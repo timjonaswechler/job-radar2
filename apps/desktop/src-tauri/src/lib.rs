@@ -1,5 +1,5 @@
 mod app_state;
-// mod commands;
+mod commands;
 mod db;
 mod paths;
 // mod deep_links;
@@ -14,6 +14,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![commands::app::get_database_info])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -25,10 +26,11 @@ pub fn run() {
 
             let paths = paths::AppPaths::from_app(app.handle())?;
 
-            let app_state = tauri::async_runtime::block_on(AppState::new(paths)).map_err(|error| {
-                eprintln!("failed to initialize app state: {error}");
-                error
-            })?;
+            let app_state =
+                tauri::async_runtime::block_on(AppState::new(paths)).map_err(|error| {
+                    eprintln!("failed to initialize app state: {error}");
+                    error
+                })?;
             println!("database path: {}", app_state.paths.database_path.display());
             app.manage(app_state);
 
