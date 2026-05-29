@@ -13,7 +13,7 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -25,16 +25,17 @@ pub fn run() {
 
             let paths = paths::AppPaths::from_app(app.handle())?;
 
-            let app_state = tauri::async_runtime::block_on(async {
-                AppState::new(paths)
-                    .await
-                    .expect("failed to initialize app state")
-            });
+            let app_state = tauri::async_runtime::block_on(AppState::new(paths)).map_err(|error| {
+                eprintln!("failed to initialize app state: {error}");
+                error
+            })?;
             println!("database path: {}", app_state.paths.database_path.display());
             app.manage(app_state);
 
             Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        });
+
+    if let Err(error) = builder.run(tauri::generate_context!()) {
+        eprintln!("error while running tauri application: {error}");
+    }
 }
