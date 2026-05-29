@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { Search } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Badge } from "@workspace/ui/components//badge"
 import { Button } from "@workspace/ui/components//button"
@@ -78,6 +79,7 @@ function groupBy(items: SearchItem[]) {
 }
 
 export function SearchDialog() {
+  const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
 
@@ -124,7 +126,7 @@ export function SearchDialog() {
 
               {item.disabled && (
                 <Badge variant="outline" className="text-xs">
-                  Soon
+                  {t("search.soon")}
                 </Badge>
               )}
             </CommandItem>
@@ -141,7 +143,7 @@ export function SearchDialog() {
         className="px-0! font-normal text-muted-foreground hover:no-underline"
       >
         <Search data-icon="inline-start" />
-        Search
+        {t("search.button")}
         <kbd className="inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium select-none">
           <span className="text-xs">⌘</span>J
         </kbd>
@@ -149,12 +151,12 @@ export function SearchDialog() {
       <CommandDialog open={open} onOpenChange={handleOpenChange}>
         <Command>
           <CommandInput
-            placeholder="Search dashboards, users, and more…"
+            placeholder={t("search.placeholder")}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>{t("search.noResults")}</CommandEmpty>
             {query ? renderGroups(searchItems) : renderGroups(recommendations)}
           </CommandList>
         </Command>

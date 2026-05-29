@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next"
 import { siGithub } from "simple-icons"
 
+import { LanguageSwitcher } from "@/components/language-switcher"
 import { SimpleIcon } from "@/components/simple-icon"
 import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import { SearchDialog } from "@/components/sidebar/search-dialog"
@@ -17,6 +19,8 @@ import {
 const { layout } = APP_SETTINGS
 
 export function App() {
+  const { t } = useTranslation()
+
   return (
     <SidebarProvider
       style={
@@ -55,11 +59,12 @@ export function App() {
               <SearchDialog />
             </div>
             <div className="flex items-center gap-2">
+              <LanguageSwitcher />
               <ThemeSwitcher />
               <Button
                 size="icon"
                 type="button"
-                aria-label="Open GitHub repository"
+                aria-label={t("app.openGithubRepository")}
                 onClick={() =>
                   window.open(
                     "https://github.com/arhamkhnz/next-shadcn-admin-dashboard",
@@ -79,10 +84,9 @@ export function App() {
 
         <main className="h-full p-4 md:p-4">
           <section className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
-            <h1 className="text-2xl font-semibold">Job Radar</h1>
+            <h1 className="text-2xl font-semibold">{t("app.title")}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Vite layout läuft. Nur Dark/Light ist User-Preference; Layout ist
-              Code-Config.
+              {t("app.description")}
             </p>
           </section>
         </main>

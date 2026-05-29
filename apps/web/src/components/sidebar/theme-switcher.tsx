@@ -1,19 +1,19 @@
 "use client"
 
 import { Moon, Sun } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@workspace/ui/components/button"
 
 export function ThemeSwitcher() {
   const { theme, toggleTheme } = useTheme()
+  const { t } = useTranslation()
+  const label =
+    theme === "dark" ? t("theme.switchToLight") : t("theme.switchToDark")
 
   return (
-    <Button
-      size="icon"
-      onClick={toggleTheme}
-      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-    >
+    <Button size="icon" onClick={toggleTheme} aria-label={label}>
       {theme === "dark" ? <Sun /> : <Moon />}
     </Button>
   )
