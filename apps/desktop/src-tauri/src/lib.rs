@@ -14,7 +14,10 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![commands::app::get_database_info])
+        .invoke_handler(tauri::generate_handler![
+            commands::app::get_database_info,
+            commands::dashboard::get_dashboard_stats,
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

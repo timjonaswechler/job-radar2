@@ -10,6 +10,7 @@ export const en = {
     switchToGerman: "Switch to German",
   },
   navigation: {
+    newApplication: "New Application",
     groups: {
       jobRadar: "Job Radar",
       search: "Search",

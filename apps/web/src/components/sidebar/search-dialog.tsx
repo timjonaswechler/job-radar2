@@ -17,6 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@workspace/ui/components//command"
+import type { TranslationKey } from "@/lib/i18n/resources"
 import { navigateTo } from "@/navigation/path"
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items"
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items"
@@ -30,7 +31,7 @@ type SearchItem = {
   newTab?: boolean
 }
 
-function createSearchItems(t: (key: string) => string): SearchItem[] {
+function createSearchItems(t: (key: TranslationKey) => string): SearchItem[] {
   return sidebarItems.flatMap((group) =>
     group.items.flatMap((item) => {
       const groupLabel = t(group.labelKey ?? "navigation.groups.other")

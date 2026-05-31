@@ -11,9 +11,10 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react"
+import type { TranslationKey } from "@/lib/i18n/resources"
 
 export interface NavSubItem {
-  titleKey: string
+  titleKey: TranslationKey
   url: string
   icon?: LucideIcon
   comingSoon?: boolean
@@ -22,7 +23,7 @@ export interface NavSubItem {
 }
 
 export interface NavMainItem {
-  titleKey: string
+  titleKey: TranslationKey
   url: string
   icon?: LucideIcon
   subItems?: NavSubItem[]
@@ -33,7 +34,7 @@ export interface NavMainItem {
 
 export interface NavGroup {
   id: number
-  labelKey?: string
+  labelKey?: TranslationKey
   items: NavMainItem[]
 }
 

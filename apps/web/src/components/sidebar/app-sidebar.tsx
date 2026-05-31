@@ -1,7 +1,7 @@
 "use client"
 
 import { InboxIcon, PlusCircleIcon } from "lucide-react"
-
+import { useTranslation } from "react-i18next"
 import { navigateTo } from "@/navigation/path"
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items"
 import { Button } from "@workspace/ui/components//button"
@@ -17,6 +17,7 @@ import {
 import { NavMain } from "./nav-main"
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const { t } = useTranslation()
   return (
     <Sidebar {...props}>
       <div className="sidebar-glow-shell flex h-full flex-col">
@@ -30,7 +31,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                 onClick={() => navigateTo("/bewerbungen")}
               >
                 <PlusCircleIcon />
-                <span>Neue Bewerbung</span>
+                <span>{t("navigation.newApplication")}</span>
               </SidebarMenuButton>
               <Button
                 size="icon"
@@ -39,7 +40,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                 onClick={() => navigateTo("/stellenanzeigen")}
               >
                 <InboxIcon />
-                <span className="sr-only">Stellenanzeigen-Inbox</span>
+                <span className="sr-only">
+                  {t("navigation.items.postingsInbox")}
+                </span>
               </Button>
             </SidebarMenuItem>
           </SidebarMenu>

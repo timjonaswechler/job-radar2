@@ -10,6 +10,7 @@ export const de = {
     switchToGerman: "Auf Deutsch wechseln",
   },
   navigation: {
+    newApplication: "Neue Bewerbung",
     groups: {
       jobRadar: "Job Radar",
       search: "Suche",

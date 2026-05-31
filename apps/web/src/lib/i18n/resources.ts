@@ -15,3 +15,11 @@ export const resources = {
 export const supportedLanguages = ["de", "en"] as const
 
 export type SupportedLanguage = (typeof supportedLanguages)[number]
+
+type DotNestedKeys<T> = {
+  [Key in Extract<keyof T, string>]: T[Key] extends Record<string, unknown>
+    ? `${Key}.${DotNestedKeys<T[Key]>}`
+    : Key
+}[Extract<keyof T, string>]
+
+export type TranslationKey = DotNestedKeys<(typeof resources)["de"]["translation"]>

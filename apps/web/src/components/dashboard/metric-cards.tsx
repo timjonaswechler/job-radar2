@@ -1,11 +1,4 @@
-import {
-  Users,
-  Bookmark,
-  FileText,
-  ScanText,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react"
+import { Users, Bookmark, FileText, ScanText, TrendingUp } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import {
   Card,
@@ -15,9 +8,35 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 
-export function MetricCards() {
+export type MetricCardsStats = {
+  scannedSourcesToday: number
+  listedPostings: number
+  savedApplications: {
+    total: number
+    thisWeekDelta: number
+  }
+  createdApplications: {
+    total: number
+    thisWeekDelta: number
+  }
+}
+
+type MetricCardsProps = {
+  stats: MetricCardsStats
+  loading?: boolean
+}
+
+export function MetricCards({ stats, loading = false }: MetricCardsProps) {
   const { t } = useTranslation()
+  const {
+    scannedSourcesToday,
+    listedPostings,
+    savedApplications,
+    createdApplications,
+  } = stats
+
   return (
     <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs xl:grid-cols-4 dark:*:data-[slot=card]:bg-card">
       <Card>
@@ -32,7 +51,11 @@ export function MetricCards() {
         <CardContent className="flex flex-col gap-1">
           <div className="flex flex-wrap items-end gap-2">
             <div className="text-3xl leading-none font-medium tracking-tight tabular-nums">
-              XXX
+              {loading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                scannedSourcesToday
+              )}
             </div>
             <div>{t("dashboard.sources")}</div>
           </div>
@@ -51,7 +74,7 @@ export function MetricCards() {
         <CardContent className="flex flex-col gap-1">
           <div className="flex flex-wrap items-end gap-2">
             <div className="text-3xl leading-none font-medium tracking-tight tabular-nums">
-              XXX
+              {loading ? <Skeleton className="h-8 w-12" /> : listedPostings}
             </div>
           </div>
         </CardContent>
@@ -69,13 +92,21 @@ export function MetricCards() {
         <CardContent className="flex flex-col gap-1">
           <div className="relative flex flex-wrap items-end gap-2">
             <div className="text-3xl leading-none font-medium tracking-tight tabular-nums">
-              XX
+              {loading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                savedApplications.total
+              )}
             </div>
-            <Badge className="self-center bg-success">
-              <TrendingUp className="size-3" />
-              +12
-            </Badge>
-            <div className="">this week</div>
+            {!loading && savedApplications.thisWeekDelta !== 0 && (
+              <Badge className="self-center bg-success">
+                <TrendingUp className="size-3" />
+                {savedApplications.thisWeekDelta}
+              </Badge>
+            )}
+            {!loading && savedApplications.thisWeekDelta !== 0 && (
+              <div className="">this week</div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -92,13 +123,21 @@ export function MetricCards() {
         <CardContent className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-3xl leading-none font-medium tracking-tight tabular-nums">
-              XX
+              {loading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                createdApplications.total
+              )}
             </div>
-            <Badge className="self-center bg-success">
-              <TrendingUp className="size-3" />
-              +12
-            </Badge>
-            <div className="">this week</div>
+            {!loading && createdApplications.thisWeekDelta !== 0 && (
+              <Badge className="self-center bg-success">
+                <TrendingUp className="size-3" />
+                {createdApplications.thisWeekDelta}
+              </Badge>
+            )}
+            {!loading && createdApplications.thisWeekDelta !== 0 && (
+              <div className="">this week</div>
+            )}
           </div>
         </CardContent>
       </Card>
