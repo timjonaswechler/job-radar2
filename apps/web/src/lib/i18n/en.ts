@@ -2,16 +2,36 @@ export const en = {
   app: {
     title: "Job Radar",
     description:
-      "The Vite layout is running. Only dark/light mode is a user preference; the layout is code-configured.",
+      "Local desktop app for managing job postings, applications, search runs, and reminders.",
     openGithubRepository: "Open GitHub repository",
   },
   language: {
     switchToEnglish: "Switch to English",
     switchToGerman: "Switch to German",
   },
+  navigation: {
+    groups: {
+      jobRadar: "Job Radar",
+      search: "Search",
+      system: "System",
+      other: "Other",
+    },
+    items: {
+      overview: "Overview",
+      postingsInbox: "Postings Inbox",
+      applications: "Applications",
+      reminders: "Reminders",
+      searchQueries: "Search Queries",
+      jobSources: "Job Sources",
+      searchRuns: "Search Runs",
+      data: "Import & Export",
+      history: "History",
+      settings: "Settings",
+    },
+  },
   search: {
     button: "Search",
-    placeholder: "Search dashboards, users, and more…",
+    placeholder: "Open postings, applications, and search…",
     noResults: "No results found.",
     soon: "Soon",
   },
@@ -30,5 +50,9 @@ export const en = {
     rejected: "Rejected",
     withdrawn: "Withdrawn",
     archived: "Archived",
+  },
+  dashboard: {
+    todaysScan: "Today's Scan",
+    sources: "Sources",
   },
 } as const

@@ -1,24 +1,19 @@
 import {
-  Banknote,
-  Calendar,
-  ChartBar,
-  Forklift,
-  Gauge,
-  GraduationCap,
-  Kanban,
+  Bell,
+  BriefcaseBusiness,
+  Building2,
+  Database,
+  History,
+  Inbox,
   LayoutDashboard,
-  ListTodo,
-  Lock,
+  Radar,
+  Search,
+  Settings,
   type LucideIcon,
-  Mail,
-  MessageSquare,
-  ReceiptText,
-  ShoppingBag,
-  Users,
 } from "lucide-react"
 
 export interface NavSubItem {
-  title: string
+  titleKey: string
   url: string
   icon?: LucideIcon
   comingSoon?: boolean
@@ -27,7 +22,7 @@ export interface NavSubItem {
 }
 
 export interface NavMainItem {
-  title: string
+  titleKey: string
   url: string
   icon?: LucideIcon
   subItems?: NavSubItem[]
@@ -38,101 +33,77 @@ export interface NavMainItem {
 
 export interface NavGroup {
   id: number
-  label?: string
+  labelKey?: string
   items: NavMainItem[]
 }
 
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Dashboards",
+    labelKey: "navigation.groups.jobRadar",
     items: [
       {
-        title: "Default",
-        url: "/dashboard/default",
+        titleKey: "navigation.items.overview",
+        url: "/",
         icon: LayoutDashboard,
       },
       {
-        title: "CRM",
-        url: "/dashboard/crm",
-        icon: ChartBar,
+        titleKey: "navigation.items.postingsInbox",
+        url: "/stellenanzeigen",
+        icon: Inbox,
       },
       {
-        title: "Finance",
-        url: "/dashboard/finance",
-        icon: Banknote,
+        titleKey: "navigation.items.applications",
+        url: "/bewerbungen",
+        icon: BriefcaseBusiness,
       },
       {
-        title: "Analytics",
-        url: "/dashboard/analytics",
-        icon: Gauge,
-      },
-      {
-        title: "Productivity",
-        url: "/dashboard/productivity",
-        icon: ListTodo,
-      },
-      {
-        title: "E-commerce",
-        url: "/dashboard/ecommerce",
-        icon: ShoppingBag,
-      },
-      {
-        title: "Academy",
-        url: "/dashboard/academy",
-        icon: GraduationCap,
-        isNew: true,
-      },
-      {
-        title: "Logistics",
-        url: "/dashboard/logistics",
-        icon: Forklift,
+        titleKey: "navigation.items.reminders",
+        url: "/erinnerungen",
+        icon: Bell,
       },
     ],
   },
   {
     id: 2,
-    label: "Pages",
+    labelKey: "navigation.groups.search",
     items: [
       {
-        title: "Email",
-        url: "/dashboard/mail",
-        icon: Mail,
+        titleKey: "navigation.items.searchQueries",
+        url: "/suchanfragen",
+        icon: Search,
       },
       {
-        title: "Chat",
-        url: "/dashboard/coming-soon",
-        icon: MessageSquare,
+        titleKey: "navigation.items.jobSources",
+        url: "/jobquellen",
+        icon: Building2,
+      },
+      {
+        titleKey: "navigation.items.searchRuns",
+        url: "/suchlaeufe",
+        icon: Radar,
+      },
+    ],
+  },
+  {
+    id: 3,
+    labelKey: "navigation.groups.system",
+    items: [
+      {
+        titleKey: "navigation.items.data",
+        url: "/daten",
+        icon: Database,
+      },
+      {
+        titleKey: "navigation.items.history",
+        url: "/historie",
+        icon: History,
         comingSoon: true,
       },
       {
-        title: "Calendar",
-        url: "/dashboard/coming-soon",
-        icon: Calendar,
-        comingSoon: true,
-      },
-      {
-        title: "Kanban",
-        url: "/dashboard/coming-soon",
-        icon: Kanban,
-        comingSoon: true,
-      },
-      {
-        title: "Invoice",
-        url: "/dashboard/coming-soon",
-        icon: ReceiptText,
-        comingSoon: true,
-      },
-      {
-        title: "Users",
-        url: "/dashboard/users",
-        icon: Users,
-      },
-      {
-        title: "Roles",
-        url: "/dashboard/coming-soon",
-        icon: Lock,
-        comingSoon: true,
+        titleKey: "navigation.items.settings",
+        url: "/einstellungen",
+        icon: Settings,
       },
     ],
   },

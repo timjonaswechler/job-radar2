@@ -2,16 +2,36 @@ export const de = {
   app: {
     title: "Job Radar",
     description:
-      "Vite-Layout läuft. Nur Dark/Light ist User-Preference; Layout ist Code-Config.",
+      "Lokale Desktop-App zum Verwalten von Stellenanzeigen, Bewerbungen, Suchläufen und Erinnerungen.",
     openGithubRepository: "GitHub-Repository öffnen",
   },
   language: {
     switchToEnglish: "Auf Englisch wechseln",
     switchToGerman: "Auf Deutsch wechseln",
   },
+  navigation: {
+    groups: {
+      jobRadar: "Job Radar",
+      search: "Suche",
+      system: "System",
+      other: "Weitere",
+    },
+    items: {
+      overview: "Übersicht",
+      postingsInbox: "Stellenanzeigen-Inbox",
+      applications: "Bewerbungen",
+      reminders: "Erinnerungen",
+      searchQueries: "Suchanfragen",
+      jobSources: "Jobquellen",
+      searchRuns: "Suchläufe",
+      data: "Import & Export",
+      history: "Historie",
+      settings: "Einstellungen",
+    },
+  },
   search: {
     button: "Suchen",
-    placeholder: "Dashboards, Nutzer und mehr suchen…",
+    placeholder: "Stellenanzeigen, Bewerbungen und Suche öffnen…",
     noResults: "Keine Ergebnisse gefunden.",
     soon: "Bald",
   },
@@ -30,5 +50,9 @@ export const de = {
     rejected: "Abgelehnt",
     withdrawn: "Zurückgezogen",
     archived: "Archiviert",
+  },
+  dashboard: {
+    todaysScan: "Heute gescannt",
+    sources: "Quellen",
   },
 } as const

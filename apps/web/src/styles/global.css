@@ -1,0 +1,61 @@
+:root {
+  --quick-create-glow: color-mix(in oklab, var(--primary) 5%, transparent);
+  --quick-create-glow-soft: color-mix(in oklab, var(--primary) 5%, transparent);
+}
+
+.sidebar-glow-shell {
+  isolation: isolate;
+  overflow: visible;
+  position: relative;
+}
+
+.sidebar-glow-shell::before {
+  background: radial-gradient(
+    circle at 32px 53px,
+    var(--quick-create-glow),
+    transparent 30%
+  );
+  content: "";
+  height: 100vh;
+  left: -12px;
+  pointer-events: none;
+  position: absolute;
+  top: -12px;
+  width: 100vw;
+  z-index: 0;
+}
+
+.drop-shadow-jumbo {
+  box-shadow:
+    0 0 16px color-mix(in oklab, var(--primary) 55%, transparent),
+    0 0px 28px color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+.titlebar {
+  height: 30px;
+  background: #329ea3;
+  user-select: none;
+  display: grid;
+  grid-template-columns: auto max-content;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+.titlebar > .controls {
+  display: flex;
+}
+.titlebar button {
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  border: none;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  background-color: transparent;
+}
+.titlebar button:hover {
+  background: #5bbec3;
+}

@@ -1,15 +1,14 @@
-import { useTranslation } from "react-i18next"
-import { siGithub } from "simple-icons"
+import { useEffect, useState } from "react"
 
 import { AppNotifications } from "@/components/app/notifications"
 import { LanguageSwitcher } from "@/components/language-switcher"
-import { SimpleIcon } from "@/components/simple-icon"
 import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import { SearchDialog } from "@/components/sidebar/search-dialog"
 import { ThemeSwitcher } from "@/components/sidebar/theme-switcher"
 import { APP_SETTINGS } from "@/lib/app-settings"
 import { cn } from "@/lib/utils"
-import { Button } from "@workspace/ui/components//button"
+import { getAppRoute } from "@/navigation/app-routes"
+import { APP_ROUTE_CHANGE_EVENT } from "@/navigation/path"
 import { Separator } from "@workspace/ui/components/separator"
 import {
   SidebarInset,
@@ -20,7 +19,21 @@ import {
 const { layout } = APP_SETTINGS
 
 export function App() {
-  const { t } = useTranslation()
+  const [pathname, setPathname] = useState(() => window.location.pathname)
+  const route = getAppRoute(pathname)
+  const Content = route.Component
+
+  useEffect(() => {
+    const syncPathname = () => setPathname(window.location.pathname)
+
+    window.addEventListener("popstate", syncPathname)
+    window.addEventListener(APP_ROUTE_CHANGE_EVENT, syncPathname)
+
+    return () => {
+      window.removeEventListener("popstate", syncPathname)
+      window.removeEventListener(APP_ROUTE_CHANGE_EVENT, syncPathname)
+    }
+  }, [])
 
   return (
     <>
@@ -38,6 +51,7 @@ export function App() {
         />
         <SidebarInset
           className={cn(
+            "relative z-20",
             layout.contentLayout === "centered" &&
               "*:mx-auto *:w-full *:max-w-screen-2xl",
             layout.sidebar.variant === "inset" &&
@@ -62,36 +76,17 @@ export function App() {
                 <SearchDialog />
               </div>
               <div className="flex items-center gap-2">
+                <p className="hidden text-sm font-medium text-muted-foreground md:block">
+                  {route.title}
+                </p>
                 <LanguageSwitcher />
                 <ThemeSwitcher />
-                <Button
-                  size="icon"
-                  type="button"
-                  aria-label={t("app.openGithubRepository")}
-                  onClick={() =>
-                    window.open(
-                      "https://github.com/arhamkhnz/next-shadcn-admin-dashboard",
-                      "_blank",
-                      "noopener,noreferrer"
-                    )
-                  }
-                >
-                  <SimpleIcon
-                    icon={siGithub}
-                    className="fill-primary-foreground"
-                  />
-                </Button>
               </div>
             </div>
           </header>
 
           <main className="h-full p-4 md:p-4">
-            <section className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
-              <h1 className="text-2xl font-semibold">{t("app.title")}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("app.description")}
-              </p>
-            </section>
+            <Content />
           </main>
         </SidebarInset>
       </SidebarProvider>

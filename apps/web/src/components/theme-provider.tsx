@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { ThemeProviderContext } from "@/components/theme-provider-context"
 import type { AppTheme } from "@/lib/app-settings"
 import {
   applyThemeToDocument,
@@ -12,16 +13,6 @@ type ThemeProviderProps = {
   children: React.ReactNode
   initialTheme?: AppTheme
 }
-
-type ThemeProviderState = {
-  theme: AppTheme
-  setTheme: (theme: AppTheme) => void
-  toggleTheme: () => void
-}
-
-const ThemeProviderContext = React.createContext<
-  ThemeProviderState | undefined
->(undefined)
 
 export function ThemeProvider({ children, initialTheme }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<AppTheme>(
@@ -64,14 +55,4 @@ export function ThemeProvider({ children, initialTheme }: ThemeProviderProps) {
       {children}
     </ThemeProviderContext.Provider>
   )
-}
-
-export function useTheme() {
-  const context = React.useContext(ThemeProviderContext)
-
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider")
-  }
-
-  return context
 }

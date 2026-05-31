@@ -8,7 +8,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@workspace/ui/components//avatar"
+} from "@workspace/ui/components/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@workspace/ui/components//dropdown-menu"
+} from "@workspace/ui/components/dropdown-menu"
 import { cn, getInitials } from "@/lib/utils"
 
 export function AccountSwitcher({

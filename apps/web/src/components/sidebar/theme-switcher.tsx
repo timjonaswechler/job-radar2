@@ -3,7 +3,7 @@
 import { Moon, Sun } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { useTheme } from "@/components/theme-provider"
+import { useTheme } from "@/components/theme-provider-context"
 import { Button } from "@workspace/ui/components/button"
 
 export function ThemeSwitcher() {
