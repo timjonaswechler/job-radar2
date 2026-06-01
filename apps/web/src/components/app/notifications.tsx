@@ -3,7 +3,7 @@ import { CheckIcon } from "lucide-react"
 import { useEffect, useRef } from "react"
 import { Toaster, toast } from "sonner"
 
-import { Spinner } from "@workspace/ui/components/spinner"
+import { Spinner } from "@/components/ui/spinner"
 
 type DatabaseInfo = {
   initializedAt: string | null

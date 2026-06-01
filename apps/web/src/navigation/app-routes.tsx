@@ -1,5 +1,5 @@
-import { ApplicationsPage } from "@/pages/applications"
-import { DashboardPage } from "@/pages/dashboard"
+import { ApplicationsPage } from "@/pages/applications/page"
+import { DashboardPage } from "@/pages/dashboard/page"
 import { DataPage } from "@/pages/data"
 import { JobSourcesPage } from "@/pages/job-sources"
 import { NotFoundPage } from "@/pages/not-found"

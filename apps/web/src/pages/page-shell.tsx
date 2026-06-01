@@ -1,11 +1,11 @@
-import { Badge } from "@workspace/ui/components/badge"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@workspace/ui/components/card"
+} from "@/components/ui/card"
 
 export type PageCard = {
   title: string

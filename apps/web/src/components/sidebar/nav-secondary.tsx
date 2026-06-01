@@ -10,7 +10,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@workspace/ui/components//sidebar"
+} from "@/components/ui//sidebar"
 
 export function NavSecondary({
   items,

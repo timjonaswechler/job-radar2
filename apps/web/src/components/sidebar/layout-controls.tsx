@@ -2,13 +2,13 @@
 
 import { Settings } from "lucide-react"
 
-import { Button } from "@workspace/ui/components//button"
-import { Label } from "@workspace/ui/components//label"
+import { Button } from "@/components/ui//button"
+import { Label } from "@/components/ui//label"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@workspace/ui/components//popover"
+} from "@/components/ui//popover"
 import {
   Select,
   SelectContent,
@@ -16,11 +16,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@workspace/ui/components//select"
+} from "@/components/ui//select"
 import {
   ToggleGroup,
   ToggleGroupItem,
-} from "@workspace/ui/components//toggle-group"
+} from "@/components/ui//toggle-group"
 import { type FontKey, fontOptions } from "@/lib/fonts/registry"
 import type {
   ContentLayout,

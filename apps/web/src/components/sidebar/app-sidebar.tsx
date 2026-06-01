@@ -4,7 +4,7 @@ import { InboxIcon, PlusCircleIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { navigateTo } from "@/navigation/path"
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items"
-import { Button } from "@workspace/ui/components//button"
+import { Button } from "@/components/ui//button"
 import {
   Sidebar,
   SidebarContent,
@@ -12,7 +12,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@workspace/ui/components//sidebar"
+} from "@/components/ui/sidebar"
 
 import { NavMain } from "./nav-main"
 

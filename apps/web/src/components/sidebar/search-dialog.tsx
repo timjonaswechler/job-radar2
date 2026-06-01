@@ -5,8 +5,8 @@ import * as React from "react"
 import { Search } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { Badge } from "@workspace/ui/components//badge"
-import { Button } from "@workspace/ui/components//button"
+import { Badge } from "@/components/ui//badge"
+import { Button } from "@/components/ui//button"
 import {
   Command,
   CommandDialog,
@@ -16,7 +16,7 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@workspace/ui/components//command"
+} from "@/components/ui//command"
 import type { TranslationKey } from "@/lib/i18n/resources"
 import { navigateTo } from "@/navigation/path"
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items"

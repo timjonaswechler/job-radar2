@@ -9,12 +9,12 @@ import { APP_SETTINGS } from "@/lib/app-settings"
 import { cn } from "@/lib/utils"
 import { getAppRoute } from "@/navigation/app-routes"
 import { APP_ROUTE_CHANGE_EVENT } from "@/navigation/path"
-import { Separator } from "@workspace/ui/components/separator"
+import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@workspace/ui/components//sidebar"
+} from "@/components/ui/sidebar"
 
 const { layout } = APP_SETTINGS
 

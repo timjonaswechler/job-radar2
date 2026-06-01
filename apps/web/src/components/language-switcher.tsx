@@ -4,7 +4,7 @@ import { Languages } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { SupportedLanguage } from "@/lib/i18n/resources"
-import { Button } from "@workspace/ui/components/button"
+import { Button } from "@/components/ui/button"
 
 function getCurrentLanguage(language: string | undefined): SupportedLanguage {
   return language?.startsWith("en") ? "en" : "de"

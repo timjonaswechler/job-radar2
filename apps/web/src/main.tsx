@@ -5,8 +5,7 @@ import { App } from "./App.js"
 import { ThemeProvider } from "@/components/theme-provider"
 import "@/lib/i18n/i18n"
 import { applyThemeToDocument, readStoredTheme } from "@/lib/theme"
-import "@workspace/ui/globals.css"
-import "@/styles/global.css"
+import "@/styles/globals.css"
 
 const initialTheme = readStoredTheme()
 applyThemeToDocument(initialTheme)
