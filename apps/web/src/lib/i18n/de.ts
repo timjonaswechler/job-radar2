@@ -76,7 +76,24 @@ export const de = {
     archived: "Archiviert",
   },
   dashboard: {
-    todaysScan: "Heute gescannt",
-    sources: "Quellen",
+    kpis: {
+      comparedToPreviousWeek: "vs. letzte Woche",
+      open: "offen",
+      clear: "ok",
+      newPostings: {
+        title: "Neue Stellenanzeigen",
+      },
+      interestingPostings: {
+        title: "Interessante Stellenanzeigen",
+        newThisWeek: "{{count}} neu diese Woche",
+      },
+      applicationsSent: {
+        title: "Beworben",
+      },
+      followUpsDue: {
+        title: "Follow-ups fällig",
+        dueUntilToday: "bis heute",
+      },
+    },
   },
 } as const

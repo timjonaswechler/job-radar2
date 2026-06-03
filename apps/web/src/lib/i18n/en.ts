@@ -76,7 +76,24 @@ export const en = {
     archived: "Archived",
   },
   dashboard: {
-    todaysScan: "Today's Scan",
-    sources: "Sources",
+    kpis: {
+      comparedToPreviousWeek: "vs. last week",
+      open: "open",
+      clear: "ok",
+      newPostings: {
+        title: "New postings",
+      },
+      interestingPostings: {
+        title: "Interesting postings",
+        newThisWeek: "{{count}} new this week",
+      },
+      applicationsSent: {
+        title: "Applied",
+      },
+      followUpsDue: {
+        title: "Follow-ups due",
+        dueUntilToday: "due by today",
+      },
+    },
   },
 } as const

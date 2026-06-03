@@ -1,44 +1,55 @@
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { useLocale } from "@/context/locale-provider-context"
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert"
-import { MetricCards, type MetricCardsStats } from "./components/metric-cards"
-import { getDashboardStats } from "@/lib/api/dashboard"
+  createDashboardStatsRange,
+  getDashboardStats,
+} from "@/lib/api/dashboard"
+import type { DashboardStats } from "./types"
 import { RecentOrders } from "./components/jobs-table"
-import { AnalyticsKpiStrip } from "./components/strip"
+import { MetricStrip } from "./components/strip"
 
-
-const emptyStats: MetricCardsStats = {
-  scannedSourcesToday: 0,
-  listedPostings: 0,
-  savedApplications: {
-    total: 0,
-    thisWeekDelta: 0,
+const emptyStats: DashboardStats = {
+  newPostingsThisWeek: {
+    count: 0,
+    previousWeekCount: 0,
+    delta: 0,
   },
-  createdApplications: {
+  interestingPostings: {
     total: 0,
-    thisWeekDelta: 0,
+    newThisWeek: 0,
+  },
+  applicationsSentThisWeek: {
+    count: 0,
+    previousWeekCount: 0,
+    delta: 0,
+  },
+  dueFollowUps: {
+    total: 0,
   },
 }
 
 export function DashboardPage() {
-  const [stats, setStats] = useState<MetricCardsStats | null>(null)
+  const { weekStartsOn } = useLocale()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    const range = createDashboardStatsRange(weekStartsOn)
 
-    getDashboardStats()
+    getDashboardStats(range)
       .then((stats) => {
         if (cancelled) return
+        toast.dismiss("dashboard-load-error")
         setStats(stats)
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        setError(String(error))
+        toast.error("Dashboard konnte nicht geladen werden", {
+          id: "dashboard-load-error",
+          description: String(error),
+        })
       })
       .finally(() => {
         if (cancelled) return
@@ -48,18 +59,11 @@ export function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [weekStartsOn])
 
   return (
     <div className="flex flex-col gap-4">
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Dashboard konnte nicht geladen werden</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      <AnalyticsKpiStrip />
-      <MetricCards stats={stats ?? emptyStats} loading={loading} />
+      <MetricStrip stats={stats ?? emptyStats} loading={loading} />
       <RecentOrders />
     </div>
   )
