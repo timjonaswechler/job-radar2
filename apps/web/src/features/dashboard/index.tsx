@@ -7,6 +7,8 @@ import {
 import { MetricCards, type MetricCardsStats } from "./components/metric-cards"
 import { getDashboardStats } from "@/lib/api/dashboard"
 import { RecentOrders } from "./components/jobs-table"
+import { AnalyticsKpiStrip } from "./components/strip"
+
 
 const emptyStats: MetricCardsStats = {
   scannedSourcesToday: 0,
@@ -56,7 +58,7 @@ export function DashboardPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
+      <AnalyticsKpiStrip />
       <MetricCards stats={stats ?? emptyStats} loading={loading} />
       <RecentOrders />
     </div>

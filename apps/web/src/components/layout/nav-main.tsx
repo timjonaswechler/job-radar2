@@ -12,7 +12,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui//sidebar"
+} from "@/components/ui/sidebar"
 import { navigateTo } from "@/navigation/path"
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items"
 

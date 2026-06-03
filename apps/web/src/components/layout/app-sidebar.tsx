@@ -1,10 +1,13 @@
 "use client"
 
+import type { ComponentProps } from "react"
+
 import { InboxIcon, PlusCircleIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
+
+import { Button } from "@/components/ui/button"
 import { navigateTo } from "@/navigation/path"
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items"
-import { Button } from "@/components/ui//button"
 import {
   Sidebar,
   SidebarContent,
@@ -16,7 +19,7 @@ import {
 
 import { NavMain } from "./nav-main"
 
-export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   return (
     <Sidebar {...props}>
