@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { cn } from "@/lib/utils"
 import {
   Sheet,
   SheetContent,
@@ -16,6 +17,7 @@ import { ShipmentList } from "./shipment-list"
 
 export function Logistics() {
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [shipmentListOpen, setShipmentListOpen] = React.useState(true)
   const [selectedShipmentId, setSelectedShipmentId] = React.useState<
     string | null
   >(shipments[0]?.id ?? null)
@@ -32,13 +34,32 @@ export function Logistics() {
     }
   }
 
+  function handleToggleShipmentList() {
+    if (window.innerWidth < 1024) {
+      setDetailsOpen(false)
+      return
+    }
+
+    setShipmentListOpen((open) => !open)
+  }
+
   return (
     <>
       <div
         data-content-padding="false"
-        className="grid h-[calc(100dvh-var(--dashboard-header-height))] overflow-hidden lg:grid-cols-[400px_minmax(0,1fr)] lg:divide-x"
+        className={cn(
+          "grid h-full overflow-hidden transition-[grid-template-columns] duration-200 ease-linear",
+          shipmentListOpen
+            ? "lg:grid-cols-[400px_minmax(0,1fr)] lg:divide-x"
+            : "lg:grid-cols-[minmax(0,1fr)]"
+        )}
       >
-        <div className="h-full overflow-hidden">
+        <div
+          className={cn(
+            "h-full overflow-hidden",
+            !shipmentListOpen && "lg:hidden"
+          )}
+        >
           <ShipmentList
             shipments={shipments}
             selectedShipmentId={selectedShipmentId}
@@ -46,7 +67,11 @@ export function Logistics() {
           />
         </div>
         <div className="hidden h-full overflow-hidden lg:block">
-          <ShipmentDetails shipment={selectedShipment} />
+          <ShipmentDetails
+            shipment={selectedShipment}
+            shipmentListOpen={shipmentListOpen}
+            onToggleShipmentList={handleToggleShipmentList}
+          />
         </div>
       </div>
 
@@ -65,7 +90,11 @@ export function Logistics() {
               Selected shipment details and route map.
             </SheetDescription>
           </SheetHeader>
-          <ShipmentDetails shipment={selectedShipment} />
+          <ShipmentDetails
+            shipment={selectedShipment}
+            shipmentListOpen={shipmentListOpen}
+            onToggleShipmentList={handleToggleShipmentList}
+          />
         </SheetContent>
       </Sheet>
     </>

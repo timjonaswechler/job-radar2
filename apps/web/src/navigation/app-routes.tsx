@@ -8,6 +8,7 @@ import { RemindersPage } from "@/pages/reminders"
 import { SearchQueriesPage } from "@/pages/search-queries"
 import { SearchRunsPage } from "@/pages/search-runs"
 import { SettingsPage } from "@/pages/settings"
+import { MailsPage } from "@/pages/mails/page"
 
 export type AppRoute = {
   path: string
@@ -20,6 +21,11 @@ export const appRoutes: AppRoute[] = [
     path: "/",
     title: "Übersicht",
     Component: DashboardPage,
+  },
+  {
+    path: "/mails",
+    title: "Mails",
+    Component: MailsPage,
   },
   {
     path: "/stellenanzeigen",

@@ -1,13 +1,17 @@
 import { useState } from "react"
-import { AlertTriangleIcon, Copy, Plane, Ship, Star, Truck } from "lucide-react"
-import { Editor } from "@/components/editor/richt-text-editor"
+import {
+  AlertTriangleIcon,
+  PanelLeftIcon,
+  Plane,
+  Ship,
+  Truck,
+} from "lucide-react"
 
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -20,7 +24,6 @@ import {
 import { cn } from "@/lib/utils"
 
 import type { Shipment } from "./shipment-data"
-import { ShipmentRouteMap } from "./shipment-route-map"
 
 const modeIcons = {
   air: Plane,
@@ -52,14 +55,14 @@ const statusBadgeClasses: Record<Shipment["status"], string> = {
 
 type ShipmentDetailsProps = {
   shipment: Shipment | null
+  shipmentListOpen?: boolean
+  onToggleShipmentList?: () => void
 }
 
 type ShipmentDetailsTab =
   | "overview"
-  | "route"
-  | "cargo"
-  | "documents"
-  | "activity"
+  | "research"
+  | "coverletter"
 
 function getContactLabel(mode: Shipment["mode"]) {
   if (mode === "land") {
@@ -103,11 +106,8 @@ function ShipmentOverview({ shipment }: { shipment: Shipment }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-medium tracking-tight tabular-nums sm:text-xl">
-            #{shipment.id}
+            {shipment.id}
           </h1>
-          <Button variant="ghost" size="icon-sm" aria-label="Copy shipment ID">
-            <Copy />
-          </Button>
         </div>
 
         <div className="flex items-center gap-2 text-xs sm:text-sm">
@@ -123,45 +123,21 @@ function ShipmentOverview({ shipment }: { shipment: Shipment }) {
             />
             {shipment.status}
           </Badge>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-foreground tabular-nums">
-            {shipment.progress}% complete
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-foreground tabular-nums">
-            ETA: {shipment.eta} {shipment.etaMeta}
-          </span>
         </div>
       </div>
 
-      <Separator />
+      {/*<Separator />*/}
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Avatar className="size-9 after:rounded-sm">
-            <AvatarFallback className="rounded-sm">
-              {shipment.customer.initials}
-            </AvatarFallback>
-          </Avatar>
-
           <div className="flex flex-col gap-1">
             <div className="text-sm leading-none font-medium">
               {shipment.customer.name}
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="text-xs leading-none tracking-tight tabular-nums">
-                {shipment.customer.id}
-              </span>{" "}
-              <Copy className="size-3" />
             </div>
           </div>
         </div>
 
         <div className="flex flex-col items-end gap-1">
-          <Badge variant="secondary">
-            <Star />
-            {shipment.customer.tier}
-          </Badge>
           <div className="text-xs leading-none text-muted-foreground">
             {shipment.customer.tierLabel}
           </div>
@@ -256,16 +232,49 @@ function ShipmentOverview({ shipment }: { shipment: Shipment }) {
   )
 }
 
-export function ShipmentDetails({ shipment }: ShipmentDetailsProps) {
+function ApplicationResearch({ shipment }: { shipment: Shipment }) {
+  if (!shipment) return null
+
+  return <div />
+}
+
+function ApplicationsListTrigger({
+  className,
+  onClick,
+  onToggleShipmentList,
+  ...props
+}: React.ComponentProps<typeof Button> & {
+  onToggleShipmentList?: () => void
+}) {
+  return (
+    <Button
+      data-sidebar="trigger"
+      data-slot="sidebar-trigger"
+      variant="ghost"
+      size="icon-sm"
+      className={cn(className)}
+      onClick={(event) => {
+        onClick?.(event)
+        onToggleShipmentList?.()
+      }}
+      {...props}
+    >
+      <PanelLeftIcon />
+      <span className="sr-only">Toggle applications list</span>
+    </Button>
+  )
+}
+
+export function ShipmentDetails({
+  shipment,
+  shipmentListOpen,
+  onToggleShipmentList,
+}: ShipmentDetailsProps) {
   const [activeTab, setActiveTab] = useState<ShipmentDetailsTab>("overview")
-  const routeEditorActive = activeTab === "route"
 
   if (!shipment) {
     return (
       <div className="grid h-full min-h-0 grid-rows-[320px_1fr] overflow-hidden lg:grid-rows-[420px_1fr]">
-        <div className="min-h-0 overflow-hidden">
-          <ShipmentRouteMap shipment={null} />
-        </div>
         <div className="min-h-0 overflow-hidden p-4">
           <EmptyShipmentOverview />
         </div>
@@ -274,70 +283,58 @@ export function ShipmentDetails({ shipment }: ShipmentDetailsProps) {
   }
 
   return (
-    <div
-      className={cn(
-        "grid h-full min-h-0 overflow-hidden",
-        routeEditorActive
-          ? "grid-rows-[1fr]"
-          : "grid-rows-[320px_1fr] lg:grid-rows-[420px_1fr]"
-      )}
-    >
-      {!routeEditorActive && (
-        <div className="min-h-0 overflow-hidden">
-          <ShipmentRouteMap shipment={shipment} />
-        </div>
-      )}
+    <div className="grid h-full min-h-0 grid-rows-[1fr] overflow-hidden">
       <div className="min-h-0 overflow-hidden">
-        <div className="h-full min-h-0 py-2">
+        <div className="h-full min-h-0 py-4">
+
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as ShipmentDetailsTab)}
             className="h-full gap-0"
           >
+
             <TabsList
               className="w-full justify-start gap-2 border-b px-4 **:data-[slot=tabs-trigger]:text-xs sm:gap-4 sm:**:data-[slot=tabs-trigger]:text-sm"
               variant="line"
             >
+              <ApplicationsListTrigger
+                aria-label={
+                  shipmentListOpen
+                    ? "Hide applications list"
+                    : "Show applications list"
+                }
+                aria-pressed={shipmentListOpen}
+                onToggleShipmentList={onToggleShipmentList}
+              />
               <TabsTrigger className="flex-none" value="overview">
                 Overview
               </TabsTrigger>
-              <TabsTrigger className="flex-none" value="route">
-                Route
+              <TabsTrigger className="flex-none" value="research">
+                Research
               </TabsTrigger>
-              <TabsTrigger className="flex-none" value="cargo">
-                Cargo
-              </TabsTrigger>
-              <TabsTrigger className="flex-none" value="documents">
-                Documents
-              </TabsTrigger>
-              <TabsTrigger className="flex-none" value="activity">
-                Activity
+              <TabsTrigger className="flex-none" value="coverletter">
+                Cover letter
               </TabsTrigger>
             </TabsList>
             <TabsContent className="min-h-0 overflow-auto p-4" value="overview">
               <ShipmentOverview shipment={shipment} />
             </TabsContent>
-            <TabsContent className="min-h-0 overflow-hidden p-4" value="route">
-              <Editor
-                className="h-full"
-                contentClassName="h-full min-h-0 pl-4"
-              />
+            <TabsContent
+              className="min-h-0 overflow-hidden p-4"
+              value="application"
+            >
+
             </TabsContent>
-            <TabsContent className="p-4" value="cargo">
-              <div className="grid h-full place-items-center rounded-md border border-dashed text-sm text-muted-foreground">
-                Cargo view coming soon.
-              </div>
+            <TabsContent
+              className="min-h-0 overflow-hidden p-4"
+              value="research"
+            >
+              <ApplicationResearch shipment={shipment} />
             </TabsContent>
-            <TabsContent className="p-4" value="documents">
-              <div className="grid h-full place-items-center rounded-md border border-dashed text-sm text-muted-foreground">
-                Documents view coming soon.
-              </div>
-            </TabsContent>
-            <TabsContent className="p-4" value="activity">
-              <div className="grid h-full place-items-center rounded-md border border-dashed text-sm text-muted-foreground">
-                Activity view coming soon.
-              </div>
-            </TabsContent>
+            <TabsContent
+              className="min-h-0 overflow-hidden p-4"
+              value="coverletter"
+            />
           </Tabs>
         </div>
       </div>

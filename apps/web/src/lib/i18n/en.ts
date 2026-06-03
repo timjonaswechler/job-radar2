@@ -6,6 +6,7 @@ export const en = {
     openGithubRepository: "Open GitHub repository",
   },
   language: {
+    selectLanguage: "Select language",
     switchToEnglish: "Switch to English",
     switchToGerman: "Switch to German",
   },
@@ -19,6 +20,7 @@ export const en = {
     },
     items: {
       overview: "Overview",
+      mails: "Mails",
       postingsInbox: "Postings Inbox",
       applications: "Applications",
       reminders: "Reminders",
@@ -28,6 +30,27 @@ export const en = {
       data: "Import & Export",
       history: "History",
       settings: "Settings",
+    },
+  },
+  commandSearch: {
+    button: "Search",
+    placeholder: "Open pages, sections, and actions…",
+    noResults: "No results found.",
+    soon: "Soon",
+    groups: {
+      pages: "Pages",
+      sections: "Sections",
+      actions: "Actions",
+    },
+    sections: {
+      activeApplications: "Active Applications",
+      language: "Language",
+      import: "Import",
+    },
+    actions: {
+      newApplication: "New Application",
+      startSearchRun: "Start Search Run",
+      newSearchQuery: "New Search Query",
     },
   },
   search: {

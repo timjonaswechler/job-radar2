@@ -6,6 +6,7 @@ import {
   History,
   Inbox,
   LayoutDashboard,
+  Mail,
   Radar,
   Search,
   Settings,
@@ -47,6 +48,11 @@ export const sidebarItems: NavGroup[] = [
         titleKey: "navigation.items.overview",
         url: "/",
         icon: LayoutDashboard,
+      },
+      {
+        titleKey: "navigation.items.mails",
+        url: "/mails",
+        icon: Mail,
       },
       {
         titleKey: "navigation.items.postingsInbox",

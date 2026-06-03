@@ -10,7 +10,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 const tsconfigRootDir = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'src/components/ui/**', 'src/components/reui/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

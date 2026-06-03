@@ -1,12 +1,8 @@
-import { Plane, Search, Ship, SlidersHorizontal, Truck } from "lucide-react"
+import { Plane, Search, Ship, Truck } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import {
   InputGroup,
@@ -173,15 +169,7 @@ export function ShipmentList({
   onSelectShipment,
 }: ShipmentListProps) {
   return (
-    <Card className="h-full rounded-none ring-0">
-      <CardHeader>
-        <CardTitle className="text-xl font-normal">Shipments</CardTitle>
-        <CardAction>
-          <Button size="icon-sm" variant="ghost">
-            <SlidersHorizontal />
-          </Button>
-        </CardAction>
-      </CardHeader>
+    <Card className="h-full rounded-xl ring-0">
       <CardContent className="flex flex-1 flex-col gap-4 overflow-hidden px-0">
         <Tabs defaultValue="all">
           <TabsList className="w-full border-b px-4" variant="line">

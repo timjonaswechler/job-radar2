@@ -6,6 +6,7 @@ export const de = {
     openGithubRepository: "GitHub-Repository öffnen",
   },
   language: {
+    selectLanguage: "Sprache auswählen",
     switchToEnglish: "Auf Englisch wechseln",
     switchToGerman: "Auf Deutsch wechseln",
   },
@@ -19,6 +20,7 @@ export const de = {
     },
     items: {
       overview: "Übersicht",
+      mails: "Mails",
       postingsInbox: "Stellenanzeigen-Inbox",
       applications: "Bewerbungen",
       reminders: "Erinnerungen",
@@ -28,6 +30,27 @@ export const de = {
       data: "Import & Export",
       history: "Historie",
       settings: "Einstellungen",
+    },
+  },
+  commandSearch: {
+    button: "Suchen",
+    placeholder: "Seiten, Abschnitte und Aktionen öffnen…",
+    noResults: "Keine Ergebnisse gefunden.",
+    soon: "Bald",
+    groups: {
+      pages: "Seiten",
+      sections: "Abschnitte",
+      actions: "Aktionen",
+    },
+    sections: {
+      activeApplications: "Aktive Bewerbungen",
+      language: "Sprache",
+      import: "Import",
+    },
+    actions: {
+      newApplication: "Neue Bewerbung",
+      startSearchRun: "Suchlauf starten",
+      newSearchQuery: "Neue Suchanfrage",
     },
   },
   search: {
