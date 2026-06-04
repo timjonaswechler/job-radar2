@@ -24,7 +24,7 @@ import type { DateRange } from "react-day-picker"
 import {
   DEFAULT_DATE_SELECTOR_I18N,
   type DateSelectorI18nConfig,
-} from "@/lib/i18n/date-selector"
+} from "@/components/reui/date-selector"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

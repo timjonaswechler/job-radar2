@@ -9,6 +9,7 @@ import type { DashboardStats } from "./types"
 import { RecentOrders } from "./components/jobs-table"
 import { MetricStrip } from "./components/strip"
 
+
 const emptyStats: DashboardStats = {
   newPostingsThisWeek: {
     count: 0,
