@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard"
 import { Badge } from "@/components/reui/badge"
 import { DataGrid } from "@/components/reui/data-grid/data-grid"
@@ -23,13 +23,17 @@ import {
   type Row,
   type SortingState,
 } from "@tanstack/react-table"
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  FunnelIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -58,214 +62,162 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { MoreHorizontalIcon, SearchIcon, XIcon, FunnelIcon, UserPlusIcon } from "lucide-react"
+import { useLocale } from "@/context/locale-provider-context"
+import { getDashboardPostings } from "@/lib/api/dashboard"
+import { cn } from "@/lib/utils"
 
-interface IData {
-  id: string
-  name: string
-  availability: "online" | "away" | "busy" | "offline"
-  avatar: string
-  status: "Active" | "Inactive" | "Pending" | "Blocked"
-  flag: string // Emoji flags
-  email: string
-  company: string
-  role: string
-  joined: string
-  location: string
-  balance: number
+import type { DashboardPosting, PostingStatus, WorkModel } from "../types"
+
+const postingStatuses = [
+  "new",
+  "interesting",
+  "review_later",
+  "hidden",
+  "converted_to_application",
+] as const satisfies readonly PostingStatus[]
+
+const postingStatusLabels: Record<PostingStatus, string> = {
+  new: "Neu",
+  interesting: "Interessant",
+  review_later: "Später ansehen",
+  hidden: "Ausgeblendet",
+  converted_to_application: "In Bewerbung",
 }
 
-const demoData: IData[] = [
-  {
-    id: "1",
-    name: "Alex Johnson",
-    availability: "online",
-    avatar:
-      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=96&h=96&dpr=2&q=80",
-    status: "Active",
-    flag: "us",
-    email: "alex@apple.com",
-    company: "Apple",
-    role: "CEO",
-    joined: "Jan, 2024",
-    location: "United States",
-    balance: 5143.03,
-  },
-  {
-    id: "2",
-    name: "Sarah Chen",
-    availability: "away",
-    avatar:
-      "https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=96&h=96&dpr=2&q=80",
-    status: "Inactive",
-    flag: "gb",
-    email: "sarah@openai.com",
-    company: "OpenAI",
-    role: "CTO",
-    joined: "Mar, 2023",
-    location: "United Kingdom",
-    balance: 4321.87,
-  },
-  {
-    id: "3",
-    name: "Michael Rodriguez",
-    availability: "busy",
-    avatar:
-      "https://images.unsplash.com/photo-1584308972272-9e4e7685e80f?w=96&h=96&dpr=2&q=80",
-    status: "Blocked",
-    flag: "ca",
-    email: "michael@meta.com",
-    company: "Meta",
-    role: "Designer",
-    joined: "Jun, 2022",
-    location: "Canada",
-    balance: 7654.98,
-  },
-  {
-    id: "4",
-    name: "Emma Wilson",
-    availability: "offline",
-    avatar:
-      "https://images.unsplash.com/photo-1485893086445-ed75865251e0?w=96&h=96&dpr=2&q=80",
-    status: "Inactive",
-    flag: "au",
-    email: "emma@tesla.com",
-    company: "Tesla",
-    role: "Developer",
-    joined: "Sep, 2024",
-    location: "Australia",
-    balance: 3456.45,
-  },
-  {
-    id: "5",
-    name: "David Kim",
-    availability: "online",
-    avatar:
-      "https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?w=96&h=96&dpr=2&q=80",
-    status: "Active",
-    flag: "de",
-    email: "david@sap.com",
-    company: "SAP",
-    role: "Lawyer",
-    joined: "Nov, 2023",
-    location: "Germany",
-    balance: 9876.54,
-  },
-  {
-    id: "6",
-    name: "Aron Thompson",
-    availability: "away",
-    avatar:
-      "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=96&h=96&dpr=2&q=80",
-    status: "Pending",
-    flag: "my",
-    email: "aron@keenthemes.com",
-    company: "Keenthemes",
-    role: "Director",
-    joined: "Feb, 2022",
-    location: "Malaysia",
-    balance: 6214.22,
-  },
-  {
-    id: "7",
-    name: "James Brown",
-    availability: "busy",
-    avatar:
-      "https://images.unsplash.com/photo-1543299750-19d1d6297053?w=96&h=96&dpr=2&q=80",
-    status: "Inactive",
-    flag: "es",
-    email: "james@bbva.es",
-    company: "BBVA",
-    role: "Product Manager",
-    joined: "Aug, 2024",
-    location: "Spain",
-    balance: 5321.77,
-  },
-  {
-    id: "8",
-    name: "Maria Garcia",
-    availability: "offline",
-    avatar:
-      "https://images.unsplash.com/photo-1620075225255-8c2051b6c015?w=96&h=96&dpr=2&q=80",
-    status: "Blocked",
-    flag: "jp",
-    email: "maria@sony.jp",
-    company: "Sony",
-    role: "Marketing Lead",
-    joined: "Dec, 2023",
-    location: "Japan",
-    balance: 8452.39,
-  },
-  {
-    id: "9",
-    name: "Nick Johnson",
-    availability: "online",
-    avatar:
-      "https://images.unsplash.com/photo-1485206412256-701ccc5b93ca?w=96&h=96&dpr=2&q=80",
-    status: "Pending",
-    flag: "fr",
-    email: "nick@lvmh.fr",
-    company: "LVMH",
-    role: "Data Scientist",
-    joined: "Apr, 2022",
-    location: "France",
-    balance: 7345.1,
-  },
-  {
-    id: "10",
-    name: "Liam Thompson",
-    availability: "away",
-    avatar:
-      "https://images.unsplash.com/photo-1542595913-85d69b0edbaf?w=96&h=96&dpr=2&q=80",
-    status: "Inactive",
-    flag: "it",
-    email: "liam@eni.it",
-    company: "ENI",
-    role: "Engineer",
-    joined: "Jul, 2024",
-    location: "Italy",
-    balance: 5214.88,
-  },
-  {
-    id: "11",
-    name: "Alex Johnson",
-    availability: "busy",
-    avatar:
-      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=96&h=96&dpr=2&q=80",
-    status: "Blocked",
-    flag: "br",
-    email: "alex@vale.br",
-    company: "Vale",
-    role: "Software Engineer",
-    joined: "May, 2023",
-    location: "Brazil",
-    balance: 9421.5,
-  },
-  {
-    id: "12",
-    name: "Sarah Chen",
-    availability: "offline",
-    avatar:
-      "https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=96&h=96&dpr=2&q=80",
-    status: "Active",
-    flag: "in",
-    email: "sarah@tata.in",
-    company: "Tata",
-    role: "Sales Manager",
-    joined: "Oct, 2024",
-    location: "India",
-    balance: 4521.67,
-  },
-]
+const workModelLabels: Record<WorkModel, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  on_site: "Vor Ort",
+  unknown: "Unbekannt",
+}
 
-function ActionsCell({ row }: { row: Row<IData> }) {
+const progressRingClasses: Record<PostingStatus, string> = {
+  new: "text-muted-foreground",
+  interesting: "text-primary",
+  review_later: "text-amber-500",
+  hidden: "text-destructive",
+  converted_to_application: "text-green-600",
+}
+
+const statusBadgeClasses: Record<PostingStatus, string> = {
+  new: "border-muted bg-muted/50 text-muted-foreground",
+  interesting: "border-primary/20 bg-primary/10 text-primary",
+  review_later:
+    "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  hidden: "border-destructive/20 bg-destructive/10 text-destructive",
+  converted_to_application:
+    "border-green-600/20 bg-green-600/10 text-green-600",
+}
+
+const statusRingAngles: Record<PostingStatus, number> = {
+  new: 90,
+  interesting: 220,
+  review_later: 140,
+  hidden: 360,
+  converted_to_application: 360,
+}
+
+type StatusRingStyle = CSSProperties & {
+  "--angle": string
+}
+
+function createEmptyStatusCounts() {
+  return postingStatuses.reduce(
+    (acc, status) => {
+      acc[status] = 0
+      return acc
+    },
+    {} as Record<PostingStatus, number>
+  )
+}
+
+function getProgressRingClass(status: PostingStatus) {
+  return cn(
+    "grid size-3 place-items-center rounded-full bg-[conic-gradient(currentColor_0deg_var(--angle),transparent_var(--angle)_360deg)] p-[0.5px]",
+    progressRingClasses[status]
+  )
+}
+
+function StatusBadge({ status }: { status: PostingStatus }) {
+  const angle = statusRingAngles[status]
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn("gap-1.5", statusBadgeClasses[status])}
+    >
+      <span
+        style={{ "--angle": `${angle}deg` } as StatusRingStyle}
+        className={getProgressRingClass(status)}
+      >
+        <span className="grid size-2 place-items-center rounded-full bg-card">
+          <span className="size-1 rounded-full bg-current" />
+        </span>
+      </span>
+      {postingStatusLabels[status]}
+    </Badge>
+  )
+}
+
+function getCompanyInitials(company: string) {
+  return (
+    company
+      .trim()
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?"
+  )
+}
+
+function getLocationLabel(posting: DashboardPosting) {
+  if (posting.primaryLocation && posting.region) {
+    return `${posting.primaryLocation} · ${posting.region}`
+  }
+
+  return posting.primaryLocation ?? posting.region ?? "Ort unbekannt"
+}
+
+function getFindingLabel(posting: DashboardPosting) {
+  if (posting.latestSourceName) {
+    return posting.findingCount > 1
+      ? `${posting.latestSourceName} +${posting.findingCount - 1}`
+      : posting.latestSourceName
+  }
+
+  if (posting.findingCount === 1) return "1 Fundstelle"
+  if (posting.findingCount > 1) return `${posting.findingCount} Fundstellen`
+
+  return "Manuell erfasst"
+}
+
+function ActionsCell({ row }: { row: Row<DashboardPosting> }) {
   const { copyToClipboard } = useCopyToClipboard()
+  const latestResultUrl = row.original.latestResultUrl
+
   const handleCopyId = () => {
     copyToClipboard(row.original.id)
 
-    toast.success("Employee ID successfully copied", {
+    toast.success("Stellenanzeigen-ID kopiert", {
       description: row.original.id,
     })
+  }
+
+  const handleCopyLink = () => {
+    if (!latestResultUrl) return
+
+    copyToClipboard(latestResultUrl)
+
+    toast.success("Fundstellen-Link kopiert", {
+      description: latestResultUrl,
+    })
+  }
+
+  const handleOpenLink = () => {
+    if (!latestResultUrl) return
+
+    window.open(latestResultUrl, "_blank", "noopener,noreferrer")
   }
 
   return (
@@ -273,75 +225,110 @@ function ActionsCell({ row }: { row: Row<IData> }) {
       <DropdownMenuTrigger
         render={
           <Button className="size-7" size="icon" variant="ghost">
-            <MoreHorizontalIcon
-            />
+            <MoreHorizontalIcon />
           </Button>
         }
       />
       <DropdownMenuContent side="bottom" align="start">
-        <DropdownMenuItem onClick={() => {}}>Edit</DropdownMenuItem>
-        <DropdownMenuItem onClick={handleCopyId}>Copy ID</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => {}}>
-          Delete
+        <DropdownMenuItem disabled={!latestResultUrl} onClick={handleOpenLink}>
+          <ExternalLinkIcon />
+          Quelle öffnen
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!latestResultUrl} onClick={handleCopyLink}>
+          <CopyIcon />
+          Link kopieren
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleCopyId}>ID kopieren</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-export function RecentOrders() {
+export function RecentPostingsTable() {
   "use no memo"
   // TanStack Table v8 returns a mutable table instance; keep this component
   // out of React Compiler memoization to avoid stale table UI.
+  const { formatDateTime } = useLocale()
+  const [postings, setPostings] = useState<DashboardPosting[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 5,
   })
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "name", desc: true },
+    { id: "lastFoundAt", desc: true },
   ])
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<PostingStatus[]>([])
 
-  const filteredData = useMemo(() => {
-    return demoData.filter((item) => {
-      // Filter by status
+  useEffect(() => {
+    let cancelled = false
+
+    setIsLoading(true)
+
+    getDashboardPostings()
+      .then((postings) => {
+        if (cancelled) return
+        toast.dismiss("dashboard-postings-load-error")
+        setPostings(postings)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        toast.error("Stellenanzeigen konnten nicht geladen werden", {
+          id: "dashboard-postings-load-error",
+          description: String(error),
+        })
+      })
+      .finally(() => {
+        if (cancelled) return
+        setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const filteredPostings = useMemo(() => {
+    return postings.filter((posting) => {
       const matchesStatus =
-        !selectedStatuses?.length || selectedStatuses.includes(item.status)
+        selectedStatuses.length === 0 ||
+        selectedStatuses.includes(posting.status)
 
-      // Filter by search query (case-insensitive)
       const searchLower = searchQuery.toLowerCase()
       const matchesSearch =
         !searchQuery ||
-        Object.values(item)
-          .join(" ") // Combine all fields into a single string
-          .toLowerCase()
-          .includes(searchLower)
+        Object.values(posting).join(" ").toLowerCase().includes(searchLower)
 
       return matchesStatus && matchesSearch
     })
-  }, [searchQuery, selectedStatuses])
+  }, [postings, searchQuery, selectedStatuses])
 
   const statusCounts = useMemo(() => {
-    return demoData.reduce(
-      (acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>
-    )
-  }, [])
+    return postings.reduce((acc, posting) => {
+      acc[posting.status] = (acc[posting.status] || 0) + 1
+      return acc
+    }, createEmptyStatusCounts())
+  }, [postings])
 
-  const handleStatusChange = (checked: boolean, value: string) => {
-    setSelectedStatuses(
-      (
-        prev = [] // Default to an empty array
-      ) => (checked ? [...prev, value] : prev.filter((v) => v !== value))
+  const availableStatuses = useMemo(() => {
+    return postingStatuses.filter((status) => statusCounts[status] > 0)
+  }, [statusCounts])
+
+  const handleStatusChange = (checked: boolean, value: PostingStatus) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setSelectedStatuses((prev) =>
+      checked ? [...prev, value] : prev.filter((status) => status !== value)
     )
   }
 
-  const columns = useMemo<ColumnDef<IData>[]>(
+  const handleSearchChange = (value: string) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setSearchQuery(value)
+  }
+
+  const columns = useMemo<ColumnDef<DashboardPosting>[]>(
     () => [
       {
         accessorKey: "id",
@@ -357,11 +344,11 @@ export function RecentOrders() {
         enableResizing: false,
       },
       {
-        accessorKey: "name",
-        id: "name",
+        accessorKey: "title",
+        id: "title",
         header: ({ column }) => (
           <DataGridColumnHeader
-            title="User"
+            title="Stellenanzeige"
             visibility={true}
             column={column}
           />
@@ -369,59 +356,39 @@ export function RecentOrders() {
         cell: ({ row }) => {
           return (
             <div className="flex items-center gap-3">
-              <Avatar className="size-8">
-                <AvatarImage
-                  src={row.original.avatar}
-                  alt={row.original.name}
-                />
-                <AvatarFallback>
-                  {row.original.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="space-y-px">
-                <div className="text-foreground font-medium">
-                  {row.original.name}
+              <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-xs font-medium text-muted-foreground">
+                {getCompanyInitials(row.original.company)}
+              </div>
+              <div className="min-w-0 space-y-px">
+                <div className="truncate font-medium text-foreground">
+                  {row.original.title}
                 </div>
-                <div className="text-muted-foreground">
-                  {row.original.email}
+                <div className="truncate text-muted-foreground">
+                  {row.original.company}
                 </div>
               </div>
             </div>
           )
         },
-        size: 200,
+        size: 260,
         enableSorting: true,
         enableHiding: false,
         enableResizing: true,
       },
       {
-        accessorKey: "location",
+        accessorFn: getLocationLabel,
         id: "location",
         header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Location"
-            visibility={true}
-            column={column}
-          />
+          <DataGridColumnHeader title="Ort" visibility={true} column={column} />
         ),
         cell: ({ row }) => {
           return (
-            <div className="flex items-center gap-1.5">
-              <img
-                src={`https://flagcdn.com/${row.original.flag.toLowerCase()}.svg`}
-                alt={row.original.flag}
-                className="size-4 rounded-full object-cover"
-              />
-              <div className="text-foreground font-medium">
-                {row.original.location}
-              </div>
+            <div className="truncate font-medium text-foreground">
+              {getLocationLabel(row.original)}
             </div>
           )
         },
-        size: 150,
+        size: 170,
         meta: {
           headerClassName: "",
           cellClassName: "text-start",
@@ -431,45 +398,78 @@ export function RecentOrders() {
         enableResizing: true,
       },
       {
-        accessorKey: "role",
-        id: "role",
+        accessorKey: "workModel",
+        id: "workModel",
         header: ({ column }) => (
           <DataGridColumnHeader
-            title="Role"
+            title="Arbeitsmodell"
             visibility={true}
             column={column}
           />
         ),
         cell: ({ row }) => {
           return (
-            <div className="text-foreground font-medium">
-              {row.original.role}
+            <div className="font-medium text-foreground">
+              {workModelLabels[row.original.workModel]}
             </div>
           )
         },
-        size: 150,
+        size: 130,
         enableSorting: true,
         enableHiding: true,
         enableResizing: true,
       },
       {
-        accessorKey: "joined",
-        id: "joined",
+        accessorKey: "descriptionExcerpt",
+        id: "descriptionExcerpt",
         header: ({ column }) => (
           <DataGridColumnHeader
-            title="Joined"
+            title="Beschreibung"
             visibility={true}
             column={column}
           />
         ),
         cell: ({ row }) => {
           return (
-            <div className="text-foreground font-medium">
-              {row.original.joined}
+            <div className="line-clamp-2 text-muted-foreground">
+              {row.original.descriptionExcerpt ||
+                "Keine Beschreibung gespeichert"}
             </div>
           )
         },
-        size: 150,
+        size: 340,
+        enableSorting: false,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorFn: (posting) => posting.lastFoundAt ?? posting.createdAt,
+        id: "lastFoundAt",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Gefunden"
+            visibility={true}
+            column={column}
+          />
+        ),
+        cell: ({ row }) => {
+          const foundAt = row.original.lastFoundAt ?? row.original.createdAt
+
+          return (
+            <div className="space-y-px">
+              <div className="font-medium text-foreground">
+                {formatDateTime(foundAt, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </div>
+              <div className="truncate text-muted-foreground">
+                {getFindingLabel(row.original)}
+              </div>
+            </div>
+          )
+        },
+        size: 180,
         enableSorting: true,
         enableHiding: true,
         enableResizing: true,
@@ -484,20 +484,8 @@ export function RecentOrders() {
             column={column}
           />
         ),
-        cell: ({ row }) => {
-          const status = row.original.status
-
-          if (status == "Active") {
-            return <Badge variant="success-outline">Approved</Badge>
-          } else if (status == "Blocked") {
-            return <Badge variant="destructive-outline">Blocked</Badge>
-          } else if (status == "Inactive") {
-            return <Badge variant="info-outline">Inactive</Badge>
-          } else {
-            return <Badge variant="warning-outline">Pending</Badge>
-          }
-        },
-        size: 100,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+        size: 160,
         enableSorting: true,
         enableHiding: true,
         enableResizing: true,
@@ -512,7 +500,7 @@ export function RecentOrders() {
         enableResizing: false,
       },
     ],
-    []
+    [formatDateTime]
   )
 
   const [columnOrder, setColumnOrder] = useState<string[]>(
@@ -523,9 +511,11 @@ export function RecentOrders() {
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     columns,
-    data: filteredData,
-    pageCount: Math.ceil((filteredData?.length || 0) / pagination.pageSize),
-    getRowId: (row: IData) => row.id,
+    data: filteredPostings,
+    pageCount: Math.ceil(
+      (filteredPostings.length || 0) / pagination.pageSize
+    ),
+    getRowId: (row: DashboardPosting) => row.id,
     state: {
       pagination,
       sorting,
@@ -544,7 +534,11 @@ export function RecentOrders() {
   return (
     <DataGrid
       table={table}
-      recordCount={filteredData?.length || 0}
+      recordCount={filteredPostings.length}
+      isLoading={isLoading}
+      loadingMode="spinner"
+      loadingMessage="Stellenanzeigen werden geladen…"
+      emptyMessage="Keine gefundenen Stellenanzeigen vorhanden."
       tableLayout={{
         columnsPinnable: true,
         columnsResizable: true,
@@ -555,28 +549,26 @@ export function RecentOrders() {
       <Card className="w-full gap-3 py-0">
         <CardHeader className="flex items-center justify-between px-3.5 py-2">
           <div className="flex items-center gap-2.5">
-            <InputGroup className="w-48">
+            <InputGroup className="w-64">
               <InputGroupAddon align="inline-start">
-                <SearchIcon
-                />
+                <SearchIcon />
               </InputGroupAddon>
 
               <InputGroupInput
-                placeholder="Search..."
+                placeholder="Stellenanzeigen suchen…"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => handleSearchChange(event.target.value)}
               />
 
               {searchQuery.length > 0 && (
                 <InputGroupAddon align="inline-end">
                   <InputGroupButton
-                    aria-label="Copy"
-                    title="Copy"
+                    aria-label="Suche zurücksetzen"
+                    title="Suche zurücksetzen"
                     size="icon-xs"
-                    onClick={() => setSearchQuery("")}
+                    onClick={() => handleSearchChange("")}
                   >
-                    <XIcon
-                    />
+                    <XIcon />
                   </InputGroupButton>
                 </InputGroupAddon>
               )}
@@ -585,8 +577,7 @@ export function RecentOrders() {
               <PopoverTrigger
                 render={
                   <Button variant="outline">
-                    <FunnelIcon
-                    />
+                    <FunnelIcon />
                     Status
                     {selectedStatuses.length > 0 && (
                       <Badge size="sm" variant="info-outline">
@@ -596,32 +587,41 @@ export function RecentOrders() {
                   </Button>
                 }
               />
-              <PopoverContent className="w-40" align="start">
+              <PopoverContent className="w-52" align="start">
                 <div className="space-y-3">
-                  <div className="text-muted-foreground text-xs font-medium">
-                    Filters
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Filter
                   </div>
                   <div className="space-y-3">
-                    {Object.keys(statusCounts).map((status) => (
-                      <div key={status} className="flex items-center gap-2.5">
-                        <Checkbox
-                          id={status}
-                          checked={selectedStatuses.includes(status)}
-                          onCheckedChange={(checked) =>
-                            handleStatusChange(checked === true, status)
-                          }
-                        />
-                        <Label
-                          htmlFor={status}
-                          className="flex grow items-center justify-between gap-1.5 font-normal"
-                        >
-                          {status}
-                          <span className="text-muted-foreground">
-                            {statusCounts[status]}
-                          </span>
-                        </Label>
+                    {availableStatuses.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        Noch keine Status vorhanden.
                       </div>
-                    ))}
+                    ) : (
+                      availableStatuses.map((status) => (
+                        <div
+                          key={status}
+                          className="flex items-center gap-2.5"
+                        >
+                          <Checkbox
+                            id={`status-${status}`}
+                            checked={selectedStatuses.includes(status)}
+                            onCheckedChange={(checked) =>
+                              handleStatusChange(checked === true, status)
+                            }
+                          />
+                          <Label
+                            htmlFor={`status-${status}`}
+                            className="flex grow items-center justify-between gap-1.5 font-normal"
+                          >
+                            {postingStatusLabels[status]}
+                            <span className="text-muted-foreground">
+                              {statusCounts[status]}
+                            </span>
+                          </Label>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </PopoverContent>
@@ -629,9 +629,8 @@ export function RecentOrders() {
           </div>
           <CardAction>
             <Button>
-              <UserPlusIcon
-              />
-              Add new
+              <PlusIcon />
+              Manuell hinzufügen
             </Button>
           </CardAction>
         </CardHeader>

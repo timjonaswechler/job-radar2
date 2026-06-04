@@ -7,7 +7,10 @@ import {
   subWeeks,
 } from "date-fns"
 
-import type { DashboardStats } from "@/features/dashboard/types"
+import type {
+  DashboardPosting,
+  DashboardStats,
+} from "@/features/dashboard/types"
 import type { WeekStartsOn } from "@/lib/i18n/language"
 
 export type DashboardStatsRange = {
@@ -47,4 +50,8 @@ export async function getDashboardStats(
   range: DashboardStatsRange
 ): Promise<DashboardStats> {
   return invoke<DashboardStats>("get_dashboard_stats", { range })
+}
+
+export async function getDashboardPostings(): Promise<DashboardPosting[]> {
+  return invoke<DashboardPosting[]>("get_dashboard_postings")
 }

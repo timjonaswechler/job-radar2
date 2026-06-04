@@ -16,6 +16,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             commands::app::get_database_info,
+            commands::dashboard::get_dashboard_postings,
             commands::dashboard::get_dashboard_stats,
         ])
         .setup(|app| {

@@ -6,9 +6,8 @@ import {
   getDashboardStats,
 } from "@/lib/api/dashboard"
 import type { DashboardStats } from "./types"
-import { RecentOrders } from "./components/jobs-table"
+import { RecentPostingsTable } from "./components/jobs-table"
 import { MetricStrip } from "./components/strip"
-
 
 const emptyStats: DashboardStats = {
   newPostingsThisWeek: {
@@ -65,7 +64,7 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <MetricStrip stats={stats ?? emptyStats} loading={loading} />
-      <RecentOrders />
+      <RecentPostingsTable />
     </div>
   )
 }

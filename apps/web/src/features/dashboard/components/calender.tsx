@@ -24,8 +24,9 @@ export function CalendarWithPresets() {
           mode="range"
           defaultMonth={dateRange?.from}
           selected={dateRange}
-          // month={currentMonth}
+          month={currentMonth}
           onMonthChange={setCurrentMonth}
+          onSelect={setDateRange}
           numberOfMonths={2}
           fixedWeeks
           className="p-0 [--cell-size:--spacing(9.5)]"
