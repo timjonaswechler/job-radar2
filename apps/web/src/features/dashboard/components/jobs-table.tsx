@@ -62,11 +62,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { useLocale } from "@/context/locale-provider-context"
 import { getDashboardPostings } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
 
-import type { DashboardPosting, PostingStatus, WorkModel } from "../types"
+import type { DashboardPosting, PostingStatus } from "../types"
 
 const postingStatuses = [
   "new",
@@ -81,14 +80,7 @@ const postingStatusLabels: Record<PostingStatus, string> = {
   interesting: "Interessant",
   review_later: "Später ansehen",
   hidden: "Ausgeblendet",
-  converted_to_application: "In Bewerbung",
-}
-
-const workModelLabels: Record<WorkModel, string> = {
-  remote: "Remote",
-  hybrid: "Hybrid",
-  on_site: "Vor Ort",
-  unknown: "Unbekannt",
+  converted_to_application: "In Bewerbung umgewandelt",
 }
 
 const progressRingClasses: Record<PostingStatus, string> = {
@@ -179,19 +171,6 @@ function getLocationLabel(posting: DashboardPosting) {
   return posting.primaryLocation ?? posting.region ?? "Ort unbekannt"
 }
 
-function getFindingLabel(posting: DashboardPosting) {
-  if (posting.latestSourceName) {
-    return posting.findingCount > 1
-      ? `${posting.latestSourceName} +${posting.findingCount - 1}`
-      : posting.latestSourceName
-  }
-
-  if (posting.findingCount === 1) return "1 Fundstelle"
-  if (posting.findingCount > 1) return `${posting.findingCount} Fundstellen`
-
-  return "Manuell erfasst"
-}
-
 function ActionsCell({ row }: { row: Row<DashboardPosting> }) {
   const { copyToClipboard } = useCopyToClipboard()
   const latestResultUrl = row.original.latestResultUrl
@@ -249,16 +228,13 @@ export function RecentPostingsTable() {
   "use no memo"
   // TanStack Table v8 returns a mutable table instance; keep this component
   // out of React Compiler memoization to avoid stale table UI.
-  const { formatDateTime } = useLocale()
   const [postings, setPostings] = useState<DashboardPosting[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 5,
   })
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "lastFoundAt", desc: true },
-  ])
+  const [sorting, setSorting] = useState<SortingState>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedStatuses, setSelectedStatuses] = useState<PostingStatus[]>([])
 
@@ -312,10 +288,6 @@ export function RecentPostingsTable() {
     }, createEmptyStatusCounts())
   }, [postings])
 
-  const availableStatuses = useMemo(() => {
-    return postingStatuses.filter((status) => statusCounts[status] > 0)
-  }, [statusCounts])
-
   const handleStatusChange = (checked: boolean, value: PostingStatus) => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     setSelectedStatuses((prev) =>
@@ -347,30 +319,56 @@ export function RecentPostingsTable() {
         accessorKey: "title",
         id: "title",
         header: ({ column }) => (
+          <DataGridColumnHeader title="Titel" visibility={true} column={column} />
+        ),
+        cell: ({ row }) => {
+          return (
+            <div className="min-w-0 space-y-1">
+              <div className="truncate text-sm font-medium text-foreground">
+                {row.original.title}
+              </div>
+              <div className="line-clamp-1 text-muted-foreground">
+                {row.original.descriptionExcerpt ||
+                  "Keine Beschreibung gespeichert"}
+              </div>
+            </div>
+          )
+        },
+        size: 420,
+        enableSorting: true,
+        enableHiding: false,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "company",
+        id: "company",
+        header: ({ column }) => (
           <DataGridColumnHeader
-            title="Stellenanzeige"
+            title="Firma"
             visibility={true}
             column={column}
           />
         ),
         cell: ({ row }) => {
           return (
-            <div className="flex items-center gap-3">
-              <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-2.5">
+              <div className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-xs font-medium text-muted-foreground">
                 {getCompanyInitials(row.original.company)}
               </div>
               <div className="min-w-0 space-y-px">
                 <div className="truncate font-medium text-foreground">
-                  {row.original.title}
-                </div>
-                <div className="truncate text-muted-foreground">
                   {row.original.company}
                 </div>
+                {row.original.latestSourceName && (
+                  <div className="truncate text-muted-foreground">
+                    {row.original.latestSourceName}
+                  </div>
+                )}
               </div>
             </div>
           )
         },
-        size: 260,
+        size: 220,
         enableSorting: true,
         enableHiding: false,
         enableResizing: true,
@@ -388,90 +386,13 @@ export function RecentPostingsTable() {
             </div>
           )
         },
-        size: 170,
+        size: 220,
         meta: {
           headerClassName: "",
           cellClassName: "text-start",
         },
         enableSorting: true,
-        enableHiding: true,
-        enableResizing: true,
-      },
-      {
-        accessorKey: "workModel",
-        id: "workModel",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Arbeitsmodell"
-            visibility={true}
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          return (
-            <div className="font-medium text-foreground">
-              {workModelLabels[row.original.workModel]}
-            </div>
-          )
-        },
-        size: 130,
-        enableSorting: true,
-        enableHiding: true,
-        enableResizing: true,
-      },
-      {
-        accessorKey: "descriptionExcerpt",
-        id: "descriptionExcerpt",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Beschreibung"
-            visibility={true}
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          return (
-            <div className="line-clamp-2 text-muted-foreground">
-              {row.original.descriptionExcerpt ||
-                "Keine Beschreibung gespeichert"}
-            </div>
-          )
-        },
-        size: 340,
-        enableSorting: false,
-        enableHiding: true,
-        enableResizing: true,
-      },
-      {
-        accessorFn: (posting) => posting.lastFoundAt ?? posting.createdAt,
-        id: "lastFoundAt",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Gefunden"
-            visibility={true}
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          const foundAt = row.original.lastFoundAt ?? row.original.createdAt
-
-          return (
-            <div className="space-y-px">
-              <div className="font-medium text-foreground">
-                {formatDateTime(foundAt, {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </div>
-              <div className="truncate text-muted-foreground">
-                {getFindingLabel(row.original)}
-              </div>
-            </div>
-          )
-        },
-        size: 180,
-        enableSorting: true,
-        enableHiding: true,
+        enableHiding: false,
         enableResizing: true,
       },
       {
@@ -485,9 +406,9 @@ export function RecentPostingsTable() {
           />
         ),
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
-        size: 160,
+        size: 180,
         enableSorting: true,
-        enableHiding: true,
+        enableHiding: false,
         enableResizing: true,
       },
       {
@@ -500,7 +421,7 @@ export function RecentPostingsTable() {
         enableResizing: false,
       },
     ],
-    [formatDateTime]
+    []
   )
 
   const [columnOrder, setColumnOrder] = useState<string[]>(
@@ -593,35 +514,26 @@ export function RecentPostingsTable() {
                     Filter
                   </div>
                   <div className="space-y-3">
-                    {availableStatuses.length === 0 ? (
-                      <div className="text-xs text-muted-foreground">
-                        Noch keine Status vorhanden.
-                      </div>
-                    ) : (
-                      availableStatuses.map((status) => (
-                        <div
-                          key={status}
-                          className="flex items-center gap-2.5"
+                    {postingStatuses.map((status) => (
+                      <div key={status} className="flex items-center gap-2.5">
+                        <Checkbox
+                          id={`status-${status}`}
+                          checked={selectedStatuses.includes(status)}
+                          onCheckedChange={(checked) =>
+                            handleStatusChange(checked === true, status)
+                          }
+                        />
+                        <Label
+                          htmlFor={`status-${status}`}
+                          className="flex grow items-center justify-between gap-1.5 font-normal"
                         >
-                          <Checkbox
-                            id={`status-${status}`}
-                            checked={selectedStatuses.includes(status)}
-                            onCheckedChange={(checked) =>
-                              handleStatusChange(checked === true, status)
-                            }
-                          />
-                          <Label
-                            htmlFor={`status-${status}`}
-                            className="flex grow items-center justify-between gap-1.5 font-normal"
-                          >
-                            {postingStatusLabels[status]}
-                            <span className="text-muted-foreground">
-                              {statusCounts[status]}
-                            </span>
-                          </Label>
-                        </div>
-                      ))
-                    )}
+                          {postingStatusLabels[status]}
+                          <span className="text-muted-foreground">
+                            {statusCounts[status]}
+                          </span>
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </PopoverContent>
