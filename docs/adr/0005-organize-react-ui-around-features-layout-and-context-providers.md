@@ -25,7 +25,7 @@ src/
     ui/
     reui/
   features/
-    dashboard/
+    dashboard/ - done
     stellenanzeigen-inbox/
     bewerbungen/
     suchanfragen/
@@ -36,7 +36,7 @@ src/
     daten/
     einstellungen/
   lib/
-    i18n/
+    i18n/ - done
     api/
     app-settings.ts
     theme.ts
