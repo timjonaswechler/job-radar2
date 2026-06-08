@@ -1,26 +1,37 @@
 {
-  "name": "client",
-  "version": "0.0.1",
+  "name": "job-radar",
   "private": true,
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "format": "turbo format",
-    "typecheck": "turbo typecheck"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.5.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "i18next": "^26.3.1",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "lucide-react": "^1.17.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "prettier": "^3.8.3",
-    "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.9.15",
-    "typescript": "~6"
-  },
-  "packageManager": "npm@11.12.1",
-  "engines": {
-    "node": ">=20"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+    "@tailwindcss/vite": "^4.3.0",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^25.9.2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
 }
