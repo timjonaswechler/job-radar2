@@ -1,12 +1,10 @@
-"use client"
-
 import {
+  PointerEvent,
+  ReactNode,
   useCallback,
   useEffect,
   useRef,
   useState,
-  type PointerEvent,
-  type ReactNode,
 } from "react"
 import { useDataGrid } from "@/components/reui/data-grid/data-grid"
 import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area"

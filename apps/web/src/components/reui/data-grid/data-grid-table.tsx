@@ -1,27 +1,25 @@
-"use client"
-
 import {
+  CSSProperties,
   Fragment,
   memo,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  TouchEvent as ReactTouchEvent,
+  Ref,
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  type ReactNode,
-  type Ref,
-  type TouchEvent as ReactTouchEvent,
 } from "react"
 import { useDataGrid } from "@/components/reui/data-grid/data-grid"
 import {
+  Cell,
+  Column,
   flexRender,
-  type Cell,
-  type Column,
-  type Header,
-  type HeaderGroup,
-  type Row,
-  type Table,
+  Header,
+  HeaderGroup,
+  Row,
+  Table,
 } from "@tanstack/react-table"
 import { cva } from "class-variance-authority"
 

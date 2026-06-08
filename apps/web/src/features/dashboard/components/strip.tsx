@@ -137,7 +137,7 @@ export function MetricStrip({ stats, loading = false }: MetricStripProps) {
             )
           }
           detail={t("dashboard.kpis.interestingPostings.newThisWeek", {
-            count: numberFormatter.format(stats.interestingPostings.newThisWeek),
+            count: stats.interestingPostings.newThisWeek,
           })}
           loading={loading}
         />

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import { NavMain } from "./nav-main"
+import { ScrollArea} from "../ui/scroll-area"
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
@@ -50,8 +51,10 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
-        <SidebarContent className="relative z-10 h-auto">
-          <NavMain items={sidebarItems} />
+        <SidebarContent className="relative z-10 ">
+          <ScrollArea className="h-auto" >
+            <NavMain items={sidebarItems} />
+          </ScrollArea>
         </SidebarContent>
       </div>
     </Sidebar>

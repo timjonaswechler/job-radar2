@@ -1,5 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react"
-import type {
+"use client"
+
+import { createContext, ReactNode, useContext, useMemo } from "react"
+import {
   Column,
   ColumnFiltersState,
   RowData,

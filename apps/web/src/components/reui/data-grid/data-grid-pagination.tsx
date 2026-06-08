@@ -1,4 +1,6 @@
-import React, { type ReactNode } from "react"
+"use client"
+
+import React, { ReactNode } from "react"
 import { useDataGrid } from "@/components/reui/data-grid/data-grid"
 
 import { cn } from "@/lib/utils"

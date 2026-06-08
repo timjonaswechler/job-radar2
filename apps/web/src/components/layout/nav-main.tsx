@@ -16,6 +16,7 @@ import {
 import { navigateTo } from "@/navigation/path"
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items"
 
+
 interface NavMainProps {
   readonly items: readonly NavGroup[]
 }
