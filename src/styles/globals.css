@@ -101,6 +101,12 @@
     --warning-foreground: var(--color-yellow-900);
     --invert: var(--color-zinc-900);
     --invert-foreground: var(--color-zinc-50);
+    --quick-create-glow: color-mix(in oklab, var(--primary) 5%, transparent);
+    --quick-create-glow-soft: color-mix(
+        in oklab,
+        var(--primary) 5%,
+        transparent
+    );
 }
 
 .dark {
