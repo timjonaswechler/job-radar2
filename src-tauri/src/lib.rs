@@ -1,7 +1,11 @@
+mod adapter_registry;
 mod app_state;
+mod browser_runtime;
 mod commands;
 mod db;
 mod paths;
+mod source_detection;
+mod source_model;
 
 use tauri::Manager;
 
@@ -32,6 +36,28 @@ pub fn run() {
             commands::set_app_preferences,
             commands::set_app_theme,
             commands::set_app_language,
+            commands::set_default_search_radius_km,
+            commands::get_browser_runtime_status,
+            commands::install_browser_runtime,
+            commands::uninstall_browser_runtime,
+            commands::check_browser_runtime,
+            commands::list_adapters,
+            commands::detect_source_from_url,
+            commands::create_browser_profile,
+            commands::list_browser_profiles,
+            commands::get_browser_profile,
+            commands::update_browser_profile,
+            commands::delete_browser_profile,
+            commands::create_system_profile,
+            commands::list_system_profiles,
+            commands::get_system_profile,
+            commands::update_system_profile,
+            commands::delete_system_profile,
+            commands::create_source,
+            commands::list_sources,
+            commands::get_source,
+            commands::update_source,
+            commands::delete_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

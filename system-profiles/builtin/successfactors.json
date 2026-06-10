@@ -1,0 +1,48 @@
+{
+  "key": "successfactors",
+  "name": "SAP SuccessFactors",
+  "description": "Deklaratives Sitemap-Systemprofil für SuccessFactors-Karriereseiten.",
+  "adapterKey": "declarative_sitemap_jobboard",
+  "definitionSchemaVersion": 1,
+  "status": "active",
+  "definition": {
+    "detect": {
+      "required": [
+        {
+          "htmlContains": "successfactors"
+        },
+        {
+          "fetchText": {
+            "url": "/sitemap.xml",
+            "contains": "/job/"
+          }
+        }
+      ]
+    },
+    "sourceConfig": {
+      "url": "{{origin}}/sitemap.xml",
+      "recursive": false
+    }
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["url"],
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "title": "Sitemap-URL"
+      },
+      "recursive": {
+        "type": "boolean",
+        "default": true,
+        "title": "Sitemap-Index rekursiv auswerten"
+      },
+      "maxUrls": {
+        "type": "number",
+        "minimum": 1,
+        "title": "Maximale URLs"
+      }
+    }
+  }
+}

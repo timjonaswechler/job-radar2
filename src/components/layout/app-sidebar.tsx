@@ -1,55 +1,64 @@
-import type { AppPage, NavigationItem } from "@/lib/navigation";
-import { cn } from "@/lib/utils";
+"use client";
 
-type AppSidebarProps = {
-  activePage: AppPage;
-  items: NavigationItem[];
-  onPageChange: (page: AppPage) => void;
-};
+import type { ComponentProps } from "react";
 
-export function AppSidebar({ activePage, items, onPageChange }: AppSidebarProps) {
+import { InboxIcon, PlusCircleIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
+
+import { Button } from "@/components/ui/button";
+import { navigateTo } from "@/app/navigation/path";
+import { sidebarItems } from "@/app/navigation/sidebar/sidebar-items";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarFooter,
+} from "@/components/ui/sidebar";
+
+import { NavMain } from "@/components/layout/nav-main";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
+  const { t } = useTranslation();
   return (
-    <aside className="hidden w-72 shrink-0 border-r bg-card lg:block">
-      <div className="flex h-20 items-center border-b px-6">
-        <div className="grid gap-0.5">
-          <span className="text-lg font-semibold tracking-tight">App Shell</span>
-          <span className="text-xs text-muted-foreground">Tauri + React + SQLite</span>
-        </div>
-      </div>
-
-      <nav className="grid gap-1 p-3" aria-label="Hauptnavigation">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const active = item.id === activePage;
-
-          return (
-            <button
-              key={item.id}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors",
-                active
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              type="button"
-              onClick={() => onPageChange(item.id)}
-            >
-              <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span className="grid gap-0.5">
-                <span className="font-medium">{item.label}</span>
-                <span
-                  className={cn(
-                    "text-xs",
-                    active ? "text-primary-foreground/75" : "text-muted-foreground",
-                  )}
-                >
-                  {item.description}
+    <Sidebar {...props}>
+      <div className="sidebar-glow-shell flex h-full flex-col">
+        <SidebarHeader className="relative z-10 px-2 pt-8 pb-1">
+          <SidebarMenu>
+            <SidebarMenuItem className="flex items-center gap-2">
+              <SidebarMenuButton
+                type="button"
+                tooltip={t("features.applications.actions.new")}
+                className="drop-shadow-jumbo relative z-10 min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                onClick={() => navigateTo("/bewerbungen")}
+              >
+                <PlusCircleIcon />
+                <span>{t("features.applications.actions.new")}</span>
+              </SidebarMenuButton>
+              <Button
+                size="icon"
+                className="relative z-0 h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
+                variant="outline"
+                onClick={() => navigateTo("/stellenanzeigen")}
+              >
+                <InboxIcon />
+                <span className="sr-only">
+                  {t("navigation.items.postingsInbox")}
                 </span>
-              </span>
-            </button>
-          );
-        })}
-      </nav>
-    </aside>
+              </Button>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent className="relative z-10 ">
+          <ScrollArea className="h-auto">
+            <NavMain items={sidebarItems} />
+          </ScrollArea>
+        </SidebarContent>
+        <SidebarFooter>Asdasd</SidebarFooter>
+      </div>
+    </Sidebar>
   );
 }

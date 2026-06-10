@@ -1,0 +1,48 @@
+{
+  "key": "phenom",
+  "name": "Phenom",
+  "description": "Deklaratives Sitemap-Systemprofil für Phenom-/CareerConnect-Seiten.",
+  "adapterKey": "declarative_sitemap_jobboard",
+  "definitionSchemaVersion": 1,
+  "status": "active",
+  "definition": {
+    "detect": {
+      "required": [
+        {
+          "htmlContains": "phenom"
+        },
+        {
+          "fetchText": {
+            "url": "/sitemap_index.xml",
+            "contains": "<sitemap"
+          }
+        }
+      ]
+    },
+    "sourceConfig": {
+      "url": "{{origin}}/sitemap_index.xml",
+      "recursive": true
+    }
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["url"],
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "title": "Sitemap-URL"
+      },
+      "recursive": {
+        "type": "boolean",
+        "default": true,
+        "title": "Sitemap-Index rekursiv auswerten"
+      },
+      "maxUrls": {
+        "type": "number",
+        "minimum": 1,
+        "title": "Maximale URLs"
+      }
+    }
+  }
+}

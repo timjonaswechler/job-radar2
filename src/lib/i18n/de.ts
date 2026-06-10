@@ -1,99 +1,66 @@
+import type { TranslationTree } from "./types"
+
 export const de = {
-  app: {
-    title: "Job Radar",
-    description:
-      "Lokale Desktop-App zum Verwalten von Stellenanzeigen, Bewerbungen, Suchläufen und Erinnerungen.",
-    openGithubRepository: "GitHub-Repository öffnen",
+  common: {
+    actions: {
+      search: "Suchen",
+    },
+    status: {
+      soon: "Bald",
+    },
+    empty: {
+      noResults: "Keine Ergebnisse gefunden.",
+    },
   },
   language: {
-    selectLanguage: "Sprache auswählen",
-    switchToEnglish: "Auf Englisch wechseln",
-    switchToGerman: "Auf Deutsch wechseln",
+    actions: {
+      select: "Sprache auswählen",
+    },
+  },
+  theme: {
+    actions: {
+      switchToDark: "Zum dunklen Modus wechseln",
+      switchToLight: "Zum hellen Modus wechseln",
+    },
   },
   navigation: {
-    newApplication: "Neue Bewerbung",
     groups: {
       jobRadar: "Job Radar",
-      search: "Suche",
-      system: "System",
-      other: "Weitere",
     },
     items: {
       overview: "Übersicht",
-      mails: "Mails",
-      postingsInbox: "Stellenanzeigen-Inbox",
-      applications: "Bewerbungen",
-      reminders: "Erinnerungen",
-      searchQueries: "Suchanfragen",
-      jobSources: "Jobquellen",
-      searchRuns: "Suchläufe",
-      data: "Import & Export",
-      history: "Historie",
+      sources: "Quellen",
       settings: "Einstellungen",
+      postingsInbox: "Stellenanzeigen-Inbox",
     },
   },
   commandSearch: {
-    button: "Suchen",
-    placeholder: "Seiten, Abschnitte und Aktionen öffnen…",
-    noResults: "Keine Ergebnisse gefunden.",
-    soon: "Bald",
+    input: {
+      placeholder: "Seiten öffnen…",
+    },
     groups: {
       pages: "Seiten",
-      sections: "Abschnitte",
-      actions: "Aktionen",
-    },
-    sections: {
-      activeApplications: "Aktive Bewerbungen",
-      language: "Sprache",
-      import: "Import",
-    },
-    actions: {
-      newApplication: "Neue Bewerbung",
-      startSearchRun: "Suchlauf starten",
-      newSearchQuery: "Neue Suchanfrage",
     },
   },
-  search: {
-    button: "Suchen",
-    placeholder: "Stellenanzeigen, Bewerbungen und Suche öffnen…",
-    noResults: "Keine Ergebnisse gefunden.",
-    soon: "Bald",
+  startup: {
+    checking: "Startcheck läuft…",
+    browserMode: {
+      title: "Browser-Modus",
+      description: "Tauri und SQLite prüfen wir nur in der Desktop-App.",
+    },
+    ready: {
+      title: "Alles bereit",
+      description: "Tauri ist verbunden, SQLite {{sqliteVersion}} ist erreichbar.",
+    },
+    failed: {
+      title: "Startcheck fehlgeschlagen",
+    },
   },
-  theme: {
-    switchToDark: "Zum dunklen Modus wechseln",
-    switchToLight: "Zum hellen Modus wechseln",
-  },
-  applicationStatus: {
-    new: "Neu",
-    preparing_documents: "Unterlagen vorbereiten",
-    applied: "Beworben",
-    response: "Rückmeldung",
-    first_interview: "Erstgespräch",
-    technical_interview: "Technisches Interview",
-    offer: "Angebot",
-    rejected: "Abgelehnt",
-    withdrawn: "Zurückgezogen",
-    archived: "Archiviert",
-  },
-  dashboard: {
-    kpis: {
-      comparedToPreviousWeek: "vs. letzte Woche",
-      open: "offen",
-      clear: "ok",
-      newPostings: {
-        title: "Neue Stellenanzeigen",
-      },
-      interestingPostings: {
-        title: "Interessante Stellenanzeigen",
-        newThisWeek: "{{count}} neu diese Woche",
-      },
-      applicationsSent: {
-        title: "Beworben",
-      },
-      followUpsDue: {
-        title: "Follow-ups fällig",
-        dueUntilToday: "bis heute",
+  features: {
+    applications: {
+      actions: {
+        new: "Neue Bewerbung",
       },
     },
   },
-} as const
+} as const satisfies TranslationTree

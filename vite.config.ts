@@ -5,12 +5,52 @@ import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+function getNodeModulePackageName(id: string) {
+  const modulePath = id.split("node_modules/")[1];
+  if (!modulePath) return null;
+
+  const [firstPart, secondPart] = modulePath.split(/[\\/]/);
+  return firstPart.startsWith("@") ? `${firstPart}/${secondPart}` : firstPart;
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const packageName = getNodeModulePackageName(id);
+          if (!packageName) return undefined;
+
+          if (["react", "react-dom", "scheduler"].includes(packageName)) {
+            return "react-vendor";
+          }
+
+          if (packageName.startsWith("@tauri-apps/")) {
+            return "tauri-vendor";
+          }
+
+          if (
+            [
+              "@base-ui/react",
+              "cmdk",
+              "i18next",
+              "lucide-react",
+              "react-i18next",
+            ].includes(packageName)
+          ) {
+            return "ui-vendor";
+          }
+
+          return "vendor";
+        },
+      },
     },
   },
 
