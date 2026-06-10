@@ -1,0 +1,31 @@
+{
+  "key": "workday",
+  "name": "Workday Recruiting",
+  "description": "Deklaratives HTTP-Systemprofil für ein bekanntes Recruiting-System.",
+  "adapterKey": "declarative_http_jobboard",
+  "definitionSchemaVersion": 1,
+  "status": "active",
+  "definition": {
+    "detect": {
+      "required": [
+        {
+          "htmlContains": "myworkday"
+        }
+      ]
+    },
+    "sourceConfig": {
+      "startUrl": "{{inputUrl}}"
+    }
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["startUrl"],
+    "properties": {
+      "startUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Start-URL"
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ import type { SupportedLanguage } from "@/lib/i18n/resources"
 export type AppPreferences = {
   theme: AppTheme
   language: SupportedLanguage
+  defaultSearchRadiusKm: number
 }
 
 export function getAppPreferences() {
@@ -22,4 +23,8 @@ export function setAppTheme(theme: AppTheme) {
 
 export function setAppLanguage(language: SupportedLanguage) {
   return invoke<AppPreferences>("set_app_language", { language })
+}
+
+export function setDefaultSearchRadiusKm(radiusKm: number) {
+  return invoke<AppPreferences>("set_default_search_radius_km", { radiusKm })
 }

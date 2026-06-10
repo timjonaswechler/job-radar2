@@ -1,23 +1,32 @@
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
+import { getAppRoute } from "@/app/navigation/app-routes";
+import { APP_ROUTE_CHANGE_EVENT } from "@/app/navigation/path";
 import { AppLayout } from "@/components/layout/app-layout";
-import type { AppPage } from "@/lib/navigation";
-import { navigationItems, pageMeta } from "@/lib/navigation";
-import { HomePage } from "@/pages/home-page";
 
 export function App() {
-  const [activePage, setActivePage] = useState<AppPage>("home");
-  const meta = pageMeta[activePage];
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const handleRouteChange = () => setPathname(window.location.pathname);
+
+    window.addEventListener(APP_ROUTE_CHANGE_EVENT, handleRouteChange);
+    window.addEventListener("popstate", handleRouteChange);
+
+    return () => {
+      window.removeEventListener(APP_ROUTE_CHANGE_EVENT, handleRouteChange);
+      window.removeEventListener("popstate", handleRouteChange);
+    };
+  }, []);
+
+  const route = getAppRoute(pathname);
+  const Page = route.Component;
 
   return (
-    <AppLayout
-      activePage={activePage}
-      navigationItems={navigationItems}
-      title={meta.title}
-      subtitle={meta.subtitle}
-      onPageChange={setActivePage}
-    >
-      <HomePage />
+    <AppLayout title={route.title}>
+      <Suspense fallback={<div className="text-sm text-muted-foreground">Lädt…</div>}>
+        <Page />
+      </Suspense>
     </AppLayout>
   );
 }

@@ -1,0 +1,71 @@
+{
+  "key": "magnolia_esmp_job_search",
+  "name": "Magnolia ESMP Jobsuche",
+  "description": "Deklaratives HTTP-Systemprofil für Magnolia-Seiten mit ESMP-/`.search?index=job`-Jobsuche.",
+  "adapterKey": "declarative_http_jobboard",
+  "definitionSchemaVersion": 1,
+  "status": "active",
+  "definition": {
+    "detect": {
+      "required": [
+        {
+          "fetchScript": {
+            "srcRegex": "/webresources/js/.*script\\.js",
+            "contains": "/.search?index=job"
+          }
+        },
+        {
+          "fetchJson": {
+            "url": "/.search?index=job&size=1&page=1",
+            "pathExists": "$.searchResults"
+          }
+        }
+      ]
+    },
+    "sourceConfig": {
+      "startUrl": "{{inputUrl}}",
+      "endpointUrl": "{{origin}}/.search?index=job",
+      "itemsPath": "$.searchResults",
+      "titlePath": "$.title",
+      "urlPath": "$.url"
+    },
+    "extract": {
+      "endpoint": "{{origin}}/.search?index=job",
+      "itemsPath": "$.searchResults",
+      "fields": {
+        "title": "$.title",
+        "url": "$.url",
+        "location": "$.location",
+        "jobId": "$.jobId"
+      }
+    }
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["startUrl"],
+    "properties": {
+      "startUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Start-URL"
+      },
+      "endpointUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Search-Endpoint"
+      },
+      "itemsPath": {
+        "type": "string",
+        "title": "JSON-Pfad zur Trefferliste"
+      },
+      "titlePath": {
+        "type": "string",
+        "title": "JSON-Pfad zum Titel"
+      },
+      "urlPath": {
+        "type": "string",
+        "title": "JSON-Pfad zur URL"
+      }
+    }
+  }
+}

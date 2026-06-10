@@ -1,0 +1,3 @@
+# Store source configuration as JSON validated by adapter-owned schemas
+
+Job Radar stores each source's stable access/configuration data as JSON and validates it against the schema owned by the relevant source capability: the adapter for source-specific integrations, or the browser profile for browser-based sources. Source configuration does not contain search criteria such as keywords, roles, locations, regions, or countries; those belong to search requests. This keeps source configuration extensible for agents and users while still giving the application a validation boundary; the main alternative, adapter-specific relational tables or columns, would make every new source or profile capability require a database migration.

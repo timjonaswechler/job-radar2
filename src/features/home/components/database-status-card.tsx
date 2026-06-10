@@ -21,8 +21,8 @@ export function DatabaseStatusCard() {
           <div className="grid gap-1.5">
             <FrameTitle>SQLite Datenbank</FrameTitle>
             <FrameDescription>
-              Die lokale Datenbank bleibt als Infrastruktur erhalten. Domain-Tabellen
-              bauen wir später bewusst Schritt für Schritt auf.
+              Die lokale Datenbank ist Runtime-/Cache-Schicht. Systemprofile kommen
+              aus gebündelten Built-ins und lokalen JSON-Dateien im App-Data-Ordner.
             </FrameDescription>
           </div>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
@@ -67,6 +67,12 @@ export function DatabaseStatusCard() {
                 <dt className="font-medium">Datenbankdatei</dt>
                 <dd className="mt-1 break-all text-muted-foreground">
                   {data.databasePath}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-muted p-3 md:col-span-2">
+                <dt className="font-medium">Custom-Systemprofile</dt>
+                <dd className="mt-1 break-all text-muted-foreground">
+                  {data.systemProfilesDir}
                 </dd>
               </div>
             </dl>
