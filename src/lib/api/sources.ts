@@ -239,6 +239,14 @@ export function deleteSystemProfile(id: number) {
   return invoke<void>("delete_system_profile", { id })
 }
 
+export function exportSystemProfileJson(id: number) {
+  return invoke<string>("export_system_profile_json", { id })
+}
+
+export function importSystemProfileJson(contents: string) {
+  return invoke<SystemProfile>("import_system_profile_json", { contents })
+}
+
 export function createSource(input: CreateSourceInput) {
   return invoke<Source>("create_source", { input })
 }
