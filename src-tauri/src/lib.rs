@@ -54,6 +54,8 @@ pub fn run() {
             commands::get_system_profile,
             commands::update_system_profile,
             commands::delete_system_profile,
+            commands::export_system_profile_json,
+            commands::import_system_profile_json,
             commands::create_source,
             commands::list_sources,
             commands::get_source,

@@ -411,6 +411,22 @@ pub async fn delete_system_profile(state: State<'_, AppState>, id: i64) -> Resul
 }
 
 #[tauri::command]
+pub async fn export_system_profile_json(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<String, String> {
+    crate::source_model::export_system_profile_json(&state.db, id).await
+}
+
+#[tauri::command]
+pub async fn import_system_profile_json(
+    state: State<'_, AppState>,
+    contents: String,
+) -> Result<crate::source_model::SystemProfile, String> {
+    crate::source_model::import_system_profile_json(&state.db, &contents).await
+}
+
+#[tauri::command]
 pub async fn create_source(
     state: State<'_, AppState>,
     input: crate::source_model::CreateSourceInput,

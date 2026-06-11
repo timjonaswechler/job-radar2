@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   AlertCircleIcon,
@@ -55,6 +55,8 @@ import {
   deleteBrowserProfile,
   deleteSource,
   deleteSystemProfile,
+  exportSystemProfileJson,
+  importSystemProfileJson,
   listAdapters,
   listBrowserProfiles,
   listSources,
@@ -182,6 +184,7 @@ export function SourcesFeature() {
     null,
   );
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const systemProfileImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const adapters = data?.adapters ?? [];
   const browserProfiles = data?.browserProfiles ?? [];
@@ -320,6 +323,38 @@ export function SourcesFeature() {
     await refresh();
   };
 
+  const handleExportSystemProfile = async (systemProfile: SystemProfile) => {
+    try {
+      const json = await exportSystemProfileJson(systemProfile.id);
+      downloadJsonFile(`${systemProfile.key}.json`, json);
+      toast.success("Systemprofil exportiert.", {
+        description: systemProfile.name,
+      });
+    } catch (unknownError) {
+      toast.error("Systemprofil konnte nicht exportiert werden.", {
+        description: String(unknownError),
+      });
+    }
+  };
+
+  const handleImportSystemProfileFile = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const imported = await importSystemProfileJson(await file.text());
+      toast.success("Systemprofil importiert.", { description: imported.name });
+      await refresh();
+    } catch (unknownError) {
+      toast.error("Systemprofil konnte nicht importiert werden.", {
+        description: String(unknownError),
+      });
+    }
+  };
+
   const handleCreateSource = async (input: CreateSourceInput) => {
     const created = await createSource(input);
     toast.success("Quelle angelegt.", { description: created.name });
@@ -382,6 +417,14 @@ export function SourcesFeature() {
               <Button variant="outline" size="sm" onClick={() => void refresh()}>
                 <RefreshCwIcon className="size-4" aria-hidden="true" />
                 Aktualisieren
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => systemProfileImportInputRef.current?.click()}
+              >
+                <FileJsonIcon className="size-4" aria-hidden="true" />
+                Systemprofil importieren
               </Button>
               <Button
                 variant="outline"
@@ -465,6 +508,10 @@ export function SourcesFeature() {
             setDeleteTarget({ type: "browserProfile", browserProfile })
           }
           onCreateSystemProfile={() => setSystemProfileDialog({ mode: "create" })}
+          onImportSystemProfile={() => systemProfileImportInputRef.current?.click()}
+          onExportSystemProfile={(systemProfile) =>
+            void handleExportSystemProfile(systemProfile)
+          }
           onEditSystemProfile={(systemProfile) =>
             setSystemProfileDialog({ mode: "edit", systemProfile })
           }
@@ -502,6 +549,14 @@ export function SourcesFeature() {
           onDelete={(source) => setDeleteTarget({ type: "source", source })}
         />
       </div>
+
+      <input
+        ref={systemProfileImportInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => void handleImportSystemProfileFile(event)}
+      />
 
       {browserProfileDialog?.mode === "create" ? (
         <BrowserProfileFormDialog
@@ -851,6 +906,8 @@ function ProfileCatalog({
   onEditBrowserProfile,
   onDeleteBrowserProfile,
   onCreateSystemProfile,
+  onImportSystemProfile,
+  onExportSystemProfile,
   onEditSystemProfile,
   onDeleteSystemProfile,
 }: {
@@ -861,6 +918,8 @@ function ProfileCatalog({
   onEditBrowserProfile: (browserProfile: BrowserProfile) => void;
   onDeleteBrowserProfile: (browserProfile: BrowserProfile) => void;
   onCreateSystemProfile: () => void;
+  onImportSystemProfile: () => void;
+  onExportSystemProfile: (systemProfile: SystemProfile) => void;
   onEditSystemProfile: (systemProfile: SystemProfile) => void;
   onDeleteSystemProfile: (systemProfile: SystemProfile) => void;
 }) {
@@ -876,6 +935,10 @@ function ProfileCatalog({
             </FrameDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onImportSystemProfile}>
+              <FileJsonIcon className="size-4" aria-hidden="true" />
+              Import
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={onCreateSystemProfile}>
               <PlusIcon className="size-4" aria-hidden="true" />
               System
@@ -919,6 +982,15 @@ function ProfileCatalog({
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onExportSystemProfile(systemProfile)}
+                    >
+                      <FileJsonIcon className="size-3" aria-hidden="true" />
+                      Export
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -1352,6 +1424,16 @@ function getFilterValue(source: Source, field: string) {
 
 function formatJson(value: JsonValue) {
   return JSON.stringify(value, null, 2);
+}
+
+function downloadJsonFile(filename: string, contents: string) {
+  const blob = new Blob([contents], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function getDeleteDialogCopy(deleteTarget: DeleteTarget | null) {

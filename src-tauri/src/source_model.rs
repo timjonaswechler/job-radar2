@@ -1,3 +1,5 @@
+use regex::Regex;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
@@ -136,6 +138,36 @@ pub struct UpdateSystemProfileInput {
     pub source_config_schema: Value,
     pub status: SourceStatus,
     pub validation_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemProfileJsonDocument {
+    pub key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub adapter_key: String,
+    pub definition_schema_version: i64,
+    pub definition: Value,
+    pub source_config_schema: Value,
+    pub status: SourceStatus,
+    pub validation_error: Option<String>,
+}
+
+impl From<SystemProfile> for SystemProfileJsonDocument {
+    fn from(profile: SystemProfile) -> Self {
+        Self {
+            key: profile.key,
+            name: profile.name,
+            description: profile.description,
+            adapter_key: profile.adapter_key,
+            definition_schema_version: profile.definition_schema_version,
+            definition: profile.definition,
+            source_config_schema: profile.source_config_schema,
+            status: profile.status,
+            validation_error: profile.validation_error,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -464,6 +496,68 @@ pub async fn delete_system_profile(pool: &SqlitePool, id: i64) -> Result<(), Str
     Ok(())
 }
 
+pub async fn export_system_profile_json(pool: &SqlitePool, id: i64) -> Result<String, String> {
+    let profile = get_system_profile(pool, id).await?;
+    let document = SystemProfileJsonDocument::from(profile);
+    serde_json::to_string_pretty(&document).map_err(|error| error.to_string())
+}
+
+pub async fn import_system_profile_json(
+    pool: &SqlitePool,
+    contents: &str,
+) -> Result<SystemProfile, String> {
+    let document = serde_json::from_str::<SystemProfileJsonDocument>(contents)
+        .map_err(|error| format!("system profile JSON is invalid: {error}"))?;
+    validate_system_profile_document(&document)?;
+
+    let existing = sqlx::query("SELECT id, built_in FROM system_profiles WHERE key = ?1")
+        .bind(&document.key)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_error)?;
+
+    let create_input = CreateSystemProfileInput {
+        key: document.key,
+        name: document.name,
+        description: document.description,
+        adapter_key: document.adapter_key,
+        definition_schema_version: document.definition_schema_version,
+        definition: document.definition,
+        source_config_schema: document.source_config_schema,
+        status: document.status,
+        validation_error: document.validation_error,
+    };
+
+    match existing {
+        Some(row) => {
+            let id: i64 = row.try_get("id").map_err(db_error)?;
+            let built_in: i64 = row.try_get("built_in").map_err(db_error)?;
+            if built_in == 1 {
+                return Err(format!(
+                    "built-in system profile {} cannot be overwritten by import",
+                    create_input.key
+                ));
+            }
+            update_system_profile(
+                pool,
+                id,
+                UpdateSystemProfileInput {
+                    name: create_input.name,
+                    description: create_input.description,
+                    adapter_key: create_input.adapter_key,
+                    definition_schema_version: create_input.definition_schema_version,
+                    definition: create_input.definition,
+                    source_config_schema: create_input.source_config_schema,
+                    status: create_input.status,
+                    validation_error: create_input.validation_error,
+                },
+            )
+            .await
+        }
+        None => create_system_profile(pool, create_input).await,
+    }
+}
+
 pub async fn create_source(pool: &SqlitePool, input: CreateSourceInput) -> Result<Source, String> {
     validate_technical_key("key", &input.key)?;
     validate_source_parts(
@@ -630,6 +724,294 @@ fn validate_system_profile_parts(
 
     if definition_schema_version < 1 {
         return Err("definitionSchemaVersion must be greater than zero".to_string());
+    }
+
+    Ok(())
+}
+
+fn validate_system_profile_document(document: &SystemProfileJsonDocument) -> Result<(), String> {
+    validate_technical_key("key", &document.key)?;
+    validate_system_profile_parts(
+        &document.name,
+        &document.adapter_key,
+        document.definition_schema_version,
+    )?;
+
+    if !document.definition.is_object() {
+        return Err("definition must be a JSON object".to_string());
+    }
+
+    validate_json_schema_document(&document.source_config_schema, "sourceConfigSchema")?;
+
+    let required_checks = document.definition.pointer("/detect/required");
+    if document.status == SourceStatus::Active {
+        let required_checks = required_checks
+            .and_then(Value::as_array)
+            .ok_or_else(|| "active profiles require definition.detect.required".to_string())?;
+        if required_checks.is_empty() {
+            return Err("active profiles require at least one detection check".to_string());
+        }
+    }
+
+    if let Some(required_checks) = required_checks {
+        let required_checks = required_checks
+            .as_array()
+            .ok_or_else(|| "definition.detect.required must be an array".to_string())?;
+        for (index, check) in required_checks.iter().enumerate() {
+            validate_detection_check(check, &format!("definition.detect.required[{index}]"))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_detection_check(check: &Value, path: &str) -> Result<(), String> {
+    let object = check
+        .as_object()
+        .ok_or_else(|| format!("{path} must be a JSON object"))?;
+    let check_types = [
+        "htmlContains",
+        "htmlRegex",
+        "fetchText",
+        "fetchJson",
+        "fetchScript",
+    ];
+    let present_check_types = check_types
+        .iter()
+        .filter(|check_type| object.contains_key(**check_type))
+        .copied()
+        .collect::<Vec<_>>();
+
+    let check_type = match present_check_types.as_slice() {
+        [] => return Err(format!("{path} uses unsupported detection check")),
+        [check_type] => *check_type,
+        _ => {
+            return Err(format!(
+                "{path} must declare exactly one detection check type"
+            ))
+        }
+    };
+
+    for key in object.keys() {
+        let supported = match check_type {
+            "htmlRegex" => matches!(key.as_str(), "htmlRegex" | "captureAs"),
+            "htmlContains" => key == "htmlContains",
+            "fetchText" => key == "fetchText",
+            "fetchJson" => key == "fetchJson",
+            "fetchScript" => key == "fetchScript",
+            _ => false,
+        };
+        if !supported {
+            return Err(format!("{path}.{key} is not supported for {check_type}"));
+        }
+    }
+
+    match check_type {
+        "htmlContains" => {
+            require_non_empty_string(object, "htmlContains", &format!("{path}.htmlContains"))?;
+        }
+        "htmlRegex" => {
+            validate_regex_value(object, "htmlRegex", &format!("{path}.htmlRegex"))?;
+            validate_optional_string(object, "captureAs", &format!("{path}.captureAs"))?;
+        }
+        "fetchText" => {
+            let fetch_text = require_object(object, "fetchText", &format!("{path}.fetchText"))?;
+            validate_allowed_keys(
+                fetch_text,
+                &["url", "contains", "regex", "captureAs"],
+                &format!("{path}.fetchText"),
+            )?;
+            validate_fetch_url(fetch_text, &format!("{path}.fetchText.url"))?;
+            validate_optional_string(
+                fetch_text,
+                "contains",
+                &format!("{path}.fetchText.contains"),
+            )?;
+            if fetch_text.contains_key("regex") {
+                validate_regex_value(fetch_text, "regex", &format!("{path}.fetchText.regex"))?;
+            }
+            validate_optional_string(
+                fetch_text,
+                "captureAs",
+                &format!("{path}.fetchText.captureAs"),
+            )?;
+        }
+        "fetchJson" => {
+            let fetch_json = require_object(object, "fetchJson", &format!("{path}.fetchJson"))?;
+            validate_allowed_keys(
+                fetch_json,
+                &["url", "pathExists"],
+                &format!("{path}.fetchJson"),
+            )?;
+            validate_fetch_url(fetch_json, &format!("{path}.fetchJson.url"))?;
+            validate_optional_string(
+                fetch_json,
+                "pathExists",
+                &format!("{path}.fetchJson.pathExists"),
+            )?;
+        }
+        "fetchScript" => {
+            let fetch_script =
+                require_object(object, "fetchScript", &format!("{path}.fetchScript"))?;
+            validate_allowed_keys(
+                fetch_script,
+                &["srcContains", "srcRegex", "contains", "regex", "captureAs"],
+                &format!("{path}.fetchScript"),
+            )?;
+            validate_optional_string(
+                fetch_script,
+                "srcContains",
+                &format!("{path}.fetchScript.srcContains"),
+            )?;
+            if fetch_script.contains_key("srcRegex") {
+                validate_regex_value(
+                    fetch_script,
+                    "srcRegex",
+                    &format!("{path}.fetchScript.srcRegex"),
+                )?;
+            }
+            validate_optional_string(
+                fetch_script,
+                "contains",
+                &format!("{path}.fetchScript.contains"),
+            )?;
+            if fetch_script.contains_key("regex") {
+                validate_regex_value(fetch_script, "regex", &format!("{path}.fetchScript.regex"))?;
+            }
+            validate_optional_string(
+                fetch_script,
+                "captureAs",
+                &format!("{path}.fetchScript.captureAs"),
+            )?;
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
+fn validate_allowed_keys(
+    object: &Map<String, Value>,
+    allowed_keys: &[&str],
+    path: &str,
+) -> Result<(), String> {
+    for key in object.keys() {
+        if !allowed_keys.contains(&key.as_str()) {
+            return Err(format!("{path}.{key} is not supported"));
+        }
+    }
+    Ok(())
+}
+
+fn require_object<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a Map<String, Value>, String> {
+    object
+        .get(key)
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("{path} must be a JSON object"))
+}
+
+fn require_non_empty_string<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a str, String> {
+    let Some(value) = object.get(key) else {
+        return Err(format!("{path} must be a non-empty string"));
+    };
+    let value = value
+        .as_str()
+        .ok_or_else(|| format!("{path} must be a string"))?;
+    if value.trim().is_empty() {
+        return Err(format!("{path} must be a non-empty string"));
+    }
+    Ok(value)
+}
+
+fn validate_optional_string(
+    object: &Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<(), String> {
+    if object.get(key).is_some_and(|value| !value.is_string()) {
+        return Err(format!("{path} must be a string"));
+    }
+    Ok(())
+}
+
+fn validate_regex_value(object: &Map<String, Value>, key: &str, path: &str) -> Result<(), String> {
+    let pattern = require_non_empty_string(object, key, path)?;
+    Regex::new(pattern).map_err(|error| format!("{path} is invalid: {error}"))?;
+    Ok(())
+}
+
+fn validate_fetch_url(object: &Map<String, Value>, path: &str) -> Result<(), String> {
+    let url = require_non_empty_string(object, "url", path)?;
+    if url.trim() != url {
+        return Err(format!("{path} is invalid: leading or trailing whitespace"));
+    }
+    let base = Url::parse("https://example.com/").map_err(|error| error.to_string())?;
+    base.join(url)
+        .map_err(|error| format!("{path} is invalid: {error}"))?;
+    Ok(())
+}
+
+fn validate_json_schema_document(schema: &Value, path: &str) -> Result<(), String> {
+    let object = schema
+        .as_object()
+        .ok_or_else(|| format!("{path} must be a JSON object"))?;
+
+    if let Some(schema_type) = object.get("type") {
+        let schema_type = schema_type
+            .as_str()
+            .ok_or_else(|| format!("{path}.type must be a string"))?;
+        if !matches!(
+            schema_type,
+            "string" | "boolean" | "number" | "integer" | "object" | "array"
+        ) {
+            return Err(format!(
+                "{path}.type must be string, boolean, number, integer, object, or array"
+            ));
+        }
+    }
+
+    if let Some(required_fields) = object.get("required") {
+        let required_fields = required_fields
+            .as_array()
+            .ok_or_else(|| format!("{path}.required must be an array"))?;
+        if required_fields.iter().any(|field| !field.is_string()) {
+            return Err(format!("{path}.required entries must be strings"));
+        }
+    }
+
+    if let Some(properties) = object.get("properties") {
+        let properties = properties
+            .as_object()
+            .ok_or_else(|| format!("{path}.properties must be a JSON object"))?;
+        for (property_key, property_schema) in properties {
+            validate_json_schema_document(
+                property_schema,
+                &format!("{path}.properties.{property_key}"),
+            )?;
+        }
+    }
+
+    if let Some(enum_values) = object.get("enum") {
+        enum_values
+            .as_array()
+            .ok_or_else(|| format!("{path}.enum must be an array"))?;
+    }
+
+    for number_keyword in ["minimum", "maximum"] {
+        if object
+            .get(number_keyword)
+            .is_some_and(|value| !value.is_number())
+        {
+            return Err(format!("{path}.{number_keyword} must be a number"));
+        }
     }
 
     Ok(())
@@ -1056,6 +1438,388 @@ mod tests {
 
             delete_system_profile(&pool, created.id).await.unwrap();
             assert!(get_system_profile(&pool, created.id).await.is_err());
+        });
+    }
+
+    #[test]
+    fn system_profile_json_export_imports_as_new_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let original = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "portable_board".to_string(),
+                    name: "Portable Board".to_string(),
+                    description: Some("Portable profile".to_string()),
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "portable-board" }] },
+                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
+                    }),
+                    source_config_schema: json!({
+                        "type": "object",
+                        "required": ["startUrl"],
+                        "properties": {
+                            "startUrl": { "type": "string", "format": "uri" }
+                        }
+                    }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let exported = export_system_profile_json(&pool, original.id)
+                .await
+                .unwrap();
+            delete_system_profile(&pool, original.id).await.unwrap();
+
+            let imported = import_system_profile_json(&pool, &exported).await.unwrap();
+            assert_eq!(imported.key, "portable_board");
+            assert_eq!(imported.name, "Portable Board");
+            assert_eq!(imported.adapter_key, "declarative_http_jobboard");
+            assert_eq!(
+                imported.definition["detect"]["required"][0]["htmlContains"],
+                "portable-board"
+            );
+            assert_eq!(imported.source_config_schema["required"][0], "startUrl");
+            assert!(!imported.built_in);
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_updates_existing_custom_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let existing = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "portable_board".to_string(),
+                    name: "Portable Board".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "old-marker" }] }
+                    }),
+                    source_config_schema: json!({ "type": "object" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let imported = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "portable_board",
+                  "name": "Portable Board v2",
+                  "description": "Updated from JSON",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 2,
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "new-marker" }] }
+                  },
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active",
+                  "validationError": null
+                }"#,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(imported.id, existing.id);
+            assert_eq!(imported.name, "Portable Board v2");
+            assert_eq!(imported.definition_schema_version, 2);
+            assert_eq!(
+                imported.definition["detect"]["required"][0]["htmlContains"],
+                "new-marker"
+            );
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_rejects_invalid_profile_without_persistence() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+
+            let invalid = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "invalid_profile",
+                  "name": "Invalid Profile",
+                  "adapterKey": "stepstone_search",
+                  "definitionSchemaVersion": 1,
+                  "definition": {},
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+
+            assert!(
+                invalid.contains("adapterKey stepstone_search cannot be used by system profiles")
+            );
+            assert!(get_system_profile_by_key(&pool, "invalid_profile")
+                .await
+                .is_err());
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_rejects_malformed_detection_checks_without_persistence() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+
+            let cases = [
+                (
+                    "invalid_html_contains",
+                    json!({ "htmlContains": 42 }),
+                    "definition.detect.required[0].htmlContains must be a string",
+                ),
+                (
+                    "invalid_html_regex",
+                    json!({ "htmlRegex": "[" }),
+                    "definition.detect.required[0].htmlRegex is invalid",
+                ),
+                (
+                    "missing_fetch_text_url",
+                    json!({ "fetchText": { "contains": "marker" } }),
+                    "definition.detect.required[0].fetchText.url must be a non-empty string",
+                ),
+                (
+                    "invalid_fetch_text_url",
+                    json!({ "fetchText": { "url": "http://[" } }),
+                    "definition.detect.required[0].fetchText.url is invalid",
+                ),
+                (
+                    "invalid_fetch_text_regex",
+                    json!({ "fetchText": { "url": "/sitemap.xml", "regex": "[" } }),
+                    "definition.detect.required[0].fetchText.regex is invalid",
+                ),
+                (
+                    "missing_fetch_json_url",
+                    json!({ "fetchJson": { "pathExists": "$.jobs" } }),
+                    "definition.detect.required[0].fetchJson.url must be a non-empty string",
+                ),
+                (
+                    "invalid_fetch_json_url",
+                    json!({ "fetchJson": { "url": "http://[" } }),
+                    "definition.detect.required[0].fetchJson.url is invalid",
+                ),
+                (
+                    "malformed_fetch_script_src_regex",
+                    json!({ "fetchScript": { "srcRegex": "[", "contains": "marker" } }),
+                    "definition.detect.required[0].fetchScript.srcRegex is invalid",
+                ),
+                (
+                    "malformed_fetch_script_regex",
+                    json!({ "fetchScript": { "regex": "[" } }),
+                    "definition.detect.required[0].fetchScript.regex is invalid",
+                ),
+                (
+                    "unknown_domain_contains",
+                    json!({ "domainContains": "example.com" }),
+                    "definition.detect.required[0] uses unsupported detection check",
+                ),
+            ];
+
+            for (key, check, expected_error) in cases {
+                let profile_json = json!({
+                    "key": key,
+                    "name": "Invalid Detection",
+                    "adapterKey": "declarative_http_jobboard",
+                    "definitionSchemaVersion": 1,
+                    "definition": {
+                        "detect": { "required": [check] }
+                    },
+                    "sourceConfigSchema": { "type": "object" },
+                    "status": "active",
+                    "validationError": null
+                })
+                .to_string();
+
+                let error = import_system_profile_json(&pool, &profile_json)
+                    .await
+                    .unwrap_err();
+                assert!(
+                    error.contains(expected_error),
+                    "expected `{error}` to contain `{expected_error}`"
+                );
+                assert!(get_system_profile_by_key(&pool, key).await.is_err());
+            }
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_rejects_invalid_detection_update_without_persistence() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let existing = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "portable_board".to_string(),
+                    name: "Portable Board".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "old-marker" }] }
+                    }),
+                    source_config_schema: json!({ "type": "object" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let error = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "portable_board",
+                  "name": "Portable Board with Bad Detection",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 2,
+                  "definition": {
+                    "detect": { "required": [{ "domainContains": "example.com" }] }
+                  },
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+
+            let unchanged = get_system_profile(&pool, existing.id).await.unwrap();
+            assert!(
+                error.contains("definition.detect.required[0] uses unsupported detection check")
+            );
+            assert_eq!(unchanged.name, "Portable Board");
+            assert_eq!(unchanged.definition_schema_version, 1);
+            assert_eq!(
+                unchanged.definition["detect"]["required"][0]["htmlContains"],
+                "old-marker"
+            );
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_rejects_invalid_definition_and_schema() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+
+            let invalid_definition = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "invalid_definition",
+                  "name": "Invalid Definition",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": [],
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+            assert!(invalid_definition.contains("definition must be a JSON object"));
+            assert!(get_system_profile_by_key(&pool, "invalid_definition")
+                .await
+                .is_err());
+
+            let invalid_schema = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "invalid_schema",
+                  "name": "Invalid Schema",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "marker" }] }
+                  },
+                  "sourceConfigSchema": [],
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+            assert!(invalid_schema.contains("sourceConfigSchema must be a JSON object"));
+            assert!(get_system_profile_by_key(&pool, "invalid_schema")
+                .await
+                .is_err());
+
+            let invalid_schema_shape = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "invalid_schema_shape",
+                  "name": "Invalid Schema Shape",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "marker" }] }
+                  },
+                  "sourceConfigSchema": { "type": "object", "required": "startUrl" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+            assert!(invalid_schema_shape.contains("sourceConfigSchema.required must be an array"));
+            assert!(get_system_profile_by_key(&pool, "invalid_schema_shape")
+                .await
+                .is_err());
+        });
+    }
+
+    #[test]
+    fn system_profile_json_import_does_not_overwrite_built_in_profiles() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            sqlx::query(
+                "INSERT INTO system_profiles (
+                   key, name, adapter_key, definition_schema_version,
+                   definition_json, source_config_schema_json, built_in, status
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7)",
+            )
+            .bind("greenhouse")
+            .bind("Greenhouse")
+            .bind("declarative_http_jobboard")
+            .bind(1_i64)
+            .bind(r#"{"detect":{"required":[{"htmlContains":"old"}]}}"#)
+            .bind(r#"{"type":"object"}"#)
+            .bind("active")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let error = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "greenhouse",
+                  "name": "Overwritten Greenhouse",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "new" }] }
+                  },
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+
+            let greenhouse = get_system_profile_by_key(&pool, "greenhouse")
+                .await
+                .unwrap();
+            assert!(error
+                .contains("built-in system profile greenhouse cannot be overwritten by import"));
+            assert_eq!(greenhouse.name, "Greenhouse");
         });
     }
 
