@@ -1,0 +1,117 @@
+version: 1
+name: system-profiles-phase-4
+
+repo:
+  github: timjonaswechler/job-radar2
+  cwd: /Users/tim-jonaswechler/GitHub-Projekte/job-radar2
+
+issues:
+  sequence: [9, 10, 11, 12, 13]
+  alreadyDone: []
+  blockedBy:
+    10: [9]
+    11: [9]
+    12: [9]
+
+references:
+  githubIssues: [9, 10, 11, 12, 13]
+  githubPRs: []
+  files:
+    - CONTEXT.md
+    - docs/adr/0001-source-config-as-json-schema.md
+    - docs/adr/0004-system-profiles-replace-system-specific-adapters.md
+    - docs/adr/0005-disposable-development-database.md
+    - docs/system-profiles.md
+    - src-tauri/src/adapter_registry.rs
+    - src-tauri/src/db.rs
+    - src-tauri/src/source_detection.rs
+    - src-tauri/src/source_model.rs
+    - src-tauri/migrations
+    - src/lib/api/sources.ts
+    - src/features/sources/index.tsx
+    - src/features/sources/components/source-form-dialog.tsx
+    - src/features/sources/components/system-profile-form-dialog.tsx
+  urls:
+    - https://github.com/timjonaswechler/job-radar2/issues/9
+    - https://github.com/timjonaswechler/job-radar2/issues/10
+    - https://github.com/timjonaswechler/job-radar2/issues/11
+    - https://github.com/timjonaswechler/job-radar2/issues/12
+    - https://github.com/timjonaswechler/job-radar2/issues/13
+
+scope:
+  summary: "Phase 4: make system profile detection testable, harden built-in profiles with deterministic evidence, and make profiles portable via JSON import/export."
+  nonGoals:
+    - "Do not reintroduce system-specific Rust adapters for Greenhouse, Lever, Ashby, Workday, Personio, SuccessFactors, Phenom, MUZ, or any company-specific career portal."
+    - "Do not use company-domain-only mappings or confidence scoring as a substitute for required technical evidence."
+    - "Do not build a marketplace, remote registry, or bulk synchronization flow for system profiles."
+    - "Do not make the local development database a durable product data store; keep the disposable-dev-DB decision intact."
+    - "Do not implement full job extraction runners unless explicitly required by an issue's acceptance criteria."
+  futureIssues:
+    - "Browser-only system profile checks for sites that cannot reveal enough evidence through HTTP fixtures."
+    - "A full system profile authoring wizard beyond test/import/export flows."
+    - "Remote/community profile registry and profile signing or trust model."
+    - "Actual job extraction execution for every hardened profile, if not already provided by the declarative runtime."
+
+workflow:
+  implementationSkill: tdd
+  oneIssuePerCommit: true
+  sequentialOnly: true
+  requireCleanWorktree: true
+  allowParallelImplementation: false
+  planGate: false
+
+review:
+  beforeCommit: true
+  acceptanceReviewerCommits: true
+  reviewerCanEditSource: false
+  reviewerSkill: review
+  mode: single-neutral
+  fixedPoint: issueStartHead
+  maxFixReviewCycles: 2
+  comparisonSources:
+    - githubIssueAcceptanceCriteria
+    - githubIssueBodyAndComments
+    - githubIssueLinksLabelsAndBlockers
+    - manifestScopeAndNonGoals
+    - manifestFutureIssues
+    - manifestReferences
+    - workerReportAsClaimsOnly
+    - currentUncommittedDiff
+    - testsAndCommandOutput
+  mustRejectIf:
+    - acceptanceCriteriaMissingOrAmbiguous
+    - missingOrUnmetAcceptanceCriterion
+    - scopeCreepOrFutureIssueWork
+    - failingOrInsufficientTests
+    - reviewerWouldNeedToEditSource
+    - impureIssueCommit
+    - productArchitectureOrApiDecisionNeeded
+  blockOn:
+    - acceptanceCriteriaMissing
+    - scopeCreep
+    - failingOrInsufficientTests
+    - regressionRisk
+    - impureIssueCommit
+
+remote:
+  pushAfterCommit: true
+  commentOnIssue: true
+  commentTemplate: default
+
+commit:
+  conventionalCommit: true
+  includeIssueNumber: true
+  requireScopeCheck: true
+
+stopIf:
+  - dirtyWorktree
+  - issueBlocked
+  - testsFailAfterFixAttempt
+  - scopeUnclear
+  - architectureDecisionNeeded
+  - acceptanceReviewBlocked
+
+report:
+  finalTable: true
+  includeTests: true
+  includeRisks: true
