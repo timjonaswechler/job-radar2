@@ -1,6 +1,7 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 
@@ -9,6 +10,39 @@ const SETTING_LANGUAGE: &str = "language";
 const SETTING_DEFAULT_SEARCH_RADIUS_KM: &str = "default_search_radius_km";
 const DEFAULT_SEARCH_RADIUS_KM: u16 = 30;
 const MAX_SEARCH_RADIUS_KM: u16 = 500;
+
+fn system_profile_export_filename(suggested_filename: Option<&str>) -> String {
+    let suggested_stem = suggested_filename
+        .and_then(|filename| {
+            filename
+                .trim()
+                .strip_suffix(".json")
+                .or(Some(filename.trim()))
+        })
+        .filter(|filename| !filename.is_empty())
+        .unwrap_or("system-profile");
+
+    let sanitized_stem = suggested_stem
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+
+    let stem = if sanitized_stem.is_empty() {
+        "system-profile"
+    } else {
+        sanitized_stem.as_str()
+    };
+
+    format!("{stem}.json")
+}
 
 struct TauriBrowserRuntimeProgressReporter {
     app: AppHandle,
@@ -416,6 +450,40 @@ pub async fn export_system_profile_json(
     id: i64,
 ) -> Result<String, String> {
     crate::source_model::export_system_profile_json(&state.db, id).await
+}
+
+#[tauri::command]
+pub async fn export_system_profile_json_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+    suggested_filename: Option<String>,
+) -> Result<Option<String>, String> {
+    let json = crate::source_model::export_system_profile_json(&state.db, id).await?;
+    let filename = system_profile_export_filename(suggested_filename.as_deref());
+
+    let selected_file = app
+        .dialog()
+        .file()
+        .set_title("Systemprofil exportieren")
+        .set_directory(state.paths.system_profiles_dir.clone())
+        .set_file_name(&filename)
+        .add_filter("JSON", &["json"])
+        .blocking_save_file();
+
+    let Some(selected_file) = selected_file else {
+        return Ok(None);
+    };
+
+    let path = selected_file
+        .into_path()
+        .map_err(|_| "Der ausgewählte Speicherort ist kein lokaler Dateipfad.".to_string())?;
+
+    tokio::fs::write(&path, json)
+        .await
+        .map_err(|error| format!("Systemprofil konnte nicht geschrieben werden: {error}"))?;
+
+    Ok(Some(path.display().to_string()))
 }
 
 #[tauri::command]

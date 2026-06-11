@@ -19,6 +19,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let paths = paths::AppPaths::from_app(app.handle())?;
             let app_state = tauri::async_runtime::block_on(app_state::AppState::new(paths))?;
@@ -55,6 +56,7 @@ pub fn run() {
             commands::update_system_profile,
             commands::delete_system_profile,
             commands::export_system_profile_json,
+            commands::export_system_profile_json_file,
             commands::import_system_profile_json,
             commands::create_source,
             commands::list_sources,

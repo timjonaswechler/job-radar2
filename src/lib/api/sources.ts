@@ -243,6 +243,16 @@ export function exportSystemProfileJson(id: number) {
   return invoke<string>("export_system_profile_json", { id })
 }
 
+export function exportSystemProfileJsonFile(
+  id: number,
+  suggestedFilename: string,
+) {
+  return invoke<string | null>("export_system_profile_json_file", {
+    id,
+    suggestedFilename,
+  })
+}
+
 export function importSystemProfileJson(contents: string) {
   return invoke<SystemProfile>("import_system_profile_json", { contents })
 }
