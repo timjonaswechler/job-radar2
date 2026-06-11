@@ -9,11 +9,11 @@
     "detect": {
       "required": [
         {
-          "htmlContains": "jobboard-widget"
+          "htmlRegex": "(?is)class=[\"'][^\"']*jobboard-widget[^\"']*[\"'][^>]+data-widget=[\"']jobboard[A-Za-z]+[\"']"
         },
         {
-          "fetchText": {
-            "url": "/script/gjb_scripts.js",
+          "fetchScript": {
+            "srcRegex": "(?i)(^|/)script/gjb_scripts\\.js(?:\\?.*)?$",
             "regex": "gjbAddress\\s*=\\s*\"([^\"]+)\"",
             "captureAs": "apiBaseUrl"
           }
@@ -42,7 +42,7 @@
   },
   "sourceConfigSchema": {
     "type": "object",
-    "required": ["startUrl"],
+    "required": ["startUrl", "apiBaseUrl", "configUrl"],
     "properties": {
       "startUrl": {
         "type": "string",

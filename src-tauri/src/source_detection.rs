@@ -513,7 +513,7 @@ async fn evaluate_fetch_script<C: DetectionHttpClient + Sync>(
                 fetch_script.get("captureAs"),
                 captures,
             )? {
-                return Ok(DetectionCheckOutcome::passed(evidence));
+                return Ok(DetectionCheckOutcome::passed(format!("Script {evidence}")));
             }
         }
         if fetch_script.get("contains").is_none() && fetch_script.get("regex").is_none() {
@@ -868,7 +868,11 @@ impl DetectionHttpClient for ReqwestDetectionHttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source_model::{create_system_profile, list_sources, CreateSystemProfileInput};
+    use crate::source_model::{
+        create_source, create_system_profile, list_sources, CreateSourceInput,
+        CreateSystemProfileInput,
+    };
+    use serde::Deserialize;
     use serde_json::json;
     use sqlx::{
         sqlite::{SqliteConnectOptions, SqlitePoolOptions},
@@ -1047,59 +1051,43 @@ mod tests {
     }
 
     #[test]
-    fn detects_muz_global_jobboard_only_when_required_evidence_matches() {
+    fn detects_commerzbank_muz_with_bundled_profile_and_creates_source() {
         tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_builtin_muz_system_profile(&pool).await;
             let client = FixtureHttpClient::new([
                 (
                     "https://jobs.commerzbank.com/index.php?ac=search_result",
-                    r#"<div class="jobboard-widget" data-widget="jobboardDatatable"></div>"#,
+                    r#"
+                    <html>
+                      <body>
+                        <form class="jobboard-container js-job-search-form" method="get">
+                          <div class="jobboard-datatable jobboard-widget"
+                               data-widget="jobboardDatatable"
+                               data-widget-config="configWidgetDataTable"></div>
+                        </form>
+                        <script src="/script/gjb_scripts.js"></script>
+                      </body>
+                    </html>
+                    "#,
                 ),
                 (
                     "https://jobs.commerzbank.com/script/gjb_scripts.js",
-                    r#"var gjbAddress = "https://api-jobs.commerzbank.com/";"#,
+                    r#"
+                    var gjb_apiTokenPayload = "";
+                    var gjbAddress = "https://api-jobs.commerzbank.com/";
+                    "#,
                 ),
                 (
                     "https://jobs.commerzbank.com/assets/js/jobboard.config.json",
-                    r#"{"configWidgetContainer":{"search":{}}}"#,
+                    r#"{"configWidgetContainer":{"search":{"endpoint":"placeholder"}}}"#,
                 ),
             ]);
-            let profile = SystemProfile {
-                id: 42,
-                key: "muz_global_jobboard".to_string(),
-                name: "Milch & Zucker Global Jobboard".to_string(),
-                description: None,
-                adapter_key: "declarative_http_jobboard".to_string(),
-                definition_schema_version: 1,
-                definition: json!({
-                    "detect": { "required": [
-                        { "htmlContains": "jobboard-widget" },
-                        { "fetchText": {
-                            "url": "/script/gjb_scripts.js",
-                            "regex": "gjbAddress\\s*=\\s*\"([^\"]+)\"",
-                            "captureAs": "apiBaseUrl"
-                        }},
-                        { "fetchJson": {
-                            "url": "/assets/js/jobboard.config.json",
-                            "pathExists": "$.configWidgetContainer.search"
-                        }}
-                    ]},
-                    "sourceConfig": {
-                        "startUrl": "{{inputUrl}}",
-                        "apiBaseUrl": "{{capture:apiBaseUrl}}",
-                        "configUrl": "{{origin}}/assets/js/jobboard.config.json"
-                    }
-                }),
-                source_config_schema: json!({}),
-                built_in: true,
-                status: SourceStatus::Active,
-                validation_error: None,
-                created_at: String::new(),
-                updated_at: String::new(),
-            };
+
             let result = detect_with_profiles(
                 &client,
                 &Url::parse("https://jobs.commerzbank.com/index.php?ac=search_result").unwrap(),
-                &[profile],
+                &[profile.clone()],
             )
             .await
             .unwrap();
@@ -1110,10 +1098,112 @@ mod tests {
                 Some("muz_global_jobboard")
             );
             assert_eq!(
-                result.source_config.unwrap()["apiBaseUrl"],
+                result.adapter_key.as_deref(),
+                Some("declarative_http_jobboard")
+            );
+            assert_eq!(result.system_profile_id, Some(profile.id));
+            assert_eq!(result.evidence.len(), 3);
+            let evidence = result.evidence.join("\n");
+            assert!(evidence.contains("HTML"));
+            assert!(evidence.contains("Script"));
+            assert!(evidence.contains("JSON-Pfad"));
+
+            let source_config = result.source_config.clone().unwrap();
+            assert_eq!(
+                source_config["startUrl"],
+                "https://jobs.commerzbank.com/index.php?ac=search_result"
+            );
+            assert_eq!(
+                source_config["apiBaseUrl"],
                 "https://api-jobs.commerzbank.com/"
             );
-            assert_eq!(result.evidence.len(), 3);
+            assert_eq!(
+                source_config["configUrl"],
+                "https://jobs.commerzbank.com/assets/js/jobboard.config.json"
+            );
+
+            let source = create_source(
+                &pool,
+                CreateSourceInput {
+                    key: result.key.unwrap(),
+                    adapter_key: result.adapter_key.unwrap(),
+                    system_profile_id: result.system_profile_id,
+                    browser_profile_id: None,
+                    name: result.name.unwrap(),
+                    description: None,
+                    source_config,
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(source.system_profile_id, Some(profile.id));
+            assert_eq!(source.adapter_key, "declarative_http_jobboard");
+            assert_eq!(
+                source.source_config["apiBaseUrl"],
+                "https://api-jobs.commerzbank.com/"
+            );
+        });
+    }
+
+    #[test]
+    fn muz_detection_fails_for_generic_jobs_page_without_technical_evidence() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://jobs.commerzbank.com/generic-careers",
+                r#"
+                <html>
+                  <body>
+                    <h1>Jobs und Karriere</h1>
+                    <p>Unsere aktuellen Stellenangebote.</p>
+                  </body>
+                </html>
+                "#,
+            )]);
+            let profile = builtin_muz_profile(42);
+
+            let result = detect_with_profiles(
+                &client,
+                &Url::parse("https://jobs.commerzbank.com/generic-careers").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+            assert!(result.evidence.is_empty());
+        });
+    }
+
+    #[test]
+    fn muz_source_config_requires_stable_api_and_config_values() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_builtin_muz_system_profile(&pool).await;
+
+            let error = create_source(
+                &pool,
+                CreateSourceInput {
+                    key: "commerzbank_careers".to_string(),
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    system_profile_id: Some(profile.id),
+                    browser_profile_id: None,
+                    name: "Commerzbank Karriere".to_string(),
+                    description: None,
+                    source_config: json!({
+                        "startUrl": "https://jobs.commerzbank.com/index.php?ac=search_result"
+                    }),
+                    status: SourceStatus::Draft,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap_err();
+
+            assert!(error.contains("sourceConfig.apiBaseUrl is required"));
         });
     }
 
@@ -1227,6 +1317,61 @@ mod tests {
             assert_eq!(result.status, SourceDetectionStatus::Unsupported);
             assert!(result.matches.is_empty());
         });
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct BuiltinSystemProfileSeed {
+        key: String,
+        name: String,
+        description: Option<String>,
+        adapter_key: String,
+        definition_schema_version: i64,
+        definition: Value,
+        source_config_schema: Value,
+    }
+
+    fn builtin_muz_profile(id: i64) -> SystemProfile {
+        let seed: BuiltinSystemProfileSeed = serde_json::from_str(include_str!(
+            "../../system-profiles/builtin/muz_global_jobboard.json"
+        ))
+        .unwrap();
+
+        SystemProfile {
+            id,
+            key: seed.key,
+            name: seed.name,
+            description: seed.description,
+            adapter_key: seed.adapter_key,
+            definition_schema_version: seed.definition_schema_version,
+            definition: seed.definition,
+            source_config_schema: seed.source_config_schema,
+            built_in: true,
+            status: SourceStatus::Active,
+            validation_error: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+        }
+    }
+
+    async fn create_builtin_muz_system_profile(pool: &SqlitePool) -> SystemProfile {
+        let profile = builtin_muz_profile(0);
+        create_system_profile(
+            pool,
+            CreateSystemProfileInput {
+                key: profile.key,
+                name: profile.name,
+                description: profile.description,
+                adapter_key: profile.adapter_key,
+                definition_schema_version: profile.definition_schema_version,
+                definition: profile.definition,
+                source_config_schema: profile.source_config_schema,
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
     }
 
     async fn migrated_pool() -> SqlitePool {
