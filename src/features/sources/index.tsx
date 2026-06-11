@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 
 import {
   AlertCircleIcon,
@@ -28,6 +36,14 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   NativeSelect,
@@ -55,7 +71,7 @@ import {
   deleteBrowserProfile,
   deleteSource,
   deleteSystemProfile,
-  exportSystemProfileJson,
+  exportSystemProfileJsonFile,
   importSystemProfileJson,
   listAdapters,
   listBrowserProfiles,
@@ -180,6 +196,8 @@ export function SourcesFeature() {
     useState<BrowserProfileDialogState | null>(null);
   const [systemProfileDialog, setSystemProfileDialog] =
     useState<SystemProfileDialogState | null>(null);
+  const [systemProfileExportDialogOpen, setSystemProfileExportDialogOpen] =
+    useState(false);
   const [sourceDialog, setSourceDialog] = useState<SourceDialogState | null>(
     null,
   );
@@ -325,15 +343,25 @@ export function SourcesFeature() {
 
   const handleExportSystemProfile = async (systemProfile: SystemProfile) => {
     try {
-      const json = await exportSystemProfileJson(systemProfile.id);
-      downloadJsonFile(`${systemProfile.key}.json`, json);
+      const targetPath = await exportSystemProfileJsonFile(
+        systemProfile.id,
+        `${systemProfile.key}.json`,
+      );
+
+      if (!targetPath) {
+        toast.info("Export abgebrochen.", { description: systemProfile.name });
+        return true;
+      }
+
       toast.success("Systemprofil exportiert.", {
-        description: systemProfile.name,
+        description: targetPath,
       });
+      return true;
     } catch (unknownError) {
       toast.error("Systemprofil konnte nicht exportiert werden.", {
         description: String(unknownError),
       });
+      return false;
     }
   };
 
@@ -509,6 +537,7 @@ export function SourcesFeature() {
           }
           onCreateSystemProfile={() => setSystemProfileDialog({ mode: "create" })}
           onImportSystemProfile={() => systemProfileImportInputRef.current?.click()}
+          onOpenSystemProfileExport={() => setSystemProfileExportDialogOpen(true)}
           onExportSystemProfile={(systemProfile) =>
             void handleExportSystemProfile(systemProfile)
           }
@@ -556,6 +585,13 @@ export function SourcesFeature() {
         accept="application/json,.json"
         className="hidden"
         onChange={(event) => void handleImportSystemProfileFile(event)}
+      />
+
+      <SystemProfileExportDialog
+        open={systemProfileExportDialogOpen}
+        systemProfiles={systemProfiles}
+        onOpenChange={setSystemProfileExportDialogOpen}
+        onExport={handleExportSystemProfile}
       />
 
       {browserProfileDialog?.mode === "create" ? (
@@ -898,6 +934,108 @@ function SystemProfileTestResultView({
   );
 }
 
+function SystemProfileExportDialog({
+  open,
+  systemProfiles,
+  onOpenChange,
+  onExport,
+}: {
+  open: boolean;
+  systemProfiles: SystemProfile[];
+  onOpenChange: (open: boolean) => void;
+  onExport: (systemProfile: SystemProfile) => Promise<boolean>;
+}) {
+  const [selectedSystemProfileId, setSelectedSystemProfileId] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedSystemProfileId(String(systemProfiles[0]?.id ?? ""));
+    setExporting(false);
+  }, [open, systemProfiles]);
+
+  const selectedSystemProfile =
+    systemProfiles.find(
+      (systemProfile) => String(systemProfile.id) === selectedSystemProfileId,
+    ) ?? null;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedSystemProfile) return;
+
+    setExporting(true);
+    const completed = await onExport(selectedSystemProfile);
+    setExporting(false);
+
+    if (completed) onOpenChange(false);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!exporting) onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent>
+        <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
+          <DialogHeader>
+            <DialogTitle>Systemprofil exportieren</DialogTitle>
+            <DialogDescription>
+              Wähle ein Systemprofil aus. Danach öffnet sich der native
+              Speichern-Dialog deines Betriebssystems.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium" htmlFor="system-profile-export-select">
+              Systemprofil
+            </label>
+            <NativeSelect
+              id="system-profile-export-select"
+              className="w-full"
+              value={selectedSystemProfileId}
+              onChange={(event) => setSelectedSystemProfileId(event.target.value)}
+              disabled={exporting || systemProfiles.length === 0}
+              required
+            >
+              {systemProfiles.map((systemProfile) => (
+                <NativeSelectOption
+                  key={systemProfile.id}
+                  value={String(systemProfile.id)}
+                >
+                  {systemProfile.name} ({systemProfile.key})
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <p className="text-xs text-muted-foreground">
+              Der Speichern-Dialog startet im App-Datenordner für Systemprofile.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={exporting}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              type="submit"
+              disabled={exporting || !selectedSystemProfile}
+            >
+              <FileJsonIcon className="size-4" aria-hidden="true" />
+              {exporting ? "Exportiere…" : "Exportieren…"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProfileCatalog({
   browserProfiles,
   systemProfiles,
@@ -907,6 +1045,7 @@ function ProfileCatalog({
   onDeleteBrowserProfile,
   onCreateSystemProfile,
   onImportSystemProfile,
+  onOpenSystemProfileExport,
   onExportSystemProfile,
   onEditSystemProfile,
   onDeleteSystemProfile,
@@ -919,6 +1058,7 @@ function ProfileCatalog({
   onDeleteBrowserProfile: (browserProfile: BrowserProfile) => void;
   onCreateSystemProfile: () => void;
   onImportSystemProfile: () => void;
+  onOpenSystemProfileExport: () => void;
   onExportSystemProfile: (systemProfile: SystemProfile) => void;
   onEditSystemProfile: (systemProfile: SystemProfile) => void;
   onDeleteSystemProfile: (systemProfile: SystemProfile) => void;
@@ -935,6 +1075,16 @@ function ProfileCatalog({
             </FrameDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenSystemProfileExport}
+              disabled={loading || systemProfiles.length === 0}
+            >
+              <FileJsonIcon className="size-4" aria-hidden="true" />
+              Export
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={onImportSystemProfile}>
               <FileJsonIcon className="size-4" aria-hidden="true" />
               Import
@@ -1424,16 +1574,6 @@ function getFilterValue(source: Source, field: string) {
 
 function formatJson(value: JsonValue) {
   return JSON.stringify(value, null, 2);
-}
-
-function downloadJsonFile(filename: string, contents: string) {
-  const blob = new Blob([contents], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function getDeleteDialogCopy(deleteTarget: DeleteTarget | null) {
