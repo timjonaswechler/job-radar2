@@ -1051,6 +1051,106 @@ mod tests {
     }
 
     #[test]
+    fn detects_successfactors_with_sap_rmk_html_and_sitemap_evidence() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://careers.example.com/search/",
+                    r#"
+                    <html>
+                      <head>
+                        <meta name="generator" content="SAP SuccessFactors Recruiting Marketing">
+                        <script src="/platform/js/sap-rmk-careersite.js"></script>
+                      </head>
+                      <body>
+                        <div id="rmk-career-site">Aktuelle Stellen</div>
+                      </body>
+                    </html>
+                    "#,
+                ),
+                (
+                    "https://careers.example.com/sitemap.xml",
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+                    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                      <url>
+                        <loc>https://careers.example.com/job/Berlin-Senior-Rust-Engineer-12345/</loc>
+                      </url>
+                    </urlset>"#,
+                ),
+            ]);
+            let profile = builtin_successfactors_profile(44);
+
+            let result = detect_with_profiles(
+                &client,
+                &Url::parse("https://careers.example.com/search/").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.system_profile_key.as_deref(), Some("successfactors"));
+            assert_eq!(
+                result.adapter_key.as_deref(),
+                Some("declarative_sitemap_jobboard")
+            );
+            assert_eq!(result.evidence.len(), 2);
+            assert!(result.evidence[0].contains("HTML erfüllt Regex"));
+            assert!(result.evidence[0].contains("SuccessFactors"));
+            assert!(result.evidence[1].contains("https://careers.example.com/sitemap.xml"));
+            assert!(result.evidence[1].contains("<urlset"));
+
+            let source_config = result.source_config.unwrap();
+            assert_eq!(
+                source_config["url"],
+                "https://careers.example.com/sitemap.xml"
+            );
+            assert_eq!(source_config["recursive"], false);
+        });
+    }
+
+    #[test]
+    fn successfactors_detection_fails_for_matching_hostname_without_technical_evidence() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://successfactors.example.com/jobs",
+                    r#"
+                    <html>
+                      <body>
+                        <h1>Careers</h1>
+                        <p>Current openings from our recruiting team.</p>
+                      </body>
+                    </html>
+                    "#,
+                ),
+                (
+                    "https://successfactors.example.com/sitemap.xml",
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+                    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                      <url>
+                        <loc>https://successfactors.example.com/job/Generic-Role-1/</loc>
+                      </url>
+                    </urlset>"#,
+                ),
+            ]);
+            let profile = builtin_successfactors_profile(45);
+
+            let result = detect_with_profiles(
+                &client,
+                &Url::parse("https://successfactors.example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+            assert!(result.evidence.is_empty());
+        });
+    }
+
+    #[test]
     fn detects_commerzbank_muz_with_bundled_profile_and_creates_source() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1332,10 +1432,21 @@ mod tests {
     }
 
     fn builtin_muz_profile(id: i64) -> SystemProfile {
-        let seed: BuiltinSystemProfileSeed = serde_json::from_str(include_str!(
-            "../../system-profiles/builtin/muz_global_jobboard.json"
-        ))
-        .unwrap();
+        builtin_profile_from_json(
+            id,
+            include_str!("../../system-profiles/builtin/muz_global_jobboard.json"),
+        )
+    }
+
+    fn builtin_successfactors_profile(id: i64) -> SystemProfile {
+        builtin_profile_from_json(
+            id,
+            include_str!("../../system-profiles/builtin/successfactors.json"),
+        )
+    }
+
+    fn builtin_profile_from_json(id: i64, contents: &str) -> SystemProfile {
+        let seed: BuiltinSystemProfileSeed = serde_json::from_str(contents).unwrap();
 
         SystemProfile {
             id,
