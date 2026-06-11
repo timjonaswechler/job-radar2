@@ -43,6 +43,7 @@ pub fn run() {
             commands::check_browser_runtime,
             commands::list_adapters,
             commands::detect_source_from_url,
+            commands::test_system_profile_url,
             commands::create_browser_profile,
             commands::list_browser_profiles,
             commands::get_browser_profile,
