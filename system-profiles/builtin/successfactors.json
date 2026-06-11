@@ -1,7 +1,7 @@
 {
   "key": "successfactors",
   "name": "SAP SuccessFactors",
-  "description": "Deklaratives Sitemap-Systemprofil für SuccessFactors-Karriereseiten.",
+  "description": "Deklaratives Sitemap-Systemprofil für SAP-SuccessFactors-/RMK-Karriereseiten.",
   "adapterKey": "declarative_sitemap_jobboard",
   "definitionSchemaVersion": 1,
   "status": "active",
@@ -9,12 +9,12 @@
     "detect": {
       "required": [
         {
-          "htmlContains": "successfactors"
+          "htmlRegex": "(?is)(?:SAP\\s+SuccessFactors|SuccessFactors).*?(?:RMK|Recruiting\\s+Marketing|sap-rmk)|(?:RMK|Recruiting\\s+Marketing|sap-rmk).*?(?:SAP\\s+SuccessFactors|SuccessFactors)"
         },
         {
           "fetchText": {
             "url": "/sitemap.xml",
-            "contains": "/job/"
+            "regex": "(?is)<urlset\\b[^>]*>.*<url>\\s*<loc>https?://[^<]+/job/[^<]+</loc>.*</url>.*</urlset>"
           }
         }
       ]
@@ -35,8 +35,8 @@
       },
       "recursive": {
         "type": "boolean",
-        "default": true,
-        "title": "Sitemap-Index rekursiv auswerten"
+        "default": false,
+        "title": "Sitemap rekursiv auswerten"
       },
       "maxUrls": {
         "type": "number",
