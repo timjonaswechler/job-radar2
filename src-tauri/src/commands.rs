@@ -236,6 +236,16 @@ pub async fn detect_source_from_url(
     crate::source_detection::detect_source_from_url(&state.db, &url).await
 }
 
+#[tauri::command]
+pub async fn test_system_profile_url(
+    state: State<'_, AppState>,
+    url: String,
+    system_profile_id: i64,
+) -> Result<crate::source_detection::SystemProfileTestResult, String> {
+    crate::source_detection::test_url_against_system_profile(&state.db, &url, system_profile_id)
+        .await
+}
+
 async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, String> {
     Ok(AppPreferences {
         theme: read_setting_or_default(pool, SETTING_THEME).await?,

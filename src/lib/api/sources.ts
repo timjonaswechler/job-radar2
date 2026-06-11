@@ -157,12 +157,43 @@ export type SourceDetectionResult = {
   matches: SourceDetectionMatch[]
 }
 
+export type SystemProfileTestStatus = "passed" | "failed"
+
+export type SystemProfileTestCheckStatus = "passed" | "failed"
+
+export type SystemProfileTestCheckResult = {
+  index: number
+  check: JsonValue
+  status: SystemProfileTestCheckStatus
+  evidence: string | null
+  diagnostic: string | null
+}
+
+export type SystemProfileTestResult = {
+  status: SystemProfileTestStatus
+  adapterKey: string
+  systemProfileId: number
+  systemProfileKey: string
+  systemProfileName: string
+  key: string | null
+  name: string | null
+  sourceConfig: JsonValue | null
+  checks: SystemProfileTestCheckResult[]
+}
+
 export function listAdapters() {
   return invoke<AdapterMetadata[]>("list_adapters")
 }
 
 export function detectSourceFromUrl(url: string) {
   return invoke<SourceDetectionResult>("detect_source_from_url", { url })
+}
+
+export function testSystemProfileUrl(url: string, systemProfileId: number) {
+  return invoke<SystemProfileTestResult>("test_system_profile_url", {
+    url,
+    systemProfileId,
+  })
 }
 
 export function createBrowserProfile(input: CreateBrowserProfileInput) {

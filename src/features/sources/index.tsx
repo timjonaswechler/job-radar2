@@ -28,6 +28,11 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import {
   formatAdapterOptionLabel,
   getAdapterDisplay,
@@ -54,6 +59,7 @@ import {
   listBrowserProfiles,
   listSources,
   listSystemProfiles,
+  testSystemProfileUrl,
   updateBrowserProfile,
   updateSource,
   updateSystemProfile,
@@ -66,6 +72,7 @@ import {
   type Source,
   type SourceStatus,
   type SystemProfile,
+  type SystemProfileTestResult,
   type UpdateBrowserProfileInput,
   type UpdateSourceInput,
   type UpdateSystemProfileInput,
@@ -413,6 +420,11 @@ export function SourcesFeature() {
 
       <BrowserRuntimeCard />
 
+      <SystemProfileTestRunner
+        systemProfiles={systemProfiles}
+        loading={loading}
+      />
+
       {error ? (
         <Alert variant="destructive">
           <AlertCircleIcon className="size-4" aria-hidden="true" />
@@ -588,6 +600,245 @@ export function SourcesFeature() {
         confirmLabel="Endgültig löschen"
         onConfirm={handleConfirmDelete}
       />
+    </div>
+  );
+}
+
+function SystemProfileTestRunner({
+  systemProfiles,
+  loading,
+}: {
+  systemProfiles: SystemProfile[];
+  loading: boolean;
+}) {
+  const [url, setUrl] = useState("");
+  const [systemProfileId, setSystemProfileId] = useState("");
+  const [result, setResult] = useState<SystemProfileTestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!systemProfiles.length) {
+      if (systemProfileId) setSystemProfileId("");
+      return;
+    }
+
+    if (
+      !systemProfiles.some(
+        (systemProfile) => String(systemProfile.id) === systemProfileId,
+      )
+    ) {
+      setSystemProfileId(String(systemProfiles[0].id));
+    }
+  }, [systemProfileId, systemProfiles]);
+
+  const selectedSystemProfile = useMemo(() => {
+    if (!systemProfileId) return null;
+    return (
+      systemProfiles.find(
+        (systemProfile) => systemProfile.id === Number(systemProfileId),
+      ) ?? null
+    );
+  }, [systemProfileId, systemProfiles]);
+
+  const handleRun = async () => {
+    setError(null);
+    setResult(null);
+
+    if (!selectedSystemProfile) {
+      setError("Bitte ein Systemprofil auswählen.");
+      return;
+    }
+
+    try {
+      setRunning(true);
+      const nextResult = await testSystemProfileUrl(
+        url,
+        selectedSystemProfile.id,
+      );
+      setResult(nextResult);
+    } catch (unknownError) {
+      setError(String(unknownError));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <Frame>
+      <FramePanel>
+        <FrameHeader className="gap-2 px-0 pt-0">
+          <FrameTitle>Systemprofil testen</FrameTitle>
+          <FrameDescription>
+            Prüft eine URL gezielt gegen genau ein Systemprofil. Der Lauf zeigt
+            Pflichtcheck-Evidence und den Quellenvorschlag, legt aber keine
+            Quelle an und speichert nichts automatisch.
+          </FrameDescription>
+        </FrameHeader>
+
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)_auto] md:items-end">
+          <div className="grid gap-1.5">
+            <label
+              className="text-xs font-medium"
+              htmlFor="system-profile-test-url"
+            >
+              URL
+            </label>
+            <Input
+              id="system-profile-test-url"
+              value={url}
+              onChange={(event) => {
+                setUrl(event.target.value);
+                setError(null);
+                setResult(null);
+              }}
+              disabled={running}
+              placeholder="https://example.com/jobs"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <label
+              className="text-xs font-medium"
+              htmlFor="system-profile-test-profile"
+            >
+              Systemprofil
+            </label>
+            <NativeSelect
+              id="system-profile-test-profile"
+              className="w-full"
+              value={systemProfileId}
+              onChange={(event) => {
+                setSystemProfileId(event.target.value);
+                setError(null);
+                setResult(null);
+              }}
+              disabled={loading || running || !systemProfiles.length}
+            >
+              <NativeSelectOption value="" disabled>
+                Systemprofil wählen
+              </NativeSelectOption>
+              {systemProfiles.map((systemProfile) => (
+                <NativeSelectOption
+                  key={systemProfile.id}
+                  value={String(systemProfile.id)}
+                >
+                  {systemProfile.name} ({systemProfile.key},{" "}
+                  {sourceStatusLabels[systemProfile.status]})
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+          <Button
+            type="button"
+            onClick={() => void handleRun()}
+            disabled={loading || running || !systemProfiles.length}
+          >
+            {running ? "Prüft…" : "Profil prüfen"}
+          </Button>
+        </div>
+
+        {!loading && !systemProfiles.length ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Noch keine Systemprofile vorhanden.
+          </p>
+        ) : null}
+
+        {error ? (
+          <Alert className="mt-3" variant="destructive">
+            <AlertCircleIcon className="size-4" aria-hidden="true" />
+            <AlertTitle>Profilcheck konnte nicht ausgeführt werden</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {result ? <SystemProfileTestResultView result={result} /> : null}
+      </FramePanel>
+    </Frame>
+  );
+}
+
+function SystemProfileTestResultView({
+  result,
+}: {
+  result: SystemProfileTestResult;
+}) {
+  const passed = result.status === "passed";
+
+  return (
+    <div className="mt-4 grid gap-3">
+      <Alert variant={passed ? "success" : "warning"}>
+        <AlertCircleIcon className="size-4" aria-hidden="true" />
+        <AlertTitle>
+          {passed ? "Profilcheck bestanden" : "Profilcheck fehlgeschlagen"}
+        </AlertTitle>
+        <AlertDescription>
+          {passed
+            ? `Alle Pflichtchecks für ${result.systemProfileName} wurden erfüllt.`
+            : `Mindestens ein Pflichtcheck für ${result.systemProfileName} ist fehlgeschlagen.`}
+        </AlertDescription>
+      </Alert>
+
+      <section className="grid gap-2">
+        <h3 className="text-sm font-medium">Pflichtchecks</h3>
+        <div className="grid gap-2">
+          {result.checks.map((check) => (
+            <div key={check.index} className="grid gap-2 rounded-md border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium">
+                  Pflichtcheck {check.index}
+                </span>
+                <Badge
+                  variant={
+                    check.status === "passed"
+                      ? "success-light"
+                      : "destructive-light"
+                  }
+                  size="sm"
+                >
+                  {check.status === "passed" ? "Bestanden" : "Fehlgeschlagen"}
+                </Badge>
+              </div>
+              <p
+                className={cn(
+                  "text-xs",
+                  check.status === "passed"
+                    ? "text-muted-foreground"
+                    : "text-destructive",
+                )}
+              >
+                {check.evidence ?? check.diagnostic}
+              </p>
+              <pre className="max-h-40 overflow-auto rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                {formatJson(check.check)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {!passed ? (
+        <p className="text-sm text-muted-foreground">
+          Keine Quellenkonfiguration wird vorgeschlagen, solange ein Pflichtcheck
+          fehlschlägt.
+        </p>
+      ) : null}
+
+      {passed && result.sourceConfig ? (
+        <section className="grid gap-2">
+          <h3 className="text-sm font-medium">
+            Vorgeschlagene Quellenkonfiguration
+          </h3>
+          <div className="grid gap-2 rounded-md border p-3 text-sm">
+            {result.name ? <DetailRow label="Name" value={result.name} /> : null}
+            {result.key ? <DetailRow label="Key" value={result.key} /> : null}
+            <DetailRow label="Adapter" value={result.adapterKey} />
+            <DetailRow label="Systemprofil" value={result.systemProfileName} />
+            <pre className="max-h-72 overflow-auto rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              {formatJson(result.sourceConfig)}
+            </pre>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

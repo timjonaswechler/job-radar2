@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use sqlx::SqlitePool;
 
-use crate::source_model::{list_system_profiles, SourceStatus, SystemProfile};
+use crate::source_model::{get_system_profile, list_system_profiles, SourceStatus, SystemProfile};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -45,6 +45,69 @@ pub struct SourceDetectionMatch {
     pub evidence: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SystemProfileTestStatus {
+    Passed,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SystemProfileTestCheckStatus {
+    Passed,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemProfileTestResult {
+    pub status: SystemProfileTestStatus,
+    pub adapter_key: String,
+    pub system_profile_id: i64,
+    pub system_profile_key: String,
+    pub system_profile_name: String,
+    pub key: Option<String>,
+    pub name: Option<String>,
+    pub source_config: Option<Value>,
+    pub checks: Vec<SystemProfileTestCheckResult>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemProfileTestCheckResult {
+    pub index: usize,
+    pub check: Value,
+    pub status: SystemProfileTestCheckStatus,
+    pub evidence: Option<String>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct DetectionCheckOutcome {
+    status: SystemProfileTestCheckStatus,
+    evidence: Option<String>,
+    diagnostic: Option<String>,
+}
+
+impl DetectionCheckOutcome {
+    fn passed(evidence: impl Into<String>) -> Self {
+        Self {
+            status: SystemProfileTestCheckStatus::Passed,
+            evidence: Some(evidence.into()),
+            diagnostic: None,
+        }
+    }
+
+    fn failed(diagnostic: impl Into<String>) -> Self {
+        Self {
+            status: SystemProfileTestCheckStatus::Failed,
+            evidence: None,
+            diagnostic: Some(diagnostic.into()),
+        }
+    }
+}
+
 pub async fn detect_source_from_url(
     pool: &SqlitePool,
     input: &str,
@@ -72,6 +135,26 @@ pub async fn detect_source_from_url(
         .collect::<Vec<_>>();
     let client = ReqwestDetectionHttpClient::new()?;
     detect_with_profiles(&client, &input_url, &profiles).await
+}
+
+pub async fn test_url_against_system_profile(
+    pool: &SqlitePool,
+    input: &str,
+    system_profile_id: i64,
+) -> Result<SystemProfileTestResult, String> {
+    let client = ReqwestDetectionHttpClient::new()?;
+    test_url_against_system_profile_with_client(pool, &client, input, system_profile_id).await
+}
+
+async fn test_url_against_system_profile_with_client<C: DetectionHttpClient + Sync>(
+    pool: &SqlitePool,
+    client: &C,
+    input: &str,
+    system_profile_id: i64,
+) -> Result<SystemProfileTestResult, String> {
+    let input_url = parse_http_url(input)?;
+    let profile = get_system_profile(pool, system_profile_id).await?;
+    test_system_profile_with_client(client, &input_url, &profile).await
 }
 
 async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
@@ -142,11 +225,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     html: &str,
     profile: &SystemProfile,
 ) -> Result<Option<SourceDetectionMatch>, String> {
-    let required = profile
-        .definition
-        .pointer("/detect/required")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "definition.detect.required must be an array".to_string())?;
+    let required = required_detection_checks(profile)?;
 
     let mut captures = HashMap::new();
     let mut evidence = Vec::new();
@@ -174,6 +253,75 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     }))
 }
 
+async fn test_system_profile_with_client<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    profile: &SystemProfile,
+) -> Result<SystemProfileTestResult, String> {
+    let html = client.get_text(input_url.clone()).await?;
+    let required = required_detection_checks(profile)?;
+    let mut captures = HashMap::new();
+    let mut checks = Vec::new();
+
+    for (index, check) in required.iter().enumerate() {
+        let outcome = evaluate_check_outcome(client, input_url, &html, check, &mut captures)
+            .await
+            .unwrap_or_else(DetectionCheckOutcome::failed);
+        checks.push(SystemProfileTestCheckResult {
+            index: index + 1,
+            check: check.clone(),
+            status: outcome.status,
+            evidence: outcome.evidence,
+            diagnostic: outcome.diagnostic,
+        });
+    }
+
+    let status = if checks
+        .iter()
+        .all(|check| check.status == SystemProfileTestCheckStatus::Passed)
+    {
+        SystemProfileTestStatus::Passed
+    } else {
+        SystemProfileTestStatus::Failed
+    };
+
+    let (key, name, source_config) = if status == SystemProfileTestStatus::Passed {
+        let company_name = derive_company_name(input_url);
+        (
+            Some(format!("{}_careers", to_technical_key(&company_name))),
+            Some(format!("{company_name} Karriere")),
+            Some(build_source_config(
+                &profile.definition,
+                input_url,
+                &captures,
+            )?),
+        )
+    } else {
+        (None, None, None)
+    };
+
+    Ok(SystemProfileTestResult {
+        status,
+        adapter_key: profile.adapter_key.clone(),
+        system_profile_id: profile.id,
+        system_profile_key: profile.key.clone(),
+        system_profile_name: profile.name.clone(),
+        key,
+        name,
+        source_config,
+        checks,
+    })
+}
+
+fn required_detection_checks(profile: &SystemProfile) -> Result<&[Value], String> {
+    profile
+        .definition
+        .pointer("/detect/required")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| "definition.detect.required must be an array".to_string())
+}
+
 async fn evaluate_check<C: DetectionHttpClient + Sync>(
     client: &C,
     input_url: &Url,
@@ -181,12 +329,31 @@ async fn evaluate_check<C: DetectionHttpClient + Sync>(
     check: &Value,
     captures: &mut HashMap<String, String>,
 ) -> Result<Option<String>, String> {
+    let outcome = evaluate_check_outcome(client, input_url, html, check, captures).await?;
+    if outcome.status == SystemProfileTestCheckStatus::Passed {
+        Ok(outcome.evidence)
+    } else {
+        Ok(None)
+    }
+}
+
+async fn evaluate_check_outcome<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    html: &str,
+    check: &Value,
+    captures: &mut HashMap<String, String>,
+) -> Result<DetectionCheckOutcome, String> {
     if let Some(needle) = check.get("htmlContains").and_then(Value::as_str) {
-        return Ok(contains_text(html, needle).then(|| format!("HTML enthält `{needle}`")));
+        return Ok(if contains_text(html, needle) {
+            DetectionCheckOutcome::passed(format!("HTML enthält `{needle}`"))
+        } else {
+            DetectionCheckOutcome::failed(format!("HTML enthält `{needle}` nicht"))
+        });
     }
 
     if let Some(pattern) = check.get("htmlRegex").and_then(Value::as_str) {
-        return evaluate_regex("HTML", html, pattern, check.get("captureAs"), captures);
+        return evaluate_regex_outcome("HTML", html, pattern, check.get("captureAs"), captures);
     }
 
     if let Some(fetch_text) = check.get("fetchText").and_then(Value::as_object) {
@@ -194,16 +361,30 @@ async fn evaluate_check<C: DetectionHttpClient + Sync>(
         let fetched_url = input_url
             .join(url)
             .map_err(|error| format!("fetchText.url is invalid: {error}"))?;
-        let text = client.get_text(fetched_url.clone()).await.ok();
-        let Some(text) = text else {
-            return Ok(None);
+        let text = match client.get_text(fetched_url.clone()).await {
+            Ok(text) => text,
+            Err(error) => {
+                return Ok(DetectionCheckOutcome::failed(format!(
+                    "{} konnte nicht geladen werden: {error}",
+                    fetched_url.as_str()
+                )))
+            }
         };
         if let Some(needle) = fetch_text.get("contains").and_then(Value::as_str) {
-            return Ok(contains_text(&text, needle)
-                .then(|| format!("{} enthält `{needle}`", fetched_url.as_str())));
+            return Ok(if contains_text(&text, needle) {
+                DetectionCheckOutcome::passed(format!(
+                    "{} enthält `{needle}`",
+                    fetched_url.as_str()
+                ))
+            } else {
+                DetectionCheckOutcome::failed(format!(
+                    "{} enthält `{needle}` nicht",
+                    fetched_url.as_str()
+                ))
+            });
         }
         if let Some(pattern) = fetch_text.get("regex").and_then(Value::as_str) {
-            return evaluate_regex(
+            return evaluate_regex_outcome(
                 fetched_url.as_str(),
                 &text,
                 pattern,
@@ -211,7 +392,7 @@ async fn evaluate_check<C: DetectionHttpClient + Sync>(
                 captures,
             );
         }
-        return Ok(Some(format!(
+        return Ok(DetectionCheckOutcome::passed(format!(
             "{} wurde erfolgreich geladen",
             fetched_url.as_str()
         )));
@@ -222,19 +403,38 @@ async fn evaluate_check<C: DetectionHttpClient + Sync>(
         let fetched_url = input_url
             .join(url)
             .map_err(|error| format!("fetchJson.url is invalid: {error}"))?;
-        let text = client.get_text(fetched_url.clone()).await.ok();
-        let Some(text) = text else {
-            return Ok(None);
+        let text = match client.get_text(fetched_url.clone()).await {
+            Ok(text) => text,
+            Err(error) => {
+                return Ok(DetectionCheckOutcome::failed(format!(
+                    "{} konnte nicht geladen werden: {error}",
+                    fetched_url.as_str()
+                )))
+            }
         };
         let json: Value = match serde_json::from_str(&text) {
             Ok(json) => json,
-            Err(_) => return Ok(None),
+            Err(error) => {
+                return Ok(DetectionCheckOutcome::failed(format!(
+                    "{} lieferte kein gültiges JSON: {error}",
+                    fetched_url.as_str()
+                )))
+            }
         };
         if let Some(path) = fetch_json.get("pathExists").and_then(Value::as_str) {
-            return Ok(json_path_exists(&json, path)
-                .then(|| format!("{} enthält JSON-Pfad `{path}`", fetched_url.as_str())));
+            return Ok(if json_path_exists(&json, path) {
+                DetectionCheckOutcome::passed(format!(
+                    "{} enthält JSON-Pfad `{path}`",
+                    fetched_url.as_str()
+                ))
+            } else {
+                DetectionCheckOutcome::failed(format!(
+                    "{} enthält JSON-Pfad `{path}` nicht",
+                    fetched_url.as_str()
+                ))
+            });
         }
-        return Ok(Some(format!(
+        return Ok(DetectionCheckOutcome::passed(format!(
             "{} lieferte gültiges JSON",
             fetched_url.as_str()
         )));
@@ -253,7 +453,7 @@ async fn evaluate_fetch_script<C: DetectionHttpClient + Sync>(
     html: &str,
     fetch_script: &Map<String, Value>,
     captures: &mut HashMap<String, String>,
-) -> Result<Option<String>, String> {
+) -> Result<DetectionCheckOutcome, String> {
     let src_contains = fetch_script.get("srcContains").and_then(Value::as_str);
     let src_regex = match fetch_script.get("srcRegex").and_then(Value::as_str) {
         Some(pattern) => Some(
@@ -278,13 +478,28 @@ async fn evaluate_fetch_script<C: DetectionHttpClient + Sync>(
         .filter_map(|src| input_url.join(&src).ok())
         .collect::<Vec<_>>();
 
+    if script_urls.is_empty() {
+        return Ok(DetectionCheckOutcome::failed(
+            "Kein Script-src passte zu den fetchScript-Kriterien",
+        ));
+    }
+
+    let mut fetch_errors = Vec::new();
+    let mut loaded_any = false;
     for script_url in script_urls {
-        let Ok(script_text) = client.get_text(script_url.clone()).await else {
-            continue;
+        let script_text = match client.get_text(script_url.clone()).await {
+            Ok(script_text) => {
+                loaded_any = true;
+                script_text
+            }
+            Err(error) => {
+                fetch_errors.push(format!("{}: {error}", script_url.as_str()));
+                continue;
+            }
         };
         if let Some(needle) = fetch_script.get("contains").and_then(Value::as_str) {
             if contains_text(&script_text, needle) {
-                return Ok(Some(format!(
+                return Ok(DetectionCheckOutcome::passed(format!(
                     "Script {} enthält `{needle}`",
                     script_url.as_str()
                 )));
@@ -298,18 +513,27 @@ async fn evaluate_fetch_script<C: DetectionHttpClient + Sync>(
                 fetch_script.get("captureAs"),
                 captures,
             )? {
-                return Ok(Some(evidence));
+                return Ok(DetectionCheckOutcome::passed(evidence));
             }
         }
         if fetch_script.get("contains").is_none() && fetch_script.get("regex").is_none() {
-            return Ok(Some(format!(
+            return Ok(DetectionCheckOutcome::passed(format!(
                 "Script {} wurde erfolgreich geladen",
                 script_url.as_str()
             )));
         }
     }
 
-    Ok(None)
+    if !loaded_any && !fetch_errors.is_empty() {
+        return Ok(DetectionCheckOutcome::failed(format!(
+            "Passende Scripts konnten nicht geladen werden: {}",
+            fetch_errors.join("; ")
+        )));
+    }
+
+    Ok(DetectionCheckOutcome::failed(
+        "Keines der passenden Scripts erfüllte die fetchScript-Inhaltsprüfung",
+    ))
 }
 
 fn extract_script_srcs(html: &str) -> Vec<String> {
@@ -344,6 +568,23 @@ fn evaluate_regex(
     }
 
     Ok(Some(format!("{label} erfüllt Regex `{pattern}`")))
+}
+
+fn evaluate_regex_outcome(
+    label: &str,
+    text: &str,
+    pattern: &str,
+    capture_as: Option<&Value>,
+    captures: &mut HashMap<String, String>,
+) -> Result<DetectionCheckOutcome, String> {
+    Ok(
+        match evaluate_regex(label, text, pattern, capture_as, captures)? {
+            Some(evidence) => DetectionCheckOutcome::passed(evidence),
+            None => {
+                DetectionCheckOutcome::failed(format!("{label} erfüllt Regex `{pattern}` nicht"))
+            }
+        },
+    )
 }
 
 fn build_source_config(
@@ -627,7 +868,12 @@ impl DetectionHttpClient for ReqwestDetectionHttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_model::{create_system_profile, list_sources, CreateSystemProfileInput};
     use serde_json::json;
+    use sqlx::{
+        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+        SqlitePool,
+    };
 
     struct FixtureHttpClient {
         responses: HashMap<String, String>,
@@ -653,6 +899,151 @@ mod tests {
                     .ok_or_else(|| format!("{} not found", url.as_str()))
             })
         }
+    }
+
+    #[test]
+    fn tests_selected_system_profile_successfully_without_persisting_a_source() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "example_board".to_string(),
+                    name: "Example Board".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [
+                            { "htmlContains": "example-board-root" },
+                            { "fetchText": {
+                                "url": "/assets/board.js",
+                                "regex": "apiBase\\s*=\\s*\"([^\"]+)\"",
+                                "captureAs": "apiBaseUrl"
+                            }}
+                        ]},
+                        "sourceConfig": {
+                            "startUrl": "{{inputUrl}}",
+                            "apiBaseUrl": "{{capture:apiBaseUrl}}"
+                        }
+                    }),
+                    source_config_schema: json!({}),
+                    status: SourceStatus::Draft,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+            let client = FixtureHttpClient::new([
+                (
+                    "https://example.com/jobs",
+                    r#"<main id="example-board-root"></main>"#,
+                ),
+                (
+                    "https://example.com/assets/board.js",
+                    r#"window.apiBase = "https://api.example.com/jobs";"#,
+                ),
+            ]);
+
+            let result = test_url_against_system_profile_with_client(
+                &pool,
+                &client,
+                "https://example.com/jobs",
+                profile.id,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SystemProfileTestStatus::Passed);
+            assert_eq!(result.system_profile_key, "example_board");
+            assert_eq!(result.checks.len(), 2);
+            assert!(result
+                .checks
+                .iter()
+                .all(|check| check.status == SystemProfileTestCheckStatus::Passed));
+            assert_eq!(
+                result.checks[0].evidence.as_deref(),
+                Some("HTML enthält `example-board-root`")
+            );
+            assert_eq!(result.checks[0].diagnostic, None);
+            assert_eq!(
+                result.source_config.unwrap()["apiBaseUrl"],
+                "https://api.example.com/jobs"
+            );
+            assert!(list_sources(&pool).await.unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn tests_selected_system_profile_reports_failed_required_check_without_source_config() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "example_board".to_string(),
+                    name: "Example Board".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [
+                            { "htmlContains": "example-board-root" },
+                            { "fetchText": {
+                                "url": "/assets/board.js",
+                                "contains": "requiredApiToken"
+                            }}
+                        ]},
+                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
+                    }),
+                    source_config_schema: json!({}),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+            let client = FixtureHttpClient::new([
+                (
+                    "https://example.com/jobs",
+                    r#"<main id="example-board-root"></main>"#,
+                ),
+                (
+                    "https://example.com/assets/board.js",
+                    "console.log('different token')",
+                ),
+            ]);
+
+            let result = test_url_against_system_profile_with_client(
+                &pool,
+                &client,
+                "https://example.com/jobs",
+                profile.id,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SystemProfileTestStatus::Failed);
+            assert_eq!(result.source_config, None);
+            assert_eq!(
+                result.checks[0].status,
+                SystemProfileTestCheckStatus::Passed
+            );
+            assert_eq!(
+                result.checks[1].status,
+                SystemProfileTestCheckStatus::Failed
+            );
+            assert_eq!(
+                result.checks[0].evidence.as_deref(),
+                Some("HTML enthält `example-board-root`")
+            );
+            assert!(result.checks[1]
+                .diagnostic
+                .as_deref()
+                .unwrap()
+                .contains("requiredApiToken` nicht"));
+            assert!(list_sources(&pool).await.unwrap().is_empty());
+        });
     }
 
     #[test]
@@ -836,5 +1227,22 @@ mod tests {
             assert_eq!(result.status, SourceDetectionStatus::Unsupported);
             assert!(result.matches.is_empty());
         });
+    }
+
+    async fn migrated_pool() -> SqlitePool {
+        let options = SqliteConnectOptions::new()
+            .filename(":memory:")
+            .create_if_missing(true)
+            .foreign_keys(true);
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+
+        pool
     }
 }
