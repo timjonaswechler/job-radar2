@@ -1051,6 +1051,200 @@ mod tests {
     }
 
     #[test]
+    fn detects_greenhouse_ashby_and_lever_with_vendor_board_or_api_evidence_and_creatable_config() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let scenarios = [
+                (
+                    create_builtin_system_profile(
+                        &pool,
+                        include_str!("../../system-profiles/builtin/greenhouse.json"),
+                    )
+                    .await,
+                    "https://openai.com/careers",
+                    r#"
+                    <html>
+                      <body>
+                        <h1>OpenAI Careers</h1>
+                        <script src="https://boards.greenhouse.io/embed/job_board/js?for=openai"></script>
+                        <a href="https://boards.greenhouse.io/openai">Job board</a>
+                      </body>
+                    </html>
+                    "#,
+                    "\\.greenhouse\\.io",
+                ),
+                (
+                    create_builtin_system_profile(
+                        &pool,
+                        include_str!("../../system-profiles/builtin/ashby.json"),
+                    )
+                    .await,
+                    "https://ashby-fixture.test/careers",
+                    r#"
+                    <html>
+                      <body>
+                        <h1>Example Careers</h1>
+                        <iframe src="https://jobs.ashbyhq.com/example"></iframe>
+                      </body>
+                    </html>
+                    "#,
+                    "\\.ashbyhq\\.com",
+                ),
+                (
+                    create_builtin_system_profile(
+                        &pool,
+                        include_str!("../../system-profiles/builtin/lever.json"),
+                    )
+                    .await,
+                    "https://lever-fixture.test/jobs",
+                    r#"
+                    <html>
+                      <body>
+                        <h1>Example Careers</h1>
+                        <a href="https://jobs.lever.co/example/9d39183d-5d2f-4c2d-aabb-1aa2bb3cc4dd">
+                          Senior Rust Engineer
+                        </a>
+                      </body>
+                    </html>
+                    "#,
+                    "jobs\\.lever\\.co",
+                ),
+            ];
+
+            for (profile, input_url, html, expected_evidence_marker) in scenarios {
+                let client = FixtureHttpClient::new([(input_url, html)]);
+
+                let result = detect_with_profiles(
+                    &client,
+                    &Url::parse(input_url).unwrap(),
+                    &[profile.clone()],
+                )
+                .await
+                .unwrap();
+
+                assert_eq!(result.status, SourceDetectionStatus::Detected);
+                assert_eq!(
+                    result.system_profile_key.as_deref(),
+                    Some(profile.key.as_str())
+                );
+                assert!(result
+                    .evidence
+                    .join("\n")
+                    .contains(expected_evidence_marker));
+
+                let source = create_source(
+                    &pool,
+                    CreateSourceInput {
+                        key: result.key.unwrap(),
+                        adapter_key: result.adapter_key.unwrap(),
+                        system_profile_id: result.system_profile_id,
+                        browser_profile_id: None,
+                        name: result.name.unwrap(),
+                        description: None,
+                        source_config: result.source_config.unwrap(),
+                        status: SourceStatus::Active,
+                        validation_error: None,
+                    },
+                )
+                .await
+                .unwrap();
+
+                assert_eq!(source.system_profile_id, Some(profile.id));
+                assert_eq!(source.adapter_key, "declarative_http_jobboard");
+                assert_eq!(source.source_config["startUrl"], input_url);
+            }
+        });
+    }
+
+    #[test]
+    fn greenhouse_ashby_and_lever_ignore_generic_vendor_mentions_without_board_or_api_evidence() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://example.com/greenhouse-mention",
+                    r#"
+                    <html>
+                      <body>
+                        <p>We use a vendor listed at https://www.greenhouse.io/.</p>
+                      </body>
+                    </html>
+                    "#,
+                ),
+                (
+                    "https://example.com/ashby-mention",
+                    r#"
+                    <html>
+                      <body>
+                        <p>Read about recruiting tools at https://www.ashbyhq.com/.</p>
+                      </body>
+                    </html>
+                    "#,
+                ),
+                (
+                    "https://example.com/lever-mention",
+                    r#"
+                    <html>
+                      <body>
+                        <p>Our old provider lived under https://jobs.lever.co/.</p>
+                      </body>
+                    </html>
+                    "#,
+                ),
+            ]);
+            let profiles = vec![
+                builtin_greenhouse_profile(51),
+                builtin_ashby_profile(52),
+                builtin_lever_profile(53),
+            ];
+
+            for input_url in [
+                "https://example.com/greenhouse-mention",
+                "https://example.com/ashby-mention",
+                "https://example.com/lever-mention",
+            ] {
+                let result =
+                    detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &profiles)
+                        .await
+                        .unwrap();
+
+                assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+                assert!(result.matches.is_empty());
+            }
+        });
+    }
+
+    #[test]
+    fn greenhouse_ashby_and_lever_do_not_detect_company_domain_only_pages() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://openai.com/careers",
+                    r#"<html><body><h1>OpenAI Careers</h1><p>Come build with us.</p></body></html>"#,
+                ),
+                (
+                    "https://helsing.ai/careers",
+                    r#"<html><body><h1>Helsing Careers</h1><p>Open roles.</p></body></html>"#,
+                ),
+            ]);
+            let profiles = vec![
+                builtin_greenhouse_profile(54),
+                builtin_ashby_profile(55),
+                builtin_lever_profile(56),
+            ];
+
+            for input_url in ["https://openai.com/careers", "https://helsing.ai/careers"] {
+                let result =
+                    detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &profiles)
+                        .await
+                        .unwrap();
+
+                assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+                assert!(result.matches.is_empty());
+            }
+        });
+    }
+
+    #[test]
     fn detects_successfactors_with_sap_rmk_html_and_sitemap_evidence() {
         tauri::async_runtime::block_on(async {
             let client = FixtureHttpClient::new([
@@ -1431,6 +1625,21 @@ mod tests {
         source_config_schema: Value,
     }
 
+    fn builtin_greenhouse_profile(id: i64) -> SystemProfile {
+        builtin_profile_from_json(
+            id,
+            include_str!("../../system-profiles/builtin/greenhouse.json"),
+        )
+    }
+
+    fn builtin_ashby_profile(id: i64) -> SystemProfile {
+        builtin_profile_from_json(id, include_str!("../../system-profiles/builtin/ashby.json"))
+    }
+
+    fn builtin_lever_profile(id: i64) -> SystemProfile {
+        builtin_profile_from_json(id, include_str!("../../system-profiles/builtin/lever.json"))
+    }
+
     fn builtin_muz_profile(id: i64) -> SystemProfile {
         builtin_profile_from_json(
             id,
@@ -1465,8 +1674,8 @@ mod tests {
         }
     }
 
-    async fn create_builtin_muz_system_profile(pool: &SqlitePool) -> SystemProfile {
-        let profile = builtin_muz_profile(0);
+    async fn create_builtin_system_profile(pool: &SqlitePool, contents: &str) -> SystemProfile {
+        let profile = builtin_profile_from_json(0, contents);
         create_system_profile(
             pool,
             CreateSystemProfileInput {
@@ -1483,6 +1692,14 @@ mod tests {
         )
         .await
         .unwrap()
+    }
+
+    async fn create_builtin_muz_system_profile(pool: &SqlitePool) -> SystemProfile {
+        create_builtin_system_profile(
+            pool,
+            include_str!("../../system-profiles/builtin/muz_global_jobboard.json"),
+        )
+        .await
     }
 
     async fn migrated_pool() -> SqlitePool {

@@ -1,7 +1,7 @@
 {
   "key": "greenhouse",
   "name": "Greenhouse",
-  "description": "Deklaratives HTTP-Systemprofil für ein bekanntes Recruiting-System.",
+  "description": "Deklaratives HTTP-Systemprofil für Greenhouse-Boards und Greenhouse-Embeds.",
   "adapterKey": "declarative_http_jobboard",
   "definitionSchemaVersion": 1,
   "status": "active",
@@ -9,7 +9,7 @@
     "detect": {
       "required": [
         {
-          "htmlContains": "greenhouse.io"
+          "htmlRegex": "(?i)https?://(?:boards|job-boards|boards-api)\\.greenhouse\\.io/(?:embed/)?(?:v1/boards/)?[a-z0-9_-]+"
         }
       ]
     },
