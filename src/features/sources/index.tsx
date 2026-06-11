@@ -11,16 +11,27 @@ import {
 import {
   AlertCircleIcon,
   FileJsonIcon,
+  GripVerticalIcon,
+  MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
-  Settings2Icon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/reui/badge";
+import {
+  Kanban,
+  KanbanBoard,
+  KanbanColumn,
+  KanbanColumnContent,
+  KanbanItem,
+  KanbanItemHandle,
+  KanbanOverlay,
+  type KanbanMoveEvent,
+} from "@/components/reui/kanban";
 import {
   DEFAULT_I18N,
   type Filter,
@@ -37,6 +48,13 @@ import {
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -44,6 +62,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   NativeSelect,
@@ -133,6 +158,26 @@ const multiselectFilterOperators = [
   { value: "is_not_any_of", label: filterI18n.operators.isNotAnyOf },
 ];
 
+const profileCatalogColumnValues: SourceStatus[] = [
+  "draft",
+  "active",
+  "disabled",
+  "invalid",
+];
+
+const profileCatalogColumnDescriptions: Record<SourceStatus, string> = {
+  draft: "Noch in Vorbereitung.",
+  active: "Für Quellen verwendbar.",
+  disabled: "Bewusst pausiert.",
+  invalid: "Benötigt Korrektur.",
+};
+
+type ProfileCatalogItem =
+  | { id: string; type: "system"; profile: SystemProfile }
+  | { id: string; type: "browser"; profile: BrowserProfile };
+
+type ProfileCatalogColumns = Record<string, ProfileCatalogItem[]>;
+
 type SourceInventory = {
   adapters: AdapterMetadata[];
   browserProfiles: BrowserProfile[];
@@ -148,9 +193,7 @@ type SystemProfileDialogState =
   | { mode: "create" }
   | { mode: "edit"; systemProfile: SystemProfile };
 
-type SourceDialogState =
-  | { mode: "create" }
-  | { mode: "edit"; source: Source };
+type SourceDialogState = { mode: "create" } | { mode: "edit"; source: Source };
 
 type DeleteTarget =
   | { type: "browserProfile"; browserProfile: BrowserProfile }
@@ -166,12 +209,13 @@ function useSourceInventory() {
     try {
       setLoading(true);
       setError(null);
-      const [browserProfiles, systemProfiles, sources, adapters] = await Promise.all([
-        listBrowserProfiles(),
-        listSystemProfiles(),
-        listSources(),
-        listAdapters(),
-      ]);
+      const [browserProfiles, systemProfiles, sources, adapters] =
+        await Promise.all([
+          listBrowserProfiles(),
+          listSystemProfiles(),
+          listSources(),
+          listAdapters(),
+        ]);
       setData({ adapters, browserProfiles, systemProfiles, sources });
     } catch (unknownError) {
       setData(null);
@@ -210,12 +254,24 @@ export function SourcesFeature() {
   const sources = data?.sources ?? [];
 
   const browserProfilesById = useMemo(
-    () => new Map(browserProfiles.map((browserProfile) => [browserProfile.id, browserProfile])),
+    () =>
+      new Map(
+        browserProfiles.map((browserProfile) => [
+          browserProfile.id,
+          browserProfile,
+        ]),
+      ),
     [browserProfiles],
   );
 
   const systemProfilesById = useMemo(
-    () => new Map(systemProfiles.map((systemProfile) => [systemProfile.id, systemProfile])),
+    () =>
+      new Map(
+        systemProfiles.map((systemProfile) => [
+          systemProfile.id,
+          systemProfile,
+        ]),
+      ),
     [systemProfiles],
   );
 
@@ -225,10 +281,12 @@ export function SourcesFeature() {
   );
 
   const adapterOptions = useMemo(() => {
-    const registeredOptions = sortAdaptersByUserFacingPriority(adapters).map((adapter) => ({
-      value: adapter.key,
-      label: formatAdapterOptionLabel(adapter),
-    }));
+    const registeredOptions = sortAdaptersByUserFacingPriority(adapters).map(
+      (adapter) => ({
+        value: adapter.key,
+        label: formatAdapterOptionLabel(adapter),
+      }),
+    );
     const fallbackOptions = Array.from(
       new Set(sources.map((source) => source.adapterKey)),
     )
@@ -287,7 +345,12 @@ export function SourcesFeature() {
     () =>
       sources.filter((source) =>
         filters.every((filter) =>
-          sourceMatchesFilter(source, filter, browserProfilesById, adaptersByKey),
+          sourceMatchesFilter(
+            source,
+            filter,
+            browserProfilesById,
+            adaptersByKey,
+          ),
         ),
       ),
     [adaptersByKey, browserProfilesById, filters, sources],
@@ -324,9 +387,7 @@ export function SourcesFeature() {
     await refresh();
   };
 
-  const handleCreateSystemProfile = async (
-    input: CreateSystemProfileInput,
-  ) => {
+  const handleCreateSystemProfile = async (input: CreateSystemProfileInput) => {
     const created = await createSystemProfile(input);
     toast.success("Systemprofil angelegt.", { description: created.name });
     await refresh();
@@ -338,6 +399,38 @@ export function SourcesFeature() {
   ) => {
     const updated = await updateSystemProfile(systemProfile.id, input);
     toast.success("Systemprofil gespeichert.", { description: updated.name });
+    await refresh();
+  };
+
+  const handleMoveBrowserProfileToStatus = async (
+    browserProfile: BrowserProfile,
+    status: SourceStatus,
+  ) => {
+    if (browserProfile.status === status) return;
+
+    const updated = await updateBrowserProfile(
+      browserProfile.id,
+      browserProfileToUpdateInput(browserProfile, status),
+    );
+    toast.success("Browserprofil verschoben.", {
+      description: `${updated.name} → ${sourceStatusLabels[updated.status]}`,
+    });
+    await refresh();
+  };
+
+  const handleMoveSystemProfileToStatus = async (
+    systemProfile: SystemProfile,
+    status: SourceStatus,
+  ) => {
+    if (systemProfile.status === status) return;
+
+    const updated = await updateSystemProfile(
+      systemProfile.id,
+      systemProfileToUpdateInput(systemProfile, status),
+    );
+    toast.success("Systemprofil verschoben.", {
+      description: `${updated.name} → ${sourceStatusLabels[updated.status]}`,
+    });
     await refresh();
   };
 
@@ -422,7 +515,9 @@ export function SourcesFeature() {
     }
 
     await deleteSource(deleteTarget.source.id);
-    toast.success("Quelle gelöscht.", { description: deleteTarget.source.name });
+    toast.success("Quelle gelöscht.", {
+      description: deleteTarget.source.name,
+    });
     if (selectedSourceId === deleteTarget.source.id) setSelectedSourceId(null);
     await refresh();
   };
@@ -431,71 +526,6 @@ export function SourcesFeature() {
 
   return (
     <div className="grid gap-5">
-      <Frame>
-        <FramePanel>
-          <FrameHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="grid gap-1.5">
-              <FrameTitle>Quellen</FrameTitle>
-              <FrameDescription>
-                Browser-Laufzeit, Browserprofile und Quellen aktiv konfigurieren.
-                Suchkriterien gehören später in Suchanfragen.
-              </FrameDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => void refresh()}>
-                <RefreshCwIcon className="size-4" aria-hidden="true" />
-                Aktualisieren
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => systemProfileImportInputRef.current?.click()}
-              >
-                <FileJsonIcon className="size-4" aria-hidden="true" />
-                Systemprofil importieren
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSystemProfileDialog({ mode: "create" })}
-              >
-                <PlusIcon className="size-4" aria-hidden="true" />
-                Systemprofil
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBrowserProfileDialog({ mode: "create" })}
-              >
-                <PlusIcon className="size-4" aria-hidden="true" />
-                Browserprofil
-              </Button>
-              <Button size="sm" onClick={() => setSourceDialog({ mode: "create" })}>
-                <PlusIcon className="size-4" aria-hidden="true" />
-                Neue Quelle
-              </Button>
-            </div>
-          </FrameHeader>
-
-          <Alert variant="info">
-            <Settings2Icon className="size-4" aria-hidden="true" />
-            <AlertTitle>Quellen enthalten keine Suchkriterien</AlertTitle>
-            <AlertDescription>
-              Eine Quelle beschreibt stabile Zugangsparameter und den Adapter.
-              Keywords, Ort, Region und weitere Filter gehören in spätere
-              Suchanfragen.
-            </AlertDescription>
-          </Alert>
-        </FramePanel>
-      </Frame>
-
-      <BrowserRuntimeCard />
-
-      <SystemProfileTestRunner
-        systemProfiles={systemProfiles}
-        loading={loading}
-      />
-
       {error ? (
         <Alert variant="destructive">
           <AlertCircleIcon className="size-4" aria-hidden="true" />
@@ -504,80 +534,130 @@ export function SourcesFeature() {
         </Alert>
       ) : null}
 
-      <Frame>
-        <FramePanel>
-          <FrameHeader className="gap-2">
-            <FrameTitle>Filter</FrameTitle>
-            <FrameDescription>
-              Quellen nach Status, Adapter oder Browserprofil eingrenzen.
-            </FrameDescription>
-          </FrameHeader>
-          <Filters
-            filters={filters}
-            fields={filterFields}
-            onChange={setFilters}
-            allowMultiple={false}
-            i18n={filterI18n}
-            size="sm"
+      <Tabs defaultValue="profiles" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-3xl tracking-tight">Quellenverwaltung</h1>
+            <p className="text-sm text-muted-foreground">
+              Laufzeit, Profile und Quellen in getrennten Arbeitsbereichen.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void refresh()}
+            >
+              <RefreshCwIcon className="size-4" aria-hidden="true" />
+              Aktualisieren
+            </Button>
+            <TabsList className="gap-1">
+              <TabsTrigger value="profiles">Profile</TabsTrigger>
+              <TabsTrigger value="sources">Quellen</TabsTrigger>
+              <TabsTrigger value="browserruntime">Browser-Laufzeit</TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
+
+        <TabsContent value="profiles" className="grid gap-4">
+          <SystemProfileTestRunner
+            systemProfiles={systemProfiles}
+            loading={loading}
           />
-        </FramePanel>
-      </Frame>
+          <ProfileCatalog
+            browserProfiles={browserProfiles}
+            systemProfiles={systemProfiles}
+            loading={loading}
+            onCreateBrowserProfile={() =>
+              setBrowserProfileDialog({ mode: "create" })
+            }
+            onEditBrowserProfile={(browserProfile) =>
+              setBrowserProfileDialog({ mode: "edit", browserProfile })
+            }
+            onDeleteBrowserProfile={(browserProfile) =>
+              setDeleteTarget({ type: "browserProfile", browserProfile })
+            }
+            onCreateSystemProfile={() =>
+              setSystemProfileDialog({ mode: "create" })
+            }
+            onImportSystemProfile={() =>
+              systemProfileImportInputRef.current?.click()
+            }
+            onOpenSystemProfileExport={() =>
+              setSystemProfileExportDialogOpen(true)
+            }
+            onExportSystemProfile={(systemProfile) =>
+              void handleExportSystemProfile(systemProfile)
+            }
+            onMoveBrowserProfileToStatus={handleMoveBrowserProfileToStatus}
+            onMoveSystemProfileToStatus={handleMoveSystemProfileToStatus}
+            onEditSystemProfile={(systemProfile) =>
+              setSystemProfileDialog({ mode: "edit", systemProfile })
+            }
+            onDeleteSystemProfile={(systemProfile) =>
+              setDeleteTarget({ type: "systemProfile", systemProfile })
+            }
+          />
+        </TabsContent>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.15fr)_minmax(20rem,1fr)]">
-        <ProfileCatalog
-          browserProfiles={browserProfiles}
-          systemProfiles={systemProfiles}
-          loading={loading}
-          onCreateBrowserProfile={() => setBrowserProfileDialog({ mode: "create" })}
-          onEditBrowserProfile={(browserProfile) =>
-            setBrowserProfileDialog({ mode: "edit", browserProfile })
-          }
-          onDeleteBrowserProfile={(browserProfile) =>
-            setDeleteTarget({ type: "browserProfile", browserProfile })
-          }
-          onCreateSystemProfile={() => setSystemProfileDialog({ mode: "create" })}
-          onImportSystemProfile={() => systemProfileImportInputRef.current?.click()}
-          onOpenSystemProfileExport={() => setSystemProfileExportDialogOpen(true)}
-          onExportSystemProfile={(systemProfile) =>
-            void handleExportSystemProfile(systemProfile)
-          }
-          onEditSystemProfile={(systemProfile) =>
-            setSystemProfileDialog({ mode: "edit", systemProfile })
-          }
-          onDeleteSystemProfile={(systemProfile) =>
-            setDeleteTarget({ type: "systemProfile", systemProfile })
-          }
-        />
+        <TabsContent value="sources" className="grid gap-4">
+          <Frame>
+            <FramePanel>
+              <FrameHeader className="gap-2">
+                <FrameTitle>Filter</FrameTitle>
+                <FrameDescription>
+                  Quellen nach Status, Adapter oder Browserprofil eingrenzen.
+                </FrameDescription>
+              </FrameHeader>
+              <Filters
+                filters={filters}
+                fields={filterFields}
+                onChange={setFilters}
+                allowMultiple={false}
+                i18n={filterI18n}
+                size="sm"
+              />
+            </FramePanel>
+          </Frame>
 
-        <SourcesList
-          sources={filteredSources}
-          loading={loading}
-          selectedSourceId={selectedSourceId}
-          browserProfilesById={browserProfilesById}
-          systemProfilesById={systemProfilesById}
-          adaptersByKey={adaptersByKey}
-          onCreate={() => setSourceDialog({ mode: "create" })}
-          onSelect={setSelectedSourceId}
-        />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
+            <SourcesList
+              sources={filteredSources}
+              loading={loading}
+              selectedSourceId={selectedSourceId}
+              browserProfilesById={browserProfilesById}
+              systemProfilesById={systemProfilesById}
+              adaptersByKey={adaptersByKey}
+              onCreate={() => setSourceDialog({ mode: "create" })}
+              onSelect={setSelectedSourceId}
+            />
 
-        <SourceDetails
-          source={selectedSource}
-          browserProfile={
-            selectedSource?.browserProfileId
-              ? browserProfilesById.get(selectedSource.browserProfileId) ?? null
-              : null
-          }
-          systemProfile={
-            selectedSource?.systemProfileId
-              ? systemProfilesById.get(selectedSource.systemProfileId) ?? null
-              : null
-          }
-          loading={loading}
-          adaptersByKey={adaptersByKey}
-          onEdit={(source) => setSourceDialog({ mode: "edit", source })}
-          onDelete={(source) => setDeleteTarget({ type: "source", source })}
-        />
-      </div>
+            <SourceDetails
+              source={selectedSource}
+              browserProfile={
+                selectedSource?.browserProfileId
+                  ? (browserProfilesById.get(selectedSource.browserProfileId) ??
+                    null)
+                  : null
+              }
+              systemProfile={
+                selectedSource?.systemProfileId
+                  ? (systemProfilesById.get(selectedSource.systemProfileId) ??
+                    null)
+                  : null
+              }
+              loading={loading}
+              adaptersByKey={adaptersByKey}
+              onEdit={(source) => setSourceDialog({ mode: "edit", source })}
+              onDelete={(source) => setDeleteTarget({ type: "source", source })}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="browserruntime" className="grid gap-4">
+          <BrowserRuntimeCard />
+        </TabsContent>
+      </Tabs>
 
       <input
         ref={systemProfileImportInputRef}
@@ -644,10 +724,7 @@ export function SourcesFeature() {
             if (!open) setSystemProfileDialog(null);
           }}
           onSubmit={(input) =>
-            handleUpdateSystemProfile(
-              systemProfileDialog.systemProfile,
-              input,
-            )
+            handleUpdateSystemProfile(systemProfileDialog.systemProfile, input)
           }
         />
       ) : null}
@@ -756,17 +833,16 @@ function SystemProfileTestRunner({
   };
 
   return (
-    <Frame>
-      <FramePanel>
-        <FrameHeader className="gap-2 px-0 pt-0">
-          <FrameTitle>Systemprofil testen</FrameTitle>
-          <FrameDescription>
-            Prüft eine URL gezielt gegen genau ein Systemprofil. Der Lauf zeigt
-            Pflichtcheck-Evidence und den Quellenvorschlag, legt aber keine
-            Quelle an und speichert nichts automatisch.
-          </FrameDescription>
-        </FrameHeader>
-
+    <Card>
+      <CardHeader>
+        <CardTitle>Systemprofil testen</CardTitle>
+        <CardDescription>
+          Prüft eine URL gezielt gegen genau ein Systemprofil. Der Lauf zeigt
+          Pflichtcheck-Evidence und den Quellenvorschlag, legt aber keine Quelle
+          an und speichert nichts automatisch.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)_auto] md:items-end">
           <div className="grid gap-1.5">
             <label
@@ -829,13 +905,13 @@ function SystemProfileTestRunner({
         </div>
 
         {!loading && !systemProfiles.length ? (
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Noch keine Systemprofile vorhanden.
           </p>
         ) : null}
 
         {error ? (
-          <Alert className="mt-3" variant="destructive">
+          <Alert variant="destructive">
             <AlertCircleIcon className="size-4" aria-hidden="true" />
             <AlertTitle>Profilcheck konnte nicht ausgeführt werden</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
@@ -843,8 +919,8 @@ function SystemProfileTestRunner({
         ) : null}
 
         {result ? <SystemProfileTestResultView result={result} /> : null}
-      </FramePanel>
-    </Frame>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -856,7 +932,7 @@ function SystemProfileTestResultView({
   const passed = result.status === "passed";
 
   return (
-    <div className="mt-4 grid gap-3">
+    <div className="grid gap-3">
       <Alert variant={passed ? "success" : "warning"}>
         <AlertCircleIcon className="size-4" aria-hidden="true" />
         <AlertTitle>
@@ -909,8 +985,8 @@ function SystemProfileTestResultView({
 
       {!passed ? (
         <p className="text-sm text-muted-foreground">
-          Keine Quellenkonfiguration wird vorgeschlagen, solange ein Pflichtcheck
-          fehlschlägt.
+          Keine Quellenkonfiguration wird vorgeschlagen, solange ein
+          Pflichtcheck fehlschlägt.
         </p>
       ) : null}
 
@@ -920,7 +996,9 @@ function SystemProfileTestResultView({
             Vorgeschlagene Quellenkonfiguration
           </h3>
           <div className="grid gap-2 rounded-md border p-3 text-sm">
-            {result.name ? <DetailRow label="Name" value={result.name} /> : null}
+            {result.name ? (
+              <DetailRow label="Name" value={result.name} />
+            ) : null}
             {result.key ? <DetailRow label="Key" value={result.key} /> : null}
             <DetailRow label="Adapter" value={result.adapterKey} />
             <DetailRow label="Systemprofil" value={result.systemProfileName} />
@@ -978,7 +1056,10 @@ function SystemProfileExportDialog({
       }}
     >
       <DialogContent>
-        <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => void handleSubmit(event)}
+        >
           <DialogHeader>
             <DialogTitle>Systemprofil exportieren</DialogTitle>
             <DialogDescription>
@@ -988,14 +1069,19 @@ function SystemProfileExportDialog({
           </DialogHeader>
 
           <div className="grid gap-1.5">
-            <label className="text-xs font-medium" htmlFor="system-profile-export-select">
+            <label
+              className="text-xs font-medium"
+              htmlFor="system-profile-export-select"
+            >
               Systemprofil
             </label>
             <NativeSelect
               id="system-profile-export-select"
               className="w-full"
               value={selectedSystemProfileId}
-              onChange={(event) => setSelectedSystemProfileId(event.target.value)}
+              onChange={(event) =>
+                setSelectedSystemProfileId(event.target.value)
+              }
               disabled={exporting || systemProfiles.length === 0}
               required
             >
@@ -1047,6 +1133,8 @@ function ProfileCatalog({
   onImportSystemProfile,
   onOpenSystemProfileExport,
   onExportSystemProfile,
+  onMoveBrowserProfileToStatus,
+  onMoveSystemProfileToStatus,
   onEditSystemProfile,
   onDeleteSystemProfile,
 }: {
@@ -1060,9 +1148,92 @@ function ProfileCatalog({
   onImportSystemProfile: () => void;
   onOpenSystemProfileExport: () => void;
   onExportSystemProfile: (systemProfile: SystemProfile) => void;
+  onMoveBrowserProfileToStatus: (
+    browserProfile: BrowserProfile,
+    status: SourceStatus,
+  ) => Promise<void>;
+  onMoveSystemProfileToStatus: (
+    systemProfile: SystemProfile,
+    status: SourceStatus,
+  ) => Promise<void>;
   onEditSystemProfile: (systemProfile: SystemProfile) => void;
   onDeleteSystemProfile: (systemProfile: SystemProfile) => void;
 }) {
+  const derivedColumns = useMemo(
+    () => buildProfileCatalogColumns(systemProfiles, browserProfiles),
+    [browserProfiles, systemProfiles],
+  );
+  const [columns, setColumns] = useState<ProfileCatalogColumns>(derivedColumns);
+  const profileCount = browserProfiles.length + systemProfiles.length;
+
+  useEffect(() => {
+    setColumns(derivedColumns);
+  }, [derivedColumns]);
+
+  const handleProfileMove = useCallback(
+    async ({
+      activeContainer,
+      activeIndex,
+      overContainer,
+      overIndex,
+    }: KanbanMoveEvent) => {
+      if (!isSourceStatus(activeContainer) || !isSourceStatus(overContainer)) {
+        return;
+      }
+
+      const activeItems = columns[activeContainer] ?? [];
+      const movedItem = activeItems[activeIndex];
+      if (!movedItem || isProfileCatalogItemLocked(movedItem)) return;
+
+      if (activeContainer === overContainer) {
+        if (activeIndex === overIndex) return;
+
+        setColumns({
+          ...columns,
+          [activeContainer]: moveProfileCatalogItem(
+            activeItems,
+            activeIndex,
+            overIndex,
+          ),
+        });
+        return;
+      }
+
+      const previousColumns = columns;
+      const nextActiveItems = [...activeItems];
+      nextActiveItems.splice(activeIndex, 1);
+
+      const nextOverItems = [...(columns[overContainer] ?? [])];
+      const nextOverIndex = clampIndex(overIndex, nextOverItems.length);
+      nextOverItems.splice(
+        nextOverIndex,
+        0,
+        withProfileCatalogItemStatus(movedItem, overContainer),
+      );
+
+      setColumns({
+        ...columns,
+        [activeContainer]: nextActiveItems,
+        [overContainer]: nextOverItems,
+      });
+
+      try {
+        if (movedItem.type === "system") {
+          await onMoveSystemProfileToStatus(movedItem.profile, overContainer);
+          return;
+        }
+
+        await onMoveBrowserProfileToStatus(movedItem.profile, overContainer);
+      } catch (unknownError) {
+        setColumns(previousColumns);
+        toast.error("Profilstatus konnte nicht geändert werden.", {
+          description: String(unknownError),
+        });
+      }
+    },
+    [columns, onMoveBrowserProfileToStatus, onMoveSystemProfileToStatus],
+  );
+
   return (
     <Frame className="content-start" spacing="sm">
       <FramePanel>
@@ -1070,8 +1241,8 @@ function ProfileCatalog({
           <div className="grid gap-1">
             <FrameTitle>Katalog</FrameTitle>
             <FrameDescription>
-              Systemprofile erkennen Recruiting-Systeme; Browserprofile steuern
-              browserbasierte Laufzeiten.
+              Systemprofile und Browserprofile als Kanban nach Quellstatus.
+              Karten können zwischen Status-Spalten verschoben werden.
             </FrameDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1085,176 +1256,424 @@ function ProfileCatalog({
               <FileJsonIcon className="size-4" aria-hidden="true" />
               Export
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onImportSystemProfile}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onImportSystemProfile}
+            >
               <FileJsonIcon className="size-4" aria-hidden="true" />
               Import
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onCreateSystemProfile}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCreateSystemProfile}
+            >
               <PlusIcon className="size-4" aria-hidden="true" />
               System
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onCreateBrowserProfile}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCreateBrowserProfile}
+            >
               <PlusIcon className="size-4" aria-hidden="true" />
               Browser
             </Button>
           </div>
         </FrameHeader>
 
-        <section className="grid gap-3">
-          <CatalogSectionTitle
-            label="Systemprofile"
-            count={systemProfiles.length}
-          />
-          {loading ? (
-            <MutedLine>Lade Systemprofile…</MutedLine>
-          ) : systemProfiles.length ? (
-            <div className="grid gap-2">
-              {systemProfiles.map((systemProfile) => (
-                <div
-                  key={systemProfile.id}
-                  className="grid gap-3 rounded-md border bg-muted/30 p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {systemProfile.name}
-                      </div>
-                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {systemProfile.key} · {systemProfile.adapterKey}
-                        {systemProfile.builtIn ? " · Eingebaut" : ""}
-                      </div>
-                    </div>
-                    <StatusBadge status={systemProfile.status} />
-                  </div>
-                  {systemProfile.validationError ? (
-                    <p className="line-clamp-2 text-xs text-destructive">
-                      {systemProfile.validationError}
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onExportSystemProfile(systemProfile)}
-                    >
-                      <FileJsonIcon className="size-3" aria-hidden="true" />
-                      Export
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onEditSystemProfile(systemProfile)}
-                      disabled={systemProfile.builtIn}
-                    >
-                      <PencilIcon className="size-3" aria-hidden="true" />
-                      Bearbeiten
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onDeleteSystemProfile(systemProfile)}
-                      disabled={systemProfile.builtIn}
-                    >
-                      <Trash2Icon className="size-3" aria-hidden="true" />
-                      Löschen
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed p-4 text-center">
-              <p className="text-sm font-medium">
-                Noch keine Systemprofile registriert.
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                className="mt-3"
-                onClick={onCreateSystemProfile}
-              >
+        <Kanban
+          value={columns}
+          onValueChange={setColumns}
+          getItemValue={(item) => item.id}
+          onMove={(moveEvent) => void handleProfileMove(moveEvent)}
+        >
+          <KanbanBoard className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {profileCatalogColumnValues.map((status) => (
+              <ProfileCatalogKanbanColumn
+                key={status}
+                value={status}
+                items={columns[status] ?? []}
+                loading={loading}
+                profileCount={profileCount}
+                onEditBrowserProfile={onEditBrowserProfile}
+                onDeleteBrowserProfile={onDeleteBrowserProfile}
+                onExportSystemProfile={onExportSystemProfile}
+                onEditSystemProfile={onEditSystemProfile}
+                onDeleteSystemProfile={onDeleteSystemProfile}
+              />
+            ))}
+          </KanbanBoard>
+          <KanbanOverlay>
+            {({ value, variant }) => {
+              if (variant === "column") {
+                const status = String(value);
+
+                return (
+                  <ProfileCatalogKanbanColumn
+                    value={status}
+                    items={columns[status] ?? []}
+                    loading={loading}
+                    profileCount={profileCount}
+                    isOverlay
+                    onEditBrowserProfile={onEditBrowserProfile}
+                    onDeleteBrowserProfile={onDeleteBrowserProfile}
+                    onExportSystemProfile={onExportSystemProfile}
+                    onEditSystemProfile={onEditSystemProfile}
+                    onDeleteSystemProfile={onDeleteSystemProfile}
+                  />
+                );
+              }
+
+              const item = Object.values(columns)
+                .flat()
+                .find((catalogItem) => catalogItem.id === value);
+
+              if (!item) return null;
+
+              return (
+                <ProfileCatalogCard
+                  item={item}
+                  isOverlay
+                  onEditBrowserProfile={onEditBrowserProfile}
+                  onDeleteBrowserProfile={onDeleteBrowserProfile}
+                  onExportSystemProfile={onExportSystemProfile}
+                  onEditSystemProfile={onEditSystemProfile}
+                  onDeleteSystemProfile={onDeleteSystemProfile}
+                />
+              );
+            }}
+          </KanbanOverlay>
+        </Kanban>
+
+        {!loading && profileCount === 0 ? (
+          <div className="mt-3 rounded-md border border-dashed p-4 text-center">
+            <p className="text-sm font-medium">
+              Noch keine Profile registriert.
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Button type="button" size="sm" onClick={onCreateSystemProfile}>
                 <PlusIcon className="size-4" aria-hidden="true" />
                 Systemprofil anlegen
               </Button>
-            </div>
-          )}
-
-          <CatalogSectionTitle
-            label="Browserprofile"
-            count={browserProfiles.length}
-          />
-          {loading ? (
-            <MutedLine>Lade Browserprofile…</MutedLine>
-          ) : browserProfiles.length ? (
-            <div className="grid gap-2">
-              {browserProfiles.map((browserProfile) => (
-                <div
-                  key={browserProfile.id}
-                  className="grid gap-3 rounded-md border bg-muted/30 p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {browserProfile.name}
-                      </div>
-                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {browserProfile.key} · Schema v
-                        {browserProfile.definitionSchemaVersion}
-                      </div>
-                    </div>
-                    <StatusBadge status={browserProfile.status} />
-                  </div>
-                  {browserProfile.validationError ? (
-                    <p className="line-clamp-2 text-xs text-destructive">
-                      {browserProfile.validationError}
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onEditBrowserProfile(browserProfile)}
-                    >
-                      <PencilIcon className="size-3" aria-hidden="true" />
-                      Bearbeiten
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onDeleteBrowserProfile(browserProfile)}
-                    >
-                      <Trash2Icon className="size-3" aria-hidden="true" />
-                      Löschen
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed p-4 text-center">
-              <p className="text-sm font-medium">
-                Noch keine Browserprofile registriert.
-              </p>
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
-                className="mt-3"
                 onClick={onCreateBrowserProfile}
               >
                 <PlusIcon className="size-4" aria-hidden="true" />
                 Browserprofil anlegen
               </Button>
             </div>
-          )}
-        </section>
+          </div>
+        ) : null}
       </FramePanel>
     </Frame>
   );
+}
+
+type ProfileCatalogCardActions = {
+  onEditBrowserProfile: (browserProfile: BrowserProfile) => void;
+  onDeleteBrowserProfile: (browserProfile: BrowserProfile) => void;
+  onExportSystemProfile: (systemProfile: SystemProfile) => void;
+  onEditSystemProfile: (systemProfile: SystemProfile) => void;
+  onDeleteSystemProfile: (systemProfile: SystemProfile) => void;
+};
+
+function ProfileCatalogKanbanColumn({
+  value,
+  items,
+  loading,
+  profileCount,
+  isOverlay = false,
+  ...actions
+}: ProfileCatalogCardActions & {
+  value: string;
+  items: ProfileCatalogItem[];
+  loading: boolean;
+  profileCount: number;
+  isOverlay?: boolean;
+}) {
+  const status = isSourceStatus(value) ? value : "draft";
+
+  return (
+    <KanbanColumn value={value} className="min-w-0">
+      <Card className="h-full bg-muted/20" size="sm">
+        <CardHeader className="flex flex-row items-start justify-between gap-2">
+          <div className="grid min-w-0 gap-1">
+            <div className="flex items-center gap-2">
+              <StatusBadge status={status} />
+              <Badge variant="outline" size="xs">
+                {items.length}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {profileCatalogColumnDescriptions[status]}
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <KanbanColumnContent value={value} className="min-h-32 gap-2 p-0.5">
+            {loading ? (
+              <MutedLine>Lade Profile…</MutedLine>
+            ) : items.length ? (
+              items.map((item) => (
+                <ProfileCatalogCard
+                  key={item.id}
+                  item={item}
+                  isOverlay={isOverlay}
+                  {...actions}
+                />
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed bg-background/60 p-3 text-center text-xs text-muted-foreground">
+                {profileCount === 0
+                  ? "Noch keine Profile."
+                  : "Keine Profile in diesem Status."}
+              </div>
+            )}
+          </KanbanColumnContent>
+        </CardContent>
+      </Card>
+    </KanbanColumn>
+  );
+}
+
+function ProfileCatalogCard({
+  item,
+  isOverlay = false,
+  onEditBrowserProfile,
+  onDeleteBrowserProfile,
+  onExportSystemProfile,
+  onEditSystemProfile,
+  onDeleteSystemProfile,
+}: ProfileCatalogCardActions & {
+  item: ProfileCatalogItem;
+  isOverlay?: boolean;
+}) {
+  const locked = isProfileCatalogItemLocked(item);
+  const profile = item.profile;
+  const typeLabel = item.type === "system" ? "System" : "Browser";
+  const subtitle =
+    item.type === "system"
+      ? `${item.profile.adapterKey}`
+      : `Schema v${item.profile.definitionSchemaVersion}`;
+
+  const cardContent = (
+    <Card
+      className={cn(
+        "bg-background transition-shadow",
+        !locked && "hover:ring-foreground/20",
+        isOverlay && "shadow-lg",
+      )}
+      size="sm"
+    >
+      <CardContent className="grid gap-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 gap-1.5">
+            {!locked ? (
+              <GripVerticalIcon
+                className="mt-0.5 size-3 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : null}
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium leading-tight">
+                {profile.name}
+              </div>
+              <div className="mt-0.5 truncate text-[0.68rem] text-muted-foreground">
+                {subtitle}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge
+              variant={item.type === "system" ? "primary-light" : "info-light"}
+              size="xs"
+            >
+              {typeLabel}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Aktionen für ${profile.name}`}
+                    title="Aktionen"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <MoreHorizontalIcon aria-hidden="true" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="min-w-36">
+                {item.type === "system" ? (
+                  <DropdownMenuItem
+                    onClick={() => onExportSystemProfile(item.profile)}
+                  >
+                    <FileJsonIcon aria-hidden="true" />
+                    Exportieren
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                  onClick={() =>
+                    item.type === "system"
+                      ? onEditSystemProfile(item.profile)
+                      : onEditBrowserProfile(item.profile)
+                  }
+                  disabled={locked}
+                >
+                  <PencilIcon aria-hidden="true" />
+                  Bearbeiten
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() =>
+                    item.type === "system"
+                      ? onDeleteSystemProfile(item.profile)
+                      : onDeleteBrowserProfile(item.profile)
+                  }
+                  disabled={locked}
+                >
+                  <Trash2Icon aria-hidden="true" />
+                  Löschen
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {profile.validationError ? (
+          <p className="line-clamp-1 rounded-sm bg-destructive/10 px-1.5 py-0.5 text-[0.68rem] text-destructive">
+            {profile.validationError}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <KanbanItem value={item.id} disabled={locked}>
+      {!locked && !isOverlay ? (
+        <KanbanItemHandle>{cardContent}</KanbanItemHandle>
+      ) : (
+        cardContent
+      )}
+    </KanbanItem>
+  );
+}
+
+function buildProfileCatalogColumns(
+  systemProfiles: SystemProfile[],
+  browserProfiles: BrowserProfile[],
+): ProfileCatalogColumns {
+  const columns = Object.fromEntries(
+    profileCatalogColumnValues.map((status) => [status, []]),
+  ) as ProfileCatalogColumns;
+
+  for (const systemProfile of systemProfiles) {
+    columns[systemProfile.status].push({
+      id: `system-${systemProfile.id}`,
+      type: "system",
+      profile: systemProfile,
+    });
+  }
+
+  for (const browserProfile of browserProfiles) {
+    columns[browserProfile.status].push({
+      id: `browser-${browserProfile.id}`,
+      type: "browser",
+      profile: browserProfile,
+    });
+  }
+
+  return columns;
+}
+
+function browserProfileToUpdateInput(
+  browserProfile: BrowserProfile,
+  status: SourceStatus,
+): UpdateBrowserProfileInput {
+  return {
+    name: browserProfile.name,
+    description: browserProfile.description,
+    nameI18nKey: browserProfile.nameI18nKey,
+    descriptionI18nKey: browserProfile.descriptionI18nKey,
+    definitionPath: browserProfile.definitionPath,
+    definitionHash: browserProfile.definitionHash,
+    definitionSchemaVersion: browserProfile.definitionSchemaVersion,
+    definition: browserProfile.definition,
+    sourceConfigSchema: browserProfile.sourceConfigSchema,
+    status,
+    validationError: browserProfile.validationError,
+  };
+}
+
+function systemProfileToUpdateInput(
+  systemProfile: SystemProfile,
+  status: SourceStatus,
+): UpdateSystemProfileInput {
+  return {
+    name: systemProfile.name,
+    description: systemProfile.description,
+    adapterKey: systemProfile.adapterKey,
+    definitionSchemaVersion: systemProfile.definitionSchemaVersion,
+    definition: systemProfile.definition,
+    sourceConfigSchema: systemProfile.sourceConfigSchema,
+    status,
+    validationError: systemProfile.validationError,
+  };
+}
+
+function isSourceStatus(value: string): value is SourceStatus {
+  return profileCatalogColumnValues.includes(value as SourceStatus);
+}
+
+function isProfileCatalogItemLocked(item: ProfileCatalogItem) {
+  return item.type === "system" && item.profile.builtIn;
+}
+
+function withProfileCatalogItemStatus(
+  item: ProfileCatalogItem,
+  status: SourceStatus,
+): ProfileCatalogItem {
+  if (item.type === "system") {
+    return {
+      ...item,
+      profile: { ...item.profile, status },
+    };
+  }
+
+  return {
+    ...item,
+    profile: { ...item.profile, status },
+  };
+}
+
+function moveProfileCatalogItem(
+  items: ProfileCatalogItem[],
+  fromIndex: number,
+  toIndex: number,
+) {
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+  if (!movedItem) return nextItems;
+
+  nextItems.splice(clampIndex(toIndex, nextItems.length), 0, movedItem);
+  return nextItems;
+}
+
+function clampIndex(index: number, maxIndex: number) {
+  return Math.min(Math.max(index, 0), maxIndex);
 }
 
 function SourcesList({
@@ -1416,7 +1835,11 @@ function SourceDetails({
                 size="sm"
                 onClick={() => onDelete(source)}
                 disabled={source.builtIn}
-                title={source.builtIn ? "Eingebaute Job-Portale können nicht gelöscht werden." : undefined}
+                title={
+                  source.builtIn
+                    ? "Eingebaute Job-Portale können nicht gelöscht werden."
+                    : undefined
+                }
               >
                 <Trash2Icon className="size-4" aria-hidden="true" />
                 Löschen
@@ -1450,7 +1873,10 @@ function SourceDetails({
               {source.builtIn ? (
                 <DetailRow label="Typ" value="Eingebautes Job-Portal" />
               ) : null}
-              <DetailRow label="Adapter" value={adapterDisplay?.name ?? source.adapterKey} />
+              <DetailRow
+                label="Adapter"
+                value={adapterDisplay?.name ?? source.adapterKey}
+              />
               <DetailRow label="Adapter-Key" value={source.adapterKey} />
               <DetailRow
                 label="Systemprofil"
@@ -1486,19 +1912,6 @@ function SourceDetails({
         )}
       </FramePanel>
     </Frame>
-  );
-}
-
-function CatalogSectionTitle({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </h2>
-      <Badge variant="outline" size="xs">
-        {count}
-      </Badge>
-    </div>
   );
 }
 
