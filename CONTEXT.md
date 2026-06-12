@@ -48,10 +48,34 @@ _Avoid_: Scraping-Regel, Website-Adapter, Plattformtyp
 A declarative description from which Job Radar can register or update a browser profile.
 _Avoid_: Browserprofil-Datei, Scraping-Datei, Plugin-Datei
 
-**Quellstatus**:
-The lifecycle state that indicates whether a source-related item is being drafted, usable, intentionally disabled, or invalid.
-_Avoid_: Enabled-Flag, Aktiv-Boolean
+**Arbeitsstatus**:
+The lifecycle state that indicates whether a managed item such as a source, profile, or search request is drafted, active, disabled, or invalid.
+_Avoid_: Enabled-Flag, Aktiv-Boolean, Quellstatus, Suchanfragenstatus
 
 **Suchanfrage**:
-A request for jobs that contains search criteria such as keywords, job roles, location, region, or country and may use one or more saved sources.
-_Avoid_: Quelle, Profil
+A user-created, saved job-search intent that contains one or more search terms, optional location criteria such as location, region, country, and radius, and selects which saved sources Job Radar should use. A search request has an Arbeitsstatus; active requests may be used for automatic or planned search runs, while disabled requests are skipped there but may still be started manually.
+_Avoid_: Quelle, Profil, Suchlauf
+
+**Suchlauf**:
+A concrete execution of a search request at a specific time that produces current results rather than versioning the search request. One search run may use multiple selected sources and expose an outcome for those sources; it may be queued, running, completed, completed with errors, failed, or cancelled.
+_Avoid_: Suchanfrage, Quelle, Profil, Historie
+
+**Quellenlauf**:
+The part of a search run that executes one selected source and exposes that source's outcome. A search run has one source run per selected source so that partial failures remain visible.
+_Avoid_: Suchlauf, Quelle
+
+**Trefferregel**:
+The user-defined rule set of a search request that decides whether a retrieved job posting counts as a match. Job portals may apply search terms directly through their own search interface; source-inventory sources may require Job Radar to match locally, initially against the job title. A posting matches when at least one positive search term or expression matches.
+_Avoid_: Quelle, Suchlauf, Portal-Suche
+
+**Ausschlussregel**:
+The user-defined rule set of a search request that removes job postings from the match list after Trefferregeln have found them, regardless of which source produced the posting. Initially, exclusion rules apply to the job title, for example to remove postings containing terms such as CEO or internship. A posting is excluded when at least one exclusion term or expression matches.
+_Avoid_: Antipattern, Quelle, Suchlauf
+
+**Stellenanzeige**:
+A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Postings with the same company and title are treated as the same job opportunity, even when they are found through multiple sources; when both postings provide locations, overlapping locations are also used to distinguish opportunities.
+_Avoid_: Treffer, Quelle, Suchlauf
+
+**Treffer**:
+The relationship that says a specific job posting matched a specific search request during a specific search run. The same job posting may be a Treffer for multiple search requests or search runs.
+_Avoid_: Stellenanzeige, Quelle

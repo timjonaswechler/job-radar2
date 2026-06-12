@@ -1,0 +1,120 @@
+version: 1
+name: search-requests-and-runs
+
+repo:
+  github: timjonaswechler/job-radar2
+  cwd: /Users/tim-jonaswechler/GitHub-Projekte/job-radar2
+
+issues:
+  sequence: [14, 15, 16, 17, 18, 19]
+  alreadyDone: []
+  blockedBy:
+    15: [14]
+    16: [15]
+    17: [16]
+    18: [16]
+    19: [17, 18]
+
+references:
+  githubIssues: [14, 15, 16, 17, 18, 19]
+  githubPRs: []
+  files:
+    - CONTEXT.md
+    - docs/adr/0001-source-config-as-json-schema.md
+    - docs/adr/0004-system-profiles-replace-system-specific-adapters.md
+    - docs/adr/0005-disposable-development-database.md
+    - docs/system-profiles.md
+    - src-tauri/Cargo.toml
+    - src-tauri/migrations/20260609000000_current_schema.sql
+    - src-tauri/src/adapter_registry.rs
+    - src-tauri/src/app_state.rs
+    - src-tauri/src/browser_runtime/mod.rs
+    - src-tauri/src/browser_runtime/browser_control.rs
+    - src-tauri/src/commands.rs
+    - src-tauri/src/db.rs
+    - src-tauri/src/lib.rs
+    - src-tauri/src/paths.rs
+    - src-tauri/src/source_model.rs
+    - src/lib/api/sources.ts
+    - system-profiles/builtin/successfactors.json
+  urls: []
+
+scope:
+  summary: "Backend-only MVP for saved Suchanfragen and current-result Suchläufe: persist search requests, execute them through a normalization pipeline, run SCHOTT sitemap and StepStone smoke adapters, and write the current normalized result to search-run-result.json."
+  nonGoals:
+    - "No UI for search requests or search runs in this issue series."
+    - "No persistent search-run, Treffer, excluded-candidate, or raw-source-payload history in SQLite."
+    - "No search request versioning or snapshots; runs use the current saved request."
+    - "No job-detail-page fetching for SCHOTT in the sitemap slice."
+    - "No StepStone login, manual cookie release, or persistent browser session management in the StepStone slice."
+    - "No new stable company field in Quellenkonfiguration for this slice; company for SCHOTT is derived from the source name."
+  futureIssues:
+    - "Search request and search run UI."
+    - "Full Browserprofil-based StepStone execution with manual release/cookies."
+    - "Job-detail-page extraction for company sources when URL-derived normalization is insufficient."
+    - "Richer Trefferregel/Ausschlussregel targets beyond title, such as company, description, and locations."
+    - "Persistent result/history model if product direction changes."
+
+workflow:
+  implementationSkill: tdd
+  oneIssuePerCommit: true
+  sequentialOnly: true
+  requireCleanWorktree: true
+  allowParallelImplementation: false
+  planGate: false
+
+review:
+  beforeCommit: true
+  acceptanceReviewerCommits: true
+  reviewerCanEditSource: false
+  reviewerSkill: review
+  mode: single-neutral
+  fixedPoint: issueStartHead
+  maxFixReviewCycles: 2
+  comparisonSources:
+    - githubIssueAcceptanceCriteria
+    - githubIssueBodyAndComments
+    - githubIssueLinksLabelsAndBlockers
+    - manifestScopeAndNonGoals
+    - manifestFutureIssues
+    - manifestReferences
+    - workerReportAsClaimsOnly
+    - currentUncommittedDiff
+    - testsAndCommandOutput
+  mustRejectIf:
+    - acceptanceCriteriaMissingOrAmbiguous
+    - missingOrUnmetAcceptanceCriterion
+    - scopeCreepOrFutureIssueWork
+    - failingOrInsufficientTests
+    - reviewerWouldNeedToEditSource
+    - impureIssueCommit
+    - productArchitectureOrApiDecisionNeeded
+  blockOn:
+    - acceptanceCriteriaMissing
+    - scopeCreep
+    - failingOrInsufficientTests
+    - regressionRisk
+    - impureIssueCommit
+
+remote:
+  pushAfterCommit: true
+  commentOnIssue: true
+  commentTemplate: default
+
+commit:
+  conventionalCommit: true
+  includeIssueNumber: true
+  requireScopeCheck: true
+
+stopIf:
+  - dirtyWorktree
+  - issueBlocked
+  - testsFailAfterFixAttempt
+  - scopeUnclear
+  - architectureDecisionNeeded
+  - acceptanceReviewBlocked
+
+report:
+  finalTable: true
+  includeTests: true
+  includeRisks: true
