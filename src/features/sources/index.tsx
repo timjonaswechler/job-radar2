@@ -121,6 +121,7 @@ import {
   type UpdateSystemProfileInput,
 } from "@/lib/api/sources";
 import { cn } from "@/lib/utils";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 const filterI18n: FilterI18nConfig = {
   ...DEFAULT_I18N,
@@ -543,11 +544,7 @@ export function SourcesFeature() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void refresh()}
-            >
+            <Button variant="outline" size="sm" onClick={() => void refresh()}>
               <RefreshCwIcon className="size-4" aria-hidden="true" />
               Aktualisieren
             </Button>
@@ -1285,71 +1282,74 @@ function ProfileCatalog({
             </Button>
           </div>
         </FrameHeader>
-
-        <Kanban
-          value={columns}
-          onValueChange={setColumns}
-          getItemValue={(item) => item.id}
-          onMove={(moveEvent) => void handleProfileMove(moveEvent)}
-        >
-          <KanbanBoard className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {profileCatalogColumnValues.map((status) => (
-              <ProfileCatalogKanbanColumn
-                key={status}
-                value={status}
-                items={columns[status] ?? []}
-                loading={loading}
-                profileCount={profileCount}
-                onEditBrowserProfile={onEditBrowserProfile}
-                onDeleteBrowserProfile={onDeleteBrowserProfile}
-                onExportSystemProfile={onExportSystemProfile}
-                onEditSystemProfile={onEditSystemProfile}
-                onDeleteSystemProfile={onDeleteSystemProfile}
-              />
-            ))}
-          </KanbanBoard>
-          <KanbanOverlay>
-            {({ value, variant }) => {
-              if (variant === "column") {
-                const status = String(value);
-
-                return (
+        <ScrollArea>
+          <div className="p-4">
+            <Kanban
+              value={columns}
+              onValueChange={setColumns}
+              getItemValue={(item) => item.id}
+              onMove={(moveEvent) => void handleProfileMove(moveEvent)}
+            >
+              <KanbanBoard className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {profileCatalogColumnValues.map((status) => (
                   <ProfileCatalogKanbanColumn
+                    key={status}
                     value={status}
                     items={columns[status] ?? []}
                     loading={loading}
                     profileCount={profileCount}
-                    isOverlay
                     onEditBrowserProfile={onEditBrowserProfile}
                     onDeleteBrowserProfile={onDeleteBrowserProfile}
                     onExportSystemProfile={onExportSystemProfile}
                     onEditSystemProfile={onEditSystemProfile}
                     onDeleteSystemProfile={onDeleteSystemProfile}
                   />
-                );
-              }
+                ))}
+              </KanbanBoard>
+              <KanbanOverlay>
+                {({ value, variant }) => {
+                  if (variant === "column") {
+                    const status = String(value);
 
-              const item = Object.values(columns)
-                .flat()
-                .find((catalogItem) => catalogItem.id === value);
+                    return (
+                      <ProfileCatalogKanbanColumn
+                        value={status}
+                        items={columns[status] ?? []}
+                        loading={loading}
+                        profileCount={profileCount}
+                        isOverlay
+                        onEditBrowserProfile={onEditBrowserProfile}
+                        onDeleteBrowserProfile={onDeleteBrowserProfile}
+                        onExportSystemProfile={onExportSystemProfile}
+                        onEditSystemProfile={onEditSystemProfile}
+                        onDeleteSystemProfile={onDeleteSystemProfile}
+                      />
+                    );
+                  }
 
-              if (!item) return null;
+                  const item = Object.values(columns)
+                    .flat()
+                    .find((catalogItem) => catalogItem.id === value);
 
-              return (
-                <ProfileCatalogCard
-                  item={item}
-                  isOverlay
-                  onEditBrowserProfile={onEditBrowserProfile}
-                  onDeleteBrowserProfile={onDeleteBrowserProfile}
-                  onExportSystemProfile={onExportSystemProfile}
-                  onEditSystemProfile={onEditSystemProfile}
-                  onDeleteSystemProfile={onDeleteSystemProfile}
-                />
-              );
-            }}
-          </KanbanOverlay>
-        </Kanban>
+                  if (!item) return null;
 
+                  return (
+                    <ProfileCatalogCard
+                      item={item}
+                      isOverlay
+                      onEditBrowserProfile={onEditBrowserProfile}
+                      onDeleteBrowserProfile={onDeleteBrowserProfile}
+                      onExportSystemProfile={onExportSystemProfile}
+                      onEditSystemProfile={onEditSystemProfile}
+                      onDeleteSystemProfile={onDeleteSystemProfile}
+                    />
+                  );
+                }}
+              </KanbanOverlay>
+            </Kanban>
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
         {!loading && profileCount === 0 ? (
           <div className="mt-3 rounded-md border border-dashed p-4 text-center">
             <p className="text-sm font-medium">
@@ -1474,26 +1474,44 @@ function ProfileCatalogCard({
       size="sm"
     >
       <CardContent className="grid gap-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 gap-1.5">
-            {!locked ? (
-              <GripVerticalIcon
-                className="mt-0.5 size-3 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-            ) : null}
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium leading-tight">
-                {profile.name}
-              </div>
-              <div className="mt-0.5 truncate text-[0.68rem] text-muted-foreground">
-                {subtitle}
-              </div>
-            </div>
+        <div
+          className={cn(
+            "grid min-w-0 gap-x-1.5 gap-y-0.5",
+            !locked
+              ? "grid-cols-[0.875rem_minmax(0,1fr)_auto]"
+              : "grid-cols-[minmax(0,1fr)_auto]",
+          )}
+        >
+          {!locked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Profil ${profile.name} verschieben`}
+              title="Verschieben"
+              className="col-start-1 row-start-1 size-3.5 translate-y-px self-baseline p-0 text-muted-foreground"
+            >
+              <GripVerticalIcon className="size-3" aria-hidden="true" />
+            </Button>
+          ) : null}
+
+          <div
+            className={cn(
+              "row-start-1 self-baseline truncate text-sm font-medium leading-tight",
+              !locked ? "col-start-2" : "col-start-1",
+            )}
+          >
+            {profile.name}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div
+            className={cn(
+              "row-start-1 flex shrink-0 items-baseline gap-1 self-baseline",
+              !locked ? "col-start-3" : "col-start-2",
+            )}
+          >
             <Badge
+              className="self-baseline"
               variant={item.type === "system" ? "primary-light" : "info-light"}
               size="xs"
             >
@@ -1506,6 +1524,7 @@ function ProfileCatalogCard({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
+                    className="-my-1 self-center"
                     aria-label={`Aktionen für ${profile.name}`}
                     title="Aktionen"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -1550,6 +1569,15 @@ function ProfileCatalogCard({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          <p
+            className={cn(
+              "row-start-2 truncate text-[0.68rem] text-muted-foreground",
+              !locked ? "col-start-2 col-end-3" : "col-start-1 col-end-2",
+            )}
+          >
+            {subtitle}
+          </p>
         </div>
 
         {profile.validationError ? (
