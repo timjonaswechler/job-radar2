@@ -953,40 +953,34 @@ mod tests {
     }
 
     #[test]
-    fn json_inventory_rejects_wildcards_to_document_simple_dot_jsonpath_scope() {
+    fn json_inventory_validation_rejects_wildcards_to_document_simple_dot_jsonpath_scope() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
             let mut inventory = json_jobs_inventory("{{sourceConfig:startUrl}}");
             inventory["items"]["select"]["jsonPath"] = json!("$.jobs[*]");
-            let source_id = create_inventory_source(
-                &pool,
-                DECLARATIVE_HTTP_ADAPTER_KEY,
-                inventory,
-                json!({ "startUrl": "https://example.com/jobs.json" }),
-                "Focused Energy Karriere",
-            )
-            .await;
-            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
-            let fixture_client = FixtureInventoryHttpClient::new([(
-                "https://example.com/jobs.json",
-                Ok(r#"{ "jobs": [] }"#),
-            )]);
-            let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
-            let running_search_runs = RunningSearchRuns::default();
 
-            let result = SearchRunService::new(
+            let error = create_system_profile(
                 &pool,
-                &running_search_runs,
-                &executor,
-                temp_dir.path().join("search-run-result.json"),
+                CreateSystemProfileInput {
+                    key: "wildcard_inventory".to_string(),
+                    name: "Wildcard Inventory".to_string(),
+                    description: None,
+                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "fixture" }] },
+                        "inventory": inventory
+                    }),
+                    source_config_schema: inventory_source_config_schema(
+                        DECLARATIVE_HTTP_ADAPTER_KEY,
+                    ),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
             )
-            .run(search_request.id)
             .await
-            .unwrap();
+            .unwrap_err();
 
-            assert_eq!(result.status, SearchRunStatus::Failed);
-            let error = result.source_runs[0].error.as_deref().unwrap();
             assert!(error.contains(
                 "definition.inventory.items.select.jsonPath `$.jobs[*]` is not supported"
             ));
@@ -1041,6 +1035,74 @@ mod tests {
                 .as_deref()
                 .unwrap()
                 .contains("connection refused"));
+        });
+    }
+
+    #[test]
+    fn declarative_source_without_inventory_fails_source_run_clearly() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "inventory_missing".to_string(),
+                    name: "Inventory Missing".to_string(),
+                    description: None,
+                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
+                    definition_schema_version: 1,
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "fixture" }] }
+                    }),
+                    source_config_schema: inventory_source_config_schema(
+                        DECLARATIVE_HTTP_ADAPTER_KEY,
+                    ),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+            let source = create_source(
+                &pool,
+                CreateSourceInput {
+                    key: "inventory_missing_source".to_string(),
+                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
+                    system_profile_id: Some(profile.id),
+                    browser_profile_id: None,
+                    name: "Inventory Missing".to_string(),
+                    description: None,
+                    source_config: json!({ "startUrl": "https://example.com/jobs.json" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+            let search_request = create_search_request(&pool, vec![source.id], "engineer").await;
+            let executor = DeclarativeInventoryExecutor::new(FixtureInventoryHttpClient::new([]));
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            assert!(result.postings.is_empty());
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            assert_eq!(result.source_runs[0].candidate_count, 0);
+            assert_eq!(result.source_runs[0].matched_count, 0);
+            assert_eq!(
+                result.source_runs[0].error.as_deref(),
+                Some("definition.inventory must be a JSON object")
+            );
+            assert!(executor.client.requested_urls().is_empty());
         });
     }
 
