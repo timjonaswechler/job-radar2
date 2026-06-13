@@ -1,8 +1,8 @@
 import type { AdapterMetadata } from "@/lib/api/sources";
 
 const adapterPriorityByKey = new Map<string, number>([
-  ["declarative_http_jobboard", 10],
-  ["declarative_sitemap_jobboard", 20],
+  ["declarative_endpoint_inventory", 10],
+  ["declarative_sitemap_inventory", 20],
   ["declarative_browser_jobboard", 30],
   ["stepstone_search", 80],
   ["indeed_search", 90],

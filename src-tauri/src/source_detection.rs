@@ -1079,7 +1079,7 @@ mod tests {
                     key: "example_board".to_string(),
                     name: "Example Board".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [
@@ -1152,7 +1152,7 @@ mod tests {
                     key: "example_board".to_string(),
                     name: "Example Board".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [
@@ -1319,7 +1319,7 @@ mod tests {
                 .unwrap();
 
                 assert_eq!(source.system_profile_id, Some(profile.id));
-                assert_eq!(source.adapter_key, "declarative_http_jobboard");
+                assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
                 assert_eq!(source.source_config["startUrl"], expected_start_url);
             }
         });
@@ -1498,7 +1498,7 @@ mod tests {
             assert_eq!(result.system_profile_key.as_deref(), Some("successfactors"));
             assert_eq!(
                 result.adapter_key.as_deref(),
-                Some("declarative_sitemap_jobboard")
+                Some("declarative_sitemap_inventory")
             );
             assert_eq!(result.evidence.len(), 2);
             assert!(result.evidence[0].contains("HTML erfüllt Regex"));
@@ -1605,7 +1605,7 @@ mod tests {
             );
             assert_eq!(
                 result.adapter_key.as_deref(),
-                Some("declarative_http_jobboard")
+                Some("declarative_endpoint_inventory")
             );
             assert_eq!(result.system_profile_id, Some(profile.id));
             assert_eq!(result.evidence.len(), 3);
@@ -1646,7 +1646,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(source.system_profile_id, Some(profile.id));
-            assert_eq!(source.adapter_key, "declarative_http_jobboard");
+            assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
             assert_eq!(
                 source.source_config["apiBaseUrl"],
                 "https://api-jobs.commerzbank.com/"
@@ -1694,7 +1694,7 @@ mod tests {
                 &pool,
                 CreateSourceInput {
                     key: "commerzbank_careers".to_string(),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     system_profile_id: Some(profile.id),
                     browser_profile_id: None,
                     name: "Commerzbank Karriere".to_string(),
@@ -1735,7 +1735,7 @@ mod tests {
                 key: "magnolia_esmp_job_search".to_string(),
                 name: "Magnolia ESMP Jobsuche".to_string(),
                 description: None,
-                adapter_key: "declarative_http_jobboard".to_string(),
+                adapter_key: "declarative_endpoint_inventory".to_string(),
                 definition_schema_version: 1,
                 definition: json!({
                     "detect": { "required": [
@@ -1799,7 +1799,7 @@ mod tests {
                 key: "example".to_string(),
                 name: "Example".to_string(),
                 description: None,
-                adapter_key: "declarative_http_jobboard".to_string(),
+                adapter_key: "declarative_endpoint_inventory".to_string(),
                 definition_schema_version: 1,
                 definition: json!({
                     "detect": { "required": [{ "htmlContains": "jobboard-widget" }] },

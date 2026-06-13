@@ -2,7 +2,7 @@
   "key": "phenom",
   "name": "Phenom",
   "description": "Deklaratives Sitemap-Systemprofil für Phenom-/CareerConnect-Seiten.",
-  "adapterKey": "declarative_sitemap_jobboard",
+  "adapterKey": "declarative_sitemap_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {

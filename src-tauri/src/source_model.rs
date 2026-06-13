@@ -1783,7 +1783,7 @@ mod tests {
                     key: "muz_global_jobboard".to_string(),
                     name: "Milch & Zucker Global Jobboard".to_string(),
                     description: Some("HTTP-basiertes Systemprofil".to_string()),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": {
@@ -1809,7 +1809,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(created.key, "muz_global_jobboard");
-            assert_eq!(created.adapter_key, "declarative_http_jobboard");
+            assert_eq!(created.adapter_key, "declarative_endpoint_inventory");
             assert!(!created.built_in);
 
             let fetched = get_system_profile_by_key(&pool, "muz_global_jobboard")
@@ -1823,7 +1823,7 @@ mod tests {
                 UpdateSystemProfileInput {
                     name: "MUZ Global Jobboard".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 2,
                     definition: json!({ "detect": { "required": [] } }),
                     source_config_schema: json!({ "type": "object" }),
@@ -1851,7 +1851,7 @@ mod tests {
                     key: "portable_board".to_string(),
                     name: "Portable Board".to_string(),
                     description: Some("Portable profile".to_string()),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [{ "htmlContains": "portable-board" }] },
@@ -1879,7 +1879,7 @@ mod tests {
             let imported = import_system_profile_json(&pool, &exported).await.unwrap();
             assert_eq!(imported.key, "portable_board");
             assert_eq!(imported.name, "Portable Board");
-            assert_eq!(imported.adapter_key, "declarative_http_jobboard");
+            assert_eq!(imported.adapter_key, "declarative_endpoint_inventory");
             assert_eq!(
                 imported.definition["detect"]["required"][0]["htmlContains"],
                 "portable-board"
@@ -1899,7 +1899,7 @@ mod tests {
                     key: "portable_board".to_string(),
                     name: "Portable Board".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [{ "htmlContains": "old-marker" }] }
@@ -1918,7 +1918,7 @@ mod tests {
                   "key": "portable_board",
                   "name": "Portable Board v2",
                   "description": "Updated from JSON",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 2,
                   "definition": {
                     "detect": { "required": [{ "htmlContains": "new-marker" }] }
@@ -2032,7 +2032,7 @@ mod tests {
                 let profile_json = json!({
                     "key": key,
                     "name": "Invalid Detection",
-                    "adapterKey": "declarative_http_jobboard",
+                    "adapterKey": "declarative_endpoint_inventory",
                     "definitionSchemaVersion": 1,
                     "definition": {
                         "detect": { "required": [check] }
@@ -2065,7 +2065,7 @@ mod tests {
                 r#"{
                   "key": "identity_board",
                   "name": "Identity Board",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": {
                     "detect": { "required": [{ "htmlRegex": "https://jobs.example.com/([a-z0-9_-]+)", "captureAs": "boardSlug" }] },
@@ -2090,7 +2090,7 @@ mod tests {
                 r#"{
                   "key": "invalid_identity_board",
                   "name": "Invalid Identity Board",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": {
                     "detect": { "required": [{ "htmlContains": "marker" }] },
@@ -2234,7 +2234,7 @@ mod tests {
                     key: "invalid_create_inventory".to_string(),
                     name: "Invalid Create Inventory".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: invalid_definition.clone(),
                     source_config_schema: json!({ "type": "object" }),
@@ -2255,7 +2255,7 @@ mod tests {
                     key: "valid_inventory".to_string(),
                     name: "Valid Inventory".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: profile_definition_with_inventory(valid_json_inventory()),
                     source_config_schema: json!({ "type": "object" }),
@@ -2272,7 +2272,7 @@ mod tests {
                 UpdateSystemProfileInput {
                     name: "Invalid Update Inventory".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 2,
                     definition: invalid_definition.clone(),
                     source_config_schema: json!({ "type": "object" }),
@@ -2290,7 +2290,7 @@ mod tests {
             let import_document = json!({
                 "key": "invalid_import_inventory",
                 "name": "Invalid Import Inventory",
-                "adapterKey": "declarative_http_jobboard",
+                "adapterKey": "declarative_endpoint_inventory",
                 "definitionSchemaVersion": 1,
                 "definition": invalid_definition,
                 "sourceConfigSchema": { "type": "object" },
@@ -2317,7 +2317,7 @@ mod tests {
                     key: "portable_board".to_string(),
                     name: "Portable Board".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [{ "htmlContains": "old-marker" }] }
@@ -2335,7 +2335,7 @@ mod tests {
                 r#"{
                   "key": "portable_board",
                   "name": "Portable Board with Bad Detection",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 2,
                   "definition": {
                     "detect": { "required": [{ "domainContains": "example.com" }] }
@@ -2370,7 +2370,7 @@ mod tests {
                 r#"{
                   "key": "invalid_definition",
                   "name": "Invalid Definition",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": [],
                   "sourceConfigSchema": { "type": "object" },
@@ -2389,7 +2389,7 @@ mod tests {
                 r#"{
                   "key": "invalid_schema",
                   "name": "Invalid Schema",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": {
                     "detect": { "required": [{ "htmlContains": "marker" }] }
@@ -2410,7 +2410,7 @@ mod tests {
                 r#"{
                   "key": "invalid_schema_shape",
                   "name": "Invalid Schema Shape",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": {
                     "detect": { "required": [{ "htmlContains": "marker" }] }
@@ -2440,7 +2440,7 @@ mod tests {
             )
             .bind("greenhouse")
             .bind("Greenhouse")
-            .bind("declarative_http_jobboard")
+            .bind("declarative_endpoint_inventory")
             .bind(1_i64)
             .bind(r#"{"detect":{"required":[{"htmlContains":"old"}]}}"#)
             .bind(r#"{"type":"object"}"#)
@@ -2454,7 +2454,7 @@ mod tests {
                 r#"{
                   "key": "greenhouse",
                   "name": "Overwritten Greenhouse",
-                  "adapterKey": "declarative_http_jobboard",
+                  "adapterKey": "declarative_endpoint_inventory",
                   "definitionSchemaVersion": 1,
                   "definition": {
                     "detect": { "required": [{ "htmlContains": "new" }] }
@@ -2486,7 +2486,7 @@ mod tests {
                     key: "greenhouse".to_string(),
                     name: "Greenhouse".to_string(),
                     description: None,
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     definition_schema_version: 1,
                     definition: json!({
                         "detect": { "required": [{ "htmlContains": "greenhouse" }] }
@@ -2510,7 +2510,7 @@ mod tests {
                 &pool,
                 CreateSourceInput {
                     key: "acme_greenhouse".to_string(),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     system_profile_id: Some(profile.id),
                     browser_profile_id: None,
                     name: "Acme Karriere".to_string(),
@@ -2527,13 +2527,13 @@ mod tests {
             .unwrap();
 
             assert_eq!(source.system_profile_id, Some(profile.id));
-            assert_eq!(source.adapter_key, "declarative_http_jobboard");
+            assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
 
             let missing_profile = create_source(
                 &pool,
                 CreateSourceInput {
                     key: "missing_profile".to_string(),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     system_profile_id: None,
                     browser_profile_id: None,
                     name: "Missing".to_string(),
@@ -2551,7 +2551,7 @@ mod tests {
                 &pool,
                 CreateSourceInput {
                     key: "invalid_profile_config".to_string(),
-                    adapter_key: "declarative_http_jobboard".to_string(),
+                    adapter_key: "declarative_endpoint_inventory".to_string(),
                     system_profile_id: Some(profile.id),
                     browser_profile_id: None,
                     name: "Invalid".to_string(),

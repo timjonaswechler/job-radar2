@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use std::{fs, io, path::Path};
 use tokio::sync::Mutex;
 
-use crate::paths::AppPaths;
+use crate::app::paths::AppPaths;
 
 pub const RESET_DEV_DB_ENV: &str = "JOB_RADAR_RESET_DEV_DB";
 

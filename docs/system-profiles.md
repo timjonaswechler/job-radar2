@@ -1,6 +1,6 @@
 # System profiles
 
-A system profile is a declarative JSON definition of a recruiting system or career-system family. It is not an adapter. Adapters are technical runtimes such as `declarative_http_jobboard`, `declarative_sitemap_jobboard`, or `declarative_browser_jobboard`.
+A system profile is a declarative JSON definition of a recruiting system or career-system family. It is not an adapter. Adapters are technical runtimes such as `declarative_endpoint_inventory`, `declarative_sitemap_inventory`, or `declarative_browser_jobboard`.
 
 ## Storage model
 
@@ -26,7 +26,7 @@ Custom profiles are runtime user data. They are loaded from the same OS app data
   "key": "muz_global_jobboard",
   "name": "Milch & Zucker Global Jobboard",
   "description": "Human-readable description.",
-  "adapterKey": "declarative_http_jobboard",
+  "adapterKey": "declarative_endpoint_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {

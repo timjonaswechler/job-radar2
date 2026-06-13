@@ -14,8 +14,8 @@ use crate::{
     source_model::Source,
 };
 
-const DECLARATIVE_HTTP_ADAPTER_KEY: &str = "declarative_http_jobboard";
-const DECLARATIVE_SITEMAP_ADAPTER_KEY: &str = "declarative_sitemap_jobboard";
+const DECLARATIVE_HTTP_ADAPTER_KEY: &str = "declarative_endpoint_inventory";
+const DECLARATIVE_SITEMAP_ADAPTER_KEY: &str = "declarative_sitemap_inventory";
 
 pub(crate) struct DeclarativeInventoryExecutor<C = ReqwestInventoryHttpClient> {
     client: C,

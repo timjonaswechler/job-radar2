@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::app_state::AppState;
+use crate::app::state::AppState;
 
 const SETTING_THEME: &str = "theme";
 const SETTING_LANGUAGE: &str = "language";
@@ -605,7 +605,8 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let paths =
-                crate::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf()).unwrap();
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
             let browser_profiles = crate::source_model::list_browser_profiles(&state.db)
@@ -656,7 +657,8 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let paths =
-                crate::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf()).unwrap();
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
             let preferences = read_app_preferences(&state.db).await.unwrap();
@@ -679,7 +681,8 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let paths =
-                crate::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf()).unwrap();
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
             assert!(!browser_runtime_installing(&state));

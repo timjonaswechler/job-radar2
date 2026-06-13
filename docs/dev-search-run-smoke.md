@@ -32,7 +32,7 @@ For a fresh development database, allow the smoke command to create the local SC
 npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-source
 ```
 
-`stepstone_de` is seeded by the backend. `--ensure-schott-source` creates only the local development source `schott_careers` with adapter `declarative_sitemap_jobboard` and source config:
+`stepstone_de` is seeded by the backend. `--ensure-schott-source` creates only the local development source `schott_careers` with adapter `declarative_sitemap_inventory` and source config:
 
 ```json
 {
