@@ -327,6 +327,22 @@ pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Resul
         .await
 }
 
+#[tauri::command]
+pub async fn run_search_request(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<crate::search_run_model::SearchRunResult, String> {
+    let source_executor = crate::search_run_model::DefaultSourceExecutor;
+    crate::search_run_model::SearchRunService::new(
+        &state.db,
+        &state.running_search_runs,
+        &source_executor,
+        crate::search_run_model::default_search_run_result_path(),
+    )
+    .run(id)
+    .await
+}
+
 async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, String> {
     Ok(AppPreferences {
         theme: read_setting_or_default(pool, SETTING_THEME).await?,

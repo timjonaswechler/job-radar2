@@ -25,6 +25,47 @@ export type SearchRequest = {
   updatedAt: string
 }
 
+export type SearchRunStatus =
+  | "completed"
+  | "completed_with_errors"
+  | "failed"
+  | "cancelled"
+
+export type SourceRunStatus = "completed" | "failed" | "cancelled"
+
+export type PostingSource = {
+  sourceId: number
+  sourceKey: string
+  sourceName: string
+  url: string
+}
+
+export type NormalizedPosting = {
+  title: string
+  company: string
+  url: string
+  locations: string[]
+  sources: PostingSource[]
+}
+
+export type SourceRunResult = {
+  sourceId: number
+  sourceKey: string
+  sourceName: string
+  status: SourceRunStatus
+  candidateCount: number
+  matchedCount: number
+  error: string | null
+}
+
+export type SearchRunResult = {
+  searchRequestId: number
+  status: SearchRunStatus
+  generatedAt: string
+  sourceRuns: SourceRunResult[]
+  postings: NormalizedPosting[]
+}
+
 export type CreateSearchRequestInput = {
   status: SearchRequestStatus
   includeRules: SearchRule[]
@@ -57,4 +98,8 @@ export function updateSearchRequest(
 
 export function deleteSearchRequest(id: number) {
   return invoke<void>("delete_search_request", { id })
+}
+
+export function runSearchRequest(id: number) {
+  return invoke<SearchRunResult>("run_search_request", { id })
 }
