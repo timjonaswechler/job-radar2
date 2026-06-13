@@ -22,12 +22,12 @@
         }
       ],
       "keyCandidates": [
-        "{{capture:companyWebsite|domainKey}}",
-        "{{capture:boardSlug|technicalKey}}"
+        "{{capture:companyWebsite|domainKey}}_careers",
+        "{{capture:boardSlug|technicalKey}}_careers"
       ],
       "nameCandidates": [
-        "{{capture:companyWebsite|domainTitle}}",
-        "{{capture:boardSlug|titleCase}}"
+        "{{capture:companyWebsite|domainTitle}} Karriere",
+        "{{capture:boardSlug|titleCase}} Karriere"
       ],
       "optionalSourceConfig": {
         "companyWebsite": "{{capture:companyWebsite}}"
@@ -35,6 +35,19 @@
     },
     "sourceConfig": {
       "startUrl": "https://api.ashbyhq.com/posting-api/job-board/{{capture:boardSlug}}?includeCompensation=true"
+    },
+    "inventory": {
+      "fetch": { "url": "{{sourceConfig:startUrl}}" },
+      "parse": { "as": "json" },
+      "items": {
+        "select": { "jsonPath": "$.jobs" }
+      },
+      "fields": {
+        "title": { "jsonPath": "$.title" },
+        "url": { "jsonPath": "$.jobUrl" },
+        "company": { "template": "{{sourceName}}" },
+        "locations": [{ "jsonPath": "$.location" }]
+      }
     }
   },
   "sourceConfigSchema": {
