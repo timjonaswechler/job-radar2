@@ -32,14 +32,21 @@ pub struct DefaultSourceExecutor;
 impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(
         &'a self,
-        _search_request: &'a SearchRequest,
+        search_request: &'a SearchRequest,
         source: &'a Source,
     ) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            Err(SourceExecutionError::Failed(format!(
-                "adapterKey {} has no search-run executor yet",
-                source.adapter_key
-            )))
+            match source.adapter_key.as_str() {
+                "declarative_sitemap_jobboard" => {
+                    let executor =
+                        crate::sitemap_source_executor::DeclarativeSitemapJobboardExecutor::new_reqwest();
+                    executor.execute(search_request, source).await
+                }
+                _ => Err(SourceExecutionError::Failed(format!(
+                    "adapterKey {} has no search-run executor yet",
+                    source.adapter_key
+                ))),
+            }
         })
     }
 }

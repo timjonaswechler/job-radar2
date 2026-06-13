@@ -6,6 +6,7 @@ mod db;
 mod paths;
 mod search_request_model;
 mod search_run_model;
+mod sitemap_source_executor;
 mod source_detection;
 mod source_model;
 
