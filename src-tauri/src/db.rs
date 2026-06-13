@@ -1,3 +1,5 @@
+use crate::source_model::{validate_system_profile_definition_and_schema, SourceStatus};
+
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
@@ -281,22 +283,14 @@ fn validate_system_profile_seed(seed: &SystemProfileSeed, source_label: &str) ->
         )));
     }
 
-    if seed.status == "active" {
-        let required_checks = seed
-            .definition
-            .pointer("/detect/required")
-            .and_then(Value::as_array)
-            .ok_or_else(|| {
-                seed_error(format!(
-                    "{source_label}: active profiles require definition.detect.required"
-                ))
-            })?;
-        if required_checks.is_empty() {
-            return Err(seed_error(format!(
-                "{source_label}: active profiles require at least one detection check"
-            )));
-        }
-    }
+    let status = SourceStatus::try_from(seed.status.as_str())
+        .map_err(|error| seed_error(format!("{source_label}: {error}")))?;
+    validate_system_profile_definition_and_schema(
+        &seed.definition,
+        &seed.source_config_schema,
+        status,
+    )
+    .map_err(|error| seed_error(format!("{source_label}: {error}")))?;
 
     Ok(())
 }

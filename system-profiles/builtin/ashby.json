@@ -9,12 +9,32 @@
     "detect": {
       "required": [
         {
-          "htmlRegex": "(?i)https?://(?:jobs|api)\\.ashbyhq\\.com/(?:posting-api/job-board/)?[a-z0-9][^\\\"'<>\\s]*"
+          "htmlRegex": "(?i)https?://(?:jobs\\.ashbyhq\\.com/|api\\.ashbyhq\\.com/posting-api/job-board/)([a-z0-9][a-z0-9_-]*)(?:/(?:embed|application|[^\\\"'<>\\s?]+))?(?:\\?[^\\\"'<>\\s]*)?",
+          "captureAs": "boardSlug"
         }
       ]
     },
+    "identity": {
+      "extract": [
+        {
+          "htmlRegex": "\"publicWebsite\"\\s*:\\s*\"(https?://[^\"\\\\]+)\"",
+          "captureAs": "companyWebsite"
+        }
+      ],
+      "keyCandidates": [
+        "{{capture:companyWebsite|domainKey}}",
+        "{{capture:boardSlug|technicalKey}}"
+      ],
+      "nameCandidates": [
+        "{{capture:companyWebsite|domainTitle}}",
+        "{{capture:boardSlug|titleCase}}"
+      ],
+      "optionalSourceConfig": {
+        "companyWebsite": "{{capture:companyWebsite}}"
+      }
+    },
     "sourceConfig": {
-      "startUrl": "{{inputUrl}}"
+      "startUrl": "https://api.ashbyhq.com/posting-api/job-board/{{capture:boardSlug}}?includeCompensation=true"
     }
   },
   "sourceConfigSchema": {
@@ -25,6 +45,11 @@
         "type": "string",
         "format": "uri",
         "title": "Start-URL"
+      },
+      "companyWebsite": {
+        "type": "string",
+        "format": "uri",
+        "title": "Firmen-Webseite"
       }
     }
   }

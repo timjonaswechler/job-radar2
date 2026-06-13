@@ -354,6 +354,11 @@ pub async fn create_system_profile(
         &input.adapter_key,
         input.definition_schema_version,
     )?;
+    validate_system_profile_definition_and_schema(
+        &input.definition,
+        &input.source_config_schema,
+        input.status,
+    )?;
     let definition_json = json_to_string(&input.definition)?;
     let source_config_schema_json = json_to_string(&input.source_config_schema)?;
 
@@ -448,6 +453,11 @@ pub async fn update_system_profile(
         &input.name,
         &input.adapter_key,
         input.definition_schema_version,
+    )?;
+    validate_system_profile_definition_and_schema(
+        &input.definition,
+        &input.source_config_schema,
+        input.status,
     )?;
     let definition_json = json_to_string(&input.definition)?;
     let source_config_schema_json = json_to_string(&input.source_config_schema)?;
@@ -737,14 +747,26 @@ fn validate_system_profile_document(document: &SystemProfileJsonDocument) -> Res
         document.definition_schema_version,
     )?;
 
-    if !document.definition.is_object() {
+    validate_system_profile_definition_and_schema(
+        &document.definition,
+        &document.source_config_schema,
+        document.status,
+    )
+}
+
+pub(crate) fn validate_system_profile_definition_and_schema(
+    definition: &Value,
+    source_config_schema: &Value,
+    status: SourceStatus,
+) -> Result<(), String> {
+    if !definition.is_object() {
         return Err("definition must be a JSON object".to_string());
     }
 
-    validate_json_schema_document(&document.source_config_schema, "sourceConfigSchema")?;
+    validate_json_schema_document(source_config_schema, "sourceConfigSchema")?;
 
-    let required_checks = document.definition.pointer("/detect/required");
-    if document.status == SourceStatus::Active {
+    let required_checks = definition.pointer("/detect/required");
+    if status == SourceStatus::Active {
         let required_checks = required_checks
             .and_then(Value::as_array)
             .ok_or_else(|| "active profiles require definition.detect.required".to_string())?;
@@ -759,6 +781,139 @@ fn validate_system_profile_document(document: &SystemProfileJsonDocument) -> Res
             .ok_or_else(|| "definition.detect.required must be an array".to_string())?;
         for (index, check) in required_checks.iter().enumerate() {
             validate_detection_check(check, &format!("definition.detect.required[{index}]"))?;
+        }
+    }
+
+    validate_identity_definition(definition)?;
+
+    Ok(())
+}
+
+fn validate_identity_definition(definition: &Value) -> Result<(), String> {
+    let Some(identity) = definition.get("identity") else {
+        return Ok(());
+    };
+    let identity = identity
+        .as_object()
+        .ok_or_else(|| "definition.identity must be a JSON object".to_string())?;
+    validate_allowed_keys(
+        identity,
+        &[
+            "extract",
+            "keyCandidates",
+            "nameCandidates",
+            "optionalSourceConfig",
+        ],
+        "definition.identity",
+    )?;
+
+    if let Some(extracts) = identity.get("extract") {
+        let extracts = extracts
+            .as_array()
+            .ok_or_else(|| "definition.identity.extract must be an array".to_string())?;
+        for (index, check) in extracts.iter().enumerate() {
+            validate_detection_check(check, &format!("definition.identity.extract[{index}]"))?;
+        }
+    }
+
+    validate_template_candidates(identity, "keyCandidates")?;
+    validate_template_candidates(identity, "nameCandidates")?;
+
+    if let Some(optional_source_config) = identity.get("optionalSourceConfig") {
+        let optional_source_config = optional_source_config.as_object().ok_or_else(|| {
+            "definition.identity.optionalSourceConfig must be a JSON object".to_string()
+        })?;
+        for (key, value) in optional_source_config {
+            validate_template_value(
+                value,
+                &format!("definition.identity.optionalSourceConfig.{key}"),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_template_candidates(identity: &Map<String, Value>, key: &str) -> Result<(), String> {
+    let Some(candidates) = identity.get(key) else {
+        return Ok(());
+    };
+    let candidates = candidates
+        .as_array()
+        .ok_or_else(|| format!("definition.identity.{key} must be an array"))?;
+    for (index, candidate) in candidates.iter().enumerate() {
+        let path = format!("definition.identity.{key}[{index}]");
+        let candidate = candidate
+            .as_str()
+            .ok_or_else(|| format!("{path} must be a string"))?;
+        if candidate.trim().is_empty() {
+            return Err(format!("{path} must be a non-empty string"));
+        }
+        validate_template_string(candidate, &path)?;
+    }
+    Ok(())
+}
+
+fn validate_template_value(value: &Value, path: &str) -> Result<(), String> {
+    match value {
+        Value::String(template) => validate_template_string(template, path),
+        Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                validate_template_value(value, &format!("{path}[{index}]"))?;
+            }
+            Ok(())
+        }
+        Value::Object(object) => {
+            for (key, value) in object {
+                validate_template_value(value, &format!("{path}.{key}"))?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_template_string(template: &str, path: &str) -> Result<(), String> {
+    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
+    for captures in placeholder_regex.captures_iter(template) {
+        validate_template_expression(&captures[1], path)?;
+    }
+    Ok(())
+}
+
+fn validate_template_expression(expression: &str, path: &str) -> Result<(), String> {
+    let mut parts = expression.split('|').map(str::trim);
+    let variable = parts
+        .next()
+        .filter(|variable| !variable.is_empty())
+        .ok_or_else(|| format!("{path} contains an empty template expression"))?;
+
+    if variable == "inputUrl" || variable == "origin" {
+        // supported built-in variable
+    } else if let Some(capture_key) = variable.strip_prefix("capture:") {
+        if capture_key.is_empty()
+            || !capture_key
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(format!(
+                "{path} contains invalid capture template variable `{variable}`"
+            ));
+        }
+    } else {
+        return Err(format!(
+            "{path} contains unsupported template variable `{variable}`"
+        ));
+    }
+
+    for filter in parts {
+        if !matches!(
+            filter,
+            "technicalKey" | "titleCase" | "domainKey" | "domainTitle"
+        ) {
+            return Err(format!(
+                "{path} contains unsupported template filter `{filter}`"
+            ));
         }
     }
 
@@ -1656,6 +1811,62 @@ mod tests {
     }
 
     #[test]
+    fn system_profile_json_import_validates_identity_templates() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+
+            let valid = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "identity_board",
+                  "name": "Identity Board",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": {
+                    "detect": { "required": [{ "htmlRegex": "https://jobs.example.com/([a-z0-9_-]+)", "captureAs": "boardSlug" }] },
+                    "identity": {
+                      "extract": [{ "htmlRegex": "\"publicWebsite\":\"(https?://[^\"\\\\]+)\"", "captureAs": "companyWebsite" }],
+                      "keyCandidates": ["{{capture:companyWebsite|domainKey}}_careers", "{{capture:boardSlug|technicalKey}}_careers"],
+                      "nameCandidates": ["{{capture:companyWebsite|domainTitle}} Karriere"],
+                      "optionalSourceConfig": { "companyWebsite": "{{capture:companyWebsite}}" }
+                    },
+                    "sourceConfig": { "startUrl": "{{inputUrl}}" }
+                  },
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap();
+            assert_eq!(valid.key, "identity_board");
+
+            let invalid = import_system_profile_json(
+                &pool,
+                r#"{
+                  "key": "invalid_identity_board",
+                  "name": "Invalid Identity Board",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "marker" }] },
+                    "identity": {
+                      "keyCandidates": ["{{capture:companyWebsite|unknownFilter}}_careers"]
+                    }
+                  },
+                  "sourceConfigSchema": { "type": "object" },
+                  "status": "active"
+                }"#,
+            )
+            .await
+            .unwrap_err();
+            assert!(invalid.contains("definition.identity.keyCandidates[0] contains unsupported template filter `unknownFilter`"));
+            assert!(get_system_profile_by_key(&pool, "invalid_identity_board")
+                .await
+                .is_err());
+        });
+    }
+
+    #[test]
     fn system_profile_json_import_rejects_invalid_detection_update_without_persistence() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1836,7 +2047,9 @@ mod tests {
                     description: None,
                     adapter_key: "declarative_http_jobboard".to_string(),
                     definition_schema_version: 1,
-                    definition: json!({}),
+                    definition: json!({
+                        "detect": { "required": [{ "htmlContains": "greenhouse" }] }
+                    }),
                     source_config_schema: json!({
                         "type": "object",
                         "required": ["startUrl", "boardToken"],
