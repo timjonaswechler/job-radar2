@@ -57,7 +57,7 @@ A user-created, saved job-search intent that contains one or more search terms, 
 _Avoid_: Quelle, Profil, Suchlauf
 
 **Suchlauf**:
-A concrete execution of a search request at a specific time that produces current results rather than versioning the search request. One search run may use multiple selected sources and expose an outcome for those sources; it may be queued, running, completed, completed with errors, failed, or cancelled.
+A concrete execution of a search request at a specific time that produces current results. Search runs use the current saved request and do not create search-request versions or snapshots. One search run may use multiple selected sources and expose an outcome for those sources; it may be queued, running, completed, completed with errors, failed, or cancelled.
 _Avoid_: Suchanfrage, Quelle, Profil, Historie
 
 **Quellenlauf**:
@@ -73,7 +73,7 @@ The user-defined rule set of a search request that removes job postings from the
 _Avoid_: Antipattern, Quelle, Suchlauf
 
 **Stellenanzeige**:
-A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Postings with the same company and title are treated as the same job opportunity, even when they are found through multiple sources; when both postings provide locations, overlapping locations are also used to distinguish opportunities.
+A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company + title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
 _Avoid_: Treffer, Quelle, Suchlauf
 
 **Treffer**:
