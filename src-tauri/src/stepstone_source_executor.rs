@@ -6,6 +6,7 @@ use std::{collections::HashSet, fmt, future::Future, path::PathBuf, pin::Pin, ti
 
 use crate::{
     search_request_model::{SearchRequest, SearchRuleKind, SearchRuleTarget},
+    search_run::normalization::{collapse_whitespace, normalize_locations},
     search_run_model::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor,
@@ -398,7 +399,7 @@ fn preloaded_item_candidate(item: &str, page_url: &Url) -> Option<SourceCandidat
         .into_iter()
         .collect::<Vec<_>>();
 
-    normalized_candidate(title, company, url, locations)
+    stepstone_candidate(title, company, url, locations)
 }
 
 fn js_object_string_field(object: &str, field: &str) -> Option<String> {
@@ -721,7 +722,7 @@ fn json_candidate_from_object(
         .or_else(|| object.get("employer").and_then(json_name_like))?;
     let url = absolute_http_url(&raw_url, page_url)?;
 
-    normalized_candidate(title, company, url, collect_locations_from_object(object))
+    stepstone_candidate(title, company, url, collect_locations_from_object(object))
 }
 
 fn first_json_string(object: &Map<String, Value>, keys: &[&str]) -> Option<String> {
@@ -778,7 +779,7 @@ fn collect_locations_from_object(object: &Map<String, Value>) -> Vec<String> {
         }
     }
 
-    normalize_locations(locations)
+    stepstone_locations(locations)
 }
 
 fn collect_location_values(value: &Value, locations: &mut Vec<String>) {
@@ -867,7 +868,7 @@ fn parse_html_card_candidates(html: &str, page_url: &Url) -> Vec<SourceCandidate
             )
             .or_else(|| company_from_stepstone_url(&url, &locations));
             if let Some(company) = company {
-                if let Some(candidate) = normalized_candidate(title, company, url, locations) {
+                if let Some(candidate) = stepstone_candidate(title, company, url, locations) {
                     candidates.push(candidate);
                 }
             }
@@ -1047,12 +1048,14 @@ fn format_company_slug_tokens(tokens: &[&str]) -> Option<String> {
     (!company.is_empty()).then_some(company)
 }
 
-fn normalized_candidate(
+fn stepstone_candidate(
     title: String,
     company: String,
     url: String,
     locations: Vec<String>,
 ) -> Option<SourceCandidate> {
+    // Keep StepStone-specific garbage filtering close to parsing. The generic
+    // final candidate normalization still happens in `SearchRunService`.
     let title = collapse_whitespace(&title);
     let company = collapse_whitespace(&company);
     let url = url.trim().to_string();
@@ -1069,23 +1072,20 @@ fn normalized_candidate(
         title,
         company,
         url,
-        locations: normalize_locations(locations),
+        locations: stepstone_locations(locations),
     })
 }
 
-fn normalize_locations(locations: Vec<String>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut normalized = Vec::new();
-    for location in locations {
-        let location = collapse_whitespace(&location);
-        if location.is_empty() || looks_like_css_garbage(&location) {
-            continue;
-        }
-        if seen.insert(location.to_lowercase()) {
-            normalized.push(location);
-        }
-    }
-    normalized
+fn stepstone_locations(locations: Vec<String>) -> Vec<String> {
+    normalize_locations(
+        locations
+            .into_iter()
+            .filter_map(|location| {
+                let location = collapse_whitespace(&location);
+                (!location.is_empty() && !looks_like_css_garbage(&location)).then_some(location)
+            })
+            .collect(),
+    )
 }
 
 fn dedupe_candidates(candidates: Vec<SourceCandidate>) -> Vec<SourceCandidate> {
@@ -1120,10 +1120,6 @@ fn has_no_results_marker(html: &str) -> bool {
         || lower.contains("keine passenden stellenangebote")
         || lower.contains("keine jobs gefunden")
         || lower.contains("no jobs found")
-}
-
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn decode_html_entities(value: &str) -> String {

@@ -13,6 +13,7 @@ use crate::{
         RunningSearchRuns, SearchRequest, SearchRequestService, SearchRule, SearchRuleKind,
         SearchRuleTarget,
     },
+    search_run::normalization::{normalize_source_candidate, normalized_text_key},
     source_model::{
         get_browser_profile, get_source, get_system_profile, BrowserProfile, Source, SourceStatus,
         SystemProfile,
@@ -230,9 +231,11 @@ impl<'a> SearchRunService<'a> {
             match self.source_executor.execute(input).await {
                 Ok(source_candidates) => {
                     let candidate_count = source_candidates.len();
-                    candidates.extend(source_candidates.into_iter().map(|candidate| Treffer {
-                        candidate: normalize_candidate(candidate),
-                        source: posting_source(source, None),
+                    candidates.extend(source_candidates.into_iter().filter_map(|candidate| {
+                        normalize_source_candidate(candidate).map(|candidate| Treffer {
+                            candidate,
+                            source: posting_source(source, None),
+                        })
                     }));
                     source_runs.push(source_run_completed(source, candidate_count));
                 }
@@ -415,44 +418,6 @@ fn matches_rule(rule: &CompiledRule, candidate: &SourceCandidate) -> bool {
     }
 }
 
-fn normalize_candidate(candidate: SourceCandidate) -> SourceCandidate {
-    SourceCandidate {
-        title: collapse_whitespace(&candidate.title),
-        company: collapse_whitespace(&candidate.company),
-        url: candidate.url.trim().to_string(),
-        locations: normalize_locations(candidate.locations),
-    }
-}
-
-fn normalize_locations(locations: Vec<String>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut normalized_locations = Vec::new();
-
-    for location in locations {
-        let location = collapse_whitespace(&location);
-        if location.is_empty() {
-            continue;
-        }
-        if seen.insert(normalized_location_key(&location)) {
-            normalized_locations.push(location);
-        }
-    }
-
-    normalized_locations
-}
-
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn normalized_text_key(value: &str) -> String {
-    collapse_whitespace(value).to_lowercase()
-}
-
-fn normalized_location_key(value: &str) -> String {
-    normalized_text_key(value)
-}
-
 fn posting_source(source: &Source, url: Option<String>) -> PostingSource {
     PostingSource {
         source_id: source.id,
@@ -547,22 +512,22 @@ fn can_merge(posting: &NormalizedPosting, candidate: &SourceCandidate) -> bool {
     let existing_location_keys = posting
         .locations
         .iter()
-        .map(|location| normalized_location_key(location))
+        .map(|location| normalized_text_key(location))
         .collect::<HashSet<_>>();
     candidate
         .locations
         .iter()
-        .any(|location| existing_location_keys.contains(&normalized_location_key(location)))
+        .any(|location| existing_location_keys.contains(&normalized_text_key(location)))
 }
 
 fn merge_into_posting(posting: &mut NormalizedPosting, treffer: Treffer) {
     let mut existing_location_keys = posting
         .locations
         .iter()
-        .map(|location| normalized_location_key(location))
+        .map(|location| normalized_text_key(location))
         .collect::<HashSet<_>>();
     for location in treffer.candidate.locations {
-        if existing_location_keys.insert(normalized_location_key(&location)) {
+        if existing_location_keys.insert(normalized_text_key(&location)) {
             posting.locations.push(location);
         }
     }
@@ -934,6 +899,61 @@ mod tests {
             .unwrap();
             assert_eq!(result_json["status"], "completed");
             assert_eq!(result_json["sourceRuns"][0]["matchedCount"], 2);
+        });
+    }
+
+    #[test]
+    fn normalizes_source_candidates_before_matching_and_merging() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let source_ids = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let search_request = create_test_search_request(
+                &pool,
+                source_ids.clone(),
+                vec![text_rule("Senior Laser Engineer")],
+                vec![],
+            )
+            .await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let executor = FixtureSourceExecutor::new([(
+                source_ids[0],
+                Ok(vec![
+                    candidate(
+                        "  Senior\n Laser   Engineer  ",
+                        "\tACME   GmbH\n",
+                        " https://example.test/laser ",
+                        &[" Mainz ", "", "mainz", "  München\nNord  "],
+                    ),
+                    candidate(
+                        "Senior Laser Engineer",
+                        " ",
+                        "https://example.test/empty-company",
+                        &["Remote"],
+                    ),
+                ]),
+            )]);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 2);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Senior Laser Engineer");
+            assert_eq!(posting.company, "ACME GmbH");
+            assert_eq!(posting.url, "https://example.test/laser");
+            assert_eq!(posting.locations, vec!["Mainz", "München Nord"]);
+            assert_eq!(posting.sources[0].url, "https://example.test/laser");
         });
     }
 
