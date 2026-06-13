@@ -1,3 +1,5 @@
+use crate::declarative_template::is_supported_template_filter;
+
 use regex::Regex;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -907,10 +909,7 @@ fn validate_template_expression(expression: &str, path: &str) -> Result<(), Stri
     }
 
     for filter in parts {
-        if !matches!(
-            filter,
-            "technicalKey" | "titleCase" | "domainKey" | "domainTitle"
-        ) {
+        if !is_supported_template_filter(filter) {
             return Err(format!(
                 "{path} contains unsupported template filter `{filter}`"
             ));
