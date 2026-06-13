@@ -13,6 +13,7 @@ node_modules
 dist
 dist-ssr
 *.local
+search-run-result.json
 
 # Editor directories and files
 .vscode/*
