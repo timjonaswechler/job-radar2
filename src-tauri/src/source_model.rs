@@ -1,4 +1,6 @@
-use crate::declarative_template::is_supported_template_filter;
+use crate::{
+    declarative_template::is_supported_template_filter, simple_json_path::resolve_simple_json_path,
+};
 
 use regex::Regex;
 use reqwest::Url;
@@ -787,8 +789,252 @@ pub(crate) fn validate_system_profile_definition_and_schema(
     }
 
     validate_identity_definition(definition)?;
+    validate_inventory_definition(definition)?;
 
     Ok(())
+}
+
+fn validate_inventory_definition(definition: &Value) -> Result<(), String> {
+    let Some(inventory) = definition.get("inventory") else {
+        return Ok(());
+    };
+    let inventory = inventory
+        .as_object()
+        .ok_or_else(|| "definition.inventory must be a JSON object".to_string())?;
+    validate_allowed_keys(
+        inventory,
+        &["fetch", "parse", "items", "fields"],
+        "definition.inventory",
+    )?;
+
+    let fetch = require_object(inventory, "fetch", "definition.inventory.fetch")?;
+    validate_allowed_keys(fetch, &["url"], "definition.inventory.fetch")?;
+    let fetch_url = require_non_empty_string(fetch, "url", "definition.inventory.fetch.url")?;
+    validate_inventory_template_string(
+        fetch_url,
+        "definition.inventory.fetch.url",
+        InventoryTemplateScope::Fetch,
+    )?;
+
+    let parse = require_object(inventory, "parse", "definition.inventory.parse")?;
+    validate_allowed_keys(parse, &["as"], "definition.inventory.parse")?;
+    let parse_as = require_non_empty_string(parse, "as", "definition.inventory.parse.as")?;
+    if !matches!(parse_as, "xml" | "json") {
+        return Err("definition.inventory.parse.as must be xml or json".to_string());
+    }
+
+    let items = require_object(inventory, "items", "definition.inventory.items")?;
+    validate_allowed_keys(
+        items,
+        &["select", "where", "captures"],
+        "definition.inventory.items",
+    )?;
+    validate_inventory_item_select(items, parse_as)?;
+    validate_inventory_regex_entries(items.get("where"), "definition.inventory.items.where")?;
+    validate_inventory_regex_entries(items.get("captures"), "definition.inventory.items.captures")?;
+
+    let fields = require_object(inventory, "fields", "definition.inventory.fields")?;
+    validate_inventory_required_field(fields, "title")?;
+    validate_inventory_required_field(fields, "url")?;
+    validate_inventory_required_field(fields, "company")?;
+    let locations = fields
+        .get("locations")
+        .ok_or_else(|| "definition.inventory.fields.locations must be an array".to_string())?;
+    let locations = locations
+        .as_array()
+        .ok_or_else(|| "definition.inventory.fields.locations must be an array".to_string())?;
+    for (index, location) in locations.iter().enumerate() {
+        validate_inventory_field_expression(
+            location,
+            &format!("definition.inventory.fields.locations[{index}]"),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_inventory_item_select(
+    items: &Map<String, Value>,
+    parse_as: &str,
+) -> Result<(), String> {
+    let select = require_object(items, "select", "definition.inventory.items.select")?;
+    match parse_as {
+        "xml" => {
+            validate_allowed_keys(select, &["xmlText"], "definition.inventory.items.select")?;
+            require_non_empty_string(
+                select,
+                "xmlText",
+                "definition.inventory.items.select.xmlText",
+            )?;
+        }
+        "json" => {
+            validate_allowed_keys(select, &["jsonPath"], "definition.inventory.items.select")?;
+            let json_path = require_non_empty_string(
+                select,
+                "jsonPath",
+                "definition.inventory.items.select.jsonPath",
+            )?;
+            validate_simple_json_path(json_path, "definition.inventory.items.select.jsonPath")?;
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
+}
+
+fn validate_inventory_regex_entries(value: Option<&Value>, path: &str) -> Result<(), String> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    let entries = value
+        .as_array()
+        .ok_or_else(|| format!("{path} must be an array"))?;
+    for (index, entry) in entries.iter().enumerate() {
+        let entry_path = format!("{path}[{index}]");
+        let object = entry
+            .as_object()
+            .ok_or_else(|| format!("{entry_path} must be a JSON object"))?;
+        validate_allowed_keys(object, &["regex"], &entry_path)?;
+        validate_regex_value(object, "regex", &format!("{entry_path}.regex"))?;
+    }
+    Ok(())
+}
+
+fn validate_inventory_required_field(
+    fields: &Map<String, Value>,
+    field_name: &str,
+) -> Result<(), String> {
+    let path = format!("definition.inventory.fields.{field_name}");
+    let field = fields
+        .get(field_name)
+        .ok_or_else(|| format!("{path} is required"))?;
+    validate_inventory_field_expression(field, &path)
+}
+
+fn validate_inventory_field_expression(value: &Value, path: &str) -> Result<(), String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| format!("{path} must be a JSON object"))?;
+    validate_allowed_keys(object, &["template", "jsonPath"], path)?;
+
+    let has_template = object.contains_key("template");
+    let has_json_path = object.contains_key("jsonPath");
+    match (has_template, has_json_path) {
+        (true, false) => {
+            let template =
+                require_non_empty_string(object, "template", &format!("{path}.template"))?;
+            validate_inventory_template_string(
+                template,
+                &format!("{path}.template"),
+                InventoryTemplateScope::Field,
+            )
+        }
+        (false, true) => {
+            let json_path =
+                require_non_empty_string(object, "jsonPath", &format!("{path}.jsonPath"))?;
+            validate_simple_json_path(json_path, &format!("{path}.jsonPath"))
+        }
+        _ => Err(format!(
+            "{path} must contain exactly one field expression: template or jsonPath"
+        )),
+    }
+}
+
+fn validate_simple_json_path(json_path: &str, path: &str) -> Result<(), String> {
+    resolve_simple_json_path(&Value::Object(Map::new()), json_path)
+        .map(|_| ())
+        .map_err(|error| format!("{path} {error}"))
+}
+
+#[derive(Clone, Copy)]
+enum InventoryTemplateScope {
+    Fetch,
+    Field,
+}
+
+fn validate_inventory_template_string(
+    template: &str,
+    path: &str,
+    scope: InventoryTemplateScope,
+) -> Result<(), String> {
+    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
+    for captures in placeholder_regex.captures_iter(template) {
+        validate_inventory_template_expression(&captures[1], path, scope)?;
+    }
+    Ok(())
+}
+
+fn validate_inventory_template_expression(
+    expression: &str,
+    path: &str,
+    scope: InventoryTemplateScope,
+) -> Result<(), String> {
+    let mut parts = expression.split('|').map(str::trim);
+    let variable = parts
+        .next()
+        .filter(|variable| !variable.is_empty())
+        .ok_or_else(|| format!("{path} contains an empty template expression"))?;
+
+    validate_inventory_template_variable(variable, path, scope)?;
+
+    for filter in parts {
+        if !is_supported_template_filter(filter) {
+            return Err(format!(
+                "{path} contains unsupported template filter `{filter}`"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_inventory_template_variable(
+    variable: &str,
+    path: &str,
+    scope: InventoryTemplateScope,
+) -> Result<(), String> {
+    if matches!(variable, "sourceName" | "sourceKey") {
+        return Ok(());
+    }
+
+    if variable == "itemText" {
+        return match scope {
+            InventoryTemplateScope::Field => Ok(()),
+            InventoryTemplateScope::Fetch => Err(format!(
+                "{path} contains unsupported template variable `itemText`"
+            )),
+        };
+    }
+
+    if let Some(source_config_key) = variable.strip_prefix("sourceConfig:") {
+        if source_config_key.is_empty() {
+            return Err(format!(
+                "{path} contains invalid sourceConfig template variable `{variable}`"
+            ));
+        }
+        return Ok(());
+    }
+
+    if let Some(capture_key) = variable.strip_prefix("capture:") {
+        if matches!(scope, InventoryTemplateScope::Fetch) {
+            return Err(format!(
+                "{path} contains unsupported template variable `{variable}`"
+            ));
+        }
+        if capture_key.is_empty()
+            || !capture_key
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(format!(
+                "{path} contains invalid capture template variable `{variable}`"
+            ));
+        }
+        return Ok(());
+    }
+
+    Err(format!(
+        "{path} contains unsupported template variable `{variable}`"
+    ))
 }
 
 fn validate_identity_definition(definition: &Value) -> Result<(), String> {
@@ -1866,6 +2112,202 @@ mod tests {
     }
 
     #[test]
+    fn system_profile_validation_accepts_xml_and_json_inventory_definitions() {
+        for inventory in [valid_xml_inventory(), valid_json_inventory()] {
+            let definition = profile_definition_with_inventory(inventory);
+
+            validate_system_profile_definition_and_schema(
+                &definition,
+                &json!({ "type": "object" }),
+                SourceStatus::Active,
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn system_profile_validation_rejects_invalid_inventory_definitions_with_actionable_paths() {
+        let cases = vec![
+            (
+                "missing_fetch_url",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["fetch"] = json!({});
+                    inventory
+                },
+                "definition.inventory.fetch.url must be a non-empty string",
+            ),
+            (
+                "unsupported_parse_as",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["parse"]["as"] = json!("html");
+                    inventory
+                },
+                "definition.inventory.parse.as must be xml or json",
+            ),
+            (
+                "unknown_selector_shape",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["items"]["select"] = json!({ "css": ".job" });
+                    inventory
+                },
+                "definition.inventory.items.select.css is not supported",
+            ),
+            (
+                "invalid_where_regex",
+                {
+                    let mut inventory = valid_xml_inventory();
+                    inventory["items"]["where"] = json!([{ "regex": "[" }]);
+                    inventory
+                },
+                "definition.inventory.items.where[0].regex is invalid",
+            ),
+            (
+                "invalid_capture_regex",
+                {
+                    let mut inventory = valid_xml_inventory();
+                    inventory["items"]["captures"] = json!([{ "regex": "[" }]);
+                    inventory
+                },
+                "definition.inventory.items.captures[0].regex is invalid",
+            ),
+            (
+                "missing_title_field",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["fields"].as_object_mut().unwrap().remove("title");
+                    inventory
+                },
+                "definition.inventory.fields.title is required",
+            ),
+            (
+                "missing_url_field",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["fields"].as_object_mut().unwrap().remove("url");
+                    inventory
+                },
+                "definition.inventory.fields.url is required",
+            ),
+            (
+                "invalid_field_expression_object",
+                {
+                    let mut inventory = valid_json_inventory();
+                    inventory["fields"]["title"] = json!({ "literal": "Engineer" });
+                    inventory
+                },
+                "definition.inventory.fields.title.literal is not supported",
+            ),
+        ];
+
+        for (case_name, inventory, expected_error) in cases {
+            let definition = profile_definition_with_inventory(inventory);
+            let error = validate_system_profile_definition_and_schema(
+                &definition,
+                &json!({ "type": "object" }),
+                SourceStatus::Active,
+            )
+            .expect_err(case_name);
+
+            assert!(
+                error.contains(expected_error),
+                "case {case_name}: expected `{error}` to contain `{expected_error}`"
+            );
+        }
+    }
+
+    #[test]
+    fn system_profile_create_update_and_import_validate_inventory() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let invalid_definition = profile_definition_with_inventory({
+                let mut inventory = valid_json_inventory();
+                inventory["fields"].as_object_mut().unwrap().remove("url");
+                inventory
+            });
+
+            let create_error = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "invalid_create_inventory".to_string(),
+                    name: "Invalid Create Inventory".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: invalid_definition.clone(),
+                    source_config_schema: json!({ "type": "object" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap_err();
+            assert!(create_error.contains("definition.inventory.fields.url is required"));
+            assert!(get_system_profile_by_key(&pool, "invalid_create_inventory")
+                .await
+                .is_err());
+
+            let existing = create_system_profile(
+                &pool,
+                CreateSystemProfileInput {
+                    key: "valid_inventory".to_string(),
+                    name: "Valid Inventory".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 1,
+                    definition: profile_definition_with_inventory(valid_json_inventory()),
+                    source_config_schema: json!({ "type": "object" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let update_error = update_system_profile(
+                &pool,
+                existing.id,
+                UpdateSystemProfileInput {
+                    name: "Invalid Update Inventory".to_string(),
+                    description: None,
+                    adapter_key: "declarative_http_jobboard".to_string(),
+                    definition_schema_version: 2,
+                    definition: invalid_definition.clone(),
+                    source_config_schema: json!({ "type": "object" }),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap_err();
+            assert!(update_error.contains("definition.inventory.fields.url is required"));
+            let unchanged = get_system_profile(&pool, existing.id).await.unwrap();
+            assert_eq!(unchanged.name, "Valid Inventory");
+            assert_eq!(unchanged.definition_schema_version, 1);
+
+            let import_document = json!({
+                "key": "invalid_import_inventory",
+                "name": "Invalid Import Inventory",
+                "adapterKey": "declarative_http_jobboard",
+                "definitionSchemaVersion": 1,
+                "definition": invalid_definition,
+                "sourceConfigSchema": { "type": "object" },
+                "status": "active"
+            })
+            .to_string();
+            let import_error = import_system_profile_json(&pool, &import_document)
+                .await
+                .unwrap_err();
+            assert!(import_error.contains("definition.inventory.fields.url is required"));
+            assert!(get_system_profile_by_key(&pool, "invalid_import_inventory")
+                .await
+                .is_err());
+        });
+    }
+
+    #[test]
     fn system_profile_json_import_rejects_invalid_detection_update_without_persistence() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -2187,6 +2629,53 @@ mod tests {
             .unwrap_err();
             assert!(disallowed_profile.contains("does not allow a systemProfileId"));
         });
+    }
+
+    fn profile_definition_with_inventory(inventory: Value) -> Value {
+        json!({
+            "detect": { "required": [{ "htmlContains": "fixture-board" }] },
+            "inventory": inventory
+        })
+    }
+
+    fn valid_xml_inventory() -> Value {
+        json!({
+            "fetch": { "url": "{{sourceConfig:url}}" },
+            "parse": { "as": "xml" },
+            "items": {
+                "select": { "xmlText": "loc" },
+                "where": [{ "regex": "(?i)/job/" }],
+                "captures": [{
+                    "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?/?$"
+                }]
+            },
+            "fields": {
+                "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
+                "url": { "template": "{{itemText}}" },
+                "company": { "template": "{{sourceName|stripCareerSuffix}}" },
+                "locations": [
+                    { "template": "{{capture:location|urlDecode|slugToTitle}}" }
+                ]
+            }
+        })
+    }
+
+    fn valid_json_inventory() -> Value {
+        json!({
+            "fetch": { "url": "{{sourceConfig:startUrl}}" },
+            "parse": { "as": "json" },
+            "items": {
+                "select": { "jsonPath": "$.jobs" }
+            },
+            "fields": {
+                "title": { "jsonPath": "$.title" },
+                "url": { "jsonPath": "$.jobUrl" },
+                "company": { "template": "{{sourceName}}" },
+                "locations": [
+                    { "jsonPath": "$.location" }
+                ]
+            }
+        })
     }
 
     async fn migrated_pool() -> SqlitePool {

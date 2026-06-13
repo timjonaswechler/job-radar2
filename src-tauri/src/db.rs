@@ -440,6 +440,55 @@ mod tests {
     }
 
     #[test]
+    fn connect_and_migrate_rejects_custom_system_profile_with_invalid_inventory() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let database_path = temp_dir.path().join("job_radar.db");
+            let custom_profiles_dir = temp_dir.path().join("system-profiles");
+            fs::create_dir_all(&custom_profiles_dir).unwrap();
+            fs::write(
+                custom_profiles_dir.join("invalid_inventory.json"),
+                r#"{
+                  "key": "invalid_inventory",
+                  "name": "Invalid Inventory",
+                  "description": "Local custom profile with broken inventory.",
+                  "adapterKey": "declarative_http_jobboard",
+                  "definitionSchemaVersion": 1,
+                  "status": "active",
+                  "definition": {
+                    "detect": { "required": [{ "htmlContains": "custom-board" }] },
+                    "inventory": {
+                      "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                      "parse": { "as": "json" },
+                      "items": { "select": { "jsonPath": "$.jobs" } },
+                      "fields": {
+                        "title": { "jsonPath": "$.title" },
+                        "company": { "template": "{{sourceName}}" },
+                        "locations": [{ "jsonPath": "$.location" }]
+                      }
+                    }
+                  },
+                  "sourceConfigSchema": {
+                    "type": "object",
+                    "required": ["startUrl"],
+                    "properties": {
+                      "startUrl": { "type": "string", "format": "uri" }
+                    }
+                  }
+                }"#,
+            )
+            .unwrap();
+
+            let error = connect_and_migrate(&database_path, &custom_profiles_dir)
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("invalid_inventory.json"));
+            assert!(error.contains("definition.inventory.fields.url is required"));
+        });
+    }
+
+    #[test]
     fn connect_and_migrate_seeds_builtin_and_custom_system_profiles() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();

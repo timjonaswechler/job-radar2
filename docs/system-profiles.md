@@ -156,6 +156,79 @@ Fields:
 
 For example, Ashby hosted boards expose `organization.publicWebsite` in the page HTML. `https://jobs.ashbyhq.com/focused` can therefore auto-fill `Focused Energy Karriere` and store `companyWebsite: https://focused-energy.co` while still using Ashby's public posting API as `startUrl`.
 
+## Declarative inventory DSL
+
+`definition.inventory` describes how a Systemprofil turns one saved Quelle into a `SourceCandidate` inventory during a Suchlauf. It is a generic pipeline, not a system-specific Rust adapter:
+
+```txt
+fetch -> parse -> items.select -> items.where/captures -> fields -> SourceCandidate
+```
+
+The inventory block is optional while profiles are introduced gradually. Declarative HTTP/Sitemap Quellen without `definition.inventory` can still be detected and saved, but a Suchlauf for that source fails clearly until the inventory definition is added.
+
+Supported MVP shape:
+
+- `fetch.url` — template for an absolute HTTP(S) URL after rendering. Inventory templates support `{{sourceConfig:<key>}}`, `{{sourceName}}`, and `{{sourceKey}}` in `fetch.url`.
+- `parse.as` — `"xml"` or `"json"`.
+- `items.select` — `{"xmlText":"loc"}` for XML text elements, or `{"jsonPath":"$.jobs"}` for JSON arrays. JSONPath support is intentionally simple dot paths only, such as `$`, `$.jobs`, or `$.outer.jobs`.
+- `items.where[]` — optional regex filters for selected text items.
+- `items.captures[]` — optional regex captures for selected text items. Named captures are available in field templates as `{{capture:name}}`.
+- `fields.title`, `fields.url`, `fields.company` — required field expressions.
+- `fields.locations[]` — array of location field expressions; use an empty array when no location is available.
+- Field expressions are JSON objects with exactly one supported form: `{ "template": "..." }` or `{ "jsonPath": "..." }`.
+
+XML sitemap example:
+
+```json
+"inventory": {
+  "fetch": { "url": "{{sourceConfig:url}}" },
+  "parse": { "as": "xml" },
+  "items": {
+    "select": { "xmlText": "loc" },
+    "where": [{ "regex": "(?i)/job/" }],
+    "captures": [{
+      "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?/?$"
+    }]
+  },
+  "fields": {
+    "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
+    "url": { "template": "{{itemText}}" },
+    "company": { "template": "{{sourceName|stripCareerSuffix}}" },
+    "locations": [
+      { "template": "{{capture:location|urlDecode|slugToTitle}}" }
+    ]
+  }
+}
+```
+
+JSON API example:
+
+```json
+"inventory": {
+  "fetch": { "url": "{{sourceConfig:startUrl}}" },
+  "parse": { "as": "json" },
+  "items": {
+    "select": { "jsonPath": "$.jobs" }
+  },
+  "fields": {
+    "title": { "jsonPath": "$.title" },
+    "url": { "jsonPath": "$.jobUrl" },
+    "company": { "template": "{{sourceName}}" },
+    "locations": [
+      { "jsonPath": "$.location" }
+    ]
+  }
+}
+```
+
+Authoring checklist for inventory:
+
+1. Keep platform detection in `definition.detect.required`; do not use inventory to guess a system.
+2. Add only one inventory pipeline per Systemprofil: fetch URL, parser, item selector, optional filters/captures, and field mappings.
+3. Validate regexes and JSONPath expressions with Rust tests before shipping a built-in profile or importing a custom profile.
+4. Keep system-specific extraction knowledge in the profile JSON. Do not add SuccessFactors-, Ashby-, Greenhouse-, Lever-, or employer-specific extraction rules to Rust validation or execution code.
+5. Built-in Job-Portale stay outside this system. StepStone and Indeed are query-parameterized portal adapters (`stepstone_search`, `indeed_search`), not Systemprofil inventory definitions.
+
 ## Agent checklist: extend a profile with better identity
 
 Use this checklist when improving an existing built-in profile such as Greenhouse, Lever, Personio, Workday, Phenom, or SuccessFactors.
