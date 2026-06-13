@@ -2,7 +2,7 @@
   "key": "greenhouse",
   "name": "Greenhouse",
   "description": "Deklaratives HTTP-Systemprofil für Greenhouse-Boards und Greenhouse-Embeds.",
-  "adapterKey": "declarative_http_jobboard",
+  "adapterKey": "declarative_endpoint_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {

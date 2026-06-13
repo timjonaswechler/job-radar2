@@ -2,7 +2,7 @@
   "key": "magnolia_esmp_job_search",
   "name": "Magnolia ESMP Jobsuche",
   "description": "Deklaratives HTTP-Systemprofil für Magnolia-Seiten mit ESMP-/`.search?index=job`-Jobsuche.",
-  "adapterKey": "declarative_http_jobboard",
+  "adapterKey": "declarative_endpoint_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {

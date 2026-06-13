@@ -4,7 +4,7 @@ use sqlx::SqlitePool;
 use std::{ffi::OsString, path::PathBuf};
 
 use crate::{
-    paths::AppPaths,
+    app::paths::AppPaths,
     search_request_model::{
         CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
         SearchRequestStatus, SearchRule, SearchRuleInput, SearchRuleKind, SearchRuleTarget,
@@ -21,7 +21,7 @@ use crate::{
 const SMOKE_COMMAND: &str = "dev-search-run-smoke";
 const SMOKE_APP_DATA_DIR_ENV: &str = "JOB_RADAR_SMOKE_APP_DATA_DIR";
 const SCHOTT_SOURCE_KEY: &str = "schott_careers";
-const SCHOTT_ADAPTER_KEY: &str = "declarative_sitemap_jobboard";
+const SCHOTT_ADAPTER_KEY: &str = "declarative_sitemap_inventory";
 const SCHOTT_SOURCE_NAME: &str = "SCHOTT Karriere";
 const SCHOTT_SITEMAP_URL: &str = "https://join.schott.com/sitemap.xml";
 const STEPSTONE_SOURCE_KEY: &str = "stepstone_de";
@@ -68,7 +68,7 @@ where
 
     tauri::async_runtime::block_on(async move {
         let paths = AppPaths::from_app_data_dir(app_data_dir).map_err(|error| error.to_string())?;
-        let state = crate::app_state::AppState::new(paths)
+        let state = crate::app::state::AppState::new(paths)
             .await
             .map_err(|error| error.to_string())?;
 

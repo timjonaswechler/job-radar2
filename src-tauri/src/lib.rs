@@ -1,11 +1,9 @@
 mod adapter_registry;
-mod app_state;
+mod app;
 mod browser_runtime;
-mod commands;
 mod db;
 mod declarative_inventory_executor;
 mod declarative_template;
-mod paths;
 mod search_request_model;
 mod search_run_model;
 mod search_run_smoke;
@@ -30,8 +28,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let paths = paths::AppPaths::from_app(app.handle())?;
-            let app_state = tauri::async_runtime::block_on(app_state::AppState::new(paths))?;
+            let paths = app::paths::AppPaths::from_app(app.handle())?;
+            let app_state = tauri::async_runtime::block_on(app::state::AppState::new(paths))?;
             let database_path = app_state.paths.database_path.clone();
 
             app.manage(app_state);
@@ -41,43 +39,43 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
-            commands::get_database_info,
-            commands::get_app_preferences,
-            commands::set_app_preferences,
-            commands::set_app_theme,
-            commands::set_app_language,
-            commands::set_default_search_radius_km,
-            commands::get_browser_runtime_status,
-            commands::install_browser_runtime,
-            commands::uninstall_browser_runtime,
-            commands::check_browser_runtime,
-            commands::list_adapters,
-            commands::detect_source_from_url,
-            commands::test_system_profile_url,
-            commands::create_search_request,
-            commands::list_search_requests,
-            commands::get_search_request,
-            commands::update_search_request,
-            commands::delete_search_request,
-            commands::run_search_request,
-            commands::create_browser_profile,
-            commands::list_browser_profiles,
-            commands::get_browser_profile,
-            commands::update_browser_profile,
-            commands::delete_browser_profile,
-            commands::create_system_profile,
-            commands::list_system_profiles,
-            commands::get_system_profile,
-            commands::update_system_profile,
-            commands::delete_system_profile,
-            commands::export_system_profile_json,
-            commands::export_system_profile_json_file,
-            commands::import_system_profile_json,
-            commands::create_source,
-            commands::list_sources,
-            commands::get_source,
-            commands::update_source,
-            commands::delete_source,
+            app::commands::get_database_info,
+            app::commands::get_app_preferences,
+            app::commands::set_app_preferences,
+            app::commands::set_app_theme,
+            app::commands::set_app_language,
+            app::commands::set_default_search_radius_km,
+            app::commands::get_browser_runtime_status,
+            app::commands::install_browser_runtime,
+            app::commands::uninstall_browser_runtime,
+            app::commands::check_browser_runtime,
+            app::commands::list_adapters,
+            app::commands::detect_source_from_url,
+            app::commands::test_system_profile_url,
+            app::commands::create_search_request,
+            app::commands::list_search_requests,
+            app::commands::get_search_request,
+            app::commands::update_search_request,
+            app::commands::delete_search_request,
+            app::commands::run_search_request,
+            app::commands::create_browser_profile,
+            app::commands::list_browser_profiles,
+            app::commands::get_browser_profile,
+            app::commands::update_browser_profile,
+            app::commands::delete_browser_profile,
+            app::commands::create_system_profile,
+            app::commands::list_system_profiles,
+            app::commands::get_system_profile,
+            app::commands::update_system_profile,
+            app::commands::delete_system_profile,
+            app::commands::export_system_profile_json,
+            app::commands::export_system_profile_json_file,
+            app::commands::import_system_profile_json,
+            app::commands::create_source,
+            app::commands::list_sources,
+            app::commands::get_source,
+            app::commands::update_source,
+            app::commands::delete_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

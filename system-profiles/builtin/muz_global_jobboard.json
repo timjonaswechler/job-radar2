@@ -2,7 +2,7 @@
   "key": "muz_global_jobboard",
   "name": "Milch & Zucker Global Jobboard",
   "description": "Deklaratives Systemprofil für Global-Jobboard-Client-Seiten von Milch & Zucker.",
-  "adapterKey": "declarative_http_jobboard",
+  "adapterKey": "declarative_endpoint_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {

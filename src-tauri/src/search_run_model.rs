@@ -51,7 +51,7 @@ impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
             match input.source.adapter_key.as_str() {
-                "declarative_http_jobboard" | "declarative_sitemap_jobboard" => {
+                "declarative_endpoint_inventory" | "declarative_sitemap_inventory" => {
                     let executor =
                         crate::declarative_inventory_executor::DeclarativeInventoryExecutor::new_reqwest();
                     executor.execute(input).await

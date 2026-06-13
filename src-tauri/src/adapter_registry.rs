@@ -49,8 +49,8 @@ pub struct AdapterMetadata {
 
 pub fn list_adapters() -> Vec<AdapterMetadata> {
     vec![
-        declarative_http_jobboard(),
-        declarative_sitemap_jobboard(),
+        declarative_endpoint_inventory(),
+        declarative_sitemap_inventory(),
         declarative_browser_jobboard(),
         stepstone_search(),
         indeed_search(),
@@ -63,9 +63,9 @@ pub fn get_adapter(key: &str) -> Option<AdapterMetadata> {
         .find(|adapter| adapter.key == key)
 }
 
-fn declarative_http_jobboard() -> AdapterMetadata {
+fn declarative_endpoint_inventory() -> AdapterMetadata {
     AdapterMetadata {
-        key: "declarative_http_jobboard".to_string(),
+        key: "declarative_endpoint_inventory".to_string(),
         name: "Deklaratives HTTP-Jobboard".to_string(),
         description: "Technische Laufzeit für geladene Systemprofile, die HTML, JSON und HTTP-Endpunkte deterministisch beschreiben.".to_string(),
         category: AdapterCategory::Generic,
@@ -95,9 +95,9 @@ fn declarative_http_jobboard() -> AdapterMetadata {
     }
 }
 
-fn declarative_sitemap_jobboard() -> AdapterMetadata {
+fn declarative_sitemap_inventory() -> AdapterMetadata {
     AdapterMetadata {
-        key: "declarative_sitemap_jobboard".to_string(),
+        key: "declarative_sitemap_inventory".to_string(),
         name: "Deklaratives Sitemap-Jobboard".to_string(),
         description: "Technische Laufzeit für geladene Systemprofile, die Jobinventare über Sitemaps beschreiben.".to_string(),
         category: AdapterCategory::Generic,
@@ -263,8 +263,8 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                "declarative_http_jobboard",
-                "declarative_sitemap_jobboard",
+                "declarative_endpoint_inventory",
+                "declarative_sitemap_inventory",
                 "declarative_browser_jobboard",
                 "stepstone_search",
                 "indeed_search"
@@ -287,8 +287,8 @@ mod tests {
     #[test]
     fn declarative_runtimes_require_system_profiles() {
         for adapter_key in [
-            "declarative_http_jobboard",
-            "declarative_sitemap_jobboard",
+            "declarative_endpoint_inventory",
+            "declarative_sitemap_inventory",
             "declarative_browser_jobboard",
         ] {
             let adapter = get_adapter(adapter_key).unwrap();
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn adapter_metadata_serializes_camel_case_runtime_flags() {
         let value =
-            serde_json::to_value(get_adapter("declarative_http_jobboard").unwrap()).unwrap();
+            serde_json::to_value(get_adapter("declarative_endpoint_inventory").unwrap()).unwrap();
         assert_eq!(value["requiresSystemProfile"], true);
         assert_eq!(value["requiresBrowserProfile"], false);
         assert_eq!(value["category"], "generic");

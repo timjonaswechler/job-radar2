@@ -2,7 +2,7 @@
   "key": "successfactors",
   "name": "SAP SuccessFactors",
   "description": "Deklaratives Sitemap-Systemprofil für SAP-SuccessFactors-/RMK-Karriereseiten.",
-  "adapterKey": "declarative_sitemap_jobboard",
+  "adapterKey": "declarative_sitemap_inventory",
   "definitionSchemaVersion": 1,
   "status": "active",
   "definition": {
