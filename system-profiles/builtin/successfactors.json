@@ -22,6 +22,27 @@
     "sourceConfig": {
       "url": "{{origin}}/sitemap.xml",
       "recursive": false
+    },
+    "inventory": {
+      "fetch": { "url": "{{sourceConfig:url}}" },
+      "parse": { "as": "xml" },
+      "items": {
+        "select": { "xmlText": "loc" },
+        "where": [{ "regex": "(?i)/job/" }],
+        "captures": [
+          {
+            "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?(?:-\\d+)?/?$"
+          }
+        ]
+      },
+      "fields": {
+        "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
+        "url": { "template": "{{itemText}}" },
+        "company": { "template": "{{sourceName|stripCareerSuffix}}" },
+        "locations": [
+          { "template": "{{capture:location|urlDecode|slugToTitle}}" }
+        ]
+      }
     }
   },
   "sourceConfigSchema": {
