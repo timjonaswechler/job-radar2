@@ -5,6 +5,7 @@ mod commands;
 mod db;
 mod paths;
 mod search_request_model;
+mod search_run_model;
 mod source_detection;
 mod source_model;
 
@@ -51,6 +52,7 @@ pub fn run() {
             commands::get_search_request,
             commands::update_search_request,
             commands::delete_search_request,
+            commands::run_search_request,
             commands::create_browser_profile,
             commands::list_browser_profiles,
             commands::get_browser_profile,
