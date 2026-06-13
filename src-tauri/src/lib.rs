@@ -6,10 +6,13 @@ mod db;
 mod paths;
 mod search_request_model;
 mod search_run_model;
+mod search_run_smoke;
 mod sitemap_source_executor;
 mod source_detection;
 mod source_model;
 mod stepstone_source_executor;
+
+pub use search_run_smoke::run_dev_search_run_smoke_cli;
 
 use tauri::Manager;
 

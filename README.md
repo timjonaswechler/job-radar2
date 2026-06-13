@@ -52,4 +52,5 @@ The Rust backend creates and migrates a local SQLite database on startup. The sc
 - `npm run build` — type-check and build the frontend
 - `npm run tauri -- dev` — run the Tauri desktop app in development
 - `npm run tauri:dev:reset-db` — explicitly reset the local development SQLite DB and start Tauri
+- `npm run smoke:search-run` — run the manual network-dependent SCHOTT + StepStone backend smoke path (see `docs/dev-search-run-smoke.md`)
 - `npm run tauri -- build` — build a distributable desktop app
