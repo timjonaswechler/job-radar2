@@ -4,9 +4,9 @@ use serde::Deserialize;
 use std::{collections::HashSet, future::Future, pin::Pin, time::Duration};
 
 use crate::{
-    search_request_model::SearchRequest,
     search_run_model::{
-        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutor,
+        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
+        SourceExecutor,
     },
     source_model::Source,
 };
@@ -18,6 +18,7 @@ pub(crate) struct DeclarativeSitemapJobboardExecutor<C = ReqwestSitemapHttpClien
 }
 
 impl DeclarativeSitemapJobboardExecutor<ReqwestSitemapHttpClient> {
+    #[allow(dead_code)]
     pub(crate) fn new_reqwest() -> Self {
         Self {
             client: ReqwestSitemapHttpClient,
@@ -36,12 +37,8 @@ impl<C> SourceExecutor for DeclarativeSitemapJobboardExecutor<C>
 where
     C: SitemapHttpClient + Send + Sync,
 {
-    fn execute<'a>(
-        &'a self,
-        _search_request: &'a SearchRequest,
-        source: &'a Source,
-    ) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move { self.execute_source(source).await })
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
+        Box::pin(async move { self.execute_source(input.source).await })
     }
 }
 
@@ -652,7 +649,7 @@ mod tests {
     }
 
     #[test]
-    fn default_source_executor_routes_declarative_sitemap_adapter() {
+    fn default_source_executor_routes_declarative_sitemap_adapter_to_inventory_runtime() {
         tauri::async_runtime::block_on(async {
             let executor = DefaultSourceExecutor::new(
                 tempfile::tempdir().unwrap().path().join("browser-runtime"),
@@ -686,13 +683,17 @@ mod tests {
             };
 
             let error = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .unwrap_err();
 
             match error {
                 SourceExecutionError::Failed(message) => {
-                    assert!(message.contains("sourceConfig is invalid"));
+                    assert!(message.contains("requires an active SystemProfile"));
                     assert!(!message.contains("has no search-run executor yet"));
                 }
                 SourceExecutionError::Cancelled(message) => {

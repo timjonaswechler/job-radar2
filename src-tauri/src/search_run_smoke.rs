@@ -382,7 +382,8 @@ mod tests {
     use super::*;
     use crate::{
         search_run_model::{
-            BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceRunStatus,
+            BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError,
+            SourceExecutionInput, SourceRunStatus,
         },
         source_model::{
             create_browser_profile, create_system_profile, CreateBrowserProfileInput,
@@ -420,19 +421,18 @@ mod tests {
     impl SourceExecutor for FixtureSourceExecutor {
         fn execute<'a>(
             &'a self,
-            _search_request: &'a SearchRequest,
-            source: &'a Source,
+            input: SourceExecutionInput<'a>,
         ) -> BoxedSourceExecutionFuture<'a> {
             Box::pin(async move {
                 self.responses
                     .lock()
                     .unwrap()
-                    .get(&source.key)
+                    .get(&input.source.key)
                     .cloned()
                     .unwrap_or_else(|| {
                         Err(SourceExecutionError::Failed(format!(
                             "missing fixture response for {}",
-                            source.key
+                            input.source.key
                         )))
                     })
             })
