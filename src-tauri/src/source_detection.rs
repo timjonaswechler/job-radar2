@@ -108,6 +108,23 @@ impl DetectionCheckOutcome {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TemplateRenderError {
+    MissingCapture(String),
+    Invalid(String),
+}
+
+impl TemplateRenderError {
+    fn message(&self) -> String {
+        match self {
+            Self::MissingCapture(capture_key) => {
+                format!("sourceConfig references missing capture `{capture_key}`")
+            }
+            Self::Invalid(message) => message.clone(),
+        }
+    }
+}
+
 pub async fn detect_source_from_url(
     pool: &SqlitePool,
     input: &str,
@@ -239,15 +256,19 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
         evidence.push(check_evidence);
     }
 
-    let company_name = derive_company_name(input_url);
+    evidence.extend(
+        enrich_identity_captures(client, input_url, html, &profile.definition, &mut captures)
+            .await?,
+    );
     let source_config = build_source_config(&profile.definition, input_url, &captures)?;
+    let identity = derive_source_identity(&profile.definition, input_url, &captures)?;
     Ok(Some(SourceDetectionMatch {
         adapter_key: profile.adapter_key.clone(),
         system_profile_id: profile.id,
         system_profile_key: profile.key.clone(),
         system_profile_name: profile.name.clone(),
-        key: format!("{}_careers", to_technical_key(&company_name)),
-        name: format!("{company_name} Karriere"),
+        key: identity.key,
+        name: identity.name,
         source_config,
         evidence,
     }))
@@ -286,10 +307,12 @@ async fn test_system_profile_with_client<C: DetectionHttpClient + Sync>(
     };
 
     let (key, name, source_config) = if status == SystemProfileTestStatus::Passed {
-        let company_name = derive_company_name(input_url);
+        enrich_identity_captures(client, input_url, &html, &profile.definition, &mut captures)
+            .await?;
+        let identity = derive_source_identity(&profile.definition, input_url, &captures)?;
         (
-            Some(format!("{}_careers", to_technical_key(&company_name))),
-            Some(format!("{company_name} Karriere")),
+            Some(identity.key),
+            Some(identity.name),
             Some(build_source_config(
                 &profile.definition,
                 input_url,
@@ -587,13 +610,100 @@ fn evaluate_regex_outcome(
     )
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourceIdentity {
+    key: String,
+    name: String,
+}
+
+async fn enrich_identity_captures<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    html: &str,
+    definition: &Value,
+    captures: &mut HashMap<String, String>,
+) -> Result<Vec<String>, String> {
+    let Some(extracts) = definition
+        .pointer("/identity/extract")
+        .and_then(Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut evidence = Vec::new();
+    for extract in extracts {
+        let outcome = evaluate_check_outcome(client, input_url, html, extract, captures).await?;
+        if outcome.status == SystemProfileTestCheckStatus::Passed {
+            if let Some(extract_evidence) = outcome.evidence {
+                evidence.push(format!("Identität: {extract_evidence}"));
+            }
+        }
+    }
+
+    Ok(evidence)
+}
+
+fn derive_source_identity(
+    definition: &Value,
+    input_url: &Url,
+    captures: &HashMap<String, String>,
+) -> Result<SourceIdentity, String> {
+    let fallback_company_name = derive_company_name(input_url);
+    let fallback_key = format!("{}_careers", to_technical_key(&fallback_company_name));
+    let fallback_name = format!("{fallback_company_name} Karriere");
+
+    let key = render_first_identity_candidate(
+        definition.pointer("/identity/keyCandidates"),
+        input_url,
+        captures,
+    )?
+    .map(|candidate| to_technical_key(&candidate))
+    .filter(|candidate| !candidate.is_empty())
+    .unwrap_or(fallback_key);
+
+    let name = render_first_identity_candidate(
+        definition.pointer("/identity/nameCandidates"),
+        input_url,
+        captures,
+    )?
+    .filter(|candidate| !candidate.trim().is_empty())
+    .unwrap_or(fallback_name);
+
+    Ok(SourceIdentity { key, name })
+}
+
+fn render_first_identity_candidate(
+    candidates_value: Option<&Value>,
+    input_url: &Url,
+    captures: &HashMap<String, String>,
+) -> Result<Option<String>, String> {
+    let Some(candidates) = candidates_value.and_then(Value::as_array) else {
+        return Ok(None);
+    };
+
+    for candidate in candidates.iter().filter_map(Value::as_str) {
+        match render_template(candidate, input_url, captures) {
+            Ok(rendered) => {
+                let rendered = rendered.trim();
+                if !rendered.is_empty() {
+                    return Ok(Some(rendered.to_string()));
+                }
+            }
+            Err(TemplateRenderError::MissingCapture(_)) => continue,
+            Err(error) => return Err(error.message()),
+        }
+    }
+
+    Ok(None)
+}
+
 fn build_source_config(
     definition: &Value,
     input_url: &Url,
     captures: &HashMap<String, String>,
 ) -> Result<Value, String> {
     let template = definition.get("sourceConfig").unwrap_or(&Value::Null);
-    if let Some(object) = template.as_object() {
+    let mut source_config = if let Some(object) = template.as_object() {
         let mut rendered = Map::new();
         for (key, value) in object {
             rendered.insert(
@@ -601,10 +711,38 @@ fn build_source_config(
                 render_template_value(value, input_url, captures)?,
             );
         }
-        return Ok(Value::Object(rendered));
+        Value::Object(rendered)
+    } else {
+        json_default_source_config(input_url)
+    };
+
+    merge_optional_source_config(&mut source_config, definition, input_url, captures)?;
+    Ok(source_config)
+}
+
+fn merge_optional_source_config(
+    source_config: &mut Value,
+    definition: &Value,
+    input_url: &Url,
+    captures: &HashMap<String, String>,
+) -> Result<(), String> {
+    let Some(optional_config) = definition.pointer("/identity/optionalSourceConfig") else {
+        return Ok(());
+    };
+    let Some(optional_config) = optional_config.as_object() else {
+        return Ok(());
+    };
+    let Some(source_config) = source_config.as_object_mut() else {
+        return Ok(());
+    };
+
+    for (key, value) in optional_config {
+        if let Some(rendered) = render_optional_template_value(value, input_url, captures)? {
+            source_config.insert(key.clone(), rendered);
+        }
     }
 
-    Ok(json_default_source_config(input_url))
+    Ok(())
 }
 
 fn render_template_value(
@@ -613,9 +751,9 @@ fn render_template_value(
     captures: &HashMap<String, String>,
 ) -> Result<Value, String> {
     match value {
-        Value::String(template) => Ok(Value::String(render_template(
-            template, input_url, captures,
-        )?)),
+        Value::String(template) => Ok(Value::String(
+            render_template(template, input_url, captures).map_err(|error| error.message())?,
+        )),
         Value::Array(values) => values
             .iter()
             .map(|value| render_template_value(value, input_url, captures))
@@ -635,37 +773,153 @@ fn render_template_value(
     }
 }
 
+fn render_optional_template_value(
+    value: &Value,
+    input_url: &Url,
+    captures: &HashMap<String, String>,
+) -> Result<Option<Value>, String> {
+    match value {
+        Value::String(template) => match render_template(template, input_url, captures) {
+            Ok(rendered) => Ok(Some(Value::String(rendered))),
+            Err(TemplateRenderError::MissingCapture(_)) => Ok(None),
+            Err(error) => Err(error.message()),
+        },
+        Value::Array(values) => {
+            let mut rendered_values = Vec::new();
+            for value in values {
+                let Some(rendered_value) =
+                    render_optional_template_value(value, input_url, captures)?
+                else {
+                    return Ok(None);
+                };
+                rendered_values.push(rendered_value);
+            }
+            Ok(Some(Value::Array(rendered_values)))
+        }
+        Value::Object(object) => {
+            let mut rendered_object = Map::new();
+            for (key, value) in object {
+                if let Some(rendered_value) =
+                    render_optional_template_value(value, input_url, captures)?
+                {
+                    rendered_object.insert(key.clone(), rendered_value);
+                }
+            }
+            if rendered_object.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(Value::Object(rendered_object)))
+            }
+        }
+        other => Ok(Some(other.clone())),
+    }
+}
+
 fn render_template(
     template: &str,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<String, String> {
-    let mut rendered = template
-        .replace("{{inputUrl}}", input_url.as_str())
-        .replace("{{origin}}", &origin(input_url));
-
-    let capture_regex = Regex::new(r"\{\{capture:([a-zA-Z0-9_]+)\}\}").unwrap();
-    let mut missing_capture = None;
-    rendered = capture_regex
-        .replace_all(&rendered, |captures_match: &regex::Captures<'_>| {
-            let capture_key = &captures_match[1];
-            match captures.get(capture_key) {
-                Some(value) => value.clone(),
-                None => {
-                    missing_capture = Some(capture_key.to_string());
-                    String::new()
+) -> Result<String, TemplateRenderError> {
+    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
+    let mut first_error = None;
+    let rendered =
+        placeholder_regex
+            .replace_all(template, |placeholder: &regex::Captures<'_>| {
+                match render_template_expression(&placeholder[1], input_url, captures) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        if first_error.is_none() {
+                            first_error = Some(error);
+                        }
+                        String::new()
+                    }
                 }
-            }
-        })
-        .to_string();
+            })
+            .to_string();
 
-    if let Some(capture_key) = missing_capture {
-        return Err(format!(
-            "sourceConfig references missing capture `{capture_key}`"
+    if let Some(error) = first_error {
+        Err(error)
+    } else {
+        Ok(rendered)
+    }
+}
+
+fn render_template_expression(
+    expression: &str,
+    input_url: &Url,
+    captures: &HashMap<String, String>,
+) -> Result<String, TemplateRenderError> {
+    let mut parts = expression.split('|').map(str::trim);
+    let Some(variable) = parts.next().filter(|variable| !variable.is_empty()) else {
+        return Err(TemplateRenderError::Invalid(
+            "template expression must not be empty".to_string(),
         ));
+    };
+
+    let mut value = if variable == "inputUrl" {
+        input_url.as_str().to_string()
+    } else if variable == "origin" {
+        origin(input_url)
+    } else if let Some(capture_key) = variable.strip_prefix("capture:") {
+        if capture_key.is_empty() {
+            return Err(TemplateRenderError::Invalid(
+                "capture template variable must include a capture name".to_string(),
+            ));
+        }
+        captures
+            .get(capture_key)
+            .cloned()
+            .ok_or_else(|| TemplateRenderError::MissingCapture(capture_key.to_string()))?
+    } else {
+        return Err(TemplateRenderError::Invalid(format!(
+            "unsupported template variable `{variable}`"
+        )));
+    };
+
+    for filter in parts {
+        if filter.is_empty() {
+            return Err(TemplateRenderError::Invalid(
+                "template filter must not be empty".to_string(),
+            ));
+        }
+        value = apply_template_filter(filter, &value)?;
     }
 
-    Ok(rendered)
+    Ok(value)
+}
+
+fn apply_template_filter(filter: &str, value: &str) -> Result<String, TemplateRenderError> {
+    match filter {
+        "technicalKey" => Ok(to_technical_key(value)),
+        "titleCase" => Ok(title_case(value)),
+        "domainKey" => Ok(to_technical_key(&company_domain_label(value)?)),
+        "domainTitle" => Ok(title_case(&company_domain_label(value)?)),
+        _ => Err(TemplateRenderError::Invalid(format!(
+            "unsupported template filter `{filter}`"
+        ))),
+    }
+}
+
+fn company_domain_label(value: &str) -> Result<String, TemplateRenderError> {
+    let url = parse_http_url(value).map_err(|error| {
+        TemplateRenderError::Invalid(format!(
+            "template domain filter requires an HTTP(S) URL: {error}"
+        ))
+    })?;
+    let host = normalized_host(&url);
+    let label = host
+        .split('.')
+        .find(|label| !is_generic_host_label(label))
+        .or_else(|| host.split('.').next())
+        .unwrap_or_default();
+
+    if label.is_empty() {
+        Err(TemplateRenderError::Invalid(
+            "template domain filter could not derive a domain label".to_string(),
+        ))
+    } else {
+        Ok(label.to_string())
+    }
 }
 
 fn json_default_source_config(input_url: &Url) -> Value {
@@ -739,14 +993,25 @@ fn derive_company_name(url: &Url) -> String {
     let host = normalized_host(url);
     let label = host
         .split('.')
-        .find(|label| {
-            !matches!(
-                *label,
-                "www" | "jobs" | "job" | "careers" | "career" | "join" | "boards" | "job-boards"
-            )
-        })
+        .find(|label| !is_generic_host_label(label))
         .unwrap_or("neue_quelle");
     title_case(label)
+}
+
+fn is_generic_host_label(label: &str) -> bool {
+    matches!(
+        label,
+        "www"
+            | "app"
+            | "api"
+            | "jobs"
+            | "job"
+            | "careers"
+            | "career"
+            | "join"
+            | "boards"
+            | "job-boards"
+    )
 }
 
 fn normalized_host(url: &Url) -> String {
@@ -1072,6 +1337,7 @@ mod tests {
                     </html>
                     "#,
                     "\\.greenhouse\\.io",
+                    "https://openai.com/careers",
                 ),
                 (
                     create_builtin_system_profile(
@@ -1089,6 +1355,7 @@ mod tests {
                     </html>
                     "#,
                     "\\.ashbyhq\\.com",
+                    "https://api.ashbyhq.com/posting-api/job-board/example?includeCompensation=true",
                 ),
                 (
                     create_builtin_system_profile(
@@ -1108,10 +1375,13 @@ mod tests {
                     </html>
                     "#,
                     "jobs\\.lever\\.co",
+                    "https://lever-fixture.test/jobs",
                 ),
             ];
 
-            for (profile, input_url, html, expected_evidence_marker) in scenarios {
+            for (profile, input_url, html, expected_evidence_marker, expected_start_url) in
+                scenarios
+            {
                 let client = FixtureHttpClient::new([(input_url, html)]);
 
                 let result = detect_with_profiles(
@@ -1151,8 +1421,51 @@ mod tests {
 
                 assert_eq!(source.system_profile_id, Some(profile.id));
                 assert_eq!(source.adapter_key, "declarative_http_jobboard");
-                assert_eq!(source.source_config["startUrl"], input_url);
+                assert_eq!(source.source_config["startUrl"], expected_start_url);
             }
+        });
+    }
+
+    #[test]
+    fn ashby_identity_uses_public_website_when_hosted_board_exposes_it() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let profile = create_builtin_system_profile(
+                &pool,
+                include_str!("../../system-profiles/builtin/ashby.json"),
+            )
+            .await;
+            let input_url = "https://jobs.ashbyhq.com/focused";
+            let client = FixtureHttpClient::new([(
+                input_url,
+                r#"
+                <html>
+                  <head>
+                    <meta property="og:url" content="https://jobs.ashbyhq.com/focused" />
+                  </head>
+                  <body>
+                    <script>
+                      window.__appData = {"organization":{"name":"Focused","publicWebsite":"https://focused-energy.co","hostedJobsPageSlug":"focused"}};
+                    </script>
+                  </body>
+                </html>
+                "#,
+            )]);
+
+            let result = detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &[profile])
+                .await
+                .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.key.as_deref(), Some("focused_energy_careers"));
+            assert_eq!(result.name.as_deref(), Some("Focused Energy Karriere"));
+            let source_config = result.source_config.unwrap();
+            assert_eq!(
+                source_config["startUrl"],
+                "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
+            );
+            assert_eq!(source_config["companyWebsite"], "https://focused-energy.co");
+            assert!(result.evidence.join("\n").contains("Identität:"));
         });
     }
 

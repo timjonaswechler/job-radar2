@@ -751,7 +751,9 @@ mod tests {
                 description: None,
                 adapter_key: ADAPTER_KEY.to_string(),
                 definition_schema_version: 1,
-                definition: json!({}),
+                definition: json!({
+                    "detect": { "required": [{ "htmlContains": "sitemap" }] }
+                }),
                 source_config_schema: json!({
                     "type": "object",
                     "required": ["url"],
