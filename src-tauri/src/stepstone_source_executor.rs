@@ -303,17 +303,19 @@ impl StepstoneHttpClient for ReqwestStepstoneHttpClient {
 }
 
 fn parse_stepstone_candidates(html: &str, page_url: &Url) -> Result<Vec<SourceCandidate>, String> {
-    let mut candidates = Vec::new();
+    let mut candidates = preloaded_state_candidates(html, page_url);
     let mut json_errors = Vec::new();
 
-    for json_source in embedded_result_json(html) {
-        match serde_json::from_str::<Value>(&json_source) {
-            Ok(value) => collect_json_candidates(&value, page_url, &mut candidates),
-            Err(error) => json_errors.push(error.to_string()),
+    if candidates.is_empty() {
+        for json_source in embedded_result_json(html) {
+            match serde_json::from_str::<Value>(&json_source) {
+                Ok(value) => collect_json_candidates(&value, page_url, &mut candidates),
+                Err(error) => json_errors.push(error.to_string()),
+            }
         }
-    }
 
-    candidates.extend(parse_html_card_candidates(html, page_url));
+        candidates.extend(parse_html_card_candidates(html, page_url));
+    }
     let candidates = dedupe_candidates(candidates);
 
     if !candidates.is_empty() {
@@ -332,6 +334,334 @@ fn parse_stepstone_candidates(html: &str, page_url: &Url) -> Result<Vec<SourceCa
     }
 
     Err("could not find StepStone job result data in HTML".to_string())
+}
+
+fn preloaded_state_candidates(html: &str, page_url: &Url) -> Vec<SourceCandidate> {
+    let script_re = Regex::new(r#"(?is)<script\b[^>]*>(?P<body>.*?)</script>"#)
+        .expect("script regex should compile");
+    let mut candidates = Vec::new();
+
+    for captures in script_re.captures_iter(html) {
+        let Some(body) = captures.name("body").map(|match_| match_.as_str()) else {
+            continue;
+        };
+        if !(body.contains("items") && body.contains("companyName") && body.contains("title")) {
+            continue;
+        }
+        for item in preloaded_stepstone_item_objects(body) {
+            if let Some(candidate) = preloaded_item_candidate(item, page_url) {
+                candidates.push(candidate);
+            }
+        }
+    }
+
+    candidates
+}
+
+fn preloaded_stepstone_item_objects(script_body: &str) -> Vec<&str> {
+    let mut objects = Vec::new();
+    let mut search_offset = 0;
+
+    while let Some(relative_items_index) = script_body[search_offset..].find("items") {
+        let items_index = search_offset + relative_items_index;
+        let context_start = items_index.saturating_sub(5_000);
+        let context = &script_body[context_start..items_index];
+        if !(context.contains("categorization") || context.contains("jobAdsData")) {
+            search_offset = items_index + "items".len();
+            continue;
+        }
+
+        let Some(relative_array_index) = script_body[items_index..].find('[') else {
+            search_offset = items_index + "items".len();
+            continue;
+        };
+        let array_index = items_index + relative_array_index;
+        let Some((array_body, array_end)) = balanced_slice(script_body, array_index, '[', ']')
+        else {
+            search_offset = array_index + 1;
+            continue;
+        };
+        objects.extend(top_level_object_slices(array_body));
+        search_offset = array_end;
+    }
+
+    objects
+}
+
+fn preloaded_item_candidate(item: &str, page_url: &Url) -> Option<SourceCandidate> {
+    let title = js_object_string_field(item, "title")?;
+    let company = js_object_string_field(item, "companyName")?;
+    let raw_url = js_object_string_field(item, "url")?;
+    let url = absolute_http_url(&raw_url, page_url)?;
+    let locations = js_object_string_field(item, "location")
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    normalized_candidate(title, company, url, locations)
+}
+
+fn js_object_string_field(object: &str, field: &str) -> Option<String> {
+    let bytes = object.as_bytes();
+    let mut index = object.find('{')? + 1;
+
+    while index < bytes.len() {
+        index = skip_js_ws_and_commas(bytes, index);
+        if index >= bytes.len() || bytes[index] == b'}' {
+            break;
+        }
+
+        let (key, key_end) = parse_js_object_key(object, index)?;
+        index = skip_js_ws(bytes, key_end);
+        if bytes.get(index) != Some(&b':') {
+            break;
+        }
+        index = skip_js_ws(bytes, index + 1);
+
+        if key == field {
+            if matches!(bytes.get(index), Some(b'"' | b'\'')) {
+                let (raw_value, _) = parse_js_string_raw(object, index)?;
+                let value = collapse_whitespace(&decode_js_string_literal(raw_value));
+                return (!value.is_empty()).then_some(value);
+            }
+            return None;
+        }
+
+        index = skip_js_value(object, index);
+    }
+
+    None
+}
+
+fn parse_js_object_key(object: &str, start: usize) -> Option<(&str, usize)> {
+    let bytes = object.as_bytes();
+    match bytes.get(start) {
+        Some(b'"' | b'\'') => parse_js_string_raw(object, start),
+        Some(byte) if is_js_ident_start(*byte) => {
+            let mut end = start + 1;
+            while bytes
+                .get(end)
+                .is_some_and(|byte| is_js_ident_continue(*byte))
+            {
+                end += 1;
+            }
+            Some((&object[start..end], end))
+        }
+        _ => None,
+    }
+}
+
+fn parse_js_string_raw(object: &str, start: usize) -> Option<(&str, usize)> {
+    let bytes = object.as_bytes();
+    let quote = *bytes.get(start)?;
+    if !matches!(quote, b'"' | b'\'') {
+        return None;
+    }
+
+    let mut index = start + 1;
+    let content_start = index;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if escaped {
+            escaped = false;
+        } else if byte == b'\\' {
+            escaped = true;
+        } else if byte == quote {
+            return Some((&object[content_start..index], index + 1));
+        }
+        index += 1;
+    }
+
+    None
+}
+
+fn skip_js_ws_and_commas(bytes: &[u8], mut index: usize) -> usize {
+    while bytes
+        .get(index)
+        .is_some_and(|byte| byte.is_ascii_whitespace() || *byte == b',')
+    {
+        index += 1;
+    }
+    index
+}
+
+fn skip_js_ws(bytes: &[u8], mut index: usize) -> usize {
+    while bytes
+        .get(index)
+        .is_some_and(|byte| byte.is_ascii_whitespace())
+    {
+        index += 1;
+    }
+    index
+}
+
+fn skip_js_value(object: &str, start: usize) -> usize {
+    let bytes = object.as_bytes();
+    let mut index = start;
+    let mut nested_depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if let Some(quote_byte) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == quote_byte {
+                quote = None;
+            }
+            index += 1;
+            continue;
+        }
+
+        match byte {
+            b'"' | b'\'' | b'`' => quote = Some(byte),
+            b'{' | b'[' | b'(' => nested_depth += 1,
+            b'}' if nested_depth == 0 => return index,
+            b'}' | b']' | b')' => nested_depth = nested_depth.saturating_sub(1),
+            b',' if nested_depth == 0 => return index + 1,
+            _ => {}
+        }
+        index += 1;
+    }
+
+    index
+}
+
+fn is_js_ident_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$'
+}
+
+fn is_js_ident_continue(byte: u8) -> bool {
+    is_js_ident_start(byte) || byte.is_ascii_digit()
+}
+
+fn decode_js_string_literal(value: &str) -> String {
+    let mut decoded = String::with_capacity(value.len());
+    let mut chars = value.chars();
+
+    while let Some(character) = chars.next() {
+        if character != '\\' {
+            decoded.push(character);
+            continue;
+        }
+
+        match chars.next() {
+            Some('"') => decoded.push('"'),
+            Some('\\') => decoded.push('\\'),
+            Some('/') => decoded.push('/'),
+            Some('n') => decoded.push('\n'),
+            Some('r') => decoded.push('\r'),
+            Some('t') => decoded.push('\t'),
+            Some('b') => decoded.push('\u{0008}'),
+            Some('f') => decoded.push('\u{000c}'),
+            Some('u') => {
+                let hex = chars.by_ref().take(4).collect::<String>();
+                if hex.len() == 4 {
+                    if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                        if let Some(character) = char::from_u32(code) {
+                            decoded.push(character);
+                        }
+                    }
+                }
+            }
+            Some(other) => decoded.push(other),
+            None => decoded.push('\\'),
+        }
+    }
+
+    decode_html_entities(&decoded)
+}
+
+fn balanced_slice(
+    input: &str,
+    open_index: usize,
+    open: char,
+    close: char,
+) -> Option<(&str, usize)> {
+    let mut depth = 0usize;
+    let mut content_start = None;
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (relative_index, character) in input[open_index..].char_indices() {
+        let index = open_index + relative_index;
+        if let Some(quote_character) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == quote_character {
+                quote = None;
+            }
+            continue;
+        }
+
+        if matches!(character, '"' | '\'' | '`') {
+            quote = Some(character);
+            continue;
+        }
+        if character == open {
+            depth += 1;
+            if depth == 1 {
+                content_start = Some(index + character.len_utf8());
+            }
+        } else if character == close {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return content_start
+                    .map(|start| (&input[start..index], index + character.len_utf8()));
+            }
+        }
+    }
+
+    None
+}
+
+fn top_level_object_slices(array_body: &str) -> Vec<&str> {
+    let mut objects = Vec::new();
+    let mut object_start = None;
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (index, character) in array_body.char_indices() {
+        if let Some(quote_character) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == quote_character {
+                quote = None;
+            }
+            continue;
+        }
+
+        if matches!(character, '"' | '\'' | '`') {
+            quote = Some(character);
+            continue;
+        }
+        if character == '{' {
+            if depth == 0 {
+                object_start = Some(index);
+            }
+            depth += 1;
+        } else if character == '}' {
+            depth = match depth.checked_sub(1) {
+                Some(depth) => depth,
+                None => return objects,
+            };
+            if depth == 0 {
+                if let Some(start) = object_start.take() {
+                    objects.push(&array_body[start..index + character.len_utf8()]);
+                }
+            }
+        }
+    }
+
+    objects
 }
 
 fn embedded_result_json(html: &str) -> Vec<String> {
@@ -506,25 +836,39 @@ fn parse_html_card_candidates(html: &str, page_url: &Url) -> Vec<SourceCandidate
                 .map(|match_| match_.as_str())
                 .unwrap_or(""),
         );
-        if title.is_empty() {
+        if title.is_empty() || looks_like_css_garbage(&title) {
             continue;
         }
 
-        let window_start = anchor.start().saturating_sub(1_500);
         let window_end = html.len().min(anchor.end() + 5_000);
-        let window = &html[window_start..window_end];
-        let Some(company) =
-            extract_first_tag_text_by_attr(window, &["company", "employer", "arbeitgeber"])
-        else {
-            continue;
-        };
-        let locations = extract_all_tag_text_by_attr(
+        let window = &html[anchor.end()..window_end];
+        let locations = extract_stepstone_marker_text(
             window,
-            &["location", "standort", "arbeitsort", "job-location"],
-        );
+            "job-item-location",
+            &[
+                "job-item-work-from-home",
+                "job-item-middle",
+                "job-item-badges",
+            ],
+        )
+        .into_iter()
+        .collect::<Vec<_>>();
         if let Some(url) = absolute_http_url(&href, page_url) {
-            if let Some(candidate) = normalized_candidate(title, company, url, locations) {
-                candidates.push(candidate);
+            let company = extract_stepstone_marker_text(
+                window,
+                "job-item-company-name",
+                &[
+                    "job-item-location",
+                    "job-item-work-from-home",
+                    "job-item-middle",
+                    "job-item-badges",
+                ],
+            )
+            .or_else(|| company_from_stepstone_url(&url, &locations));
+            if let Some(company) = company {
+                if let Some(candidate) = normalized_candidate(title, company, url, locations) {
+                    candidates.push(candidate);
+                }
             }
         }
     }
@@ -557,42 +901,55 @@ fn html_attr(attrs: &str, name: &str) -> Option<String> {
     })
 }
 
-fn extract_first_tag_text_by_attr(fragment: &str, attr_needles: &[&str]) -> Option<String> {
-    extract_all_tag_text_by_attr(fragment, attr_needles)
-        .into_iter()
-        .next()
-}
+fn extract_stepstone_marker_text(
+    fragment: &str,
+    marker: &str,
+    stop_markers: &[&str],
+) -> Option<String> {
+    let marker_index = find_stepstone_marker(fragment, marker)?;
+    let start = fragment[..marker_index].rfind('<').unwrap_or(marker_index);
+    let mut end = fragment.len();
 
-fn extract_all_tag_text_by_attr(fragment: &str, attr_needles: &[&str]) -> Vec<String> {
-    let tag_re = Regex::new(r#"(?is)<[a-z0-9]+\b(?P<attrs>[^>]*)>(?P<body>.*?)</[a-z0-9]+>"#)
-        .expect("tag regex should compile");
-    let mut values = Vec::new();
-
-    for captures in tag_re.captures_iter(fragment) {
-        let attrs = captures
-            .name("attrs")
-            .map(|match_| match_.as_str().to_lowercase())
-            .unwrap_or_default();
-        if !attr_needles.iter().any(|needle| attrs.contains(needle)) {
-            continue;
-        }
-        let value = html_fragment_text(
-            captures
-                .name("body")
-                .map(|match_| match_.as_str())
-                .unwrap_or(""),
-        );
-        if !value.is_empty() {
-            values.push(value);
+    for stop_marker in stop_markers {
+        if let Some(relative_stop_index) =
+            find_stepstone_marker(&fragment[marker_index + 1..], stop_marker)
+        {
+            let stop_index = marker_index + 1 + relative_stop_index;
+            let stop_tag_start = fragment[..stop_index].rfind('<').unwrap_or(stop_index);
+            end = end.min(stop_tag_start);
         }
     }
+    if let Some(relative_article_end) = fragment[marker_index..].find("</article>") {
+        end = end.min(marker_index + relative_article_end);
+    }
 
-    normalize_locations(values)
+    let value = html_fragment_text(&fragment[start..end]);
+    (!value.is_empty() && !looks_like_css_garbage(&value)).then_some(value)
+}
+
+fn find_stepstone_marker(fragment: &str, marker: &str) -> Option<usize> {
+    [
+        format!("data-at=\"{marker}\""),
+        format!("data-testid=\"{marker}\""),
+        format!("data-at='{marker}'"),
+        format!("data-testid='{marker}'"),
+    ]
+    .into_iter()
+    .filter_map(|pattern| fragment.find(&pattern))
+    .min()
 }
 
 fn html_fragment_text(fragment: &str) -> String {
+    let mut without_non_content = fragment.to_string();
+    for tag in ["script", "style", "svg", "noscript"] {
+        let pattern = format!(r#"(?is)<{}\b[^>]*>.*?</{}>"#, tag, tag);
+        let tag_re = Regex::new(&pattern).expect("non-content tag regex should compile");
+        without_non_content = tag_re.replace_all(&without_non_content, " ").into_owned();
+    }
     let tag_re = Regex::new(r#"(?is)<[^>]+>"#).expect("strip-tag regex should compile");
-    collapse_whitespace(&decode_html_entities(&tag_re.replace_all(fragment, " ")))
+    collapse_whitespace(&decode_html_entities(
+        &tag_re.replace_all(&without_non_content, " "),
+    ))
 }
 
 fn absolute_http_url(raw_url: &str, page_url: &Url) -> Option<String> {
@@ -605,6 +962,90 @@ fn absolute_http_url(raw_url: &str, page_url: &Url) -> Option<String> {
     }
 }
 
+fn company_from_stepstone_url(url: &str, locations: &[String]) -> Option<String> {
+    let url = Url::parse(url).ok()?;
+    let slug = url
+        .path_segments()?
+        .find(|segment| segment.starts_with("stellenangebote--"))?
+        .strip_prefix("stellenangebote--")?
+        .split("--")
+        .next()?;
+    let tokens = slug
+        .split('-')
+        .filter(|token| !token.is_empty())
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return None;
+    }
+
+    let normalized_tokens = tokens
+        .iter()
+        .map(|token| normalized_slug_token(token))
+        .collect::<Vec<_>>();
+    for location in locations {
+        let location_tokens = slug_tokens_from_text(location);
+        if location_tokens.is_empty() {
+            continue;
+        }
+        for start in 0..normalized_tokens.len() {
+            let end = start + location_tokens.len();
+            if end >= normalized_tokens.len() || end > normalized_tokens.len() {
+                continue;
+            }
+            if normalized_tokens[start..end] == location_tokens {
+                return format_company_slug_tokens(&tokens[end..]);
+            }
+        }
+    }
+
+    None
+}
+
+fn slug_tokens_from_text(value: &str) -> Vec<String> {
+    normalize_german_slug_text(value)
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn normalized_slug_token(value: &str) -> String {
+    normalize_german_slug_text(value)
+}
+
+fn normalize_german_slug_text(value: &str) -> String {
+    value
+        .replace('Ä', "Ae")
+        .replace('Ö', "Oe")
+        .replace('Ü', "Ue")
+        .replace('ä', "ae")
+        .replace('ö', "oe")
+        .replace('ü', "ue")
+        .replace('ß', "ss")
+        .to_lowercase()
+}
+
+fn format_company_slug_tokens(tokens: &[&str]) -> Option<String> {
+    let company = tokens
+        .iter()
+        .map(|token| match token.to_ascii_lowercase().as_str() {
+            "ag" => "AG".to_string(),
+            "gmbh" => "GmbH".to_string(),
+            "kg" => "KG".to_string(),
+            "se" => "SE".to_string(),
+            "ug" => "UG".to_string(),
+            "gbr" => "GbR".to_string(),
+            "kgaa" => "KGaA".to_string(),
+            "llc" => "LLC".to_string(),
+            "inc" => "Inc".to_string(),
+            _ => (*token).to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let company = collapse_whitespace(&company);
+    (!company.is_empty()).then_some(company)
+}
+
 fn normalized_candidate(
     title: String,
     company: String,
@@ -614,7 +1055,12 @@ fn normalized_candidate(
     let title = collapse_whitespace(&title);
     let company = collapse_whitespace(&company);
     let url = url.trim().to_string();
-    if title.is_empty() || company.is_empty() || url.is_empty() {
+    if title.is_empty()
+        || company.is_empty()
+        || url.is_empty()
+        || looks_like_css_garbage(&title)
+        || looks_like_css_garbage(&company)
+    {
         return None;
     }
 
@@ -631,7 +1077,7 @@ fn normalize_locations(locations: Vec<String>) -> Vec<String> {
     let mut normalized = Vec::new();
     for location in locations {
         let location = collapse_whitespace(&location);
-        if location.is_empty() {
+        if location.is_empty() || looks_like_css_garbage(&location) {
             continue;
         }
         if seen.insert(location.to_lowercase()) {
@@ -646,18 +1092,24 @@ fn dedupe_candidates(candidates: Vec<SourceCandidate>) -> Vec<SourceCandidate> {
     let mut deduped = Vec::new();
 
     for candidate in candidates {
-        let key = format!(
-            "{}\n{}\n{}",
-            candidate.url.to_lowercase(),
-            candidate.title.to_lowercase(),
-            candidate.company.to_lowercase()
-        );
+        let key = candidate.url.to_lowercase();
         if seen.insert(key) {
             deduped.push(candidate);
         }
     }
 
     deduped
+}
+
+fn looks_like_css_garbage(value: &str) -> bool {
+    let lower = value.to_lowercase();
+    (lower.contains('{') && lower.contains('}'))
+        || lower.starts_with(".res-")
+        || lower.starts_with("<path")
+        || lower.contains("box-sizing")
+        || lower.contains("data-genesis-element")
+        || lower.contains("fill=\"currentcolor\"")
+        || lower.contains("viewbox")
 }
 
 fn has_no_results_marker(html: &str) -> bool {
@@ -892,6 +1344,70 @@ mod tests {
                 executor.http.requested_urls()
             );
         });
+    }
+
+    #[test]
+    fn adapter_extracts_preloaded_search_result_items_before_html_fallback() {
+        tauri::async_runtime::block_on(async {
+            let browser =
+                FixtureStepstoneBrowserClient::new(vec![Ok(preloaded_search_results_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![Err(StepstoneFetchError::failed(
+                "HTTP should not be used",
+            ))]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request =
+                search_request(vec![text_rule("Laser")], vec![], vec!["Mainz"], Some(30));
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+
+            let candidates = executor
+                .execute(&search_request, &source)
+                .await
+                .expect("preloaded search-result items should produce candidates");
+
+            assert_eq!(candidates.len(), 2);
+            assert_eq!(
+                candidates[0].title,
+                "Masterthesis Laser-/ Materialbearbeitung (m/w/d)*"
+            );
+            assert_eq!(candidates[0].company, "SCHOTT AG");
+            assert_eq!(candidates[0].locations, vec!["Mainz"]);
+            assert_eq!(
+                candidates[0].url,
+                "https://stepstone.example/stellenangebote--Masterthesis-Laser-Materialbearbeitung-m-w-d-Mainz-SCHOTT-AG--14098611-inline.html"
+            );
+            assert_eq!(
+                candidates[1].title,
+                "Techniker für Laser- & LED-Anlagen (m/w/d)"
+            );
+            assert_eq!(candidates[1].company, "Schmoll Maschinen GmbH");
+            assert_eq!(candidates[1].locations, vec!["Rödermark"]);
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn html_fallback_uses_exact_stepstone_markers_without_css_noise() {
+        let page_url = Url::parse("https://stepstone.example/jobs?what=Physik+Laser").unwrap();
+        let candidates = parse_stepstone_candidates(nested_html_card_with_style_noise(), &page_url)
+            .expect("nested HTML card should parse");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].title,
+            "Mathematiker/Mathematikerin / Physiker/Physikerin für die Unternehmensberatung (w/m/d)"
+        );
+        assert_eq!(
+            candidates[0].company,
+            "KPMG AG Wirtschaftsprüfungsgesellschaft"
+        );
+        assert_eq!(
+            candidates[0].locations,
+            vec!["Frankfurt am Main, Düsseldorf, Köln, Essen, Dortmund, Münster, Mainz"]
+        );
+        assert_eq!(
+            candidates[0].url,
+            "https://www.stepstone.de/stellenangebote--Mathematiker-Mathematikerin-Physiker-Physikerin-fuer-die-Unternehmensberatung-w-m-d-Frankfurt-am-Main-Duesseldorf-Koeln-Essen-Dortmund-Muenster-Mainz-Saarbruecken-Aachen-KPMG-AG-Wirtschaftspruefungsgesellschaft--13253573-inline.html"
+        );
     }
 
     #[test]
@@ -1150,6 +1666,86 @@ mod tests {
               </a>
               <span data-at="job-item-company-name">ACME GmbH</span>
               <span data-at="job-item-location">Hamburg</span>
+            </article>
+          </body>
+        </html>
+        "#
+    }
+
+    fn preloaded_search_results_html() -> &'static str {
+        r#"
+        <html>
+          <body>
+            <script>
+              window.__PRELOADED_STATE__ = window.__PRELOADED_STATE__ || {};
+              window.__PRELOADED_STATE__.SearchResults = {
+                props: {
+                  searchResults: {
+                    categorization: { what: "Physik Laser", where: "Mainz", radius: 30 },
+                    items: [
+                      {
+                        score: 0.47262776,
+                        id: 14098611,
+                        title: "Masterthesis Laser-/ Materialbearbeitung (m/w/d)*",
+                        normalizedTitle: "",
+                        tracking: { location: "<path fill=\"currentColor\" d=\"M9.99984 16.157C11.5885\"></path>" },
+                        location: "Mainz",
+                        companyId: 56082,
+                        companyName: "SCHOTT AG",
+                        companyUrl: "https://www.stepstone.de/cmp/de/SCHOTT-AG-56082/jobs.html",
+                        url: "/stellenangebote--Masterthesis-Laser-Materialbearbeitung-m-w-d-Mainz-SCHOTT-AG--14098611-inline.html",
+                        metaData: { positionOnPage: 5 }
+                      },
+                      {
+                        score: 0.6145367,
+                        id: 13903683,
+                        title: "Techniker für Laser- & LED-Anlagen (m/w/d)",
+                        normalizedTitle: "Techniker",
+                        location: "Rödermark",
+                        companyId: 78687,
+                        companyName: "Schmoll Maschinen GmbH",
+                        companyUrl: "https://www.stepstone.de/cmp/de/Schmoll-Maschinen-GmbH-78687/jobs.html",
+                        url: "/stellenangebote--Techniker-fuer-Laser-LED-Anlagen-m-w-d-Roedermark-Schmoll-Maschinen-GmbH--13903683-inline.html",
+                        metaData: { positionOnPage: 9 }
+                      }
+                    ],
+                    meta: { jobItemCount: 25 }
+                  }
+                }
+              };
+            </script>
+            <article data-at="job-item">
+              <a data-at="job-item-title" href="/stellenangebote--Masterthesis-Laser-Materialbearbeitung-m-w-d-Mainz-SCHOTT-AG--14098611-inline.html">
+                <style>.res-146mwm8{box-sizing:border-box;margin:0;}</style>
+                Masterthesis Laser-/ Materialbearbeitung (m/w/d)*
+              </a>
+              <span data-at="job-item-company-name"><style>.res-dhwsg9{box-sizing:border-box;}</style></span>
+            </article>
+          </body>
+        </html>
+        "#
+    }
+
+    fn nested_html_card_with_style_noise() -> &'static str {
+        r#"
+        <html>
+          <body>
+            <article data-at="job-item">
+              <h2>
+                <a data-testid="job-item-title" data-at="job-item-title" href="https://www.stepstone.de/stellenangebote--Mathematiker-Mathematikerin-Physiker-Physikerin-fuer-die-Unternehmensberatung-w-m-d-Frankfurt-am-Main-Duesseldorf-Koeln-Essen-Dortmund-Muenster-Mainz-Saarbruecken-Aachen-KPMG-AG-Wirtschaftspruefungsgesellschaft--13253573-inline.html">
+                  <style>.res-146mwm8{box-sizing:border-box;margin:0;}</style>
+                  <div><div>Mathematiker/Mathematikerin / Physiker/Physikerin für die Unternehmensberatung (w/m/d)</div></div>
+                </a>
+              </h2>
+              <div>
+                <span data-at="job-item-company-name">
+                  <span><span><svg><path d="M3 16"></path></svg></span><span><div>KPMG AG Wirtschaftsprüfungsgesellschaft</div></span></span>
+                </span>
+                <span data-at="job-item-location">
+                  <span><svg><path d="M9 16"></path></svg></span>
+                  <span>Frankfurt am Main, Düsseldorf, Köln, Essen, Dortmund, Münster, Mainz</span>
+                </span>
+              </div>
             </article>
           </body>
         </html>
