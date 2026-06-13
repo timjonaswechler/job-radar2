@@ -1124,6 +1124,7 @@ mod tests {
                         search_request: &search_request,
                         source: &source,
                         system_profile: None,
+                        browser_profile: None,
                     })
                     .await
                     .unwrap_err();

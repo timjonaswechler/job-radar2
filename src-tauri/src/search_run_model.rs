@@ -13,7 +13,10 @@ use crate::{
         RunningSearchRuns, SearchRequest, SearchRequestService, SearchRule, SearchRuleKind,
         SearchRuleTarget,
     },
-    source_model::{get_source, get_system_profile, Source, SourceStatus, SystemProfile},
+    source_model::{
+        get_browser_profile, get_source, get_system_profile, BrowserProfile, Source, SourceStatus,
+        SystemProfile,
+    },
 };
 
 pub type BoxedSourceExecutionFuture<'a> =
@@ -21,14 +24,15 @@ pub type BoxedSourceExecutionFuture<'a> =
 
 /// Public source-execution seam used by Suchläufe.
 ///
-/// `SearchRunService` loads the active `SystemProfile` for sources that have a
-/// `system_profile_id` and passes it here. Declarative inventory adapters return
+/// `SearchRunService` loads active profiles for sources that reference them and
+/// passes them here. Declarative inventory adapters return
 /// `SourceExecutionError::Failed` when the required profile or inventory
 /// definition is missing or invalid.
 pub struct SourceExecutionInput<'a> {
     pub search_request: &'a SearchRequest,
     pub source: &'a Source,
     pub system_profile: Option<&'a SystemProfile>,
+    pub browser_profile: Option<&'a BrowserProfile>,
 }
 
 pub trait SourceExecutor: Send + Sync {
@@ -208,10 +212,19 @@ impl<'a> SearchRunService<'a> {
                         continue;
                     }
                 };
+            let browser_profile =
+                match load_active_browser_profile_for_source(self.pool, source).await {
+                    Ok(browser_profile) => browser_profile,
+                    Err(error) => {
+                        source_runs.push(source_run_failed(source, error));
+                        continue;
+                    }
+                };
             let input = SourceExecutionInput {
                 search_request: &search_request,
                 source,
                 system_profile: system_profile.as_ref(),
+                browser_profile: browser_profile.as_ref(),
             };
 
             match self.source_executor.execute(input).await {
@@ -316,6 +329,32 @@ async fn load_active_system_profile_for_source(
     }
 
     Ok(Some(system_profile))
+}
+
+async fn load_active_browser_profile_for_source(
+    pool: &SqlitePool,
+    source: &Source,
+) -> Result<Option<BrowserProfile>, SourceExecutionError> {
+    let Some(browser_profile_id) = source.browser_profile_id else {
+        return Ok(None);
+    };
+
+    let browser_profile = get_browser_profile(pool, browser_profile_id)
+        .await
+        .map_err(|error| {
+            SourceExecutionError::Failed(format!(
+                "browserProfileId {browser_profile_id} for source {} could not be loaded: {error}",
+                source.key
+            ))
+        })?;
+    if browser_profile.status != SourceStatus::Active {
+        return Err(SourceExecutionError::Failed(format!(
+            "browserProfileId {browser_profile_id} for source {} must reference an active browser profile",
+            source.key
+        )));
+    }
+
+    Ok(Some(browser_profile))
 }
 
 fn validate_executable_search_request(search_request: &SearchRequest) -> Result<(), String> {
@@ -571,8 +610,8 @@ mod tests {
             CreateSearchRequestInput, RunningSearchRuns, SearchRequestStatus, SearchRuleInput,
         },
         source_model::{
-            create_browser_profile, create_source, CreateBrowserProfileInput, CreateSourceInput,
-            SourceStatus,
+            create_browser_profile, create_source, BrowserProfile, CreateBrowserProfileInput,
+            CreateSourceInput, SourceStatus,
         },
     };
     use serde_json::{json, Value};
@@ -614,6 +653,216 @@ mod tests {
                     })
             })
         }
+    }
+
+    struct BrowserProfileCapturingExecutor {
+        response: Result<Vec<SourceCandidate>, SourceExecutionError>,
+        seen_browser_profiles: Mutex<Vec<(i64, Option<(i64, String)>)>>,
+    }
+
+    impl BrowserProfileCapturingExecutor {
+        fn new(response: Result<Vec<SourceCandidate>, SourceExecutionError>) -> Self {
+            Self {
+                response,
+                seen_browser_profiles: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn seen_browser_profiles(&self) -> Vec<(i64, Option<(i64, String)>)> {
+            self.seen_browser_profiles.lock().unwrap().clone()
+        }
+    }
+
+    impl SourceExecutor for BrowserProfileCapturingExecutor {
+        fn execute<'a>(
+            &'a self,
+            input: SourceExecutionInput<'a>,
+        ) -> BoxedSourceExecutionFuture<'a> {
+            Box::pin(async move {
+                self.seen_browser_profiles.lock().unwrap().push((
+                    input.source.id,
+                    input
+                        .browser_profile
+                        .map(|profile| (profile.id, profile.key.clone())),
+                ));
+                self.response.clone()
+            })
+        }
+    }
+
+    #[test]
+    fn source_execution_input_includes_active_browser_profile_for_source() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let browser_profile =
+                create_test_browser_profile(&pool, "manual_release_runtime", SourceStatus::Active)
+                    .await;
+            let source = create_stepstone_test_source(
+                &pool,
+                "browser_runtime_source",
+                "Browser Runtime Source",
+                browser_profile.id,
+            )
+            .await;
+            let search_request = create_test_search_request(
+                &pool,
+                vec![source.id],
+                vec![text_rule("engineer")],
+                vec![],
+            )
+            .await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let executor = BrowserProfileCapturingExecutor::new(Ok(vec![candidate(
+                "Browser Engineer",
+                "ACME",
+                "https://example.test/browser",
+                &[],
+            )]));
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(
+                executor.seen_browser_profiles(),
+                vec![(
+                    source.id,
+                    Some((browser_profile.id, "manual_release_runtime".to_string()))
+                )]
+            );
+        });
+    }
+
+    #[test]
+    fn missing_browser_profile_marks_source_run_failed_and_continues() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let browser_profile = create_test_browser_profile(
+                &pool,
+                "manual_release_before_missing",
+                SourceStatus::Active,
+            )
+            .await;
+            let missing_profile_source = create_stepstone_test_source(
+                &pool,
+                "missing_profile_source",
+                "Missing Profile Source",
+                browser_profile.id,
+            )
+            .await;
+            let healthy_source = create_stepstone_test_source(
+                &pool,
+                "healthy_profile_source",
+                "Healthy Profile Source",
+                browser_profile.id,
+            )
+            .await;
+            set_source_browser_profile_id_without_foreign_key_check(
+                &pool,
+                missing_profile_source.id,
+                999_999,
+            )
+            .await;
+            let search_request = create_test_search_request(
+                &pool,
+                vec![missing_profile_source.id, healthy_source.id],
+                vec![text_rule("engineer")],
+                vec![],
+            )
+            .await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let executor = FixtureSourceExecutor::new([(
+                healthy_source.id,
+                Ok(vec![candidate(
+                    "Healthy Engineer",
+                    "ACME",
+                    "https://example.test/healthy",
+                    &[],
+                )]),
+            )]);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
+            assert_eq!(result.source_runs[0].source_key, "missing_profile_source");
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            let error = result.source_runs[0].error.as_deref().unwrap();
+            assert!(error.contains("browserProfileId 999999"));
+            assert!(error.contains("source missing_profile_source"));
+            assert_eq!(result.source_runs[1].source_key, "healthy_profile_source");
+            assert_eq!(result.source_runs[1].status, SourceRunStatus::Completed);
+            assert_eq!(result.postings.len(), 1);
+        });
+    }
+
+    #[test]
+    fn inactive_browser_profile_marks_source_run_failed_with_clear_error() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let browser_profile = create_test_browser_profile(
+                &pool,
+                "manual_release_disabled",
+                SourceStatus::Disabled,
+            )
+            .await;
+            let source = create_stepstone_test_source(
+                &pool,
+                "disabled_profile_source",
+                "Disabled Profile Source",
+                browser_profile.id,
+            )
+            .await;
+            let search_request = create_test_search_request(
+                &pool,
+                vec![source.id],
+                vec![text_rule("engineer")],
+                vec![],
+            )
+            .await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let executor = FixtureSourceExecutor::new([]);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            let expected_error = format!(
+                "browserProfileId {} for source disabled_profile_source must reference an active browser profile",
+                browser_profile.id
+            );
+            assert_eq!(
+                result.source_runs[0].error.as_deref(),
+                Some(expected_error.as_str())
+            );
+            assert!(result.postings.is_empty());
+        });
     }
 
     #[test]
@@ -1003,11 +1252,15 @@ mod tests {
             .unwrap()
     }
 
-    async fn create_test_sources(pool: &SqlitePool, sources: &[(&str, &str)]) -> Vec<i64> {
-        let browser_profile = create_browser_profile(
+    async fn create_test_browser_profile(
+        pool: &SqlitePool,
+        key: &str,
+        status: SourceStatus,
+    ) -> BrowserProfile {
+        create_browser_profile(
             pool,
             CreateBrowserProfileInput {
-                key: "manual_release".to_string(),
+                key: key.to_string(),
                 name: "Manuelle Freigabe".to_string(),
                 description: None,
                 name_i18n_key: None,
@@ -1017,33 +1270,48 @@ mod tests {
                 definition_schema_version: 1,
                 definition: json!({}),
                 source_config_schema: json!({ "type": "object" }),
+                status,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    async fn create_stepstone_test_source(
+        pool: &SqlitePool,
+        key: &str,
+        name: &str,
+        browser_profile_id: i64,
+    ) -> Source {
+        create_source(
+            pool,
+            CreateSourceInput {
+                key: key.to_string(),
+                adapter_key: "stepstone_search".to_string(),
+                system_profile_id: None,
+                browser_profile_id: Some(browser_profile_id),
+                name: name.to_string(),
+                description: None,
+                source_config: json!({}),
                 status: SourceStatus::Active,
                 validation_error: None,
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+    }
+
+    async fn create_test_sources(pool: &SqlitePool, sources: &[(&str, &str)]) -> Vec<i64> {
+        let browser_profile =
+            create_test_browser_profile(pool, "manual_release", SourceStatus::Active).await;
 
         let mut source_ids = Vec::new();
         for (key, name) in sources {
             source_ids.push(
-                create_source(
-                    pool,
-                    CreateSourceInput {
-                        key: (*key).to_string(),
-                        adapter_key: "stepstone_search".to_string(),
-                        system_profile_id: None,
-                        browser_profile_id: Some(browser_profile.id),
-                        name: (*name).to_string(),
-                        description: None,
-                        source_config: json!({}),
-                        status: SourceStatus::Active,
-                        validation_error: None,
-                    },
-                )
-                .await
-                .unwrap()
-                .id,
+                create_stepstone_test_source(pool, key, name, browser_profile.id)
+                    .await
+                    .id,
             );
         }
 
@@ -1076,6 +1344,27 @@ mod tests {
                 .map(|location| (*location).to_string())
                 .collect(),
         }
+    }
+
+    async fn set_source_browser_profile_id_without_foreign_key_check(
+        pool: &SqlitePool,
+        source_id: i64,
+        browser_profile_id: i64,
+    ) {
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE sources SET browser_profile_id = ?1 WHERE id = ?2")
+            .bind(browser_profile_id)
+            .bind(source_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     async fn migrated_pool() -> SqlitePool {
