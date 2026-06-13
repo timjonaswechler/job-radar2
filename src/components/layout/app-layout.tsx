@@ -21,7 +21,7 @@ export function AppLayout({ title, children }: AppLayoutProps) {
       <AppSidebar variant="inset" collapsible="icon" />
       <SidebarInset className="relative z-20 min-w-0 peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]">
         <AppHeader title={title} />
-        <main className="h-full min-w-0 p-4 ">{children}</main>
+        <main className="h-full min-w-0 p-4">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );
