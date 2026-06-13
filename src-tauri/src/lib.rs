@@ -4,6 +4,7 @@ mod browser_runtime;
 mod commands;
 mod db;
 mod paths;
+mod search_request_model;
 mod source_detection;
 mod source_model;
 
@@ -45,6 +46,11 @@ pub fn run() {
             commands::list_adapters,
             commands::detect_source_from_url,
             commands::test_system_profile_url,
+            commands::create_search_request,
+            commands::list_search_requests,
+            commands::get_search_request,
+            commands::update_search_request,
+            commands::delete_search_request,
             commands::create_browser_profile,
             commands::list_browser_profiles,
             commands::get_browser_profile,
