@@ -654,7 +654,9 @@ mod tests {
     #[test]
     fn default_source_executor_routes_declarative_sitemap_adapter() {
         tauri::async_runtime::block_on(async {
-            let executor = DefaultSourceExecutor;
+            let executor = DefaultSourceExecutor::new(
+                tempfile::tempdir().unwrap().path().join("browser-runtime"),
+            );
             let search_request = SearchRequest {
                 id: 1,
                 status: SearchRequestStatus::Active,

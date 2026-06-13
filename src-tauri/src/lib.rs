@@ -9,6 +9,7 @@ mod search_run_model;
 mod sitemap_source_executor;
 mod source_detection;
 mod source_model;
+mod stepstone_source_executor;
 
 use tauri::Manager;
 
