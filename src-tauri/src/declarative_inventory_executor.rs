@@ -5,10 +5,12 @@ use serde_json::Value;
 use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
 
 use crate::{
+    declarative_template::{render_template, TemplateContext, TemplateError},
     search_run_model::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor,
     },
+    simple_json_path::{resolve_simple_json_path, SimpleJsonPathError},
     source_model::Source,
 };
 
@@ -237,16 +239,13 @@ fn select_json_items(
         "jsonPath",
         "definition.inventory.items.select.jsonPath",
     )?;
-    let selected = resolve_simple_json_path(
-        &root,
-        json_path,
-        "definition.inventory.items.select.jsonPath",
-    )?
-    .ok_or_else(|| {
-        SourceExecutionError::Failed(format!(
-            "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but no value was found"
-        ))
-    })?;
+    let selected = resolve_simple_json_path(&root, json_path)
+        .map_err(|error| simple_json_path_execution_error("definition.inventory.items.select.jsonPath", error))?
+        .ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but no value was found"
+            ))
+        })?;
     let array = selected.as_array().ok_or_else(|| {
         SourceExecutionError::Failed(format!(
             "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but resolved to {}",
@@ -323,53 +322,11 @@ fn parse_xml_text_values(xml: &str, element_name: &str) -> Result<Vec<String>, S
     Ok(values)
 }
 
-fn resolve_simple_json_path<'a>(
-    root: &'a Value,
-    json_path: &str,
+fn simple_json_path_execution_error(
     path: &str,
-) -> Result<Option<&'a Value>, SourceExecutionError> {
-    let segments = parse_simple_json_path(json_path, path)?;
-    let mut current = root;
-    for segment in segments {
-        let Some(next) = current.get(segment) else {
-            return Ok(None);
-        };
-        current = next;
-    }
-    Ok(Some(current))
-}
-
-fn parse_simple_json_path<'a>(
-    json_path: &'a str,
-    path: &str,
-) -> Result<Vec<&'a str>, SourceExecutionError> {
-    let json_path = json_path.trim();
-    if json_path == "$" {
-        return Ok(Vec::new());
-    }
-    let Some(rest) = json_path.strip_prefix("$.") else {
-        return Err(simple_json_path_error(path, json_path));
-    };
-
-    let mut segments = Vec::new();
-    for segment in rest.split('.') {
-        if segment.is_empty()
-            || !segment
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        {
-            return Err(simple_json_path_error(path, json_path));
-        }
-        segments.push(segment);
-    }
-
-    Ok(segments)
-}
-
-fn simple_json_path_error(path: &str, json_path: &str) -> SourceExecutionError {
-    SourceExecutionError::Failed(format!(
-        "{path} `{json_path}` is not supported; use simple dot JSONPath only, for example $.jobs or $.title (filters and wildcards are not supported)"
-    ))
+    error: SimpleJsonPathError,
+) -> SourceExecutionError {
+    SourceExecutionError::Failed(format!("{path} {error}"))
 }
 
 fn json_type_label(value: &Value) -> &'static str {
@@ -500,7 +457,9 @@ fn render_field_expression(
                 "{path}.jsonPath is only available for JSON inventory items"
             ))
         })?;
-        let value = resolve_simple_json_path(item, json_path, &format!("{path}.jsonPath"))?;
+        let value = resolve_simple_json_path(item, json_path).map_err(|error| {
+            simple_json_path_execution_error(&format!("{path}.jsonPath"), error)
+        })?;
         return json_field_value_to_string(value, path);
     }
 
@@ -530,86 +489,51 @@ struct InventoryTemplateContext<'a> {
     captures: &'a HashMap<String, String>,
 }
 
-fn render_template(
-    template: &str,
-    context: &InventoryTemplateContext<'_>,
-) -> Result<String, String> {
-    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
-    let mut first_error = None;
-    let rendered =
-        placeholder_regex
-            .replace_all(template, |placeholder: &regex::Captures<'_>| {
-                match render_template_expression(&placeholder[1], context) {
-                    Ok(value) => value,
-                    Err(error) => {
-                        if first_error.is_none() {
-                            first_error = Some(error);
-                        }
-                        String::new()
-                    }
-                }
-            })
-            .to_string();
-
-    if let Some(error) = first_error {
-        Err(error)
-    } else {
-        Ok(rendered)
-    }
-}
-
-fn render_template_expression(
-    expression: &str,
-    context: &InventoryTemplateContext<'_>,
-) -> Result<String, String> {
-    let mut parts = expression.split('|').map(str::trim);
-    let variable = parts
-        .next()
-        .filter(|variable| !variable.is_empty())
-        .ok_or_else(|| "template expression must not be empty".to_string())?;
-
-    let mut value = resolve_template_variable(variable, context)?;
-    for filter in parts {
-        if filter.is_empty() {
-            return Err("template filter must not be empty".to_string());
+impl TemplateContext for InventoryTemplateContext<'_> {
+    fn resolve_variable(&self, variable: &str) -> Result<Option<String>, TemplateError> {
+        if variable == "sourceName" {
+            Ok(Some(self.source.name.clone()))
+        } else if variable == "sourceKey" {
+            Ok(Some(self.source.key.clone()))
+        } else if variable == "itemText" {
+            self.item
+                .and_then(InventoryItem::text)
+                .map(str::to_string)
+                .map(Some)
+                .ok_or_else(|| {
+                    TemplateError::Invalid(
+                        "itemText is not available in this template context".to_string(),
+                    )
+                })
+        } else if let Some(config_key) = variable.strip_prefix("sourceConfig:") {
+            if config_key.is_empty() {
+                return Err(TemplateError::Invalid(
+                    "sourceConfig template variable must include a key".to_string(),
+                ));
+            }
+            source_config_value_as_string(&self.source.source_config, config_key)
+                .map(Some)
+                .ok_or_else(|| {
+                    TemplateError::Invalid(format!("sourceConfig.{config_key} is not available"))
+                })
+        } else if let Some(capture_key) = variable.strip_prefix("capture:") {
+            if capture_key.is_empty() {
+                return Err(TemplateError::Invalid(
+                    "capture template variable must include a capture name".to_string(),
+                ));
+            }
+            self.captures
+                .get(capture_key)
+                .cloned()
+                .map(Some)
+                .ok_or_else(|| {
+                    TemplateError::Invalid(format!("capture `{capture_key}` is not available"))
+                })
+        } else {
+            Err(TemplateError::Invalid(format!(
+                "unsupported template variable `{variable}`"
+            )))
         }
-        value = apply_template_filter(filter, &value)?;
-    }
-
-    Ok(value)
-}
-
-fn resolve_template_variable(
-    variable: &str,
-    context: &InventoryTemplateContext<'_>,
-) -> Result<String, String> {
-    if variable == "sourceName" {
-        Ok(context.source.name.clone())
-    } else if variable == "sourceKey" {
-        Ok(context.source.key.clone())
-    } else if variable == "itemText" {
-        context
-            .item
-            .and_then(InventoryItem::text)
-            .map(str::to_string)
-            .ok_or_else(|| "itemText is not available in this template context".to_string())
-    } else if let Some(config_key) = variable.strip_prefix("sourceConfig:") {
-        if config_key.is_empty() {
-            return Err("sourceConfig template variable must include a key".to_string());
-        }
-        source_config_value_as_string(&context.source.source_config, config_key)
-            .ok_or_else(|| format!("sourceConfig.{config_key} is not available"))
-    } else if let Some(capture_key) = variable.strip_prefix("capture:") {
-        if capture_key.is_empty() {
-            return Err("capture template variable must include a capture name".to_string());
-        }
-        context
-            .captures
-            .get(capture_key)
-            .cloned()
-            .ok_or_else(|| format!("capture `{capture_key}` is not available"))
-    } else {
-        Err(format!("unsupported template variable `{variable}`"))
     }
 }
 
@@ -619,95 +543,6 @@ fn source_config_value_as_string(source_config: &Value, key: &str) -> Option<Str
         Value::String(value) => Some(value.clone()),
         Value::Bool(value) => Some(value.to_string()),
         Value::Number(value) => Some(value.to_string()),
-        _ => None,
-    }
-}
-
-fn apply_template_filter(filter: &str, value: &str) -> Result<String, String> {
-    match filter {
-        "urlDecode" => Ok(percent_decode_lossy(value)),
-        "slugToTitle" => Ok(slug_to_title(value)),
-        "stripCareerSuffix" => Ok(strip_career_suffix(value)),
-        _ => Err(format!("unsupported template filter `{filter}`")),
-    }
-}
-
-fn slug_to_title(value: &str) -> String {
-    title_case(&collapse_whitespace(&value.replace(['-', '_'], " ")))
-}
-
-fn title_case(value: &str) -> String {
-    let words = value
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    words.join(" ")
-}
-
-fn strip_career_suffix(source_name: &str) -> String {
-    let source_name = collapse_whitespace(source_name);
-    let lower = source_name.to_lowercase();
-    for suffix in [
-        " karriere",
-        " careers",
-        " career",
-        " jobs",
-        " stellenangebote",
-    ] {
-        if lower.ends_with(suffix) {
-            let company = source_name[..source_name.len() - suffix.len()].trim();
-            if !company.is_empty() {
-                return company.to_string();
-            }
-        }
-    }
-    source_name
-}
-
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn percent_decode_lossy(value: &str) -> String {
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-
-    while index < bytes.len() {
-        if bytes[index] == b'+' {
-            decoded.push(b' ');
-            index += 1;
-            continue;
-        }
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
-            if let (Some(high), Some(low)) =
-                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
-            {
-                decoded.push((high << 4) | low);
-                index += 3;
-                continue;
-            }
-        }
-
-        decoded.push(bytes[index]);
-        index += 1;
-    }
-
-    String::from_utf8_lossy(&decoded).into_owned()
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
 }
@@ -857,6 +692,50 @@ mod tests {
                     .unwrap_or_else(|| Err(format!("{} not found", url.as_str())))
             })
         }
+    }
+
+    #[test]
+    fn inventory_template_context_uses_shared_renderer_and_filters() {
+        let source = Source {
+            id: 1,
+            key: "focused_energy_careers".to_string(),
+            adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
+            system_profile_id: Some(1),
+            browser_profile_id: None,
+            name: "Focused Energy Karriere".to_string(),
+            description: None,
+            source_config: json!({
+                "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
+            }),
+            status: SourceStatus::Active,
+            validation_error: None,
+            built_in: false,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        let item = InventoryItem::Text(
+            "https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/".to_string(),
+        );
+        let captures = HashMap::from([
+            ("location".to_string(), "berlin".to_string()),
+            ("title".to_string(), "senior+rust%2Dengineer".to_string()),
+        ]);
+        let context = InventoryTemplateContext {
+            source: &source,
+            item: Some(&item),
+            captures: &captures,
+        };
+
+        let rendered = render_template(
+            "{{sourceKey}}|{{sourceConfig:startUrl}}|{{itemText}}|{{capture:title|urlDecode|slugToTitle}}|{{sourceName|stripCareerSuffix}}",
+            &context,
+        )
+        .unwrap();
+
+        assert_eq!(
+            rendered,
+            "focused_energy_careers|https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true|https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/|Senior Rust Engineer|Focused Energy"
+        );
     }
 
     #[test]

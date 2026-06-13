@@ -6,7 +6,13 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use sqlx::SqlitePool;
 
-use crate::source_model::{get_system_profile, list_system_profiles, SourceStatus, SystemProfile};
+use crate::{
+    declarative_template::{
+        render_template, title_case, to_technical_key, TemplateContext, TemplateError,
+    },
+    simple_json_path::simple_json_path_exists,
+    source_model::{get_system_profile, list_system_profiles, SourceStatus, SystemProfile},
+};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -108,19 +114,28 @@ impl DetectionCheckOutcome {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum TemplateRenderError {
-    MissingCapture(String),
-    Invalid(String),
+struct DetectionTemplateContext<'a> {
+    input_url: &'a Url,
+    captures: &'a HashMap<String, String>,
 }
 
-impl TemplateRenderError {
-    fn message(&self) -> String {
-        match self {
-            Self::MissingCapture(capture_key) => {
-                format!("sourceConfig references missing capture `{capture_key}`")
+impl TemplateContext for DetectionTemplateContext<'_> {
+    fn resolve_variable(&self, variable: &str) -> Result<Option<String>, TemplateError> {
+        if variable == "inputUrl" {
+            Ok(Some(self.input_url.as_str().to_string()))
+        } else if variable == "origin" {
+            Ok(Some(origin(self.input_url)))
+        } else if let Some(capture_key) = variable.strip_prefix("capture:") {
+            if capture_key.is_empty() {
+                return Err(TemplateError::Invalid(
+                    "capture template variable must include a capture name".to_string(),
+                ));
             }
-            Self::Invalid(message) => message.clone(),
+            Ok(self.captures.get(capture_key).cloned())
+        } else {
+            Err(TemplateError::Invalid(format!(
+                "unsupported template variable `{variable}`"
+            )))
         }
     }
 }
@@ -445,7 +460,7 @@ async fn evaluate_check_outcome<C: DetectionHttpClient + Sync>(
             }
         };
         if let Some(path) = fetch_json.get("pathExists").and_then(Value::as_str) {
-            return Ok(if json_path_exists(&json, path) {
+            return Ok(if simple_json_path_exists(&json, path) {
                 DetectionCheckOutcome::passed(format!(
                     "{} enthält JSON-Pfad `{path}`",
                     fetched_url.as_str()
@@ -682,15 +697,15 @@ fn render_first_identity_candidate(
     };
 
     for candidate in candidates.iter().filter_map(Value::as_str) {
-        match render_template(candidate, input_url, captures) {
+        match render_detection_template(candidate, input_url, captures) {
             Ok(rendered) => {
                 let rendered = rendered.trim();
                 if !rendered.is_empty() {
                     return Ok(Some(rendered.to_string()));
                 }
             }
-            Err(TemplateRenderError::MissingCapture(_)) => continue,
-            Err(error) => return Err(error.message()),
+            Err(error) if is_missing_capture(&error) => continue,
+            Err(error) => return Err(detection_template_error_message(error)),
         }
     }
 
@@ -752,7 +767,8 @@ fn render_template_value(
 ) -> Result<Value, String> {
     match value {
         Value::String(template) => Ok(Value::String(
-            render_template(template, input_url, captures).map_err(|error| error.message())?,
+            render_detection_template(template, input_url, captures)
+                .map_err(detection_template_error_message)?,
         )),
         Value::Array(values) => values
             .iter()
@@ -779,10 +795,10 @@ fn render_optional_template_value(
     captures: &HashMap<String, String>,
 ) -> Result<Option<Value>, String> {
     match value {
-        Value::String(template) => match render_template(template, input_url, captures) {
+        Value::String(template) => match render_detection_template(template, input_url, captures) {
             Ok(rendered) => Ok(Some(Value::String(rendered))),
-            Err(TemplateRenderError::MissingCapture(_)) => Ok(None),
-            Err(error) => Err(error.message()),
+            Err(error) if is_missing_capture(&error) => Ok(None),
+            Err(error) => Err(detection_template_error_message(error)),
         },
         Value::Array(values) => {
             let mut rendered_values = Vec::new();
@@ -815,110 +831,35 @@ fn render_optional_template_value(
     }
 }
 
-fn render_template(
+fn render_detection_template(
     template: &str,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<String, TemplateRenderError> {
-    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
-    let mut first_error = None;
-    let rendered =
-        placeholder_regex
-            .replace_all(template, |placeholder: &regex::Captures<'_>| {
-                match render_template_expression(&placeholder[1], input_url, captures) {
-                    Ok(value) => value,
-                    Err(error) => {
-                        if first_error.is_none() {
-                            first_error = Some(error);
-                        }
-                        String::new()
-                    }
-                }
-            })
-            .to_string();
-
-    if let Some(error) = first_error {
-        Err(error)
-    } else {
-        Ok(rendered)
-    }
-}
-
-fn render_template_expression(
-    expression: &str,
-    input_url: &Url,
-    captures: &HashMap<String, String>,
-) -> Result<String, TemplateRenderError> {
-    let mut parts = expression.split('|').map(str::trim);
-    let Some(variable) = parts.next().filter(|variable| !variable.is_empty()) else {
-        return Err(TemplateRenderError::Invalid(
-            "template expression must not be empty".to_string(),
-        ));
+) -> Result<String, TemplateError> {
+    let context = DetectionTemplateContext {
+        input_url,
+        captures,
     };
-
-    let mut value = if variable == "inputUrl" {
-        input_url.as_str().to_string()
-    } else if variable == "origin" {
-        origin(input_url)
-    } else if let Some(capture_key) = variable.strip_prefix("capture:") {
-        if capture_key.is_empty() {
-            return Err(TemplateRenderError::Invalid(
-                "capture template variable must include a capture name".to_string(),
-            ));
-        }
-        captures
-            .get(capture_key)
-            .cloned()
-            .ok_or_else(|| TemplateRenderError::MissingCapture(capture_key.to_string()))?
-    } else {
-        return Err(TemplateRenderError::Invalid(format!(
-            "unsupported template variable `{variable}`"
-        )));
-    };
-
-    for filter in parts {
-        if filter.is_empty() {
-            return Err(TemplateRenderError::Invalid(
-                "template filter must not be empty".to_string(),
-            ));
-        }
-        value = apply_template_filter(filter, &value)?;
-    }
-
-    Ok(value)
+    render_template(template, &context)
 }
 
-fn apply_template_filter(filter: &str, value: &str) -> Result<String, TemplateRenderError> {
-    match filter {
-        "technicalKey" => Ok(to_technical_key(value)),
-        "titleCase" => Ok(title_case(value)),
-        "domainKey" => Ok(to_technical_key(&company_domain_label(value)?)),
-        "domainTitle" => Ok(title_case(&company_domain_label(value)?)),
-        _ => Err(TemplateRenderError::Invalid(format!(
-            "unsupported template filter `{filter}`"
-        ))),
-    }
+fn is_missing_capture(error: &TemplateError) -> bool {
+    error
+        .missing_variable()
+        .and_then(|variable| variable.strip_prefix("capture:"))
+        .is_some()
 }
 
-fn company_domain_label(value: &str) -> Result<String, TemplateRenderError> {
-    let url = parse_http_url(value).map_err(|error| {
-        TemplateRenderError::Invalid(format!(
-            "template domain filter requires an HTTP(S) URL: {error}"
-        ))
-    })?;
-    let host = normalized_host(&url);
-    let label = host
-        .split('.')
-        .find(|label| !is_generic_host_label(label))
-        .or_else(|| host.split('.').next())
-        .unwrap_or_default();
-
-    if label.is_empty() {
-        Err(TemplateRenderError::Invalid(
-            "template domain filter could not derive a domain label".to_string(),
-        ))
-    } else {
-        Ok(label.to_string())
+fn detection_template_error_message(error: TemplateError) -> String {
+    match error {
+        TemplateError::MissingVariable(variable) => {
+            if let Some(capture_key) = variable.strip_prefix("capture:") {
+                format!("sourceConfig references missing capture `{capture_key}`")
+            } else {
+                format!("template variable `{variable}` is not available")
+            }
+        }
+        TemplateError::Invalid(message) => message,
     }
 }
 
@@ -931,21 +872,6 @@ fn required_string<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a 
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| format!("{key} is required"))
-}
-
-fn json_path_exists(value: &Value, path: &str) -> bool {
-    let Some(path) = path.strip_prefix("$.") else {
-        return false;
-    };
-
-    let mut current = value;
-    for segment in path.split('.') {
-        let Some(next) = current.get(segment) else {
-            return false;
-        };
-        current = next;
-    }
-    true
 }
 
 fn parse_http_url(input: &str) -> Result<Url, String> {
@@ -1021,60 +947,6 @@ fn normalized_host(url: &Url) -> String {
         .strip_prefix("www.")
         .unwrap_or_else(|| url.host_str().unwrap_or_default())
         .to_string()
-}
-
-fn title_case(value: &str) -> String {
-    let words = value
-        .replace(['-', '_'], " ")
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    if words.is_empty() {
-        "Neue Quelle".to_string()
-    } else {
-        words.join(" ")
-    }
-}
-
-fn to_technical_key(value: &str) -> String {
-    let mut key = String::new();
-    let mut last_was_separator = false;
-    for ch in value.to_lowercase().chars() {
-        let mapped = match ch {
-            'a'..='z' | '0'..='9' => Some(ch),
-            'ä' => Some('a'),
-            'ö' => Some('o'),
-            'ü' => Some('u'),
-            'ß' => {
-                key.push_str("ss");
-                last_was_separator = false;
-                None
-            }
-            _ => None,
-        };
-
-        if let Some(ch) = mapped {
-            key.push(ch);
-            last_was_separator = false;
-        } else if !last_was_separator && !key.is_empty() {
-            key.push('_');
-            last_was_separator = true;
-        }
-    }
-
-    let key = key.trim_matches('_').to_string();
-    if key.is_empty() {
-        "quelle".to_string()
-    } else {
-        key
-    }
 }
 
 type BoxedTextFuture<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
@@ -1168,6 +1040,33 @@ mod tests {
                     .ok_or_else(|| format!("{} not found", url.as_str()))
             })
         }
+    }
+
+    #[test]
+    fn detection_template_context_uses_shared_renderer_and_filters() {
+        let input_url = Url::parse("https://jobs.ashbyhq.com/focused").unwrap();
+        let captures = HashMap::from([
+            ("boardSlug".to_string(), "focused-energy".to_string()),
+            (
+                "companyWebsite".to_string(),
+                "https://focused-energy.co".to_string(),
+            ),
+        ]);
+        let context = DetectionTemplateContext {
+            input_url: &input_url,
+            captures: &captures,
+        };
+
+        let rendered = render_template(
+            "{{origin}}|{{capture:companyWebsite|domainKey}}|{{capture:boardSlug|titleCase}}",
+            &context,
+        )
+        .unwrap();
+
+        assert_eq!(
+            rendered,
+            "https://jobs.ashbyhq.com|focused_energy|Focused Energy"
+        );
     }
 
     #[test]
