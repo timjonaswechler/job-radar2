@@ -41,10 +41,13 @@ The Rust backend creates and migrates a local SQLite database on startup. The sc
 - Database file: app data directory + `job_radar.db`
 - Custom system profiles: app data directory + `system-profiles/*.json`
 - Built-in system profiles: versioned under `system-profiles/builtin/*.json` and embedded into the Rust binary with `include_str!`
-- Current tables: `app_metadata`, `app_settings`, `browser_profiles`, `system_profiles`, `sources`
+- Current tables: `app_metadata`, `app_settings`, `browser_profiles`, `system_profiles`, `sources`, `search_requests`
 - Migrations: `src-tauri/migrations/`
 - Backend access: `src-tauri/src/db.rs` and `src-tauri/src/commands.rs`
 - Dev reset: `npm run tauri:dev:reset-db` starts Tauri with `JOB_RADAR_RESET_DEV_DB=1` and deletes only the local SQLite file family before migration/seeding. This is debug-build only.
+- Local app-data DB reset: `just db-clear` deletes the installed/dev app-data SQLite file family (`job_radar.db`, `-wal`, `-shm`, `-journal`) without deleting custom system profiles.
+- Migration squash: `just migrations-squash` rebuilds a single current-schema SQLx migration from all files in `src-tauri/migrations/`; run `just db-reset-after-squash` if you want to squash and then clear the app-data DB so checksum conflicts cannot occur.
+- Data-preserving migration squash: `just db-preserve-after-squash` squashes migrations and rewrites SQLx bookkeeping on the existing DB, but only if the DB schema already matches the squashed schema; it creates a backup under `backups/db/` first.
 
 ## Useful scripts
 
