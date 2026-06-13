@@ -49,6 +49,7 @@ where
 {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
+            let _browser_profile = input.browser_profile;
             self.execute_source(input.search_request, input.source)
                 .await
         })
@@ -1292,6 +1293,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect("browser fixture should produce candidates");
@@ -1340,6 +1342,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect("HTTP fallback should produce candidates");
@@ -1372,6 +1375,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect("preloaded search-result items should produce candidates");
@@ -1439,6 +1443,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect_err("both fetch paths should fail");
@@ -1471,6 +1476,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect_err("unparseable browser content should fail explicitly");
@@ -1500,6 +1506,7 @@ mod tests {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
+                    browser_profile: None,
                 })
                 .await
                 .expect_err(
