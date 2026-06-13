@@ -700,25 +700,7 @@ mod tests {
             let source_id = create_inventory_source(
                 &pool,
                 DECLARATIVE_SITEMAP_ADAPTER_KEY,
-                json!({
-                    "fetch": { "url": "{{sourceConfig:url}}" },
-                    "parse": { "as": "xml" },
-                    "items": {
-                        "select": { "xmlText": "loc" },
-                        "where": [{ "regex": "(?i)/job/" }],
-                        "captures": [{
-                            "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?/?$"
-                        }]
-                    },
-                    "fields": {
-                        "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
-                        "url": { "template": "{{itemText}}" },
-                        "company": { "template": "{{sourceName|stripCareerSuffix}}" },
-                        "locations": [
-                            { "template": "{{capture:location|urlDecode|slugToTitle}}" }
-                        ]
-                    }
-                }),
+                xml_loc_inventory(),
                 json!({ "url": "https://example.com/sitemap.xml" }),
                 "Example Careers",
             )
@@ -771,6 +753,109 @@ mod tests {
     }
 
     #[test]
+    fn successfactors_builtin_inventory_runs_schott_sitemap_fixture_through_central_runtime() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let source_id = create_builtin_successfactors_source(&pool).await;
+            let search_request = create_search_request(&pool, vec![source_id], "laser").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://join.schott.com/sitemap.xml",
+                Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
+                <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                  <url>
+                    <loc>https://join.schott.com/job/Mainz-Laser-Engineer-55122/</loc>
+                  </url>
+                  <url>
+                    <loc>https://join.schott.com/about-schott/</loc>
+                  </url>
+                </urlset>"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 1);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Laser Engineer");
+            assert_eq!(posting.company, "SCHOTT");
+            assert_eq!(
+                posting.url,
+                "https://join.schott.com/job/Mainz-Laser-Engineer-55122/"
+            );
+            assert_eq!(posting.locations, vec!["Mainz"]);
+            assert_eq!(posting.sources[0].source_key, "schott_careers");
+            assert_eq!(posting.sources[0].source_name, "SCHOTT Karriere");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://join.schott.com/sitemap.xml"]
+            );
+        });
+    }
+
+    #[test]
+    fn xml_inventory_fetch_errors_become_source_run_errors() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let source_id = create_inventory_source(
+                &pool,
+                DECLARATIVE_SITEMAP_ADAPTER_KEY,
+                xml_loc_inventory(),
+                json!({ "url": "https://broken.example/sitemap.xml" }),
+                "Broken Careers",
+            )
+            .await;
+            let search_request = create_search_request(&pool, vec![source_id], "engineer").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://broken.example/sitemap.xml",
+                Err("connection refused"),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            assert!(result.postings.is_empty());
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            assert_eq!(result.source_runs[0].candidate_count, 0);
+            assert_eq!(result.source_runs[0].matched_count, 0);
+            assert!(result.source_runs[0]
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("could not fetch inventory https://broken.example/sitemap.xml"));
+            assert!(result.source_runs[0]
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("connection refused"));
+        });
+    }
+
+    #[test]
     fn default_source_executor_routes_declarative_adapters_to_inventory_runtime() {
         tauri::async_runtime::block_on(async {
             let executor = DefaultSourceExecutor::new(
@@ -803,6 +888,28 @@ mod tests {
                 }
             }
         });
+    }
+
+    fn xml_loc_inventory() -> Value {
+        json!({
+            "fetch": { "url": "{{sourceConfig:url}}" },
+            "parse": { "as": "xml" },
+            "items": {
+                "select": { "xmlText": "loc" },
+                "where": [{ "regex": "(?i)/job/" }],
+                "captures": [{
+                    "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?(?:-\\d+)?/?$"
+                }]
+            },
+            "fields": {
+                "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
+                "url": { "template": "{{itemText}}" },
+                "company": { "template": "{{sourceName|stripCareerSuffix}}" },
+                "locations": [
+                    { "template": "{{capture:location|urlDecode|slugToTitle}}" }
+                ]
+            }
+        })
     }
 
     async fn create_inventory_source(
@@ -848,6 +955,55 @@ mod tests {
                 name: source_name.to_string(),
                 description: None,
                 source_config,
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn create_builtin_successfactors_source(pool: &SqlitePool) -> i64 {
+        let document: Value = serde_json::from_str(include_str!(
+            "../../system-profiles/builtin/successfactors.json"
+        ))
+        .unwrap();
+        assert!(
+            document.pointer("/definition/inventory").is_some(),
+            "SuccessFactors built-in profile must define definition.inventory"
+        );
+
+        let profile = create_system_profile(
+            pool,
+            CreateSystemProfileInput {
+                key: document["key"].as_str().unwrap().to_string(),
+                name: document["name"].as_str().unwrap().to_string(),
+                description: document["description"].as_str().map(str::to_string),
+                adapter_key: document["adapterKey"].as_str().unwrap().to_string(),
+                definition_schema_version: document["definitionSchemaVersion"].as_i64().unwrap(),
+                definition: document["definition"].clone(),
+                source_config_schema: document["sourceConfigSchema"].clone(),
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        create_source(
+            pool,
+            CreateSourceInput {
+                key: "schott_careers".to_string(),
+                adapter_key: DECLARATIVE_SITEMAP_ADAPTER_KEY.to_string(),
+                system_profile_id: Some(profile.id),
+                browser_profile_id: None,
+                name: "SCHOTT Karriere".to_string(),
+                description: None,
+                source_config: json!({
+                    "url": "https://join.schott.com/sitemap.xml",
+                    "recursive": false
+                }),
                 status: SourceStatus::Active,
                 validation_error: None,
             },
