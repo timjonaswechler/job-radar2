@@ -5,6 +5,7 @@ mod db;
 mod declarative_inventory_executor;
 mod declarative_template;
 mod search_request_model;
+mod search_run;
 mod search_run_model;
 mod search_run_smoke;
 mod simple_json_path;
