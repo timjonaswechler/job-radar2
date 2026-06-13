@@ -26,7 +26,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <div className="sidebar-glow-shell flex h-full flex-col">
-        <SidebarHeader className="relative z-10 px-2 pt-8 pb-1">
+        <SidebarHeader className="relative z-10 px-2 pt-12 pb-1">
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
               <SidebarMenuButton
@@ -52,7 +52,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
-        <SidebarContent className="relative z-10 ">
+        <SidebarContent className="relative z-10">
           <ScrollArea className="h-auto">
             <NavMain items={sidebarItems} />
           </ScrollArea>

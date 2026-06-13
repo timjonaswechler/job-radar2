@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "Job Radar",
         "width": 1440,
-        "height": 810
+        "height": 810,
+        "label": "main",
+        "decorations": true,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 15, "y": 24 }
       }
     ],
     "security": {
