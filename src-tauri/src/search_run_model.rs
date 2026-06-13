@@ -27,7 +27,17 @@ pub trait SourceExecutor: Send + Sync {
     ) -> BoxedSourceExecutionFuture<'a>;
 }
 
-pub struct DefaultSourceExecutor;
+pub struct DefaultSourceExecutor {
+    browser_runtime_dir: PathBuf,
+}
+
+impl DefaultSourceExecutor {
+    pub fn new(browser_runtime_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            browser_runtime_dir: browser_runtime_dir.into(),
+        }
+    }
+}
 
 impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(
@@ -40,6 +50,13 @@ impl SourceExecutor for DefaultSourceExecutor {
                 "declarative_sitemap_jobboard" => {
                     let executor =
                         crate::sitemap_source_executor::DeclarativeSitemapJobboardExecutor::new_reqwest();
+                    executor.execute(search_request, source).await
+                }
+                "stepstone_search" => {
+                    let executor =
+                        crate::stepstone_source_executor::StepstoneSearchExecutor::new_managed(
+                            self.browser_runtime_dir.clone(),
+                        );
                     executor.execute(search_request, source).await
                 }
                 _ => Err(SourceExecutionError::Failed(format!(

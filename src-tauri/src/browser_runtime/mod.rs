@@ -309,6 +309,14 @@ pub fn uninstall_runtime(
     Ok(status_for_runtime_dir(runtime_dir, spec, false))
 }
 
+pub async fn render_page_html(
+    executable_path: &Path,
+    runtime_dir: &Path,
+    url: &str,
+) -> Result<String, String> {
+    browser_control::render_page_html(executable_path, runtime_dir, url).await
+}
+
 pub async fn check_runtime(
     runtime_dir: &Path,
     spec: Option<&BrowserRuntimeSpec>,
