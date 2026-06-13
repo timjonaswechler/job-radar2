@@ -13,18 +13,26 @@ use crate::{
         RunningSearchRuns, SearchRequest, SearchRequestService, SearchRule, SearchRuleKind,
         SearchRuleTarget,
     },
-    source_model::{get_source, Source},
+    source_model::{get_source, get_system_profile, Source, SourceStatus, SystemProfile},
 };
 
 pub type BoxedSourceExecutionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<SourceCandidate>, SourceExecutionError>> + Send + 'a>>;
 
+/// Public source-execution seam used by Suchläufe.
+///
+/// `SearchRunService` loads the active `SystemProfile` for sources that have a
+/// `system_profile_id` and passes it here. Declarative inventory adapters return
+/// `SourceExecutionError::Failed` when the required profile or inventory
+/// definition is missing or invalid.
+pub struct SourceExecutionInput<'a> {
+    pub search_request: &'a SearchRequest,
+    pub source: &'a Source,
+    pub system_profile: Option<&'a SystemProfile>,
+}
+
 pub trait SourceExecutor: Send + Sync {
-    fn execute<'a>(
-        &'a self,
-        search_request: &'a SearchRequest,
-        source: &'a Source,
-    ) -> BoxedSourceExecutionFuture<'a>;
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a>;
 }
 
 pub struct DefaultSourceExecutor {
@@ -40,28 +48,24 @@ impl DefaultSourceExecutor {
 }
 
 impl SourceExecutor for DefaultSourceExecutor {
-    fn execute<'a>(
-        &'a self,
-        search_request: &'a SearchRequest,
-        source: &'a Source,
-    ) -> BoxedSourceExecutionFuture<'a> {
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            match source.adapter_key.as_str() {
-                "declarative_sitemap_jobboard" => {
+            match input.source.adapter_key.as_str() {
+                "declarative_http_jobboard" | "declarative_sitemap_jobboard" => {
                     let executor =
-                        crate::sitemap_source_executor::DeclarativeSitemapJobboardExecutor::new_reqwest();
-                    executor.execute(search_request, source).await
+                        crate::declarative_inventory_executor::DeclarativeInventoryExecutor::new_reqwest();
+                    executor.execute(input).await
                 }
                 "stepstone_search" => {
                     let executor =
                         crate::stepstone_source_executor::StepstoneSearchExecutor::new_managed(
                             self.browser_runtime_dir.clone(),
                         );
-                    executor.execute(search_request, source).await
+                    executor.execute(input).await
                 }
                 _ => Err(SourceExecutionError::Failed(format!(
                     "adapterKey {} has no search-run executor yet",
-                    source.adapter_key
+                    input.source.adapter_key
                 ))),
             }
         })
@@ -196,7 +200,21 @@ impl<'a> SearchRunService<'a> {
         let mut candidates = Vec::new();
 
         for source in &sources {
-            match self.source_executor.execute(&search_request, source).await {
+            let system_profile =
+                match load_active_system_profile_for_source(self.pool, source).await {
+                    Ok(system_profile) => system_profile,
+                    Err(error) => {
+                        source_runs.push(source_run_failed(source, error));
+                        continue;
+                    }
+                };
+            let input = SourceExecutionInput {
+                search_request: &search_request,
+                source,
+                system_profile: system_profile.as_ref(),
+            };
+
+            match self.source_executor.execute(input).await {
                 Ok(source_candidates) => {
                     let candidate_count = source_candidates.len();
                     candidates.extend(source_candidates.into_iter().map(|candidate| Treffer {
@@ -277,6 +295,27 @@ async fn load_selected_sources(
         sources.push(get_source(pool, *source_id).await?);
     }
     Ok(sources)
+}
+
+async fn load_active_system_profile_for_source(
+    pool: &SqlitePool,
+    source: &Source,
+) -> Result<Option<SystemProfile>, SourceExecutionError> {
+    let Some(system_profile_id) = source.system_profile_id else {
+        return Ok(None);
+    };
+
+    let system_profile = get_system_profile(pool, system_profile_id)
+        .await
+        .map_err(SourceExecutionError::Failed)?;
+    if system_profile.status != SourceStatus::Active {
+        return Err(SourceExecutionError::Failed(format!(
+            "systemProfileId {system_profile_id} for source {} must reference an active system profile",
+            source.key
+        )));
+    }
+
+    Ok(Some(system_profile))
 }
 
 fn validate_executable_search_request(search_request: &SearchRequest) -> Result<(), String> {
@@ -559,19 +598,18 @@ mod tests {
     impl SourceExecutor for FixtureSourceExecutor {
         fn execute<'a>(
             &'a self,
-            _search_request: &'a SearchRequest,
-            source: &'a Source,
+            input: SourceExecutionInput<'a>,
         ) -> BoxedSourceExecutionFuture<'a> {
             Box::pin(async move {
                 self.responses
                     .lock()
                     .unwrap()
-                    .get(&source.id)
+                    .get(&input.source.id)
                     .cloned()
                     .unwrap_or_else(|| {
                         Err(SourceExecutionError::Failed(format!(
                             "missing fixture response for source {}",
-                            source.id
+                            input.source.id
                         )))
                     })
             })

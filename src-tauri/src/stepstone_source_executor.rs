@@ -7,7 +7,8 @@ use std::{collections::HashSet, fmt, future::Future, path::PathBuf, pin::Pin, ti
 use crate::{
     search_request_model::{SearchRequest, SearchRuleKind, SearchRuleTarget},
     search_run_model::{
-        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutor,
+        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
+        SourceExecutor,
     },
     source_model::Source,
 };
@@ -46,12 +47,11 @@ where
     B: StepstoneBrowserClient + Send + Sync,
     H: StepstoneHttpClient + Send + Sync,
 {
-    fn execute<'a>(
-        &'a self,
-        search_request: &'a SearchRequest,
-        source: &'a Source,
-    ) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move { self.execute_source(search_request, source).await })
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
+        Box::pin(async move {
+            self.execute_source(input.search_request, input.source)
+                .await
+        })
     }
 }
 
@@ -1288,7 +1288,11 @@ mod tests {
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
 
             let candidates = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .expect("browser fixture should produce candidates");
 
@@ -1332,7 +1336,11 @@ mod tests {
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
 
             let candidates = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .expect("HTTP fallback should produce candidates");
 
@@ -1360,7 +1368,11 @@ mod tests {
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
 
             let candidates = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .expect("preloaded search-result items should produce candidates");
 
@@ -1423,7 +1435,11 @@ mod tests {
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
 
             let error = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .expect_err("both fetch paths should fail");
 
@@ -1451,7 +1467,11 @@ mod tests {
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
 
             let error = executor
-                .execute(&search_request, &source)
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
                 .await
                 .expect_err("unparseable browser content should fail explicitly");
 
@@ -1475,9 +1495,16 @@ mod tests {
             let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
             let source = source(json!({ "baseUrl": "not a url" }));
 
-            let error = executor.execute(&search_request, &source).await.expect_err(
-                "invalid StepStone source config should fail before any network access",
-            );
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                })
+                .await
+                .expect_err(
+                    "invalid StepStone source config should fail before any network access",
+                );
 
             match error {
                 SourceExecutionError::Failed(message) => {
