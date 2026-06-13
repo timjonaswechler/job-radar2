@@ -11,6 +11,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub paths: AppPaths,
     pub browser_runtime_install_lock: Mutex<()>,
+    pub running_search_runs: crate::search_request_model::RunningSearchRuns,
 }
 
 impl AppState {
@@ -23,6 +24,7 @@ impl AppState {
             db,
             paths,
             browser_runtime_install_lock: Mutex::new(()),
+            running_search_runs: crate::search_request_model::RunningSearchRuns::default(),
         })
     }
 }

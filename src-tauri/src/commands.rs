@@ -280,6 +280,53 @@ pub async fn test_system_profile_url(
         .await
 }
 
+#[tauri::command]
+pub async fn create_search_request(
+    state: State<'_, AppState>,
+    input: crate::search_request_model::CreateSearchRequestInput,
+) -> Result<crate::search_request_model::SearchRequest, String> {
+    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+        .create(input)
+        .await
+}
+
+#[tauri::command]
+pub async fn list_search_requests(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::search_request_model::SearchRequest>, String> {
+    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+        .list()
+        .await
+}
+
+#[tauri::command]
+pub async fn get_search_request(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<crate::search_request_model::SearchRequest, String> {
+    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+        .get(id)
+        .await
+}
+
+#[tauri::command]
+pub async fn update_search_request(
+    state: State<'_, AppState>,
+    id: i64,
+    input: crate::search_request_model::UpdateSearchRequestInput,
+) -> Result<crate::search_request_model::SearchRequest, String> {
+    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+        .update(id, input)
+        .await
+}
+
+#[tauri::command]
+pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+        .delete(id)
+        .await
+}
+
 async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, String> {
     Ok(AppPreferences {
         theme: read_setting_or_default(pool, SETTING_THEME).await?,
