@@ -85,7 +85,7 @@ where
         let empty_captures = HashMap::new();
         let fetch_context = InventoryTemplateContext {
             source,
-            item_text: None,
+            item: None,
             captures: &empty_captures,
         };
         let fetch_url = render_template(fetch_url_template, &fetch_context).map_err(|error| {
@@ -108,8 +108,9 @@ where
         let parse = required_object_value(inventory, "parse", "definition.inventory.parse")?;
         let parse_as = required_string(parse, "as", "definition.inventory.parse.as")?;
         let items = required_object_value(inventory, "items", "definition.inventory.items")?;
-        let item_texts = match parse_as {
-            "xml" => select_xml_item_texts(&body, items)?,
+        let inventory_items = match parse_as {
+            "xml" => select_xml_items(&body, items)?,
+            "json" => select_json_items(&body, items)?,
             other => {
                 return Err(SourceExecutionError::Failed(format!(
                     "definition.inventory.parse.as `{other}` is not supported by this executor slice"
@@ -124,16 +125,36 @@ where
         let fields = required_object_value(inventory, "fields", "definition.inventory.fields")?;
 
         let mut candidates = Vec::new();
-        for item_text in item_texts {
-            if !where_regexes.iter().all(|regex| regex.is_match(&item_text)) {
-                continue;
-            }
-            let Some(captures) = capture_item(&capture_regexes, &item_text) else {
-                continue;
+        for inventory_item in inventory_items {
+            let captures = match inventory_item.text() {
+                Some(item_text) => {
+                    if !where_regexes.iter().all(|regex| regex.is_match(item_text)) {
+                        continue;
+                    }
+                    let Some(captures) = capture_item(&capture_regexes, item_text) else {
+                        continue;
+                    };
+                    captures
+                }
+                None => {
+                    if !where_regexes.is_empty() {
+                        return Err(SourceExecutionError::Failed(
+                            "definition.inventory.items.where is only supported for text item selections"
+                                .to_string(),
+                        ));
+                    }
+                    if !capture_regexes.is_empty() {
+                        return Err(SourceExecutionError::Failed(
+                            "definition.inventory.items.captures is only supported for text item selections"
+                                .to_string(),
+                        ));
+                    }
+                    HashMap::new()
+                }
             };
             let context = InventoryTemplateContext {
                 source,
-                item_text: Some(&item_text),
+                item: Some(&inventory_item),
                 captures: &captures,
             };
 
@@ -158,10 +179,32 @@ where
     }
 }
 
-fn select_xml_item_texts(
+#[derive(Clone, Debug)]
+enum InventoryItem {
+    Text(String),
+    Json(Value),
+}
+
+impl InventoryItem {
+    fn text(&self) -> Option<&str> {
+        match self {
+            Self::Text(text) => Some(text.as_str()),
+            Self::Json(_) => None,
+        }
+    }
+
+    fn json(&self) -> Option<&Value> {
+        match self {
+            Self::Text(_) => None,
+            Self::Json(value) => Some(value),
+        }
+    }
+}
+
+fn select_xml_items(
     xml: &str,
     items: &serde_json::Map<String, Value>,
-) -> Result<Vec<String>, SourceExecutionError> {
+) -> Result<Vec<InventoryItem>, SourceExecutionError> {
     let select = required_object_value(items, "select", "definition.inventory.items.select")?;
     let element_name = required_string(
         select,
@@ -174,9 +217,44 @@ fn select_xml_item_texts(
         ));
     }
 
-    parse_xml_text_values(xml, element_name).map_err(|error| {
-        SourceExecutionError::Failed(format!("could not parse inventory XML: {error}"))
-    })
+    parse_xml_text_values(xml, element_name)
+        .map(|values| values.into_iter().map(InventoryItem::Text).collect())
+        .map_err(|error| {
+            SourceExecutionError::Failed(format!("could not parse inventory XML: {error}"))
+        })
+}
+
+fn select_json_items(
+    json_text: &str,
+    items: &serde_json::Map<String, Value>,
+) -> Result<Vec<InventoryItem>, SourceExecutionError> {
+    let root = serde_json::from_str::<Value>(json_text).map_err(|error| {
+        SourceExecutionError::Failed(format!("could not parse inventory JSON: {error}"))
+    })?;
+    let select = required_object_value(items, "select", "definition.inventory.items.select")?;
+    let json_path = required_string(
+        select,
+        "jsonPath",
+        "definition.inventory.items.select.jsonPath",
+    )?;
+    let selected = resolve_simple_json_path(
+        &root,
+        json_path,
+        "definition.inventory.items.select.jsonPath",
+    )?
+    .ok_or_else(|| {
+        SourceExecutionError::Failed(format!(
+            "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but no value was found"
+        ))
+    })?;
+    let array = selected.as_array().ok_or_else(|| {
+        SourceExecutionError::Failed(format!(
+            "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but resolved to {}",
+            json_type_label(selected)
+        ))
+    })?;
+
+    Ok(array.iter().cloned().map(InventoryItem::Json).collect())
 }
 
 fn parse_xml_text_values(xml: &str, element_name: &str) -> Result<Vec<String>, String> {
@@ -243,6 +321,66 @@ fn parse_xml_text_values(xml: &str, element_name: &str) -> Result<Vec<String>, S
     }
 
     Ok(values)
+}
+
+fn resolve_simple_json_path<'a>(
+    root: &'a Value,
+    json_path: &str,
+    path: &str,
+) -> Result<Option<&'a Value>, SourceExecutionError> {
+    let segments = parse_simple_json_path(json_path, path)?;
+    let mut current = root;
+    for segment in segments {
+        let Some(next) = current.get(segment) else {
+            return Ok(None);
+        };
+        current = next;
+    }
+    Ok(Some(current))
+}
+
+fn parse_simple_json_path<'a>(
+    json_path: &'a str,
+    path: &str,
+) -> Result<Vec<&'a str>, SourceExecutionError> {
+    let json_path = json_path.trim();
+    if json_path == "$" {
+        return Ok(Vec::new());
+    }
+    let Some(rest) = json_path.strip_prefix("$.") else {
+        return Err(simple_json_path_error(path, json_path));
+    };
+
+    let mut segments = Vec::new();
+    for segment in rest.split('.') {
+        if segment.is_empty()
+            || !segment
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(simple_json_path_error(path, json_path));
+        }
+        segments.push(segment);
+    }
+
+    Ok(segments)
+}
+
+fn simple_json_path_error(path: &str, json_path: &str) -> SourceExecutionError {
+    SourceExecutionError::Failed(format!(
+        "{path} `{json_path}` is not supported; use simple dot JSONPath only, for example $.jobs or $.title (filters and wildcards are not supported)"
+    ))
+}
+
+fn json_type_label(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
 }
 
 fn compile_regex_list(
@@ -348,20 +486,47 @@ fn render_field_expression(
         });
     }
 
-    if object.contains_key("jsonPath") {
-        return Err(SourceExecutionError::Failed(format!(
-            "{path}.jsonPath is not supported by this executor slice"
-        )));
+    if let Some(json_path) = object.get("jsonPath") {
+        let json_path = json_path.as_str().ok_or_else(|| {
+            SourceExecutionError::Failed(format!("{path}.jsonPath must be a non-empty string"))
+        })?;
+        if json_path.trim().is_empty() {
+            return Err(SourceExecutionError::Failed(format!(
+                "{path}.jsonPath must be a non-empty string"
+            )));
+        }
+        let item = context.item.and_then(InventoryItem::json).ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "{path}.jsonPath is only available for JSON inventory items"
+            ))
+        })?;
+        let value = resolve_simple_json_path(item, json_path, &format!("{path}.jsonPath"))?;
+        return json_field_value_to_string(value, path);
     }
 
     Err(SourceExecutionError::Failed(format!(
-        "{path} must contain a template expression"
+        "{path} must contain a template or jsonPath expression"
     )))
+}
+
+fn json_field_value_to_string(
+    value: Option<&Value>,
+    path: &str,
+) -> Result<String, SourceExecutionError> {
+    match value {
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(Value::String(value)) => Ok(value.clone()),
+        Some(Value::Bool(value)) => Ok(value.to_string()),
+        Some(Value::Number(value)) => Ok(value.to_string()),
+        Some(Value::Array(_) | Value::Object(_)) => Err(SourceExecutionError::Failed(format!(
+            "{path}.jsonPath must resolve to a string, number, boolean, or null"
+        ))),
+    }
 }
 
 struct InventoryTemplateContext<'a> {
     source: &'a Source,
-    item_text: Option<&'a str>,
+    item: Option<&'a InventoryItem>,
     captures: &'a HashMap<String, String>,
 }
 
@@ -424,7 +589,8 @@ fn resolve_template_variable(
         Ok(context.source.key.clone())
     } else if variable == "itemText" {
         context
-            .item_text
+            .item
+            .and_then(InventoryItem::text)
             .map(str::to_string)
             .ok_or_else(|| "itemText is not available in this template context".to_string())
     } else if let Some(config_key) = variable.strip_prefix("sourceConfig:") {
@@ -807,6 +973,150 @@ mod tests {
     }
 
     #[test]
+    fn ashby_json_inventory_source_runs_through_search_run_with_system_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let source_id = create_builtin_ashby_source(&pool).await;
+            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
+                Ok(r#"{
+                  "jobs": [
+                    {
+                      "title": "Photonics Engineer",
+                      "jobUrl": "https://jobs.ashbyhq.com/focused/abc",
+                      "location": "Darmstadt"
+                    }
+                  ]
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 1);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Photonics Engineer");
+            assert_eq!(posting.company, "Focused Energy Karriere");
+            assert_eq!(posting.url, "https://jobs.ashbyhq.com/focused/abc");
+            assert_eq!(posting.locations, vec!["Darmstadt"]);
+            assert_eq!(posting.sources[0].source_key, "focused_energy_careers");
+            assert_eq!(posting.sources[0].source_name, "Focused Energy Karriere");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"]
+            );
+        });
+    }
+
+    #[test]
+    fn json_inventory_reports_profile_author_error_when_items_path_is_not_array() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let source_id = create_inventory_source(
+                &pool,
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json_jobs_inventory("{{sourceConfig:startUrl}}"),
+                json!({ "startUrl": "https://example.com/jobs.json" }),
+                "Focused Energy Karriere",
+            )
+            .await;
+            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.com/jobs.json",
+                Ok(r#"{
+                  "jobs": {
+                    "title": "Photonics Engineer",
+                    "jobUrl": "https://jobs.ashbyhq.com/focused/abc",
+                    "location": "Darmstadt"
+                  }
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            assert!(result.postings.is_empty());
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            assert_eq!(result.source_runs[0].candidate_count, 0);
+            assert_eq!(result.source_runs[0].matched_count, 0);
+            let error = result.source_runs[0].error.as_deref().unwrap();
+            assert!(error.contains(
+                "definition.inventory.items.select.jsonPath `$.jobs` must resolve to an array"
+            ));
+            assert!(error.contains("resolved to object"));
+        });
+    }
+
+    #[test]
+    fn json_inventory_rejects_wildcards_to_document_simple_dot_jsonpath_scope() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let mut inventory = json_jobs_inventory("{{sourceConfig:startUrl}}");
+            inventory["items"]["select"]["jsonPath"] = json!("$.jobs[*]");
+            let source_id = create_inventory_source(
+                &pool,
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                inventory,
+                json!({ "startUrl": "https://example.com/jobs.json" }),
+                "Focused Energy Karriere",
+            )
+            .await;
+            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.com/jobs.json",
+                Ok(r#"{ "jobs": [] }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            let error = result.source_runs[0].error.as_deref().unwrap();
+            assert!(error.contains(
+                "definition.inventory.items.select.jsonPath `$.jobs[*]` is not supported"
+            ));
+            assert!(error.contains("simple dot JSONPath only"));
+            assert!(error.contains("filters and wildcards are not supported"));
+        });
+    }
+
+    #[test]
     fn xml_inventory_fetch_errors_become_source_run_errors() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -912,6 +1222,44 @@ mod tests {
         })
     }
 
+    fn json_jobs_inventory(fetch_url_template: &str) -> Value {
+        json!({
+            "fetch": { "url": fetch_url_template },
+            "parse": { "as": "json" },
+            "items": {
+                "select": { "jsonPath": "$.jobs" }
+            },
+            "fields": {
+                "title": { "jsonPath": "$.title" },
+                "url": { "jsonPath": "$.jobUrl" },
+                "company": { "template": "{{sourceName}}" },
+                "locations": [
+                    { "jsonPath": "$.location" }
+                ]
+            }
+        })
+    }
+
+    fn inventory_source_config_schema(adapter_key: &str) -> Value {
+        if adapter_key == DECLARATIVE_HTTP_ADAPTER_KEY {
+            json!({
+                "type": "object",
+                "required": ["startUrl"],
+                "properties": {
+                    "startUrl": { "type": "string", "format": "uri" }
+                }
+            })
+        } else {
+            json!({
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": { "type": "string", "format": "uri" }
+                }
+            })
+        }
+    }
+
     async fn create_inventory_source(
         pool: &SqlitePool,
         adapter_key: &str,
@@ -931,13 +1279,7 @@ mod tests {
                     "detect": { "required": [{ "htmlContains": "fixture" }] },
                     "inventory": inventory
                 }),
-                source_config_schema: json!({
-                    "type": "object",
-                    "required": ["url"],
-                    "properties": {
-                        "url": { "type": "string", "format": "uri" }
-                    }
-                }),
+                source_config_schema: inventory_source_config_schema(adapter_key),
                 status: SourceStatus::Active,
                 validation_error: None,
             },
@@ -1003,6 +1345,53 @@ mod tests {
                 source_config: json!({
                     "url": "https://join.schott.com/sitemap.xml",
                     "recursive": false
+                }),
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn create_builtin_ashby_source(pool: &SqlitePool) -> i64 {
+        let document: Value =
+            serde_json::from_str(include_str!("../../system-profiles/builtin/ashby.json")).unwrap();
+        assert!(
+            document.pointer("/definition/inventory").is_some(),
+            "Ashby built-in profile must define definition.inventory"
+        );
+
+        let profile = create_system_profile(
+            pool,
+            CreateSystemProfileInput {
+                key: document["key"].as_str().unwrap().to_string(),
+                name: document["name"].as_str().unwrap().to_string(),
+                description: document["description"].as_str().map(str::to_string),
+                adapter_key: document["adapterKey"].as_str().unwrap().to_string(),
+                definition_schema_version: document["definitionSchemaVersion"].as_i64().unwrap(),
+                definition: document["definition"].clone(),
+                source_config_schema: document["sourceConfigSchema"].clone(),
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        create_source(
+            pool,
+            CreateSourceInput {
+                key: "focused_energy_careers".to_string(),
+                adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
+                system_profile_id: Some(profile.id),
+                browser_profile_id: None,
+                name: "Focused Energy Karriere".to_string(),
+                description: None,
+                source_config: json!({
+                    "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
+                    "companyWebsite": "https://focused-energy.co"
                 }),
                 status: SourceStatus::Active,
                 validation_error: None,
