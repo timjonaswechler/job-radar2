@@ -12,7 +12,6 @@ mod search_run_smoke;
 mod simple_json_path;
 mod source_detection;
 mod source_model;
-mod stepstone_source_executor;
 
 pub use search_run_smoke::run_dev_search_run_smoke_cli;
 

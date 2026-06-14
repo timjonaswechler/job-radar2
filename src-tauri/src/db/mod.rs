@@ -26,7 +26,7 @@ pub async fn connect_and_migrate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::seed::parse_system_profile_seed;
+    use crate::db::seed::{parse_browser_profile_seed, parse_system_profile_seed};
     use std::fs;
 
     #[test]
@@ -54,6 +54,20 @@ mod tests {
                 "phenom"
             ]
         );
+    }
+
+    #[test]
+    fn bundled_builtin_browser_profiles_are_valid_seed_files() {
+        let keys = crate::db::seed::BUILTIN_BROWSER_PROFILE_JSON_FILES
+            .iter()
+            .map(|(source_label, contents)| {
+                parse_browser_profile_seed(contents, source_label)
+                    .expect("built-in browser profile must parse")
+                    .key
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(keys, vec!["stepstone_de_browser_profile"]);
     }
 
     #[test]

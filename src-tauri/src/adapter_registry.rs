@@ -52,7 +52,6 @@ pub fn list_adapters() -> Vec<AdapterMetadata> {
         declarative_endpoint_inventory(),
         declarative_sitemap_inventory(),
         declarative_browser_inventory(),
-        stepstone_search(),
         indeed_search(),
     ]
 }
@@ -149,46 +148,6 @@ fn declarative_browser_inventory() -> AdapterMetadata {
     }
 }
 
-fn stepstone_search() -> AdapterMetadata {
-    AdapterMetadata {
-        key: "stepstone_search".to_string(),
-        name: "StepStone Suche".to_string(),
-        description: "Eingebauter Übergangsadapter für StepStone-Suchläufe; Browserprofil steuert runtime-relevante Policy, bis die Quelle hinter deklaratives Browser-Inventar migriert wird.".to_string(),
-        category: AdapterCategory::JobBoard,
-        execution_mode: AdapterExecutionMode::QueryParameterized,
-        requires_system_profile: false,
-        requires_browser_profile: true,
-        supports_manual_release: true,
-        auth_mode: AdapterAuthMode::ManualCookie,
-        risk_level: AdapterRiskLevel::Fragile,
-        source_config_schema: json!({
-            "type": "object",
-            "properties": {
-                "baseUrl": {
-                    "type": "string",
-                    "format": "uri",
-                    "title": "Basis-URL überschreiben",
-                    "description": "Optional. Standard: https://www.stepstone.de",
-                    "default": "https://www.stepstone.de"
-                },
-                "manualReleaseStartUrl": {
-                    "type": "string",
-                    "format": "uri",
-                    "title": "Start-URL für manuelle Freigabe überschreiben",
-                    "description": "Optional. Standard: https://www.stepstone.de/",
-                    "default": "https://www.stepstone.de/"
-                },
-                "maxPages": {
-                    "type": "number",
-                    "minimum": 1,
-                    "default": 1,
-                    "title": "Maximale Seiten pro Suchlauf"
-                }
-            }
-        }),
-    }
-}
-
 fn indeed_search() -> AdapterMetadata {
     AdapterMetadata {
         key: "indeed_search".to_string(),
@@ -247,7 +206,6 @@ mod tests {
                 "declarative_endpoint_inventory",
                 "declarative_sitemap_inventory",
                 "declarative_browser_inventory",
-                "stepstone_search",
                 "indeed_search"
             ]
         );
@@ -291,10 +249,6 @@ mod tests {
             browser_inventory.source_config_schema,
             json!({ "type": "object" })
         );
-
-        let stepstone = get_adapter("stepstone_search").unwrap();
-        assert!(!stepstone.requires_system_profile);
-        assert!(stepstone.requires_browser_profile);
     }
 
     #[test]

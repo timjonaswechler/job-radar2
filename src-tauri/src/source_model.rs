@@ -1951,7 +1951,7 @@ mod tests {
                 r#"{
                   "key": "invalid_profile",
                   "name": "Invalid Profile",
-                  "adapterKey": "stepstone_search",
+                  "adapterKey": "indeed_search",
                   "definitionSchemaVersion": 1,
                   "definition": {},
                   "sourceConfigSchema": { "type": "object" },
@@ -1961,9 +1961,7 @@ mod tests {
             .await
             .unwrap_err();
 
-            assert!(
-                invalid.contains("adapterKey stepstone_search cannot be used by system profiles")
-            );
+            assert!(invalid.contains("adapterKey indeed_search cannot be used by system profiles"));
             assert!(get_system_profile_by_key(&pool, "invalid_profile")
                 .await
                 .is_err());
@@ -2568,7 +2566,7 @@ mod tests {
     }
 
     #[test]
-    fn job_board_adapters_stay_separate_from_system_profiles() {
+    fn indeed_job_board_adapter_stays_separate_from_system_profiles() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
             let browser_profile = create_browser_profile(
@@ -2594,11 +2592,11 @@ mod tests {
             let source = create_source(
                 &pool,
                 CreateSourceInput {
-                    key: "stepstone_de".to_string(),
-                    adapter_key: "stepstone_search".to_string(),
+                    key: "indeed_de".to_string(),
+                    adapter_key: "indeed_search".to_string(),
                     system_profile_id: None,
                     browser_profile_id: Some(browser_profile.id),
-                    name: "StepStone Deutschland".to_string(),
+                    name: "Indeed Deutschland".to_string(),
                     description: None,
                     source_config: json!({}),
                     status: SourceStatus::Active,
@@ -2614,8 +2612,8 @@ mod tests {
             let disallowed_profile = create_source(
                 &pool,
                 CreateSourceInput {
-                    key: "stepstone_with_system".to_string(),
-                    adapter_key: "stepstone_search".to_string(),
+                    key: "indeed_with_system".to_string(),
+                    adapter_key: "indeed_search".to_string(),
                     system_profile_id: Some(1),
                     browser_profile_id: Some(browser_profile.id),
                     name: "Invalid".to_string(),
