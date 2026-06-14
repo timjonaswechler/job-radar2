@@ -634,6 +634,15 @@ mod tests {
                 .expect("missing built-in StepStone source");
             assert_eq!(stepstone.adapter_key, "stepstone_search");
             assert!(stepstone.browser_profile_id.is_some());
+            let stepstone_browser_profile = browser_profiles
+                .iter()
+                .find(|profile| Some(profile.id) == stepstone.browser_profile_id)
+                .expect("StepStone source should reference a seeded Browserprofil");
+            assert_eq!(stepstone_browser_profile.key, "stepstone_browser_profile");
+            assert_eq!(
+                stepstone_browser_profile.definition["kind"],
+                serde_json::json!("queryParameterizedBrowserInventory")
+            );
             assert!(stepstone.built_in);
             assert_eq!(stepstone.source_config, serde_json::json!({}));
 

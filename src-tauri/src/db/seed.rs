@@ -66,6 +66,27 @@ pub const BUILTIN_SYSTEM_PROFILE_JSON_FILES: &[(&str, &str)] = &[
 
 pub type SeedResult<T> = Result<T, Box<dyn Error>>;
 
+const STEPSTONE_BROWSER_PROFILE_DEFINITION_JSON: &str = r#"{
+  "kind": "queryParameterizedBrowserInventory",
+  "browser": {
+    "render": true,
+    "httpFallback": true,
+    "waitFor": {
+      "timeoutMs": 15000
+    }
+  },
+  "query": {
+    "baseUrlSourceConfigKey": "baseUrl",
+    "defaultBaseUrl": "https://www.stepstone.de",
+    "path": "/jobs",
+    "params": {
+      "searchText": "what",
+      "location": "where",
+      "radiusKm": "radius"
+    }
+  }
+}"#;
+
 pub async fn seed_database(pool: &SqlitePool, custom_system_profiles_dir: &Path) -> SeedResult<()> {
     sqlx::query(
         "INSERT OR IGNORE INTO app_metadata (key, value)
@@ -123,44 +144,36 @@ fn seed_error(message: impl Into<String>) -> Box<dyn Error> {
 }
 
 async fn seed_builtin_job_portal_sources(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT OR IGNORE INTO browser_profiles (
-           key, name, description, definition_schema_version,
-           definition_json, source_config_schema_json, status
-         )
-         VALUES (
-           'job_portal_manual_release',
-           'Job-Portal Browserfreigabe',
-           'Eingebautes Browserprofil für nutzerassistierte StepStone- und Indeed-Suchläufe.',
-           1,
-           '{}',
-           '{}',
-           'active'
-         )",
-    )
-    .execute(pool)
-    .await?;
-
-    let browser_profile_id = sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM browser_profiles WHERE key = 'job_portal_manual_release'",
-    )
-    .fetch_one(pool)
-    .await?;
-
-    seed_builtin_source(
+    let manual_release_browser_profile_id = insert_builtin_browser_profile_if_missing(
         pool,
-        "stepstone_de",
-        "stepstone_search",
-        browser_profile_id,
-        "StepStone Deutschland",
-        "Eingebautes Job-Portal. URL-Muster und Such-Templates sind im Adapter fest hinterlegt.",
+        "job_portal_manual_release",
+        "Job-Portal Browserfreigabe",
+        "Eingebautes Browserprofil für nutzerassistierte StepStone- und Indeed-Suchläufe.",
+        "{}",
+        "{}",
     )
     .await?;
-    seed_builtin_source(
+    let stepstone_browser_profile_id = upsert_builtin_browser_profile(
+        pool,
+        "stepstone_browser_profile",
+        "StepStone Browserprofil",
+        "Eingebautes Browserprofil für den aktuellen StepStone-Suchlauf über stepstone_search.",
+        STEPSTONE_BROWSER_PROFILE_DEFINITION_JSON,
+        "{}",
+    )
+    .await?;
+
+    seed_stepstone_builtin_source(
+        pool,
+        stepstone_browser_profile_id,
+        "Eingebautes Job-Portal. Browserprofil steuert URL- und Fallback-Policy; Parser bleibt im StepStone-Adapter.",
+    )
+    .await?;
+    insert_builtin_source_if_missing(
         pool,
         "indeed_de",
         "indeed_search",
-        browser_profile_id,
+        manual_release_browser_profile_id,
         "Indeed Deutschland",
         "Eingebautes Job-Portal. URL-Muster und Such-Templates sind im Adapter fest hinterlegt.",
     )
@@ -291,7 +304,107 @@ fn validate_technical_key(field: &str, value: &str, source_label: &str) -> SeedR
     Ok(())
 }
 
-async fn seed_builtin_source(
+async fn insert_builtin_browser_profile_if_missing(
+    pool: &SqlitePool,
+    key: &str,
+    name: &str,
+    description: &str,
+    definition_json: &str,
+    source_config_schema_json: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO browser_profiles (
+           key, name, description, definition_schema_version,
+           definition_json, source_config_schema_json, status
+         )
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, 'active')",
+    )
+    .bind(key)
+    .bind(name)
+    .bind(description)
+    .bind(definition_json)
+    .bind(source_config_schema_json)
+    .execute(pool)
+    .await?;
+
+    browser_profile_id_by_key(pool, key).await
+}
+
+async fn upsert_builtin_browser_profile(
+    pool: &SqlitePool,
+    key: &str,
+    name: &str,
+    description: &str,
+    definition_json: &str,
+    source_config_schema_json: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO browser_profiles (
+           key, name, description, definition_schema_version,
+           definition_json, source_config_schema_json, status, validation_error
+         )
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, 'active', NULL)
+         ON CONFLICT(key) DO UPDATE SET
+           name = excluded.name,
+           description = excluded.description,
+           definition_schema_version = excluded.definition_schema_version,
+           definition_json = excluded.definition_json,
+           source_config_schema_json = excluded.source_config_schema_json,
+           status = excluded.status,
+           validation_error = excluded.validation_error,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+    )
+    .bind(key)
+    .bind(name)
+    .bind(description)
+    .bind(definition_json)
+    .bind(source_config_schema_json)
+    .execute(pool)
+    .await?;
+
+    browser_profile_id_by_key(pool, key).await
+}
+
+async fn browser_profile_id_by_key(pool: &SqlitePool, key: &str) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>("SELECT id FROM browser_profiles WHERE key = ?1")
+        .bind(key)
+        .fetch_one(pool)
+        .await
+}
+
+async fn seed_stepstone_builtin_source(
+    pool: &SqlitePool,
+    browser_profile_id: i64,
+    description: &str,
+) -> Result<(), sqlx::Error> {
+    insert_builtin_source_if_missing(
+        pool,
+        "stepstone_de",
+        "stepstone_search",
+        browser_profile_id,
+        "StepStone Deutschland",
+        description,
+    )
+    .await?;
+
+    sqlx::query(
+        "UPDATE sources
+         SET adapter_key = 'stepstone_search',
+             system_profile_id = NULL,
+             browser_profile_id = ?1,
+             description = ?2,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE key = 'stepstone_de'",
+    )
+    .bind(browser_profile_id)
+    .bind(description)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn insert_builtin_source_if_missing(
     pool: &SqlitePool,
     key: &str,
     adapter_key: &str,

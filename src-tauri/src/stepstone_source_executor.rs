@@ -11,11 +11,10 @@ use crate::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor,
     },
-    source_model::Source,
+    source_model::{BrowserProfile, Source, SourceStatus},
 };
 
 const ADAPTER_KEY: &str = "stepstone_search";
-const DEFAULT_BASE_URL: &str = "https://www.stepstone.de";
 
 pub(crate) struct StepstoneSearchExecutor<
     B = ManagedStepstoneBrowserClient,
@@ -50,8 +49,14 @@ where
 {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            let _browser_profile = input.browser_profile;
-            self.execute_source(input.search_request, input.source)
+            let browser_profile = input.browser_profile.ok_or_else(|| {
+                SourceExecutionError::Failed(format!(
+                    "adapterKey {ADAPTER_KEY} requires an active Browserprofil for source {}",
+                    input.source.key
+                ))
+            })?;
+
+            self.execute_source(input.search_request, input.source, browser_profile)
                 .await
         })
     }
@@ -66,6 +71,7 @@ where
         &self,
         search_request: &SearchRequest,
         source: &Source,
+        browser_profile: &BrowserProfile,
     ) -> Result<Vec<SourceCandidate>, SourceExecutionError> {
         if source.adapter_key != ADAPTER_KEY {
             return Err(SourceExecutionError::Failed(format!(
@@ -74,8 +80,8 @@ where
             )));
         }
 
-        let config = stepstone_source_config(source)?;
-        let search_url = build_stepstone_search_url(search_request, &config)?;
+        let policy = stepstone_runtime_policy(source, browser_profile)?;
+        let search_url = build_stepstone_search_url(search_request, &policy)?;
 
         match self.browser.render_html(search_url.clone()).await {
             Ok(rendered_html) => parse_stepstone_candidates(&rendered_html, &search_url).map_err(
@@ -86,53 +92,252 @@ where
                     ))
                 },
             ),
-            Err(browser_error) => match self.http.get_text(search_url.clone()).await {
-                Ok(html) => parse_stepstone_candidates(&html, &search_url).map_err(|error| {
-                    SourceExecutionError::Failed(format!(
-                        "stepstone parse error after HTTP fallback for {}: {error}; browser attempt: {browser_error}",
+            Err(browser_error) if policy.http_fallback => {
+                match self.http.get_text(search_url.clone()).await {
+                    Ok(html) => parse_stepstone_candidates(&html, &search_url).map_err(|error| {
+                        SourceExecutionError::Failed(format!(
+                            "stepstone parse error after HTTP fallback for {}: {error}; browser attempt: {browser_error}",
+                            search_url.as_str()
+                        ))
+                    }),
+                    Err(http_error) => Err(SourceExecutionError::Failed(format!(
+                        "stepstone browser attempt failed for {}: {browser_error}; HTTP fallback failed: {http_error}",
                         search_url.as_str()
-                    ))
-                }),
-                Err(http_error) => Err(SourceExecutionError::Failed(format!(
-                    "stepstone browser attempt failed for {}: {browser_error}; HTTP fallback failed: {http_error}",
-                    search_url.as_str()
-                ))),
-            },
+                    ))),
+                }
+            }
+            Err(browser_error) => Err(SourceExecutionError::Failed(format!(
+                "stepstone browser attempt failed for {}: {browser_error}; HTTP fallback is disabled by Browserprofil {}",
+                search_url.as_str(), browser_profile.key
+            ))),
         }
     }
 }
 
+#[derive(Debug)]
+struct StepstoneRuntimePolicy {
+    base_url: Url,
+    path: String,
+    search_text_param: String,
+    location_param: String,
+    radius_km_param: String,
+    http_fallback: bool,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct StepstoneSourceConfig {
-    #[serde(default = "default_base_url")]
-    base_url: String,
-    #[allow(dead_code)]
-    manual_release_start_url: Option<String>,
-    #[allow(dead_code)]
-    max_pages: Option<usize>,
+struct StepstoneBrowserProfileDefinition {
+    kind: String,
+    browser: StepstoneBrowserPolicy,
+    query: StepstoneQueryPolicy,
 }
 
-fn default_base_url() -> String {
-    DEFAULT_BASE_URL.to_string()
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StepstoneBrowserPolicy {
+    render: bool,
+    http_fallback: bool,
+    #[allow(dead_code)]
+    wait_for: Option<StepstoneWaitForPolicy>,
 }
 
-fn stepstone_source_config(source: &Source) -> Result<StepstoneSourceConfig, SourceExecutionError> {
-    serde_json::from_value(source.source_config.clone()).map_err(|error| {
-        SourceExecutionError::Failed(format!(
-            "sourceConfig is invalid for {ADAPTER_KEY}: {error}"
-        ))
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StepstoneWaitForPolicy {
+    #[allow(dead_code)]
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StepstoneQueryPolicy {
+    base_url_source_config_key: String,
+    default_base_url: String,
+    path: String,
+    params: StepstoneQueryParamsPolicy,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StepstoneQueryParamsPolicy {
+    search_text: String,
+    location: String,
+    radius_km: String,
+}
+
+fn stepstone_runtime_policy(
+    source: &Source,
+    browser_profile: &BrowserProfile,
+) -> Result<StepstoneRuntimePolicy, SourceExecutionError> {
+    if browser_profile.status != SourceStatus::Active {
+        return Err(SourceExecutionError::Failed(format!(
+            "adapterKey {ADAPTER_KEY} requires an active Browserprofil for source {}, but Browserprofil {} has status {}",
+            source.key,
+            browser_profile.key,
+            source_status_label(browser_profile.status)
+        )));
+    }
+
+    let definition_object = browser_profile.definition.as_object().ok_or_else(|| {
+        invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            "definition must be a JSON object",
+        )
+    })?;
+    if definition_object.is_empty() {
+        return Err(invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            "definition must not be empty",
+        ));
+    }
+
+    let definition = serde_json::from_value::<StepstoneBrowserProfileDefinition>(
+        browser_profile.definition.clone(),
+    )
+    .map_err(|error| {
+        invalid_stepstone_browser_profile_definition(browser_profile, &error.to_string())
+    })?;
+
+    if definition.kind != "queryParameterizedBrowserInventory" {
+        return Err(invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            "definition.kind must be queryParameterizedBrowserInventory",
+        ));
+    }
+    if !definition.browser.render {
+        return Err(invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            "definition.browser.render must be true for stepstone_search",
+        ));
+    }
+
+    let base_url_config_key = required_policy_text(
+        browser_profile,
+        &definition.query.base_url_source_config_key,
+        "definition.query.baseUrlSourceConfigKey",
+    )?;
+    let default_base_url = required_policy_text(
+        browser_profile,
+        &definition.query.default_base_url,
+        "definition.query.defaultBaseUrl",
+    )?;
+    let path = required_policy_text(
+        browser_profile,
+        &definition.query.path,
+        "definition.query.path",
+    )?;
+    if !path.starts_with('/') || path.starts_with("//") || path.contains('\\') {
+        return Err(invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            "definition.query.path must be an absolute path starting with one / and without a URL authority or backslashes",
+        ));
+    }
+
+    let search_text_param = required_policy_text(
+        browser_profile,
+        &definition.query.params.search_text,
+        "definition.query.params.searchText",
+    )?;
+    let location_param = required_policy_text(
+        browser_profile,
+        &definition.query.params.location,
+        "definition.query.params.location",
+    )?;
+    let radius_km_param = required_policy_text(
+        browser_profile,
+        &definition.query.params.radius_km,
+        "definition.query.params.radiusKm",
+    )?;
+
+    let (base_url_value, base_url_field) =
+        stepstone_base_url_from_source_or_profile(source, &base_url_config_key, &default_base_url)?;
+    let base_url = parse_http_url(&base_url_value, &base_url_field)?;
+
+    Ok(StepstoneRuntimePolicy {
+        base_url,
+        path,
+        search_text_param,
+        location_param,
+        radius_km_param,
+        http_fallback: definition.browser.http_fallback,
     })
+}
+
+fn stepstone_base_url_from_source_or_profile(
+    source: &Source,
+    source_config_key: &str,
+    default_base_url: &str,
+) -> Result<(String, String), SourceExecutionError> {
+    let source_config = source.source_config.as_object().ok_or_else(|| {
+        SourceExecutionError::Failed(
+            "sourceConfig is invalid for stepstone_search: expected a JSON object".to_string(),
+        )
+    })?;
+    let source_config_field = format!("sourceConfig.{source_config_key}");
+
+    match source_config.get(source_config_key) {
+        Some(Value::String(base_url)) => {
+            let base_url = base_url.trim();
+            if base_url.is_empty() {
+                Err(SourceExecutionError::Failed(format!(
+                    "{source_config_field} must not be empty"
+                )))
+            } else {
+                Ok((base_url.to_string(), source_config_field))
+            }
+        }
+        Some(Value::Null) | None => Ok((
+            default_base_url.to_string(),
+            "Browserprofil definition.query.defaultBaseUrl".to_string(),
+        )),
+        Some(_) => Err(SourceExecutionError::Failed(format!(
+            "{source_config_field} must be a string"
+        ))),
+    }
+}
+
+fn required_policy_text(
+    browser_profile: &BrowserProfile,
+    value: &str,
+    field: &str,
+) -> Result<String, SourceExecutionError> {
+    let value = value.trim();
+    if value.is_empty() {
+        Err(invalid_stepstone_browser_profile_definition(
+            browser_profile,
+            &format!("{field} must not be empty"),
+        ))
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn invalid_stepstone_browser_profile_definition(
+    browser_profile: &BrowserProfile,
+    message: &str,
+) -> SourceExecutionError {
+    SourceExecutionError::Failed(format!(
+        "Browserprofil {} definition is invalid for adapterKey {ADAPTER_KEY}: {message}",
+        browser_profile.key
+    ))
+}
+
+fn source_status_label(status: SourceStatus) -> &'static str {
+    match status {
+        SourceStatus::Draft => "draft",
+        SourceStatus::Active => "active",
+        SourceStatus::Disabled => "disabled",
+        SourceStatus::Invalid => "invalid",
+    }
 }
 
 fn build_stepstone_search_url(
     search_request: &SearchRequest,
-    config: &StepstoneSourceConfig,
+    policy: &StepstoneRuntimePolicy,
 ) -> Result<Url, SourceExecutionError> {
-    let base_url = parse_http_url(&config.base_url, "sourceConfig.baseUrl")?;
-    let mut url = base_url.join("/jobs").map_err(|error| {
+    let mut url = policy.base_url.join(&policy.path).map_err(|error| {
         SourceExecutionError::Failed(format!(
-            "sourceConfig.baseUrl could not be used to build StepStone jobs URL: {error}"
+            "Browserprofil definition.query.path could not be used to build StepStone jobs URL: {error}"
         ))
     })?;
 
@@ -149,13 +354,13 @@ fn build_stepstone_search_url(
     {
         let mut query = url.query_pairs_mut();
         if !query_text.is_empty() {
-            query.append_pair("what", &query_text);
+            query.append_pair(&policy.search_text_param, &query_text);
         }
         if let Some(location) = first_location.as_deref() {
-            query.append_pair("where", location);
+            query.append_pair(&policy.location_param, location);
         }
         if let Some(radius_km) = radius_km.as_deref() {
-            query.append_pair("radius", radius_km);
+            query.append_pair(&policy.radius_km_param, radius_km);
         }
     }
 
@@ -1177,8 +1382,8 @@ mod tests {
         },
         search_run_model::{SearchRunService, SearchRunStatus, SourceRunStatus},
         source_model::{
-            create_browser_profile, create_source, CreateBrowserProfileInput, CreateSourceInput,
-            SourceStatus,
+            create_browser_profile, create_source, update_browser_profile, BrowserProfile,
+            CreateBrowserProfileInput, CreateSourceInput, SourceStatus, UpdateBrowserProfileInput,
         },
     };
     use serde_json::{json, Value};
@@ -1265,6 +1470,328 @@ mod tests {
     }
 
     #[test]
+    fn adapter_requires_active_browser_profile() {
+        tauri::async_runtime::block_on(async {
+            let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                    browser_profile: None,
+                })
+                .await
+                .expect_err("stepstone_search should require Browserprofil at runtime");
+
+            assert_eq!(
+                error,
+                SourceExecutionError::Failed(
+                    "adapterKey stepstone_search requires an active Browserprofil for source stepstone_de"
+                        .to_string()
+                )
+            );
+            assert!(executor.browser.requested_urls().is_empty());
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn missing_stepstone_browser_profile_marks_quellenlauf_failed() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let insert_result = sqlx::query(
+                "INSERT INTO sources (
+                   key, adapter_key, system_profile_id, browser_profile_id, name, description,
+                   source_config_json, status
+                 )
+                 VALUES (
+                   'stepstone_without_profile', 'stepstone_search', NULL, NULL,
+                   'StepStone without Browserprofil', NULL, '{}', 'active'
+                 )",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let source_id = insert_result.last_insert_rowid();
+            let running_search_runs = RunningSearchRuns::default();
+            let search_request = SearchRequestService::new(&pool, &running_search_runs)
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![text_rule("Developer")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_ids: vec![source_id],
+                })
+                .await
+                .unwrap();
+            let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![Ok(html_card_results())]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let temp_dir = tempfile::tempdir().unwrap();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Failed);
+            assert_eq!(
+                result.source_runs[0].source_key,
+                "stepstone_without_profile"
+            );
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            assert_eq!(
+                result.source_runs[0].error.as_deref(),
+                Some(
+                    "adapterKey stepstone_search requires an active Browserprofil for source stepstone_without_profile"
+                )
+            );
+            assert!(executor.browser.requested_urls().is_empty());
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn adapter_rejects_empty_browser_profile_definition_clearly() {
+        tauri::async_runtime::block_on(async {
+            let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile_with_definition(json!({}));
+
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                    browser_profile: Some(&browser_profile),
+                })
+                .await
+                .expect_err("empty StepStone Browserprofil definition should fail clearly");
+
+            assert_eq!(
+                error,
+                SourceExecutionError::Failed(
+                    "Browserprofil stepstone_browser_profile definition is invalid for adapterKey stepstone_search: definition must not be empty"
+                        .to_string()
+                )
+            );
+            assert!(executor.browser.requested_urls().is_empty());
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn adapter_rejects_browser_profile_path_that_can_override_host() {
+        tauri::async_runtime::block_on(async {
+            let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+
+            for invalid_path in ["//other-host.example/jobs", "/\\other-host.example/jobs"] {
+                let browser_profile = stepstone_browser_profile_with_definition(
+                    stepstone_browser_definition_with_query(
+                        "https://www.stepstone.de",
+                        invalid_path,
+                        "what",
+                        "where",
+                        "radius",
+                    ),
+                );
+
+                let error = executor
+                    .execute(SourceExecutionInput {
+                        search_request: &search_request,
+                        source: &source,
+                        system_profile: None,
+                        browser_profile: Some(&browser_profile),
+                    })
+                    .await
+                    .expect_err("Browserprofil path must not override base URL host");
+
+                assert_eq!(
+                    error,
+                    SourceExecutionError::Failed(
+                        "Browserprofil stepstone_browser_profile definition is invalid for adapterKey stepstone_search: definition.query.path must be an absolute path starting with one / and without a URL authority or backslashes"
+                            .to_string()
+                    )
+                );
+            }
+
+            assert!(executor.browser.requested_urls().is_empty());
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn changing_browser_profile_policy_changes_url_without_source_or_request_changes() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let browser_profile_id = create_stepstone_browser_profile(&pool).await;
+            let source = create_stepstone_source_with_key(
+                &pool,
+                browser_profile_id,
+                "stepstone_policy_driven",
+                json!({}),
+            )
+            .await;
+            let running_search_runs = RunningSearchRuns::default();
+            let search_request = SearchRequestService::new(&pool, &running_search_runs)
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![text_rule("Developer")],
+                    exclude_rules: vec![],
+                    locations: vec!["Hamburg".to_string()],
+                    radius_km: Some(20),
+                    source_ids: vec![source.id],
+                })
+                .await
+                .unwrap();
+            let browser =
+                FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html()), Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let result_path = temp_dir.path().join("search-run-result.json");
+
+            SearchRunService::new(&pool, &running_search_runs, &executor, &result_path)
+                .run(search_request.id)
+                .await
+                .unwrap();
+
+            update_browser_profile(
+                &pool,
+                browser_profile_id,
+                UpdateBrowserProfileInput {
+                    name: "Manuelle Freigabe".to_string(),
+                    description: None,
+                    name_i18n_key: None,
+                    description_i18n_key: None,
+                    definition_path: None,
+                    definition_hash: None,
+                    definition_schema_version: 1,
+                    definition: stepstone_browser_definition_with_query(
+                        "https://jobs.example",
+                        "/search",
+                        "keyword",
+                        "place",
+                        "distance",
+                    ),
+                    source_config_schema: json!({}),
+                    status: SourceStatus::Active,
+                    validation_error: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            SearchRunService::new(&pool, &running_search_runs, &executor, &result_path)
+                .run(search_request.id)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                executor.browser.requested_urls(),
+                vec![
+                    "https://www.stepstone.de/jobs?what=Developer&where=Hamburg&radius=20"
+                        .to_string(),
+                    "https://jobs.example/search?keyword=Developer&place=Hamburg&distance=20"
+                        .to_string(),
+                ]
+            );
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn adapter_rejects_browser_profile_without_browser_render() {
+        tauri::async_runtime::block_on(async {
+            let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
+            let http = FixtureStepstoneHttpClient::new(vec![Ok(html_card_results())]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile_with_definition(
+                stepstone_browser_definition_without_browser_render(),
+            );
+
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                    browser_profile: Some(&browser_profile),
+                })
+                .await
+                .expect_err("stepstone_search should remain browser-first in this slice");
+
+            assert_eq!(
+                error,
+                SourceExecutionError::Failed(
+                    "Browserprofil stepstone_browser_profile definition is invalid for adapterKey stepstone_search: definition.browser.render must be true for stepstone_search"
+                        .to_string()
+                )
+            );
+            assert!(executor.browser.requested_urls().is_empty());
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
+    fn browser_profile_policy_can_disable_http_fallback() {
+        tauri::async_runtime::block_on(async {
+            let browser = FixtureStepstoneBrowserClient::new(vec![Err(
+                StepstoneFetchError::failed("chromium crashed"),
+            )]);
+            let http = FixtureStepstoneHttpClient::new(vec![Ok(html_card_results())]);
+            let executor = StepstoneSearchExecutor::new(browser, http);
+            let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
+            let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile_with_definition(
+                stepstone_browser_definition_without_http_fallback(),
+            );
+
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                    system_profile: None,
+                    browser_profile: Some(&browser_profile),
+                })
+                .await
+                .expect_err("disabled HTTP fallback should not call HTTP client");
+
+            assert_eq!(
+                error,
+                SourceExecutionError::Failed(
+                    "stepstone browser attempt failed for https://stepstone.example/jobs?what=Developer: chromium crashed; HTTP fallback is disabled by Browserprofil stepstone_browser_profile"
+                        .to_string()
+                )
+            );
+            assert_eq!(
+                executor.browser.requested_urls(),
+                vec!["https://stepstone.example/jobs?what=Developer".to_string()]
+            );
+            assert!(executor.http.requested_urls().is_empty());
+        });
+    }
+
+    #[test]
     fn adapter_builds_url_from_text_location_and_radius_and_uses_browser_first() {
         tauri::async_runtime::block_on(async {
             let browser = FixtureStepstoneBrowserClient::new(vec![Ok(json_ld_html())]);
@@ -1283,13 +1810,14 @@ mod tests {
                 Some(50),
             );
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile();
 
             let candidates = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect("browser fixture should produce candidates");
@@ -1332,13 +1860,14 @@ mod tests {
                 Some(30),
             );
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile();
 
             let candidates = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect("HTTP fallback should produce candidates");
@@ -1365,13 +1894,14 @@ mod tests {
             let search_request =
                 search_request(vec![text_rule("Laser")], vec![], vec!["Mainz"], Some(30));
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile();
 
             let candidates = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect("preloaded search-result items should produce candidates");
@@ -1433,13 +1963,14 @@ mod tests {
             let executor = StepstoneSearchExecutor::new(browser, http);
             let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile();
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect_err("both fetch paths should fail");
@@ -1466,13 +1997,14 @@ mod tests {
             let executor = StepstoneSearchExecutor::new(browser, http);
             let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
             let source = source(json!({ "baseUrl": "https://stepstone.example" }));
+            let browser_profile = stepstone_browser_profile();
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect_err("unparseable browser content should fail explicitly");
@@ -1496,13 +2028,14 @@ mod tests {
             );
             let search_request = search_request(vec![text_rule("Developer")], vec![], vec![], None);
             let source = source(json!({ "baseUrl": "not a url" }));
+            let browser_profile = stepstone_browser_profile();
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
                     system_profile: None,
-                    browser_profile: None,
+                    browser_profile: Some(&browser_profile),
                 })
                 .await
                 .expect_err(
@@ -1800,6 +2333,81 @@ mod tests {
         }
     }
 
+    fn stepstone_browser_profile() -> BrowserProfile {
+        stepstone_browser_profile_with_definition(stepstone_browser_definition())
+    }
+
+    fn stepstone_browser_profile_with_definition(definition: Value) -> BrowserProfile {
+        BrowserProfile {
+            id: 1,
+            key: "stepstone_browser_profile".to_string(),
+            name: "StepStone Browserprofil".to_string(),
+            description: None,
+            name_i18n_key: None,
+            description_i18n_key: None,
+            definition_path: None,
+            definition_hash: None,
+            definition_schema_version: 1,
+            definition,
+            source_config_schema: json!({}),
+            status: SourceStatus::Active,
+            validation_error: None,
+            created_at: "2026-06-13T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-13T00:00:00.000Z".to_string(),
+        }
+    }
+
+    fn stepstone_browser_definition() -> Value {
+        stepstone_browser_definition_with_query(
+            "https://www.stepstone.de",
+            "/jobs",
+            "what",
+            "where",
+            "radius",
+        )
+    }
+
+    fn stepstone_browser_definition_with_query(
+        default_base_url: &str,
+        path: &str,
+        search_text_param: &str,
+        location_param: &str,
+        radius_km_param: &str,
+    ) -> Value {
+        json!({
+            "kind": "queryParameterizedBrowserInventory",
+            "browser": {
+                "render": true,
+                "httpFallback": true,
+                "waitFor": {
+                    "timeoutMs": 15000
+                }
+            },
+            "query": {
+                "baseUrlSourceConfigKey": "baseUrl",
+                "defaultBaseUrl": default_base_url,
+                "path": path,
+                "params": {
+                    "searchText": search_text_param,
+                    "location": location_param,
+                    "radiusKm": radius_km_param
+                }
+            }
+        })
+    }
+
+    fn stepstone_browser_definition_without_http_fallback() -> Value {
+        let mut definition = stepstone_browser_definition();
+        definition["browser"]["httpFallback"] = json!(false);
+        definition
+    }
+
+    fn stepstone_browser_definition_without_browser_render() -> Value {
+        let mut definition = stepstone_browser_definition();
+        definition["browser"]["render"] = json!(false);
+        definition
+    }
+
     fn search_request(
         include_rules: Vec<SearchRuleInput>,
         exclude_rules: Vec<SearchRuleInput>,
@@ -1873,7 +2481,7 @@ mod tests {
                 definition_path: None,
                 definition_hash: None,
                 definition_schema_version: 1,
-                definition: json!({}),
+                definition: stepstone_browser_definition(),
                 source_config_schema: json!({}),
                 status: SourceStatus::Active,
                 validation_error: None,
