@@ -1,6 +1,6 @@
 # System profiles
 
-A system profile is a declarative JSON definition of a recruiting system or career-system family. It is not an adapter. Adapters are technical runtimes such as `declarative_endpoint_inventory`, `declarative_sitemap_inventory`, or `declarative_browser_jobboard`.
+A system profile is a declarative JSON definition of a recruiting system or career-system family. It is not an adapter. System-profile adapters are technical runtimes such as `declarative_endpoint_inventory` and `declarative_sitemap_inventory`; Browserprofil-backed sources use `declarative_browser_inventory` instead of a Systemprofil adapter key.
 
 ## Storage model
 

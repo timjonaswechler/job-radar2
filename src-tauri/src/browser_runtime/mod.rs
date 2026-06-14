@@ -93,6 +93,12 @@ pub struct BrowserRuntimeCheckResult {
     pub message: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserRuntimePageWait {
+    pub selector: String,
+    pub timeout_ms: u64,
+}
+
 pub trait BrowserRuntimeInstallProgressReporter: Send + Sync {
     fn emit(&self, progress: BrowserRuntimeInstallProgress);
 }
@@ -315,6 +321,15 @@ pub async fn render_page_html(
     url: &str,
 ) -> Result<String, String> {
     browser_control::render_page_html(executable_path, runtime_dir, url).await
+}
+
+pub async fn render_page_html_with_wait(
+    executable_path: &Path,
+    runtime_dir: &Path,
+    url: &str,
+    wait_for: Option<&BrowserRuntimePageWait>,
+) -> Result<String, String> {
+    browser_control::render_page_html_with_wait(executable_path, runtime_dir, url, wait_for).await
 }
 
 pub async fn check_runtime(
