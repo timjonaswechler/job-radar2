@@ -2,6 +2,7 @@ mod adapter_registry;
 mod app;
 mod browser_runtime;
 mod db;
+mod declarative_browser_inventory_executor;
 mod declarative_inventory_executor;
 mod declarative_template;
 mod search_request_model;

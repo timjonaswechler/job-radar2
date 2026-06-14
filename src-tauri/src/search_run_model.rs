@@ -62,6 +62,12 @@ impl SourceExecutor for DefaultSourceExecutor {
                         crate::declarative_inventory_executor::DeclarativeInventoryExecutor::new_reqwest();
                     executor.execute(input).await
                 }
+                "declarative_browser_inventory" => {
+                    let executor = crate::declarative_browser_inventory_executor::DeclarativeBrowserInventoryExecutor::new_managed(
+                        self.browser_runtime_dir.clone(),
+                    );
+                    executor.execute(input).await
+                }
                 "stepstone_search" => {
                     let executor =
                         crate::stepstone_source_executor::StepstoneSearchExecutor::new_managed(

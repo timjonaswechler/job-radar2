@@ -2130,6 +2130,7 @@ name = "job-radar"
 version = "0.1.0"
 dependencies = [
  "chromiumoxide",
+ "dom_query",
  "futures-util",
  "quick-xml",
  "regex",

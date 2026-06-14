@@ -51,7 +51,7 @@ pub fn list_adapters() -> Vec<AdapterMetadata> {
     vec![
         declarative_endpoint_inventory(),
         declarative_sitemap_inventory(),
-        declarative_browser_jobboard(),
+        declarative_browser_inventory(),
         stepstone_search(),
         indeed_search(),
     ]
@@ -131,39 +131,20 @@ fn declarative_sitemap_inventory() -> AdapterMetadata {
     }
 }
 
-fn declarative_browser_jobboard() -> AdapterMetadata {
+fn declarative_browser_inventory() -> AdapterMetadata {
     AdapterMetadata {
-        key: "declarative_browser_jobboard".to_string(),
-        name: "Deklaratives Browser-Jobboard".to_string(),
-        description: "Technische Laufzeit für geladene Systemprofile, die gerenderte Webseiten über eine Browser-Laufzeit beschreiben.".to_string(),
+        key: "declarative_browser_inventory".to_string(),
+        name: "Deklaratives Browser-Inventar".to_string(),
+        description: "Technische Laufzeit für Browserprofil-basierte Quellen, die gerenderte Webseiten über eine Browser-Laufzeit als Quellenbestand extrahieren.".to_string(),
         category: AdapterCategory::Browser,
         execution_mode: AdapterExecutionMode::SourceInventory,
-        requires_system_profile: true,
+        requires_system_profile: false,
         requires_browser_profile: true,
         supports_manual_release: true,
         auth_mode: AdapterAuthMode::ManualCookie,
         risk_level: AdapterRiskLevel::Fragile,
         source_config_schema: json!({
-            "type": "object",
-            "required": ["startUrl"],
-            "properties": {
-                "startUrl": {
-                    "type": "string",
-                    "format": "uri",
-                    "title": "Start-URL"
-                },
-                "manualReleaseStartUrl": {
-                    "type": "string",
-                    "format": "uri",
-                    "title": "Start-URL für manuelle Freigabe"
-                },
-                "maxPages": {
-                    "type": "number",
-                    "minimum": 1,
-                    "default": 1,
-                    "title": "Maximale Seiten"
-                }
-            }
+            "type": "object"
         }),
     }
 }
@@ -265,7 +246,7 @@ mod tests {
             vec![
                 "declarative_endpoint_inventory",
                 "declarative_sitemap_inventory",
-                "declarative_browser_jobboard",
+                "declarative_browser_inventory",
                 "stepstone_search",
                 "indeed_search"
             ]
@@ -285,19 +266,31 @@ mod tests {
     }
 
     #[test]
-    fn declarative_runtimes_require_system_profiles() {
+    fn declarative_inventory_runtimes_expose_profile_requirements() {
         for adapter_key in [
             "declarative_endpoint_inventory",
             "declarative_sitemap_inventory",
-            "declarative_browser_jobboard",
         ] {
             let adapter = get_adapter(adapter_key).unwrap();
             assert!(adapter.requires_system_profile);
+            assert!(!adapter.requires_browser_profile);
             assert_eq!(
                 adapter.execution_mode,
                 AdapterExecutionMode::SourceInventory
             );
         }
+
+        let browser_inventory = get_adapter("declarative_browser_inventory").unwrap();
+        assert!(!browser_inventory.requires_system_profile);
+        assert!(browser_inventory.requires_browser_profile);
+        assert_eq!(
+            browser_inventory.execution_mode,
+            AdapterExecutionMode::SourceInventory
+        );
+        assert_eq!(
+            browser_inventory.source_config_schema,
+            json!({ "type": "object" })
+        );
 
         let stepstone = get_adapter("stepstone_search").unwrap();
         assert!(!stepstone.requires_system_profile);
