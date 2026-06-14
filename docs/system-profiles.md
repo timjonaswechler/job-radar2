@@ -227,7 +227,7 @@ Authoring checklist for inventory:
 2. Add only one inventory pipeline per Systemprofil: fetch URL, parser, item selector, optional filters/captures, and field mappings.
 3. Validate regexes and JSONPath expressions with Rust tests before shipping a built-in profile or importing a custom profile.
 4. Keep system-specific extraction knowledge in the profile JSON. Do not add SuccessFactors-, Ashby-, Greenhouse-, Lever-, or employer-specific extraction rules to Rust validation or execution code.
-5. Built-in Job-Portale stay outside this system. StepStone and Indeed are query-parameterized portal adapters (`stepstone_search`, `indeed_search`), not Systemprofil inventory definitions.
+5. Built-in Job-Portale stay outside this Systemprofil system. StepStone is a Browserprofil-backed Quelle executed by `declarative_browser_inventory`; Indeed remains a query-parameterized portal adapter (`indeed_search`). Neither is a Systemprofil inventory definition.
 
 ## Agent checklist: extend a profile with better identity
 

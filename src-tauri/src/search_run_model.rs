@@ -27,9 +27,8 @@ pub type BoxedSourceExecutionFuture<'a> =
 ///
 /// `SearchRunService` loads active profiles for sources that reference them and
 /// passes them here. Adapters that require runtime profile policy, including
-/// declarative inventory runtimes and the transitional `stepstone_search`, return
-/// `SourceExecutionError::Failed` when the required profile or definition is
-/// missing or invalid.
+/// declarative inventory runtimes, return `SourceExecutionError::Failed` when
+/// the required profile or definition is missing or invalid.
 pub struct SourceExecutionInput<'a> {
     pub search_request: &'a SearchRequest,
     pub source: &'a Source,
@@ -66,13 +65,6 @@ impl SourceExecutor for DefaultSourceExecutor {
                     let executor = crate::declarative_browser_inventory_executor::DeclarativeBrowserInventoryExecutor::new_managed(
                         self.browser_runtime_dir.clone(),
                     );
-                    executor.execute(input).await
-                }
-                "stepstone_search" => {
-                    let executor =
-                        crate::stepstone_source_executor::StepstoneSearchExecutor::new_managed(
-                            self.browser_runtime_dir.clone(),
-                        );
                     executor.execute(input).await
                 }
                 _ => Err(SourceExecutionError::Failed(format!(
@@ -669,7 +661,7 @@ mod tests {
             let browser_profile =
                 create_test_browser_profile(&pool, "manual_release_runtime", SourceStatus::Active)
                     .await;
-            let source = create_stepstone_test_source(
+            let source = create_browser_inventory_test_source(
                 &pool,
                 "browser_runtime_source",
                 "Browser Runtime Source",
@@ -724,14 +716,14 @@ mod tests {
                 SourceStatus::Active,
             )
             .await;
-            let missing_profile_source = create_stepstone_test_source(
+            let missing_profile_source = create_browser_inventory_test_source(
                 &pool,
                 "missing_profile_source",
                 "Missing Profile Source",
                 browser_profile.id,
             )
             .await;
-            let healthy_source = create_stepstone_test_source(
+            let healthy_source = create_browser_inventory_test_source(
                 &pool,
                 "healthy_profile_source",
                 "Healthy Profile Source",
@@ -795,7 +787,7 @@ mod tests {
                 SourceStatus::Disabled,
             )
             .await;
-            let source = create_stepstone_test_source(
+            let source = create_browser_inventory_test_source(
                 &pool,
                 "disabled_profile_source",
                 "Disabled Profile Source",
@@ -1305,7 +1297,7 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_stepstone_test_source(
+    async fn create_browser_inventory_test_source(
         pool: &SqlitePool,
         key: &str,
         name: &str,
@@ -1315,7 +1307,7 @@ mod tests {
             pool,
             CreateSourceInput {
                 key: key.to_string(),
-                adapter_key: "stepstone_search".to_string(),
+                adapter_key: "declarative_browser_inventory".to_string(),
                 system_profile_id: None,
                 browser_profile_id: Some(browser_profile_id),
                 name: name.to_string(),
@@ -1336,7 +1328,7 @@ mod tests {
         let mut source_ids = Vec::new();
         for (key, name) in sources {
             source_ids.push(
-                create_stepstone_test_source(pool, key, name, browser_profile.id)
+                create_browser_inventory_test_source(pool, key, name, browser_profile.id)
                     .await
                     .id,
             );

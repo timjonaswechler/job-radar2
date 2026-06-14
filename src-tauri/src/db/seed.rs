@@ -25,6 +25,22 @@ pub struct SystemProfileSeed {
     validation_error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserProfileSeed {
+    pub key: String,
+    name: String,
+    description: Option<String>,
+    definition_schema_version: i64,
+    #[serde(default = "empty_json_object")]
+    definition: Value,
+    #[serde(default = "empty_json_object")]
+    source_config_schema: Value,
+    #[serde(default = "default_active_status")]
+    status: String,
+    validation_error: Option<String>,
+}
+
 pub const BUILTIN_SYSTEM_PROFILE_JSON_FILES: &[(&str, &str)] = &[
     (
         "system-profiles/builtin/muz_global_jobboard.json",
@@ -64,28 +80,12 @@ pub const BUILTIN_SYSTEM_PROFILE_JSON_FILES: &[(&str, &str)] = &[
     ),
 ];
 
-pub type SeedResult<T> = Result<T, Box<dyn Error>>;
+pub const BUILTIN_BROWSER_PROFILE_JSON_FILES: &[(&str, &str)] = &[(
+    "browser-profiles/builtin/stepstone_de.json",
+    include_str!("../../../browser-profiles/builtin/stepstone_de.json"),
+)];
 
-const STEPSTONE_BROWSER_PROFILE_DEFINITION_JSON: &str = r#"{
-  "kind": "queryParameterizedBrowserInventory",
-  "browser": {
-    "render": true,
-    "httpFallback": true,
-    "waitFor": {
-      "timeoutMs": 15000
-    }
-  },
-  "query": {
-    "baseUrlSourceConfigKey": "baseUrl",
-    "defaultBaseUrl": "https://www.stepstone.de",
-    "path": "/jobs",
-    "params": {
-      "searchText": "what",
-      "location": "where",
-      "radiusKm": "radius"
-    }
-  }
-}"#;
+pub type SeedResult<T> = Result<T, Box<dyn Error>>;
 
 pub async fn seed_database(pool: &SqlitePool, custom_system_profiles_dir: &Path) -> SeedResult<()> {
     sqlx::query(
@@ -97,6 +97,7 @@ pub async fn seed_database(pool: &SqlitePool, custom_system_profiles_dir: &Path)
 
     seed_builtin_system_profiles(pool).await?;
     seed_custom_system_profiles(pool, custom_system_profiles_dir).await?;
+    seed_builtin_browser_profiles(pool).await?;
     seed_builtin_job_portal_sources(pool).await?;
 
     Ok(())
@@ -112,10 +113,29 @@ pub fn parse_system_profile_seed(
     Ok(seed)
 }
 
+pub fn parse_browser_profile_seed(
+    contents: &str,
+    source_label: &str,
+) -> SeedResult<BrowserProfileSeed> {
+    let seed = serde_json::from_str::<BrowserProfileSeed>(contents)
+        .map_err(|error| seed_error(format!("{source_label}: invalid JSON: {error}")))?;
+    validate_browser_profile_seed(&seed, source_label)?;
+    Ok(seed)
+}
+
 async fn seed_builtin_system_profiles(pool: &SqlitePool) -> SeedResult<()> {
     for (source_label, contents) in BUILTIN_SYSTEM_PROFILE_JSON_FILES {
         let seed = parse_system_profile_seed(contents, source_label)?;
         upsert_system_profile(pool, &seed, true, source_label).await?;
+    }
+
+    Ok(())
+}
+
+async fn seed_builtin_browser_profiles(pool: &SqlitePool) -> SeedResult<()> {
+    for (source_label, contents) in BUILTIN_BROWSER_PROFILE_JSON_FILES {
+        let seed = parse_browser_profile_seed(contents, source_label)?;
+        upsert_browser_profile_seed(pool, &seed, source_label).await?;
     }
 
     Ok(())
@@ -153,20 +173,13 @@ async fn seed_builtin_job_portal_sources(pool: &SqlitePool) -> Result<(), sqlx::
         "{}",
     )
     .await?;
-    let stepstone_browser_profile_id = upsert_builtin_browser_profile(
-        pool,
-        "stepstone_browser_profile",
-        "StepStone Browserprofil",
-        "Eingebautes Browserprofil für den aktuellen StepStone-Suchlauf über stepstone_search.",
-        STEPSTONE_BROWSER_PROFILE_DEFINITION_JSON,
-        "{}",
-    )
-    .await?;
+    let stepstone_browser_profile_id =
+        browser_profile_id_by_key(pool, "stepstone_de_browser_profile").await?;
 
     seed_stepstone_builtin_source(
         pool,
         stepstone_browser_profile_id,
-        "Eingebautes Job-Portal. Browserprofil steuert URL- und Fallback-Policy; Parser bleibt im StepStone-Adapter.",
+        "Eingebautes Job-Portal. StepStone läuft über deklaratives Browser-Inventar.",
     )
     .await?;
     insert_builtin_source_if_missing(
@@ -276,6 +289,43 @@ fn validate_system_profile_seed(seed: &SystemProfileSeed, source_label: &str) ->
     Ok(())
 }
 
+fn validate_browser_profile_seed(seed: &BrowserProfileSeed, source_label: &str) -> SeedResult<()> {
+    validate_technical_key("key", &seed.key, source_label)?;
+    validate_required_text("name", &seed.name, source_label)?;
+
+    if seed.definition_schema_version < 1 {
+        return Err(seed_error(format!(
+            "{source_label}: definitionSchemaVersion must be greater than zero"
+        )));
+    }
+
+    if !matches!(
+        seed.status.as_str(),
+        "draft" | "active" | "disabled" | "invalid"
+    ) {
+        return Err(seed_error(format!(
+            "{source_label}: status must be draft, active, disabled, or invalid"
+        )));
+    }
+
+    if !seed.definition.is_object() {
+        return Err(seed_error(format!(
+            "{source_label}: definition must be a JSON object"
+        )));
+    }
+
+    if !seed.source_config_schema.is_object() {
+        return Err(seed_error(format!(
+            "{source_label}: sourceConfigSchema must be a JSON object"
+        )));
+    }
+
+    SourceStatus::try_from(seed.status.as_str())
+        .map_err(|error| seed_error(format!("{source_label}: {error}")))?;
+
+    Ok(())
+}
+
 fn validate_required_text(field: &str, value: &str, source_label: &str) -> SeedResult<()> {
     if value.trim().is_empty() {
         return Err(seed_error(format!(
@@ -300,6 +350,55 @@ fn validate_technical_key(field: &str, value: &str, source_label: &str) -> SeedR
             "{source_label}: {field} must use lowercase snake case with only a-z, 0-9, and _"
         )));
     }
+
+    Ok(())
+}
+
+async fn upsert_browser_profile_seed(
+    pool: &SqlitePool,
+    seed: &BrowserProfileSeed,
+    source_label: &str,
+) -> SeedResult<()> {
+    let definition_json = serde_json::to_string(&seed.definition).map_err(|error| {
+        seed_error(format!(
+            "{source_label}: could not serialize definition JSON: {error}"
+        ))
+    })?;
+    let source_config_schema_json =
+        serde_json::to_string(&seed.source_config_schema).map_err(|error| {
+            seed_error(format!(
+                "{source_label}: could not serialize source config schema JSON: {error}"
+            ))
+        })?;
+
+    sqlx::query(
+        "INSERT INTO browser_profiles (
+           key, name, description, definition_path, definition_schema_version,
+           definition_json, source_config_schema_json, status, validation_error
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT(key) DO UPDATE SET
+           name = excluded.name,
+           description = excluded.description,
+           definition_path = excluded.definition_path,
+           definition_schema_version = excluded.definition_schema_version,
+           definition_json = excluded.definition_json,
+           source_config_schema_json = excluded.source_config_schema_json,
+           status = excluded.status,
+           validation_error = excluded.validation_error,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+    )
+    .bind(&seed.key)
+    .bind(&seed.name)
+    .bind(seed.description.as_deref())
+    .bind(source_label)
+    .bind(seed.definition_schema_version)
+    .bind(definition_json)
+    .bind(source_config_schema_json)
+    .bind(&seed.status)
+    .bind(seed.validation_error.as_deref())
+    .execute(pool)
+    .await?;
 
     Ok(())
 }
@@ -330,41 +429,6 @@ async fn insert_builtin_browser_profile_if_missing(
     browser_profile_id_by_key(pool, key).await
 }
 
-async fn upsert_builtin_browser_profile(
-    pool: &SqlitePool,
-    key: &str,
-    name: &str,
-    description: &str,
-    definition_json: &str,
-    source_config_schema_json: &str,
-) -> Result<i64, sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO browser_profiles (
-           key, name, description, definition_schema_version,
-           definition_json, source_config_schema_json, status, validation_error
-         )
-         VALUES (?1, ?2, ?3, 1, ?4, ?5, 'active', NULL)
-         ON CONFLICT(key) DO UPDATE SET
-           name = excluded.name,
-           description = excluded.description,
-           definition_schema_version = excluded.definition_schema_version,
-           definition_json = excluded.definition_json,
-           source_config_schema_json = excluded.source_config_schema_json,
-           status = excluded.status,
-           validation_error = excluded.validation_error,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
-    )
-    .bind(key)
-    .bind(name)
-    .bind(description)
-    .bind(definition_json)
-    .bind(source_config_schema_json)
-    .execute(pool)
-    .await?;
-
-    browser_profile_id_by_key(pool, key).await
-}
-
 async fn browser_profile_id_by_key(pool: &SqlitePool, key: &str) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>("SELECT id FROM browser_profiles WHERE key = ?1")
         .bind(key)
@@ -380,7 +444,7 @@ async fn seed_stepstone_builtin_source(
     insert_builtin_source_if_missing(
         pool,
         "stepstone_de",
-        "stepstone_search",
+        "declarative_browser_inventory",
         browser_profile_id,
         "StepStone Deutschland",
         description,
@@ -389,7 +453,7 @@ async fn seed_stepstone_builtin_source(
 
     sqlx::query(
         "UPDATE sources
-         SET adapter_key = 'stepstone_search',
+         SET adapter_key = 'declarative_browser_inventory',
              system_profile_id = NULL,
              browser_profile_id = ?1,
              description = ?2,

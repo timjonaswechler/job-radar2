@@ -822,11 +822,11 @@ mod tests {
         crate::source_model::create_source(
             pool,
             crate::source_model::CreateSourceInput {
-                key: "test_stepstone".to_string(),
-                adapter_key: "stepstone_search".to_string(),
+                key: "test_browser_inventory".to_string(),
+                adapter_key: "declarative_browser_inventory".to_string(),
                 system_profile_id: None,
                 browser_profile_id: Some(browser_profile.id),
-                name: "Test StepStone".to_string(),
+                name: "Test Browser Inventory".to_string(),
                 description: None,
                 source_config: json!({}),
                 status: crate::source_model::SourceStatus::Active,

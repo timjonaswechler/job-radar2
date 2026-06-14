@@ -26,14 +26,6 @@ pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<()
     }
 }
 
-pub async fn render_page_html(
-    executable_path: &Path,
-    runtime_dir: &Path,
-    url: &str,
-) -> Result<String, String> {
-    render_page_html_with_wait(executable_path, runtime_dir, url, None).await
-}
-
 pub async fn render_page_html_with_wait(
     executable_path: &Path,
     runtime_dir: &Path,

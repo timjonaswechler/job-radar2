@@ -9,8 +9,13 @@
 //! Minimal browser inventory language:
 //!
 //! - `definition.schemaVersion` may be omitted or must be `1`.
+//! - `definition.query` is optional and can build a query-parameterized URL
+//!   from `baseUrl`, `path`, and an ordered `params` array.
 //! - `definition.inventory.navigate.url` is a template supporting
-//!   `{{sourceConfig:<key>}}`, `{{sourceName}}`, and `{{sourceKey}}`.
+//!   `{{sourceConfig:<key>}}`, `{{sourceName}}`, `{{sourceKey}}`, and
+//!   `{{query:url}}` when `definition.query` is present.
+//! - Query param templates may use `{{searchRequest:titleText}}`,
+//!   `{{searchRequest:firstLocation}}`, and `{{searchRequest:radiusKm}}`.
 //! - `definition.inventory.waitFor.selector`/`timeoutMs` is optional and is
 //!   passed to the managed browser runtime.
 //! - `definition.inventory.items.select` is a CSS selector for job cards.
@@ -27,6 +32,8 @@ use std::{future::Future, path::PathBuf, pin::Pin};
 use crate::{
     browser_runtime::BrowserRuntimePageWait,
     declarative_template::{render_template, TemplateContext, TemplateError},
+    search_request_model::{SearchRequest, SearchRuleKind, SearchRuleTarget},
+    search_run::normalization::collapse_whitespace,
     search_run_model::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor,
@@ -125,7 +132,12 @@ where
             "url",
             &browser_profile_path(browser_profile, "definition.inventory.navigate.url"),
         )?;
-        let template_context = BrowserInventoryTemplateContext { source };
+        let query_url = render_query_url(browser_profile, &input)?;
+        let template_context = BrowserInventoryTemplateContext {
+            source,
+            search_request: input.search_request,
+            query_url: query_url.as_deref(),
+        };
         let navigate_url =
             render_template(navigate_url_template, &template_context).map_err(|error| {
                 SourceExecutionError::Failed(format!(
@@ -461,8 +473,186 @@ fn ensure_supported_schema_version(
     )))
 }
 
+fn render_query_url(
+    browser_profile: &BrowserProfile,
+    input: &SourceExecutionInput<'_>,
+) -> Result<Option<String>, SourceExecutionError> {
+    let Some(query_value) = browser_profile.definition.get("query") else {
+        return Ok(None);
+    };
+
+    let query_path = browser_profile_path(browser_profile, "definition.query");
+    let query = query_value.as_object().ok_or_else(|| {
+        SourceExecutionError::Failed(format!("{query_path} must be a JSON object"))
+    })?;
+    validate_allowed_keys(query, &["baseUrl", "path", "params"], &query_path)?;
+
+    let base_url_value = query
+        .get("baseUrl")
+        .ok_or_else(|| SourceExecutionError::Failed(format!("{query_path}.baseUrl is required")))?;
+    let base_url = render_query_base_url(
+        browser_profile,
+        input,
+        base_url_value,
+        &format!("{query_path}.baseUrl"),
+    )?;
+    let base_url = parse_http_url(&base_url, &format!("{query_path}.baseUrl"))?;
+
+    let path = required_string(query, "path", &format!("{query_path}.path"))?;
+    if !path.starts_with('/') || path.starts_with("//") || path.contains('\\') {
+        return Err(SourceExecutionError::Failed(format!(
+            "{query_path}.path must be an absolute path starting with one / and without a URL authority or backslashes"
+        )));
+    }
+
+    let mut url = base_url.join(path).map_err(|error| {
+        SourceExecutionError::Failed(format!(
+            "{query_path}.path could not be used to build URL: {error}"
+        ))
+    })?;
+
+    let params_path = format!("{query_path}.params");
+    let params = query
+        .get("params")
+        .and_then(Value::as_array)
+        .ok_or_else(|| SourceExecutionError::Failed(format!("{params_path} must be an array")))?;
+    let template_context = BrowserInventoryTemplateContext {
+        source: input.source,
+        search_request: input.search_request,
+        query_url: None,
+    };
+    {
+        let mut query_pairs = url.query_pairs_mut();
+        for (index, param) in params.iter().enumerate() {
+            let param_path = format!("{params_path}[{index}]");
+            let param = param.as_object().ok_or_else(|| {
+                SourceExecutionError::Failed(format!("{param_path} must be a JSON object"))
+            })?;
+            validate_allowed_keys(param, &["name", "value"], &param_path)?;
+            let param_name = required_string(param, "name", &format!("{param_path}.name"))?;
+            let template = required_string(param, "value", &format!("{param_path}.value"))?;
+            let value = render_template(template, &template_context).map_err(|error| {
+                SourceExecutionError::Failed(format!("{param_path}.value is invalid: {error}"))
+            })?;
+            let value = value.trim();
+            if !value.is_empty() {
+                query_pairs.append_pair(param_name, value);
+            }
+        }
+    }
+
+    Ok(Some(url.to_string()))
+}
+
+fn render_query_base_url(
+    browser_profile: &BrowserProfile,
+    input: &SourceExecutionInput<'_>,
+    value: &Value,
+    path: &str,
+) -> Result<String, SourceExecutionError> {
+    match value {
+        Value::String(template) => {
+            let template_context = BrowserInventoryTemplateContext {
+                source: input.source,
+                search_request: input.search_request,
+                query_url: None,
+            };
+            let rendered = render_template(template, &template_context).map_err(|error| {
+                SourceExecutionError::Failed(format!("{path} is invalid: {error}"))
+            })?;
+            let rendered = rendered.trim();
+            if rendered.is_empty() {
+                Err(SourceExecutionError::Failed(format!(
+                    "{path} must render a non-empty URL"
+                )))
+            } else {
+                Ok(rendered.to_string())
+            }
+        }
+        Value::Object(object) => {
+            validate_allowed_keys(object, &["sourceConfigKey", "default"], path)?;
+            let source_config_key = required_string(
+                object,
+                "sourceConfigKey",
+                &format!("{path}.sourceConfigKey"),
+            )?;
+            let default = required_string(object, "default", &format!("{path}.default"))?;
+            let source_config = input.source.source_config.as_object().ok_or_else(|| {
+                SourceExecutionError::Failed(format!(
+                    "sourceConfig is invalid for Browserprofil {}: expected a JSON object",
+                    browser_profile.key
+                ))
+            })?;
+            match source_config.get(source_config_key) {
+                Some(Value::String(base_url)) => {
+                    let base_url = base_url.trim();
+                    if base_url.is_empty() {
+                        Err(SourceExecutionError::Failed(format!(
+                            "sourceConfig.{source_config_key} must not be empty"
+                        )))
+                    } else {
+                        Ok(base_url.to_string())
+                    }
+                }
+                Some(Value::Null) | None => Ok(default.to_string()),
+                Some(_) => Err(SourceExecutionError::Failed(format!(
+                    "sourceConfig.{source_config_key} must be a string"
+                ))),
+            }
+        }
+        _ => Err(SourceExecutionError::Failed(format!(
+            "{path} must be either a string template or a JSON object"
+        ))),
+    }
+}
+
+fn resolve_search_request_variable(
+    search_request: &SearchRequest,
+    key: &str,
+) -> Result<Option<String>, TemplateError> {
+    match key {
+        "titleText" => Ok(Some(search_request_title_text(search_request))),
+        "firstLocation" => Ok(Some(
+            first_search_request_location(search_request).unwrap_or_default(),
+        )),
+        "radiusKm" => Ok(Some(
+            search_request
+                .radius_km
+                .map(|radius_km| radius_km.to_string())
+                .unwrap_or_default(),
+        )),
+        "" => Err(TemplateError::Invalid(
+            "searchRequest template variable must include a key".to_string(),
+        )),
+        _ => Err(TemplateError::Invalid(format!(
+            "unsupported searchRequest template variable `{key}`"
+        ))),
+    }
+}
+
+fn search_request_title_text(search_request: &SearchRequest) -> String {
+    search_request
+        .include_rules
+        .iter()
+        .filter(|rule| rule.target == SearchRuleTarget::Title && rule.kind == SearchRuleKind::Text)
+        .map(|rule| collapse_whitespace(&rule.value))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn first_search_request_location(search_request: &SearchRequest) -> Option<String> {
+    search_request
+        .locations
+        .iter()
+        .map(|location| collapse_whitespace(location))
+        .find(|location| !location.is_empty())
+}
+
 struct BrowserInventoryTemplateContext<'a> {
     source: &'a Source,
+    search_request: &'a SearchRequest,
+    query_url: Option<&'a str>,
 }
 
 impl TemplateContext for BrowserInventoryTemplateContext<'_> {
@@ -471,6 +661,12 @@ impl TemplateContext for BrowserInventoryTemplateContext<'_> {
             Ok(Some(self.source.name.clone()))
         } else if variable == "sourceKey" {
             Ok(Some(self.source.key.clone()))
+        } else if variable == "query:url" {
+            self.query_url
+                .map(|url| Some(url.to_string()))
+                .ok_or_else(|| TemplateError::Invalid("query.url is not available".to_string()))
+        } else if let Some(search_request_key) = variable.strip_prefix("searchRequest:") {
+            resolve_search_request_variable(self.search_request, search_request_key)
         } else if let Some(config_key) = variable.strip_prefix("sourceConfig:") {
             if config_key.is_empty() {
                 return Err(TemplateError::Invalid(
@@ -750,6 +946,100 @@ mod tests {
     }
 
     #[test]
+    fn stepstone_browser_profile_builds_query_url_and_extracts_cards_through_search_run() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let browser_profile_id = create_stepstone_browser_inventory_profile(&pool).await;
+            let source = create_stepstone_browser_inventory_source(
+                &pool,
+                browser_profile_id,
+                json!({
+                    "baseUrl": "https://stepstone.example"
+                }),
+            )
+            .await;
+            let search_request = SearchRequestService::new(&pool, &RunningSearchRuns::default())
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![
+                        text_rule("Rust Engineer"),
+                        regex_rule("Senior\\s+Developer"),
+                        text_rule(" Data "),
+                    ],
+                    exclude_rules: vec![],
+                    locations: vec![" Berlin ".to_string(), "München".to_string()],
+                    radius_km: Some(50),
+                    source_ids: vec![source.id],
+                })
+                .await
+                .unwrap();
+            let fixture_browser = FixtureBrowserInventoryClient::new([(
+                "https://stepstone.example/jobs?what=Rust+Engineer+Data&where=Berlin&radius=50",
+                Ok(r#"
+                <html><body>
+                  <article data-at="job-item">
+                    <a data-at="job-item-title" href="/stellenangebote--Rust-Engineer-Berlin-ACME--123.html">
+                        Rust
+                        Engineer
+                    </a>
+                    <span data-at="job-item-company-name"> ACME   GmbH </span>
+                    <span data-at="job-item-location"> Berlin </span>
+                    <span data-at="job-item-location">berlin</span>
+                  </article>
+                  <article data-at="job-item">
+                    <a data-at="job-item-title" href="/stellenangebote--Chemist-Berlin-ACME--456.html">
+                        Chemist
+                    </a>
+                    <span data-at="job-item-company-name">ACME GmbH</span>
+                    <span data-at="job-item-location">Berlin</span>
+                  </article>
+                </body></html>
+                "#),
+            )]);
+            let executor = DeclarativeBrowserInventoryExecutor::new(fixture_browser);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].source_key, "stepstone_de");
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 2);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Rust Engineer");
+            assert_eq!(posting.company, "ACME GmbH");
+            assert_eq!(
+                posting.url,
+                "https://stepstone.example/stellenangebote--Rust-Engineer-Berlin-ACME--123.html"
+            );
+            assert_eq!(posting.locations, vec!["Berlin"]);
+            assert_eq!(posting.sources[0].source_key, "stepstone_de");
+            assert_eq!(
+                executor.browser.rendered_requests(),
+                vec![(
+                    "https://stepstone.example/jobs?what=Rust+Engineer+Data&where=Berlin&radius=50"
+                        .to_string(),
+                    Some(BrowserInventoryWait {
+                        selector: "article[data-at=\"job-item\"]".to_string(),
+                        timeout_ms: 15_000,
+                    })
+                )]
+            );
+        });
+    }
+
+    #[test]
     fn adapter_requires_browser_profile_before_rendering() {
         tauri::async_runtime::block_on(async {
             let executor =
@@ -882,6 +1172,59 @@ mod tests {
         });
     }
 
+    async fn create_stepstone_browser_inventory_profile(pool: &SqlitePool) -> i64 {
+        create_browser_profile(
+            pool,
+            CreateBrowserProfileInput {
+                key: "stepstone_de_browser_profile".to_string(),
+                name: "StepStone Deutschland Browserprofil".to_string(),
+                description: None,
+                name_i18n_key: None,
+                description_i18n_key: None,
+                definition_path: None,
+                definition_hash: None,
+                definition_schema_version: 1,
+                definition: stepstone_browser_inventory_definition(),
+                source_config_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "baseUrl": { "type": "string", "format": "uri" },
+                        "manualReleaseStartUrl": { "type": "string", "format": "uri" },
+                        "maxPages": { "type": "number", "minimum": 1, "default": 1 }
+                    }
+                }),
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn create_stepstone_browser_inventory_source(
+        pool: &SqlitePool,
+        browser_profile_id: i64,
+        source_config: Value,
+    ) -> Source {
+        create_source(
+            pool,
+            CreateSourceInput {
+                key: "stepstone_de".to_string(),
+                adapter_key: ADAPTER_KEY.to_string(),
+                system_profile_id: None,
+                browser_profile_id: Some(browser_profile_id),
+                name: "StepStone Deutschland".to_string(),
+                description: None,
+                source_config,
+                status: SourceStatus::Active,
+                validation_error: None,
+            },
+        )
+        .await
+        .unwrap()
+    }
+
     async fn create_browser_inventory_profile(pool: &SqlitePool, definition: Value) -> i64 {
         create_browser_profile(
             pool,
@@ -959,6 +1302,50 @@ mod tests {
             kind: "text".to_string(),
             value: value.to_string(),
         }
+    }
+
+    fn regex_rule(value: &str) -> SearchRuleInput {
+        SearchRuleInput {
+            target: "title".to_string(),
+            kind: "regex".to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    fn stepstone_browser_inventory_definition() -> Value {
+        json!({
+            "schemaVersion": 1,
+            "query": {
+                "baseUrl": {
+                    "sourceConfigKey": "baseUrl",
+                    "default": "https://www.stepstone.de"
+                },
+                "path": "/jobs",
+                "params": [
+                    { "name": "what", "value": "{{searchRequest:titleText}}" },
+                    { "name": "where", "value": "{{searchRequest:firstLocation}}" },
+                    { "name": "radius", "value": "{{searchRequest:radiusKm}}" }
+                ]
+            },
+            "inventory": {
+                "navigate": { "url": "{{query:url}}" },
+                "waitFor": { "selector": "article[data-at=\"job-item\"]", "timeoutMs": 15000 },
+                "items": { "select": "article[data-at=\"job-item\"]" },
+                "fields": {
+                    "title": { "selectorText": "[data-at=\"job-item-title\"]" },
+                    "company": { "selectorText": "[data-at=\"job-item-company-name\"]" },
+                    "url": {
+                        "selectorAttribute": {
+                            "selector": "a[data-at=\"job-item-title\"]",
+                            "attribute": "href"
+                        }
+                    },
+                    "locations": [
+                        { "selectorText": "[data-at=\"job-item-location\"]" }
+                    ]
+                }
+            }
+        })
     }
 
     fn browser_inventory_definition() -> Value {

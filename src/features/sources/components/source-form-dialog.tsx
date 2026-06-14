@@ -1005,7 +1005,7 @@ function TextField({
 }
 
 function isBuiltInJobPortalAdapterKey(adapterKey: string) {
-  return adapterKey === "stepstone_search" || adapterKey === "indeed_search";
+  return adapterKey === "indeed_search";
 }
 
 function mergeJsonObjectSchemas(primarySchema: JsonValue, secondarySchema: JsonValue): JsonValue {

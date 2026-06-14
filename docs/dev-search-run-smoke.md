@@ -45,7 +45,7 @@ npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-s
 
 - SCHOTT should complete when the sitemap is reachable and produce normalized postings with readable titles, URL, source reference, company derived from `SCHOTT Karriere`, and `Mainz` where the URL contains that location.
 - StepStone success is acceptable when available.
-- StepStone browser/HTTP failure is acceptable only when `sourceRuns` contains an explicit `stepstone_de` error and the overall status is `completed_with_errors` if SCHOTT completed.
+- StepStone browser-inventory failure is acceptable only when `sourceRuns` contains an explicit `stepstone_de` error and the overall status is `completed_with_errors` if SCHOTT completed.
 - Final `postings` should not contain titles with the configured exclusion terms (`Praktikum`, `Werkstudent`, `Schülerpraktikum`).
 
 Do not add this command to CI or default test scripts; live SCHOTT/StepStone availability is intentionally human-in-the-loop validation only.

@@ -6,4 +6,4 @@ The built-in adapter registry should therefore contain only generic runtime capa
 
 Source detection runs all active system profiles against a submitted URL and returns evidence. A profile is detected only when all required checks pass. Multiple passing profiles are ambiguous. No passing profile is unsupported. Domain-only mappings, company-specific adapter code, and confidence scoring are not acceptable substitutes for required technical evidence.
 
-Existing built-in job portals such as StepStone and Indeed remain separate because they are query-parameterized portal integrations rather than employer career-system profiles.
+Built-in job portals remain separate from Systemprofile because they are not employer career-system profiles. StepStone is represented as a Browserprofil-backed Quelle executed by the generic `declarative_browser_inventory` adapter; Indeed remains a query-parameterized built-in portal integration until it is migrated behind a Browserprofil.
