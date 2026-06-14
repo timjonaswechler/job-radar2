@@ -172,7 +172,7 @@ fn stepstone_search() -> AdapterMetadata {
     AdapterMetadata {
         key: "stepstone_search".to_string(),
         name: "StepStone Suche".to_string(),
-        description: "Eingebauter Job-Portal-Adapter für StepStone-Suchläufe; Suchtext, Ort und Radius gehören in Suchanfragen bzw. Einstellungen.".to_string(),
+        description: "Eingebauter Übergangsadapter für StepStone-Suchläufe; Browserprofil steuert runtime-relevante Policy, bis die Quelle hinter deklaratives Browser-Inventar migriert wird.".to_string(),
         category: AdapterCategory::JobBoard,
         execution_mode: AdapterExecutionMode::QueryParameterized,
         requires_system_profile: false,

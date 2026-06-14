@@ -26,9 +26,10 @@ pub type BoxedSourceExecutionFuture<'a> =
 /// Public source-execution seam used by Suchläufe.
 ///
 /// `SearchRunService` loads active profiles for sources that reference them and
-/// passes them here. Declarative inventory adapters return
-/// `SourceExecutionError::Failed` when the required profile or inventory
-/// definition is missing or invalid.
+/// passes them here. Adapters that require runtime profile policy, including
+/// declarative inventory runtimes and the transitional `stepstone_search`, return
+/// `SourceExecutionError::Failed` when the required profile or definition is
+/// missing or invalid.
 pub struct SourceExecutionInput<'a> {
     pub search_request: &'a SearchRequest,
     pub source: &'a Source,
