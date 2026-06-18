@@ -1070,6 +1070,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn tests_selected_system_profile_successfully_without_persisting_a_source() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1143,6 +1144,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn tests_selected_system_profile_reports_failed_required_check_without_source_config() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1215,6 +1217,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn detects_greenhouse_ashby_and_lever_with_vendor_board_or_api_evidence_and_creatable_config() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1326,6 +1329,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn ashby_identity_uses_public_website_when_hosted_board_exposes_it() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1557,6 +1561,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn detects_commerzbank_muz_with_bundled_profile_and_creates_source() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1685,6 +1690,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn muz_source_config_requires_stable_api_and_config_values() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;

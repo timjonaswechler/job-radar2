@@ -440,6 +440,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failure() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -561,6 +562,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn ensure_schott_source_creates_only_missing_local_smoke_source() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
@@ -600,6 +602,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
