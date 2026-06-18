@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source.schema.json",
+  "title": "Job Radar source document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "key", "name", "status", "sourceConfig", "selectedAccessPath"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "key": { "$ref": "#/$defs/technicalKey" },
+    "name": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "disabled", "invalid"]
+    },
+    "sourceConfig": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "selectedAccessPath": {
+      "oneOf": [
+        { "$ref": "#/$defs/profileAccessPathRef" },
+        { "$ref": "#/$defs/sourceSpecificAccessPath" }
+      ]
+    }
+  },
+  "$defs": {
+    "technicalKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 1
+    },
+    "jsonSchemaObject": {
+      "type": "object"
+    },
+    "jsonObject": {
+      "type": "object"
+    },
+    "profileAccessPathRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "profileKey", "pathKey"],
+      "properties": {
+        "type": { "const": "profile" },
+        "profileKey": { "$ref": "#/$defs/technicalKey" },
+        "pathKey": { "$ref": "#/$defs/technicalKey" }
+      }
+    },
+    "sourceSpecificAccessPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "adapterKey"],
+      "properties": {
+        "type": { "const": "source_specific" },
+        "adapterKey": { "$ref": "#/$defs/technicalKey" },
+        "sourceConfigSchema": { "$ref": "#/$defs/jsonSchemaObject" },
+        "query": { "$ref": "#/$defs/jsonObject" },
+        "inventory": { "$ref": "#/$defs/jsonObject" },
+        "interactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/browserInteraction" }
+        },
+        "manualRelease": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "browserInteraction": {
+      "oneOf": [
+        { "$ref": "#/$defs/waitForInteraction" },
+        { "$ref": "#/$defs/clickIfVisibleInteraction" },
+        { "$ref": "#/$defs/clickUpToNInteraction" }
+      ]
+    },
+    "waitForInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "waitFor" },
+        "selector": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clickIfVisibleInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "clickIfVisible" },
+        "selector": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clickUpToNInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector", "maxClicks"],
+      "properties": {
+        "type": { "const": "clickUpToN" },
+        "selector": { "type": "string", "minLength": 1 },
+        "maxClicks": { "type": "integer", "minimum": 1 },
+        "waitAfterClickMs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
