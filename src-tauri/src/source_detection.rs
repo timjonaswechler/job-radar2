@@ -1,17 +1,20 @@
-use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
+use std::{collections::HashMap, future::Future, path::Path, pin::Pin, time::Duration};
 
 use regex::Regex;
 use reqwest::Url;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use sqlx::SqlitePool;
 
 use crate::{
     declarative_template::{
         render_template, title_case, to_technical_key, TemplateContext, TemplateError,
     },
     simple_json_path::simple_json_path_exists,
-    source_model::{get_system_profile, list_system_profiles, SourceStatus, SystemProfile},
+    source_registry::{
+        self, AvailabilityBlock, DetectionBlock, DetectionPhase, ProfileAccessPathDefinition,
+        RegistrySourceProfile, SourceProfileIdentity, SourceRegistryDiagnostic,
+        SourceRegistryDocumentKind,
+    },
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -28,10 +31,14 @@ pub enum SourceDetectionStatus {
 pub struct SourceDetectionResult {
     pub status: SourceDetectionStatus,
     pub adapter_key: Option<String>,
-    pub system_profile_id: Option<i64>,
-    pub system_profile_key: Option<String>,
+    pub profile_key: Option<String>,
+    pub profile_name: Option<String>,
+    pub path_key: Option<String>,
+    pub path_name: Option<String>,
     pub key: Option<String>,
     pub name: Option<String>,
+    pub key_candidates: Vec<String>,
+    pub name_candidates: Vec<String>,
     pub source_config: Option<Value>,
     pub evidence: Vec<String>,
     pub warnings: Vec<String>,
@@ -42,56 +49,27 @@ pub struct SourceDetectionResult {
 #[serde(rename_all = "camelCase")]
 pub struct SourceDetectionMatch {
     pub adapter_key: String,
-    pub system_profile_id: i64,
-    pub system_profile_key: String,
-    pub system_profile_name: String,
+    pub profile_key: String,
+    pub profile_name: String,
+    pub path_key: String,
+    pub path_name: Option<String>,
     pub key: String,
     pub name: String,
+    pub key_candidates: Vec<String>,
+    pub name_candidates: Vec<String>,
     pub source_config: Value,
     pub evidence: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SystemProfileTestStatus {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DetectionCheckStatus {
     Passed,
     Failed,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SystemProfileTestCheckStatus {
-    Passed,
-    Failed,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemProfileTestResult {
-    pub status: SystemProfileTestStatus,
-    pub adapter_key: String,
-    pub system_profile_id: i64,
-    pub system_profile_key: String,
-    pub system_profile_name: String,
-    pub key: Option<String>,
-    pub name: Option<String>,
-    pub source_config: Option<Value>,
-    pub checks: Vec<SystemProfileTestCheckResult>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemProfileTestCheckResult {
-    pub index: usize,
-    pub check: Value,
-    pub status: SystemProfileTestCheckStatus,
-    pub evidence: Option<String>,
-    pub diagnostic: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct DetectionCheckOutcome {
-    status: SystemProfileTestCheckStatus,
+    status: DetectionCheckStatus,
     evidence: Option<String>,
     diagnostic: Option<String>,
 }
@@ -99,7 +77,7 @@ struct DetectionCheckOutcome {
 impl DetectionCheckOutcome {
     fn passed(evidence: impl Into<String>) -> Self {
         Self {
-            status: SystemProfileTestCheckStatus::Passed,
+            status: DetectionCheckStatus::Passed,
             evidence: Some(evidence.into()),
             diagnostic: None,
         }
@@ -107,11 +85,17 @@ impl DetectionCheckOutcome {
 
     fn failed(diagnostic: impl Into<String>) -> Self {
         Self {
-            status: SystemProfileTestCheckStatus::Failed,
+            status: DetectionCheckStatus::Failed,
             evidence: None,
             diagnostic: Some(diagnostic.into()),
         }
     }
+}
+
+#[derive(Default)]
+struct ProfileEvaluation {
+    matches: Vec<SourceDetectionMatch>,
+    warnings: Vec<String>,
 }
 
 struct DetectionTemplateContext<'a> {
@@ -141,7 +125,7 @@ impl TemplateContext for DetectionTemplateContext<'_> {
 }
 
 pub async fn detect_source_from_url(
-    pool: &SqlitePool,
+    app_data_dir: impl AsRef<Path>,
     input: &str,
 ) -> Result<SourceDetectionResult, String> {
     let input_url = parse_http_url(input)?;
@@ -149,10 +133,14 @@ pub async fn detect_source_from_url(
         return Ok(SourceDetectionResult {
             status: SourceDetectionStatus::BuiltInSource,
             adapter_key: None,
-            system_profile_id: None,
-            system_profile_key: None,
+            profile_key: None,
+            profile_name: None,
+            path_key: None,
+            path_name: None,
             key: None,
             name: None,
+            key_candidates: Vec::new(),
+            name_candidates: Vec::new(),
             source_config: None,
             evidence: vec![message],
             warnings: Vec::new(),
@@ -160,49 +148,48 @@ pub async fn detect_source_from_url(
         });
     }
 
-    let profiles = list_system_profiles(pool)
-        .await?
-        .into_iter()
-        .filter(|profile| profile.status == SourceStatus::Active)
-        .collect::<Vec<_>>();
+    let snapshot = source_registry::load_snapshot(app_data_dir);
+    let mut registry_warnings = source_profile_registry_warnings(&snapshot.diagnostics);
     let client = ReqwestDetectionHttpClient::new()?;
-    detect_with_profiles(&client, &input_url, &profiles).await
+    let mut result =
+        detect_with_source_profiles(&client, &input_url, &snapshot.valid_profiles).await?;
+    registry_warnings.append(&mut result.warnings);
+    result.warnings = registry_warnings;
+    Ok(result)
 }
 
-pub async fn test_url_against_system_profile(
-    pool: &SqlitePool,
-    input: &str,
-    system_profile_id: i64,
-) -> Result<SystemProfileTestResult, String> {
-    let client = ReqwestDetectionHttpClient::new()?;
-    test_url_against_system_profile_with_client(pool, &client, input, system_profile_id).await
+fn source_profile_registry_warnings(diagnostics: &[SourceRegistryDiagnostic]) -> Vec<String> {
+    diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.document_kind == SourceRegistryDocumentKind::SourceProfile)
+        .map(|diagnostic| {
+            format!(
+                "source profile registry diagnostic at {}: {}",
+                diagnostic.path, diagnostic.message
+            )
+        })
+        .collect()
 }
 
-async fn test_url_against_system_profile_with_client<C: DetectionHttpClient + Sync>(
-    pool: &SqlitePool,
-    client: &C,
-    input: &str,
-    system_profile_id: i64,
-) -> Result<SystemProfileTestResult, String> {
-    let input_url = parse_http_url(input)?;
-    let profile = get_system_profile(pool, system_profile_id).await?;
-    test_system_profile_with_client(client, &input_url, &profile).await
-}
-
-async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
+async fn detect_with_source_profiles<C: DetectionHttpClient + Sync>(
     client: &C,
     input_url: &Url,
-    profiles: &[SystemProfile],
+    profiles: &[RegistrySourceProfile],
 ) -> Result<SourceDetectionResult, String> {
     let html = client.get_text(input_url.clone()).await?;
     let mut matches = Vec::new();
     let mut warnings = Vec::new();
 
     for profile in profiles {
-        match evaluate_profile(client, input_url, &html, profile).await {
-            Ok(Some(candidate)) => matches.push(candidate),
-            Ok(None) => {}
-            Err(error) => warnings.push(format!("{}: {error}", profile.key)),
+        match evaluate_source_profile(client, input_url, &html, profile).await {
+            Ok(evaluation) => {
+                matches.extend(evaluation.matches);
+                warnings.extend(evaluation.warnings);
+            }
+            Err(error) => warnings.push(format!(
+                "source profile `{}`: {error}",
+                profile.document.key
+            )),
         }
     }
 
@@ -210,10 +197,14 @@ async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
         return Ok(SourceDetectionResult {
             status: SourceDetectionStatus::Unsupported,
             adapter_key: None,
-            system_profile_id: None,
-            system_profile_key: None,
+            profile_key: None,
+            profile_name: None,
+            path_key: None,
+            path_name: None,
             key: None,
             name: None,
+            key_candidates: Vec::new(),
+            name_candidates: Vec::new(),
             source_config: None,
             evidence: Vec::new(),
             warnings,
@@ -225,10 +216,14 @@ async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
         return Ok(SourceDetectionResult {
             status: SourceDetectionStatus::Ambiguous,
             adapter_key: None,
-            system_profile_id: None,
-            system_profile_key: None,
+            profile_key: None,
+            profile_name: None,
+            path_key: None,
+            path_name: None,
             key: None,
             name: None,
+            key_candidates: Vec::new(),
+            name_candidates: Vec::new(),
             source_config: None,
             evidence: Vec::new(),
             warnings,
@@ -240,10 +235,14 @@ async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
     Ok(SourceDetectionResult {
         status: SourceDetectionStatus::Detected,
         adapter_key: Some(detected.adapter_key.clone()),
-        system_profile_id: Some(detected.system_profile_id),
-        system_profile_key: Some(detected.system_profile_key.clone()),
+        profile_key: Some(detected.profile_key.clone()),
+        profile_name: Some(detected.profile_name.clone()),
+        path_key: Some(detected.path_key.clone()),
+        path_name: detected.path_name.clone(),
         key: Some(detected.key.clone()),
         name: Some(detected.name.clone()),
+        key_candidates: detected.key_candidates.clone(),
+        name_candidates: detected.name_candidates.clone(),
         source_config: Some(detected.source_config.clone()),
         evidence: detected.evidence.clone(),
         warnings,
@@ -251,113 +250,194 @@ async fn detect_with_profiles<C: DetectionHttpClient + Sync>(
     })
 }
 
-async fn evaluate_profile<C: DetectionHttpClient + Sync>(
+async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
     client: &C,
     input_url: &Url,
     html: &str,
-    profile: &SystemProfile,
-) -> Result<Option<SourceDetectionMatch>, String> {
-    let required = required_detection_checks(profile)?;
+    profile: &RegistrySourceProfile,
+) -> Result<ProfileEvaluation, String> {
+    let document = &profile.document;
+    let Some(detect) = &document.detect else {
+        return Ok(ProfileEvaluation::default());
+    };
+
+    if detect.required.is_empty() {
+        return Ok(ProfileEvaluation::default());
+    }
+
+    if !detect_supports_http(detect) {
+        return Ok(ProfileEvaluation {
+            matches: Vec::new(),
+            warnings: vec![format!(
+                "source profile `{}` declares no HTTP detection phase; browser-assisted profile detection is not implemented yet",
+                document.key
+            )],
+        });
+    }
 
     let mut captures = HashMap::new();
     let mut evidence = Vec::new();
 
-    for check in required {
+    for check in &detect.required {
         let Some(check_evidence) =
             evaluate_check(client, input_url, html, check, &mut captures).await?
         else {
-            return Ok(None);
+            return Ok(ProfileEvaluation::default());
         };
         evidence.push(check_evidence);
     }
 
-    evidence.extend(
-        enrich_identity_captures(client, input_url, html, &profile.definition, &mut captures)
-            .await?,
-    );
-    let source_config = build_source_config(&profile.definition, input_url, &captures)?;
-    let identity = derive_source_identity(&profile.definition, input_url, &captures)?;
+    let mut evaluation = ProfileEvaluation::default();
+    for access_path in &document.access_paths {
+        match evaluate_access_path_availability(
+            client,
+            input_url,
+            html,
+            profile,
+            access_path,
+            &captures,
+            &evidence,
+        )
+        .await
+        {
+            Ok(Some(candidate)) => evaluation.matches.push(candidate),
+            Ok(None) => {}
+            Err(error) => evaluation.warnings.push(format!(
+                "source profile `{}` access path `{}`: {error}",
+                document.key, access_path.key
+            )),
+        }
+    }
+
+    Ok(evaluation)
+}
+
+fn detect_supports_http(detect: &DetectionBlock) -> bool {
+    detect.phases.is_empty() || detect.phases.contains(&DetectionPhase::Http)
+}
+
+async fn evaluate_access_path_availability<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    html: &str,
+    profile: &RegistrySourceProfile,
+    access_path: &ProfileAccessPathDefinition,
+    profile_captures: &HashMap<String, String>,
+    profile_evidence: &[String],
+) -> Result<Option<SourceDetectionMatch>, String> {
+    let mut captures = profile_captures.clone();
+    let mut evidence = profile_evidence.to_vec();
+
+    if let Some(availability) = &access_path.availability {
+        if !evaluate_availability_checks(
+            client,
+            input_url,
+            html,
+            availability,
+            &mut captures,
+            &mut evidence,
+        )
+        .await?
+        {
+            return Ok(None);
+        }
+
+        if !required_captures_available(availability, &captures) {
+            return Ok(None);
+        }
+    }
+
+    let source_config_template = access_path
+        .availability
+        .as_ref()
+        .and_then(|availability| availability.source_config.as_ref());
+    let source_config = match build_source_config(
+        source_config_template,
+        profile.document.identity.as_ref(),
+        input_url,
+        &captures,
+    ) {
+        Ok(source_config) => source_config,
+        Err(error) if is_missing_capture(&error) => return Ok(None),
+        Err(error) => return Err(detection_template_error_message(error)),
+    };
+    if !source_config_satisfies_required_schema(
+        &source_config,
+        profile.document.source_config_schema.as_ref(),
+    ) || !source_config_satisfies_required_schema(
+        &source_config,
+        access_path.source_config_schema.as_ref(),
+    ) {
+        return Ok(None);
+    }
+    let identity =
+        derive_source_identity(profile.document.identity.as_ref(), input_url, &captures)?;
+
     Ok(Some(SourceDetectionMatch {
-        adapter_key: profile.adapter_key.clone(),
-        system_profile_id: profile.id,
-        system_profile_key: profile.key.clone(),
-        system_profile_name: profile.name.clone(),
+        adapter_key: access_path.adapter_key.clone(),
+        profile_key: profile.document.key.clone(),
+        profile_name: profile.document.name.clone(),
+        path_key: access_path.key.clone(),
+        path_name: access_path.name.clone(),
         key: identity.key,
         name: identity.name,
+        key_candidates: identity.key_candidates,
+        name_candidates: identity.name_candidates,
         source_config,
         evidence,
     }))
 }
 
-async fn test_system_profile_with_client<C: DetectionHttpClient + Sync>(
+async fn evaluate_availability_checks<C: DetectionHttpClient + Sync>(
     client: &C,
     input_url: &Url,
-    profile: &SystemProfile,
-) -> Result<SystemProfileTestResult, String> {
-    let html = client.get_text(input_url.clone()).await?;
-    let required = required_detection_checks(profile)?;
-    let mut captures = HashMap::new();
-    let mut checks = Vec::new();
-
-    for (index, check) in required.iter().enumerate() {
-        let outcome = evaluate_check_outcome(client, input_url, &html, check, &mut captures)
-            .await
-            .unwrap_or_else(DetectionCheckOutcome::failed);
-        checks.push(SystemProfileTestCheckResult {
-            index: index + 1,
-            check: check.clone(),
-            status: outcome.status,
-            evidence: outcome.evidence,
-            diagnostic: outcome.diagnostic,
-        });
+    html: &str,
+    availability: &AvailabilityBlock,
+    captures: &mut HashMap<String, String>,
+    evidence: &mut Vec<String>,
+) -> Result<bool, String> {
+    for check in &availability.checks {
+        let Some(check_evidence) = evaluate_check(client, input_url, html, check, captures).await?
+        else {
+            return Ok(false);
+        };
+        evidence.push(check_evidence);
     }
 
-    let status = if checks
-        .iter()
-        .all(|check| check.status == SystemProfileTestCheckStatus::Passed)
-    {
-        SystemProfileTestStatus::Passed
-    } else {
-        SystemProfileTestStatus::Failed
-    };
+    Ok(true)
+}
 
-    let (key, name, source_config) = if status == SystemProfileTestStatus::Passed {
-        enrich_identity_captures(client, input_url, &html, &profile.definition, &mut captures)
-            .await?;
-        let identity = derive_source_identity(&profile.definition, input_url, &captures)?;
-        (
-            Some(identity.key),
-            Some(identity.name),
-            Some(build_source_config(
-                &profile.definition,
-                input_url,
-                &captures,
-            )?),
-        )
-    } else {
-        (None, None, None)
-    };
-
-    Ok(SystemProfileTestResult {
-        status,
-        adapter_key: profile.adapter_key.clone(),
-        system_profile_id: profile.id,
-        system_profile_key: profile.key.clone(),
-        system_profile_name: profile.name.clone(),
-        key,
-        name,
-        source_config,
-        checks,
+fn required_captures_available(
+    availability: &AvailabilityBlock,
+    captures: &HashMap<String, String>,
+) -> bool {
+    availability.required_captures.iter().all(|capture_key| {
+        captures
+            .get(capture_key)
+            .is_some_and(|value| !value.trim().is_empty())
     })
 }
 
-fn required_detection_checks(profile: &SystemProfile) -> Result<&[Value], String> {
-    profile
-        .definition
-        .pointer("/detect/required")
+fn source_config_satisfies_required_schema(source_config: &Value, schema: Option<&Value>) -> bool {
+    let Some(required_fields) = schema
+        .and_then(|schema| schema.get("required"))
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .ok_or_else(|| "definition.detect.required must be an array".to_string())
+    else {
+        return true;
+    };
+
+    required_fields
+        .iter()
+        .filter_map(Value::as_str)
+        .all(|field| source_config_value_is_available(source_config.get(field)))
+}
+
+fn source_config_value_is_available(value: Option<&Value>) -> bool {
+    match value {
+        Some(Value::Null) | None => false,
+        Some(Value::String(value)) => !value.trim().is_empty(),
+        Some(_) => true,
+    }
 }
 
 async fn evaluate_check<C: DetectionHttpClient + Sync>(
@@ -368,7 +448,7 @@ async fn evaluate_check<C: DetectionHttpClient + Sync>(
     captures: &mut HashMap<String, String>,
 ) -> Result<Option<String>, String> {
     let outcome = evaluate_check_outcome(client, input_url, html, check, captures).await?;
-    if outcome.status == SystemProfileTestCheckStatus::Passed {
+    if outcome.status == DetectionCheckStatus::Passed {
         Ok(outcome.evidence)
     } else {
         Ok(None)
@@ -482,7 +562,7 @@ async fn evaluate_check_outcome<C: DetectionHttpClient + Sync>(
         return evaluate_fetch_script(client, input_url, html, fetch_script, captures).await;
     }
 
-    Err("unsupported detection check".to_string())
+    Err("unsupported source-profile detection check".to_string())
 }
 
 async fn evaluate_fetch_script<C: DetectionHttpClient + Sync>(
@@ -629,37 +709,12 @@ fn evaluate_regex_outcome(
 struct SourceIdentity {
     key: String,
     name: String,
-}
-
-async fn enrich_identity_captures<C: DetectionHttpClient + Sync>(
-    client: &C,
-    input_url: &Url,
-    html: &str,
-    definition: &Value,
-    captures: &mut HashMap<String, String>,
-) -> Result<Vec<String>, String> {
-    let Some(extracts) = definition
-        .pointer("/identity/extract")
-        .and_then(Value::as_array)
-    else {
-        return Ok(Vec::new());
-    };
-
-    let mut evidence = Vec::new();
-    for extract in extracts {
-        let outcome = evaluate_check_outcome(client, input_url, html, extract, captures).await?;
-        if outcome.status == SystemProfileTestCheckStatus::Passed {
-            if let Some(extract_evidence) = outcome.evidence {
-                evidence.push(format!("Identität: {extract_evidence}"));
-            }
-        }
-    }
-
-    Ok(evidence)
+    key_candidates: Vec<String>,
+    name_candidates: Vec<String>,
 }
 
 fn derive_source_identity(
-    definition: &Value,
+    identity: Option<&SourceProfileIdentity>,
     input_url: &Url,
     captures: &HashMap<String, String>,
 ) -> Result<SourceIdentity, String> {
@@ -667,41 +722,57 @@ fn derive_source_identity(
     let fallback_key = format!("{}_careers", to_technical_key(&fallback_company_name));
     let fallback_name = format!("{fallback_company_name} Karriere");
 
-    let key = render_first_identity_candidate(
-        definition.pointer("/identity/keyCandidates"),
+    let mut key_candidates = render_identity_candidates(
+        identity
+            .map(|identity| identity.key_candidates.as_slice())
+            .unwrap_or(&[]),
         input_url,
         captures,
     )?
+    .into_iter()
     .map(|candidate| to_technical_key(&candidate))
     .filter(|candidate| !candidate.is_empty())
-    .unwrap_or(fallback_key);
+    .collect::<Vec<_>>();
+    dedupe_preserving_order(&mut key_candidates);
+    if key_candidates.is_empty() {
+        key_candidates.push(fallback_key);
+    }
 
-    let name = render_first_identity_candidate(
-        definition.pointer("/identity/nameCandidates"),
+    let mut name_candidates = render_identity_candidates(
+        identity
+            .map(|identity| identity.name_candidates.as_slice())
+            .unwrap_or(&[]),
         input_url,
         captures,
     )?
+    .into_iter()
     .filter(|candidate| !candidate.trim().is_empty())
-    .unwrap_or(fallback_name);
+    .collect::<Vec<_>>();
+    dedupe_preserving_order(&mut name_candidates);
+    if name_candidates.is_empty() {
+        name_candidates.push(fallback_name);
+    }
 
-    Ok(SourceIdentity { key, name })
+    Ok(SourceIdentity {
+        key: key_candidates[0].clone(),
+        name: name_candidates[0].clone(),
+        key_candidates,
+        name_candidates,
+    })
 }
 
-fn render_first_identity_candidate(
-    candidates_value: Option<&Value>,
+fn render_identity_candidates(
+    candidates: &[String],
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<Option<String>, String> {
-    let Some(candidates) = candidates_value.and_then(Value::as_array) else {
-        return Ok(None);
-    };
-
-    for candidate in candidates.iter().filter_map(Value::as_str) {
+) -> Result<Vec<String>, String> {
+    let mut rendered_candidates = Vec::new();
+    for candidate in candidates {
         match render_detection_template(candidate, input_url, captures) {
             Ok(rendered) => {
                 let rendered = rendered.trim();
                 if !rendered.is_empty() {
-                    return Ok(Some(rendered.to_string()));
+                    rendered_candidates.push(rendered.to_string());
                 }
             }
             Err(error) if is_missing_capture(&error) => continue,
@@ -709,16 +780,29 @@ fn render_first_identity_candidate(
         }
     }
 
-    Ok(None)
+    Ok(rendered_candidates)
+}
+
+fn dedupe_preserving_order(values: &mut Vec<String>) {
+    let mut seen = Vec::<String>::new();
+    values.retain(|value| {
+        if seen.iter().any(|seen_value| seen_value == value) {
+            false
+        } else {
+            seen.push(value.clone());
+            true
+        }
+    });
 }
 
 fn build_source_config(
-    definition: &Value,
+    source_config_template: Option<&Value>,
+    identity: Option<&SourceProfileIdentity>,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<Value, String> {
-    let template = definition.get("sourceConfig").unwrap_or(&Value::Null);
-    let mut source_config = if let Some(object) = template.as_object() {
+) -> Result<Value, TemplateError> {
+    let mut source_config = if let Some(object) = source_config_template.and_then(Value::as_object)
+    {
         let mut rendered = Map::new();
         for (key, value) in object {
             rendered.insert(
@@ -731,17 +815,19 @@ fn build_source_config(
         json_default_source_config(input_url)
     };
 
-    merge_optional_source_config(&mut source_config, definition, input_url, captures)?;
+    merge_optional_source_config(&mut source_config, identity, input_url, captures)?;
     Ok(source_config)
 }
 
 fn merge_optional_source_config(
     source_config: &mut Value,
-    definition: &Value,
+    identity: Option<&SourceProfileIdentity>,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<(), String> {
-    let Some(optional_config) = definition.pointer("/identity/optionalSourceConfig") else {
+) -> Result<(), TemplateError> {
+    let Some(optional_config) =
+        identity.and_then(|identity| identity.optional_source_config.as_ref())
+    else {
         return Ok(());
     };
     let Some(optional_config) = optional_config.as_object() else {
@@ -764,12 +850,11 @@ fn render_template_value(
     value: &Value,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<Value, String> {
+) -> Result<Value, TemplateError> {
     match value {
-        Value::String(template) => Ok(Value::String(
-            render_detection_template(template, input_url, captures)
-                .map_err(detection_template_error_message)?,
-        )),
+        Value::String(template) => Ok(Value::String(render_detection_template(
+            template, input_url, captures,
+        )?)),
         Value::Array(values) => values
             .iter()
             .map(|value| render_template_value(value, input_url, captures))
@@ -783,7 +868,7 @@ fn render_template_value(
                     render_template_value(value, input_url, captures)?,
                 ))
             })
-            .collect::<Result<Map<_, _>, String>>()
+            .collect::<Result<Map<_, _>, TemplateError>>()
             .map(Value::Object),
         other => Ok(other.clone()),
     }
@@ -793,12 +878,12 @@ fn render_optional_template_value(
     value: &Value,
     input_url: &Url,
     captures: &HashMap<String, String>,
-) -> Result<Option<Value>, String> {
+) -> Result<Option<Value>, TemplateError> {
     match value {
         Value::String(template) => match render_detection_template(template, input_url, captures) {
             Ok(rendered) => Ok(Some(Value::String(rendered))),
             Err(error) if is_missing_capture(&error) => Ok(None),
-            Err(error) => Err(detection_template_error_message(error)),
+            Err(error) => Err(error),
         },
         Value::Array(values) => {
             let mut rendered_values = Vec::new();
@@ -941,12 +1026,8 @@ fn is_generic_host_label(label: &str) -> bool {
 }
 
 fn normalized_host(url: &Url) -> String {
-    url.host_str()
-        .unwrap_or_default()
-        .to_lowercase()
-        .strip_prefix("www.")
-        .unwrap_or_else(|| url.host_str().unwrap_or_default())
-        .to_string()
+    let host = url.host_str().unwrap_or_default().to_lowercase();
+    host.strip_prefix("www.").unwrap_or(&host).to_string()
 }
 
 type BoxedTextFuture<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
@@ -1005,16 +1086,10 @@ impl DetectionHttpClient for ReqwestDetectionHttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source_model::{
-        create_source, create_system_profile, list_sources, CreateSourceInput,
-        CreateSystemProfileInput,
+    use crate::source_registry::{
+        RegistrySourceProfile, SourceProfileDocument, SourceRegistryDocumentOrigin,
     };
-    use serde::Deserialize;
     use serde_json::json;
-    use sqlx::{
-        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-        SqlitePool,
-    };
 
     struct FixtureHttpClient {
         responses: HashMap<String, String>,
@@ -1040,6 +1115,220 @@ mod tests {
                     .ok_or_else(|| format!("{} not found", url.as_str()))
             })
         }
+    }
+
+    #[test]
+    fn source_profile_detection_does_not_recommend_access_path_without_required_capture() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><main id="example-board-root"></main></body></html>"#,
+            )]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example_board",
+                "name": "Example Board",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{ "htmlContains": "example-board-root" }]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": {
+                        "requiredCaptures": ["tenant"],
+                        "sourceConfig": {
+                            "tenant": "{{capture:tenant}}",
+                            "startUrl": "{{inputUrl}}"
+                        }
+                    }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_recommends_path_after_required_capture_and_availability_checks_pass(
+    ) {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://example.com/jobs",
+                    r#"<html><body><script>window.tenant = "acme";</script></body></html>"#,
+                ),
+                (
+                    "https://example.com/api/status.json",
+                    r#"{"jobs":[{"title":"Engineer"}]}"#,
+                ),
+            ]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example_board",
+                "name": "Example Board",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{
+                        "htmlRegex": "tenant\\s*=\\s*\"([^\"]+)\"",
+                        "captureAs": "tenant"
+                    }]
+                },
+                "identity": {
+                    "keyCandidates": ["{{capture:tenant|technicalKey}}_careers"],
+                    "nameCandidates": ["{{capture:tenant|titleCase}} Karriere"]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": {
+                        "requiredCaptures": ["tenant"],
+                        "checks": [{
+                            "fetchJson": {
+                                "url": "/api/status.json",
+                                "pathExists": "$.jobs"
+                            }
+                        }],
+                        "sourceConfig": {
+                            "tenant": "{{capture:tenant}}",
+                            "startUrl": "{{origin}}/api/jobs/{{capture:tenant}}"
+                        }
+                    }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.profile_key.as_deref(), Some("example_board"));
+            assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
+            assert_eq!(result.key.as_deref(), Some("acme_careers"));
+            assert_eq!(result.name.as_deref(), Some("Acme Karriere"));
+            assert_eq!(result.key_candidates, vec!["acme_careers"]);
+            assert_eq!(result.name_candidates, vec!["Acme Karriere"]);
+            assert_eq!(result.matches[0].key_candidates, vec!["acme_careers"]);
+            assert_eq!(result.matches[0].name_candidates, vec!["Acme Karriere"]);
+            let source_config = result.source_config.unwrap();
+            assert_eq!(source_config["tenant"], "acme");
+            assert_eq!(
+                source_config["startUrl"],
+                "https://example.com/api/jobs/acme"
+            );
+            assert!(result
+                .evidence
+                .join("\n")
+                .contains("https://example.com/api/status.json"));
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_does_not_recommend_path_when_required_schema_config_is_missing() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><main id="example-board-root"></main></body></html>"#,
+            )]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example_board",
+                "name": "Example Board",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{ "htmlContains": "example-board-root" }]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": {
+                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
+                    },
+                    "sourceConfigSchema": {
+                        "type": "object",
+                        "required": ["startUrl", "apiBaseUrl"],
+                        "properties": {
+                            "startUrl": { "type": "string" },
+                            "apiBaseUrl": { "type": "string" }
+                        }
+                    }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_does_not_recommend_path_when_availability_check_fails() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([
+                (
+                    "https://example.com/jobs",
+                    r#"<html><body><main id="example-board-root"></main></body></html>"#,
+                ),
+                ("https://example.com/health.txt", "different token"),
+            ]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example_board",
+                "name": "Example Board",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{ "htmlContains": "example-board-root" }]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": {
+                        "checks": [{
+                            "fetchText": {
+                                "url": "/health.txt",
+                                "contains": "requiredApiToken"
+                            }
+                        }],
+                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
+                    }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+        });
     }
 
     #[test]
@@ -1070,164 +1359,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn tests_selected_system_profile_successfully_without_persisting_a_source() {
+    fn detects_greenhouse_ashby_and_lever_with_profile_path_and_creatable_config() {
         tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let profile = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "example_board".to_string(),
-                    name: "Example Board".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [
-                            { "htmlContains": "example-board-root" },
-                            { "fetchText": {
-                                "url": "/assets/board.js",
-                                "regex": "apiBase\\s*=\\s*\"([^\"]+)\"",
-                                "captureAs": "apiBaseUrl"
-                            }}
-                        ]},
-                        "sourceConfig": {
-                            "startUrl": "{{inputUrl}}",
-                            "apiBaseUrl": "{{capture:apiBaseUrl}}"
-                        }
-                    }),
-                    source_config_schema: json!({}),
-                    status: SourceStatus::Draft,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-            let client = FixtureHttpClient::new([
-                (
-                    "https://example.com/jobs",
-                    r#"<main id="example-board-root"></main>"#,
-                ),
-                (
-                    "https://example.com/assets/board.js",
-                    r#"window.apiBase = "https://api.example.com/jobs";"#,
-                ),
-            ]);
-
-            let result = test_url_against_system_profile_with_client(
-                &pool,
-                &client,
-                "https://example.com/jobs",
-                profile.id,
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(result.status, SystemProfileTestStatus::Passed);
-            assert_eq!(result.system_profile_key, "example_board");
-            assert_eq!(result.checks.len(), 2);
-            assert!(result
-                .checks
-                .iter()
-                .all(|check| check.status == SystemProfileTestCheckStatus::Passed));
-            assert_eq!(
-                result.checks[0].evidence.as_deref(),
-                Some("HTML enthält `example-board-root`")
-            );
-            assert_eq!(result.checks[0].diagnostic, None);
-            assert_eq!(
-                result.source_config.unwrap()["apiBaseUrl"],
-                "https://api.example.com/jobs"
-            );
-            assert!(list_sources(&pool).await.unwrap().is_empty());
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn tests_selected_system_profile_reports_failed_required_check_without_source_config() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let profile = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "example_board".to_string(),
-                    name: "Example Board".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [
-                            { "htmlContains": "example-board-root" },
-                            { "fetchText": {
-                                "url": "/assets/board.js",
-                                "contains": "requiredApiToken"
-                            }}
-                        ]},
-                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                    }),
-                    source_config_schema: json!({}),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-            let client = FixtureHttpClient::new([
-                (
-                    "https://example.com/jobs",
-                    r#"<main id="example-board-root"></main>"#,
-                ),
-                (
-                    "https://example.com/assets/board.js",
-                    "console.log('different token')",
-                ),
-            ]);
-
-            let result = test_url_against_system_profile_with_client(
-                &pool,
-                &client,
-                "https://example.com/jobs",
-                profile.id,
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(result.status, SystemProfileTestStatus::Failed);
-            assert_eq!(result.source_config, None);
-            assert_eq!(
-                result.checks[0].status,
-                SystemProfileTestCheckStatus::Passed
-            );
-            assert_eq!(
-                result.checks[1].status,
-                SystemProfileTestCheckStatus::Failed
-            );
-            assert_eq!(
-                result.checks[0].evidence.as_deref(),
-                Some("HTML enthält `example-board-root`")
-            );
-            assert!(result.checks[1]
-                .diagnostic
-                .as_deref()
-                .unwrap()
-                .contains("requiredApiToken` nicht"));
-            assert!(list_sources(&pool).await.unwrap().is_empty());
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn detects_greenhouse_ashby_and_lever_with_vendor_board_or_api_evidence_and_creatable_config() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
             let scenarios = [
                 (
-                    create_builtin_system_profile(
-                        &pool,
-                        include_str!("../../system-profiles/builtin/greenhouse.json"),
-                    )
-                    .await,
+                    builtin_profile("greenhouse"),
                     "https://openai.com/careers",
                     r#"
                     <html>
@@ -1238,15 +1374,14 @@ mod tests {
                       </body>
                     </html>
                     "#,
+                    "greenhouse",
+                    "endpoint_inventory",
+                    "declarative_endpoint_inventory",
                     "\\.greenhouse\\.io",
                     "https://openai.com/careers",
                 ),
                 (
-                    create_builtin_system_profile(
-                        &pool,
-                        include_str!("../../system-profiles/builtin/ashby.json"),
-                    )
-                    .await,
+                    builtin_profile("ashby"),
                     "https://ashby-fixture.test/careers",
                     r#"
                     <html>
@@ -1256,15 +1391,14 @@ mod tests {
                       </body>
                     </html>
                     "#,
+                    "ashby",
+                    "endpoint_inventory",
+                    "declarative_endpoint_inventory",
                     "\\.ashbyhq\\.com",
                     "https://api.ashbyhq.com/posting-api/job-board/example?includeCompensation=true",
                 ),
                 (
-                    create_builtin_system_profile(
-                        &pool,
-                        include_str!("../../system-profiles/builtin/lever.json"),
-                    )
-                    .await,
+                    builtin_profile("lever"),
                     "https://lever-fixture.test/jobs",
                     r#"
                     <html>
@@ -1276,68 +1410,54 @@ mod tests {
                       </body>
                     </html>
                     "#,
+                    "lever",
+                    "endpoint_inventory",
+                    "declarative_endpoint_inventory",
                     "jobs\\.lever\\.co",
                     "https://lever-fixture.test/jobs",
                 ),
             ];
 
-            for (profile, input_url, html, expected_evidence_marker, expected_start_url) in
-                scenarios
+            for (
+                profile,
+                input_url,
+                html,
+                expected_profile_key,
+                expected_path_key,
+                expected_adapter_key,
+                expected_evidence_marker,
+                expected_start_url,
+            ) in scenarios
             {
                 let client = FixtureHttpClient::new([(input_url, html)]);
 
-                let result = detect_with_profiles(
+                let result = detect_with_source_profiles(
                     &client,
                     &Url::parse(input_url).unwrap(),
-                    &[profile.clone()],
+                    &[profile],
                 )
                 .await
                 .unwrap();
 
                 assert_eq!(result.status, SourceDetectionStatus::Detected);
-                assert_eq!(
-                    result.system_profile_key.as_deref(),
-                    Some(profile.key.as_str())
-                );
+                assert_eq!(result.profile_key.as_deref(), Some(expected_profile_key));
+                assert_eq!(result.path_key.as_deref(), Some(expected_path_key));
+                assert_eq!(result.adapter_key.as_deref(), Some(expected_adapter_key));
                 assert!(result
                     .evidence
                     .join("\n")
                     .contains(expected_evidence_marker));
-
-                let source = create_source(
-                    &pool,
-                    CreateSourceInput {
-                        key: result.key.unwrap(),
-                        adapter_key: result.adapter_key.unwrap(),
-                        system_profile_id: result.system_profile_id,
-                        browser_profile_id: None,
-                        name: result.name.unwrap(),
-                        description: None,
-                        source_config: result.source_config.unwrap(),
-                        status: SourceStatus::Active,
-                        validation_error: None,
-                    },
-                )
-                .await
-                .unwrap();
-
-                assert_eq!(source.system_profile_id, Some(profile.id));
-                assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
-                assert_eq!(source.source_config["startUrl"], expected_start_url);
+                assert_eq!(
+                    result.source_config.unwrap()["startUrl"],
+                    expected_start_url
+                );
             }
         });
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn ashby_identity_uses_public_website_when_hosted_board_exposes_it() {
+    fn ashby_identity_uses_board_slug_candidates_when_profile_captures_it() {
         tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let profile = create_builtin_system_profile(
-                &pool,
-                include_str!("../../system-profiles/builtin/ashby.json"),
-            )
-            .await;
             let input_url = "https://jobs.ashbyhq.com/focused";
             let client = FixtureHttpClient::new([(
                 input_url,
@@ -1355,20 +1475,23 @@ mod tests {
                 "#,
             )]);
 
-            let result = detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &[profile])
-                .await
-                .unwrap();
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse(input_url).unwrap(),
+                &[builtin_profile("ashby")],
+            )
+            .await
+            .unwrap();
 
             assert_eq!(result.status, SourceDetectionStatus::Detected);
-            assert_eq!(result.key.as_deref(), Some("focused_energy_careers"));
-            assert_eq!(result.name.as_deref(), Some("Focused Energy Karriere"));
+            assert_eq!(result.key.as_deref(), Some("focused_careers"));
+            assert_eq!(result.name.as_deref(), Some("Focused Karriere"));
             let source_config = result.source_config.unwrap();
             assert_eq!(
                 source_config["startUrl"],
                 "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
             );
-            assert_eq!(source_config["companyWebsite"], "https://focused-energy.co");
-            assert!(result.evidence.join("\n").contains("Identität:"));
+            assert!(source_config.get("companyWebsite").is_none());
         });
     }
 
@@ -1408,9 +1531,9 @@ mod tests {
                 ),
             ]);
             let profiles = vec![
-                builtin_greenhouse_profile(51),
-                builtin_ashby_profile(52),
-                builtin_lever_profile(53),
+                builtin_profile("greenhouse"),
+                builtin_profile("ashby"),
+                builtin_profile("lever"),
             ];
 
             for input_url in [
@@ -1418,10 +1541,13 @@ mod tests {
                 "https://example.com/ashby-mention",
                 "https://example.com/lever-mention",
             ] {
-                let result =
-                    detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &profiles)
-                        .await
-                        .unwrap();
+                let result = detect_with_source_profiles(
+                    &client,
+                    &Url::parse(input_url).unwrap(),
+                    &profiles,
+                )
+                .await
+                .unwrap();
 
                 assert_eq!(result.status, SourceDetectionStatus::Unsupported);
                 assert!(result.matches.is_empty());
@@ -1443,16 +1569,19 @@ mod tests {
                 ),
             ]);
             let profiles = vec![
-                builtin_greenhouse_profile(54),
-                builtin_ashby_profile(55),
-                builtin_lever_profile(56),
+                builtin_profile("greenhouse"),
+                builtin_profile("ashby"),
+                builtin_profile("lever"),
             ];
 
             for input_url in ["https://openai.com/careers", "https://helsing.ai/careers"] {
-                let result =
-                    detect_with_profiles(&client, &Url::parse(input_url).unwrap(), &profiles)
-                        .await
-                        .unwrap();
+                let result = detect_with_source_profiles(
+                    &client,
+                    &Url::parse(input_url).unwrap(),
+                    &profiles,
+                )
+                .await
+                .unwrap();
 
                 assert_eq!(result.status, SourceDetectionStatus::Unsupported);
                 assert!(result.matches.is_empty());
@@ -1488,27 +1617,27 @@ mod tests {
                     </urlset>"#,
                 ),
             ]);
-            let profile = builtin_successfactors_profile(44);
 
-            let result = detect_with_profiles(
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse("https://careers.example.com/search/").unwrap(),
-                &[profile],
+                &[builtin_profile("successfactors")],
             )
             .await
             .unwrap();
 
             assert_eq!(result.status, SourceDetectionStatus::Detected);
-            assert_eq!(result.system_profile_key.as_deref(), Some("successfactors"));
+            assert_eq!(result.profile_key.as_deref(), Some("successfactors"));
+            assert_eq!(result.path_key.as_deref(), Some("sitemap_inventory"));
             assert_eq!(
                 result.adapter_key.as_deref(),
                 Some("declarative_sitemap_inventory")
             );
-            assert_eq!(result.evidence.len(), 2);
-            assert!(result.evidence[0].contains("HTML erfüllt Regex"));
-            assert!(result.evidence[0].contains("SuccessFactors"));
-            assert!(result.evidence[1].contains("https://careers.example.com/sitemap.xml"));
-            assert!(result.evidence[1].contains("<urlset"));
+            let evidence = result.evidence.join("\n");
+            assert!(evidence.contains("HTML erfüllt Regex"));
+            assert!(evidence.contains("SuccessFactors"));
+            assert!(evidence.contains("https://careers.example.com/sitemap.xml"));
+            assert!(evidence.contains("<urlset"));
 
             let source_config = result.source_config.unwrap();
             assert_eq!(
@@ -1544,12 +1673,11 @@ mod tests {
                     </urlset>"#,
                 ),
             ]);
-            let profile = builtin_successfactors_profile(45);
 
-            let result = detect_with_profiles(
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse("https://successfactors.example.com/jobs").unwrap(),
-                &[profile],
+                &[builtin_profile("successfactors")],
             )
             .await
             .unwrap();
@@ -1561,11 +1689,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn detects_commerzbank_muz_with_bundled_profile_and_creates_source() {
+    fn detects_muz_with_source_profile_and_access_path_config() {
         tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let profile = create_builtin_muz_system_profile(&pool).await;
             let client = FixtureHttpClient::new([
                 (
                     "https://jobs.commerzbank.com/index.php?ac=search_result",
@@ -1595,31 +1720,27 @@ mod tests {
                 ),
             ]);
 
-            let result = detect_with_profiles(
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse("https://jobs.commerzbank.com/index.php?ac=search_result").unwrap(),
-                &[profile.clone()],
+                &[builtin_profile("muz_global_jobboard")],
             )
             .await
             .unwrap();
 
             assert_eq!(result.status, SourceDetectionStatus::Detected);
-            assert_eq!(
-                result.system_profile_key.as_deref(),
-                Some("muz_global_jobboard")
-            );
+            assert_eq!(result.profile_key.as_deref(), Some("muz_global_jobboard"));
+            assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
             assert_eq!(
                 result.adapter_key.as_deref(),
                 Some("declarative_endpoint_inventory")
             );
-            assert_eq!(result.system_profile_id, Some(profile.id));
-            assert_eq!(result.evidence.len(), 3);
             let evidence = result.evidence.join("\n");
             assert!(evidence.contains("HTML"));
             assert!(evidence.contains("Script"));
             assert!(evidence.contains("JSON-Pfad"));
 
-            let source_config = result.source_config.clone().unwrap();
+            let source_config = result.source_config.unwrap();
             assert_eq!(
                 source_config["startUrl"],
                 "https://jobs.commerzbank.com/index.php?ac=search_result"
@@ -1631,30 +1752,6 @@ mod tests {
             assert_eq!(
                 source_config["configUrl"],
                 "https://jobs.commerzbank.com/assets/js/jobboard.config.json"
-            );
-
-            let source = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: result.key.unwrap(),
-                    adapter_key: result.adapter_key.unwrap(),
-                    system_profile_id: result.system_profile_id,
-                    browser_profile_id: None,
-                    name: result.name.unwrap(),
-                    description: None,
-                    source_config,
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(source.system_profile_id, Some(profile.id));
-            assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
-            assert_eq!(
-                source.source_config["apiBaseUrl"],
-                "https://api-jobs.commerzbank.com/"
             );
         });
     }
@@ -1673,12 +1770,11 @@ mod tests {
                 </html>
                 "#,
             )]);
-            let profile = builtin_muz_profile(42);
 
-            let result = detect_with_profiles(
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse("https://jobs.commerzbank.com/generic-careers").unwrap(),
-                &[profile],
+                &[builtin_profile("muz_global_jobboard")],
             )
             .await
             .unwrap();
@@ -1686,36 +1782,6 @@ mod tests {
             assert_eq!(result.status, SourceDetectionStatus::Unsupported);
             assert!(result.matches.is_empty());
             assert!(result.evidence.is_empty());
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn muz_source_config_requires_stable_api_and_config_values() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let profile = create_builtin_muz_system_profile(&pool).await;
-
-            let error = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "commerzbank_careers".to_string(),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    system_profile_id: Some(profile.id),
-                    browser_profile_id: None,
-                    name: "Commerzbank Karriere".to_string(),
-                    description: None,
-                    source_config: json!({
-                        "startUrl": "https://jobs.commerzbank.com/index.php?ac=search_result"
-                    }),
-                    status: SourceStatus::Draft,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
-
-            assert!(error.contains("sourceConfig.apiBaseUrl is required"));
         });
     }
 
@@ -1736,56 +1802,24 @@ mod tests {
                     r#"{"searchResults":[{"title":"Software Engineer","url":"/karriere/stellenanzeigen/ref1"}],"total":1}"#,
                 ),
             ]);
-            let profile = SystemProfile {
-                id: 43,
-                key: "magnolia_esmp_job_search".to_string(),
-                name: "Magnolia ESMP Jobsuche".to_string(),
-                description: None,
-                adapter_key: "declarative_endpoint_inventory".to_string(),
-                definition_schema_version: 1,
-                definition: json!({
-                    "detect": { "required": [
-                        { "fetchScript": {
-                            "srcRegex": "/webresources/js/.*script\\.js",
-                            "contains": "/.search?index=job"
-                        }},
-                        { "fetchJson": {
-                            "url": "/.search?index=job&size=1&page=1",
-                            "pathExists": "$.searchResults"
-                        }}
-                    ]},
-                    "sourceConfig": {
-                        "startUrl": "{{inputUrl}}",
-                        "endpointUrl": "{{origin}}/.search?index=job",
-                        "itemsPath": "$.searchResults",
-                        "titlePath": "$.title",
-                        "urlPath": "$.url"
-                    }
-                }),
-                source_config_schema: json!({}),
-                built_in: true,
-                status: SourceStatus::Active,
-                validation_error: None,
-                created_at: String::new(),
-                updated_at: String::new(),
-            };
 
-            let result = detect_with_profiles(
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse(
                     "https://www.ruv.de/karriere/jobsuche?reqPlace=&reqUmkreis=&jobSearchText=",
                 )
                 .unwrap(),
-                &[profile],
+                &[builtin_profile("magnolia_esmp_job_search")],
             )
             .await
             .unwrap();
 
             assert_eq!(result.status, SourceDetectionStatus::Detected);
             assert_eq!(
-                result.system_profile_key.as_deref(),
+                result.profile_key.as_deref(),
                 Some("magnolia_esmp_job_search")
             );
+            assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
             assert_eq!(
                 result.source_config.unwrap()["endpointUrl"],
                 "https://www.ruv.de/.search?index=job"
@@ -1798,27 +1832,25 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let client = FixtureHttpClient::new([(
                 "https://example.com/jobs",
-                r#"<html><body>No known system</body></html>"#,
+                r#"<html><body>No known source profile</body></html>"#,
             )]);
-            let profile = SystemProfile {
-                id: 1,
-                key: "example".to_string(),
-                name: "Example".to_string(),
-                description: None,
-                adapter_key: "declarative_endpoint_inventory".to_string(),
-                definition_schema_version: 1,
-                definition: json!({
-                    "detect": { "required": [{ "htmlContains": "jobboard-widget" }] },
-                    "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                }),
-                source_config_schema: json!({}),
-                built_in: false,
-                status: SourceStatus::Active,
-                validation_error: None,
-                created_at: String::new(),
-                updated_at: String::new(),
-            };
-            let result = detect_with_profiles(
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example",
+                "name": "Example",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{ "htmlContains": "jobboard-widget" }]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": { "sourceConfig": { "startUrl": "{{inputUrl}}" } }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
                 &client,
                 &Url::parse("https://example.com/jobs").unwrap(),
                 &[profile],
@@ -1831,109 +1863,135 @@ mod tests {
         });
     }
 
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct BuiltinSystemProfileSeed {
-        key: String,
-        name: String,
-        description: Option<String>,
-        adapter_key: String,
-        definition_schema_version: i64,
-        definition: Value,
-        source_config_schema: Value,
-    }
+    #[test]
+    fn ambiguous_detection_reports_source_profile_and_path_terms() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><main id="shared-board-root"></main></body></html>"#,
+            )]);
+            let first = matching_profile("first_profile");
+            let second = matching_profile("second_profile");
 
-    fn builtin_greenhouse_profile(id: i64) -> SystemProfile {
-        builtin_profile_from_json(
-            id,
-            include_str!("../../system-profiles/builtin/greenhouse.json"),
-        )
-    }
-
-    fn builtin_ashby_profile(id: i64) -> SystemProfile {
-        builtin_profile_from_json(id, include_str!("../../system-profiles/builtin/ashby.json"))
-    }
-
-    fn builtin_lever_profile(id: i64) -> SystemProfile {
-        builtin_profile_from_json(id, include_str!("../../system-profiles/builtin/lever.json"))
-    }
-
-    fn builtin_muz_profile(id: i64) -> SystemProfile {
-        builtin_profile_from_json(
-            id,
-            include_str!("../../system-profiles/builtin/muz_global_jobboard.json"),
-        )
-    }
-
-    fn builtin_successfactors_profile(id: i64) -> SystemProfile {
-        builtin_profile_from_json(
-            id,
-            include_str!("../../system-profiles/builtin/successfactors.json"),
-        )
-    }
-
-    fn builtin_profile_from_json(id: i64, contents: &str) -> SystemProfile {
-        let seed: BuiltinSystemProfileSeed = serde_json::from_str(contents).unwrap();
-
-        SystemProfile {
-            id,
-            key: seed.key,
-            name: seed.name,
-            description: seed.description,
-            adapter_key: seed.adapter_key,
-            definition_schema_version: seed.definition_schema_version,
-            definition: seed.definition,
-            source_config_schema: seed.source_config_schema,
-            built_in: true,
-            status: SourceStatus::Active,
-            validation_error: None,
-            created_at: String::new(),
-            updated_at: String::new(),
-        }
-    }
-
-    async fn create_builtin_system_profile(pool: &SqlitePool, contents: &str) -> SystemProfile {
-        let profile = builtin_profile_from_json(0, contents);
-        create_system_profile(
-            pool,
-            CreateSystemProfileInput {
-                key: profile.key,
-                name: profile.name,
-                description: profile.description,
-                adapter_key: profile.adapter_key,
-                definition_schema_version: profile.definition_schema_version,
-                definition: profile.definition,
-                source_config_schema: profile.source_config_schema,
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-    }
-
-    async fn create_builtin_muz_system_profile(pool: &SqlitePool) -> SystemProfile {
-        create_builtin_system_profile(
-            pool,
-            include_str!("../../system-profiles/builtin/muz_global_jobboard.json"),
-        )
-        .await
-    }
-
-    async fn migrated_pool() -> SqlitePool {
-        let options = SqliteConnectOptions::new()
-            .filename(":memory:")
-            .create_if_missing(true)
-            .foreign_keys(true);
-
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(options)
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[first, second],
+            )
             .await
             .unwrap();
 
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+            assert_eq!(result.status, SourceDetectionStatus::Ambiguous);
+            assert_eq!(result.matches.len(), 2);
+            assert_eq!(result.matches[0].profile_key, "first_profile");
+            assert_eq!(result.matches[0].path_key, "endpoint_inventory");
+            let serialized = serde_json::to_string(&result).unwrap();
+            assert!(serialized.contains("profileKey"));
+            assert!(serialized.contains("pathKey"));
+            assert!(!serialized.contains("systemProfile"));
+        });
+    }
 
-        pool
+    #[test]
+    fn source_profiles_without_detection_blocks_are_not_global_detection_candidates() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><main>Any page</main></body></html>"#,
+            )]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "manual_only",
+                "name": "Manual Only",
+                "kind": "generic",
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory"
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+        });
+    }
+
+    fn matching_profile(key: &str) -> RegistrySourceProfile {
+        registry_profile(json!({
+            "schemaVersion": 1,
+            "key": key,
+            "name": title_from_key(key),
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [{ "htmlContains": "shared-board-root" }]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": { "sourceConfig": { "startUrl": "{{inputUrl}}" } }
+            }]
+        }))
+    }
+
+    fn builtin_profile(key: &str) -> RegistrySourceProfile {
+        match key {
+            "ashby" => {
+                registry_profile_from_str(include_str!("../../source-profiles/builtin/ashby.json"))
+            }
+            "greenhouse" => registry_profile_from_str(include_str!(
+                "../../source-profiles/builtin/greenhouse.json"
+            )),
+            "lever" => {
+                registry_profile_from_str(include_str!("../../source-profiles/builtin/lever.json"))
+            }
+            "magnolia_esmp_job_search" => registry_profile_from_str(include_str!(
+                "../../source-profiles/builtin/magnolia_esmp_job_search.json"
+            )),
+            "muz_global_jobboard" => registry_profile_from_str(include_str!(
+                "../../source-profiles/builtin/muz_global_jobboard.json"
+            )),
+            "successfactors" => registry_profile_from_str(include_str!(
+                "../../source-profiles/builtin/successfactors.json"
+            )),
+            other => panic!("unknown built-in source profile fixture {other}"),
+        }
+    }
+
+    fn registry_profile(value: Value) -> RegistrySourceProfile {
+        let document: SourceProfileDocument = serde_json::from_value(value).unwrap();
+        wrap_registry_profile(document)
+    }
+
+    fn registry_profile_from_str(contents: &str) -> RegistrySourceProfile {
+        let document: SourceProfileDocument = serde_json::from_str(contents).unwrap();
+        wrap_registry_profile(document)
+    }
+
+    fn wrap_registry_profile(document: SourceProfileDocument) -> RegistrySourceProfile {
+        RegistrySourceProfile {
+            origin: SourceRegistryDocumentOrigin::BuiltIn,
+            path: format!("source-profiles/builtin/{}.json", document.key),
+            document,
+        }
+    }
+
+    fn title_from_key(key: &str) -> String {
+        key.split('_')
+            .map(|part| {
+                let mut characters = part.chars();
+                match characters.next() {
+                    Some(first) => format!("{}{}", first.to_ascii_uppercase(), characters.as_str()),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }

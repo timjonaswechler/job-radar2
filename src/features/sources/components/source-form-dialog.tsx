@@ -248,34 +248,43 @@ export function SourceFormDialog(props: SourceFormDialogProps) {
 
       if (result.status === "unsupported") {
         setUrlAssistError(
-          "Kein aktives Systemprofil konnte diese URL mit allen Pflichtnachweisen erkennen.",
+          "Kein Quellenprofil konnte diese URL mit allen Pflichtnachweisen und einem verfügbaren Zugriffspfad erkennen.",
         );
         return;
       }
 
       if (result.status === "ambiguous") {
         setUrlAssistError(
-          `Mehrere Systemprofile passen (${result.matches
-            .map((match) => match.systemProfileKey)
-            .join(", ")}). Bitte Systemprofil manuell wählen.`,
+          `Mehrere Quellenprofil-Zugriffspfade passen (${result.matches
+            .map((match) => `${match.profileKey}/${match.pathKey}`)
+            .join(", ")}). Bitte Quelle manuell konfigurieren.`,
         );
         return;
       }
 
-      if (!result.adapterKey || !result.systemProfileId || !result.key || !result.name || !isJsonObject(result.sourceConfig)) {
-        setUrlAssistError("Die Erkennung lieferte keinen vollständigen Quellenvorschlag.");
+      if (
+        !result.adapterKey ||
+        !result.profileKey ||
+        !result.pathKey ||
+        !result.key ||
+        !result.name ||
+        !isJsonObject(result.sourceConfig)
+      ) {
+        setUrlAssistError(
+          "Die Erkennung lieferte keinen vollständigen Quellenvorschlag.",
+        );
         return;
       }
 
       setAdapterKey(result.adapterKey);
-      setSystemProfileId(String(result.systemProfileId));
+      setSystemProfileId("");
       setKey(result.key);
       setName(result.name);
       setBrowserProfileId("");
       setSourceConfigText(JSON.stringify(result.sourceConfig, null, 2));
       setUrlAssistEvidence(result.evidence);
       setUrlAssistMessage(
-        `Erkannt: Systemprofil ${result.systemProfileKey}. Bitte Angaben prüfen und speichern.`,
+        `Erkannt: Quellenprofil ${result.profileKey}, Zugriffspfad ${result.pathKey}. Bitte Angaben prüfen.`,
       );
     } catch (unknownError) {
       setUrlAssistError(String(unknownError));

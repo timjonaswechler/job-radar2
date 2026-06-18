@@ -267,17 +267,7 @@ pub async fn detect_source_from_url(
     state: State<'_, AppState>,
     url: String,
 ) -> Result<crate::source_detection::SourceDetectionResult, String> {
-    crate::source_detection::detect_source_from_url(&state.db, &url).await
-}
-
-#[tauri::command]
-pub async fn test_system_profile_url(
-    state: State<'_, AppState>,
-    url: String,
-    system_profile_id: i64,
-) -> Result<crate::source_detection::SystemProfileTestResult, String> {
-    crate::source_detection::test_url_against_system_profile(&state.db, &url, system_profile_id)
-        .await
+    crate::source_detection::detect_source_from_url(&state.paths.app_data_dir, &url).await
 }
 
 #[tauri::command]
