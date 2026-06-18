@@ -135,11 +135,14 @@ export type SourceDetectionStatus =
 
 export type SourceDetectionMatch = {
   adapterKey: string
-  systemProfileId: number
-  systemProfileKey: string
-  systemProfileName: string
+  profileKey: string
+  profileName: string
+  pathKey: string
+  pathName: string | null
   key: string
   name: string
+  keyCandidates: string[]
+  nameCandidates: string[]
   sourceConfig: JsonValue
   evidence: string[]
 }
@@ -147,10 +150,14 @@ export type SourceDetectionMatch = {
 export type SourceDetectionResult = {
   status: SourceDetectionStatus
   adapterKey: string | null
-  systemProfileId: number | null
-  systemProfileKey: string | null
+  profileKey: string | null
+  profileName: string | null
+  pathKey: string | null
+  pathName: string | null
   key: string | null
   name: string | null
+  keyCandidates: string[]
+  nameCandidates: string[]
   sourceConfig: JsonValue | null
   evidence: string[]
   warnings: string[]

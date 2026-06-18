@@ -54,7 +54,6 @@ pub fn run() {
             app::commands::check_browser_runtime,
             app::commands::list_adapters,
             app::commands::detect_source_from_url,
-            app::commands::test_system_profile_url,
             app::commands::create_search_request,
             app::commands::list_search_requests,
             app::commands::get_search_request,
