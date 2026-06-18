@@ -1,27 +1,25 @@
-//! Declarative Browserprofil-backed source-inventory adapter.
+//! Declarative browser source-inventory adapter backed by registry execution plans.
 //!
 //! This adapter satisfies the `SourceExecutor` seam for Quellen with
 //! `adapter_key = declarative_browser_inventory`. The external representation is
-//! `Browserprofil.definition.inventory`; this module translates that JSON shape
-//! into Job Radar `SourceCandidate` values and maps profile/selector/browser
+//! the resolved source registry access path: optional `query`, ordered
+//! `interactions`, and `inventory` definitions. The module translates that JSON
+//! shape into Job Radar `SourceCandidate` values and maps selector/browser
 //! failures to `SourceExecutionError::Failed`.
 //!
 //! Minimal browser inventory language:
 //!
-//! - `definition.schemaVersion` may be omitted or must be `1`.
-//! - `definition.query` is optional and can build a query-parameterized URL
-//!   from `baseUrl`, `path`, and an ordered `params` array.
-//! - `definition.inventory.navigate.url` is a template supporting
-//!   `{{sourceConfig:<key>}}`, `{{sourceName}}`, `{{sourceKey}}`, and
-//!   `{{query:url}}` when `definition.query` is present.
+//! - `executionPlan.query` is optional and can build a query-parameterized URL
+//!   from `baseUrl`, `path`, and an ordered `params` array. When absent,
+//!   `sourceConfig.startUrl` is used as the page URL.
 //! - Query param templates may use `{{searchRequest:titleText}}`,
 //!   `{{searchRequest:firstLocation}}`, and `{{searchRequest:radiusKm}}`.
-//! - `definition.inventory.waitFor.selector`/`timeoutMs` is optional and is
-//!   passed to the managed browser runtime.
-//! - `definition.inventory.items.select` is a CSS selector for job cards.
-//! - `definition.inventory.fields.title`, `company`, and `url` use exactly one
-//!   of `selectorText` or `selectorAttribute`.
-//! - `definition.inventory.fields.locations` is an array of the same field
+//! - The first `waitFor` entry in `executionPlan.interactions` is passed to the
+//!   managed browser runtime.
+//! - `executionPlan.inventory.items.select` is a CSS selector for job cards.
+//! - `executionPlan.inventory.fields.title`, `company`, and `url` use exactly
+//!   one of `selectorText` or `selectorAttribute`.
+//! - `executionPlan.inventory.fields.locations` is an array of the same field
 //!   expressions and may yield zero or more locations.
 
 use dom_query::{Document, Matcher, Selection};
@@ -38,7 +36,7 @@ use crate::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutionSource, SourceExecutor,
     },
-    source_model::{BrowserProfile, SourceStatus},
+    source_registry::BrowserInteraction,
 };
 
 const ADAPTER_KEY: &str = "declarative_browser_inventory";
@@ -90,80 +88,45 @@ where
             )));
         }
 
-        let browser_profile = input.browser_profile.ok_or_else(|| {
-            SourceExecutionError::Failed(format!(
-                "adapterKey {ADAPTER_KEY} requires an active Browserprofil for source {}",
-                source.key
-            ))
-        })?;
-        if browser_profile.status != SourceStatus::Active {
-            return Err(SourceExecutionError::Failed(format!(
-                "adapterKey {ADAPTER_KEY} requires an active Browserprofil for source {}, but Browserprofil {} has status {}",
-                source.key,
-                browser_profile.key,
-                source_status_label(browser_profile.status)
-            )));
-        }
-
-        ensure_supported_schema_version(browser_profile)?;
-        let inventory = required_object(
-            &browser_profile.definition,
-            "inventory",
-            &browser_profile_path(browser_profile, "definition.inventory"),
-        )?;
-        validate_allowed_keys(
-            inventory,
-            &["navigate", "waitFor", "items", "fields"],
-            &browser_profile_path(browser_profile, "definition.inventory"),
-        )?;
-
-        let navigate = required_object_value(
-            inventory,
-            "navigate",
-            &browser_profile_path(browser_profile, "definition.inventory.navigate"),
-        )?;
-        validate_allowed_keys(
-            navigate,
-            &["url"],
-            &browser_profile_path(browser_profile, "definition.inventory.navigate"),
-        )?;
-        let navigate_url_template = required_string(
-            navigate,
-            "url",
-            &browser_profile_path(browser_profile, "definition.inventory.navigate.url"),
-        )?;
-        let query_url = render_query_url(browser_profile, &input)?;
-        let template_context = BrowserInventoryTemplateContext {
-            source,
-            search_request: input.search_request,
-            query_url: query_url.as_deref(),
-        };
-        let navigate_url =
-            render_template(navigate_url_template, &template_context).map_err(|error| {
+        let inventory = source
+            .inventory()
+            .and_then(Value::as_object)
+            .ok_or_else(|| {
                 SourceExecutionError::Failed(format!(
-                    "{} is invalid: {error}",
-                    browser_profile_path(browser_profile, "definition.inventory.navigate.url")
+                    "executionPlan.inventory must be a JSON object for source {}",
+                    source.key
                 ))
             })?;
-        let page_url = parse_http_url(
-            &navigate_url,
-            &browser_profile_path(browser_profile, "definition.inventory.navigate.url"),
+        validate_allowed_keys(
+            inventory,
+            &["items", "fields"],
+            &plan_path(source, "executionPlan.inventory"),
         )?;
 
-        let wait_for = parse_wait_for(browser_profile, inventory.get("waitFor"))?;
+        let query_url = render_query_url(&input)?;
+        let navigate_url = match query_url {
+            Some(query_url) => query_url,
+            None => source_config_start_url(source)?,
+        };
+        let page_url = parse_http_url(
+            &navigate_url,
+            &plan_path(source, "executionPlan.navigate.url"),
+        )?;
+
+        let wait_for = parse_wait_for(source)?;
         let rendered_html = self
             .browser
             .render_html(page_url.clone(), wait_for.clone())
             .await
             .map_err(|error| {
                 SourceExecutionError::Failed(format!(
-                    "could not render browser inventory {} with Browserprofil {}: {error}",
+                    "could not render browser inventory {} for source {}: {error}",
                     page_url.as_str(),
-                    browser_profile.key
+                    source.key
                 ))
             })?;
 
-        extract_candidates(browser_profile, &rendered_html, &page_url)
+        extract_candidates(source, &rendered_html, &page_url)
     }
 }
 
@@ -233,54 +196,58 @@ impl BrowserInventoryClient for ManagedBrowserInventoryClient {
 }
 
 fn extract_candidates(
-    browser_profile: &BrowserProfile,
+    source: &SourceExecutionSource,
     rendered_html: &str,
     page_url: &Url,
 ) -> Result<Vec<SourceCandidate>, SourceExecutionError> {
-    let inventory = required_object(
-        &browser_profile.definition,
-        "inventory",
-        &browser_profile_path(browser_profile, "definition.inventory"),
-    )?;
+    let inventory = source
+        .inventory()
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "executionPlan.inventory must be a JSON object for source {}",
+                source.key
+            ))
+        })?;
     let items = required_object_value(
         inventory,
         "items",
-        &browser_profile_path(browser_profile, "definition.inventory.items"),
+        &plan_path(source, "executionPlan.inventory.items"),
     )?;
     validate_allowed_keys(
         items,
         &["select"],
-        &browser_profile_path(browser_profile, "definition.inventory.items"),
+        &plan_path(source, "executionPlan.inventory.items"),
     )?;
     let item_selector = required_string(
         items,
         "select",
-        &browser_profile_path(browser_profile, "definition.inventory.items.select"),
+        &plan_path(source, "executionPlan.inventory.items.select"),
     )?;
     let item_matcher = compile_selector(
         item_selector,
-        &browser_profile_path(browser_profile, "definition.inventory.items.select"),
+        &plan_path(source, "executionPlan.inventory.items.select"),
     )?;
 
     let fields = required_object_value(
         inventory,
         "fields",
-        &browser_profile_path(browser_profile, "definition.inventory.fields"),
+        &plan_path(source, "executionPlan.inventory.fields"),
     )?;
     validate_allowed_keys(
         fields,
         &["title", "company", "url", "locations"],
-        &browser_profile_path(browser_profile, "definition.inventory.fields"),
+        &plan_path(source, "executionPlan.inventory.fields"),
     )?;
 
     let document = Document::from(rendered_html);
     let mut candidates = Vec::new();
     for item in document.select_matcher(&item_matcher).iter() {
-        let title = render_required_field(browser_profile, fields, "title", &item)?;
-        let company = render_required_field(browser_profile, fields, "company", &item)?;
-        let raw_url = render_required_field(browser_profile, fields, "url", &item)?;
+        let title = render_required_field(source, fields, "title", &item)?;
+        let company = render_required_field(source, fields, "company", &item)?;
+        let raw_url = render_required_field(source, fields, "url", &item)?;
         let url = resolve_http_candidate_url(&raw_url, page_url).unwrap_or_default();
-        let locations = render_locations(browser_profile, fields, &item)?;
+        let locations = render_locations(source, fields, &item)?;
 
         if title.trim().is_empty() || company.trim().is_empty() || url.trim().is_empty() {
             continue;
@@ -298,14 +265,14 @@ fn extract_candidates(
 }
 
 fn render_required_field(
-    browser_profile: &BrowserProfile,
+    source: &SourceExecutionSource,
     fields: &Map<String, Value>,
     field_name: &str,
     item: &Selection<'_>,
 ) -> Result<String, SourceExecutionError> {
-    let path = browser_profile_path(
-        browser_profile,
-        &format!("definition.inventory.fields.{field_name}"),
+    let path = plan_path(
+        source,
+        &format!("executionPlan.inventory.fields.{field_name}"),
     );
     let field = fields
         .get(field_name)
@@ -319,11 +286,11 @@ fn render_required_field(
 }
 
 fn render_locations(
-    browser_profile: &BrowserProfile,
+    source: &SourceExecutionSource,
     fields: &Map<String, Value>,
     item: &Selection<'_>,
 ) -> Result<Vec<String>, SourceExecutionError> {
-    let path = browser_profile_path(browser_profile, "definition.inventory.fields.locations");
+    let path = plan_path(source, "executionPlan.inventory.fields.locations");
     let locations = fields
         .get("locations")
         .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be an array")))?;
@@ -336,9 +303,9 @@ fn render_locations(
         values.extend(render_field_values(
             location,
             item,
-            &browser_profile_path(
-                browser_profile,
-                &format!("definition.inventory.fields.locations[{index}]"),
+            &plan_path(
+                source,
+                &format!("executionPlan.inventory.fields.locations[{index}]"),
             ),
         )?);
     }
@@ -426,62 +393,52 @@ fn selector_attribute_values(
 }
 
 fn parse_wait_for(
-    browser_profile: &BrowserProfile,
-    value: Option<&Value>,
+    source: &SourceExecutionSource,
 ) -> Result<Option<BrowserInventoryWait>, SourceExecutionError> {
-    let Some(value) = value else {
+    let Some(interactions) = source.interactions() else {
         return Ok(None);
     };
-    let path = browser_profile_path(browser_profile, "definition.inventory.waitFor");
-    let object = value
-        .as_object()
-        .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be a JSON object")))?;
-    validate_allowed_keys(object, &["selector", "timeoutMs"], &path)?;
-    let selector = required_string(object, "selector", &format!("{path}.selector"))?;
-    compile_selector(selector, &format!("{path}.selector"))?;
-    let timeout_ms = match object.get("timeoutMs") {
-        Some(value) => value.as_u64().ok_or_else(|| {
-            SourceExecutionError::Failed(format!("{path}.timeoutMs must be a positive integer"))
-        })?,
-        None => DEFAULT_WAIT_TIMEOUT_MS,
-    };
-    if timeout_ms == 0 {
-        return Err(SourceExecutionError::Failed(format!(
-            "{path}.timeoutMs must be a positive integer"
-        )));
+
+    for (index, interaction) in interactions.iter().enumerate() {
+        match interaction {
+            BrowserInteraction::WaitFor {
+                selector,
+                timeout_ms,
+            } => {
+                let path = plan_path(source, &format!("executionPlan.interactions[{index}]"));
+                compile_selector(selector, &format!("{path}.selector"))?;
+                let timeout_ms = timeout_ms.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
+                if timeout_ms == 0 {
+                    return Err(SourceExecutionError::Failed(format!(
+                        "{path}.timeoutMs must be a positive integer"
+                    )));
+                }
+
+                return Ok(Some(BrowserInventoryWait {
+                    selector: selector.to_string(),
+                    timeout_ms,
+                }));
+            }
+            BrowserInteraction::ClickIfVisible { .. } | BrowserInteraction::ClickUpToN { .. } => {
+                return Err(SourceExecutionError::Failed(format!(
+                    "{} is not supported by the browser inventory executor yet",
+                    plan_path(source, &format!("executionPlan.interactions[{index}]"))
+                )));
+            }
+        }
     }
 
-    Ok(Some(BrowserInventoryWait {
-        selector: selector.to_string(),
-        timeout_ms,
-    }))
-}
-
-fn ensure_supported_schema_version(
-    browser_profile: &BrowserProfile,
-) -> Result<(), SourceExecutionError> {
-    let Some(schema_version) = browser_profile.definition.get("schemaVersion") else {
-        return Ok(());
-    };
-    if schema_version.as_i64() == Some(1) {
-        return Ok(());
-    }
-
-    Err(SourceExecutionError::Failed(format!(
-        "{} must be 1",
-        browser_profile_path(browser_profile, "definition.schemaVersion")
-    )))
+    Ok(None)
 }
 
 fn render_query_url(
-    browser_profile: &BrowserProfile,
     input: &SourceExecutionInput<'_>,
 ) -> Result<Option<String>, SourceExecutionError> {
-    let Some(query_value) = browser_profile.definition.get("query") else {
+    let Some(query_value) = input.source.query() else {
         return Ok(None);
     };
 
-    let query_path = browser_profile_path(browser_profile, "definition.query");
+    let query_path = plan_path(input.source, "executionPlan.query");
     let query = query_value.as_object().ok_or_else(|| {
         SourceExecutionError::Failed(format!("{query_path} must be a JSON object"))
     })?;
@@ -490,12 +447,7 @@ fn render_query_url(
     let base_url_value = query
         .get("baseUrl")
         .ok_or_else(|| SourceExecutionError::Failed(format!("{query_path}.baseUrl is required")))?;
-    let base_url = render_query_base_url(
-        browser_profile,
-        input,
-        base_url_value,
-        &format!("{query_path}.baseUrl"),
-    )?;
+    let base_url = render_query_base_url(input, base_url_value, &format!("{query_path}.baseUrl"))?;
     let base_url = parse_http_url(&base_url, &format!("{query_path}.baseUrl"))?;
 
     let path = required_string(query, "path", &format!("{query_path}.path"))?;
@@ -545,7 +497,6 @@ fn render_query_url(
 }
 
 fn render_query_base_url(
-    browser_profile: &BrowserProfile,
     input: &SourceExecutionInput<'_>,
     value: &Value,
     path: &str,
@@ -579,8 +530,8 @@ fn render_query_base_url(
             let default = required_string(object, "default", &format!("{path}.default"))?;
             let source_config = input.source.source_config.as_object().ok_or_else(|| {
                 SourceExecutionError::Failed(format!(
-                    "sourceConfig is invalid for Browserprofil {}: expected a JSON object",
-                    browser_profile.key
+                    "sourceConfig is invalid for source {}: expected a JSON object",
+                    input.source.key
                 ))
             })?;
             match source_config.get(source_config_key) {
@@ -696,6 +647,31 @@ fn source_config_value_as_string(source_config: &Value, key: &str) -> Option<Str
     }
 }
 
+fn source_config_start_url(source: &SourceExecutionSource) -> Result<String, SourceExecutionError> {
+    let source_config = source.source_config.as_object().ok_or_else(|| {
+        SourceExecutionError::Failed(format!(
+            "sourceConfig is invalid for source {}: expected a JSON object",
+            source.key
+        ))
+    })?;
+    let start_url = source_config
+        .get("startUrl")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "source {} requires sourceConfig.startUrl when executionPlan.query is absent",
+                source.key
+            ))
+        })?;
+    if start_url.trim().is_empty() {
+        return Err(SourceExecutionError::Failed(format!(
+            "source {} sourceConfig.startUrl must be a non-empty string",
+            source.key
+        )));
+    }
+    Ok(start_url.to_string())
+}
+
 fn resolve_http_candidate_url(raw_url: &str, page_url: &Url) -> Option<String> {
     let raw_url = raw_url.trim();
     if raw_url.is_empty() {
@@ -731,17 +707,6 @@ fn compile_selector(selector: &str, path: &str) -> Result<Matcher, SourceExecuti
             "{path} must be a valid CSS selector for the browser inventory language: {error:?}"
         ))
     })
-}
-
-fn required_object<'a>(
-    value: &'a Value,
-    key: &str,
-    path: &str,
-) -> Result<&'a Map<String, Value>, SourceExecutionError> {
-    value
-        .get(key)
-        .and_then(Value::as_object)
-        .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be a JSON object")))
 }
 
 fn required_object_value<'a>(
@@ -786,17 +751,8 @@ fn validate_allowed_keys(
     Ok(())
 }
 
-fn browser_profile_path(browser_profile: &BrowserProfile, path: &str) -> String {
-    format!("Browserprofil {} {path}", browser_profile.key)
-}
-
-fn source_status_label(status: SourceStatus) -> &'static str {
-    match status {
-        SourceStatus::Draft => "draft",
-        SourceStatus::Active => "active",
-        SourceStatus::Disabled => "disabled",
-        SourceStatus::Invalid => "invalid",
-    }
+fn plan_path(source: &SourceExecutionSource, path: &str) -> String {
+    format!("source {} {path}", source.key)
 }
 
 #[cfg(test)]
@@ -811,9 +767,10 @@ mod tests {
             DefaultSourceExecutor, SearchRunService, SearchRunStatus, SourceRunStatus,
         },
         source_model::{
-            create_browser_profile, create_source, BrowserProfile, CreateBrowserProfileInput,
-            CreateSourceInput, Source, SourceStatus,
+            create_browser_profile, create_source, CreateBrowserProfileInput, CreateSourceInput,
+            Source, SourceStatus,
         },
+        source_registry::{BrowserInteraction, ResolvedSelectedAccessPath},
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -1044,27 +1001,94 @@ mod tests {
     }
 
     #[test]
-    fn adapter_requires_browser_profile_before_rendering() {
+    fn browser_inventory_executes_from_resolved_execution_plan_without_browser_profile() {
+        tauri::async_runtime::block_on(async {
+            let fixture_browser = FixtureBrowserInventoryClient::new([(
+                "https://example.test/jobs?what=Engineer",
+                Ok(r#"
+                <html><body>
+                  <article data-job-card>
+                    <a href="/jobs/laser">
+                      <span data-job-title>Laser Engineer</span>
+                    </a>
+                    <span data-company>ACME GmbH</span>
+                    <span data-location>Mainz</span>
+                  </article>
+                </body></html>
+                "#),
+            )]);
+            let executor = DeclarativeBrowserInventoryExecutor::new(fixture_browser);
+            let search_request = search_request();
+            let source = source_with_browser_plan(
+                json!({ "baseUrl": "https://example.test" }),
+                Some(json!({
+                    "baseUrl": {
+                        "sourceConfigKey": "baseUrl",
+                        "default": "https://www.example.test"
+                    },
+                    "path": "/jobs",
+                    "params": [
+                        { "name": "what", "value": "{{searchRequest:titleText}}" }
+                    ]
+                })),
+                browser_inventory_without_navigate_definition(),
+                Some(vec![BrowserInteraction::WaitFor {
+                    selector: "[data-job-card]".to_string(),
+                    timeout_ms: Some(15_000),
+                }]),
+            );
+
+            let candidates = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidates,
+                vec![SourceCandidate {
+                    title: "Laser Engineer".to_string(),
+                    company: "ACME GmbH".to_string(),
+                    url: "https://example.test/jobs/laser".to_string(),
+                    locations: vec!["Mainz".to_string()],
+                }]
+            );
+            assert_eq!(
+                executor.browser.rendered_requests(),
+                vec![(
+                    "https://example.test/jobs?what=Engineer".to_string(),
+                    Some(BrowserInventoryWait {
+                        selector: "[data-job-card]".to_string(),
+                        timeout_ms: 15_000,
+                    })
+                )]
+            );
+        });
+    }
+
+    #[test]
+    fn adapter_requires_inventory_plan_before_rendering() {
         tauri::async_runtime::block_on(async {
             let executor =
                 DeclarativeBrowserInventoryExecutor::new(FixtureBrowserInventoryClient::new([]));
             let search_request = search_request();
-            let source = source(json!({ "startUrl": "https://example.test/jobs" }), None);
+            let source =
+                source_without_inventory(json!({ "startUrl": "https://example.test/jobs" }));
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
-                    system_profile: None,
-                    browser_profile: None,
                 })
                 .await
-                .expect_err("browser inventory must require a Browserprofil");
+                .expect_err("browser inventory must require a resolved inventory plan");
 
             assert_eq!(
                 error,
                 SourceExecutionError::Failed(
-                    "adapterKey declarative_browser_inventory requires an active Browserprofil for source browser_inventory_fixture"
+                    "executionPlan.inventory must be a JSON object for source browser_inventory_fixture"
                         .to_string()
                 )
             );
@@ -1073,29 +1097,30 @@ mod tests {
     }
 
     #[test]
-    fn adapter_rejects_inactive_browser_profile_before_rendering() {
+    fn source_without_query_requires_start_url_before_rendering() {
         tauri::async_runtime::block_on(async {
             let executor =
                 DeclarativeBrowserInventoryExecutor::new(FixtureBrowserInventoryClient::new([]));
             let search_request = search_request();
-            let source = source(json!({ "startUrl": "https://example.test/jobs" }), Some(1));
-            let mut browser_profile = browser_profile(browser_inventory_definition());
-            browser_profile.status = SourceStatus::Disabled;
+            let source = source_with_browser_plan(
+                json!({}),
+                None,
+                browser_inventory_without_navigate_definition(),
+                None,
+            );
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
-                    system_profile: None,
-                    browser_profile: Some(&browser_profile),
                 })
                 .await
-                .expect_err("inactive Browserprofil must fail explicitly");
+                .expect_err("source-specific browser inventory without query must need startUrl");
 
             assert_eq!(
                 error,
                 SourceExecutionError::Failed(
-                    "adapterKey declarative_browser_inventory requires an active Browserprofil for source browser_inventory_fixture, but Browserprofil browser_inventory_profile has status disabled"
+                    "source browser_inventory_fixture requires sourceConfig.startUrl when executionPlan.query is absent"
                         .to_string()
                 )
             );
@@ -1152,23 +1177,22 @@ mod tests {
                 tempfile::tempdir().unwrap().path().join("browser-runtime"),
             );
             let search_request = search_request();
-            let source = source(json!({ "startUrl": "https://example.test/jobs" }), Some(1));
+            let source =
+                source_without_inventory(json!({ "startUrl": "https://example.test/jobs" }));
 
             let error = executor
                 .execute(SourceExecutionInput {
                     search_request: &search_request,
                     source: &source,
-                    system_profile: None,
-                    browser_profile: None,
                 })
                 .await
                 .expect_err(
-                    "missing Browserprofil should fail before managed browser runtime access",
+                    "missing execution-plan inventory should fail before managed browser runtime access",
                 );
 
             match error {
                 SourceExecutionError::Failed(message) => {
-                    assert!(message.contains("requires an active Browserprofil"));
+                    assert!(message.contains("executionPlan.inventory"));
                     assert!(!message.contains("has no search-run executor yet"));
                 }
                 SourceExecutionError::Cancelled(message) => {
@@ -1375,6 +1399,22 @@ mod tests {
         })
     }
 
+    fn browser_inventory_without_navigate_definition() -> Value {
+        json!({
+            "items": { "select": "[data-job-card]" },
+            "fields": {
+                "title": { "selectorText": "[data-job-title]" },
+                "company": { "selectorText": "[data-company]" },
+                "url": {
+                    "selectorAttribute": { "selector": "a", "attribute": "href" }
+                },
+                "locations": [
+                    { "selectorText": "[data-location]" }
+                ]
+            }
+        })
+    }
+
     fn search_request() -> SearchRequest {
         SearchRequest {
             id: 1,
@@ -1401,32 +1441,37 @@ mod tests {
         }
     }
 
-    fn source(source_config: Value, _browser_profile_id: Option<i64>) -> SourceExecutionSource {
+    fn source_with_browser_plan(
+        source_config: Value,
+        query: Option<Value>,
+        inventory: Value,
+        interactions: Option<Vec<BrowserInteraction>>,
+    ) -> SourceExecutionSource {
+        source_execution_source(source_config, query, Some(inventory), interactions)
+    }
+
+    fn source_without_inventory(source_config: Value) -> SourceExecutionSource {
+        source_execution_source(source_config, None, None, None)
+    }
+
+    fn source_execution_source(
+        source_config: Value,
+        query: Option<Value>,
+        inventory: Option<Value>,
+        interactions: Option<Vec<BrowserInteraction>>,
+    ) -> SourceExecutionSource {
         SourceExecutionSource {
             key: "browser_inventory_fixture".to_string(),
             adapter_key: ADAPTER_KEY.to_string(),
             name: "Browser Inventory Fixture".to_string(),
             source_config,
-        }
-    }
-
-    fn browser_profile(definition: Value) -> BrowserProfile {
-        BrowserProfile {
-            id: 1,
-            key: "browser_inventory_profile".to_string(),
-            name: "Browser Inventory Profile".to_string(),
-            description: None,
-            name_i18n_key: None,
-            description_i18n_key: None,
-            definition_path: None,
-            definition_hash: None,
-            definition_schema_version: 1,
-            definition,
-            source_config_schema: json!({}),
-            status: SourceStatus::Active,
-            validation_error: None,
-            created_at: String::new(),
-            updated_at: String::new(),
+            effective_source_config_schema: json!({ "type": "object" }),
+            selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
+                query,
+                inventory,
+                interactions,
+                manual_release: None,
+            },
         }
     }
 

@@ -63,26 +63,18 @@ where
             )));
         }
 
-        let system_profile = input.system_profile.ok_or_else(|| {
-            SourceExecutionError::Failed(format!(
-                "adapterKey {} requires an active SystemProfile for source {}",
-                source.adapter_key, source.key
-            ))
-        })?;
-        if system_profile.adapter_key != source.adapter_key {
-            return Err(SourceExecutionError::Failed(format!(
-                "source {} uses adapterKey {}, but SystemProfile {} uses adapterKey {}",
-                source.key, source.adapter_key, system_profile.key, system_profile.adapter_key
-            )));
-        }
-
-        let inventory = required_object(
-            &system_profile.definition,
-            "inventory",
-            "definition.inventory",
-        )?;
-        let fetch = required_object_value(inventory, "fetch", "definition.inventory.fetch")?;
-        let fetch_url_template = required_string(fetch, "url", "definition.inventory.fetch.url")?;
+        let inventory = source
+            .inventory()
+            .and_then(Value::as_object)
+            .ok_or_else(|| {
+                SourceExecutionError::Failed(format!(
+                    "executionPlan.inventory must be a JSON object for source {}",
+                    source.key
+                ))
+            })?;
+        let fetch = required_object_value(inventory, "fetch", "executionPlan.inventory.fetch")?;
+        let fetch_url_template =
+            required_string(fetch, "url", "executionPlan.inventory.fetch.url")?;
         let empty_captures = HashMap::new();
         let fetch_context = InventoryTemplateContext {
             source,
@@ -91,10 +83,10 @@ where
         };
         let fetch_url = render_template(fetch_url_template, &fetch_context).map_err(|error| {
             SourceExecutionError::Failed(format!(
-                "definition.inventory.fetch.url is invalid: {error}"
+                "executionPlan.inventory.fetch.url is invalid: {error}"
             ))
         })?;
-        let fetch_url = parse_http_url(&fetch_url, "definition.inventory.fetch.url")?;
+        let fetch_url = parse_http_url(&fetch_url, "executionPlan.inventory.fetch.url")?;
         let body = self
             .client
             .get_text(fetch_url.clone())
@@ -106,24 +98,26 @@ where
                 ))
             })?;
 
-        let parse = required_object_value(inventory, "parse", "definition.inventory.parse")?;
-        let parse_as = required_string(parse, "as", "definition.inventory.parse.as")?;
-        let items = required_object_value(inventory, "items", "definition.inventory.items")?;
+        let parse = required_object_value(inventory, "parse", "executionPlan.inventory.parse")?;
+        let parse_as = required_string(parse, "as", "executionPlan.inventory.parse.as")?;
+        let items = required_object_value(inventory, "items", "executionPlan.inventory.items")?;
         let inventory_items = match parse_as {
             "xml" => select_xml_items(&body, items)?,
             "json" => select_json_items(&body, items)?,
             other => {
                 return Err(SourceExecutionError::Failed(format!(
-                    "definition.inventory.parse.as `{other}` is not supported by this executor slice"
+                    "executionPlan.inventory.parse.as `{other}` is not supported by this executor slice"
                 )));
             }
         };
 
         let where_regexes =
-            compile_regex_list(items.get("where"), "definition.inventory.items.where")?;
-        let capture_regexes =
-            compile_regex_list(items.get("captures"), "definition.inventory.items.captures")?;
-        let fields = required_object_value(inventory, "fields", "definition.inventory.fields")?;
+            compile_regex_list(items.get("where"), "executionPlan.inventory.items.where")?;
+        let capture_regexes = compile_regex_list(
+            items.get("captures"),
+            "executionPlan.inventory.items.captures",
+        )?;
+        let fields = required_object_value(inventory, "fields", "executionPlan.inventory.fields")?;
 
         let mut candidates = Vec::new();
         for inventory_item in inventory_items {
@@ -140,13 +134,13 @@ where
                 None => {
                     if !where_regexes.is_empty() {
                         return Err(SourceExecutionError::Failed(
-                            "definition.inventory.items.where is only supported for text item selections"
+                            "executionPlan.inventory.items.where is only supported for text item selections"
                                 .to_string(),
                         ));
                     }
                     if !capture_regexes.is_empty() {
                         return Err(SourceExecutionError::Failed(
-                            "definition.inventory.items.captures is only supported for text item selections"
+                            "executionPlan.inventory.items.captures is only supported for text item selections"
                                 .to_string(),
                         ));
                     }
@@ -206,15 +200,15 @@ fn select_xml_items(
     xml: &str,
     items: &serde_json::Map<String, Value>,
 ) -> Result<Vec<InventoryItem>, SourceExecutionError> {
-    let select = required_object_value(items, "select", "definition.inventory.items.select")?;
+    let select = required_object_value(items, "select", "executionPlan.inventory.items.select")?;
     let element_name = required_string(
         select,
         "xmlText",
-        "definition.inventory.items.select.xmlText",
+        "executionPlan.inventory.items.select.xmlText",
     )?;
     if element_name.trim().is_empty() {
         return Err(SourceExecutionError::Failed(
-            "definition.inventory.items.select.xmlText must not be empty".to_string(),
+            "executionPlan.inventory.items.select.xmlText must not be empty".to_string(),
         ));
     }
 
@@ -232,22 +226,22 @@ fn select_json_items(
     let root = serde_json::from_str::<Value>(json_text).map_err(|error| {
         SourceExecutionError::Failed(format!("could not parse inventory JSON: {error}"))
     })?;
-    let select = required_object_value(items, "select", "definition.inventory.items.select")?;
+    let select = required_object_value(items, "select", "executionPlan.inventory.items.select")?;
     let json_path = required_string(
         select,
         "jsonPath",
-        "definition.inventory.items.select.jsonPath",
+        "executionPlan.inventory.items.select.jsonPath",
     )?;
     let selected = resolve_simple_json_path(&root, json_path)
-        .map_err(|error| simple_json_path_execution_error("definition.inventory.items.select.jsonPath", error))?
+        .map_err(|error| simple_json_path_execution_error("executionPlan.inventory.items.select.jsonPath", error))?
         .ok_or_else(|| {
             SourceExecutionError::Failed(format!(
-                "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but no value was found"
+                "executionPlan.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but no value was found"
             ))
         })?;
     let array = selected.as_array().ok_or_else(|| {
         SourceExecutionError::Failed(format!(
-            "definition.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but resolved to {}",
+            "executionPlan.inventory.items.select.jsonPath `{json_path}` must resolve to an array, but resolved to {}",
             json_type_label(selected)
         ))
     })?;
@@ -386,13 +380,13 @@ fn render_required_field(
 ) -> Result<String, SourceExecutionError> {
     let field = fields.get(field_name).ok_or_else(|| {
         SourceExecutionError::Failed(format!(
-            "definition.inventory.fields.{field_name} is required"
+            "executionPlan.inventory.fields.{field_name} is required"
         ))
     })?;
     render_field_expression(
         field,
         context,
-        &format!("definition.inventory.fields.{field_name}"),
+        &format!("executionPlan.inventory.fields.{field_name}"),
     )
 }
 
@@ -402,12 +396,12 @@ fn render_locations(
 ) -> Result<Vec<String>, SourceExecutionError> {
     let locations = fields.get("locations").ok_or_else(|| {
         SourceExecutionError::Failed(
-            "definition.inventory.fields.locations is required".to_string(),
+            "executionPlan.inventory.fields.locations is required".to_string(),
         )
     })?;
     let locations = locations.as_array().ok_or_else(|| {
         SourceExecutionError::Failed(
-            "definition.inventory.fields.locations must be an array".to_string(),
+            "executionPlan.inventory.fields.locations must be an array".to_string(),
         )
     })?;
 
@@ -418,7 +412,7 @@ fn render_locations(
             render_field_expression(
                 location,
                 context,
-                &format!("definition.inventory.fields.locations[{index}]"),
+                &format!("executionPlan.inventory.fields.locations[{index}]"),
             )
         })
         .filter_map(|location| match location {
@@ -546,17 +540,6 @@ fn source_config_value_as_string(source_config: &Value, key: &str) -> Option<Str
     }
 }
 
-fn required_object<'a>(
-    value: &'a Value,
-    key: &str,
-    path: &str,
-) -> Result<&'a serde_json::Map<String, Value>, SourceExecutionError> {
-    value
-        .get(key)
-        .and_then(Value::as_object)
-        .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be a JSON object")))
-}
-
 fn required_object_value<'a>(
     object: &'a serde_json::Map<String, Value>,
     key: &str,
@@ -644,6 +627,7 @@ mod tests {
             create_source, create_system_profile, CreateSourceInput, CreateSystemProfileInput,
             SourceStatus,
         },
+        source_registry::ResolvedSelectedAccessPath,
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -702,6 +686,13 @@ mod tests {
             source_config: json!({
                 "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
             }),
+            effective_source_config_schema: json!({ "type": "object" }),
+            selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
+                query: None,
+                inventory: None,
+                interactions: None,
+                manual_release: None,
+            },
         };
         let item = InventoryItem::Text(
             "https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/".to_string(),
@@ -726,6 +717,53 @@ mod tests {
             rendered,
             "focused_energy_careers|https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true|https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/|Senior Rust Engineer|Focused Energy"
         );
+    }
+
+    #[test]
+    fn json_inventory_executes_from_resolved_execution_plan_without_system_profile() {
+        tauri::async_runtime::block_on(async {
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.test/jobs.json",
+                Ok(r#"{
+                  "jobs": [
+                    {
+                      "title": "Laser Engineer",
+                      "jobUrl": "https://example.test/jobs/laser",
+                      "location": "Mainz"
+                    }
+                  ]
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let search_request = search_request();
+            let source = source_with_inventory(
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json!({ "startUrl": "https://example.test/jobs.json" }),
+                json_jobs_inventory("{{sourceConfig:startUrl}}"),
+            );
+
+            let candidates = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidates,
+                vec![SourceCandidate {
+                    title: "Laser Engineer".to_string(),
+                    company: "Fixture Careers".to_string(),
+                    url: "https://example.test/jobs/laser".to_string(),
+                    locations: vec!["Mainz".to_string()],
+                }]
+            );
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://example.test/jobs.json"]
+            );
+        });
     }
 
     #[test]
@@ -1125,15 +1163,13 @@ mod tests {
                     .execute(SourceExecutionInput {
                         search_request: &search_request,
                         source: &source,
-                        system_profile: None,
-                        browser_profile: None,
                     })
                     .await
                     .unwrap_err();
 
                 match error {
                     SourceExecutionError::Failed(message) => {
-                        assert!(message.contains("requires an active SystemProfile"));
+                        assert!(message.contains("executionPlan.inventory"));
                         assert!(!message.contains("has no search-run executor yet"));
                     }
                     SourceExecutionError::Cancelled(message) => {
@@ -1389,11 +1425,30 @@ mod tests {
     }
 
     fn source(adapter_key: &str) -> SourceExecutionSource {
+        source_with_inventory(adapter_key, json!({}), Value::Null)
+    }
+
+    fn source_with_inventory(
+        adapter_key: &str,
+        source_config: Value,
+        inventory: Value,
+    ) -> SourceExecutionSource {
         SourceExecutionSource {
             key: "fixture_source".to_string(),
             adapter_key: adapter_key.to_string(),
             name: "Fixture Careers".to_string(),
-            source_config: json!({}),
+            source_config,
+            effective_source_config_schema: json!({ "type": "object" }),
+            selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
+                query: None,
+                inventory: if inventory.is_null() {
+                    None
+                } else {
+                    Some(inventory)
+                },
+                interactions: None,
+                manual_release: None,
+            },
         }
     }
 

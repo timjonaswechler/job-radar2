@@ -1,6 +1,5 @@
 use regex::Regex;
 use serde::Serialize;
-use serde_json::Value;
 use sqlx::SqlitePool;
 use std::{
     collections::{HashMap, HashSet},
@@ -15,8 +14,7 @@ use crate::{
         SearchRuleTarget,
     },
     search_run::normalization::{normalize_source_candidate, normalized_text_key},
-    source_model::{BrowserProfile, SystemProfile},
-    source_registry::{RegistrySource, SelectedAccessPath, SourceRegistrySnapshot},
+    source_registry::{ResolvedSourceExecutionPlan, SourceRegistrySnapshot},
 };
 
 pub type BoxedSourceExecutionFuture<'a> =
@@ -25,23 +23,14 @@ pub type BoxedSourceExecutionFuture<'a> =
 /// Public source-execution seam used by Suchläufe.
 ///
 /// `SearchRunService` resolves selected source keys through one registry
-/// snapshot at run start and passes the resolved source identity/config here.
-/// Adapters that still require runtime profile policy return
-/// `SourceExecutionError::Failed` when the required profile or definition is
-/// missing or invalid.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SourceExecutionSource {
-    pub key: String,
-    pub name: String,
-    pub adapter_key: String,
-    pub source_config: Value,
-}
+/// snapshot at run start and passes immutable source execution plans here.
+/// Adapters read access-path definitions from that plan instead of legacy
+/// system/browser profile references.
+pub type SourceExecutionSource = ResolvedSourceExecutionPlan;
 
 pub struct SourceExecutionInput<'a> {
     pub search_request: &'a SearchRequest,
     pub source: &'a SourceExecutionSource,
-    pub system_profile: Option<&'a SystemProfile>,
-    pub browser_profile: Option<&'a BrowserProfile>,
 }
 
 pub trait SourceExecutor: Send + Sync {
@@ -226,8 +215,6 @@ impl<'a> SearchRunService<'a> {
             let input = SourceExecutionInput {
                 search_request: &search_request,
                 source,
-                system_profile: None,
-                browser_profile: None,
             };
 
             match self.source_executor.execute(input).await {
@@ -321,69 +308,14 @@ fn resolve_selected_sources(
 ) -> Vec<SelectedSearchRunSource> {
     source_keys
         .iter()
-        .map(|source_key| {
-            let Some(source) = snapshot.source(source_key) else {
-                return SelectedSearchRunSource::Missing {
-                    source_key: source_key.clone(),
-                    error: SourceExecutionError::Failed(format!(
-                        "sourceKey `{source_key}` was not found in the source registry snapshot"
-                    )),
-                };
-            };
-
-            match source_execution_source(snapshot, source) {
-                Ok(source) => SelectedSearchRunSource::Resolved(source),
-                Err(message) => SelectedSearchRunSource::Missing {
-                    source_key: source_key.clone(),
-                    error: SourceExecutionError::Failed(message),
-                },
-            }
+        .map(|source_key| match snapshot.resolve_source(source_key) {
+            Ok(source) => SelectedSearchRunSource::Resolved(source),
+            Err(message) => SelectedSearchRunSource::Missing {
+                source_key: source_key.clone(),
+                error: SourceExecutionError::Failed(message),
+            },
         })
         .collect()
-}
-
-fn source_execution_source(
-    snapshot: &SourceRegistrySnapshot,
-    source: &RegistrySource,
-) -> Result<SourceExecutionSource, String> {
-    Ok(SourceExecutionSource {
-        key: source.document.key.clone(),
-        name: source.document.name.clone(),
-        adapter_key: adapter_key_for_source(snapshot, source)?,
-        source_config: source.document.source_config.clone(),
-    })
-}
-
-fn adapter_key_for_source(
-    snapshot: &SourceRegistrySnapshot,
-    source: &RegistrySource,
-) -> Result<String, String> {
-    match &source.document.selected_access_path {
-        SelectedAccessPath::SourceSpecific { adapter_key, .. } => Ok(adapter_key.clone()),
-        SelectedAccessPath::Profile {
-            profile_key,
-            path_key,
-        } => {
-            let profile = snapshot.profile(profile_key).ok_or_else(|| {
-                format!(
-                    "source `{}` references missing profile `{profile_key}`",
-                    source.document.key
-                )
-            })?;
-            let access_path = profile
-                .document
-                .access_paths
-                .iter()
-                .find(|access_path| access_path.key == *path_key)
-                .ok_or_else(|| {
-                    format!(
-                        "source `{}` references missing path `{path_key}` on profile `{profile_key}`",
-                        source.document.key
-                    )
-                })?;
-            Ok(access_path.adapter_key.clone())
-        }
-    }
 }
 
 fn validate_executable_search_request(search_request: &SearchRequest) -> Result<(), String> {
@@ -618,7 +550,10 @@ mod tests {
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-    use std::sync::Mutex;
+    use std::{
+        path::{Path, PathBuf},
+        sync::Mutex,
+    };
 
     struct FixtureSourceExecutor {
         responses: Mutex<HashMap<String, Result<Vec<SourceCandidate>, SourceExecutionError>>>,
@@ -660,6 +595,57 @@ mod tests {
         }
     }
 
+    struct RegistryMutatingPlanCaptureExecutor {
+        profile_path: PathBuf,
+        seen_inventory_markers: Mutex<Vec<(String, String)>>,
+    }
+
+    impl RegistryMutatingPlanCaptureExecutor {
+        fn new(profile_path: PathBuf) -> Self {
+            Self {
+                profile_path,
+                seen_inventory_markers: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn seen_inventory_markers(&self) -> Vec<(String, String)> {
+            self.seen_inventory_markers.lock().unwrap().clone()
+        }
+    }
+
+    impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
+        fn execute<'a>(
+            &'a self,
+            input: SourceExecutionInput<'a>,
+        ) -> BoxedSourceExecutionFuture<'a> {
+            Box::pin(async move {
+                let marker = input
+                    .source
+                    .inventory()
+                    .and_then(|inventory| inventory.get("marker"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("missing")
+                    .to_string();
+                self.seen_inventory_markers
+                    .lock()
+                    .unwrap()
+                    .push((input.source.key.clone(), marker));
+
+                if input.source.key == "first_source" {
+                    std::fs::write(&self.profile_path, mutable_profile_json("changed"))
+                        .map_err(|error| SourceExecutionError::Failed(error.to_string()))?;
+                }
+
+                Ok(vec![candidate(
+                    "Laser Engineer",
+                    input.source.name.as_str(),
+                    &format!("https://example.test/{}/laser", input.source.key),
+                    &[],
+                )])
+            })
+        }
+    }
+
     struct BrowserProfileCapturingExecutor {
         response: Result<Vec<SourceCandidate>, SourceExecutionError>,
         seen_browser_profiles: Mutex<Vec<(String, Option<(i64, String)>)>>,
@@ -684,12 +670,10 @@ mod tests {
             input: SourceExecutionInput<'a>,
         ) -> BoxedSourceExecutionFuture<'a> {
             Box::pin(async move {
-                self.seen_browser_profiles.lock().unwrap().push((
-                    input.source.key.clone(),
-                    input
-                        .browser_profile
-                        .map(|profile| (profile.id, profile.key.clone())),
-                ));
+                self.seen_browser_profiles
+                    .lock()
+                    .unwrap()
+                    .push((input.source.key.clone(), None));
                 self.response.clone()
             })
         }
@@ -754,6 +738,61 @@ mod tests {
             assert!(result_json["postings"][0]["sources"][0]
                 .get("sourceId")
                 .is_none());
+        });
+    }
+
+    #[test]
+    fn registry_file_changes_after_run_start_do_not_change_execution_plans() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let running_search_runs = RunningSearchRuns::default();
+            let temp_dir = tempfile::tempdir().unwrap();
+            let app_data_dir = temp_dir.path().join("app-data");
+            let profile_path = app_data_dir.join("source-profiles/mutable_profile.json");
+            write_json(&profile_path, &mutable_profile_json("initial"));
+            write_json(
+                app_data_dir.join("sources/first_source.json"),
+                &mutable_profile_source_json("first_source", "First Source"),
+            );
+            write_json(
+                app_data_dir.join("sources/second_source.json"),
+                &mutable_profile_source_json("second_source", "Second Source"),
+            );
+            let search_request = SearchRequestService::new(&pool, &running_search_runs)
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![text_rule("laser")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["first_source".to_string(), "second_source".to_string()],
+                })
+                .await
+                .unwrap();
+            let executor = RegistryMutatingPlanCaptureExecutor::new(profile_path.clone());
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                &app_data_dir,
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(
+                executor.seen_inventory_markers(),
+                vec![
+                    ("first_source".to_string(), "initial".to_string()),
+                    ("second_source".to_string(), "initial".to_string()),
+                ]
+            );
+            assert!(std::fs::read_to_string(profile_path)
+                .unwrap()
+                .contains("changed"));
         });
     }
 
@@ -1487,6 +1526,48 @@ mod tests {
             kind: "regex".to_string(),
             value: value.to_string(),
         }
+    }
+
+    fn mutable_profile_json(marker: &str) -> String {
+        json!({
+            "schemaVersion": 1,
+            "key": "mutable_profile",
+            "name": "Mutable Profile",
+            "kind": "generic",
+            "accessPaths": [
+                {
+                    "key": "inventory",
+                    "adapterKey": "test_inventory",
+                    "sourceConfigSchema": { "type": "object" },
+                    "inventory": { "marker": marker }
+                }
+            ]
+        })
+        .to_string()
+    }
+
+    fn mutable_profile_source_json(key: &str, name: &str) -> String {
+        json!({
+            "schemaVersion": 1,
+            "key": key,
+            "name": name,
+            "status": "active",
+            "sourceConfig": {},
+            "selectedAccessPath": {
+                "type": "profile",
+                "profileKey": "mutable_profile",
+                "pathKey": "inventory"
+            }
+        })
+        .to_string()
+    }
+
+    fn write_json(path: impl AsRef<Path>, contents: &str) {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, contents).unwrap();
     }
 
     fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {
