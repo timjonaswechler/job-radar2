@@ -25,7 +25,6 @@ const SCHOTT_ADAPTER_KEY: &str = "declarative_sitemap_inventory";
 const SCHOTT_SOURCE_NAME: &str = "SCHOTT Karriere";
 const SCHOTT_SITEMAP_URL: &str = "https://join.schott.com/sitemap.xml";
 const STEPSTONE_SOURCE_KEY: &str = "stepstone_de";
-const STEPSTONE_ADAPTER_KEY: &str = "declarative_browser_inventory";
 const SUCCESSFACTORS_PROFILE_KEY: &str = "successfactors";
 const SMOKE_LOCATION: &str = "Mainz";
 const SMOKE_RADIUS_KM: i64 = 30;
@@ -83,6 +82,7 @@ where
             &state.running_search_runs,
             &source_executor,
             result_path,
+            state.paths.app_data_dir.clone(),
         )
         .await?;
 
@@ -96,17 +96,19 @@ pub(crate) async fn run_schott_stepstone_smoke(
     running_search_runs: &RunningSearchRuns,
     source_executor: &dyn SourceExecutor,
     result_path: impl Into<PathBuf>,
+    source_registry_app_data_dir: impl Into<PathBuf>,
 ) -> Result<SearchRunSmokeSummary, String> {
     let result_path = result_path.into();
-    let source_ids = smoke_source_ids(pool).await?;
+    let source_keys = smoke_source_keys();
     let (search_request, search_request_created) =
-        get_or_create_smoke_search_request(pool, running_search_runs, source_ids).await?;
+        get_or_create_smoke_search_request(pool, running_search_runs, source_keys).await?;
 
     let result = SearchRunService::new(
         pool,
         running_search_runs,
         source_executor,
         result_path.clone(),
+        source_registry_app_data_dir,
     )
     .run(search_request.id)
     .await?;
@@ -122,32 +124,32 @@ pub(crate) async fn run_schott_stepstone_smoke(
 async fn get_or_create_smoke_search_request(
     pool: &SqlitePool,
     running_search_runs: &RunningSearchRuns,
-    source_ids: Vec<i64>,
+    source_keys: Vec<String>,
 ) -> Result<(SearchRequest, bool), String> {
     let service = SearchRequestService::new(pool, running_search_runs);
     for search_request in service.list().await? {
-        if is_smoke_search_request(&search_request, &source_ids) {
+        if is_smoke_search_request(&search_request, &source_keys) {
             return Ok((search_request, false));
         }
     }
 
     let created = service
-        .create(smoke_search_request_input(source_ids))
+        .create(smoke_search_request_input(source_keys))
         .await?;
     Ok((created, true))
 }
 
-fn is_smoke_search_request(search_request: &SearchRequest, source_ids: &[i64]) -> bool {
+fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String]) -> bool {
     search_request.status == SearchRequestStatus::Active
         && search_request.include_rules == expected_rules(INCLUDE_RULE_VALUES)
         && search_request.exclude_rules == expected_rules(EXCLUDE_RULE_VALUES)
         && search_request.locations == vec![SMOKE_LOCATION.to_string()]
         && search_request.radius_km == Some(SMOKE_RADIUS_KM)
-        && search_request.source_ids == source_ids
+        && search_request.source_keys == source_keys
         && search_request.validation_error.is_none()
 }
 
-fn smoke_search_request_input(source_ids: Vec<i64>) -> CreateSearchRequestInput {
+fn smoke_search_request_input(source_keys: Vec<String>) -> CreateSearchRequestInput {
     CreateSearchRequestInput {
         status: SearchRequestStatus::Active,
         include_rules: INCLUDE_RULE_VALUES
@@ -160,7 +162,7 @@ fn smoke_search_request_input(source_ids: Vec<i64>) -> CreateSearchRequestInput 
             .collect(),
         locations: vec![SMOKE_LOCATION.to_string()],
         radius_km: Some(SMOKE_RADIUS_KM),
-        source_ids,
+        source_keys,
     }
 }
 
@@ -183,27 +185,11 @@ fn text_rule_input(value: &str) -> SearchRuleInput {
     }
 }
 
-async fn smoke_source_ids(pool: &SqlitePool) -> Result<Vec<i64>, String> {
-    let sources = list_sources(pool).await?;
-    let schott = require_smoke_source(&sources, SCHOTT_SOURCE_KEY)?;
-    let stepstone = require_smoke_source(&sources, STEPSTONE_SOURCE_KEY)?;
-
-    validate_smoke_source(schott, SCHOTT_ADAPTER_KEY)?;
-    validate_smoke_source(stepstone, STEPSTONE_ADAPTER_KEY)?;
-    validate_schott_source_config(schott)?;
-
-    Ok(vec![schott.id, stepstone.id])
-}
-
-fn require_smoke_source<'a>(sources: &'a [Source], key: &str) -> Result<&'a Source, String> {
-    sources
-        .iter()
-        .find(|source| source.key == key)
-        .ok_or_else(|| {
-            format!(
-                "smoke source `{key}` was not found in the local DB; see docs/dev-search-run-smoke.md"
-            )
-        })
+fn smoke_source_keys() -> Vec<String> {
+    vec![
+        SCHOTT_SOURCE_KEY.to_string(),
+        STEPSTONE_SOURCE_KEY.to_string(),
+    ]
 }
 
 fn validate_smoke_source(source: &Source, expected_adapter_key: &str) -> Result<(), String> {
@@ -444,7 +430,7 @@ mod tests {
     fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failure() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let (schott_id, stepstone_id) = create_smoke_sources(&pool).await;
+            let (_schott_id, _stepstone_id) = create_smoke_sources(&pool).await;
             let running_search_runs = RunningSearchRuns::default();
             let executor = FixtureSourceExecutor::new([
                 (
@@ -486,6 +472,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 result_path.clone(),
+                temp_dir.path(),
             )
             .await
             .unwrap();
@@ -505,7 +492,7 @@ mod tests {
             );
             assert_eq!(search_request.locations, vec![SMOKE_LOCATION]);
             assert_eq!(search_request.radius_km, Some(SMOKE_RADIUS_KM));
-            assert_eq!(search_request.source_ids, vec![schott_id, stepstone_id]);
+            assert_eq!(search_request.source_keys, smoke_source_keys());
 
             assert_eq!(
                 serialized_label(&summary.result.status),
@@ -627,6 +614,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .await
             .unwrap();
@@ -635,6 +623,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .await
             .unwrap();
@@ -726,7 +715,7 @@ mod tests {
             pool,
             CreateSourceInput {
                 key: STEPSTONE_SOURCE_KEY.to_string(),
-                adapter_key: STEPSTONE_ADAPTER_KEY.to_string(),
+                adapter_key: "declarative_browser_inventory".to_string(),
                 system_profile_id: None,
                 browser_profile_id: Some(browser_profile.id),
                 name: "StepStone Deutschland".to_string(),

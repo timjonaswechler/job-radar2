@@ -36,9 +36,9 @@ use crate::{
     search_run::normalization::collapse_whitespace,
     search_run_model::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
-        SourceExecutor,
+        SourceExecutionSource, SourceExecutor,
     },
-    source_model::{BrowserProfile, Source, SourceStatus},
+    source_model::{BrowserProfile, SourceStatus},
 };
 
 const ADAPTER_KEY: &str = "declarative_browser_inventory";
@@ -650,7 +650,7 @@ fn first_search_request_location(search_request: &SearchRequest) -> Option<Strin
 }
 
 struct BrowserInventoryTemplateContext<'a> {
-    source: &'a Source,
+    source: &'a SourceExecutionSource,
     search_request: &'a SearchRequest,
     query_url: Option<&'a str>,
 }
@@ -812,7 +812,7 @@ mod tests {
         },
         source_model::{
             create_browser_profile, create_source, BrowserProfile, CreateBrowserProfileInput,
-            CreateSourceInput, SourceStatus,
+            CreateSourceInput, Source, SourceStatus,
         },
     };
     use serde_json::{json, Value};
@@ -917,6 +917,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -971,7 +972,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![" Berlin ".to_string(), "München".to_string()],
                     radius_km: Some(50),
-                    source_ids: vec![source.id],
+                    source_keys: vec![source.key.clone()],
                 })
                 .await
                 .unwrap();
@@ -1007,6 +1008,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1126,6 +1128,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1293,7 +1296,7 @@ mod tests {
                 exclude_rules: vec![],
                 locations: vec![],
                 radius_km: None,
-                source_ids,
+                source_keys: source_ids.into_iter().map(|id| id.to_string()).collect(),
             })
             .await
             .unwrap()
@@ -1391,28 +1394,19 @@ mod tests {
             exclude_rules: vec![],
             locations: vec![],
             radius_km: None,
-            source_ids: vec![1],
+            source_keys: vec!["browser_inventory_fixture".to_string()],
             validation_error: None,
             created_at: String::new(),
             updated_at: String::new(),
         }
     }
 
-    fn source(source_config: Value, browser_profile_id: Option<i64>) -> Source {
-        Source {
-            id: 1,
+    fn source(source_config: Value, _browser_profile_id: Option<i64>) -> SourceExecutionSource {
+        SourceExecutionSource {
             key: "browser_inventory_fixture".to_string(),
             adapter_key: ADAPTER_KEY.to_string(),
-            system_profile_id: None,
-            browser_profile_id,
             name: "Browser Inventory Fixture".to_string(),
-            description: None,
             source_config,
-            status: SourceStatus::Active,
-            validation_error: None,
-            built_in: false,
-            created_at: String::new(),
-            updated_at: String::new(),
         }
     }
 

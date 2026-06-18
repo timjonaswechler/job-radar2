@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde::Serialize;
+use serde_json::Value;
 use sqlx::SqlitePool;
 use std::{
     collections::{HashMap, HashSet},
@@ -14,10 +15,8 @@ use crate::{
         SearchRuleTarget,
     },
     search_run::normalization::{normalize_source_candidate, normalized_text_key},
-    source_model::{
-        get_browser_profile, get_source, get_system_profile, BrowserProfile, Source, SourceStatus,
-        SystemProfile,
-    },
+    source_model::{BrowserProfile, SystemProfile},
+    source_registry::{RegistrySource, SelectedAccessPath, SourceRegistrySnapshot},
 };
 
 pub type BoxedSourceExecutionFuture<'a> =
@@ -25,13 +24,22 @@ pub type BoxedSourceExecutionFuture<'a> =
 
 /// Public source-execution seam used by Suchläufe.
 ///
-/// `SearchRunService` loads active profiles for sources that reference them and
-/// passes them here. Adapters that require runtime profile policy, including
-/// declarative inventory runtimes, return `SourceExecutionError::Failed` when
-/// the required profile or definition is missing or invalid.
+/// `SearchRunService` resolves selected source keys through one registry
+/// snapshot at run start and passes the resolved source identity/config here.
+/// Adapters that still require runtime profile policy return
+/// `SourceExecutionError::Failed` when the required profile or definition is
+/// missing or invalid.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SourceExecutionSource {
+    pub key: String,
+    pub name: String,
+    pub adapter_key: String,
+    pub source_config: Value,
+}
+
 pub struct SourceExecutionInput<'a> {
     pub search_request: &'a SearchRequest,
-    pub source: &'a Source,
+    pub source: &'a SourceExecutionSource,
     pub system_profile: Option<&'a SystemProfile>,
     pub browser_profile: Option<&'a BrowserProfile>,
 }
@@ -138,7 +146,6 @@ pub struct SearchRunResult {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceRunResult {
-    pub source_id: i64,
     pub source_key: String,
     pub source_name: String,
     pub status: SourceRunStatus,
@@ -161,7 +168,6 @@ pub struct NormalizedPosting {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostingSource {
-    pub source_id: i64,
     pub source_key: String,
     pub source_name: String,
     pub url: String,
@@ -172,6 +178,7 @@ pub struct SearchRunService<'a> {
     running_search_runs: &'a RunningSearchRuns,
     source_executor: &'a dyn SourceExecutor,
     result_path: PathBuf,
+    source_registry_app_data_dir: PathBuf,
 }
 
 impl<'a> SearchRunService<'a> {
@@ -180,12 +187,14 @@ impl<'a> SearchRunService<'a> {
         running_search_runs: &'a RunningSearchRuns,
         source_executor: &'a dyn SourceExecutor,
         result_path: impl Into<PathBuf>,
+        source_registry_app_data_dir: impl Into<PathBuf>,
     ) -> Self {
         Self {
             pool,
             running_search_runs,
             source_executor,
             result_path: result_path.into(),
+            source_registry_app_data_dir: source_registry_app_data_dir.into(),
         }
     }
 
@@ -198,33 +207,27 @@ impl<'a> SearchRunService<'a> {
 
         let include_rules = compile_rules(&search_request.include_rules, "includeRules")?;
         let exclude_rules = compile_rules(&search_request.exclude_rules, "excludeRules")?;
-        let sources = load_selected_sources(self.pool, &search_request.source_ids).await?;
+        let registry_snapshot =
+            crate::source_registry::load_snapshot(&self.source_registry_app_data_dir);
+        let selected_sources =
+            resolve_selected_sources(&registry_snapshot, &search_request.source_keys);
 
-        let mut source_runs = Vec::with_capacity(sources.len());
+        let mut source_runs = Vec::with_capacity(selected_sources.len());
         let mut candidates = Vec::new();
 
-        for source in &sources {
-            let system_profile =
-                match load_active_system_profile_for_source(self.pool, source).await {
-                    Ok(system_profile) => system_profile,
-                    Err(error) => {
-                        source_runs.push(source_run_failed(source, error));
-                        continue;
-                    }
-                };
-            let browser_profile =
-                match load_active_browser_profile_for_source(self.pool, source).await {
-                    Ok(browser_profile) => browser_profile,
-                    Err(error) => {
-                        source_runs.push(source_run_failed(source, error));
-                        continue;
-                    }
-                };
+        for selected_source in &selected_sources {
+            let source = match selected_source {
+                SelectedSearchRunSource::Resolved(source) => source,
+                SelectedSearchRunSource::Missing { source_key, error } => {
+                    source_runs.push(source_run_failed_for_key(source_key, error.clone()));
+                    continue;
+                }
+            };
             let input = SourceExecutionInput {
                 search_request: &search_request,
                 source,
-                system_profile: system_profile.as_ref(),
-                browser_profile: browser_profile.as_ref(),
+                system_profile: None,
+                browser_profile: None,
             };
 
             match self.source_executor.execute(input).await {
@@ -251,13 +254,15 @@ impl<'a> SearchRunService<'a> {
             .filter(|candidate| !matches_any_rule(&exclude_rules, &candidate.candidate))
             .collect::<Vec<_>>();
 
-        let mut matched_counts = HashMap::<i64, usize>::new();
+        let mut matched_counts = HashMap::<String, usize>::new();
         for treffer in &treffers {
-            *matched_counts.entry(treffer.source.source_id).or_default() += 1;
+            *matched_counts
+                .entry(treffer.source.source_key.clone())
+                .or_default() += 1;
         }
         for source_run in &mut source_runs {
             source_run.matched_count = matched_counts
-                .get(&source_run.source_id)
+                .get(&source_run.source_key)
                 .copied()
                 .unwrap_or_default();
         }
@@ -301,62 +306,84 @@ pub fn default_search_run_result_path() -> PathBuf {
         .join("search-run-result.json")
 }
 
-async fn load_selected_sources(
-    pool: &SqlitePool,
-    source_ids: &[i64],
-) -> Result<Vec<Source>, String> {
-    let mut sources = Vec::with_capacity(source_ids.len());
-    for source_id in source_ids {
-        sources.push(get_source(pool, *source_id).await?);
-    }
-    Ok(sources)
+#[derive(Clone, Debug, PartialEq)]
+enum SelectedSearchRunSource {
+    Resolved(SourceExecutionSource),
+    Missing {
+        source_key: String,
+        error: SourceExecutionError,
+    },
 }
 
-async fn load_active_system_profile_for_source(
-    pool: &SqlitePool,
-    source: &Source,
-) -> Result<Option<SystemProfile>, SourceExecutionError> {
-    let Some(system_profile_id) = source.system_profile_id else {
-        return Ok(None);
-    };
+fn resolve_selected_sources(
+    snapshot: &SourceRegistrySnapshot,
+    source_keys: &[String],
+) -> Vec<SelectedSearchRunSource> {
+    source_keys
+        .iter()
+        .map(|source_key| {
+            let Some(source) = snapshot.source(source_key) else {
+                return SelectedSearchRunSource::Missing {
+                    source_key: source_key.clone(),
+                    error: SourceExecutionError::Failed(format!(
+                        "sourceKey `{source_key}` was not found in the source registry snapshot"
+                    )),
+                };
+            };
 
-    let system_profile = get_system_profile(pool, system_profile_id)
-        .await
-        .map_err(SourceExecutionError::Failed)?;
-    if system_profile.status != SourceStatus::Active {
-        return Err(SourceExecutionError::Failed(format!(
-            "systemProfileId {system_profile_id} for source {} must reference an active system profile",
-            source.key
-        )));
-    }
-
-    Ok(Some(system_profile))
+            match source_execution_source(snapshot, source) {
+                Ok(source) => SelectedSearchRunSource::Resolved(source),
+                Err(message) => SelectedSearchRunSource::Missing {
+                    source_key: source_key.clone(),
+                    error: SourceExecutionError::Failed(message),
+                },
+            }
+        })
+        .collect()
 }
 
-async fn load_active_browser_profile_for_source(
-    pool: &SqlitePool,
-    source: &Source,
-) -> Result<Option<BrowserProfile>, SourceExecutionError> {
-    let Some(browser_profile_id) = source.browser_profile_id else {
-        return Ok(None);
-    };
+fn source_execution_source(
+    snapshot: &SourceRegistrySnapshot,
+    source: &RegistrySource,
+) -> Result<SourceExecutionSource, String> {
+    Ok(SourceExecutionSource {
+        key: source.document.key.clone(),
+        name: source.document.name.clone(),
+        adapter_key: adapter_key_for_source(snapshot, source)?,
+        source_config: source.document.source_config.clone(),
+    })
+}
 
-    let browser_profile = get_browser_profile(pool, browser_profile_id)
-        .await
-        .map_err(|error| {
-            SourceExecutionError::Failed(format!(
-                "browserProfileId {browser_profile_id} for source {} could not be loaded: {error}",
-                source.key
-            ))
-        })?;
-    if browser_profile.status != SourceStatus::Active {
-        return Err(SourceExecutionError::Failed(format!(
-            "browserProfileId {browser_profile_id} for source {} must reference an active browser profile",
-            source.key
-        )));
+fn adapter_key_for_source(
+    snapshot: &SourceRegistrySnapshot,
+    source: &RegistrySource,
+) -> Result<String, String> {
+    match &source.document.selected_access_path {
+        SelectedAccessPath::SourceSpecific { adapter_key, .. } => Ok(adapter_key.clone()),
+        SelectedAccessPath::Profile {
+            profile_key,
+            path_key,
+        } => {
+            let profile = snapshot.profile(profile_key).ok_or_else(|| {
+                format!(
+                    "source `{}` references missing profile `{profile_key}`",
+                    source.document.key
+                )
+            })?;
+            let access_path = profile
+                .document
+                .access_paths
+                .iter()
+                .find(|access_path| access_path.key == *path_key)
+                .ok_or_else(|| {
+                    format!(
+                        "source `{}` references missing path `{path_key}` on profile `{profile_key}`",
+                        source.document.key
+                    )
+                })?;
+            Ok(access_path.adapter_key.clone())
+        }
     }
-
-    Ok(Some(browser_profile))
 }
 
 fn validate_executable_search_request(search_request: &SearchRequest) -> Result<(), String> {
@@ -372,7 +399,7 @@ fn validate_executable_search_request(search_request: &SearchRequest) -> Result<
             search_request.id
         ));
     }
-    if search_request.source_ids.is_empty() {
+    if search_request.source_keys.is_empty() {
         return Err(format!(
             "search request {} cannot run without selected sources",
             search_request.id
@@ -417,18 +444,16 @@ fn matches_rule(rule: &CompiledRule, candidate: &SourceCandidate) -> bool {
     }
 }
 
-fn posting_source(source: &Source, url: Option<String>) -> PostingSource {
+fn posting_source(source: &SourceExecutionSource, url: Option<String>) -> PostingSource {
     PostingSource {
-        source_id: source.id,
         source_key: source.key.clone(),
         source_name: source.name.clone(),
         url: url.unwrap_or_default(),
     }
 }
 
-fn source_run_completed(source: &Source, candidate_count: usize) -> SourceRunResult {
+fn source_run_completed(source: &SourceExecutionSource, candidate_count: usize) -> SourceRunResult {
     SourceRunResult {
-        source_id: source.id,
         source_key: source.key.clone(),
         source_name: source.name.clone(),
         status: SourceRunStatus::Completed,
@@ -438,11 +463,24 @@ fn source_run_completed(source: &Source, candidate_count: usize) -> SourceRunRes
     }
 }
 
-fn source_run_failed(source: &Source, error: SourceExecutionError) -> SourceRunResult {
+fn source_run_failed(
+    source: &SourceExecutionSource,
+    error: SourceExecutionError,
+) -> SourceRunResult {
     SourceRunResult {
-        source_id: source.id,
         source_key: source.key.clone(),
         source_name: source.name.clone(),
+        status: error.status(),
+        candidate_count: 0,
+        matched_count: 0,
+        error: Some(error.message()),
+    }
+}
+
+fn source_run_failed_for_key(source_key: &str, error: SourceExecutionError) -> SourceRunResult {
+    SourceRunResult {
+        source_key: source_key.to_string(),
+        source_name: String::new(),
         status: error.status(),
         candidate_count: 0,
         matched_count: 0,
@@ -575,7 +613,7 @@ mod tests {
         },
         source_model::{
             create_browser_profile, create_source, BrowserProfile, CreateBrowserProfileInput,
-            CreateSourceInput, SourceStatus,
+            CreateSourceInput, Source, SourceStatus,
         },
     };
     use serde_json::{json, Value};
@@ -583,17 +621,20 @@ mod tests {
     use std::sync::Mutex;
 
     struct FixtureSourceExecutor {
-        responses: Mutex<HashMap<i64, Result<Vec<SourceCandidate>, SourceExecutionError>>>,
+        responses: Mutex<HashMap<String, Result<Vec<SourceCandidate>, SourceExecutionError>>>,
     }
 
     impl FixtureSourceExecutor {
-        fn new(
-            responses: impl IntoIterator<
-                Item = (i64, Result<Vec<SourceCandidate>, SourceExecutionError>),
-            >,
+        fn new<K: ToString>(
+            responses: impl IntoIterator<Item = (K, Result<Vec<SourceCandidate>, SourceExecutionError>)>,
         ) -> Self {
             Self {
-                responses: Mutex::new(responses.into_iter().collect()),
+                responses: Mutex::new(
+                    responses
+                        .into_iter()
+                        .map(|(key, response)| (key.to_string(), response))
+                        .collect(),
+                ),
             }
         }
     }
@@ -607,12 +648,12 @@ mod tests {
                 self.responses
                     .lock()
                     .unwrap()
-                    .get(&input.source.id)
+                    .get(&input.source.key)
                     .cloned()
                     .unwrap_or_else(|| {
                         Err(SourceExecutionError::Failed(format!(
                             "missing fixture response for source {}",
-                            input.source.id
+                            input.source.key
                         )))
                     })
             })
@@ -621,7 +662,7 @@ mod tests {
 
     struct BrowserProfileCapturingExecutor {
         response: Result<Vec<SourceCandidate>, SourceExecutionError>,
-        seen_browser_profiles: Mutex<Vec<(i64, Option<(i64, String)>)>>,
+        seen_browser_profiles: Mutex<Vec<(String, Option<(i64, String)>)>>,
     }
 
     impl BrowserProfileCapturingExecutor {
@@ -632,7 +673,7 @@ mod tests {
             }
         }
 
-        fn seen_browser_profiles(&self) -> Vec<(i64, Option<(i64, String)>)> {
+        fn seen_browser_profiles(&self) -> Vec<(String, Option<(i64, String)>)> {
             self.seen_browser_profiles.lock().unwrap().clone()
         }
     }
@@ -644,7 +685,7 @@ mod tests {
         ) -> BoxedSourceExecutionFuture<'a> {
             Box::pin(async move {
                 self.seen_browser_profiles.lock().unwrap().push((
-                    input.source.id,
+                    input.source.key.clone(),
                     input
                         .browser_profile
                         .map(|profile| (profile.id, profile.key.clone())),
@@ -652,6 +693,68 @@ mod tests {
                 self.response.clone()
             })
         }
+    }
+
+    #[test]
+    fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let running_search_runs = RunningSearchRuns::default();
+            let search_request = SearchRequestService::new(&pool, &running_search_runs)
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![text_rule("laser")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["missing_source".to_string(), "indeed_de".to_string()],
+                })
+                .await
+                .unwrap();
+            let executor = FixtureSourceExecutor::new([(
+                "indeed_de",
+                Ok(vec![candidate(
+                    "Laser Engineer",
+                    "ACME",
+                    "https://example.test/laser",
+                    &[],
+                )]),
+            )]);
+            let temp_dir = tempfile::tempdir().unwrap();
+            let result_path = temp_dir.path().join("search-run-result.json");
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                result_path.clone(),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
+            assert_eq!(result.source_runs[0].source_key, "missing_source");
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
+            assert!(result.source_runs[0]
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("sourceKey `missing_source` was not found"));
+            assert_eq!(result.source_runs[1].source_key, "indeed_de");
+            assert_eq!(result.source_runs[1].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[1].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            assert_eq!(result.postings[0].sources[0].source_key, "indeed_de");
+
+            let result_json: Value =
+                serde_json::from_str(&std::fs::read_to_string(result_path).unwrap()).unwrap();
+            assert!(result_json["sourceRuns"][0].get("sourceId").is_none());
+            assert!(result_json["postings"][0]["sources"][0]
+                .get("sourceId")
+                .is_none());
+        });
     }
 
     #[test]
@@ -671,7 +774,7 @@ mod tests {
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                vec![source.id],
+                vec![source.key.clone()],
                 vec![text_rule("engineer")],
                 vec![],
             )
@@ -690,6 +793,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -700,7 +804,7 @@ mod tests {
             assert_eq!(
                 executor.seen_browser_profiles(),
                 vec![(
-                    source.id,
+                    source.key.clone(),
                     Some((browser_profile.id, "manual_release_runtime".to_string()))
                 )]
             );
@@ -740,14 +844,17 @@ mod tests {
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                vec![missing_profile_source.id, healthy_source.id],
+                vec![
+                    missing_profile_source.key.clone(),
+                    healthy_source.key.clone(),
+                ],
                 vec![text_rule("engineer")],
                 vec![],
             )
             .await;
             let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([(
-                healthy_source.id,
+                healthy_source.key.clone(),
                 Ok(vec![candidate(
                     "Healthy Engineer",
                     "ACME",
@@ -762,6 +869,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -799,13 +907,16 @@ mod tests {
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                vec![source.id],
+                vec![source.key.clone()],
                 vec![text_rule("engineer")],
                 vec![],
             )
             .await;
             let temp_dir = tempfile::tempdir().unwrap();
-            let executor = FixtureSourceExecutor::new([]);
+            let executor = FixtureSourceExecutor::new(Vec::<(
+                &str,
+                Result<Vec<SourceCandidate>, SourceExecutionError>,
+            )>::new());
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -813,6 +924,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -837,10 +949,10 @@ mod tests {
     fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("laser"), regex_rule("Optics\\s+Engineer")],
                 vec![text_rule("praktikum"), regex_rule("Werkstudent")],
             )
@@ -848,7 +960,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let result_path = temp_dir.path().join("search-run-result.json");
             let executor = FixtureSourceExecutor::new([(
-                source_ids[0],
+                source_keys[0].clone(),
                 Ok(vec![
                     candidate(
                         "LASER Physicist",
@@ -879,11 +991,16 @@ mod tests {
             )]);
             let running_search_runs = RunningSearchRuns::default();
 
-            let result =
-                SearchRunService::new(&pool, &running_search_runs, &executor, result_path.clone())
-                    .run(search_request.id)
-                    .await
-                    .unwrap();
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                result_path.clone(),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
 
             assert_eq!(result.status, SearchRunStatus::Completed);
             assert_eq!(result.source_runs[0].candidate_count, 5);
@@ -910,17 +1027,17 @@ mod tests {
     fn normalizes_source_candidates_before_matching_and_merging() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("Senior Laser Engineer")],
                 vec![],
             )
             .await;
             let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([(
-                source_ids[0],
+                source_keys[0].clone(),
                 Ok(vec![
                     candidate(
                         "  Senior\n Laser   Engineer  ",
@@ -943,6 +1060,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -966,14 +1084,14 @@ mod tests {
     fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(
+            let source_keys = create_test_sources(
                 &pool,
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
             )
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("engineer")],
                 vec![],
             )
@@ -981,7 +1099,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([
                 (
-                    source_ids[0],
+                    source_keys[0].clone(),
                     Ok(vec![
                         candidate(
                             "Laser Engineer",
@@ -1004,7 +1122,7 @@ mod tests {
                     ]),
                 ),
                 (
-                    source_ids[1],
+                    source_keys[1].clone(),
                     Ok(vec![
                         candidate(
                             "Laser Engineer",
@@ -1034,6 +1152,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1086,14 +1205,14 @@ mod tests {
     fn partial_source_failure_completes_with_errors_and_records_failed_source_error() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(
+            let source_keys = create_test_sources(
                 &pool,
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
             )
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("engineer")],
                 vec![],
             )
@@ -1102,7 +1221,7 @@ mod tests {
             let result_path = temp_dir.path().join("search-run-result.json");
             let executor = FixtureSourceExecutor::new([
                 (
-                    source_ids[0],
+                    source_keys[0].clone(),
                     Ok(vec![candidate(
                         "Laser Engineer",
                         "ACME",
@@ -1111,7 +1230,7 @@ mod tests {
                     )]),
                 ),
                 (
-                    source_ids[1],
+                    source_keys[1].clone(),
                     Err(SourceExecutionError::Failed(
                         "fixture source failed".to_string(),
                     )),
@@ -1119,11 +1238,16 @@ mod tests {
             ]);
             let running_search_runs = RunningSearchRuns::default();
 
-            let result =
-                SearchRunService::new(&pool, &running_search_runs, &executor, result_path.clone())
-                    .run(search_request.id)
-                    .await
-                    .unwrap();
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                result_path.clone(),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
 
             assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
             assert_eq!(result.postings.len(), 1);
@@ -1149,14 +1273,14 @@ mod tests {
     fn total_source_failure_produces_failed_result_without_postings() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(
+            let source_keys = create_test_sources(
                 &pool,
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
             )
             .await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("engineer")],
                 vec![],
             )
@@ -1164,11 +1288,11 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([
                 (
-                    source_ids[0],
+                    source_keys[0].clone(),
                     Err(SourceExecutionError::Failed("first failed".to_string())),
                 ),
                 (
-                    source_ids[1],
+                    source_keys[1].clone(),
                     Err(SourceExecutionError::Failed("second failed".to_string())),
                 ),
             ]);
@@ -1179,6 +1303,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1198,10 +1323,10 @@ mod tests {
     fn each_run_overwrites_search_run_result_json() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_ids = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
             let search_request = create_test_search_request(
                 &pool,
-                source_ids.clone(),
+                source_keys.clone(),
                 vec![text_rule("engineer")],
                 vec![],
             )
@@ -1212,7 +1337,7 @@ mod tests {
             let running_search_runs = RunningSearchRuns::default();
 
             let first_executor = FixtureSourceExecutor::new([(
-                source_ids[0],
+                source_keys[0].clone(),
                 Ok(vec![candidate(
                     "First Engineer",
                     "ACME",
@@ -1225,6 +1350,7 @@ mod tests {
                 &running_search_runs,
                 &first_executor,
                 result_path.clone(),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1234,7 +1360,7 @@ mod tests {
             assert!(!first_contents.contains("stale result"));
 
             let second_executor = FixtureSourceExecutor::new([(
-                source_ids[0],
+                source_keys[0].clone(),
                 Ok(vec![candidate(
                     "Second Engineer",
                     "ACME",
@@ -1247,6 +1373,7 @@ mod tests {
                 &running_search_runs,
                 &second_executor,
                 result_path.clone(),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1262,7 +1389,7 @@ mod tests {
 
     async fn create_test_search_request(
         pool: &SqlitePool,
-        source_ids: Vec<i64>,
+        source_keys: Vec<String>,
         include_rules: Vec<SearchRuleInput>,
         exclude_rules: Vec<SearchRuleInput>,
     ) -> SearchRequest {
@@ -1274,7 +1401,7 @@ mod tests {
                 exclude_rules,
                 locations: vec!["Mainz".to_string()],
                 radius_km: Some(30),
-                source_ids,
+                source_keys,
             })
             .await
             .unwrap()
@@ -1330,20 +1457,20 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_test_sources(pool: &SqlitePool, sources: &[(&str, &str)]) -> Vec<i64> {
+    async fn create_test_sources(pool: &SqlitePool, sources: &[(&str, &str)]) -> Vec<String> {
         let browser_profile =
             create_test_browser_profile(pool, "manual_release", SourceStatus::Active).await;
 
-        let mut source_ids = Vec::new();
+        let mut source_keys = Vec::new();
         for (key, name) in sources {
-            source_ids.push(
+            source_keys.push(
                 create_browser_inventory_test_source(pool, key, name, browser_profile.id)
                     .await
-                    .id,
+                    .key,
             );
         }
 
-        source_ids
+        source_keys
     }
 
     fn text_rule(value: &str) -> SearchRuleInput {

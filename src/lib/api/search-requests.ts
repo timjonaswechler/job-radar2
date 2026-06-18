@@ -19,7 +19,7 @@ export type SearchRequest = {
   excludeRules: SearchRule[]
   locations: string[]
   radiusKm: number | null
-  sourceIds: number[]
+  sourceKeys: string[]
   validationError: string | null
   createdAt: string
   updatedAt: string
@@ -34,7 +34,6 @@ export type SearchRunStatus =
 export type SourceRunStatus = "completed" | "failed" | "cancelled"
 
 export type PostingSource = {
-  sourceId: number
   sourceKey: string
   sourceName: string
   url: string
@@ -49,7 +48,6 @@ export type NormalizedPosting = {
 }
 
 export type SourceRunResult = {
-  sourceId: number
   sourceKey: string
   sourceName: string
   status: SourceRunStatus
@@ -72,7 +70,7 @@ export type CreateSearchRequestInput = {
   excludeRules: SearchRule[]
   locations: string[]
   radiusKm: number | null
-  sourceIds: number[]
+  sourceKeys: string[]
 }
 
 export type UpdateSearchRequestInput = CreateSearchRequestInput

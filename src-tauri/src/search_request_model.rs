@@ -152,7 +152,7 @@ pub struct SearchRequest {
     pub exclude_rules: Vec<SearchRule>,
     pub locations: Vec<String>,
     pub radius_km: Option<i64>,
-    pub source_ids: Vec<i64>,
+    pub source_keys: Vec<String>,
     pub validation_error: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -166,7 +166,7 @@ pub struct CreateSearchRequestInput {
     pub exclude_rules: Vec<SearchRuleInput>,
     pub locations: Vec<String>,
     pub radius_km: Option<i64>,
-    pub source_ids: Vec<i64>,
+    pub source_keys: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -177,7 +177,7 @@ pub struct UpdateSearchRequestInput {
     pub exclude_rules: Vec<SearchRuleInput>,
     pub locations: Vec<String>,
     pub radius_km: Option<i64>,
-    pub source_ids: Vec<i64>,
+    pub source_keys: Vec<String>,
 }
 
 pub struct SearchRequestService<'a> {
@@ -201,18 +201,18 @@ impl<'a> SearchRequestService<'a> {
             input.exclude_rules,
             input.locations,
             input.radius_km,
-            input.source_ids,
+            input.source_keys,
         )
         .await?;
         let include_rules_json = json_to_string(&input.include_rules)?;
         let exclude_rules_json = json_to_string(&input.exclude_rules)?;
         let locations_json = json_to_string(&input.locations)?;
-        let source_ids_json = json_to_string(&input.source_ids)?;
+        let source_keys_json = json_to_string(&input.source_keys)?;
 
         let result = sqlx::query(
             "INSERT INTO search_requests (
                status, include_rules_json, exclude_rules_json, locations_json,
-               radius_km, source_ids_json, validation_error
+               radius_km, source_keys_json, validation_error
              )
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
@@ -221,7 +221,7 @@ impl<'a> SearchRequestService<'a> {
         .bind(exclude_rules_json)
         .bind(locations_json)
         .bind(input.radius_km)
-        .bind(source_ids_json)
+        .bind(source_keys_json)
         .bind(input.validation_error.as_deref())
         .execute(self.pool)
         .await
@@ -233,7 +233,7 @@ impl<'a> SearchRequestService<'a> {
     pub async fn list(&self) -> Result<Vec<SearchRequest>, String> {
         let rows = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_ids_json, validation_error, created_at, updated_at
+                    radius_km, source_keys_json, validation_error, created_at, updated_at
              FROM search_requests
              ORDER BY id",
         )
@@ -247,7 +247,7 @@ impl<'a> SearchRequestService<'a> {
     pub async fn get(&self, id: i64) -> Result<SearchRequest, String> {
         let row = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_ids_json, validation_error, created_at, updated_at
+                    radius_km, source_keys_json, validation_error, created_at, updated_at
              FROM search_requests
              WHERE id = ?1",
         )
@@ -276,13 +276,13 @@ impl<'a> SearchRequestService<'a> {
             input.exclude_rules,
             input.locations,
             input.radius_km,
-            input.source_ids,
+            input.source_keys,
         )
         .await?;
         let include_rules_json = json_to_string(&input.include_rules)?;
         let exclude_rules_json = json_to_string(&input.exclude_rules)?;
         let locations_json = json_to_string(&input.locations)?;
-        let source_ids_json = json_to_string(&input.source_ids)?;
+        let source_keys_json = json_to_string(&input.source_keys)?;
 
         sqlx::query(
             "UPDATE search_requests
@@ -291,7 +291,7 @@ impl<'a> SearchRequestService<'a> {
                  exclude_rules_json = ?3,
                  locations_json = ?4,
                  radius_km = ?5,
-                 source_ids_json = ?6,
+                 source_keys_json = ?6,
                  validation_error = ?7,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?8",
@@ -301,7 +301,7 @@ impl<'a> SearchRequestService<'a> {
         .bind(exclude_rules_json)
         .bind(locations_json)
         .bind(input.radius_km)
-        .bind(source_ids_json)
+        .bind(source_keys_json)
         .bind(input.validation_error.as_deref())
         .bind(id)
         .execute(self.pool)
@@ -341,7 +341,7 @@ struct NormalizedSearchRequestInput {
     exclude_rules: Vec<SearchRule>,
     locations: Vec<String>,
     radius_km: Option<i64>,
-    source_ids: Vec<i64>,
+    source_keys: Vec<String>,
     validation_error: Option<String>,
 }
 
@@ -352,7 +352,7 @@ async fn validate_search_request_input(
     exclude_rules: Vec<SearchRuleInput>,
     locations: Vec<String>,
     radius_km: Option<i64>,
-    source_ids: Vec<i64>,
+    source_keys: Vec<String>,
 ) -> Result<NormalizedSearchRequestInput, String> {
     let (include_rules, mut validation_errors) = normalize_rules(include_rules, "includeRules")?;
     let (exclude_rules, exclude_validation_errors) =
@@ -365,7 +365,7 @@ async fn validate_search_request_input(
         }
     }
 
-    validate_source_id_values(&source_ids)?;
+    let source_keys = normalize_source_keys(source_keys)?;
 
     if status == SearchRequestStatus::Active {
         if include_rules.is_empty() {
@@ -373,9 +373,9 @@ async fn validate_search_request_input(
                 "active/executable search requests require at least one include rule".to_string(),
             );
         }
-        if source_ids.is_empty() {
+        if source_keys.is_empty() {
             return Err(
-                "active/executable search requests require at least one sourceId".to_string(),
+                "active/executable search requests require at least one sourceKey".to_string(),
             );
         }
     }
@@ -400,7 +400,7 @@ async fn validate_search_request_input(
         exclude_rules,
         locations: normalize_locations(locations),
         radius_km,
-        source_ids,
+        source_keys,
         validation_error,
     })
 }
@@ -447,14 +447,30 @@ fn normalize_locations(locations: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-fn validate_source_id_values(source_ids: &[i64]) -> Result<(), String> {
-    for source_id in source_ids {
-        if *source_id < 1 {
-            return Err(format!("sourceIds contains invalid source id {source_id}"));
-        }
+fn normalize_source_keys(source_keys: Vec<String>) -> Result<Vec<String>, String> {
+    source_keys
+        .into_iter()
+        .enumerate()
+        .map(|(index, source_key)| {
+            let source_key = source_key.trim().to_string();
+            validate_source_key_value(&source_key, &format!("sourceKeys[{index}]"))?;
+            Ok(source_key)
+        })
+        .collect()
+}
+
+fn validate_source_key_value(source_key: &str, path: &str) -> Result<(), String> {
+    if source_key.is_empty() {
+        return Err(format!("{path} must be a non-empty source key"));
     }
 
-    Ok(())
+    if source_key.chars().all(|character| {
+        character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+    }) {
+        Ok(())
+    } else {
+        Err(format!("{path} must match ^[a-z0-9_]+$"))
+    }
 }
 
 fn search_request_from_row(row: SqliteRow) -> Result<SearchRequest, String> {
@@ -467,7 +483,7 @@ fn search_request_from_row(row: SqliteRow) -> Result<SearchRequest, String> {
         exclude_rules: json_from_row(&row, "exclude_rules_json")?,
         locations: json_from_row(&row, "locations_json")?,
         radius_km: row.try_get("radius_km").map_err(db_error)?,
-        source_ids: json_from_row(&row, "source_ids_json")?,
+        source_keys: json_from_row(&row, "source_keys_json")?,
         validation_error: row.try_get("validation_error").map_err(db_error)?,
         created_at: row.try_get("created_at").map_err(db_error)?,
         updated_at: row.try_get("updated_at").map_err(db_error)?,
@@ -504,7 +520,7 @@ mod tests {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = 1;
+            let source_key = "indeed_de".to_string();
 
             let created = service
                 .create(CreateSearchRequestInput {
@@ -513,7 +529,7 @@ mod tests {
                     exclude_rules: vec![text_rule("Praktikum")],
                     locations: vec![" Mainz ".to_string(), "".to_string()],
                     radius_km: Some(30),
-                    source_ids: vec![source_id],
+                    source_keys: vec![source_key.clone()],
                 })
                 .await
                 .unwrap();
@@ -523,14 +539,22 @@ mod tests {
             assert_eq!(created.exclude_rules[0].value, "Praktikum");
             assert_eq!(created.locations, vec!["Mainz"]);
             assert_eq!(created.radius_km, Some(30));
-            assert_eq!(created.source_ids, vec![source_id]);
+            assert_eq!(created.source_keys, vec![source_key]);
             assert!(created.validation_error.is_none());
             assert!(!created.created_at.is_empty());
             assert!(!created.updated_at.is_empty());
-            assert!(serde_json::to_value(&created)
-                .unwrap()
-                .get("name")
-                .is_none());
+            let created_json = serde_json::to_value(&created).unwrap();
+            assert!(created_json.get("name").is_none());
+            assert_eq!(created_json["sourceKeys"], serde_json::json!(["indeed_de"]));
+            assert!(created_json.get("sourceIds").is_none());
+
+            let persisted_source_keys_json: String =
+                sqlx::query_scalar("SELECT source_keys_json FROM search_requests WHERE id = ?1")
+                    .bind(created.id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(persisted_source_keys_json, "[\"indeed_de\"]");
 
             let listed = service.list().await.unwrap();
             assert_eq!(listed, vec![created.clone()]);
@@ -545,7 +569,7 @@ mod tests {
                         exclude_rules: vec![],
                         locations: vec!["Berlin".to_string()],
                         radius_km: None,
-                        source_ids: vec![],
+                        source_keys: vec![],
                     },
                 )
                 .await
@@ -555,7 +579,7 @@ mod tests {
             assert_eq!(updated.include_rules[0].kind, SearchRuleKind::Regex);
             assert_eq!(updated.locations, vec!["Berlin"]);
             assert_eq!(updated.radius_km, None);
-            assert!(updated.source_ids.is_empty());
+            assert!(updated.source_keys.is_empty());
 
             service.delete(created.id).await.unwrap();
             assert!(service.get(created.id).await.is_err());
@@ -568,7 +592,7 @@ mod tests {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = 1;
+            let source_key = "indeed_de".to_string();
 
             let draft = service
                 .create(CreateSearchRequestInput {
@@ -577,7 +601,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap();
@@ -595,7 +619,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![source_id],
+                    source_keys: vec![source_key.clone()],
                 })
                 .await
                 .unwrap_err();
@@ -618,36 +642,36 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![999],
+                    source_keys: vec!["missing_source".to_string()],
                 })
                 .await
                 .unwrap();
 
-            assert_eq!(created.source_ids, vec![999]);
+            assert_eq!(created.source_keys, vec!["missing_source"]);
             assert_eq!(service.list().await.unwrap(), vec![created]);
 
-            let invalid_source_id = service
+            let invalid_source_key = service
                 .create(CreateSearchRequestInput {
                     status: SearchRequestStatus::Draft,
                     include_rules: vec![text_rule("Physik")],
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![0],
+                    source_keys: vec!["Invalid-Key".to_string()],
                 })
                 .await
                 .unwrap_err();
-            assert!(invalid_source_id.contains("sourceIds contains invalid source id 0"));
+            assert!(invalid_source_key.contains("sourceKeys[0] must match ^[a-z0-9_]+$"));
         });
     }
 
     #[test]
-    fn active_search_requests_require_include_rule_and_source_id() {
+    fn active_search_requests_require_include_rule_and_source_key() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = 1;
+            let source_key = "indeed_de".to_string();
 
             let missing_rule = service
                 .create(CreateSearchRequestInput {
@@ -656,7 +680,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![source_id],
+                    source_keys: vec![source_key.clone()],
                 })
                 .await
                 .unwrap_err();
@@ -669,11 +693,11 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap_err();
-            assert!(missing_source.contains("at least one sourceId"));
+            assert!(missing_source.contains("at least one sourceKey"));
         });
     }
 
@@ -695,7 +719,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap_err();
@@ -712,7 +736,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap_err();
@@ -725,7 +749,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap_err();
@@ -747,7 +771,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![],
                     radius_km: None,
-                    source_ids: vec![],
+                    source_keys: vec![],
                 })
                 .await
                 .unwrap();
@@ -763,7 +787,7 @@ mod tests {
                         exclude_rules: vec![],
                         locations: vec![],
                         radius_km: None,
-                        source_ids: vec![],
+                        source_keys: vec![],
                     },
                 )
                 .await

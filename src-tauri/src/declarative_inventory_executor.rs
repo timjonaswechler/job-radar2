@@ -8,10 +8,9 @@ use crate::{
     declarative_template::{render_template, TemplateContext, TemplateError},
     search_run_model::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
-        SourceExecutor,
+        SourceExecutionSource, SourceExecutor,
     },
     simple_json_path::{resolve_simple_json_path, SimpleJsonPathError},
-    source_model::Source,
 };
 
 const DECLARATIVE_HTTP_ADAPTER_KEY: &str = "declarative_endpoint_inventory";
@@ -484,7 +483,7 @@ fn json_field_value_to_string(
 }
 
 struct InventoryTemplateContext<'a> {
-    source: &'a Source,
+    source: &'a SourceExecutionSource,
     item: Option<&'a InventoryItem>,
     captures: &'a HashMap<String, String>,
 }
@@ -643,7 +642,7 @@ mod tests {
         },
         source_model::{
             create_source, create_system_profile, CreateSourceInput, CreateSystemProfileInput,
-            Source, SourceStatus,
+            SourceStatus,
         },
     };
     use serde_json::{json, Value};
@@ -696,22 +695,13 @@ mod tests {
 
     #[test]
     fn inventory_template_context_uses_shared_renderer_and_filters() {
-        let source = Source {
-            id: 1,
+        let source = SourceExecutionSource {
             key: "focused_energy_careers".to_string(),
             adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-            system_profile_id: Some(1),
-            browser_profile_id: None,
             name: "Focused Energy Karriere".to_string(),
-            description: None,
             source_config: json!({
                 "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
             }),
-            status: SourceStatus::Active,
-            validation_error: None,
-            built_in: false,
-            created_at: String::new(),
-            updated_at: String::new(),
         };
         let item = InventoryItem::Text(
             "https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/".to_string(),
@@ -773,6 +763,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -826,6 +817,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -881,6 +873,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -938,6 +931,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1020,6 +1014,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1094,6 +1089,7 @@ mod tests {
                 &running_search_runs,
                 &executor,
                 temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
             )
             .run(search_request.id)
             .await
@@ -1363,7 +1359,7 @@ mod tests {
                 exclude_rules: vec![],
                 locations: vec![],
                 radius_km: None,
-                source_ids,
+                source_keys: source_ids.into_iter().map(|id| id.to_string()).collect(),
             })
             .await
             .unwrap()
@@ -1385,28 +1381,19 @@ mod tests {
             exclude_rules: vec![],
             locations: vec![],
             radius_km: None,
-            source_ids: vec![1],
+            source_keys: vec!["fixture_source".to_string()],
             validation_error: None,
             created_at: String::new(),
             updated_at: String::new(),
         }
     }
 
-    fn source(adapter_key: &str) -> Source {
-        Source {
-            id: 1,
+    fn source(adapter_key: &str) -> SourceExecutionSource {
+        SourceExecutionSource {
             key: "fixture_source".to_string(),
             adapter_key: adapter_key.to_string(),
-            system_profile_id: Some(1),
-            browser_profile_id: None,
             name: "Fixture Careers".to_string(),
-            description: None,
             source_config: json!({}),
-            status: SourceStatus::Active,
-            validation_error: None,
-            built_in: false,
-            created_at: String::new(),
-            updated_at: String::new(),
         }
     }
 
