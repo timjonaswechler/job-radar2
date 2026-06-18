@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "key": "magnolia_esmp_job_search",
+  "name": "Magnolia ESMP Jobsuche",
+  "kind": "website_family",
+  "detect": {
+    "phases": ["http"],
+    "required": [
+      {
+        "fetchScript": {
+          "srcRegex": "/webresources/js/.*script\\.js",
+          "contains": "/.search?index=job"
+        }
+      },
+      {
+        "fetchJson": {
+          "url": "/.search?index=job&size=1&page=1",
+          "pathExists": "$.searchResults"
+        }
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "endpoint_inventory",
+      "adapterKey": "declarative_endpoint_inventory",
+      "availability": {
+        "sourceConfig": {
+          "startUrl": "{{inputUrl}}",
+          "endpointUrl": "{{origin}}/.search?index=job",
+          "itemsPath": "$.searchResults",
+          "titlePath": "$.title",
+          "urlPath": "$.url"
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["startUrl"],
+        "properties": {
+          "startUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Start-URL"
+          },
+          "endpointUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Search-Endpoint"
+          },
+          "itemsPath": {
+            "type": "string",
+            "title": "JSON-Pfad zur Trefferliste"
+          },
+          "titlePath": {
+            "type": "string",
+            "title": "JSON-Pfad zum Titel"
+          },
+          "urlPath": {
+            "type": "string",
+            "title": "JSON-Pfad zur URL"
+          }
+        }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "{{sourceConfig:endpointUrl}}"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "items": {
+          "select": {
+            "jsonPath": "$.searchResults"
+          }
+        },
+        "fields": {
+          "title": {
+            "jsonPath": "$.title"
+          },
+          "url": {
+            "jsonPath": "$.url"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": [
+            {
+              "jsonPath": "$.location"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

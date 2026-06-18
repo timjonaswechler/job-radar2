@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "key": "stepstone_de",
+  "name": "StepStone Deutschland",
+  "status": "active",
+  "sourceConfig": {},
+  "selectedAccessPath": {
+    "type": "profile",
+    "profileKey": "stepstone_de",
+    "pathKey": "browser_inventory"
+  }
+}

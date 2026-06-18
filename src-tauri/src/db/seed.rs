@@ -41,6 +41,9 @@ pub struct BrowserProfileSeed {
     validation_error: Option<String>,
 }
 
+// Obsolete migration inputs: kept only until #38 removes the DB-owned
+// source/profile seed path. Authoritative built-in source registry documents
+// live under source-profiles/builtin/ and sources/builtin/.
 pub const BUILTIN_SYSTEM_PROFILE_JSON_FILES: &[(&str, &str)] = &[
     (
         "system-profiles/builtin/muz_global_jobboard.json",
@@ -80,6 +83,9 @@ pub const BUILTIN_SYSTEM_PROFILE_JSON_FILES: &[(&str, &str)] = &[
     ),
 ];
 
+// Obsolete migration input: kept only until #38 removes the DB-owned browser
+// profile seed path. Authoritative built-in source registry documents live
+// under source-profiles/builtin/ and sources/builtin/.
 pub const BUILTIN_BROWSER_PROFILE_JSON_FILES: &[(&str, &str)] = &[(
     "browser-profiles/builtin/stepstone_de.json",
     include_str!("../../../browser-profiles/builtin/stepstone_de.json"),

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "personio",
+  "name": "Personio",
+  "kind": "recruiting_system",
+  "detect": {
+    "phases": ["http"],
+    "required": [
+      {
+        "htmlContains": "personio"
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "endpoint_inventory",
+      "adapterKey": "declarative_endpoint_inventory",
+      "availability": {
+        "sourceConfig": {
+          "startUrl": "{{inputUrl}}"
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["startUrl"],
+        "properties": {
+          "startUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Start-URL"
+          }
+        }
+      }
+    }
+  ]
+}

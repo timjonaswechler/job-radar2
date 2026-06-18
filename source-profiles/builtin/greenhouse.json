@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "greenhouse",
+  "name": "Greenhouse",
+  "kind": "recruiting_system",
+  "detect": {
+    "phases": ["http"],
+    "required": [
+      {
+        "htmlRegex": "(?i)https?://(?:boards|job-boards|boards-api)\\.greenhouse\\.io/(?:embed/)?(?:v1/boards/)?[a-z0-9_-]+"
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "endpoint_inventory",
+      "adapterKey": "declarative_endpoint_inventory",
+      "availability": {
+        "sourceConfig": {
+          "startUrl": "{{inputUrl}}"
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["startUrl"],
+        "properties": {
+          "startUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Start-URL"
+          }
+        }
+      }
+    }
+  ]
+}

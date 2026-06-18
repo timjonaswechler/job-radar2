@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "key": "indeed_de",
+  "name": "Indeed Deutschland",
+  "status": "active",
+  "sourceConfig": {},
+  "selectedAccessPath": {
+    "type": "source_specific",
+    "adapterKey": "indeed_search",
+    "sourceConfigSchema": {
+      "type": "object"
+    }
+  }
+}
