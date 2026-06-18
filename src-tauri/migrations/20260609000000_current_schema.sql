@@ -22,7 +22,7 @@ CREATE TABLE search_requests(
   exclude_rules_json TEXT NOT NULL DEFAULT '[]',
   locations_json TEXT NOT NULL DEFAULT '[]',
   radius_km INTEGER NULL,
-  source_ids_json TEXT NOT NULL DEFAULT '[]',
+  source_keys_json TEXT NOT NULL DEFAULT '[]',
   validation_error TEXT NULL,
   created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -30,6 +30,6 @@ CREATE TABLE search_requests(
   CHECK(json_valid(include_rules_json)),
   CHECK(json_valid(exclude_rules_json)),
   CHECK(json_valid(locations_json)),
-  CHECK(json_valid(source_ids_json)),
+  CHECK(json_valid(source_keys_json)),
   CHECK(radius_km IS NULL OR radius_km >= 0)
 );

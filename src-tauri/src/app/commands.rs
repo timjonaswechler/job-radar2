@@ -340,6 +340,7 @@ pub async fn run_search_request(
         &state.running_search_runs,
         &source_executor,
         crate::search_run_model::default_search_run_result_path(),
+        state.paths.app_data_dir.clone(),
     )
     .run(id)
     .await
