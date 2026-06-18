@@ -739,6 +739,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn xml_inventory_source_runs_through_search_run_with_system_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -798,6 +799,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn successfactors_builtin_inventory_runs_schott_sitemap_fixture_through_central_runtime() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -852,6 +854,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn ashby_json_inventory_source_runs_through_search_run_with_system_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -903,6 +906,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn json_inventory_reports_profile_author_error_when_items_path_is_not_array() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -990,6 +994,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn xml_inventory_fetch_errors_become_source_run_errors() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1039,6 +1044,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn declarative_source_without_inventory_fails_source_run_clearly() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;

@@ -868,6 +868,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn browser_inventory_source_runs_through_search_run_with_browser_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -946,6 +947,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn stepstone_browser_profile_builds_query_url_and_extracts_cards_through_search_run() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -1100,6 +1102,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn missing_inventory_definition_becomes_failed_source_run() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;

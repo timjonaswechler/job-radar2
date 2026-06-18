@@ -7,7 +7,7 @@ use std::{error::Error, path::Path};
 
 pub async fn connect_and_migrate(
     db_path: &Path,
-    custom_system_profiles_dir: &Path,
+    _custom_system_profiles_dir: &Path,
 ) -> Result<SqlitePool, Box<dyn Error>> {
     let options = SqliteConnectOptions::new()
         .filename(db_path)
@@ -18,7 +18,7 @@ pub async fn connect_and_migrate(
 
     // Embedded at compile time, so packaged builds do not need loose SQL files.
     sqlx::migrate!("./migrations").run(&pool).await?;
-    seed_database(&pool, custom_system_profiles_dir).await?;
+    seed_database(&pool).await?;
 
     Ok(pool)
 }
@@ -26,191 +26,85 @@ pub async fn connect_and_migrate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::seed::{parse_browser_profile_seed, parse_system_profile_seed};
     use std::fs;
 
     #[test]
-    fn bundled_builtin_system_profiles_are_valid_seed_files() {
-        let keys = crate::db::seed::BUILTIN_SYSTEM_PROFILE_JSON_FILES
-            .iter()
-            .map(|(source_label, contents)| {
-                parse_system_profile_seed(contents, source_label)
-                    .expect("built-in system profile must parse")
-                    .key
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            keys,
-            vec![
-                "muz_global_jobboard",
-                "greenhouse",
-                "lever",
-                "ashby",
-                "personio",
-                "workday",
-                "magnolia_esmp_job_search",
-                "successfactors",
-                "phenom"
-            ]
-        );
-    }
-
-    #[test]
-    fn bundled_builtin_browser_profiles_are_valid_seed_files() {
-        let keys = crate::db::seed::BUILTIN_BROWSER_PROFILE_JSON_FILES
-            .iter()
-            .map(|(source_label, contents)| {
-                parse_browser_profile_seed(contents, source_label)
-                    .expect("built-in browser profile must parse")
-                    .key
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(keys, vec!["stepstone_de_browser_profile"]);
-    }
-
-    #[test]
-    fn connect_and_migrate_rejects_custom_system_profile_with_invalid_inventory() {
+    fn fresh_dev_schema_has_no_source_or_profile_domain_tables() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let database_path = temp_dir.path().join("job_radar.db");
             let custom_profiles_dir = temp_dir.path().join("system-profiles");
-            fs::create_dir_all(&custom_profiles_dir).unwrap();
-            fs::write(
-                custom_profiles_dir.join("invalid_inventory.json"),
-                r#"{
-                  "key": "invalid_inventory",
-                  "name": "Invalid Inventory",
-                  "description": "Local custom profile with broken inventory.",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "status": "active",
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "custom-board" }] },
-                    "inventory": {
-                      "fetch": { "url": "{{sourceConfig:startUrl}}" },
-                      "parse": { "as": "json" },
-                      "items": { "select": { "jsonPath": "$.jobs" } },
-                      "fields": {
-                        "title": { "jsonPath": "$.title" },
-                        "company": { "template": "{{sourceName}}" },
-                        "locations": [{ "jsonPath": "$.location" }]
-                      }
-                    }
-                  },
-                  "sourceConfigSchema": {
-                    "type": "object",
-                    "required": ["startUrl"],
-                    "properties": {
-                      "startUrl": { "type": "string", "format": "uri" }
-                    }
-                  }
-                }"#,
-            )
-            .unwrap();
-
-            let error = connect_and_migrate(&database_path, &custom_profiles_dir)
-                .await
-                .unwrap_err()
-                .to_string();
-            assert!(error.contains("invalid_inventory.json"));
-            assert!(error.contains("definition.inventory.fields.url is required"));
-        });
-    }
-
-    #[test]
-    fn connect_and_migrate_seeds_builtin_and_custom_system_profiles() {
-        tauri::async_runtime::block_on(async {
-            let temp_dir = tempfile::tempdir().unwrap();
-            let database_path = temp_dir.path().join("job_radar.db");
-            let custom_profiles_dir = temp_dir.path().join("system-profiles");
-            fs::create_dir_all(&custom_profiles_dir).unwrap();
-            fs::write(
-                custom_profiles_dir.join("custom_greenhouse_variant.json"),
-                r#"{
-                  "key": "custom_greenhouse_variant",
-                  "name": "Custom Greenhouse Variant",
-                  "description": "Local custom profile kept in the app data directory.",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "status": "active",
-                  "definition": {
-                    "detect": {
-                      "required": [
-                        { "htmlContains": "custom-greenhouse-marker" }
-                      ]
-                    },
-                    "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                  },
-                  "sourceConfigSchema": {
-                    "type": "object",
-                    "required": ["startUrl"],
-                    "properties": {
-                      "startUrl": { "type": "string", "format": "uri" }
-                    }
-                  }
-                }"#,
-            )
-            .unwrap();
 
             let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
                 .await
                 .unwrap();
-            let profiles = crate::source_model::list_system_profiles(&pool)
-                .await
-                .unwrap();
+            let table_names = sqlx::query_scalar::<_, String>(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
 
-            assert!(profiles
-                .iter()
-                .any(|profile| profile.key == "muz_global_jobboard" && profile.built_in));
-            assert!(profiles
-                .iter()
-                .any(|profile| profile.key == "custom_greenhouse_variant" && !profile.built_in));
+            assert!(table_names.contains(&"app_metadata".to_string()));
+            assert!(table_names.contains(&"app_settings".to_string()));
+            assert!(table_names.contains(&"search_requests".to_string()));
+            assert!(!table_names.contains(&"system_profiles".to_string()));
+            assert!(!table_names.contains(&"browser_profiles".to_string()));
+            assert!(!table_names.contains(&"sources".to_string()));
         });
     }
 
     #[test]
-    fn custom_system_profiles_cannot_override_bundled_keys() {
+    fn connect_and_migrate_records_database_initialization_metadata_only() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let database_path = temp_dir.path().join("job_radar.db");
+            let custom_profiles_dir = temp_dir.path().join("system-profiles");
+
+            let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
+                .await
+                .unwrap();
+
+            let initialized_at = sqlx::query_scalar::<_, String>(
+                "SELECT value FROM app_metadata WHERE key = 'database_initialized'",
+            )
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
+            assert!(initialized_at.is_some());
+
+            let metadata_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM app_metadata")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(metadata_count, 1);
+        });
+    }
+
+    #[test]
+    fn connect_and_migrate_does_not_read_or_seed_legacy_custom_system_profiles() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let database_path = temp_dir.path().join("job_radar.db");
             let custom_profiles_dir = temp_dir.path().join("system-profiles");
             fs::create_dir_all(&custom_profiles_dir).unwrap();
-            fs::write(
-                custom_profiles_dir.join("greenhouse.json"),
-                r#"{
-                  "key": "greenhouse",
-                  "name": "Shadow Greenhouse",
-                  "description": null,
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "status": "active",
-                  "definition": {
-                    "detect": {
-                      "required": [
-                        { "htmlContains": "shadow-greenhouse" }
-                      ]
-                    },
-                    "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                  },
-                  "sourceConfigSchema": {
-                    "type": "object",
-                    "required": ["startUrl"],
-                    "properties": {
-                      "startUrl": { "type": "string", "format": "uri" }
-                    }
-                  }
-                }"#,
+            fs::write(custom_profiles_dir.join("broken.json"), "{not json").unwrap();
+
+            let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
+                .await
+                .unwrap();
+            let table_exists = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'system_profiles'",
             )
+            .fetch_one(&pool)
+            .await
             .unwrap();
 
-            let error = connect_and_migrate(&database_path, &custom_profiles_dir)
-                .await
-                .unwrap_err()
-                .to_string();
-
-            assert!(error.contains("cannot override built-in key `greenhouse`"));
+            assert_eq!(table_exists, 0);
+            assert_eq!(
+                fs::read_to_string(custom_profiles_dir.join("broken.json")).unwrap(),
+                "{not json"
+            );
         });
     }
 }

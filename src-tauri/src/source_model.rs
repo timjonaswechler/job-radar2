@@ -1759,355 +1759,6 @@ fn db_error(error: sqlx::Error) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
-    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-
-    #[test]
-    fn migration_starts_with_empty_source_inventory() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            assert!(list_browser_profiles(&pool).await.unwrap().is_empty());
-            assert!(list_system_profiles(&pool).await.unwrap().is_empty());
-            assert!(list_sources(&pool).await.unwrap().is_empty());
-        });
-    }
-
-    #[test]
-    fn system_profile_crud_round_trips_declarative_definition() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let created = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "muz_global_jobboard".to_string(),
-                    name: "Milch & Zucker Global Jobboard".to_string(),
-                    description: Some("HTTP-basiertes Systemprofil".to_string()),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": {
-                            "required": [
-                                { "htmlContains": "global-jobboard-client" },
-                                { "fetchText": { "url": "/script/gjb_scripts.js", "regex": "gjbAddress" } }
-                            ]
-                        }
-                    }),
-                    source_config_schema: json!({
-                        "type": "object",
-                        "required": ["startUrl", "apiBaseUrl"],
-                        "properties": {
-                            "startUrl": { "type": "string", "format": "uri" },
-                            "apiBaseUrl": { "type": "string", "format": "uri" }
-                        }
-                    }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(created.key, "muz_global_jobboard");
-            assert_eq!(created.adapter_key, "declarative_endpoint_inventory");
-            assert!(!created.built_in);
-
-            let fetched = get_system_profile_by_key(&pool, "muz_global_jobboard")
-                .await
-                .unwrap();
-            assert_eq!(fetched.id, created.id);
-
-            let updated = update_system_profile(
-                &pool,
-                created.id,
-                UpdateSystemProfileInput {
-                    name: "MUZ Global Jobboard".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 2,
-                    definition: json!({ "detect": { "required": [] } }),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Draft,
-                    validation_error: Some("in Arbeit".to_string()),
-                },
-            )
-            .await
-            .unwrap();
-            assert_eq!(updated.name, "MUZ Global Jobboard");
-            assert_eq!(updated.status, SourceStatus::Draft);
-
-            delete_system_profile(&pool, created.id).await.unwrap();
-            assert!(get_system_profile(&pool, created.id).await.is_err());
-        });
-    }
-
-    #[test]
-    fn system_profile_json_export_imports_as_new_profile() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let original = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "portable_board".to_string(),
-                    name: "Portable Board".to_string(),
-                    description: Some("Portable profile".to_string()),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "portable-board" }] },
-                        "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                    }),
-                    source_config_schema: json!({
-                        "type": "object",
-                        "required": ["startUrl"],
-                        "properties": {
-                            "startUrl": { "type": "string", "format": "uri" }
-                        }
-                    }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let exported = export_system_profile_json(&pool, original.id)
-                .await
-                .unwrap();
-            delete_system_profile(&pool, original.id).await.unwrap();
-
-            let imported = import_system_profile_json(&pool, &exported).await.unwrap();
-            assert_eq!(imported.key, "portable_board");
-            assert_eq!(imported.name, "Portable Board");
-            assert_eq!(imported.adapter_key, "declarative_endpoint_inventory");
-            assert_eq!(
-                imported.definition["detect"]["required"][0]["htmlContains"],
-                "portable-board"
-            );
-            assert_eq!(imported.source_config_schema["required"][0], "startUrl");
-            assert!(!imported.built_in);
-        });
-    }
-
-    #[test]
-    fn system_profile_json_import_updates_existing_custom_profile() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let existing = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "portable_board".to_string(),
-                    name: "Portable Board".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "old-marker" }] }
-                    }),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let imported = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "portable_board",
-                  "name": "Portable Board v2",
-                  "description": "Updated from JSON",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 2,
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "new-marker" }] }
-                  },
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active",
-                  "validationError": null
-                }"#,
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(imported.id, existing.id);
-            assert_eq!(imported.name, "Portable Board v2");
-            assert_eq!(imported.definition_schema_version, 2);
-            assert_eq!(
-                imported.definition["detect"]["required"][0]["htmlContains"],
-                "new-marker"
-            );
-        });
-    }
-
-    #[test]
-    fn system_profile_json_import_rejects_invalid_profile_without_persistence() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let invalid = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "invalid_profile",
-                  "name": "Invalid Profile",
-                  "adapterKey": "indeed_search",
-                  "definitionSchemaVersion": 1,
-                  "definition": {},
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-
-            assert!(invalid.contains("adapterKey indeed_search cannot be used by system profiles"));
-            assert!(get_system_profile_by_key(&pool, "invalid_profile")
-                .await
-                .is_err());
-        });
-    }
-
-    #[test]
-    fn system_profile_json_import_rejects_malformed_detection_checks_without_persistence() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let cases = [
-                (
-                    "invalid_html_contains",
-                    json!({ "htmlContains": 42 }),
-                    "definition.detect.required[0].htmlContains must be a string",
-                ),
-                (
-                    "invalid_html_regex",
-                    json!({ "htmlRegex": "[" }),
-                    "definition.detect.required[0].htmlRegex is invalid",
-                ),
-                (
-                    "missing_fetch_text_url",
-                    json!({ "fetchText": { "contains": "marker" } }),
-                    "definition.detect.required[0].fetchText.url must be a non-empty string",
-                ),
-                (
-                    "invalid_fetch_text_url",
-                    json!({ "fetchText": { "url": "http://[" } }),
-                    "definition.detect.required[0].fetchText.url is invalid",
-                ),
-                (
-                    "invalid_fetch_text_regex",
-                    json!({ "fetchText": { "url": "/sitemap.xml", "regex": "[" } }),
-                    "definition.detect.required[0].fetchText.regex is invalid",
-                ),
-                (
-                    "missing_fetch_json_url",
-                    json!({ "fetchJson": { "pathExists": "$.jobs" } }),
-                    "definition.detect.required[0].fetchJson.url must be a non-empty string",
-                ),
-                (
-                    "invalid_fetch_json_url",
-                    json!({ "fetchJson": { "url": "http://[" } }),
-                    "definition.detect.required[0].fetchJson.url is invalid",
-                ),
-                (
-                    "malformed_fetch_script_src_regex",
-                    json!({ "fetchScript": { "srcRegex": "[", "contains": "marker" } }),
-                    "definition.detect.required[0].fetchScript.srcRegex is invalid",
-                ),
-                (
-                    "malformed_fetch_script_regex",
-                    json!({ "fetchScript": { "regex": "[" } }),
-                    "definition.detect.required[0].fetchScript.regex is invalid",
-                ),
-                (
-                    "unknown_domain_contains",
-                    json!({ "domainContains": "example.com" }),
-                    "definition.detect.required[0] uses unsupported detection check",
-                ),
-            ];
-
-            for (key, check, expected_error) in cases {
-                let profile_json = json!({
-                    "key": key,
-                    "name": "Invalid Detection",
-                    "adapterKey": "declarative_endpoint_inventory",
-                    "definitionSchemaVersion": 1,
-                    "definition": {
-                        "detect": { "required": [check] }
-                    },
-                    "sourceConfigSchema": { "type": "object" },
-                    "status": "active",
-                    "validationError": null
-                })
-                .to_string();
-
-                let error = import_system_profile_json(&pool, &profile_json)
-                    .await
-                    .unwrap_err();
-                assert!(
-                    error.contains(expected_error),
-                    "expected `{error}` to contain `{expected_error}`"
-                );
-                assert!(get_system_profile_by_key(&pool, key).await.is_err());
-            }
-        });
-    }
-
-    #[test]
-    fn system_profile_json_import_validates_identity_templates() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let valid = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "identity_board",
-                  "name": "Identity Board",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": {
-                    "detect": { "required": [{ "htmlRegex": "https://jobs.example.com/([a-z0-9_-]+)", "captureAs": "boardSlug" }] },
-                    "identity": {
-                      "extract": [{ "htmlRegex": "\"publicWebsite\":\"(https?://[^\"\\\\]+)\"", "captureAs": "companyWebsite" }],
-                      "keyCandidates": ["{{capture:companyWebsite|domainKey}}_careers", "{{capture:boardSlug|technicalKey}}_careers"],
-                      "nameCandidates": ["{{capture:companyWebsite|domainTitle}} Karriere"],
-                      "optionalSourceConfig": { "companyWebsite": "{{capture:companyWebsite}}" }
-                    },
-                    "sourceConfig": { "startUrl": "{{inputUrl}}" }
-                  },
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap();
-            assert_eq!(valid.key, "identity_board");
-
-            let invalid = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "invalid_identity_board",
-                  "name": "Invalid Identity Board",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "marker" }] },
-                    "identity": {
-                      "keyCandidates": ["{{capture:companyWebsite|unknownFilter}}_careers"]
-                    }
-                  },
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-            assert!(invalid.contains("definition.identity.keyCandidates[0] contains unsupported template filter `unknownFilter`"));
-            assert!(get_system_profile_by_key(&pool, "invalid_identity_board")
-                .await
-                .is_err());
-        });
-    }
 
     #[test]
     fn system_profile_validation_accepts_xml_and_json_inventory_definitions() {
@@ -2217,416 +1868,142 @@ mod tests {
     }
 
     #[test]
-    fn system_profile_create_update_and_import_validate_inventory() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let invalid_definition = profile_definition_with_inventory({
-                let mut inventory = valid_json_inventory();
-                inventory["fields"].as_object_mut().unwrap().remove("url");
-                inventory
-            });
+    fn system_profile_validation_rejects_invalid_detection_checks() {
+        let cases = [
+            (
+                json!({ "htmlContains": 42 }),
+                "definition.detect.required[0].htmlContains must be a string",
+            ),
+            (
+                json!({ "htmlRegex": "[" }),
+                "definition.detect.required[0].htmlRegex is invalid",
+            ),
+            (
+                json!({ "fetchText": { "contains": "marker" } }),
+                "definition.detect.required[0].fetchText.url must be a non-empty string",
+            ),
+            (
+                json!({ "fetchText": { "url": "http://[" } }),
+                "definition.detect.required[0].fetchText.url is invalid",
+            ),
+            (
+                json!({ "fetchText": { "url": "/sitemap.xml", "regex": "[" } }),
+                "definition.detect.required[0].fetchText.regex is invalid",
+            ),
+            (
+                json!({ "fetchJson": { "pathExists": "$.jobs" } }),
+                "definition.detect.required[0].fetchJson.url must be a non-empty string",
+            ),
+            (
+                json!({ "fetchJson": { "url": "http://[" } }),
+                "definition.detect.required[0].fetchJson.url is invalid",
+            ),
+            (
+                json!({ "fetchScript": { "srcRegex": "[", "contains": "marker" } }),
+                "definition.detect.required[0].fetchScript.srcRegex is invalid",
+            ),
+            (
+                json!({ "fetchScript": { "regex": "[" } }),
+                "definition.detect.required[0].fetchScript.regex is invalid",
+            ),
+            (
+                json!({ "domainContains": "example.com" }),
+                "definition.detect.required[0] uses unsupported detection check",
+            ),
+        ];
 
-            let create_error = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "invalid_create_inventory".to_string(),
-                    name: "Invalid Create Inventory".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: invalid_definition.clone(),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
+        for (check, expected_error) in cases {
+            let definition = json!({ "detect": { "required": [check] } });
+            let error = validate_system_profile_definition_and_schema(
+                &definition,
+                &json!({ "type": "object" }),
+                SourceStatus::Active,
             )
-            .await
-            .unwrap_err();
-            assert!(create_error.contains("definition.inventory.fields.url is required"));
-            assert!(get_system_profile_by_key(&pool, "invalid_create_inventory")
-                .await
-                .is_err());
-
-            let existing = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "valid_inventory".to_string(),
-                    name: "Valid Inventory".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: profile_definition_with_inventory(valid_json_inventory()),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let update_error = update_system_profile(
-                &pool,
-                existing.id,
-                UpdateSystemProfileInput {
-                    name: "Invalid Update Inventory".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 2,
-                    definition: invalid_definition.clone(),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
-            assert!(update_error.contains("definition.inventory.fields.url is required"));
-            let unchanged = get_system_profile(&pool, existing.id).await.unwrap();
-            assert_eq!(unchanged.name, "Valid Inventory");
-            assert_eq!(unchanged.definition_schema_version, 1);
-
-            let import_document = json!({
-                "key": "invalid_import_inventory",
-                "name": "Invalid Import Inventory",
-                "adapterKey": "declarative_endpoint_inventory",
-                "definitionSchemaVersion": 1,
-                "definition": invalid_definition,
-                "sourceConfigSchema": { "type": "object" },
-                "status": "active"
-            })
-            .to_string();
-            let import_error = import_system_profile_json(&pool, &import_document)
-                .await
-                .unwrap_err();
-            assert!(import_error.contains("definition.inventory.fields.url is required"));
-            assert!(get_system_profile_by_key(&pool, "invalid_import_inventory")
-                .await
-                .is_err());
-        });
-    }
-
-    #[test]
-    fn system_profile_json_import_rejects_invalid_detection_update_without_persistence() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let existing = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "portable_board".to_string(),
-                    name: "Portable Board".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "old-marker" }] }
-                    }),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let error = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "portable_board",
-                  "name": "Portable Board with Bad Detection",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 2,
-                  "definition": {
-                    "detect": { "required": [{ "domainContains": "example.com" }] }
-                  },
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
             .unwrap_err();
 
-            let unchanged = get_system_profile(&pool, existing.id).await.unwrap();
             assert!(
-                error.contains("definition.detect.required[0] uses unsupported detection check")
+                error.contains(expected_error),
+                "expected `{error}` to contain `{expected_error}`"
             );
-            assert_eq!(unchanged.name, "Portable Board");
-            assert_eq!(unchanged.definition_schema_version, 1);
-            assert_eq!(
-                unchanged.definition["detect"]["required"][0]["htmlContains"],
-                "old-marker"
-            );
-        });
+        }
     }
 
     #[test]
-    fn system_profile_json_import_rejects_invalid_definition_and_schema() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let invalid_definition = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "invalid_definition",
-                  "name": "Invalid Definition",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": [],
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-            assert!(invalid_definition.contains("definition must be a JSON object"));
-            assert!(get_system_profile_by_key(&pool, "invalid_definition")
-                .await
-                .is_err());
-
-            let invalid_schema = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "invalid_schema",
-                  "name": "Invalid Schema",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "marker" }] }
-                  },
-                  "sourceConfigSchema": [],
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-            assert!(invalid_schema.contains("sourceConfigSchema must be a JSON object"));
-            assert!(get_system_profile_by_key(&pool, "invalid_schema")
-                .await
-                .is_err());
-
-            let invalid_schema_shape = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "invalid_schema_shape",
-                  "name": "Invalid Schema Shape",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "marker" }] }
-                  },
-                  "sourceConfigSchema": { "type": "object", "required": "startUrl" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-            assert!(invalid_schema_shape.contains("sourceConfigSchema.required must be an array"));
-            assert!(get_system_profile_by_key(&pool, "invalid_schema_shape")
-                .await
-                .is_err());
+    fn system_profile_validation_validates_identity_templates() {
+        let valid = json!({
+            "detect": {
+                "required": [{
+                    "htmlRegex": "https://jobs.example.com/([a-z0-9_-]+)",
+                    "captureAs": "boardSlug"
+                }]
+            },
+            "identity": {
+                "extract": [{
+                    "htmlRegex": "\\\"publicWebsite\\\":\\\"(https?://[^\\\"\\\\]+)\\\"",
+                    "captureAs": "companyWebsite"
+                }],
+                "keyCandidates": [
+                    "{{capture:companyWebsite|domainKey}}_careers",
+                    "{{capture:boardSlug|technicalKey}}_careers"
+                ],
+                "nameCandidates": ["{{capture:companyWebsite|domainTitle}} Karriere"],
+                "optionalSourceConfig": { "companyWebsite": "{{capture:companyWebsite}}" }
+            }
         });
+
+        validate_system_profile_definition_and_schema(
+            &valid,
+            &json!({ "type": "object" }),
+            SourceStatus::Active,
+        )
+        .unwrap();
+
+        let invalid = json!({
+            "detect": { "required": [{ "htmlContains": "marker" }] },
+            "identity": {
+                "keyCandidates": ["{{capture:companyWebsite|unknownFilter}}_careers"]
+            }
+        });
+        let error = validate_system_profile_definition_and_schema(
+            &invalid,
+            &json!({ "type": "object" }),
+            SourceStatus::Active,
+        )
+        .unwrap_err();
+
+        assert!(error.contains(
+            "definition.identity.keyCandidates[0] contains unsupported template filter `unknownFilter`"
+        ));
     }
 
     #[test]
-    fn system_profile_json_import_does_not_overwrite_built_in_profiles() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            sqlx::query(
-                "INSERT INTO system_profiles (
-                   key, name, adapter_key, definition_schema_version,
-                   definition_json, source_config_schema_json, built_in, status
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7)",
-            )
-            .bind("greenhouse")
-            .bind("Greenhouse")
-            .bind("declarative_endpoint_inventory")
-            .bind(1_i64)
-            .bind(r#"{"detect":{"required":[{"htmlContains":"old"}]}}"#)
-            .bind(r#"{"type":"object"}"#)
-            .bind("active")
-            .execute(&pool)
-            .await
-            .unwrap();
+    fn system_profile_validation_rejects_invalid_definition_and_source_config_schema() {
+        let invalid_definition = validate_system_profile_definition_and_schema(
+            &json!([]),
+            &json!({ "type": "object" }),
+            SourceStatus::Active,
+        )
+        .unwrap_err();
+        assert!(invalid_definition.contains("definition must be a JSON object"));
 
-            let error = import_system_profile_json(
-                &pool,
-                r#"{
-                  "key": "greenhouse",
-                  "name": "Overwritten Greenhouse",
-                  "adapterKey": "declarative_endpoint_inventory",
-                  "definitionSchemaVersion": 1,
-                  "definition": {
-                    "detect": { "required": [{ "htmlContains": "new" }] }
-                  },
-                  "sourceConfigSchema": { "type": "object" },
-                  "status": "active"
-                }"#,
-            )
-            .await
-            .unwrap_err();
-
-            let greenhouse = get_system_profile_by_key(&pool, "greenhouse")
-                .await
-                .unwrap();
-            assert!(error
-                .contains("built-in system profile greenhouse cannot be overwritten by import"));
-            assert_eq!(greenhouse.name, "Greenhouse");
+        let definition = json!({
+            "detect": { "required": [{ "htmlContains": "marker" }] }
         });
-    }
+        let invalid_schema = validate_system_profile_definition_and_schema(
+            &definition,
+            &json!([]),
+            SourceStatus::Active,
+        )
+        .unwrap_err();
+        assert!(invalid_schema.contains("sourceConfigSchema must be a JSON object"));
 
-    #[test]
-    fn declarative_sources_require_matching_active_system_profile() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-
-            let profile = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "greenhouse".to_string(),
-                    name: "Greenhouse".to_string(),
-                    description: None,
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "greenhouse" }] }
-                    }),
-                    source_config_schema: json!({
-                        "type": "object",
-                        "required": ["startUrl", "boardToken"],
-                        "properties": {
-                            "startUrl": { "type": "string", "format": "uri" },
-                            "boardToken": { "type": "string" }
-                        }
-                    }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let source = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "acme_greenhouse".to_string(),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    system_profile_id: Some(profile.id),
-                    browser_profile_id: None,
-                    name: "Acme Karriere".to_string(),
-                    description: None,
-                    source_config: json!({
-                        "startUrl": "https://job-boards.greenhouse.io/acme",
-                        "boardToken": "acme"
-                    }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(source.system_profile_id, Some(profile.id));
-            assert_eq!(source.adapter_key, "declarative_endpoint_inventory");
-
-            let missing_profile = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "missing_profile".to_string(),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    system_profile_id: None,
-                    browser_profile_id: None,
-                    name: "Missing".to_string(),
-                    description: None,
-                    source_config: json!({ "startUrl": "https://example.com/jobs" }),
-                    status: SourceStatus::Draft,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
-            assert!(missing_profile.contains("requires a systemProfileId"));
-
-            let schema_error = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "invalid_profile_config".to_string(),
-                    adapter_key: "declarative_endpoint_inventory".to_string(),
-                    system_profile_id: Some(profile.id),
-                    browser_profile_id: None,
-                    name: "Invalid".to_string(),
-                    description: None,
-                    source_config: json!({ "startUrl": "https://example.com/jobs" }),
-                    status: SourceStatus::Draft,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
-            assert!(schema_error.contains("sourceConfig.boardToken is required"));
-        });
-    }
-
-    #[test]
-    fn indeed_job_board_adapter_stays_separate_from_system_profiles() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let browser_profile = create_browser_profile(
-                &pool,
-                CreateBrowserProfileInput {
-                    key: "manual_release".to_string(),
-                    name: "Manuelle Freigabe".to_string(),
-                    description: None,
-                    name_i18n_key: None,
-                    description_i18n_key: None,
-                    definition_path: None,
-                    definition_hash: None,
-                    definition_schema_version: 1,
-                    definition: json!({}),
-                    source_config_schema: json!({ "type": "object" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            let source = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "indeed_de".to_string(),
-                    adapter_key: "indeed_search".to_string(),
-                    system_profile_id: None,
-                    browser_profile_id: Some(browser_profile.id),
-                    name: "Indeed Deutschland".to_string(),
-                    description: None,
-                    source_config: json!({}),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(source.system_profile_id, None);
-            assert_eq!(source.browser_profile_id, Some(browser_profile.id));
-
-            let disallowed_profile = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "indeed_with_system".to_string(),
-                    adapter_key: "indeed_search".to_string(),
-                    system_profile_id: Some(1),
-                    browser_profile_id: Some(browser_profile.id),
-                    name: "Invalid".to_string(),
-                    description: None,
-                    source_config: json!({}),
-                    status: SourceStatus::Draft,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
-            assert!(disallowed_profile.contains("does not allow a systemProfileId"));
-        });
+        let invalid_schema_shape = validate_system_profile_definition_and_schema(
+            &definition,
+            &json!({ "type": "object", "required": "startUrl" }),
+            SourceStatus::Active,
+        )
+        .unwrap_err();
+        assert!(invalid_schema_shape.contains("sourceConfigSchema.required must be an array"));
     }
 
     fn profile_definition_with_inventory(inventory: Value) -> Value {
@@ -2674,22 +2051,5 @@ mod tests {
                 ]
             }
         })
-    }
-
-    async fn migrated_pool() -> SqlitePool {
-        let options = SqliteConnectOptions::new()
-            .filename(":memory:")
-            .create_if_missing(true)
-            .foreign_keys(true);
-
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(options)
-            .await
-            .unwrap();
-
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-
-        pool
     }
 }

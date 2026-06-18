@@ -346,7 +346,7 @@ struct NormalizedSearchRequestInput {
 }
 
 async fn validate_search_request_input(
-    pool: &SqlitePool,
+    _pool: &SqlitePool,
     status: SearchRequestStatus,
     include_rules: Vec<SearchRuleInput>,
     exclude_rules: Vec<SearchRuleInput>,
@@ -365,7 +365,7 @@ async fn validate_search_request_input(
         }
     }
 
-    validate_source_ids(pool, &source_ids).await?;
+    validate_source_id_values(&source_ids)?;
 
     if status == SearchRequestStatus::Active {
         if include_rules.is_empty() {
@@ -447,26 +447,10 @@ fn normalize_locations(locations: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-async fn validate_source_ids(pool: &SqlitePool, source_ids: &[i64]) -> Result<(), String> {
-    let mut validated_source_ids = HashSet::new();
-
+fn validate_source_id_values(source_ids: &[i64]) -> Result<(), String> {
     for source_id in source_ids {
         if *source_id < 1 {
-            return Err(format!("sourceIds contains unknown source id {source_id}"));
-        }
-        if !validated_source_ids.insert(*source_id) {
-            continue;
-        }
-
-        let existing_source_id =
-            sqlx::query_scalar::<_, i64>("SELECT id FROM sources WHERE id = ?1")
-                .bind(source_id)
-                .fetch_optional(pool)
-                .await
-                .map_err(db_error)?;
-
-        if existing_source_id.is_none() {
-            return Err(format!("sourceIds contains unknown source id {source_id}"));
+            return Err(format!("sourceIds contains invalid source id {source_id}"));
         }
     }
 
@@ -512,7 +496,6 @@ fn db_error(error: sqlx::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     #[test]
@@ -521,7 +504,7 @@ mod tests {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = create_test_source(&pool).await;
+            let source_id = 1;
 
             let created = service
                 .create(CreateSearchRequestInput {
@@ -585,7 +568,7 @@ mod tests {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = create_test_source(&pool).await;
+            let source_id = 1;
 
             let draft = service
                 .create(CreateSearchRequestInput {
@@ -622,15 +605,15 @@ mod tests {
     }
 
     #[test]
-    fn selected_source_ids_must_exist() {
+    fn search_requests_do_not_query_removed_source_domain_table() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
 
-            let error = service
+            let created = service
                 .create(CreateSearchRequestInput {
-                    status: SearchRequestStatus::Draft,
+                    status: SearchRequestStatus::Active,
                     include_rules: vec![text_rule("Physik")],
                     exclude_rules: vec![],
                     locations: vec![],
@@ -638,10 +621,23 @@ mod tests {
                     source_ids: vec![999],
                 })
                 .await
-                .unwrap_err();
+                .unwrap();
 
-            assert!(error.contains("sourceIds contains unknown source id 999"));
-            assert!(service.list().await.unwrap().is_empty());
+            assert_eq!(created.source_ids, vec![999]);
+            assert_eq!(service.list().await.unwrap(), vec![created]);
+
+            let invalid_source_id = service
+                .create(CreateSearchRequestInput {
+                    status: SearchRequestStatus::Draft,
+                    include_rules: vec![text_rule("Physik")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_ids: vec![0],
+                })
+                .await
+                .unwrap_err();
+            assert!(invalid_source_id.contains("sourceIds contains invalid source id 0"));
         });
     }
 
@@ -651,7 +647,7 @@ mod tests {
             let pool = migrated_pool().await;
             let running_search_runs = RunningSearchRuns::default();
             let service = SearchRequestService::new(&pool, &running_search_runs);
-            let source_id = create_test_source(&pool).await;
+            let source_id = 1;
 
             let missing_rule = service
                 .create(CreateSearchRequestInput {
@@ -796,46 +792,6 @@ mod tests {
             kind: "regex".to_string(),
             value: value.to_string(),
         }
-    }
-
-    async fn create_test_source(pool: &SqlitePool) -> i64 {
-        let browser_profile = crate::source_model::create_browser_profile(
-            pool,
-            crate::source_model::CreateBrowserProfileInput {
-                key: "manual_release".to_string(),
-                name: "Manuelle Freigabe".to_string(),
-                description: None,
-                name_i18n_key: None,
-                description_i18n_key: None,
-                definition_path: None,
-                definition_hash: None,
-                definition_schema_version: 1,
-                definition: json!({}),
-                source_config_schema: json!({ "type": "object" }),
-                status: crate::source_model::SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        crate::source_model::create_source(
-            pool,
-            crate::source_model::CreateSourceInput {
-                key: "test_browser_inventory".to_string(),
-                adapter_key: "declarative_browser_inventory".to_string(),
-                system_profile_id: None,
-                browser_profile_id: Some(browser_profile.id),
-                name: "Test Browser Inventory".to_string(),
-                description: None,
-                source_config: json!({}),
-                status: crate::source_model::SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
     }
 
     async fn migrated_pool() -> SqlitePool {

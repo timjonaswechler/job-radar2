@@ -601,7 +601,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn app_state_seeds_builtin_job_portal_sources() {
+    fn app_state_starts_without_source_or_profile_domain_tables() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let paths =
@@ -609,62 +609,22 @@ mod tests {
                     .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
-            let browser_profiles = crate::source_model::list_browser_profiles(&state.db)
-                .await
-                .unwrap();
-            assert!(browser_profiles
-                .iter()
-                .any(|profile| profile.key == "job_portal_manual_release"));
+            let removed_tables = sqlx::query_scalar::<_, String>(
+                "SELECT name FROM sqlite_master
+                 WHERE type = 'table' AND name IN ('system_profiles', 'browser_profiles', 'sources')
+                 ORDER BY name",
+            )
+            .fetch_all(&state.db)
+            .await
+            .unwrap();
+            assert!(removed_tables.is_empty());
 
-            let system_profiles = crate::source_model::list_system_profiles(&state.db)
-                .await
-                .unwrap();
-            assert!(system_profiles
-                .iter()
-                .any(|profile| profile.key == "muz_global_jobboard" && profile.built_in));
-            assert!(system_profiles.iter().all(|profile| !matches!(
-                profile.adapter_key.as_str(),
-                "greenhouse" | "lever" | "ashby"
-            )));
-
-            let sources = crate::source_model::list_sources(&state.db).await.unwrap();
-            let stepstone = sources
-                .iter()
-                .find(|source| source.key == "stepstone_de")
-                .expect("missing built-in StepStone source");
-            assert_eq!(stepstone.adapter_key, "declarative_browser_inventory");
-            assert!(stepstone.browser_profile_id.is_some());
-            let stepstone_browser_profile = browser_profiles
-                .iter()
-                .find(|profile| Some(profile.id) == stepstone.browser_profile_id)
-                .expect("StepStone source should reference a seeded Browserprofil");
-            assert_eq!(
-                stepstone_browser_profile.key,
-                "stepstone_de_browser_profile"
-            );
-            assert_eq!(
-                stepstone_browser_profile.definition["schemaVersion"],
-                serde_json::json!(1)
-            );
-            assert_eq!(
-                stepstone_browser_profile.definition["inventory"]["navigate"]["url"],
-                serde_json::json!("{{query:url}}")
-            );
-            assert!(stepstone.built_in);
-            assert_eq!(stepstone.source_config, serde_json::json!({}));
-
-            let indeed = sources
-                .iter()
-                .find(|source| source.key == "indeed_de")
-                .expect("missing built-in Indeed source");
-            assert_eq!(indeed.adapter_key, "indeed_search");
-            assert!(indeed.browser_profile_id.is_some());
-            assert!(indeed.built_in);
-
-            assert!(crate::source_model::delete_source(&state.db, stepstone.id)
-                .await
-                .unwrap_err()
-                .contains("built-in sources cannot be deleted"));
+            let registry_snapshot =
+                crate::source_registry::load_snapshot(&state.paths.app_data_dir);
+            assert!(registry_snapshot.diagnostics.is_empty());
+            assert!(registry_snapshot.source("stepstone_de").is_some());
+            assert!(registry_snapshot.source("indeed_de").is_some());
+            assert!(registry_snapshot.profile("greenhouse").is_some());
         });
     }
 
