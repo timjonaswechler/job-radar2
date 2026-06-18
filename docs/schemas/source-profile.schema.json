@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source-profile.schema.json",
+  "title": "Job Radar source profile document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "key", "name", "kind", "accessPaths"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "key": { "$ref": "#/$defs/technicalKey" },
+    "name": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "enum": ["recruiting_system", "job_portal", "website_family", "generic"]
+    },
+    "detect": { "$ref": "#/$defs/detection" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "sourceConfigSchema": { "$ref": "#/$defs/jsonSchemaObject" },
+    "accessPaths": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/profileAccessPath" }
+    }
+  },
+  "$defs": {
+    "technicalKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 1
+    },
+    "captureKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_]+$",
+      "minLength": 1
+    },
+    "jsonSchemaObject": {
+      "type": "object"
+    },
+    "jsonObject": {
+      "type": "object"
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "phases": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["http", "browser"] },
+          "uniqueItems": true
+        },
+        "required": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionCheck" }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keyCandidates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "nameCandidates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "optionalSourceConfig": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "profileAccessPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "adapterKey"],
+      "properties": {
+        "key": { "$ref": "#/$defs/technicalKey" },
+        "name": { "type": "string", "minLength": 1 },
+        "adapterKey": { "$ref": "#/$defs/technicalKey" },
+        "sourceConfigSchema": { "$ref": "#/$defs/jsonSchemaObject" },
+        "availability": { "$ref": "#/$defs/availability" },
+        "query": { "$ref": "#/$defs/jsonObject" },
+        "inventory": { "$ref": "#/$defs/jsonObject" },
+        "interactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/browserInteraction" }
+        },
+        "manualRelease": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredCaptures": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/captureKey" },
+          "uniqueItems": true
+        },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionCheck" }
+        },
+        "sourceConfig": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "detectionCheck": {
+      "oneOf": [
+        { "$ref": "#/$defs/htmlContainsCheck" },
+        { "$ref": "#/$defs/htmlRegexCheck" },
+        { "$ref": "#/$defs/fetchTextCheck" },
+        { "$ref": "#/$defs/fetchJsonCheck" },
+        { "$ref": "#/$defs/fetchScriptCheck" },
+        { "$ref": "#/$defs/networkRequestCheck" }
+      ]
+    },
+    "htmlContainsCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["htmlContains"],
+      "properties": {
+        "htmlContains": { "type": "string", "minLength": 1 }
+      }
+    },
+    "htmlRegexCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["htmlRegex"],
+      "properties": {
+        "htmlRegex": { "type": "string", "minLength": 1 },
+        "captureAs": { "$ref": "#/$defs/captureKey" }
+      }
+    },
+    "fetchTextCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fetchText"],
+      "properties": {
+        "fetchText": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url"],
+          "oneOf": [
+            { "required": ["contains"] },
+            { "required": ["regex"] }
+          ],
+          "properties": {
+            "url": { "type": "string", "minLength": 1 },
+            "contains": { "type": "string", "minLength": 1 },
+            "regex": { "type": "string", "minLength": 1 },
+            "captureAs": { "$ref": "#/$defs/captureKey" }
+          }
+        }
+      }
+    },
+    "fetchJsonCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fetchJson"],
+      "properties": {
+        "fetchJson": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "pathExists"],
+          "properties": {
+            "url": { "type": "string", "minLength": 1 },
+            "pathExists": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "fetchScriptCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fetchScript"],
+      "properties": {
+        "fetchScript": {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            { "required": ["srcContains"] },
+            { "required": ["srcRegex"] }
+          ],
+          "anyOf": [
+            { "required": ["contains"] },
+            { "required": ["regex"] }
+          ],
+          "properties": {
+            "srcContains": { "type": "string", "minLength": 1 },
+            "srcRegex": { "type": "string", "minLength": 1 },
+            "contains": { "type": "string", "minLength": 1 },
+            "regex": { "type": "string", "minLength": 1 },
+            "captureAs": { "$ref": "#/$defs/captureKey" }
+          }
+        }
+      }
+    },
+    "networkRequestCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["networkRequest"],
+      "properties": {
+        "networkRequest": {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            { "required": ["urlContains"] },
+            { "required": ["urlRegex"] }
+          ],
+          "properties": {
+            "urlContains": { "type": "string", "minLength": 1 },
+            "urlRegex": { "type": "string", "minLength": 1 },
+            "method": { "type": "string", "minLength": 1 },
+            "responseJsonPathExists": { "type": "string", "minLength": 1 },
+            "responseTextContains": { "type": "string", "minLength": 1 },
+            "responseTextRegex": { "type": "string", "minLength": 1 },
+            "captureAs": { "$ref": "#/$defs/captureKey" }
+          }
+        }
+      }
+    },
+    "browserInteraction": {
+      "oneOf": [
+        { "$ref": "#/$defs/waitForInteraction" },
+        { "$ref": "#/$defs/clickIfVisibleInteraction" },
+        { "$ref": "#/$defs/clickUpToNInteraction" }
+      ]
+    },
+    "waitForInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "waitFor" },
+        "selector": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clickIfVisibleInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "clickIfVisible" },
+        "selector": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clickUpToNInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector", "maxClicks"],
+      "properties": {
+        "type": { "const": "clickUpToN" },
+        "selector": { "type": "string", "minLength": 1 },
+        "maxClicks": { "type": "integer", "minimum": 1 },
+        "waitAfterClickMs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

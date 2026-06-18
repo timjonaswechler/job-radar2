@@ -4,8 +4,6 @@ Until Job Radar reaches its first stable release, the local development SQLite d
 
 This does not allow hidden data loss. A reset must be explicit, visible, and limited to debug/development builds. The application must not silently delete a user's database in release builds.
 
-Important system knowledge must therefore not live only in SQLite. Built-in system profiles are versioned JSON source artifacts in the repository and are embedded into the application bundle. On startup the app seeds/upserts those bundled profiles into `system_profiles` with `built_in = 1`.
+Important source knowledge must therefore not live only in SQLite. Built-in sources and source profiles are versioned JSON artifacts in the repository and embedded into the application bundle. Custom sources and source profiles are user/runtime JSON documents in the OS app data directory. Custom documents must not override bundled built-in keys.
 
-Custom system profiles are user/runtime data. They live next to the database in the OS app data directory under `system-profiles/*.json` and are loaded after built-ins with `built_in = 0`. Custom profiles must not override a bundled built-in key.
-
-The database remains the runtime index, editable copy, and cache layer. Production-grade migration compatibility becomes a hard requirement when Job Radar starts carrying non-disposable user data across stable releases.
+The database remains runtime state for search requests, search runs, results, caches, and diagnostics. It may index loaded JSON documents, but it is not the authoritative store for sources or source profiles. Production-grade migration compatibility becomes a hard requirement when Job Radar starts carrying non-disposable user data across stable releases.

@@ -1,0 +1,7 @@
+# Unify system and browser profiles as source profiles
+
+Job Radar will treat Systemprofile and Browserprofile as specializations of one reusable Quellenprofil concept, because both describe how a class of sources is detected, configured, accessed, and interpreted. A concrete Quelle selects one access path offered by its profile instead of freely choosing a runtime; when no reusable profile can be found even after browser-assisted detection, the source may carry source-specific extraction rather than creating a fake one-off Browserprofil. This keeps profiles reusable while allowing fragile one-off websites to be modeled explicitly.
+
+## Consequences
+
+Because the development database is still disposable, Job Radar will make a clean persistence cut instead of keeping `system_profiles` and `browser_profiles` as long-term core tables. The target model is `source_profiles`, a source-selected access-path key, and optional source-specific extraction on sources without a reusable profile. Browser-assisted detection is an analysis phase and does not imply that the resulting source must use a browser access path. Access paths own their path-specific source-configuration requirements; source validation combines profile-level requirements with the requirements of the source's selected access path. Source-specific extraction is not treated as an implicit profile candidate; it is authored from one concrete page and remains attached to that source rather than being promoted into a reusable profile by default.

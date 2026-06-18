@@ -5,35 +5,55 @@ Job Radar helps users observe job sources and prepare job discovery across diffe
 ## Language
 
 **Quelle**:
-A saved, repeatable source configuration that tells Job Radar where and through which adapter job postings may be retrieved or received. A source does not contain search criteria such as keywords, job roles, location, region, or country; those belong to a search request.
+A saved, repeatable source configuration that tells Job Radar which concrete endpoint or entry point job postings may be retrieved or received from. A source may use a reusable profile and one selected access path from that profile or, as a fallback, source-specific extraction. A source does not contain search criteria such as keywords, job roles, location, region, or country; those belong to a search request.
 _Avoid_: Plattform, Portal, Connector, Ad-hoc-Suche, Suchprofil, Quellentyp
 
 **Quellenkonfiguration**:
 The stable access configuration of a source, interpreted by the source's adapter. It does not include search criteria.
 _Avoid_: Suchkonfiguration, Suchprofil, Config
 
+**Zugriffspfad**:
+The profile-owned or source-specific execution description that tells Job Radar which technical access class retrieves source data, such as HTTP endpoint inventory, sitemap inventory, browser-rendered inventory, or query-parameterized portal access. A reusable source profile may offer multiple access paths. For sources that use a reusable profile, each allowed access path belongs to that profile; for sources with source-specific extraction, the access path belongs to that source-specific extraction.
+_Avoid_: Quelle, Quellenkonfiguration, Suchanfrage, Runtime-Haken
+
+**Gewählter Zugriffspfad**:
+The one access path selected by a concrete source from the access paths allowed by its reusable source profile. A source may not freely choose a runtime outside its profile; it only selects which profile-defined access path is used for this specific endpoint.
+_Avoid_: Runtime-Haken, Browser-Schalter, Adapterauswahl
+
+**Quellenspezifische Extraktion**:
+An interpretation rule set that belongs to exactly one source because no reusable profile describes that website or website family. It may explain how source data is accessed and how job postings and their fields are read for that source, but it is not a reusable profile and does not contain search criteria.
+_Avoid_: Quellenprofil, Browserprofil, Systemprofil, Suchprofil, Quellenkonfiguration
+
 **Adapter**:
-The technical runtime that knows how to execute a class of source access, such as declarative HTTP, declarative sitemap, declarative browser, or built-in job portal search. An adapter is not the recruiting system itself; system-specific knowledge belongs in a system profile.
+The technical runtime that knows how to execute a class of source access, such as declarative HTTP, declarative sitemap, declarative browser, or built-in job portal search. An adapter is not the recruiting system itself; reusable source-specific knowledge belongs in source profiles.
 _Avoid_: Plugin, Scraper, Crawler, Quellentyp, Recruiting-System
 
+**Quellenprofil**:
+A reusable declarative understanding of a source class, recruiting system, career-system family, website, or website family. It describes how matching sources can be detected, which stable source configuration they need, which access path retrieves source data, and how retrieved data is interpreted as job postings. It is not tied to one individual source.
+_Avoid_: Adapter, Quelle, Suchprofil, Heuristik, Firmenadapter, hardcodiertes Portal
+
 **Systemprofil**:
-A saved declarative JSON definition of a recruiting system or career-system family. It contains deterministic detection checks, extraction description, source configuration templates, and source configuration schema. Users and agents can create system profiles without changing Rust source code.
+A Quellenprofil for a recruiting system or career-system family. It contains deterministic detection checks, extraction description, source configuration templates, and source configuration schema. Users and agents can create system profiles without changing Rust source code.
 _Avoid_: Adapter, Browserprofil, Heuristik, Firmenadapter, hardcodiertes Portal
 
 **Eingebautes Systemprofil**:
-A system profile that is versioned in the repository under `system-profiles/builtin/*.json` and embedded into the application bundle. It is seeded/upserted into the database on startup with `built_in = 1`; the installed app must not depend on loose external built-in files.
+A system profile that is versioned in the repository under `system-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
 _Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Systemwissen
 
 **Custom-Systemprofil**:
-A user/runtime system profile stored as JSON in the OS app data directory under `system-profiles/*.json`, next to the local SQLite database. It is loaded after built-ins with `built_in = 0` and may not override a built-in key.
+A user/runtime system profile stored as JSON in the OS app data directory under `system-profiles/*.json`. It may not override a built-in key.
 _Avoid_: Repo-Community-Ordner als Laufzeitquelle, Built-in-Override
 
+**Profilerkennung**:
+The deterministic process that checks a submitted source entry point against valid source profiles. A source profile is valid when its profile definition can be loaded and passes runtime validation. A profile is detected only when all required technical checks pass and evidence can be shown. When a profile is detected, profile detection should also recommend the selected access path and source configuration for the concrete source. Profile detection may use direct HTTP checks first and browser-assisted analysis as a second phase, but using a browser during detection does not imply that the detected source must use a browser access path. If multiple profiles pass the result is ambiguous, and if none pass the source entry point is unsupported by reusable profiles.
+_Avoid_: Raten, Heuristik, Domain-Mapping, Confidence-Scoring
+
 **Systemerkennung**:
-The deterministic process that checks a company URL against active system profiles. A system profile is detected only when all required technical checks pass and evidence can be shown; if multiple profiles pass the result is ambiguous, and if none pass the URL is unsupported.
+Profilerkennung scoped to Systemprofile.
 _Avoid_: Raten, Heuristik, Domain-Mapping, Confidence-Scoring
 
 **Browserbasierte Quelle**:
-A source inspected through rendered web pages rather than through a source-specific structured interface. It uses a browser profile to interpret the target website or website family.
+A source inspected through rendered web pages rather than through a source-specific structured interface. It uses either a Quellenprofil with browser-based access or source-specific extraction to interpret the target website.
 _Avoid_: Headless-Quelle, Scraping-Quelle
 
 **Browser-Laufzeit**:
@@ -41,16 +61,24 @@ The locally managed browser installation that Job Radar uses to inspect browser-
 _Avoid_: Systembrowser, Headless-Browser, Chromium-Download
 
 **Browserprofil**:
-A reusable understanding of a website or website family that tells Job Radar how a browser-based source should be interpreted. It defines the parameters expected from sources that use it.
-_Avoid_: Scraping-Regel, Website-Adapter, Plattformtyp
+A Quellenprofil for a website or website family whose access or extraction depends on rendered web pages. It defines the parameters expected from sources that use it and must remain reusable rather than describe only one individual source.
+_Avoid_: Scraping-Regel, Website-Adapter, Plattformtyp, quellenspezifische Extraktion
+
+**Eingebautes Browserprofil**:
+A browser profile that is versioned in the repository under `browser-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
+_Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Browserwissen
+
+**Custom-Browserprofil**:
+A user/runtime browser profile stored as JSON in the OS app data directory under `browser-profiles/*.json`. It may not override a built-in key.
+_Avoid_: Repo-Community-Ordner als Laufzeitquelle, Built-in-Override
 
 **Profildefinition**:
-A declarative description from which Job Radar can register or update a browser profile.
-_Avoid_: Browserprofil-Datei, Scraping-Datei, Plugin-Datei
+A declarative JSON description from which Job Radar can use or update a Quellenprofil. Validity is determined at runtime when the profile is loaded or used.
+_Avoid_: Scraping-Datei, Plugin-Datei, DB-Profil, Profilstatus, Profil-ID, Profil-Timestamp
 
 **Arbeitsstatus**:
-The lifecycle state that indicates whether a managed item such as a source, profile, or search request is drafted, active, disabled, or invalid.
-_Avoid_: Enabled-Flag, Aktiv-Boolean, Quellstatus, Suchanfragenstatus
+The lifecycle state that indicates whether a managed item such as a source or search request is drafted, active, disabled, or invalid.
+_Avoid_: Enabled-Flag, Aktiv-Boolean, Quellstatus, Suchanfragenstatus, Profilstatus
 
 **Suchanfrage**:
 A user-created, saved job-search intent that contains one or more search terms, optional location criteria such as location, region, country, and radius, and selects which saved sources Job Radar should use. A search request has an Arbeitsstatus; active requests may be used for automatic or planned search runs, while disabled requests are skipped there but may still be started manually.
