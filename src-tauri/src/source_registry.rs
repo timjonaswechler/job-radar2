@@ -134,6 +134,190 @@ impl SourceRegistrySnapshot {
             .iter()
             .find(|source| source.document.key == key)
     }
+
+    pub fn resolve_source(&self, key: &str) -> Result<ResolvedSourceExecutionPlan, String> {
+        let source = self.source(key).ok_or_else(|| {
+            format!("sourceKey `{key}` was not found in the source registry snapshot")
+        })?;
+
+        self.resolve_registry_source(source)
+    }
+
+    fn resolve_registry_source(
+        &self,
+        source: &RegistrySource,
+    ) -> Result<ResolvedSourceExecutionPlan, String> {
+        match &source.document.selected_access_path {
+            SelectedAccessPath::Profile {
+                profile_key,
+                path_key,
+            } => {
+                let profile = self.profile(profile_key).ok_or_else(|| {
+                    format!(
+                        "source `{}` references missing profile `{profile_key}`",
+                        source.document.key
+                    )
+                })?;
+                let access_path = profile
+                    .document
+                    .access_paths
+                    .iter()
+                    .find(|access_path| access_path.key == *path_key)
+                    .ok_or_else(|| {
+                        format!(
+                            "source `{}` references missing path `{path_key}` on profile `{profile_key}`",
+                            source.document.key
+                        )
+                    })?;
+
+                Ok(ResolvedSourceExecutionPlan {
+                    key: source.document.key.clone(),
+                    name: source.document.name.clone(),
+                    adapter_key: access_path.adapter_key.clone(),
+                    source_config: source.document.source_config.clone(),
+                    effective_source_config_schema: effective_source_config_schema(
+                        profile.document.source_config_schema.as_ref(),
+                        access_path.source_config_schema.as_ref(),
+                    ),
+                    selected_access_path: ResolvedSelectedAccessPath::Profile {
+                        profile_key: profile_key.clone(),
+                        path_key: path_key.clone(),
+                        query: access_path.query.clone(),
+                        inventory: access_path.inventory.clone(),
+                        interactions: access_path.interactions.clone(),
+                        manual_release: access_path.manual_release.clone(),
+                    },
+                })
+            }
+            SelectedAccessPath::SourceSpecific {
+                adapter_key,
+                source_config_schema,
+                query,
+                inventory,
+                interactions,
+                manual_release,
+            } => Ok(ResolvedSourceExecutionPlan {
+                key: source.document.key.clone(),
+                name: source.document.name.clone(),
+                adapter_key: adapter_key.clone(),
+                source_config: source.document.source_config.clone(),
+                effective_source_config_schema: effective_source_config_schema(
+                    None,
+                    source_config_schema.as_ref(),
+                ),
+                selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
+                    query: query.clone(),
+                    inventory: inventory.clone(),
+                    interactions: interactions.clone(),
+                    manual_release: manual_release.clone(),
+                },
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedSourceExecutionPlan {
+    pub key: String,
+    pub name: String,
+    pub adapter_key: String,
+    pub source_config: Value,
+    pub effective_source_config_schema: Value,
+    pub selected_access_path: ResolvedSelectedAccessPath,
+}
+
+impl ResolvedSourceExecutionPlan {
+    pub fn query(&self) -> Option<&Value> {
+        self.selected_access_path.query()
+    }
+
+    pub fn inventory(&self) -> Option<&Value> {
+        self.selected_access_path.inventory()
+    }
+
+    pub fn interactions(&self) -> Option<&[BrowserInteraction]> {
+        self.selected_access_path.interactions()
+    }
+
+    pub fn manual_release(&self) -> Option<&Value> {
+        self.selected_access_path.manual_release()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResolvedSelectedAccessPath {
+    #[serde(rename_all = "camelCase")]
+    Profile {
+        profile_key: String,
+        path_key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        query: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        inventory: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        interactions: Option<Vec<BrowserInteraction>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        manual_release: Option<Value>,
+    },
+    #[serde(rename_all = "camelCase")]
+    SourceSpecific {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        query: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        inventory: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        interactions: Option<Vec<BrowserInteraction>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        manual_release: Option<Value>,
+    },
+}
+
+impl ResolvedSelectedAccessPath {
+    fn query(&self) -> Option<&Value> {
+        match self {
+            Self::Profile { query, .. } | Self::SourceSpecific { query, .. } => query.as_ref(),
+        }
+    }
+
+    fn inventory(&self) -> Option<&Value> {
+        match self {
+            Self::Profile { inventory, .. } | Self::SourceSpecific { inventory, .. } => {
+                inventory.as_ref()
+            }
+        }
+    }
+
+    fn interactions(&self) -> Option<&[BrowserInteraction]> {
+        match self {
+            Self::Profile { interactions, .. } | Self::SourceSpecific { interactions, .. } => {
+                interactions.as_deref()
+            }
+        }
+    }
+
+    fn manual_release(&self) -> Option<&Value> {
+        match self {
+            Self::Profile { manual_release, .. } | Self::SourceSpecific { manual_release, .. } => {
+                manual_release.as_ref()
+            }
+        }
+    }
+}
+
+fn effective_source_config_schema(
+    profile_schema: Option<&Value>,
+    path_schema: Option<&Value>,
+) -> Value {
+    match (profile_schema, path_schema) {
+        (Some(profile_schema), Some(path_schema)) => serde_json::json!({
+            "allOf": [profile_schema.clone(), path_schema.clone()]
+        }),
+        (Some(profile_schema), None) => profile_schema.clone(),
+        (None, Some(path_schema)) => path_schema.clone(),
+        (None, None) => serde_json::json!({ "type": "object" }),
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1252,6 +1436,185 @@ mod tests {
             .contains("accessPaths contains duplicate key `boards_api`"));
     }
 
+    #[test]
+    fn resolves_profile_backed_execution_plan_with_access_path_definition() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_json(
+            temp_dir.path().join("source-profiles/example_profile.json"),
+            &profile_with_execution_plan_json(),
+        );
+        write_json(
+            temp_dir.path().join("sources/example_source.json"),
+            &json!({
+                "schemaVersion": 1,
+                "key": "example_source",
+                "name": "Example Source",
+                "status": "active",
+                "sourceConfig": {
+                    "tenant": "acme",
+                    "startUrl": "https://example.test/jobs"
+                },
+                "selectedAccessPath": {
+                    "type": "profile",
+                    "profileKey": "example_profile",
+                    "pathKey": "endpoint_inventory"
+                }
+            })
+            .to_string(),
+        );
+
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+        let plan = snapshot.resolve_source("example_source").unwrap();
+        assert_eq!(plan.key, "example_source");
+        assert_eq!(plan.name, "Example Source");
+        assert_eq!(plan.adapter_key, "declarative_endpoint_inventory");
+        assert_eq!(
+            plan.source_config,
+            json!({
+                "tenant": "acme",
+                "startUrl": "https://example.test/jobs"
+            })
+        );
+        assert_eq!(
+            plan.effective_source_config_schema,
+            json!({
+                "allOf": [
+                    {
+                        "type": "object",
+                        "required": ["tenant"],
+                        "properties": {
+                            "tenant": { "type": "string" }
+                        }
+                    },
+                    {
+                        "type": "object",
+                        "required": ["startUrl"],
+                        "properties": {
+                            "startUrl": { "type": "string", "format": "uri" }
+                        }
+                    }
+                ]
+            })
+        );
+        assert_eq!(
+            plan.inventory(),
+            Some(&json!({
+                "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                "parse": { "as": "json" },
+                "items": { "select": { "jsonPath": "$.jobs" } },
+                "fields": {
+                    "title": { "jsonPath": "$.title" },
+                    "url": { "jsonPath": "$.url" },
+                    "company": { "template": "{{sourceName}}" },
+                    "locations": []
+                }
+            }))
+        );
+        assert_eq!(
+            plan.query(),
+            Some(&json!({
+                "baseUrl": "{{sourceConfig:startUrl}}",
+                "path": "/jobs",
+                "params": []
+            }))
+        );
+        assert!(matches!(
+            &plan.selected_access_path,
+            ResolvedSelectedAccessPath::Profile { profile_key, path_key, .. }
+                if profile_key == "example_profile" && path_key == "endpoint_inventory"
+        ));
+    }
+
+    #[test]
+    fn resolves_source_specific_execution_plan_from_inline_selected_access_path() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_json(
+            temp_dir.path().join("sources/example_company.json"),
+            &json!({
+                "schemaVersion": 1,
+                "key": "example_company",
+                "name": "Example Company",
+                "status": "active",
+                "sourceConfig": { "startUrl": "https://example.test/jobs" },
+                "selectedAccessPath": {
+                    "type": "source_specific",
+                    "adapterKey": "declarative_browser_inventory",
+                    "sourceConfigSchema": {
+                        "type": "object",
+                        "required": ["startUrl"],
+                        "properties": {
+                            "startUrl": { "type": "string", "format": "uri" }
+                        }
+                    },
+                    "query": {
+                        "baseUrl": "{{sourceConfig:startUrl}}",
+                        "path": "/jobs",
+                        "params": []
+                    },
+                    "interactions": [
+                        { "type": "waitFor", "selector": ".job-card", "timeoutMs": 5000 }
+                    ],
+                    "inventory": {
+                        "items": { "select": ".job-card" },
+                        "fields": {
+                            "title": { "selectorText": ".title" },
+                            "company": { "selectorText": ".company" },
+                            "url": {
+                                "selectorAttribute": { "selector": "a", "attribute": "href" }
+                            },
+                            "locations": []
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        );
+
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+        let plan = snapshot.resolve_source("example_company").unwrap();
+        assert_eq!(plan.key, "example_company");
+        assert_eq!(plan.adapter_key, "declarative_browser_inventory");
+        assert_eq!(
+            plan.effective_source_config_schema,
+            json!({
+                "type": "object",
+                "required": ["startUrl"],
+                "properties": {
+                    "startUrl": { "type": "string", "format": "uri" }
+                }
+            })
+        );
+        assert_eq!(
+            plan.query(),
+            Some(&json!({
+                "baseUrl": "{{sourceConfig:startUrl}}",
+                "path": "/jobs",
+                "params": []
+            }))
+        );
+        assert_eq!(
+            plan.inventory(),
+            Some(&json!({
+                "items": { "select": ".job-card" },
+                "fields": {
+                    "title": { "selectorText": ".title" },
+                    "company": { "selectorText": ".company" },
+                    "url": {
+                        "selectorAttribute": { "selector": "a", "attribute": "href" }
+                    },
+                    "locations": []
+                }
+            }))
+        );
+        assert!(matches!(
+            &plan.selected_access_path,
+            ResolvedSelectedAccessPath::SourceSpecific { interactions, .. }
+                if interactions.as_ref().is_some_and(|interactions| interactions.len() == 1)
+        ));
+    }
+
     fn load_custom_only_snapshot(app_data_dir: impl AsRef<Path>) -> SourceRegistrySnapshot {
         load_snapshot_with_builtins(app_data_dir, &[], &[])
     }
@@ -1315,6 +1678,52 @@ mod tests {
                 "profileKey": profile_key,
                 "pathKey": path_key
             }
+        })
+        .to_string()
+    }
+
+    fn profile_with_execution_plan_json() -> String {
+        json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "sourceConfigSchema": {
+                "type": "object",
+                "required": ["tenant"],
+                "properties": {
+                    "tenant": { "type": "string" }
+                }
+            },
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "sourceConfigSchema": {
+                        "type": "object",
+                        "required": ["startUrl"],
+                        "properties": {
+                            "startUrl": { "type": "string", "format": "uri" }
+                        }
+                    },
+                    "query": {
+                        "baseUrl": "{{sourceConfig:startUrl}}",
+                        "path": "/jobs",
+                        "params": []
+                    },
+                    "inventory": {
+                        "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                        "parse": { "as": "json" },
+                        "items": { "select": { "jsonPath": "$.jobs" } },
+                        "fields": {
+                            "title": { "jsonPath": "$.title" },
+                            "url": { "jsonPath": "$.url" },
+                            "company": { "template": "{{sourceName}}" },
+                            "locations": []
+                        }
+                    }
+                }
+            ]
         })
         .to_string()
     }
