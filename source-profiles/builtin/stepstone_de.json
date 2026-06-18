@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "key": "stepstone_de",
+  "name": "StepStone Deutschland",
+  "kind": "job_portal",
+  "accessPaths": [
+    {
+      "key": "browser_inventory",
+      "adapterKey": "declarative_browser_inventory",
+      "sourceConfigSchema": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Basis-URL überschreiben",
+            "description": "Optional. Standard: https://www.stepstone.de",
+            "default": "https://www.stepstone.de"
+          },
+          "manualReleaseStartUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Start-URL für manuelle Freigabe überschreiben",
+            "description": "Optional. Standard: https://www.stepstone.de/",
+            "default": "https://www.stepstone.de/"
+          },
+          "maxPages": {
+            "type": "number",
+            "minimum": 1,
+            "default": 1,
+            "title": "Maximale Seiten pro Suchlauf"
+          }
+        }
+      },
+      "query": {
+        "baseUrl": {
+          "sourceConfigKey": "baseUrl",
+          "default": "https://www.stepstone.de"
+        },
+        "path": "/jobs",
+        "params": [
+          {
+            "name": "what",
+            "value": "{{searchRequest:titleText}}"
+          },
+          {
+            "name": "where",
+            "value": "{{searchRequest:firstLocation}}"
+          },
+          {
+            "name": "radius",
+            "value": "{{searchRequest:radiusKm}}"
+          }
+        ]
+      },
+      "interactions": [
+        {
+          "type": "waitFor",
+          "selector": "article[data-at=\"job-item\"]",
+          "timeoutMs": 15000
+        }
+      ],
+      "inventory": {
+        "items": {
+          "select": "article[data-at=\"job-item\"]"
+        },
+        "fields": {
+          "title": {
+            "selectorText": "[data-at=\"job-item-title\"]"
+          },
+          "company": {
+            "selectorText": "[data-at=\"job-item-company-name\"]"
+          },
+          "url": {
+            "selectorAttribute": {
+              "selector": "a[data-at=\"job-item-title\"]",
+              "attribute": "href"
+            }
+          },
+          "locations": [
+            {
+              "selectorText": "[data-at=\"job-item-location\"]"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "key": "muz_global_jobboard",
+  "name": "Milch & Zucker Global Jobboard",
+  "kind": "recruiting_system",
+  "detect": {
+    "phases": ["http"],
+    "required": [
+      {
+        "htmlRegex": "(?is)class=[\"'][^\"']*jobboard-widget[^\"']*[\"'][^>]+data-widget=[\"']jobboard[A-Za-z]+[\"']"
+      },
+      {
+        "fetchScript": {
+          "srcRegex": "(?i)(^|/)script/gjb_scripts\\.js(?:\\?.*)?$",
+          "regex": "gjbAddress\\s*=\\s*\"([^\"]+)\"",
+          "captureAs": "apiBaseUrl"
+        }
+      },
+      {
+        "fetchJson": {
+          "url": "/assets/js/jobboard.config.json",
+          "pathExists": "$.configWidgetContainer.search"
+        }
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "endpoint_inventory",
+      "adapterKey": "declarative_endpoint_inventory",
+      "availability": {
+        "requiredCaptures": ["apiBaseUrl"],
+        "sourceConfig": {
+          "startUrl": "{{inputUrl}}",
+          "apiBaseUrl": "{{capture:apiBaseUrl}}",
+          "configUrl": "{{origin}}/assets/js/jobboard.config.json"
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["startUrl", "apiBaseUrl", "configUrl"],
+        "properties": {
+          "startUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Start-URL"
+          },
+          "apiBaseUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "API-Basis-URL"
+          },
+          "configUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Jobboard-Konfiguration"
+          }
+        }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "{{sourceConfig:apiBaseUrl}}search/"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "items": {
+          "select": {
+            "jsonPath": "$.SearchResult.SearchResultItems"
+          }
+        },
+        "fields": {
+          "title": {
+            "jsonPath": "$.MatchedObjectDescriptor.PositionTitle"
+          },
+          "url": {
+            "jsonPath": "$.MatchedObjectDescriptor.PositionURI"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": []
+        }
+      }
+    }
+  ]
+}

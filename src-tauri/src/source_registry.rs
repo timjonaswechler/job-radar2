@@ -8,8 +8,58 @@ use std::{
 
 pub type EmbeddedSourceRegistryDocument<'a> = (&'a str, &'a str);
 
-pub const BUILTIN_SOURCE_PROFILE_JSON_FILES: &[EmbeddedSourceRegistryDocument<'static>] = &[];
-pub const BUILTIN_SOURCE_JSON_FILES: &[EmbeddedSourceRegistryDocument<'static>] = &[];
+pub const BUILTIN_SOURCE_PROFILE_JSON_FILES: &[EmbeddedSourceRegistryDocument<'static>] = &[
+    (
+        "source-profiles/builtin/ashby.json",
+        include_str!("../../source-profiles/builtin/ashby.json"),
+    ),
+    (
+        "source-profiles/builtin/greenhouse.json",
+        include_str!("../../source-profiles/builtin/greenhouse.json"),
+    ),
+    (
+        "source-profiles/builtin/lever.json",
+        include_str!("../../source-profiles/builtin/lever.json"),
+    ),
+    (
+        "source-profiles/builtin/magnolia_esmp_job_search.json",
+        include_str!("../../source-profiles/builtin/magnolia_esmp_job_search.json"),
+    ),
+    (
+        "source-profiles/builtin/muz_global_jobboard.json",
+        include_str!("../../source-profiles/builtin/muz_global_jobboard.json"),
+    ),
+    (
+        "source-profiles/builtin/personio.json",
+        include_str!("../../source-profiles/builtin/personio.json"),
+    ),
+    (
+        "source-profiles/builtin/phenom.json",
+        include_str!("../../source-profiles/builtin/phenom.json"),
+    ),
+    (
+        "source-profiles/builtin/stepstone_de.json",
+        include_str!("../../source-profiles/builtin/stepstone_de.json"),
+    ),
+    (
+        "source-profiles/builtin/successfactors.json",
+        include_str!("../../source-profiles/builtin/successfactors.json"),
+    ),
+    (
+        "source-profiles/builtin/workday.json",
+        include_str!("../../source-profiles/builtin/workday.json"),
+    ),
+];
+pub const BUILTIN_SOURCE_JSON_FILES: &[EmbeddedSourceRegistryDocument<'static>] = &[
+    (
+        "sources/builtin/indeed_de.json",
+        include_str!("../../sources/builtin/indeed_de.json"),
+    ),
+    (
+        "sources/builtin/stepstone_de.json",
+        include_str!("../../sources/builtin/stepstone_de.json"),
+    ),
+];
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -887,6 +937,75 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn loads_migrated_builtin_source_registry_documents() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let snapshot = load_snapshot(temp_dir.path());
+
+        assert!(
+            snapshot.diagnostics.is_empty(),
+            "built-in registry diagnostics: {:#?}",
+            snapshot.diagnostics
+        );
+        assert_eq!(
+            sorted_profile_keys(&snapshot),
+            vec![
+                "ashby",
+                "greenhouse",
+                "lever",
+                "magnolia_esmp_job_search",
+                "muz_global_jobboard",
+                "personio",
+                "phenom",
+                "stepstone_de",
+                "successfactors",
+                "workday",
+            ]
+        );
+        assert_eq!(
+            sorted_source_keys(&snapshot),
+            vec!["indeed_de", "stepstone_de"]
+        );
+
+        let stepstone = snapshot.source("stepstone_de").unwrap();
+        assert_eq!(stepstone.origin, SourceRegistryDocumentOrigin::BuiltIn);
+        assert_eq!(stepstone.document.status, SourceDocumentStatus::Active);
+        assert!(matches!(
+            &stepstone.document.selected_access_path,
+            SelectedAccessPath::Profile { profile_key, path_key }
+                if profile_key == "stepstone_de" && path_key == "browser_inventory"
+        ));
+
+        let indeed = snapshot.source("indeed_de").unwrap();
+        assert_eq!(indeed.origin, SourceRegistryDocumentOrigin::BuiltIn);
+        assert_eq!(indeed.document.status, SourceDocumentStatus::Active);
+        assert!(matches!(
+            &indeed.document.selected_access_path,
+            SelectedAccessPath::SourceSpecific { adapter_key, .. } if adapter_key == "indeed_search"
+        ));
+
+        let stepstone_profile = snapshot.profile("stepstone_de").unwrap();
+        assert_eq!(
+            stepstone_profile.document.kind,
+            SourceProfileKind::JobPortal
+        );
+        assert!(stepstone_profile
+            .document
+            .access_paths
+            .iter()
+            .any(|path| path.key == "browser_inventory"
+                && path.adapter_key == "declarative_browser_inventory"));
+
+        let greenhouse = snapshot.profile("greenhouse").unwrap();
+        assert!(greenhouse
+            .document
+            .access_paths
+            .iter()
+            .any(|path| path.key == "endpoint_inventory"
+                && path.adapter_key == "declarative_endpoint_inventory"));
+    }
+
+    #[test]
     fn loads_valid_profile_backed_and_source_specific_documents() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_json(
@@ -902,7 +1021,7 @@ mod tests {
             &source_specific_source_json("example_company"),
         );
 
-        let snapshot = load_snapshot(temp_dir.path());
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
 
         assert!(snapshot.diagnostics.is_empty());
         assert_eq!(snapshot.valid_profiles.len(), 1);
@@ -946,7 +1065,7 @@ mod tests {
             .to_string(),
         );
 
-        let snapshot = load_snapshot(&app_data_dir);
+        let snapshot = load_custom_only_snapshot(&app_data_dir);
 
         assert_eq!(snapshot.valid_profiles.len(), 0);
         assert_diagnostic_codes(
@@ -962,7 +1081,7 @@ mod tests {
         );
 
         let missing_app_data_dir = temp_dir.path().join("does-not-exist");
-        let empty_snapshot = load_snapshot(&missing_app_data_dir);
+        let empty_snapshot = load_custom_only_snapshot(&missing_app_data_dir);
         assert!(empty_snapshot.diagnostics.is_empty());
         assert!(!missing_app_data_dir.exists());
     }
@@ -1043,7 +1162,7 @@ mod tests {
             &profile_source_json("missing_path_source", "greenhouse", "unknown_path"),
         );
 
-        let snapshot = load_snapshot(temp_dir.path());
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
 
         assert_eq!(snapshot.valid_sources.len(), 0);
         assert_diagnostic_codes(
@@ -1097,7 +1216,7 @@ mod tests {
             .to_string(),
         );
 
-        let snapshot = load_snapshot(temp_dir.path());
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
 
         assert!(snapshot.valid_sources.is_empty());
         assert_diagnostic_codes(
@@ -1124,13 +1243,37 @@ mod tests {
             &profile_json("greenhouse", &["boards_api", "boards_api"]),
         );
 
-        let snapshot = load_snapshot(temp_dir.path());
+        let snapshot = load_custom_only_snapshot(temp_dir.path());
 
         assert!(snapshot.valid_profiles.is_empty());
         assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
         assert!(snapshot.diagnostics[0]
             .message
             .contains("accessPaths contains duplicate key `boards_api`"));
+    }
+
+    fn load_custom_only_snapshot(app_data_dir: impl AsRef<Path>) -> SourceRegistrySnapshot {
+        load_snapshot_with_builtins(app_data_dir, &[], &[])
+    }
+
+    fn sorted_profile_keys(snapshot: &SourceRegistrySnapshot) -> Vec<&str> {
+        let mut keys = snapshot
+            .valid_profiles
+            .iter()
+            .map(|profile| profile.document.key.as_str())
+            .collect::<Vec<_>>();
+        keys.sort_unstable();
+        keys
+    }
+
+    fn sorted_source_keys(snapshot: &SourceRegistrySnapshot) -> Vec<&str> {
+        let mut keys = snapshot
+            .valid_sources
+            .iter()
+            .map(|source| source.document.key.as_str())
+            .collect::<Vec<_>>();
+        keys.sort_unstable();
+        keys
     }
 
     fn profile_json(key: &str, access_path_keys: &[&str]) -> String {

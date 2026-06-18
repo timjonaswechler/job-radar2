@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "key": "phenom",
+  "name": "Phenom",
+  "kind": "recruiting_system",
+  "detect": {
+    "phases": ["http"],
+    "required": [
+      {
+        "htmlContains": "phenom"
+      },
+      {
+        "fetchText": {
+          "url": "/sitemap_index.xml",
+          "contains": "<sitemap"
+        }
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "sitemap_inventory",
+      "adapterKey": "declarative_sitemap_inventory",
+      "availability": {
+        "sourceConfig": {
+          "url": "{{origin}}/sitemap_index.xml",
+          "recursive": true
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Sitemap-URL"
+          },
+          "recursive": {
+            "type": "boolean",
+            "default": true,
+            "title": "Sitemap-Index rekursiv auswerten"
+          },
+          "maxUrls": {
+            "type": "number",
+            "minimum": 1,
+            "title": "Maximale URLs"
+          }
+        }
+      }
+    }
+  ]
+}
