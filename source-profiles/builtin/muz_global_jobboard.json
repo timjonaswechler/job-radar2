@@ -39,6 +39,7 @@
       "sourceConfigSchema": {
         "type": "object",
         "required": ["startUrl", "apiBaseUrl", "configUrl"],
+        "additionalProperties": false,
         "properties": {
           "startUrl": {
             "type": "string",
@@ -48,11 +49,13 @@
           "apiBaseUrl": {
             "type": "string",
             "format": "uri",
+            "pattern": "^https?://.+/$",
             "title": "API-Basis-URL"
           },
           "configUrl": {
             "type": "string",
             "format": "uri",
+            "pattern": "^https?://.+/assets/js/jobboard\\.config\\.json$",
             "title": "Jobboard-Konfiguration"
           }
         }
@@ -79,7 +82,12 @@
           "company": {
             "template": "{{sourceName}}"
           },
-          "locations": []
+          "locations": [
+            {
+              "jsonPath": "$.MatchedObjectDescriptor.PositionLocation",
+              "objectFields": ["CityName", "CountryName"]
+            }
+          ]
         }
       }
     }

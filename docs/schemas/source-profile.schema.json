@@ -45,7 +45,8 @@
         {
           "type": "object",
           "properties": {
-            "fetch": { "$ref": "#/$defs/inventoryFetch" }
+            "fetch": { "$ref": "#/$defs/inventoryFetch" },
+            "fields": { "$ref": "#/$defs/inventoryFields" }
           }
         }
       ]
@@ -73,6 +74,68 @@
         "size": { "type": "integer", "minimum": 1 },
         "firstPage": { "type": "integer", "minimum": 0 },
         "totalPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inventoryFields": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "locations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/locationFieldExpression" }
+        }
+      }
+    },
+    "locationFieldExpression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["template"],
+          "properties": {
+            "template": { "type": "string", "minLength": 1 },
+            "split": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPath"],
+          "properties": {
+            "jsonPath": { "type": "string", "minLength": 1 },
+            "split": { "type": "string", "minLength": 1 },
+            "objectFields": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["selectorText"],
+          "properties": {
+            "selectorText": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["selectorAttribute"],
+          "properties": {
+            "selectorAttribute": { "$ref": "#/$defs/selectorAttributeExpression" }
+          }
+        }
+      ]
+    },
+    "selectorAttributeExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "attribute"],
+      "properties": {
+        "selector": { "type": "string", "minLength": 1 },
+        "attribute": { "type": "string", "minLength": 1 }
       }
     },
     "detection": {

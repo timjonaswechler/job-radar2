@@ -610,6 +610,10 @@ fn render_location_expression(
         let value = resolve_simple_json_path(item, json_path).map_err(|error| {
             simple_json_path_execution_error(&format!("{path}.jsonPath"), error)
         })?;
+        if object.contains_key("objectFields") {
+            let object_fields = required_location_object_fields(object, path)?;
+            return json_location_object_fields_to_strings(value, &object_fields, path);
+        }
         return json_location_value_to_strings(value, split, path);
     }
 
@@ -634,6 +638,106 @@ fn optional_location_split<'a>(
         )));
     }
     Ok(Some(delimiter))
+}
+
+fn required_location_object_fields(
+    object: &serde_json::Map<String, Value>,
+    path: &str,
+) -> Result<Vec<String>, SourceExecutionError> {
+    let fields = object
+        .get("objectFields")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            SourceExecutionError::Failed(format!("{path}.objectFields must be an array"))
+        })?;
+    if fields.is_empty() {
+        return Err(SourceExecutionError::Failed(format!(
+            "{path}.objectFields must not be empty"
+        )));
+    }
+
+    fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let field = field.as_str().ok_or_else(|| {
+                SourceExecutionError::Failed(format!(
+                    "{path}.objectFields[{index}] must be a non-empty string"
+                ))
+            })?;
+            if field.trim().is_empty() {
+                return Err(SourceExecutionError::Failed(format!(
+                    "{path}.objectFields[{index}] must be a non-empty string"
+                )));
+            }
+            Ok(field.to_string())
+        })
+        .collect()
+}
+
+fn json_location_object_fields_to_strings(
+    value: Option<&Value>,
+    object_fields: &[String],
+    path: &str,
+) -> Result<Vec<String>, SourceExecutionError> {
+    match value {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::Object(object)) => location_object_fields_to_string(object, object_fields, path)
+            .map(|location| location.into_iter().collect()),
+        Some(Value::Array(values)) => {
+            let mut locations = Vec::new();
+            for (index, value) in values.iter().enumerate() {
+                let object = value.as_object().ok_or_else(|| {
+                    SourceExecutionError::Failed(format!(
+                        "{path}.jsonPath array item {index} must resolve to an object when objectFields is set"
+                    ))
+                })?;
+                if let Some(location) = location_object_fields_to_string(
+                    object,
+                    object_fields,
+                    &format!("{path}.jsonPath array item {index}"),
+                )? {
+                    locations.push(location);
+                }
+            }
+            Ok(locations)
+        }
+        Some(_) => Err(SourceExecutionError::Failed(format!(
+            "{path}.jsonPath must resolve to an object, null, or an array of objects when objectFields is set"
+        ))),
+    }
+}
+
+fn location_object_fields_to_string(
+    object: &serde_json::Map<String, Value>,
+    object_fields: &[String],
+    path: &str,
+) -> Result<Option<String>, SourceExecutionError> {
+    let mut parts = Vec::new();
+    for field in object_fields {
+        match object.get(field) {
+            None | Some(Value::Null) => {}
+            Some(Value::String(value)) => {
+                let value = value.trim();
+                if !value.is_empty() {
+                    parts.push(value.to_string());
+                }
+            }
+            Some(Value::Bool(value)) => parts.push(value.to_string()),
+            Some(Value::Number(value)) => parts.push(value.to_string()),
+            Some(Value::Array(_)) | Some(Value::Object(_)) => {
+                return Err(SourceExecutionError::Failed(format!(
+                    "{path}.{field} must resolve to a string, number, boolean, or null"
+                )));
+            }
+        }
+    }
+
+    if parts.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(parts.join(", ")))
+    }
 }
 
 fn json_location_value_to_strings(
@@ -1666,6 +1770,89 @@ mod tests {
                     "https://example.test/.search?index=job&size=1000&page=1",
                     "https://example.test/.search?index=job&size=1000&page=2",
                 ]
+            );
+        });
+    }
+
+    #[test]
+    fn muz_global_jobboard_inventory_runs_endpoint_fixture_through_central_runtime() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "commerzbank",
+                "Commerzbank",
+                "muz_global_jobboard",
+                "endpoint_inventory",
+                json!({
+                    "startUrl": "https://jobs.commerzbank.com/index.php?ac=search_result",
+                    "apiBaseUrl": "https://api-jobs.commerzbank.com/",
+                    "configUrl": "https://jobs.commerzbank.com/assets/js/jobboard.config.json"
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["commerzbank".to_string()], "praktikant").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://api-jobs.commerzbank.com/search/",
+                Ok(r#"{
+                  "LanguageCode": "DE",
+                  "SearchResult": {
+                    "SearchResultCount": 1,
+                    "SearchResultItems": [
+                      {
+                        "MatchedObjectId": "58810",
+                        "MatchedObjectDescriptor": {
+                          "PositionTitle": "Schülerpraktikant / Schülerpraktikantin in der Filiale",
+                          "PositionURI": "https://jobs.commerzbank.com/index.php?ac=jobad&id=58810",
+                          "PositionLocation": [
+                            {
+                              "CountryName": "Deutschland",
+                              "CityName": "Hamburg",
+                              "PostalCode": "22587"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 1);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(
+                posting.title,
+                "Schülerpraktikant / Schülerpraktikantin in der Filiale"
+            );
+            assert_eq!(posting.company, "Commerzbank");
+            assert_eq!(
+                posting.url,
+                "https://jobs.commerzbank.com/index.php?ac=jobad&id=58810"
+            );
+            assert_eq!(posting.locations, vec!["Hamburg, Deutschland"]);
+            assert_eq!(posting.sources[0].source_key, "commerzbank");
+            assert_eq!(posting.sources[0].source_name, "Commerzbank");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://api-jobs.commerzbank.com/search/"]
             );
         });
     }
