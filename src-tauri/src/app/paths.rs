@@ -7,7 +7,8 @@ pub struct AppPaths {
     pub app_data_dir: PathBuf,
     pub database_path: PathBuf,
     pub browser_runtime_dir: PathBuf,
-    pub system_profiles_dir: PathBuf,
+    pub source_profiles_dir: PathBuf,
+    pub sources_dir: PathBuf,
 }
 
 impl AppPaths {
@@ -20,14 +21,17 @@ impl AppPaths {
 
         let database_path = app_data_dir.join(DB_NAME);
         let browser_runtime_dir = app_data_dir.join("browser-runtime");
-        let system_profiles_dir = app_data_dir.join("system-profiles");
-        std::fs::create_dir_all(&system_profiles_dir)?;
+        let source_profiles_dir = app_data_dir.join("source-profiles");
+        let sources_dir = app_data_dir.join("sources");
+        std::fs::create_dir_all(&source_profiles_dir)?;
+        std::fs::create_dir_all(&sources_dir)?;
 
         Ok(Self {
             app_data_dir,
             database_path,
             browser_runtime_dir,
-            system_profiles_dir,
+            source_profiles_dir,
+            sources_dir,
         })
     }
 }
@@ -52,8 +56,12 @@ mod tests {
             PathBuf::from("/tmp/job-radar-test-data/browser-runtime")
         );
         assert_eq!(
-            paths.system_profiles_dir,
-            PathBuf::from("/tmp/job-radar-test-data/system-profiles")
+            paths.source_profiles_dir,
+            PathBuf::from("/tmp/job-radar-test-data/source-profiles")
+        );
+        assert_eq!(
+            paths.sources_dir,
+            PathBuf::from("/tmp/job-radar-test-data/sources")
         );
     }
 }

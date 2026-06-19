@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 
+import type { SourceKey } from "@/lib/api/sources"
+
 export type SearchRequestStatus = "draft" | "active" | "disabled" | "invalid"
 
 export type SearchRuleTarget = "title"
@@ -19,7 +21,7 @@ export type SearchRequest = {
   excludeRules: SearchRule[]
   locations: string[]
   radiusKm: number | null
-  sourceKeys: string[]
+  sourceKeys: SourceKey[]
   validationError: string | null
   createdAt: string
   updatedAt: string
@@ -70,7 +72,7 @@ export type CreateSearchRequestInput = {
   excludeRules: SearchRule[]
   locations: string[]
   radiusKm: number | null
-  sourceKeys: string[]
+  sourceKeys: SourceKey[]
 }
 
 export type UpdateSearchRequestInput = CreateSearchRequestInput

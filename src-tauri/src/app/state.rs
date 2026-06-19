@@ -17,8 +17,7 @@ pub struct AppState {
 impl AppState {
     pub async fn new(paths: AppPaths) -> Result<Self, Box<dyn std::error::Error>> {
         maybe_reset_dev_database(&paths)?;
-        let db = crate::db::connect_and_migrate(&paths.database_path, &paths.system_profiles_dir)
-            .await?;
+        let db = crate::db::connect_and_migrate(&paths.database_path).await?;
 
         Ok(Self {
             db,

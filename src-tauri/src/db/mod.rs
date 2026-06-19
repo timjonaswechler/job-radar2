@@ -5,10 +5,7 @@ use crate::db::seed::seed_database;
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::{error::Error, path::Path};
 
-pub async fn connect_and_migrate(
-    db_path: &Path,
-    _custom_system_profiles_dir: &Path,
-) -> Result<SqlitePool, Box<dyn Error>> {
+pub async fn connect_and_migrate(db_path: &Path) -> Result<SqlitePool, Box<dyn Error>> {
     let options = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)
@@ -33,11 +30,8 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let database_path = temp_dir.path().join("job_radar.db");
-            let custom_profiles_dir = temp_dir.path().join("system-profiles");
 
-            let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
-                .await
-                .unwrap();
+            let pool = connect_and_migrate(&database_path).await.unwrap();
             let table_names = sqlx::query_scalar::<_, String>(
                 "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
             )
@@ -59,11 +53,8 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let database_path = temp_dir.path().join("job_radar.db");
-            let custom_profiles_dir = temp_dir.path().join("system-profiles");
 
-            let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
-                .await
-                .unwrap();
+            let pool = connect_and_migrate(&database_path).await.unwrap();
 
             let initialized_at = sqlx::query_scalar::<_, String>(
                 "SELECT value FROM app_metadata WHERE key = 'database_initialized'",
@@ -90,9 +81,7 @@ mod tests {
             fs::create_dir_all(&custom_profiles_dir).unwrap();
             fs::write(custom_profiles_dir.join("broken.json"), "{not json").unwrap();
 
-            let pool = connect_and_migrate(&database_path, &custom_profiles_dir)
-                .await
-                .unwrap();
+            let pool = connect_and_migrate(&database_path).await.unwrap();
             let table_exists = sqlx::query_scalar::<_, i64>(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'system_profiles'",
             )

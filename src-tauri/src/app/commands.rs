@@ -1,7 +1,7 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::path::Path;
 use tauri::{AppHandle, Emitter, State};
-use tauri_plugin_dialog::DialogExt;
 
 use crate::app::state::AppState;
 
@@ -10,39 +10,6 @@ const SETTING_LANGUAGE: &str = "language";
 const SETTING_DEFAULT_SEARCH_RADIUS_KM: &str = "default_search_radius_km";
 const DEFAULT_SEARCH_RADIUS_KM: u16 = 30;
 const MAX_SEARCH_RADIUS_KM: u16 = 500;
-
-fn system_profile_export_filename(suggested_filename: Option<&str>) -> String {
-    let suggested_stem = suggested_filename
-        .and_then(|filename| {
-            filename
-                .trim()
-                .strip_suffix(".json")
-                .or(Some(filename.trim()))
-        })
-        .filter(|filename| !filename.is_empty())
-        .unwrap_or("system-profile");
-
-    let sanitized_stem = suggested_stem
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
-                character
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('_')
-        .to_string();
-
-    let stem = if sanitized_stem.is_empty() {
-        "system-profile"
-    } else {
-        sanitized_stem.as_str()
-    };
-
-    format!("{stem}.json")
-}
 
 struct TauriBrowserRuntimeProgressReporter {
     app: AppHandle,
@@ -63,7 +30,8 @@ impl crate::browser_runtime::BrowserRuntimeInstallProgressReporter
 pub struct DatabaseInfo {
     app_data_dir: String,
     database_path: String,
-    system_profiles_dir: String,
+    source_profiles_dir: String,
+    sources_dir: String,
     initialized_at: Option<String>,
     sqlite_version: String,
 }
@@ -119,11 +87,12 @@ pub async fn get_database_info(state: State<'_, AppState>) -> Result<DatabaseInf
     Ok(DatabaseInfo {
         app_data_dir: state.paths.app_data_dir.to_string_lossy().to_string(),
         database_path: state.paths.database_path.to_string_lossy().to_string(),
-        system_profiles_dir: state
+        source_profiles_dir: state
             .paths
-            .system_profiles_dir
+            .source_profiles_dir
             .to_string_lossy()
             .to_string(),
+        sources_dir: state.paths.sources_dir.to_string_lossy().to_string(),
         initialized_at,
         sqlite_version,
     })
@@ -260,6 +229,33 @@ fn browser_runtime_installing(state: &AppState) -> bool {
 #[tauri::command]
 pub fn list_adapters() -> Result<Vec<crate::adapter_registry::AdapterMetadata>, String> {
     Ok(crate::adapter_registry::list_adapters())
+}
+
+fn load_source_registry_snapshot(
+    app_data_dir: &Path,
+) -> crate::source_registry::SourceRegistrySnapshot {
+    crate::source_registry::load_snapshot(app_data_dir)
+}
+
+#[tauri::command]
+pub fn list_source_registry_profiles(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::source_registry::RegistrySourceProfile>, String> {
+    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_profiles)
+}
+
+#[tauri::command]
+pub fn list_source_registry_sources(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::source_registry::RegistrySource>, String> {
+    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_sources)
+}
+
+#[tauri::command]
+pub fn list_source_registry_diagnostics(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::source_registry::SourceRegistryDiagnostic>, String> {
+    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).diagnostics)
 }
 
 #[tauri::command]
@@ -426,167 +422,6 @@ where
     Ok(())
 }
 
-#[tauri::command]
-pub async fn create_browser_profile(
-    state: State<'_, AppState>,
-    input: crate::source_model::CreateBrowserProfileInput,
-) -> Result<crate::source_model::BrowserProfile, String> {
-    crate::source_model::create_browser_profile(&state.db, input).await
-}
-
-#[tauri::command]
-pub async fn list_browser_profiles(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::source_model::BrowserProfile>, String> {
-    crate::source_model::list_browser_profiles(&state.db).await
-}
-
-#[tauri::command]
-pub async fn get_browser_profile(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<crate::source_model::BrowserProfile, String> {
-    crate::source_model::get_browser_profile(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn update_browser_profile(
-    state: State<'_, AppState>,
-    id: i64,
-    input: crate::source_model::UpdateBrowserProfileInput,
-) -> Result<crate::source_model::BrowserProfile, String> {
-    crate::source_model::update_browser_profile(&state.db, id, input).await
-}
-
-#[tauri::command]
-pub async fn delete_browser_profile(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    crate::source_model::delete_browser_profile(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn create_system_profile(
-    state: State<'_, AppState>,
-    input: crate::source_model::CreateSystemProfileInput,
-) -> Result<crate::source_model::SystemProfile, String> {
-    crate::source_model::create_system_profile(&state.db, input).await
-}
-
-#[tauri::command]
-pub async fn list_system_profiles(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::source_model::SystemProfile>, String> {
-    crate::source_model::list_system_profiles(&state.db).await
-}
-
-#[tauri::command]
-pub async fn get_system_profile(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<crate::source_model::SystemProfile, String> {
-    crate::source_model::get_system_profile(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn update_system_profile(
-    state: State<'_, AppState>,
-    id: i64,
-    input: crate::source_model::UpdateSystemProfileInput,
-) -> Result<crate::source_model::SystemProfile, String> {
-    crate::source_model::update_system_profile(&state.db, id, input).await
-}
-
-#[tauri::command]
-pub async fn delete_system_profile(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    crate::source_model::delete_system_profile(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn export_system_profile_json(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<String, String> {
-    crate::source_model::export_system_profile_json(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn export_system_profile_json_file(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: i64,
-    suggested_filename: Option<String>,
-) -> Result<Option<String>, String> {
-    let json = crate::source_model::export_system_profile_json(&state.db, id).await?;
-    let filename = system_profile_export_filename(suggested_filename.as_deref());
-
-    let selected_file = app
-        .dialog()
-        .file()
-        .set_title("Systemprofil exportieren")
-        .set_directory(state.paths.system_profiles_dir.clone())
-        .set_file_name(&filename)
-        .add_filter("JSON", &["json"])
-        .blocking_save_file();
-
-    let Some(selected_file) = selected_file else {
-        return Ok(None);
-    };
-
-    let path = selected_file
-        .into_path()
-        .map_err(|_| "Der ausgewählte Speicherort ist kein lokaler Dateipfad.".to_string())?;
-
-    tokio::fs::write(&path, json)
-        .await
-        .map_err(|error| format!("Systemprofil konnte nicht geschrieben werden: {error}"))?;
-
-    Ok(Some(path.display().to_string()))
-}
-
-#[tauri::command]
-pub async fn import_system_profile_json(
-    state: State<'_, AppState>,
-    contents: String,
-) -> Result<crate::source_model::SystemProfile, String> {
-    crate::source_model::import_system_profile_json(&state.db, &contents).await
-}
-
-#[tauri::command]
-pub async fn create_source(
-    state: State<'_, AppState>,
-    input: crate::source_model::CreateSourceInput,
-) -> Result<crate::source_model::Source, String> {
-    crate::source_model::create_source(&state.db, input).await
-}
-
-#[tauri::command]
-pub async fn list_sources(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::source_model::Source>, String> {
-    crate::source_model::list_sources(&state.db).await
-}
-
-#[tauri::command]
-pub async fn get_source(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<crate::source_model::Source, String> {
-    crate::source_model::get_source(&state.db, id).await
-}
-
-#[tauri::command]
-pub async fn update_source(
-    state: State<'_, AppState>,
-    id: i64,
-    input: crate::source_model::UpdateSourceInput,
-) -> Result<crate::source_model::Source, String> {
-    crate::source_model::update_source(&state.db, id, input).await
-}
-
-#[tauri::command]
-pub async fn delete_source(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    crate::source_model::delete_source(&state.db, id).await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -616,6 +451,29 @@ mod tests {
             assert!(registry_snapshot.source("stepstone_de").is_some());
             assert!(registry_snapshot.source("indeed_de").is_some());
             assert!(registry_snapshot.profile("greenhouse").is_some());
+        });
+    }
+
+    #[test]
+    fn source_registry_commands_read_current_registry_snapshot() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let paths =
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
+            let state = AppState::new(paths).await.unwrap();
+
+            let snapshot = load_source_registry_snapshot(&state.paths.app_data_dir);
+
+            assert!(snapshot.diagnostics.is_empty());
+            assert!(snapshot
+                .valid_profiles
+                .iter()
+                .any(|profile| profile.document.key == "greenhouse"));
+            assert!(snapshot
+                .valid_sources
+                .iter()
+                .any(|source| source.document.key == "stepstone_de"));
         });
     }
 
