@@ -101,7 +101,6 @@ fn apply_template_filter(filter: &str, value: &str) -> Result<String, TemplateEr
         "domainTitle" => Ok(title_case(&company_domain_label(value)?)),
         "urlDecode" => Ok(percent_decode_lossy(value)),
         "slugToTitle" => Ok(slug_to_title(value)),
-        "stripCareerSuffix" => Ok(strip_career_suffix(value)),
         _ => Err(TemplateError::Invalid(format!(
             "unsupported template filter `{filter}`"
         ))),
@@ -232,26 +231,6 @@ fn slug_to_title(value: &str) -> String {
     title_case_without_default(&collapse_whitespace(&value.replace(['-', '_'], " ")))
 }
 
-fn strip_career_suffix(source_name: &str) -> String {
-    let source_name = collapse_whitespace(source_name);
-    let lower = source_name.to_lowercase();
-    for suffix in [
-        " karriere",
-        " careers",
-        " career",
-        " jobs",
-        " stellenangebote",
-    ] {
-        if lower.ends_with(suffix) {
-            let company = source_name[..source_name.len() - suffix.len()].trim();
-            if !company.is_empty() {
-                return company.to_string();
-            }
-        }
-    }
-    source_name
-}
-
 fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -346,7 +325,7 @@ mod tests {
                 ("raw", "Héllo GmbH & Co. KG"),
                 ("slug", "senior+rust%2Dengineer"),
                 ("website", "https://jobs.focused-energy.co/careers"),
-                ("sourceName", "Focused Energy Karriere"),
+                ("sourceName", "Focused Energy"),
             ]),
         };
 
@@ -371,7 +350,7 @@ mod tests {
             "Senior Rust Engineer"
         );
         assert_eq!(
-            render_template("{{sourceName|stripCareerSuffix}}", &context).unwrap(),
+            render_template("{{sourceName}}", &context).unwrap(),
             "Focused Energy"
         );
     }

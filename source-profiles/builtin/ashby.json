@@ -14,12 +14,12 @@
   },
   "identity": {
     "keyCandidates": [
-      "{{capture:companyWebsite|domainKey}}_careers",
-      "{{capture:boardSlug|technicalKey}}_careers"
+      "{{capture:companyWebsite|domainKey}}",
+      "{{capture:boardSlug|technicalKey}}"
     ],
     "nameCandidates": [
-      "{{capture:companyWebsite|domainTitle}} Karriere",
-      "{{capture:boardSlug|titleCase}} Karriere"
+      "{{capture:companyWebsite|domainTitle}}",
+      "{{capture:boardSlug|titleCase}}"
     ],
     "optionalSourceConfig": {
       "companyWebsite": "{{capture:companyWebsite}}"

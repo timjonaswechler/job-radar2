@@ -78,7 +78,7 @@
             "template": "{{itemText}}"
           },
           "company": {
-            "template": "{{sourceName|stripCareerSuffix}}"
+            "template": "{{sourceName}}"
           },
           "locations": [
             {

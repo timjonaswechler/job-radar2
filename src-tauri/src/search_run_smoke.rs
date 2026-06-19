@@ -23,8 +23,8 @@ use crate::{
 
 const SMOKE_COMMAND: &str = "dev-search-run-smoke";
 const SMOKE_APP_DATA_DIR_ENV: &str = "JOB_RADAR_SMOKE_APP_DATA_DIR";
-const SCHOTT_SOURCE_KEY: &str = "schott_careers";
-const SCHOTT_SOURCE_NAME: &str = "SCHOTT Karriere";
+const SCHOTT_SOURCE_KEY: &str = "schott_ag";
+const SCHOTT_SOURCE_NAME: &str = "SCHOTT AG";
 const SCHOTT_SITEMAP_URL: &str = "https://join.schott.com/sitemap.xml";
 const STEPSTONE_SOURCE_KEY: &str = "stepstone_de";
 const SUCCESSFACTORS_PROFILE_KEY: &str = "successfactors";

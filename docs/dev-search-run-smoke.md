@@ -8,7 +8,7 @@ The smoke path creates or reuses an active Suchanfrage with:
 - Ausschlussregeln: `Praktikum`, `Werkstudent`, `Schülerpraktikum`
 - location: `Mainz`
 - radius: `30`
-- sources: `schott_careers`, `stepstone_de`
+- sources: `schott_ag`, `stepstone_de`
 
 Running it overwrites `search-run-result.json` in the repository root.
 
@@ -32,7 +32,7 @@ For a fresh development database, allow the smoke command to create the local SC
 npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-source
 ```
 
-`stepstone_de` is a built-in source registry document. `--ensure-schott-source` creates only the local development source JSON document `sources/schott_careers.json` with source profile `successfactors`, access path `sitemap_inventory`, and source config:
+`stepstone_de` is a built-in source registry document. `--ensure-schott-source` creates only the local development source JSON document `sources/schott_ag.json` with source profile `successfactors`, access path `sitemap_inventory`, and source config:
 
 ```json
 {
@@ -43,7 +43,7 @@ npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-s
 
 ## Expected validation
 
-- SCHOTT should complete when the sitemap is reachable and produce normalized postings with readable titles, URL, source reference, company derived from `SCHOTT Karriere`, and `Mainz` where the URL contains that location.
+- SCHOTT should complete when the sitemap is reachable and produce normalized postings with readable titles, URL, source reference, company derived from `SCHOTT AG`, and `Mainz` where the URL contains that location.
 - StepStone success is acceptable when available.
 - StepStone browser-inventory failure is acceptable only when `sourceRuns` contains an explicit `stepstone_de` error and the overall status is `completed_with_errors` if SCHOTT completed.
 - Final `postings` should not contain titles with the configured exclusion terms (`Praktikum`, `Werkstudent`, `Schülerpraktikum`).
