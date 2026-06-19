@@ -32,17 +32,18 @@
       "availability": {
         "requiredCaptures": ["boardSlug"],
         "sourceConfig": {
-          "startUrl": "https://api.ashbyhq.com/posting-api/job-board/{{capture:boardSlug}}?includeCompensation=true"
+          "boardSlug": "{{capture:boardSlug}}"
         }
       },
       "sourceConfigSchema": {
         "type": "object",
-        "required": ["startUrl"],
+        "required": ["boardSlug"],
+        "additionalProperties": false,
         "properties": {
-          "startUrl": {
+          "boardSlug": {
             "type": "string",
-            "format": "uri",
-            "title": "Start-URL"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "title": "Ashby job board name"
           },
           "companyWebsite": {
             "type": "string",
@@ -53,7 +54,7 @@
       },
       "inventory": {
         "fetch": {
-          "url": "{{sourceConfig:startUrl}}"
+          "url": "https://api.ashbyhq.com/posting-api/job-board/{{sourceConfig:boardSlug}}?includeCompensation=true"
         },
         "parse": {
           "as": "json"
