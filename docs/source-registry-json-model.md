@@ -129,6 +129,22 @@ Use shared field names when different recruiting systems expose the same concept
 - `startUrl` is optional context for the submitted page or canonical career URL. Do not require it when inventory can be derived solely from `boardSlug`.
 - Provider-specific names are still allowed when the concept is genuinely different, but avoid introducing aliases such as `boardToken`, `companySlug`, or `postingSlug` for the same reusable board identifier.
 
+### Declarative inventory XML items
+
+For XML feeds, `inventory.items.select.xmlText` selects all descendant elements with the matching local tag name and returns their trimmed text content, for example sitemap `<loc>` entries. Empty or whitespace-only selected text values are returned as `""`.
+
+`inventory.items.select.xmlElement` selects all descendant elements with the matching local tag name and exposes each selected element as a structured JSON item. The mapping is intentionally small and deterministic:
+
+- attributes are ignored;
+- XML namespaces and prefixes are not included in JSON field names;
+- an element with only text becomes a trimmed JSON string; empty or whitespace-only text becomes `""`;
+- an element with child elements becomes a JSON object keyed by each child element's local tag name;
+- repeated child elements with the same local tag name become JSON arrays in source order;
+- for mixed content, text directly beside child elements is ignored;
+- this is not XPath and not a complete XML-to-JSON converter.
+
+Field expressions can use `jsonPath` on the structured item. Template expressions may also read scalar structured-item fields via `{{itemJson:$.fieldName}}`, for example to combine a source-config host with a posting id.
+
 ### Declarative inventory location fields
 
 `inventory.fields.locations` is an array of location expressions. Each expression may produce zero, one, or many locations:
@@ -257,7 +273,7 @@ Named captures from detection, for example `boardSlug`, are reusable evidence fi
 
 Detection `required` checks are conjunctive: every required check must pass. Optional `detect.anyOf` adds ordered OR-style alternatives after `required`: each alternative is an array of detection checks that must all pass, and the first passing alternative wins. If `anyOf` exists and no alternative passes, the profile does not match. Captures from `required` plus the selected alternative are available to identity templates, access-path availability, and `availability.sourceConfig`; captures from failed alternatives are discarded.
 
-When a regex check has `captureAs`, the detector stores the first non-empty capture group from the first regex match, so an alternative can normalize one URL shape into a reusable field such as `boardSlug`.
+`inputUrlRegex` checks match the submitted source URL itself; `htmlRegex` checks match the fetched page text. When a regex check has `captureAs`, the detector stores the first non-empty capture group from the first regex match, so an alternative can normalize one URL shape into a reusable field such as `boardSlug`.
 
 A profile access path may be recommended only when:
 

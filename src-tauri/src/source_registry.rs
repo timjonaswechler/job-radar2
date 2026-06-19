@@ -1223,6 +1223,38 @@ mod tests {
     }
 
     #[test]
+    fn personio_builtin_schema_and_inventory_are_hardened() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snapshot = load_snapshot(temp_dir.path());
+        let profile = snapshot.profile("personio").unwrap();
+        let access_path = profile
+            .document
+            .access_paths
+            .iter()
+            .find(|access_path| access_path.key == "endpoint_inventory")
+            .unwrap();
+
+        let source_config_schema = access_path.source_config_schema.as_ref().unwrap();
+        assert_eq!(source_config_schema["additionalProperties"], false);
+        assert_eq!(
+            source_config_schema["required"],
+            json!(["boardSlug", "personioHost", "language"])
+        );
+        assert_eq!(
+            source_config_schema["properties"]["language"]["enum"],
+            json!(["de", "en", "fr", "es", "nl", "it", "pt"])
+        );
+        assert_eq!(
+            access_path.inventory.as_ref().unwrap()["items"]["select"],
+            json!({ "xmlElement": "position" })
+        );
+        assert_eq!(
+            access_path.inventory.as_ref().unwrap()["fields"]["url"],
+            json!({ "template": "https://{{sourceConfig:personioHost}}/job/{{itemJson:$.id}}" })
+        );
+    }
+
+    #[test]
     fn loads_valid_profile_backed_and_source_specific_documents() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_json(
