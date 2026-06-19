@@ -21,8 +21,9 @@ export function DatabaseStatusCard() {
           <div className="grid gap-1.5">
             <FrameTitle>SQLite Datenbank</FrameTitle>
             <FrameDescription>
-              Die lokale Datenbank ist Runtime-/Cache-Schicht. Systemprofile kommen
-              aus gebündelten Built-ins und lokalen JSON-Dateien im App-Data-Ordner.
+              Die lokale Datenbank ist Runtime-/Cache-Schicht. Quellen und
+              Quellenprofile kommen aus gebündelten Built-ins und lokalen
+              JSON-Dateien im App-Data-Ordner.
             </FrameDescription>
           </div>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
@@ -69,10 +70,16 @@ export function DatabaseStatusCard() {
                   {data.databasePath}
                 </dd>
               </div>
-              <div className="rounded-lg bg-muted p-3 md:col-span-2">
-                <dt className="font-medium">Custom-Systemprofile</dt>
+              <div className="rounded-lg bg-muted p-3">
+                <dt className="font-medium">Custom-Quellenprofile</dt>
                 <dd className="mt-1 break-all text-muted-foreground">
-                  {data.systemProfilesDir}
+                  {data.sourceProfilesDir}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <dt className="font-medium">Custom-Quellen</dt>
+                <dd className="mt-1 break-all text-muted-foreground">
+                  {data.sourcesDir}
                 </dd>
               </div>
             </dl>

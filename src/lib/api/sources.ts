@@ -10,6 +10,8 @@ export type JsonValue =
 
 export type SourceStatus = "draft" | "active" | "disabled" | "invalid"
 
+export type SourceKey = string
+
 export type AdapterExecutionMode = "source_inventory" | "query_parameterized"
 
 export type AdapterCategory = "job_board" | "generic" | "browser"
@@ -25,107 +27,131 @@ export type AdapterMetadata = {
   category: AdapterCategory
   executionMode: AdapterExecutionMode
   sourceConfigSchema: JsonValue
-  requiresSystemProfile: boolean
-  requiresBrowserProfile: boolean
   supportsManualRelease: boolean
   authMode: AdapterAuthMode
   riskLevel: AdapterRiskLevel
 }
 
-export type BrowserProfile = {
-  id: number
-  key: string
-  name: string
-  description: string | null
-  nameI18nKey: string | null
-  descriptionI18nKey: string | null
-  definitionPath: string | null
-  definitionHash: string | null
-  definitionSchemaVersion: number
-  definition: JsonValue
-  sourceConfigSchema: JsonValue
-  status: SourceStatus
-  validationError: string | null
-  createdAt: string
-  updatedAt: string
+export type SourceRegistryDocumentOrigin = "built_in" | "custom"
+
+export type SourceRegistryDocumentKind = "source_profile" | "source"
+
+export type SourceRegistryDiagnosticCode =
+  | "invalid_json"
+  | "invalid_shape"
+  | "filename_key_mismatch"
+  | "duplicate_key"
+  | "missing_profile_ref"
+  | "missing_path_ref"
+  | "read_error"
+
+export type SourceRegistryDiagnostic = {
+  code: SourceRegistryDiagnosticCode
+  documentKind: SourceRegistryDocumentKind
+  origin: SourceRegistryDocumentOrigin
+  path: string
+  key: string | null
+  message: string
 }
 
-export type CreateBrowserProfileInput = {
-  key: string
-  name: string
-  description: string | null
-  nameI18nKey: string | null
-  descriptionI18nKey: string | null
-  definitionPath: string | null
-  definitionHash: string | null
-  definitionSchemaVersion: number
-  definition: JsonValue
-  sourceConfigSchema: JsonValue
-  status: SourceStatus
-  validationError: string | null
+export type SourceProfileKind =
+  | "recruiting_system"
+  | "job_portal"
+  | "website_family"
+  | "generic"
+
+export type DetectionPhase = "http" | "browser"
+
+export type DetectionBlock = {
+  phases?: DetectionPhase[]
+  required: JsonValue[]
 }
 
-export type UpdateBrowserProfileInput = Omit<CreateBrowserProfileInput, "key">
+export type SourceProfileIdentity = {
+  keyCandidates?: string[]
+  nameCandidates?: string[]
+  optionalSourceConfig?: JsonValue
+}
 
-export type SystemProfile = {
-  id: number
+export type AvailabilityBlock = {
+  requiredCaptures?: string[]
+  checks?: JsonValue[]
+  sourceConfig?: JsonValue
+}
+
+export type BrowserInteraction =
+  | { type: "waitFor"; selector: string; timeoutMs?: number }
+  | { type: "clickIfVisible"; selector: string; timeoutMs?: number }
+  | {
+      type: "clickUpToN"
+      selector: string
+      maxClicks: number
+      waitAfterClickMs?: number
+    }
+
+export type ProfileAccessPathDefinition = {
   key: string
-  name: string
-  description: string | null
+  name?: string
   adapterKey: string
-  definitionSchemaVersion: number
-  definition: JsonValue
-  sourceConfigSchema: JsonValue
-  builtIn: boolean
-  status: SourceStatus
-  validationError: string | null
-  createdAt: string
-  updatedAt: string
+  sourceConfigSchema?: JsonValue
+  availability?: AvailabilityBlock
+  query?: JsonValue
+  inventory?: JsonValue
+  interactions?: BrowserInteraction[]
+  manualRelease?: JsonValue
 }
 
-export type CreateSystemProfileInput = {
+export type SourceProfileDocument = {
+  schemaVersion: 1
   key: string
   name: string
-  description: string | null
-  adapterKey: string
-  definitionSchemaVersion: number
-  definition: JsonValue
-  sourceConfigSchema: JsonValue
-  status: SourceStatus
-  validationError: string | null
+  kind: SourceProfileKind
+  detect?: DetectionBlock
+  identity?: SourceProfileIdentity
+  sourceConfigSchema?: JsonValue
+  accessPaths: ProfileAccessPathDefinition[]
 }
 
-export type UpdateSystemProfileInput = Omit<CreateSystemProfileInput, "key">
+export type ProfileSelectedAccessPath = {
+  type: "profile"
+  profileKey: string
+  pathKey: string
+}
 
-export type Source = {
-  id: number
-  key: string
+export type SourceSpecificSelectedAccessPath = {
+  type: "source_specific"
   adapterKey: string
-  systemProfileId: number | null
-  browserProfileId: number | null
+  sourceConfigSchema?: JsonValue
+  query?: JsonValue
+  inventory?: JsonValue
+  interactions?: BrowserInteraction[]
+  manualRelease?: JsonValue
+}
+
+export type SelectedAccessPath =
+  | ProfileSelectedAccessPath
+  | SourceSpecificSelectedAccessPath
+
+export type SourceDocument = {
+  schemaVersion: 1
+  key: SourceKey
   name: string
-  description: string | null
+  status: SourceStatus
   sourceConfig: JsonValue
-  status: SourceStatus
-  validationError: string | null
-  builtIn: boolean
-  createdAt: string
-  updatedAt: string
+  selectedAccessPath: SelectedAccessPath
 }
 
-export type CreateSourceInput = {
-  key: string
-  adapterKey: string
-  systemProfileId: number | null
-  browserProfileId: number | null
-  name: string
-  description: string | null
-  sourceConfig: JsonValue
-  status: SourceStatus
-  validationError: string | null
+export type RegistrySourceProfile = {
+  origin: SourceRegistryDocumentOrigin
+  path: string
+  document: SourceProfileDocument
 }
 
-export type UpdateSourceInput = Omit<CreateSourceInput, "key">
+export type RegistrySource = {
+  origin: SourceRegistryDocumentOrigin
+  path: string
+  document: SourceDocument
+}
 
 export type SourceDetectionStatus =
   | "detected"
@@ -139,7 +165,7 @@ export type SourceDetectionMatch = {
   profileName: string
   pathKey: string
   pathName: string | null
-  key: string
+  key: SourceKey
   name: string
   keyCandidates: string[]
   nameCandidates: string[]
@@ -154,7 +180,7 @@ export type SourceDetectionResult = {
   profileName: string | null
   pathKey: string | null
   pathName: string | null
-  key: string | null
+  key: SourceKey | null
   name: string | null
   keyCandidates: string[]
   nameCandidates: string[]
@@ -164,122 +190,24 @@ export type SourceDetectionResult = {
   matches: SourceDetectionMatch[]
 }
 
-export type SystemProfileTestStatus = "passed" | "failed"
-
-export type SystemProfileTestCheckStatus = "passed" | "failed"
-
-export type SystemProfileTestCheckResult = {
-  index: number
-  check: JsonValue
-  status: SystemProfileTestCheckStatus
-  evidence: string | null
-  diagnostic: string | null
-}
-
-export type SystemProfileTestResult = {
-  status: SystemProfileTestStatus
-  adapterKey: string
-  systemProfileId: number
-  systemProfileKey: string
-  systemProfileName: string
-  key: string | null
-  name: string | null
-  sourceConfig: JsonValue | null
-  checks: SystemProfileTestCheckResult[]
-}
-
 export function listAdapters() {
   return invoke<AdapterMetadata[]>("list_adapters")
 }
 
+export function listSourceRegistryProfiles() {
+  return invoke<RegistrySourceProfile[]>("list_source_registry_profiles")
+}
+
+export function listSourceRegistrySources() {
+  return invoke<RegistrySource[]>("list_source_registry_sources")
+}
+
+export function listSourceRegistryDiagnostics() {
+  return invoke<SourceRegistryDiagnostic[]>(
+    "list_source_registry_diagnostics",
+  )
+}
+
 export function detectSourceFromUrl(url: string) {
   return invoke<SourceDetectionResult>("detect_source_from_url", { url })
-}
-
-export function testSystemProfileUrl(url: string, systemProfileId: number) {
-  return invoke<SystemProfileTestResult>("test_system_profile_url", {
-    url,
-    systemProfileId,
-  })
-}
-
-export function createBrowserProfile(input: CreateBrowserProfileInput) {
-  return invoke<BrowserProfile>("create_browser_profile", { input })
-}
-
-export function listBrowserProfiles() {
-  return invoke<BrowserProfile[]>("list_browser_profiles")
-}
-
-export function getBrowserProfile(id: number) {
-  return invoke<BrowserProfile>("get_browser_profile", { id })
-}
-
-export function updateBrowserProfile(
-  id: number,
-  input: UpdateBrowserProfileInput,
-) {
-  return invoke<BrowserProfile>("update_browser_profile", { id, input })
-}
-
-export function deleteBrowserProfile(id: number) {
-  return invoke<void>("delete_browser_profile", { id })
-}
-
-export function createSystemProfile(input: CreateSystemProfileInput) {
-  return invoke<SystemProfile>("create_system_profile", { input })
-}
-
-export function listSystemProfiles() {
-  return invoke<SystemProfile[]>("list_system_profiles")
-}
-
-export function getSystemProfile(id: number) {
-  return invoke<SystemProfile>("get_system_profile", { id })
-}
-
-export function updateSystemProfile(id: number, input: UpdateSystemProfileInput) {
-  return invoke<SystemProfile>("update_system_profile", { id, input })
-}
-
-export function deleteSystemProfile(id: number) {
-  return invoke<void>("delete_system_profile", { id })
-}
-
-export function exportSystemProfileJson(id: number) {
-  return invoke<string>("export_system_profile_json", { id })
-}
-
-export function exportSystemProfileJsonFile(
-  id: number,
-  suggestedFilename: string,
-) {
-  return invoke<string | null>("export_system_profile_json_file", {
-    id,
-    suggestedFilename,
-  })
-}
-
-export function importSystemProfileJson(contents: string) {
-  return invoke<SystemProfile>("import_system_profile_json", { contents })
-}
-
-export function createSource(input: CreateSourceInput) {
-  return invoke<Source>("create_source", { input })
-}
-
-export function listSources() {
-  return invoke<Source[]>("list_sources")
-}
-
-export function getSource(id: number) {
-  return invoke<Source>("get_source", { id })
-}
-
-export function updateSource(id: number, input: UpdateSourceInput) {
-  return invoke<Source>("update_source", { id, input })
-}
-
-export function deleteSource(id: number) {
-  return invoke<void>("delete_source", { id })
 }

@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 export type DatabaseInfo = {
   appDataDir: string;
   databasePath: string;
-  systemProfilesDir: string;
+  sourceProfilesDir: string;
+  sourcesDir: string;
   initializedAt: string | null;
   sqliteVersion: string;
 };

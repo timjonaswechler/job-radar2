@@ -553,12 +553,9 @@ mod tests {
     fn ensure_schott_source_creates_only_missing_local_smoke_source() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
-            let pool = crate::db::connect_and_migrate(
-                &temp_dir.path().join("job_radar.db"),
-                &temp_dir.path().join("system-profiles"),
-            )
-            .await
-            .unwrap();
+            let pool = crate::db::connect_and_migrate(&temp_dir.path().join("job_radar.db"))
+                .await
+                .unwrap();
 
             let created = ensure_schott_smoke_source(&pool).await.unwrap();
             let reused = ensure_schott_smoke_source(&pool).await.unwrap();

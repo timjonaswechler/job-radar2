@@ -11,6 +11,7 @@ mod search_run_model;
 mod search_run_smoke;
 mod simple_json_path;
 mod source_detection;
+#[allow(dead_code)]
 mod source_model;
 #[allow(dead_code)]
 mod source_registry;
@@ -53,6 +54,9 @@ pub fn run() {
             app::commands::uninstall_browser_runtime,
             app::commands::check_browser_runtime,
             app::commands::list_adapters,
+            app::commands::list_source_registry_profiles,
+            app::commands::list_source_registry_sources,
+            app::commands::list_source_registry_diagnostics,
             app::commands::detect_source_from_url,
             app::commands::create_search_request,
             app::commands::list_search_requests,
@@ -60,24 +64,6 @@ pub fn run() {
             app::commands::update_search_request,
             app::commands::delete_search_request,
             app::commands::run_search_request,
-            app::commands::create_browser_profile,
-            app::commands::list_browser_profiles,
-            app::commands::get_browser_profile,
-            app::commands::update_browser_profile,
-            app::commands::delete_browser_profile,
-            app::commands::create_system_profile,
-            app::commands::list_system_profiles,
-            app::commands::get_system_profile,
-            app::commands::update_system_profile,
-            app::commands::delete_system_profile,
-            app::commands::export_system_profile_json,
-            app::commands::export_system_profile_json_file,
-            app::commands::import_system_profile_json,
-            app::commands::create_source,
-            app::commands::list_sources,
-            app::commands::get_source,
-            app::commands::update_source,
-            app::commands::delete_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
