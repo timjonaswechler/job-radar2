@@ -7,6 +7,10 @@ alias squash-migrations := migrations-squash
 default:
     @just --list
 
+# Print the line count of every tracked Rust source file and the total.
+loc extension:
+    @git ls-files '*.{{extension}}' | while IFS= read -r file; do wc -l "$file"; done | awk '{ total += $1; print } END { if (NR == 0) print "No Rust files found."; else printf "%7d total\n", total }'
+
 # Print the Tauri app data directory used by the installed/dev app.
 app-data-dir:
     @python3 scripts/tauri-app-data-dir.py
