@@ -39,6 +39,42 @@
     "jsonObject": {
       "type": "object"
     },
+    "inventory": {
+      "allOf": [
+        { "$ref": "#/$defs/jsonObject" },
+        {
+          "type": "object",
+          "properties": {
+            "fetch": { "$ref": "#/$defs/inventoryFetch" }
+          }
+        }
+      ]
+    },
+    "inventoryFetch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "pagination": { "$ref": "#/$defs/inventoryPagination" }
+      }
+    },
+    "inventoryPagination": {
+      "oneOf": [{ "$ref": "#/$defs/pageCountPagination" }]
+    },
+    "pageCountPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pageParam", "sizeParam", "size", "totalPath"],
+      "properties": {
+        "type": { "const": "page_count" },
+        "pageParam": { "type": "string", "minLength": 1 },
+        "sizeParam": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 1 },
+        "firstPage": { "type": "integer", "minimum": 0 },
+        "totalPath": { "type": "string", "minLength": 1 }
+      }
+    },
     "detection": {
       "type": "object",
       "additionalProperties": false,
@@ -89,7 +125,7 @@
         "sourceConfigSchema": { "$ref": "#/$defs/jsonSchemaObject" },
         "availability": { "$ref": "#/$defs/availability" },
         "query": { "$ref": "#/$defs/jsonObject" },
-        "inventory": { "$ref": "#/$defs/jsonObject" },
+        "inventory": { "$ref": "#/$defs/inventory" },
         "interactions": {
           "type": "array",
           "items": { "$ref": "#/$defs/browserInteraction" }

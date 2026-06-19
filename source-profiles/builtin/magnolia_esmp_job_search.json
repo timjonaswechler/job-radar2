@@ -27,15 +27,13 @@
       "availability": {
         "sourceConfig": {
           "startUrl": "{{inputUrl}}",
-          "endpointUrl": "{{origin}}/.search?index=job",
-          "itemsPath": "$.searchResults",
-          "titlePath": "$.title",
-          "urlPath": "$.url"
+          "endpointUrl": "{{origin}}/.search?index=job"
         }
       },
       "sourceConfigSchema": {
         "type": "object",
-        "required": ["startUrl"],
+        "required": ["startUrl", "endpointUrl"],
+        "additionalProperties": false,
         "properties": {
           "startUrl": {
             "type": "string",
@@ -45,25 +43,22 @@
           "endpointUrl": {
             "type": "string",
             "format": "uri",
+            "pattern": "^https?://.+/\\.search\\?index=job$",
             "title": "Search-Endpoint"
-          },
-          "itemsPath": {
-            "type": "string",
-            "title": "JSON-Pfad zur Trefferliste"
-          },
-          "titlePath": {
-            "type": "string",
-            "title": "JSON-Pfad zum Titel"
-          },
-          "urlPath": {
-            "type": "string",
-            "title": "JSON-Pfad zur URL"
           }
         }
       },
       "inventory": {
         "fetch": {
-          "url": "{{sourceConfig:endpointUrl}}"
+          "url": "{{sourceConfig:endpointUrl}}",
+          "pagination": {
+            "type": "page_count",
+            "pageParam": "page",
+            "sizeParam": "size",
+            "size": 1000,
+            "firstPage": 1,
+            "totalPath": "$.total"
+          }
         },
         "parse": {
           "as": "json"

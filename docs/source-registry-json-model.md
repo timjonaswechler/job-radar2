@@ -141,6 +141,28 @@ Use shared field names when different recruiting systems expose the same concept
 
 Do not split by punctuation implicitly: values such as `Berlin, Germany` are single locations unless the profile explicitly declares `split`.
 
+### Declarative endpoint pagination
+
+`declarative_endpoint_inventory` normally fetches `inventory.fetch.url` once. JSON endpoints that expose page-count metadata may opt into bounded page fetching with `inventory.fetch.pagination`:
+
+```json
+{
+  "fetch": {
+    "url": "{{sourceConfig:endpointUrl}}",
+    "pagination": {
+      "type": "page_count",
+      "pageParam": "page",
+      "sizeParam": "size",
+      "size": 1000,
+      "firstPage": 1,
+      "totalPath": "$.total"
+    }
+  }
+}
+```
+
+The executor fetches the first page with `sizeParam` and `pageParam`, reads the non-negative integer at `totalPath`, then fetches the remaining pages up to `ceil(total / size)`. Existing query parameters on `url` are preserved unless they use the configured page/size parameter names.
+
 ## Source document
 
 Profile-backed source:
