@@ -29,7 +29,7 @@ dom_query = "0.27"
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 regex = "1"
-quick-xml = "0.39"
+roxmltree = "0.20"
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util", "rt", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }

@@ -222,6 +222,7 @@
     },
     "detectionCheck": {
       "oneOf": [
+        { "$ref": "#/$defs/inputUrlRegexCheck" },
         { "$ref": "#/$defs/htmlContainsCheck" },
         { "$ref": "#/$defs/htmlRegexCheck" },
         { "$ref": "#/$defs/fetchTextCheck" },
@@ -229,6 +230,15 @@
         { "$ref": "#/$defs/fetchScriptCheck" },
         { "$ref": "#/$defs/networkRequestCheck" }
       ]
+    },
+    "inputUrlRegexCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputUrlRegex"],
+      "properties": {
+        "inputUrlRegex": { "type": "string", "minLength": 1 },
+        "captureAs": { "$ref": "#/$defs/captureKey" }
+      }
     },
     "htmlContainsCheck": {
       "type": "object",

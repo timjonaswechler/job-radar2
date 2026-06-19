@@ -1,6 +1,6 @@
-use quick_xml::{escape::unescape, events::Event, Reader};
 use regex::Regex;
 use reqwest::Url;
+use roxmltree::{Document, Node};
 use serde_json::Value;
 use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
 
@@ -249,22 +249,47 @@ fn select_xml_items(
     items: &serde_json::Map<String, Value>,
 ) -> Result<Vec<InventoryItem>, SourceExecutionError> {
     let select = required_object_value(items, "select", "executionPlan.inventory.items.select")?;
-    let element_name = required_string(
-        select,
-        "xmlText",
-        "executionPlan.inventory.items.select.xmlText",
-    )?;
-    if element_name.trim().is_empty() {
-        return Err(SourceExecutionError::Failed(
-            "executionPlan.inventory.items.select.xmlText must not be empty".to_string(),
-        ));
+    if let Some(element_name) = select.get("xmlText") {
+        let element_name = element_name.as_str().ok_or_else(|| {
+            SourceExecutionError::Failed(
+                "executionPlan.inventory.items.select.xmlText must be a string".to_string(),
+            )
+        })?;
+        if element_name.trim().is_empty() {
+            return Err(SourceExecutionError::Failed(
+                "executionPlan.inventory.items.select.xmlText must not be empty".to_string(),
+            ));
+        }
+
+        return parse_xml_text_values(xml, element_name)
+            .map(|values| values.into_iter().map(InventoryItem::Text).collect())
+            .map_err(|error| {
+                SourceExecutionError::Failed(format!("could not parse inventory XML: {error}"))
+            });
     }
 
-    parse_xml_text_values(xml, element_name)
-        .map(|values| values.into_iter().map(InventoryItem::Text).collect())
-        .map_err(|error| {
-            SourceExecutionError::Failed(format!("could not parse inventory XML: {error}"))
-        })
+    if let Some(element_name) = select.get("xmlElement") {
+        let element_name = element_name.as_str().ok_or_else(|| {
+            SourceExecutionError::Failed(
+                "executionPlan.inventory.items.select.xmlElement must be a string".to_string(),
+            )
+        })?;
+        if element_name.trim().is_empty() {
+            return Err(SourceExecutionError::Failed(
+                "executionPlan.inventory.items.select.xmlElement must not be empty".to_string(),
+            ));
+        }
+
+        return parse_xml_element_values(xml, element_name)
+            .map(|values| values.into_iter().map(InventoryItem::Json).collect())
+            .map_err(|error| {
+                SourceExecutionError::Failed(format!("could not parse inventory XML: {error}"))
+            });
+    }
+
+    Err(SourceExecutionError::Failed(
+        "executionPlan.inventory.items.select must contain xmlText or xmlElement".to_string(),
+    ))
 }
 
 fn select_json_items(
@@ -409,69 +434,67 @@ fn resolve_json_u64(
 }
 
 fn parse_xml_text_values(xml: &str, element_name: &str) -> Result<Vec<String>, String> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let document = Document::parse(xml).map_err(|error| error.to_string())?;
 
-    let target = element_name.as_bytes();
-    let mut selected_depth = 0_usize;
-    let mut current_text = String::new();
-    let mut values = Vec::new();
+    Ok(document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == element_name)
+        .map(xml_text_content)
+        .collect())
+}
 
-    loop {
-        match reader.read_event() {
-            Ok(Event::Start(element)) => {
-                if selected_depth > 0 {
-                    selected_depth += 1;
-                } else if element.local_name().as_ref() == target {
-                    selected_depth = 1;
-                    current_text.clear();
-                }
-            }
-            Ok(Event::Empty(element)) => {
-                if selected_depth == 0 && element.local_name().as_ref() == target {
-                    values.push(String::new());
-                }
-            }
-            Ok(Event::Text(text)) if selected_depth > 0 => {
-                let decoded = text
-                    .xml10_content()
-                    .map_err(|error| format!("text could not be decoded: {error}"))?;
-                let unescaped = unescape(decoded.as_ref())
-                    .map_err(|error| format!("text could not be unescaped: {error}"))?;
-                current_text.push_str(unescaped.as_ref());
-            }
-            Ok(Event::GeneralRef(reference)) if selected_depth > 0 => {
-                let decoded = reference
-                    .xml10_content()
-                    .map_err(|error| format!("entity could not be decoded: {error}"))?;
-                let entity = format!("&{};", decoded.as_ref());
-                let unescaped = unescape(&entity)
-                    .map_err(|error| format!("entity could not be unescaped: {error}"))?;
-                current_text.push_str(unescaped.as_ref());
-            }
-            Ok(Event::CData(cdata)) if selected_depth > 0 => {
-                let decoded = cdata
-                    .xml10_content()
-                    .map_err(|error| format!("CDATA could not be decoded: {error}"))?;
-                current_text.push_str(decoded.as_ref());
-            }
-            Ok(Event::End(_)) if selected_depth > 0 => {
-                selected_depth -= 1;
-                if selected_depth == 0 {
-                    let value = current_text.trim();
-                    if !value.is_empty() {
-                        values.push(value.to_string());
-                    }
-                    current_text.clear();
-                }
-            }
-            Ok(Event::Eof) => break,
-            Ok(_) => {}
-            Err(error) => return Err(error.to_string()),
-        }
+fn parse_xml_element_values(xml: &str, element_name: &str) -> Result<Vec<Value>, String> {
+    let document = Document::parse(xml).map_err(|error| error.to_string())?;
+
+    Ok(document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == element_name)
+        .map(xml_element_to_json_value)
+        .collect())
+}
+
+fn xml_element_to_json_value(node: Node<'_, '_>) -> Value {
+    let element_children = node
+        .children()
+        .filter(|child| child.is_element())
+        .collect::<Vec<_>>();
+
+    if element_children.is_empty() {
+        return Value::String(xml_text_content(node));
     }
 
-    Ok(values)
+    let mut object = serde_json::Map::new();
+    for child in element_children {
+        insert_xml_json_child(
+            &mut object,
+            child.tag_name().name().to_string(),
+            xml_element_to_json_value(child),
+        );
+    }
+
+    Value::Object(object)
+}
+
+fn xml_text_content(node: Node<'_, '_>) -> String {
+    node.descendants()
+        .filter(|descendant| descendant.is_text())
+        .filter_map(|text| text.text())
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+fn insert_xml_json_child(object: &mut serde_json::Map<String, Value>, name: String, value: Value) {
+    match object.get_mut(&name) {
+        None => {
+            object.insert(name, value);
+        }
+        Some(Value::Array(values)) => values.push(value),
+        Some(existing) => {
+            let previous = std::mem::take(existing);
+            *existing = Value::Array(vec![previous, value]);
+        }
+    }
 }
 
 fn simple_json_path_execution_error(
@@ -893,6 +916,18 @@ impl TemplateContext for InventoryTemplateContext<'_> {
                 .ok_or_else(|| {
                     TemplateError::Invalid(format!("sourceConfig.{config_key} is not available"))
                 })
+        } else if let Some(json_path) = variable.strip_prefix("itemJson:") {
+            if json_path.trim().is_empty() {
+                return Err(TemplateError::Invalid(
+                    "itemJson template variable must include a JSONPath".to_string(),
+                ));
+            }
+            let item = self.item.and_then(InventoryItem::json).ok_or_else(|| {
+                TemplateError::Invalid(
+                    "itemJson is not available in this template context".to_string(),
+                )
+            })?;
+            item_json_value_as_string(item, json_path).map(Some)
         } else if let Some(capture_key) = variable.strip_prefix("capture:") {
             if capture_key.is_empty() {
                 return Err(TemplateError::Invalid(
@@ -921,6 +956,20 @@ fn source_config_value_as_string(source_config: &Value, key: &str) -> Option<Str
         Value::Bool(value) => Some(value.to_string()),
         Value::Number(value) => Some(value.to_string()),
         _ => None,
+    }
+}
+
+fn item_json_value_as_string(item: &Value, json_path: &str) -> Result<String, TemplateError> {
+    let value = resolve_simple_json_path(item, json_path)
+        .map_err(|error| TemplateError::Invalid(format!("itemJson path {error}")))?;
+    match value {
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(Value::String(value)) => Ok(value.clone()),
+        Some(Value::Bool(value)) => Ok(value.to_string()),
+        Some(Value::Number(value)) => Ok(value.to_string()),
+        Some(Value::Array(_) | Value::Object(_)) => Err(TemplateError::Invalid(format!(
+            "itemJson path `{json_path}` must resolve to a string, number, boolean, or null"
+        ))),
     }
 }
 
@@ -1133,6 +1182,130 @@ mod tests {
             rendered,
             "focused_energy|https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true|https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/|Senior Rust Engineer|Focused Energy"
         );
+    }
+
+    #[test]
+    fn xml_text_selection_uses_local_names_and_keeps_empty_text_values() {
+        let values = parse_xml_text_values(
+            r#"<urlset xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <s:loc>https://example.test/a?x=1&amp;y=2</s:loc>
+              <loc><![CDATA[https://example.test/cdata]]></loc>
+              <loc></loc>
+            </urlset>"#,
+            "loc",
+        )
+        .unwrap();
+
+        assert_eq!(
+            values,
+            vec![
+                "https://example.test/a?x=1&y=2".to_string(),
+                "https://example.test/cdata".to_string(),
+                String::new(),
+            ]
+        );
+    }
+
+    #[test]
+    fn xml_element_selection_maps_dom_to_structured_json_values() {
+        let values = parse_xml_element_values(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns:j="urn:jobs">
+              <j:item ignored="attribute">
+                ignored mixed parent text
+                <title lang="en">Senior &amp; Staff <![CDATA[Engineer]]></title>
+                <details>
+                  <team>Platform</team>
+                </details>
+                <tag>Rust</tag>
+                <tag>XML</tag>
+                <empty></empty>
+                <selfClosing />
+                trailing mixed parent text
+              </j:item>
+            </feed>"#,
+            "item",
+        )
+        .unwrap();
+
+        assert_eq!(
+            values,
+            vec![json!({
+                "title": "Senior & Staff Engineer",
+                "details": {
+                    "team": "Platform"
+                },
+                "tag": ["Rust", "XML"],
+                "empty": "",
+                "selfClosing": ""
+            })]
+        );
+    }
+
+    #[test]
+    fn xml_element_inventory_uses_json_path_and_item_json_template_fields() {
+        tauri::async_runtime::block_on(async {
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.test/jobs.xml",
+                Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
+                <feed xmlns:j="urn:jobs">
+                  <j:job>
+                    <id>runtime-42</id>
+                    <title>Platform Engineer</title>
+                    <details>
+                      <team>Runtime Team</team>
+                    </details>
+                    <locations>
+                      <location>Berlin</location>
+                      <location>Munich</location>
+                    </locations>
+                  </j:job>
+                </feed>"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let search_request = search_request();
+            let source = source_with_inventory(
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json!({ "startUrl": "https://example.test/jobs.xml" }),
+                json!({
+                    "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                    "parse": { "as": "xml" },
+                    "items": {
+                        "select": { "xmlElement": "job" }
+                    },
+                    "fields": {
+                        "title": { "jsonPath": "$.title" },
+                        "url": { "template": "https://example.test/jobs/{{itemJson:$.id}}" },
+                        "company": { "jsonPath": "$.details.team" },
+                        "locations": [
+                            { "jsonPath": "$.locations.location" }
+                        ]
+                    }
+                }),
+            );
+
+            let candidates = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidates,
+                vec![SourceCandidate {
+                    title: "Platform Engineer".to_string(),
+                    company: "Runtime Team".to_string(),
+                    url: "https://example.test/jobs/runtime-42".to_string(),
+                    locations: vec!["Berlin".to_string(), "Munich".to_string()],
+                }]
+            );
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://example.test/jobs.xml"]
+            );
+        });
     }
 
     #[test]
@@ -1478,6 +1651,88 @@ mod tests {
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://join.schott.com/sitemap.xml"]
+            );
+        });
+    }
+
+    #[test]
+    fn personio_xml_inventory_source_runs_through_search_run_with_source_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "demo_ag",
+                "Demo AG",
+                "personio",
+                "endpoint_inventory",
+                json!({
+                    "boardSlug": "demo",
+                    "personioHost": "demo.jobs.personio.de",
+                    "language": "en",
+                    "startUrl": "https://demo.jobs.personio.de/"
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["demo_ag".to_string()], "engineer").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://demo.jobs.personio.de/xml?language=en",
+                Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
+                <workzag-jobs>
+                  <position>
+                    <id>4103</id>
+                    <subcompany>Demo AG</subcompany>
+                    <office>Munich</office>
+                    <additionalOffices>
+                      <office>Berlin</office>
+                      <office>Hamburg</office>
+                    </additionalOffices>
+                    <department>Engineering</department>
+                    <recruitingCategory>Engineering</recruitingCategory>
+                    <name>Senior Rust Engineer</name>
+                    <jobDescriptions>
+                      <jobDescription>
+                        <name>Description</name>
+                        <value><![CDATA[Build reliable systems.]]></value>
+                      </jobDescription>
+                    </jobDescriptions>
+                  </position>
+                  <position>
+                    <id>4104</id>
+                    <office>Cologne</office>
+                    <name>Sales Manager</name>
+                  </position>
+                </workzag-jobs>"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 2);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Senior Rust Engineer");
+            assert_eq!(posting.company, "Demo AG");
+            assert_eq!(posting.url, "https://demo.jobs.personio.de/job/4103");
+            assert_eq!(posting.locations, vec!["Munich", "Berlin", "Hamburg"]);
+            assert_eq!(posting.sources[0].source_key, "demo_ag");
+            assert_eq!(posting.sources[0].source_name, "Demo AG");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://demo.jobs.personio.de/xml?language=en"]
             );
         });
     }
