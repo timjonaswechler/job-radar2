@@ -87,23 +87,19 @@ where
             ))
         })?;
         let fetch_url = parse_http_url(&fetch_url, "executionPlan.inventory.fetch.url")?;
-        let body = self
-            .client
-            .get_text(fetch_url.clone())
-            .await
-            .map_err(|error| {
-                SourceExecutionError::Failed(format!(
-                    "could not fetch inventory {}: {error}",
-                    fetch_url.as_str()
-                ))
-            })?;
 
         let parse = required_object_value(inventory, "parse", "executionPlan.inventory.parse")?;
         let parse_as = required_string(parse, "as", "executionPlan.inventory.parse.as")?;
         let items = required_object_value(inventory, "items", "executionPlan.inventory.items")?;
         let inventory_items = match parse_as {
-            "xml" => select_xml_items(&body, items)?,
-            "json" => select_json_items(&body, items)?,
+            "xml" => {
+                let body = self.fetch_inventory_text(fetch_url.clone()).await?;
+                select_xml_items(&body, items)?
+            }
+            "json" => {
+                self.select_json_inventory_items(fetch_url.clone(), fetch, items)
+                    .await?
+            }
             other => {
                 return Err(SourceExecutionError::Failed(format!(
                     "executionPlan.inventory.parse.as `{other}` is not supported by this executor slice"
@@ -154,7 +150,9 @@ where
             };
 
             let title = render_required_field(fields, "title", &context)?;
-            let url = render_required_field(fields, "url", &context)?;
+            let raw_url = render_required_field(fields, "url", &context)?;
+            let url = resolve_http_candidate_url(&raw_url, &fetch_url)
+                .unwrap_or_else(|| raw_url.trim().to_string());
             let company = render_required_field(fields, "company", &context)?;
             let locations = render_locations(fields, &context)?;
 
@@ -171,6 +169,56 @@ where
         }
 
         Ok(candidates)
+    }
+
+    async fn fetch_inventory_text(&self, fetch_url: Url) -> Result<String, SourceExecutionError> {
+        self.client
+            .get_text(fetch_url.clone())
+            .await
+            .map_err(|error| {
+                SourceExecutionError::Failed(format!(
+                    "could not fetch inventory {}: {error}",
+                    fetch_url.as_str()
+                ))
+            })
+    }
+
+    async fn select_json_inventory_items(
+        &self,
+        fetch_url: Url,
+        fetch: &serde_json::Map<String, Value>,
+        items: &serde_json::Map<String, Value>,
+    ) -> Result<Vec<InventoryItem>, SourceExecutionError> {
+        let Some(pagination_value) = fetch.get("pagination") else {
+            let body = self.fetch_inventory_text(fetch_url).await?;
+            return select_json_items(&body, items);
+        };
+
+        let pagination = parse_page_count_pagination(
+            pagination_value,
+            "executionPlan.inventory.fetch.pagination",
+        )?;
+        let first_url = page_count_pagination_url(&fetch_url, &pagination, pagination.first_page);
+        let first_body = self.fetch_inventory_text(first_url).await?;
+        let (mut inventory_items, first_root) = select_json_items_with_root(&first_body, items)?;
+        let total = resolve_json_u64(
+            &first_root,
+            &pagination.total_path,
+            "executionPlan.inventory.fetch.pagination.totalPath",
+        )?;
+        let page_count = total.div_ceil(pagination.size);
+        if page_count <= 1 {
+            return Ok(inventory_items);
+        }
+
+        let last_page = pagination.first_page + page_count - 1;
+        for page in (pagination.first_page + 1)..=last_page {
+            let page_url = page_count_pagination_url(&fetch_url, &pagination, page);
+            let page_body = self.fetch_inventory_text(page_url).await?;
+            inventory_items.extend(select_json_items(&page_body, items)?);
+        }
+
+        Ok(inventory_items)
     }
 }
 
@@ -223,16 +271,31 @@ fn select_json_items(
     json_text: &str,
     items: &serde_json::Map<String, Value>,
 ) -> Result<Vec<InventoryItem>, SourceExecutionError> {
+    select_json_items_with_root(json_text, items).map(|(items, _root)| items)
+}
+
+fn select_json_items_with_root(
+    json_text: &str,
+    items: &serde_json::Map<String, Value>,
+) -> Result<(Vec<InventoryItem>, Value), SourceExecutionError> {
     let root = serde_json::from_str::<Value>(json_text).map_err(|error| {
         SourceExecutionError::Failed(format!("could not parse inventory JSON: {error}"))
     })?;
+    let inventory_items = select_json_items_from_root(&root, items)?;
+    Ok((inventory_items, root))
+}
+
+fn select_json_items_from_root(
+    root: &Value,
+    items: &serde_json::Map<String, Value>,
+) -> Result<Vec<InventoryItem>, SourceExecutionError> {
     let select = required_object_value(items, "select", "executionPlan.inventory.items.select")?;
     let json_path = required_string(
         select,
         "jsonPath",
         "executionPlan.inventory.items.select.jsonPath",
     )?;
-    let selected = resolve_simple_json_path(&root, json_path)
+    let selected = resolve_simple_json_path(root, json_path)
         .map_err(|error| simple_json_path_execution_error("executionPlan.inventory.items.select.jsonPath", error))?
         .ok_or_else(|| {
             SourceExecutionError::Failed(format!(
@@ -247,6 +310,102 @@ fn select_json_items(
     })?;
 
     Ok(array.iter().cloned().map(InventoryItem::Json).collect())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PageCountPagination {
+    page_param: String,
+    size_param: String,
+    size: u64,
+    first_page: u64,
+    total_path: String,
+}
+
+fn parse_page_count_pagination(
+    value: &Value,
+    path: &str,
+) -> Result<PageCountPagination, SourceExecutionError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be a JSON object")))?;
+    let pagination_type = required_string(object, "type", &format!("{path}.type"))?;
+    if pagination_type != "page_count" {
+        return Err(SourceExecutionError::Failed(format!(
+            "{path}.type `{pagination_type}` is not supported by this executor slice"
+        )));
+    }
+
+    let page_param = required_string(object, "pageParam", &format!("{path}.pageParam"))?;
+    let size_param = required_string(object, "sizeParam", &format!("{path}.sizeParam"))?;
+    let size = required_u64(object, "size", &format!("{path}.size"))?;
+    if size == 0 {
+        return Err(SourceExecutionError::Failed(format!(
+            "{path}.size must be greater than 0"
+        )));
+    }
+    let first_page = optional_u64(object, "firstPage", &format!("{path}.firstPage"))?.unwrap_or(1);
+    let total_path = required_string(object, "totalPath", &format!("{path}.totalPath"))?;
+
+    Ok(PageCountPagination {
+        page_param: page_param.to_string(),
+        size_param: size_param.to_string(),
+        size,
+        first_page,
+        total_path: total_path.to_string(),
+    })
+}
+
+fn page_count_pagination_url(base_url: &Url, pagination: &PageCountPagination, page: u64) -> Url {
+    let overrides = [
+        (pagination.size_param.as_str(), pagination.size.to_string()),
+        (pagination.page_param.as_str(), page.to_string()),
+    ];
+    query_param_override_url(base_url, &overrides)
+}
+
+fn query_param_override_url(base_url: &Url, overrides: &[(&str, String)]) -> Url {
+    let mut url = base_url.clone();
+    let existing_pairs = url
+        .query_pairs()
+        .filter(|(key, _value)| {
+            !overrides
+                .iter()
+                .any(|(override_key, _)| key == *override_key)
+        })
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+
+    url.set_query(None);
+    {
+        let mut pairs = url.query_pairs_mut();
+        for (key, value) in existing_pairs {
+            pairs.append_pair(&key, &value);
+        }
+        for (key, value) in overrides {
+            pairs.append_pair(key, value);
+        }
+    }
+    url
+}
+
+fn resolve_json_u64(
+    root: &Value,
+    json_path: &str,
+    path: &str,
+) -> Result<u64, SourceExecutionError> {
+    let selected = resolve_simple_json_path(root, json_path)
+        .map_err(|error| simple_json_path_execution_error(path, error))?
+        .ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "{path} `{json_path}` must resolve to a non-negative integer, but no value was found"
+            ))
+        })?;
+    selected.as_u64().ok_or_else(|| {
+        SourceExecutionError::Failed(format!(
+            "{path} `{json_path}` must resolve to a non-negative integer, but resolved to {}",
+            json_type_label(selected)
+        ))
+    })
 }
 
 fn parse_xml_text_values(xml: &str, element_name: &str) -> Result<Vec<String>, String> {
@@ -688,6 +847,42 @@ fn required_string<'a>(
     Ok(value)
 }
 
+fn required_u64(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<u64, SourceExecutionError> {
+    object.get(key).and_then(Value::as_u64).ok_or_else(|| {
+        SourceExecutionError::Failed(format!("{path} must be a non-negative integer"))
+    })
+}
+
+fn optional_u64(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<Option<u64>, SourceExecutionError> {
+    let Some(value) = object.get(key) else {
+        return Ok(None);
+    };
+    value.as_u64().map(Some).ok_or_else(|| {
+        SourceExecutionError::Failed(format!("{path} must be a non-negative integer"))
+    })
+}
+
+fn resolve_http_candidate_url(raw_url: &str, base_url: &Url) -> Option<String> {
+    let raw_url = raw_url.trim();
+    if raw_url.is_empty() {
+        return None;
+    }
+    let url = base_url.join(raw_url).ok()?;
+    if matches!(url.scheme(), "http" | "https") && url.host_str().is_some() {
+        Some(url.to_string())
+    } else {
+        None
+    }
+}
+
 fn parse_http_url(value: &str, field: &str) -> Result<Url, SourceExecutionError> {
     let url = Url::parse(value.trim()).map_err(|error| {
         SourceExecutionError::Failed(format!(
@@ -879,6 +1074,115 @@ mod tests {
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://example.test/jobs.json"]
+            );
+        });
+    }
+
+    #[test]
+    fn json_inventory_paginates_endpoint_and_resolves_relative_urls() {
+        tauri::async_runtime::block_on(async {
+            let fixture_client = FixtureInventoryHttpClient::new([
+                (
+                    "https://example.test/.search?index=job&size=2&page=1",
+                    Ok(r#"{
+                      "total": 3,
+                      "searchResults": [
+                        {
+                          "title": "Backend Engineer",
+                          "url": "/jobs/backend",
+                          "location": "Berlin"
+                        },
+                        {
+                          "title": "Frontend Engineer",
+                          "url": "/jobs/frontend",
+                          "location": "Hamburg"
+                        }
+                      ]
+                    }"#),
+                ),
+                (
+                    "https://example.test/.search?index=job&size=2&page=2",
+                    Ok(r#"{
+                      "total": 3,
+                      "searchResults": [
+                        {
+                          "title": "Platform Engineer",
+                          "url": "/jobs/platform",
+                          "location": "Mainz"
+                        }
+                      ]
+                    }"#),
+                ),
+            ]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let search_request = search_request();
+            let source = source_with_inventory(
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json!({ "endpointUrl": "https://example.test/.search?index=job" }),
+                json!({
+                    "fetch": {
+                        "url": "{{sourceConfig:endpointUrl}}",
+                        "pagination": {
+                            "type": "page_count",
+                            "pageParam": "page",
+                            "sizeParam": "size",
+                            "size": 2,
+                            "firstPage": 1,
+                            "totalPath": "$.total"
+                        }
+                    },
+                    "parse": { "as": "json" },
+                    "items": {
+                        "select": { "jsonPath": "$.searchResults" }
+                    },
+                    "fields": {
+                        "title": { "jsonPath": "$.title" },
+                        "url": { "jsonPath": "$.url" },
+                        "company": { "template": "{{sourceName}}" },
+                        "locations": [
+                            { "jsonPath": "$.location" }
+                        ]
+                    }
+                }),
+            );
+
+            let candidates = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidates,
+                vec![
+                    SourceCandidate {
+                        title: "Backend Engineer".to_string(),
+                        company: "Fixture Careers".to_string(),
+                        url: "https://example.test/jobs/backend".to_string(),
+                        locations: vec!["Berlin".to_string()],
+                    },
+                    SourceCandidate {
+                        title: "Frontend Engineer".to_string(),
+                        company: "Fixture Careers".to_string(),
+                        url: "https://example.test/jobs/frontend".to_string(),
+                        locations: vec!["Hamburg".to_string()],
+                    },
+                    SourceCandidate {
+                        title: "Platform Engineer".to_string(),
+                        company: "Fixture Careers".to_string(),
+                        url: "https://example.test/jobs/platform".to_string(),
+                        locations: vec!["Mainz".to_string()],
+                    },
+                ]
+            );
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec![
+                    "https://example.test/.search?index=job&size=2&page=1",
+                    "https://example.test/.search?index=job&size=2&page=2",
+                ]
             );
         });
     }
@@ -1267,6 +1571,101 @@ mod tests {
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://api.lever.co/v0/postings/leverdemo?mode=json"]
+            );
+        });
+    }
+
+    #[test]
+    fn magnolia_esmp_job_search_inventory_paginates_relative_urls() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "example_magnolia",
+                "Example Magnolia",
+                "magnolia_esmp_job_search",
+                "endpoint_inventory",
+                json!({
+                    "startUrl": "https://example.test/karriere/jobsuche",
+                    "endpointUrl": "https://example.test/.search?index=job"
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["example_magnolia".to_string()], "engineer")
+                    .await;
+            let fixture_client = FixtureInventoryHttpClient::new([
+                (
+                    "https://example.test/.search?index=job&size=1000&page=1",
+                    Ok(r#"{
+                      "page": 1,
+                      "pageSize": 1000,
+                      "total": 1001,
+                      "searchResults": [
+                        {
+                          "title": "Backend Engineer",
+                          "url": "/karriere/stellenanzeigen/backend",
+                          "location": "Berlin"
+                        },
+                        {
+                          "title": "Frontend Engineer",
+                          "url": "/karriere/stellenanzeigen/frontend",
+                          "location": "Hamburg"
+                        }
+                      ]
+                    }"#),
+                ),
+                (
+                    "https://example.test/.search?index=job&size=1000&page=2",
+                    Ok(r#"{
+                      "page": 2,
+                      "pageSize": 1000,
+                      "total": 1001,
+                      "searchResults": [
+                        {
+                          "title": "Platform Engineer",
+                          "url": "/karriere/stellenanzeigen/platform",
+                          "location": "Mainz"
+                        }
+                      ]
+                    }"#),
+                ),
+            ]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 3);
+            assert_eq!(result.source_runs[0].matched_count, 3);
+            assert_eq!(result.postings.len(), 3);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Backend Engineer");
+            assert_eq!(posting.company, "Example Magnolia");
+            assert_eq!(
+                posting.url,
+                "https://example.test/karriere/stellenanzeigen/backend"
+            );
+            assert_eq!(posting.locations, vec!["Berlin"]);
+            assert_eq!(posting.sources[0].source_key, "example_magnolia");
+            assert_eq!(posting.sources[0].source_name, "Example Magnolia");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec![
+                    "https://example.test/.search?index=job&size=1000&page=1",
+                    "https://example.test/.search?index=job&size=1000&page=2",
+                ]
             );
         });
     }
