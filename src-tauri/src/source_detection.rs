@@ -719,8 +719,8 @@ fn derive_source_identity(
     captures: &HashMap<String, String>,
 ) -> Result<SourceIdentity, String> {
     let fallback_company_name = derive_company_name(input_url);
-    let fallback_key = format!("{}_careers", to_technical_key(&fallback_company_name));
-    let fallback_name = format!("{fallback_company_name} Karriere");
+    let fallback_key = format!("{}", to_technical_key(&fallback_company_name));
+    let fallback_name = format!("{fallback_company_name}");
 
     let mut key_candidates = render_identity_candidates(
         identity
@@ -1186,8 +1186,8 @@ mod tests {
                     }]
                 },
                 "identity": {
-                    "keyCandidates": ["{{capture:tenant|technicalKey}}_careers"],
-                    "nameCandidates": ["{{capture:tenant|titleCase}} Karriere"]
+                    "keyCandidates": ["{{capture:tenant|technicalKey}}"],
+                    "nameCandidates": ["{{capture:tenant|titleCase}}"]
                 },
                 "accessPaths": [{
                     "key": "endpoint_inventory",
@@ -1219,12 +1219,12 @@ mod tests {
             assert_eq!(result.status, SourceDetectionStatus::Detected);
             assert_eq!(result.profile_key.as_deref(), Some("example_board"));
             assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
-            assert_eq!(result.key.as_deref(), Some("acme_careers"));
-            assert_eq!(result.name.as_deref(), Some("Acme Karriere"));
-            assert_eq!(result.key_candidates, vec!["acme_careers"]);
-            assert_eq!(result.name_candidates, vec!["Acme Karriere"]);
-            assert_eq!(result.matches[0].key_candidates, vec!["acme_careers"]);
-            assert_eq!(result.matches[0].name_candidates, vec!["Acme Karriere"]);
+            assert_eq!(result.key.as_deref(), Some("acme"));
+            assert_eq!(result.name.as_deref(), Some("Acme"));
+            assert_eq!(result.key_candidates, vec!["acme"]);
+            assert_eq!(result.name_candidates, vec!["Acme"]);
+            assert_eq!(result.matches[0].key_candidates, vec!["acme"]);
+            assert_eq!(result.matches[0].name_candidates, vec!["Acme"]);
             let source_config = result.source_config.unwrap();
             assert_eq!(source_config["tenant"], "acme");
             assert_eq!(
@@ -1484,8 +1484,8 @@ mod tests {
             .unwrap();
 
             assert_eq!(result.status, SourceDetectionStatus::Detected);
-            assert_eq!(result.key.as_deref(), Some("focused_careers"));
-            assert_eq!(result.name.as_deref(), Some("Focused Karriere"));
+            assert_eq!(result.key.as_deref(), Some("focused"));
+            assert_eq!(result.name.as_deref(), Some("Focused"));
             let source_config = result.source_config.unwrap();
             assert_eq!(
                 source_config["startUrl"],

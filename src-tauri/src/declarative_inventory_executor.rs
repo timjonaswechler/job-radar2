@@ -676,9 +676,9 @@ mod tests {
     #[test]
     fn inventory_template_context_uses_shared_renderer_and_filters() {
         let source = SourceExecutionSource {
-            key: "focused_energy_careers".to_string(),
+            key: "focused_energy".to_string(),
             adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-            name: "Focused Energy Karriere".to_string(),
+            name: "Focused Energy".to_string(),
             source_config: json!({
                 "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
             }),
@@ -704,14 +704,14 @@ mod tests {
         };
 
         let rendered = render_template(
-            "{{sourceKey}}|{{sourceConfig:startUrl}}|{{itemText}}|{{capture:title|urlDecode|slugToTitle}}|{{sourceName|stripCareerSuffix}}",
+            "{{sourceKey}}|{{sourceConfig:startUrl}}|{{itemText}}|{{capture:title|urlDecode|slugToTitle}}|{{sourceName}}",
             &context,
         )
         .unwrap();
 
         assert_eq!(
             rendered,
-            "focused_energy_careers|https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true|https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/|Senior Rust Engineer|Focused Energy"
+            "focused_energy|https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true|https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/|Senior Rust Engineer|Focused Energy"
         );
     }
 
@@ -769,15 +769,15 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             write_profile_backed_source(
                 temp_dir.path(),
-                "example_careers",
-                "Example Careers",
+                "example",
+                "Example",
                 DECLARATIVE_SITEMAP_ADAPTER_KEY,
                 xml_loc_inventory(),
                 inventory_source_config_schema(DECLARATIVE_SITEMAP_ADAPTER_KEY),
                 json!({ "url": "https://example.com/sitemap.xml" }),
             );
             let search_request =
-                create_search_request(&pool, vec!["example_careers".to_string()], "laser").await;
+                create_search_request(&pool, vec!["example".to_string()], "laser").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://example.com/sitemap.xml",
                 Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -831,8 +831,8 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             write_builtin_profile_source(
                 temp_dir.path(),
-                "schott_careers",
-                "SCHOTT Karriere",
+                "schott_ag",
+                "SCHOTT AG",
                 "successfactors",
                 "sitemap_inventory",
                 json!({
@@ -841,7 +841,7 @@ mod tests {
                 }),
             );
             let search_request =
-                create_search_request(&pool, vec!["schott_careers".to_string()], "laser").await;
+                create_search_request(&pool, vec!["schott_ag".to_string()], "laser").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://join.schott.com/sitemap.xml",
                 Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -875,14 +875,14 @@ mod tests {
             assert_eq!(result.postings.len(), 1);
             let posting = &result.postings[0];
             assert_eq!(posting.title, "Laser Engineer");
-            assert_eq!(posting.company, "SCHOTT");
+            assert_eq!(posting.company, "SCHOTT AG");
             assert_eq!(
                 posting.url,
                 "https://join.schott.com/job/Mainz-Laser-Engineer-55122/"
             );
             assert_eq!(posting.locations, vec!["Mainz"]);
-            assert_eq!(posting.sources[0].source_key, "schott_careers");
-            assert_eq!(posting.sources[0].source_name, "SCHOTT Karriere");
+            assert_eq!(posting.sources[0].source_key, "schott_ag");
+            assert_eq!(posting.sources[0].source_name, "SCHOTT AG");
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://join.schott.com/sitemap.xml"]
@@ -897,8 +897,8 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             write_builtin_profile_source(
                 temp_dir.path(),
-                "focused_energy_careers",
-                "Focused Energy Karriere",
+                "focused_energy",
+                "Focused Energy",
                 "ashby",
                 "endpoint_inventory",
                 json!({
@@ -906,12 +906,8 @@ mod tests {
                     "companyWebsite": "https://focused-energy.co"
                 }),
             );
-            let search_request = create_search_request(
-                &pool,
-                vec!["focused_energy_careers".to_string()],
-                "photonics",
-            )
-            .await;
+            let search_request =
+                create_search_request(&pool, vec!["focused_energy".to_string()], "photonics").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
                 Ok(r#"{
@@ -945,11 +941,11 @@ mod tests {
             assert_eq!(result.postings.len(), 1);
             let posting = &result.postings[0];
             assert_eq!(posting.title, "Photonics Engineer");
-            assert_eq!(posting.company, "Focused Energy Karriere");
+            assert_eq!(posting.company, "Focused Energy");
             assert_eq!(posting.url, "https://jobs.ashbyhq.com/focused/abc");
             assert_eq!(posting.locations, vec!["Darmstadt"]);
-            assert_eq!(posting.sources[0].source_key, "focused_energy_careers");
-            assert_eq!(posting.sources[0].source_name, "Focused Energy Karriere");
+            assert_eq!(posting.sources[0].source_key, "focused_energy");
+            assert_eq!(posting.sources[0].source_name, "Focused Energy");
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"]
@@ -964,19 +960,15 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             write_profile_backed_source(
                 temp_dir.path(),
-                "focused_energy_careers",
-                "Focused Energy Karriere",
+                "focused_energy",
+                "Focused Energy",
                 DECLARATIVE_HTTP_ADAPTER_KEY,
                 json_jobs_inventory("{{sourceConfig:startUrl}}"),
                 inventory_source_config_schema(DECLARATIVE_HTTP_ADAPTER_KEY),
                 json!({ "startUrl": "https://example.com/jobs.json" }),
             );
-            let search_request = create_search_request(
-                &pool,
-                vec!["focused_energy_careers".to_string()],
-                "photonics",
-            )
-            .await;
+            let search_request =
+                create_search_request(&pool, vec!["focused_energy".to_string()], "photonics").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://example.com/jobs.json",
                 Ok(r#"{
@@ -1057,15 +1049,15 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             write_profile_backed_source(
                 temp_dir.path(),
-                "broken_careers",
-                "Broken Careers",
+                "broken",
+                "Broken",
                 DECLARATIVE_SITEMAP_ADAPTER_KEY,
                 xml_loc_inventory(),
                 inventory_source_config_schema(DECLARATIVE_SITEMAP_ADAPTER_KEY),
                 json!({ "url": "https://broken.example/sitemap.xml" }),
             );
             let search_request =
-                create_search_request(&pool, vec!["broken_careers".to_string()], "engineer").await;
+                create_search_request(&pool, vec!["broken".to_string()], "engineer").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://broken.example/sitemap.xml",
                 Err("connection refused"),
@@ -1196,7 +1188,7 @@ mod tests {
             "fields": {
                 "title": { "template": "{{capture:title|urlDecode|slugToTitle}}" },
                 "url": { "template": "{{itemText}}" },
-                "company": { "template": "{{sourceName|stripCareerSuffix}}" },
+                "company": { "template": "{{sourceName}}" },
                 "locations": [
                     { "template": "{{capture:location|urlDecode|slugToTitle}}" }
                 ]
