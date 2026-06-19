@@ -7,28 +7,148 @@
     "phases": ["http"],
     "required": [
       {
-        "htmlRegex": "(?i)https?://jobs\\.lever\\.co/[a-z0-9][^\\\"'<>\\s]*(?:/[a-z0-9][^\\\"'<>\\s]*)?"
+        "htmlRegex": "(?i)https?://(?:jobs|api)(?:\\.eu)?\\.lever\\.co/"
       }
+    ],
+    "anyOf": [
+      [
+        {
+          "htmlRegex": "(?i)https?://(?:jobs\\.lever\\.co/|api\\.lever\\.co/v0/postings/)([a-z0-9][a-z0-9_-]*)(?:(?:/[^\\\"'<>\\s]*)|(?:\\?[^\\\"'<>\\s]*)|[\\\"'<>\\s]|$)",
+          "captureAs": "boardSlug"
+        },
+        {
+          "htmlRegex": "(?i)https?://(?:jobs|api)\\.(lever\\.co)/",
+          "captureAs": "leverGlobalDomain"
+        }
+      ],
+      [
+        {
+          "htmlRegex": "(?i)https?://(?:jobs\\.eu\\.lever\\.co/|api\\.eu\\.lever\\.co/v0/postings/)([a-z0-9][a-z0-9_-]*)(?:(?:/[^\\\"'<>\\s]*)|(?:\\?[^\\\"'<>\\s]*)|[\\\"'<>\\s]|$)",
+          "captureAs": "boardSlug"
+        },
+        {
+          "htmlRegex": "(?i)https?://(?:jobs|api)\\.(eu\\.lever\\.co)/",
+          "captureAs": "leverEuDomain"
+        }
+      ]
+    ]
+  },
+  "identity": {
+    "keyCandidates": [
+      "{{capture:boardSlug|technicalKey}}"
+    ],
+    "nameCandidates": [
+      "{{capture:boardSlug|titleCase}}"
     ]
   },
   "accessPaths": [
     {
       "key": "endpoint_inventory",
+      "name": "Lever Global postings API",
       "adapterKey": "declarative_endpoint_inventory",
       "availability": {
+        "requiredCaptures": ["boardSlug", "leverGlobalDomain"],
         "sourceConfig": {
-          "startUrl": "{{inputUrl}}"
+          "boardSlug": "{{capture:boardSlug}}"
         }
       },
       "sourceConfigSchema": {
         "type": "object",
-        "required": ["startUrl"],
+        "required": ["boardSlug"],
+        "additionalProperties": false,
         "properties": {
-          "startUrl": {
+          "boardSlug": {
             "type": "string",
-            "format": "uri",
-            "title": "Start-URL"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "title": "Lever site name"
           }
+        }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "https://api.lever.co/v0/postings/{{sourceConfig:boardSlug}}?mode=json"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "items": {
+          "select": {
+            "jsonPath": "$"
+          }
+        },
+        "fields": {
+          "title": {
+            "jsonPath": "$.text"
+          },
+          "url": {
+            "jsonPath": "$.hostedUrl"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": [
+            {
+              "jsonPath": "$.categories.allLocations"
+            },
+            {
+              "jsonPath": "$.categories.location"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "key": "eu_endpoint_inventory",
+      "name": "Lever EU postings API",
+      "adapterKey": "declarative_endpoint_inventory",
+      "availability": {
+        "requiredCaptures": ["boardSlug", "leverEuDomain"],
+        "sourceConfig": {
+          "boardSlug": "{{capture:boardSlug}}"
+        }
+      },
+      "sourceConfigSchema": {
+        "type": "object",
+        "required": ["boardSlug"],
+        "additionalProperties": false,
+        "properties": {
+          "boardSlug": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "title": "Lever EU site name"
+          }
+        }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "https://api.eu.lever.co/v0/postings/{{sourceConfig:boardSlug}}?mode=json"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "items": {
+          "select": {
+            "jsonPath": "$"
+          }
+        },
+        "fields": {
+          "title": {
+            "jsonPath": "$.text"
+          },
+          "url": {
+            "jsonPath": "$.hostedUrl"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": [
+            {
+              "jsonPath": "$.categories.allLocations"
+            },
+            {
+              "jsonPath": "$.categories.location"
+            }
+          ]
         }
       }
     }
