@@ -623,16 +623,12 @@ mod tests {
         search_run_model::{
             DefaultSourceExecutor, SearchRunService, SearchRunStatus, SourceRunStatus,
         },
-        source_model::{
-            create_source, create_system_profile, CreateSourceInput, CreateSystemProfileInput,
-            SourceStatus,
-        },
         source_registry::ResolvedSelectedAccessPath,
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use sqlx::SqlitePool;
-    use std::sync::Mutex;
+    use std::{path::Path, sync::Mutex};
 
     struct FixtureInventoryHttpClient {
         responses: HashMap<String, Result<String, String>>,
@@ -720,7 +716,7 @@ mod tests {
     }
 
     #[test]
-    fn json_inventory_executes_from_resolved_execution_plan_without_system_profile() {
+    fn json_inventory_executes_from_resolved_execution_plan() {
         tauri::async_runtime::block_on(async {
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://example.test/jobs.json",
@@ -767,19 +763,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn xml_inventory_source_runs_through_search_run_with_system_profile() {
+    fn xml_inventory_source_runs_through_search_run_with_source_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_id = create_inventory_source(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_profile_backed_source(
+                temp_dir.path(),
+                "example_careers",
+                "Example Careers",
                 DECLARATIVE_SITEMAP_ADAPTER_KEY,
                 xml_loc_inventory(),
+                inventory_source_config_schema(DECLARATIVE_SITEMAP_ADAPTER_KEY),
                 json!({ "url": "https://example.com/sitemap.xml" }),
-                "Example Careers",
-            )
-            .await;
-            let search_request = create_search_request(&pool, vec![source_id], "laser").await;
+            );
+            let search_request =
+                create_search_request(&pool, vec!["example_careers".to_string()], "laser").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://example.com/sitemap.xml",
                 Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -793,7 +791,6 @@ mod tests {
                 </urlset>"#),
             )]);
             let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -828,12 +825,23 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn successfactors_builtin_inventory_runs_schott_sitemap_fixture_through_central_runtime() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_id = create_builtin_successfactors_source(&pool).await;
-            let search_request = create_search_request(&pool, vec![source_id], "laser").await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "schott_careers",
+                "SCHOTT Karriere",
+                "successfactors",
+                "sitemap_inventory",
+                json!({
+                    "url": "https://join.schott.com/sitemap.xml",
+                    "recursive": false
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["schott_careers".to_string()], "laser").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://join.schott.com/sitemap.xml",
                 Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -847,7 +855,6 @@ mod tests {
                 </urlset>"#),
             )]);
             let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -884,12 +891,27 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn ashby_json_inventory_source_runs_through_search_run_with_system_profile() {
+    fn ashby_json_inventory_source_runs_through_search_run_with_source_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_id = create_builtin_ashby_source(&pool).await;
-            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "focused_energy_careers",
+                "Focused Energy Karriere",
+                "ashby",
+                "endpoint_inventory",
+                json!({
+                    "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
+                    "companyWebsite": "https://focused-energy.co"
+                }),
+            );
+            let search_request = create_search_request(
+                &pool,
+                vec!["focused_energy_careers".to_string()],
+                "photonics",
+            )
+            .await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
                 Ok(r#"{
@@ -903,7 +925,6 @@ mod tests {
                 }"#),
             )]);
             let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -937,19 +958,25 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn json_inventory_reports_profile_author_error_when_items_path_is_not_array() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_id = create_inventory_source(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_profile_backed_source(
+                temp_dir.path(),
+                "focused_energy_careers",
+                "Focused Energy Karriere",
                 DECLARATIVE_HTTP_ADAPTER_KEY,
                 json_jobs_inventory("{{sourceConfig:startUrl}}"),
+                inventory_source_config_schema(DECLARATIVE_HTTP_ADAPTER_KEY),
                 json!({ "startUrl": "https://example.com/jobs.json" }),
-                "Focused Energy Karriere",
+            );
+            let search_request = create_search_request(
+                &pool,
+                vec!["focused_energy_careers".to_string()],
+                "photonics",
             )
             .await;
-            let search_request = create_search_request(&pool, vec![source_id], "photonics").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://example.com/jobs.json",
                 Ok(r#"{
@@ -961,7 +988,6 @@ mod tests {
                 }"#),
             )]);
             let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -982,69 +1008,69 @@ mod tests {
             assert_eq!(result.source_runs[0].matched_count, 0);
             let error = result.source_runs[0].error.as_deref().unwrap();
             assert!(error.contains(
-                "definition.inventory.items.select.jsonPath `$.jobs` must resolve to an array"
+                "executionPlan.inventory.items.select.jsonPath `$.jobs` must resolve to an array"
             ));
             assert!(error.contains("resolved to object"));
         });
     }
 
     #[test]
-    fn json_inventory_validation_rejects_wildcards_to_document_simple_dot_jsonpath_scope() {
+    fn json_inventory_execution_rejects_wildcards_to_document_simple_dot_jsonpath_scope() {
         tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
             let mut inventory = json_jobs_inventory("{{sourceConfig:startUrl}}");
             inventory["items"]["select"]["jsonPath"] = json!("$.jobs[*]");
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.com/jobs.json",
+                Ok(r#"{ "jobs": [] }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let search_request = search_request();
+            let source = source_with_inventory(
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json!({ "startUrl": "https://example.com/jobs.json" }),
+                inventory,
+            );
 
-            let error = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "wildcard_inventory".to_string(),
-                    name: "Wildcard Inventory".to_string(),
-                    description: None,
-                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "fixture" }] },
-                        "inventory": inventory
-                    }),
-                    source_config_schema: inventory_source_config_schema(
-                        DECLARATIVE_HTTP_ADAPTER_KEY,
-                    ),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap_err();
+            let error = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap_err();
 
-            assert!(error.contains(
-                "definition.inventory.items.select.jsonPath `$.jobs[*]` is not supported"
+            let SourceExecutionError::Failed(message) = error else {
+                panic!("expected failed source execution");
+            };
+            assert!(message.contains(
+                "executionPlan.inventory.items.select.jsonPath `$.jobs[*]` is not supported"
             ));
-            assert!(error.contains("simple dot JSONPath only"));
-            assert!(error.contains("filters and wildcards are not supported"));
+            assert!(message.contains("simple dot JSONPath only"));
+            assert!(message.contains("filters and wildcards are not supported"));
         });
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn xml_inventory_fetch_errors_become_source_run_errors() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_id = create_inventory_source(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_profile_backed_source(
+                temp_dir.path(),
+                "broken_careers",
+                "Broken Careers",
                 DECLARATIVE_SITEMAP_ADAPTER_KEY,
                 xml_loc_inventory(),
+                inventory_source_config_schema(DECLARATIVE_SITEMAP_ADAPTER_KEY),
                 json!({ "url": "https://broken.example/sitemap.xml" }),
-                "Broken Careers",
-            )
-            .await;
-            let search_request = create_search_request(&pool, vec![source_id], "engineer").await;
+            );
+            let search_request =
+                create_search_request(&pool, vec!["broken_careers".to_string()], "engineer").await;
             let fixture_client = FixtureInventoryHttpClient::new([(
                 "https://broken.example/sitemap.xml",
                 Err("connection refused"),
             )]);
             let executor = DeclarativeInventoryExecutor::new(fixture_client);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -1077,49 +1103,25 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn declarative_source_without_inventory_fails_source_run_clearly() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let profile = create_system_profile(
-                &pool,
-                CreateSystemProfileInput {
-                    key: "inventory_missing".to_string(),
-                    name: "Inventory Missing".to_string(),
-                    description: None,
-                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-                    definition_schema_version: 1,
-                    definition: json!({
-                        "detect": { "required": [{ "htmlContains": "fixture" }] }
-                    }),
-                    source_config_schema: inventory_source_config_schema(
-                        DECLARATIVE_HTTP_ADAPTER_KEY,
-                    ),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-            let source = create_source(
-                &pool,
-                CreateSourceInput {
-                    key: "inventory_missing_source".to_string(),
-                    adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-                    system_profile_id: Some(profile.id),
-                    browser_profile_id: None,
-                    name: "Inventory Missing".to_string(),
-                    description: None,
-                    source_config: json!({ "startUrl": "https://example.com/jobs.json" }),
-                    status: SourceStatus::Active,
-                    validation_error: None,
-                },
-            )
-            .await
-            .unwrap();
-            let search_request = create_search_request(&pool, vec![source.id], "engineer").await;
-            let executor = DeclarativeInventoryExecutor::new(FixtureInventoryHttpClient::new([]));
             let temp_dir = tempfile::tempdir().unwrap();
+            write_profile_backed_source_without_inventory(
+                temp_dir.path(),
+                "inventory_missing_source",
+                "Inventory Missing",
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                inventory_source_config_schema(DECLARATIVE_HTTP_ADAPTER_KEY),
+                json!({ "startUrl": "https://example.com/jobs.json" }),
+            );
+            let search_request = create_search_request(
+                &pool,
+                vec!["inventory_missing_source".to_string()],
+                "engineer",
+            )
+            .await;
+            let executor = DeclarativeInventoryExecutor::new(FixtureInventoryHttpClient::new([]));
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -1140,7 +1142,7 @@ mod tests {
             assert_eq!(result.source_runs[0].matched_count, 0);
             assert_eq!(
                 result.source_runs[0].error.as_deref(),
-                Some("definition.inventory must be a JSON object")
+                Some("executionPlan.inventory must be a JSON object for source inventory_missing_source")
             );
             assert!(executor.client.requested_urls().is_empty());
         });
@@ -1240,151 +1242,113 @@ mod tests {
         }
     }
 
-    async fn create_inventory_source(
-        pool: &SqlitePool,
+    fn write_profile_backed_source(
+        app_data_dir: &Path,
+        source_key: &str,
+        source_name: &str,
         adapter_key: &str,
         inventory: Value,
+        source_config_schema: Value,
         source_config: Value,
+    ) {
+        write_profile_backed_source_inner(
+            app_data_dir,
+            source_key,
+            source_name,
+            adapter_key,
+            Some(inventory),
+            source_config_schema,
+            source_config,
+        );
+    }
+
+    fn write_profile_backed_source_without_inventory(
+        app_data_dir: &Path,
+        source_key: &str,
         source_name: &str,
-    ) -> i64 {
-        let profile = create_system_profile(
-            pool,
-            CreateSystemProfileInput {
-                key: format!("{}_profile", adapter_key),
-                name: format!("{source_name} Profil"),
-                description: None,
-                adapter_key: adapter_key.to_string(),
-                definition_schema_version: 1,
-                definition: json!({
-                    "detect": { "required": [{ "htmlContains": "fixture" }] },
-                    "inventory": inventory
-                }),
-                source_config_schema: inventory_source_config_schema(adapter_key),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: format!("{}_source", adapter_key),
-                adapter_key: adapter_key.to_string(),
-                system_profile_id: Some(profile.id),
-                browser_profile_id: None,
-                name: source_name.to_string(),
-                description: None,
-                source_config,
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
+        adapter_key: &str,
+        source_config_schema: Value,
+        source_config: Value,
+    ) {
+        write_profile_backed_source_inner(
+            app_data_dir,
+            source_key,
+            source_name,
+            adapter_key,
+            None,
+            source_config_schema,
+            source_config,
+        );
     }
 
-    async fn create_builtin_successfactors_source(pool: &SqlitePool) -> i64 {
-        let document: Value = serde_json::from_str(include_str!(
-            "../../system-profiles/builtin/successfactors.json"
-        ))
-        .unwrap();
-        assert!(
-            document.pointer("/definition/inventory").is_some(),
-            "SuccessFactors built-in profile must define definition.inventory"
+    fn write_profile_backed_source_inner(
+        app_data_dir: &Path,
+        source_key: &str,
+        source_name: &str,
+        adapter_key: &str,
+        inventory: Option<Value>,
+        source_config_schema: Value,
+        source_config: Value,
+    ) {
+        let profile_key = format!("{source_key}_profile");
+        let mut access_path = json!({
+            "key": "inventory",
+            "adapterKey": adapter_key,
+            "sourceConfigSchema": source_config_schema
+        });
+        if let Some(inventory) = inventory {
+            access_path["inventory"] = inventory;
+        }
+        write_json(
+            app_data_dir.join(format!("source-profiles/{profile_key}.json")),
+            &json!({
+                "schemaVersion": 1,
+                "key": profile_key,
+                "name": format!("{source_name} Profile"),
+                "kind": "generic",
+                "accessPaths": [access_path]
+            })
+            .to_string(),
         );
-
-        let profile = create_system_profile(
-            pool,
-            CreateSystemProfileInput {
-                key: document["key"].as_str().unwrap().to_string(),
-                name: document["name"].as_str().unwrap().to_string(),
-                description: document["description"].as_str().map(str::to_string),
-                adapter_key: document["adapterKey"].as_str().unwrap().to_string(),
-                definition_schema_version: document["definitionSchemaVersion"].as_i64().unwrap(),
-                definition: document["definition"].clone(),
-                source_config_schema: document["sourceConfigSchema"].clone(),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: "schott_careers".to_string(),
-                adapter_key: DECLARATIVE_SITEMAP_ADAPTER_KEY.to_string(),
-                system_profile_id: Some(profile.id),
-                browser_profile_id: None,
-                name: "SCHOTT Karriere".to_string(),
-                description: None,
-                source_config: json!({
-                    "url": "https://join.schott.com/sitemap.xml",
-                    "recursive": false
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
+        write_builtin_profile_source(
+            app_data_dir,
+            source_key,
+            source_name,
+            &profile_key,
+            "inventory",
+            source_config,
+        );
     }
 
-    async fn create_builtin_ashby_source(pool: &SqlitePool) -> i64 {
-        let document: Value =
-            serde_json::from_str(include_str!("../../system-profiles/builtin/ashby.json")).unwrap();
-        assert!(
-            document.pointer("/definition/inventory").is_some(),
-            "Ashby built-in profile must define definition.inventory"
+    fn write_builtin_profile_source(
+        app_data_dir: &Path,
+        source_key: &str,
+        source_name: &str,
+        profile_key: &str,
+        path_key: &str,
+        source_config: Value,
+    ) {
+        write_json(
+            app_data_dir.join(format!("sources/{source_key}.json")),
+            &json!({
+                "schemaVersion": 1,
+                "key": source_key,
+                "name": source_name,
+                "status": "active",
+                "sourceConfig": source_config,
+                "selectedAccessPath": {
+                    "type": "profile",
+                    "profileKey": profile_key,
+                    "pathKey": path_key
+                }
+            })
+            .to_string(),
         );
-
-        let profile = create_system_profile(
-            pool,
-            CreateSystemProfileInput {
-                key: document["key"].as_str().unwrap().to_string(),
-                name: document["name"].as_str().unwrap().to_string(),
-                description: document["description"].as_str().map(str::to_string),
-                adapter_key: document["adapterKey"].as_str().unwrap().to_string(),
-                definition_schema_version: document["definitionSchemaVersion"].as_i64().unwrap(),
-                definition: document["definition"].clone(),
-                source_config_schema: document["sourceConfigSchema"].clone(),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: "focused_energy_careers".to_string(),
-                adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
-                system_profile_id: Some(profile.id),
-                browser_profile_id: None,
-                name: "Focused Energy Karriere".to_string(),
-                description: None,
-                source_config: json!({
-                    "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
-                    "companyWebsite": "https://focused-energy.co"
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
     }
 
     async fn create_search_request(
         pool: &SqlitePool,
-        source_ids: Vec<i64>,
+        source_keys: Vec<String>,
         include_text: &str,
     ) -> SearchRequest {
         let running_search_runs = RunningSearchRuns::default();
@@ -1395,7 +1359,7 @@ mod tests {
                 exclude_rules: vec![],
                 locations: vec![],
                 radius_km: None,
-                source_keys: source_ids.into_iter().map(|id| id.to_string()).collect(),
+                source_keys,
             })
             .await
             .unwrap()
@@ -1450,6 +1414,14 @@ mod tests {
                 manual_release: None,
             },
         }
+    }
+
+    fn write_json(path: impl AsRef<Path>, contents: &str) {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, contents).unwrap();
     }
 
     async fn migrated_pool() -> SqlitePool {

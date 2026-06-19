@@ -539,14 +539,8 @@ fn db_error(error: sqlx::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        search_request_model::{
-            CreateSearchRequestInput, RunningSearchRuns, SearchRequestStatus, SearchRuleInput,
-        },
-        source_model::{
-            create_browser_profile, create_source, BrowserProfile, CreateBrowserProfileInput,
-            CreateSourceInput, Source, SourceStatus,
-        },
+    use crate::search_request_model::{
+        CreateSearchRequestInput, RunningSearchRuns, SearchRequestStatus, SearchRuleInput,
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -642,39 +636,6 @@ mod tests {
                     &format!("https://example.test/{}/laser", input.source.key),
                     &[],
                 )])
-            })
-        }
-    }
-
-    struct BrowserProfileCapturingExecutor {
-        response: Result<Vec<SourceCandidate>, SourceExecutionError>,
-        seen_browser_profiles: Mutex<Vec<(String, Option<(i64, String)>)>>,
-    }
-
-    impl BrowserProfileCapturingExecutor {
-        fn new(response: Result<Vec<SourceCandidate>, SourceExecutionError>) -> Self {
-            Self {
-                response,
-                seen_browser_profiles: Mutex::new(Vec::new()),
-            }
-        }
-
-        fn seen_browser_profiles(&self) -> Vec<(String, Option<(i64, String)>)> {
-            self.seen_browser_profiles.lock().unwrap().clone()
-        }
-    }
-
-    impl SourceExecutor for BrowserProfileCapturingExecutor {
-        fn execute<'a>(
-            &'a self,
-            input: SourceExecutionInput<'a>,
-        ) -> BoxedSourceExecutionFuture<'a> {
-            Box::pin(async move {
-                self.seen_browser_profiles
-                    .lock()
-                    .unwrap()
-                    .push((input.source.key.clone(), None));
-                self.response.clone()
             })
         }
     }
@@ -797,198 +758,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn source_execution_input_includes_active_browser_profile_for_source() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let browser_profile =
-                create_test_browser_profile(&pool, "manual_release_runtime", SourceStatus::Active)
-                    .await;
-            let source = create_browser_inventory_test_source(
-                &pool,
-                "browser_runtime_source",
-                "Browser Runtime Source",
-                browser_profile.id,
-            )
-            .await;
-            let search_request = create_test_search_request(
-                &pool,
-                vec![source.key.clone()],
-                vec![text_rule("engineer")],
-                vec![],
-            )
-            .await;
-            let temp_dir = tempfile::tempdir().unwrap();
-            let executor = BrowserProfileCapturingExecutor::new(Ok(vec![candidate(
-                "Browser Engineer",
-                "ACME",
-                "https://example.test/browser",
-                &[],
-            )]));
-            let running_search_runs = RunningSearchRuns::default();
-
-            let result = SearchRunService::new(
-                &pool,
-                &running_search_runs,
-                &executor,
-                temp_dir.path().join("search-run-result.json"),
-                temp_dir.path(),
-            )
-            .run(search_request.id)
-            .await
-            .unwrap();
-
-            assert_eq!(result.status, SearchRunStatus::Completed);
-            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
-            assert_eq!(
-                executor.seen_browser_profiles(),
-                vec![(
-                    source.key.clone(),
-                    Some((browser_profile.id, "manual_release_runtime".to_string()))
-                )]
-            );
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn missing_browser_profile_marks_source_run_failed_and_continues() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let browser_profile = create_test_browser_profile(
-                &pool,
-                "manual_release_before_missing",
-                SourceStatus::Active,
-            )
-            .await;
-            let missing_profile_source = create_browser_inventory_test_source(
-                &pool,
-                "missing_profile_source",
-                "Missing Profile Source",
-                browser_profile.id,
-            )
-            .await;
-            let healthy_source = create_browser_inventory_test_source(
-                &pool,
-                "healthy_profile_source",
-                "Healthy Profile Source",
-                browser_profile.id,
-            )
-            .await;
-            set_source_browser_profile_id_without_foreign_key_check(
-                &pool,
-                missing_profile_source.id,
-                999_999,
-            )
-            .await;
-            let search_request = create_test_search_request(
-                &pool,
-                vec![
-                    missing_profile_source.key.clone(),
-                    healthy_source.key.clone(),
-                ],
-                vec![text_rule("engineer")],
-                vec![],
-            )
-            .await;
-            let temp_dir = tempfile::tempdir().unwrap();
-            let executor = FixtureSourceExecutor::new([(
-                healthy_source.key.clone(),
-                Ok(vec![candidate(
-                    "Healthy Engineer",
-                    "ACME",
-                    "https://example.test/healthy",
-                    &[],
-                )]),
-            )]);
-            let running_search_runs = RunningSearchRuns::default();
-
-            let result = SearchRunService::new(
-                &pool,
-                &running_search_runs,
-                &executor,
-                temp_dir.path().join("search-run-result.json"),
-                temp_dir.path(),
-            )
-            .run(search_request.id)
-            .await
-            .unwrap();
-
-            assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
-            assert_eq!(result.source_runs[0].source_key, "missing_profile_source");
-            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
-            let error = result.source_runs[0].error.as_deref().unwrap();
-            assert!(error.contains("browserProfileId 999999"));
-            assert!(error.contains("source missing_profile_source"));
-            assert_eq!(result.source_runs[1].source_key, "healthy_profile_source");
-            assert_eq!(result.source_runs[1].status, SourceRunStatus::Completed);
-            assert_eq!(result.postings.len(), 1);
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn inactive_browser_profile_marks_source_run_failed_with_clear_error() {
-        tauri::async_runtime::block_on(async {
-            let pool = migrated_pool().await;
-            let browser_profile = create_test_browser_profile(
-                &pool,
-                "manual_release_disabled",
-                SourceStatus::Disabled,
-            )
-            .await;
-            let source = create_browser_inventory_test_source(
-                &pool,
-                "disabled_profile_source",
-                "Disabled Profile Source",
-                browser_profile.id,
-            )
-            .await;
-            let search_request = create_test_search_request(
-                &pool,
-                vec![source.key.clone()],
-                vec![text_rule("engineer")],
-                vec![],
-            )
-            .await;
-            let temp_dir = tempfile::tempdir().unwrap();
-            let executor = FixtureSourceExecutor::new(Vec::<(
-                &str,
-                Result<Vec<SourceCandidate>, SourceExecutionError>,
-            )>::new());
-            let running_search_runs = RunningSearchRuns::default();
-
-            let result = SearchRunService::new(
-                &pool,
-                &running_search_runs,
-                &executor,
-                temp_dir.path().join("search-run-result.json"),
-                temp_dir.path(),
-            )
-            .run(search_request.id)
-            .await
-            .unwrap();
-
-            assert_eq!(result.status, SearchRunStatus::Failed);
-            assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
-            let expected_error = format!(
-                "browserProfileId {} for source disabled_profile_source must reference an active browser profile",
-                browser_profile.id
-            );
-            assert_eq!(
-                result.source_runs[0].error.as_deref(),
-                Some(expected_error.as_str())
-            );
-            assert!(result.postings.is_empty());
-        });
-    }
-
-    #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys =
+                write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -996,7 +771,6 @@ mod tests {
                 vec![text_rule("praktikum"), regex_rule("Werkstudent")],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let result_path = temp_dir.path().join("search-run-result.json");
             let executor = FixtureSourceExecutor::new([(
                 source_keys[0].clone(),
@@ -1062,11 +836,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn normalizes_source_candidates_before_matching_and_merging() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys =
+                write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -1074,7 +849,6 @@ mod tests {
                 vec![],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([(
                 source_keys[0].clone(),
                 Ok(vec![
@@ -1119,15 +893,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys = write_test_sources(
+                temp_dir.path(),
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
-            )
-            .await;
+            );
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -1135,7 +908,6 @@ mod tests {
                 vec![],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([
                 (
                     source_keys[0].clone(),
@@ -1240,15 +1012,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn partial_source_failure_completes_with_errors_and_records_failed_source_error() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys = write_test_sources(
+                temp_dir.path(),
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
-            )
-            .await;
+            );
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -1256,7 +1027,6 @@ mod tests {
                 vec![],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let result_path = temp_dir.path().join("search-run-result.json");
             let executor = FixtureSourceExecutor::new([
                 (
@@ -1308,15 +1078,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn total_source_failure_produces_failed_result_without_postings() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(
-                &pool,
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys = write_test_sources(
+                temp_dir.path(),
                 &[("source_one", "Source One"), ("source_two", "Source Two")],
-            )
-            .await;
+            );
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -1324,7 +1093,6 @@ mod tests {
                 vec![],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let executor = FixtureSourceExecutor::new([
                 (
                     source_keys[0].clone(),
@@ -1358,11 +1126,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn each_run_overwrites_search_run_result_json() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let source_keys = create_test_sources(&pool, &[("test_source", "Test Source")]).await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            let source_keys =
+                write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
             let search_request = create_test_search_request(
                 &pool,
                 source_keys.clone(),
@@ -1370,7 +1139,6 @@ mod tests {
                 vec![],
             )
             .await;
-            let temp_dir = tempfile::tempdir().unwrap();
             let result_path = temp_dir.path().join("search-run-result.json");
             std::fs::write(&result_path, "stale result").unwrap();
             let running_search_runs = RunningSearchRuns::default();
@@ -1446,70 +1214,32 @@ mod tests {
             .unwrap()
     }
 
-    async fn create_test_browser_profile(
-        pool: &SqlitePool,
-        key: &str,
-        status: SourceStatus,
-    ) -> BrowserProfile {
-        create_browser_profile(
-            pool,
-            CreateBrowserProfileInput {
-                key: key.to_string(),
-                name: "Manuelle Freigabe".to_string(),
-                description: None,
-                name_i18n_key: None,
-                description_i18n_key: None,
-                definition_path: None,
-                definition_hash: None,
-                definition_schema_version: 1,
-                definition: json!({}),
-                source_config_schema: json!({ "type": "object" }),
-                status,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
+    fn write_test_sources(app_data_dir: &Path, sources: &[(&str, &str)]) -> Vec<String> {
+        sources
+            .iter()
+            .map(|(key, name)| {
+                write_json(
+                    app_data_dir.join(format!("sources/{key}.json")),
+                    &source_json(key, name),
+                );
+                (*key).to_string()
+            })
+            .collect()
     }
 
-    async fn create_browser_inventory_test_source(
-        pool: &SqlitePool,
-        key: &str,
-        name: &str,
-        browser_profile_id: i64,
-    ) -> Source {
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: key.to_string(),
-                adapter_key: "declarative_browser_inventory".to_string(),
-                system_profile_id: None,
-                browser_profile_id: Some(browser_profile_id),
-                name: name.to_string(),
-                description: None,
-                source_config: json!({}),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-    }
-
-    async fn create_test_sources(pool: &SqlitePool, sources: &[(&str, &str)]) -> Vec<String> {
-        let browser_profile =
-            create_test_browser_profile(pool, "manual_release", SourceStatus::Active).await;
-
-        let mut source_keys = Vec::new();
-        for (key, name) in sources {
-            source_keys.push(
-                create_browser_inventory_test_source(pool, key, name, browser_profile.id)
-                    .await
-                    .key,
-            );
-        }
-
-        source_keys
+    fn source_json(key: &str, name: &str) -> String {
+        json!({
+            "schemaVersion": 1,
+            "key": key,
+            "name": name,
+            "status": "active",
+            "sourceConfig": {},
+            "selectedAccessPath": {
+                "type": "source_specific",
+                "adapterKey": "fixture_inventory"
+            }
+        })
+        .to_string()
     }
 
     fn text_rule(value: &str) -> SearchRuleInput {
@@ -1580,27 +1310,6 @@ mod tests {
                 .map(|location| (*location).to_string())
                 .collect(),
         }
-    }
-
-    async fn set_source_browser_profile_id_without_foreign_key_check(
-        pool: &SqlitePool,
-        source_id: i64,
-        browser_profile_id: i64,
-    ) {
-        sqlx::query("PRAGMA foreign_keys = OFF")
-            .execute(pool)
-            .await
-            .unwrap();
-        sqlx::query("UPDATE sources SET browser_profile_id = ?1 WHERE id = ?2")
-            .bind(browser_profile_id)
-            .bind(source_id)
-            .execute(pool)
-            .await
-            .unwrap();
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(pool)
-            .await
-            .unwrap();
     }
 
     async fn migrated_pool() -> SqlitePool {

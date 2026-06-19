@@ -766,16 +766,12 @@ mod tests {
         search_run_model::{
             DefaultSourceExecutor, SearchRunService, SearchRunStatus, SourceRunStatus,
         },
-        source_model::{
-            create_browser_profile, create_source, CreateBrowserProfileInput, CreateSourceInput,
-            Source, SourceStatus,
-        },
         source_registry::{BrowserInteraction, ResolvedSelectedAccessPath},
     };
     use serde_json::{json, Value};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use sqlx::SqlitePool;
-    use std::{collections::HashMap, sync::Mutex};
+    use std::{collections::HashMap, path::Path, sync::Mutex};
 
     struct FixtureBrowserInventoryClient {
         responses: HashMap<String, Result<String, String>>,
@@ -825,22 +821,28 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn browser_inventory_source_runs_through_search_run_with_browser_profile() {
+    fn browser_inventory_source_runs_through_search_run_with_source_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let browser_profile_id =
-                create_browser_inventory_profile(&pool, browser_inventory_definition()).await;
-            let source = create_browser_inventory_source(
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_browser_access_profile_source(
+                temp_dir.path(),
+                "browser_inventory_fixture",
+                "Browser Inventory Fixture",
+                json!({ "startUrl": "https://example.test/jobs" }),
+                Some(vec![json!({
+                    "type": "waitFor",
+                    "selector": "[data-job-card]",
+                    "timeoutMs": 15000
+                })]),
+                Some(browser_inventory_without_navigate_definition()),
+            );
+            let search_request = create_search_request(
                 &pool,
-                browser_profile_id,
-                json!({
-                    "startUrl": "https://example.test/jobs"
-                }),
+                vec!["browser_inventory_fixture".to_string()],
+                "Senior Laser Engineer",
             )
             .await;
-            let search_request =
-                create_search_request(&pool, vec![source.id], "Senior Laser Engineer").await;
             let fixture_browser = FixtureBrowserInventoryClient::new([(
                 "https://example.test/jobs",
                 Ok(r#"
@@ -866,7 +868,6 @@ mod tests {
                 "#),
             )]);
             let executor = DeclarativeBrowserInventoryExecutor::new(fixture_browser);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -905,19 +906,18 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn stepstone_browser_profile_builds_query_url_and_extracts_cards_through_search_run() {
+    fn stepstone_source_profile_builds_query_url_and_extracts_cards_through_search_run() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let browser_profile_id = create_stepstone_browser_inventory_profile(&pool).await;
-            let source = create_stepstone_browser_inventory_source(
-                &pool,
-                browser_profile_id,
-                json!({
-                    "baseUrl": "https://stepstone.example"
-                }),
-            )
-            .await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "stepstone_fixture",
+                "StepStone Fixture",
+                "stepstone_de",
+                "browser_inventory",
+                json!({ "baseUrl": "https://stepstone.example" }),
+            );
             let search_request = SearchRequestService::new(&pool, &RunningSearchRuns::default())
                 .create(CreateSearchRequestInput {
                     status: SearchRequestStatus::Active,
@@ -929,7 +929,7 @@ mod tests {
                     exclude_rules: vec![],
                     locations: vec![" Berlin ".to_string(), "München".to_string()],
                     radius_km: Some(50),
-                    source_keys: vec![source.key.clone()],
+                    source_keys: vec!["stepstone_fixture".to_string()],
                 })
                 .await
                 .unwrap();
@@ -957,7 +957,6 @@ mod tests {
                 "#),
             )]);
             let executor = DeclarativeBrowserInventoryExecutor::new(fixture_browser);
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -972,7 +971,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(result.status, SearchRunStatus::Completed);
-            assert_eq!(result.source_runs[0].source_key, "stepstone_de");
+            assert_eq!(result.source_runs[0].source_key, "stepstone_fixture");
             assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
             assert_eq!(result.source_runs[0].candidate_count, 2);
             assert_eq!(result.source_runs[0].matched_count, 1);
@@ -985,7 +984,7 @@ mod tests {
                 "https://stepstone.example/stellenangebote--Rust-Engineer-Berlin-ACME--123.html"
             );
             assert_eq!(posting.locations, vec!["Berlin"]);
-            assert_eq!(posting.sources[0].source_key, "stepstone_de");
+            assert_eq!(posting.sources[0].source_key, "stepstone_fixture");
             assert_eq!(
                 executor.browser.rendered_requests(),
                 vec![(
@@ -1001,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn browser_inventory_executes_from_resolved_execution_plan_without_browser_profile() {
+    fn browser_inventory_executes_from_resolved_execution_plan() {
         tauri::async_runtime::block_on(async {
             let fixture_browser = FixtureBrowserInventoryClient::new([(
                 "https://example.test/jobs?what=Engineer",
@@ -1129,23 +1128,26 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn missing_inventory_definition_becomes_failed_source_run() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let browser_profile_id = create_browser_inventory_profile(&pool, json!({})).await;
-            let source = create_browser_inventory_source(
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_browser_access_profile_source(
+                temp_dir.path(),
+                "browser_inventory_fixture",
+                "Browser Inventory Fixture",
+                json!({ "startUrl": "https://example.test/jobs" }),
+                None,
+                None,
+            );
+            let search_request = create_search_request(
                 &pool,
-                browser_profile_id,
-                json!({
-                    "startUrl": "https://example.test/jobs"
-                }),
+                vec!["browser_inventory_fixture".to_string()],
+                "Engineer",
             )
             .await;
-            let search_request = create_search_request(&pool, vec![source.id], "Engineer").await;
             let executor =
                 DeclarativeBrowserInventoryExecutor::new(FixtureBrowserInventoryClient::new([]));
-            let temp_dir = tempfile::tempdir().unwrap();
             let running_search_runs = RunningSearchRuns::default();
 
             let result = SearchRunService::new(
@@ -1163,7 +1165,7 @@ mod tests {
             assert_eq!(result.source_runs[0].status, SourceRunStatus::Failed);
             assert_eq!(
                 result.source_runs[0].error.as_deref(),
-                Some("Browserprofil browser_inventory_profile definition.inventory must be a JSON object")
+                Some("executionPlan.inventory must be a JSON object for source browser_inventory_fixture")
             );
             assert!(result.postings.is_empty());
             assert!(executor.browser.rendered_requests().is_empty());
@@ -1202,114 +1204,82 @@ mod tests {
         });
     }
 
-    async fn create_stepstone_browser_inventory_profile(pool: &SqlitePool) -> i64 {
-        create_browser_profile(
-            pool,
-            CreateBrowserProfileInput {
-                key: "stepstone_de_browser_profile".to_string(),
-                name: "StepStone Deutschland Browserprofil".to_string(),
-                description: None,
-                name_i18n_key: None,
-                description_i18n_key: None,
-                definition_path: None,
-                definition_hash: None,
-                definition_schema_version: 1,
-                definition: stepstone_browser_inventory_definition(),
-                source_config_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "baseUrl": { "type": "string", "format": "uri" },
-                        "manualReleaseStartUrl": { "type": "string", "format": "uri" },
-                        "maxPages": { "type": "number", "minimum": 1, "default": 1 }
-                    }
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
-    }
-
-    async fn create_stepstone_browser_inventory_source(
-        pool: &SqlitePool,
-        browser_profile_id: i64,
+    fn write_browser_access_profile_source(
+        app_data_dir: &Path,
+        source_key: &str,
+        source_name: &str,
         source_config: Value,
-    ) -> Source {
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: "stepstone_de".to_string(),
-                adapter_key: ADAPTER_KEY.to_string(),
-                system_profile_id: None,
-                browser_profile_id: Some(browser_profile_id),
-                name: "StepStone Deutschland".to_string(),
-                description: None,
-                source_config,
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
+        interactions: Option<Vec<Value>>,
+        inventory: Option<Value>,
+    ) {
+        let profile_key = format!("{source_key}_profile");
+        let mut access_path = json!({
+            "key": "browser_inventory",
+            "adapterKey": ADAPTER_KEY,
+            "sourceConfigSchema": {
+                "type": "object",
+                "required": ["startUrl"],
+                "properties": {
+                    "startUrl": { "type": "string", "format": "uri" }
+                }
+            }
+        });
+        if let Some(interactions) = interactions {
+            access_path["interactions"] = Value::Array(interactions);
+        }
+        if let Some(inventory) = inventory {
+            access_path["inventory"] = inventory;
+        }
+        write_json(
+            app_data_dir.join(format!("source-profiles/{profile_key}.json")),
+            &json!({
+                "schemaVersion": 1,
+                "key": profile_key,
+                "name": format!("{source_name} Profile"),
+                "kind": "generic",
+                "accessPaths": [access_path]
+            })
+            .to_string(),
+        );
+        write_builtin_profile_source(
+            app_data_dir,
+            source_key,
+            source_name,
+            &profile_key,
+            "browser_inventory",
+            source_config,
+        );
     }
 
-    async fn create_browser_inventory_profile(pool: &SqlitePool, definition: Value) -> i64 {
-        create_browser_profile(
-            pool,
-            CreateBrowserProfileInput {
-                key: "browser_inventory_profile".to_string(),
-                name: "Browser Inventory Profile".to_string(),
-                description: None,
-                name_i18n_key: None,
-                description_i18n_key: None,
-                definition_path: None,
-                definition_hash: None,
-                definition_schema_version: 1,
-                definition,
-                source_config_schema: json!({
-                    "type": "object",
-                    "required": ["startUrl"],
-                    "properties": {
-                        "startUrl": { "type": "string", "format": "uri" }
-                    }
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
-        .id
-    }
-
-    async fn create_browser_inventory_source(
-        pool: &SqlitePool,
-        browser_profile_id: i64,
+    fn write_builtin_profile_source(
+        app_data_dir: &Path,
+        source_key: &str,
+        source_name: &str,
+        profile_key: &str,
+        path_key: &str,
         source_config: Value,
-    ) -> Source {
-        create_source(
-            pool,
-            CreateSourceInput {
-                key: "browser_inventory_fixture".to_string(),
-                adapter_key: ADAPTER_KEY.to_string(),
-                system_profile_id: None,
-                browser_profile_id: Some(browser_profile_id),
-                name: "Browser Inventory Fixture".to_string(),
-                description: None,
-                source_config,
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap()
+    ) {
+        write_json(
+            app_data_dir.join(format!("sources/{source_key}.json")),
+            &json!({
+                "schemaVersion": 1,
+                "key": source_key,
+                "name": source_name,
+                "status": "active",
+                "sourceConfig": source_config,
+                "selectedAccessPath": {
+                    "type": "profile",
+                    "profileKey": profile_key,
+                    "pathKey": path_key
+                }
+            })
+            .to_string(),
+        );
     }
 
     async fn create_search_request(
         pool: &SqlitePool,
-        source_ids: Vec<i64>,
+        source_keys: Vec<String>,
         include_text: &str,
     ) -> SearchRequest {
         let running_search_runs = RunningSearchRuns::default();
@@ -1320,7 +1290,7 @@ mod tests {
                 exclude_rules: vec![],
                 locations: vec![],
                 radius_km: None,
-                source_keys: source_ids.into_iter().map(|id| id.to_string()).collect(),
+                source_keys,
             })
             .await
             .unwrap()
@@ -1340,63 +1310,6 @@ mod tests {
             kind: "regex".to_string(),
             value: value.to_string(),
         }
-    }
-
-    fn stepstone_browser_inventory_definition() -> Value {
-        json!({
-            "schemaVersion": 1,
-            "query": {
-                "baseUrl": {
-                    "sourceConfigKey": "baseUrl",
-                    "default": "https://www.stepstone.de"
-                },
-                "path": "/jobs",
-                "params": [
-                    { "name": "what", "value": "{{searchRequest:titleText}}" },
-                    { "name": "where", "value": "{{searchRequest:firstLocation}}" },
-                    { "name": "radius", "value": "{{searchRequest:radiusKm}}" }
-                ]
-            },
-            "inventory": {
-                "navigate": { "url": "{{query:url}}" },
-                "waitFor": { "selector": "article[data-at=\"job-item\"]", "timeoutMs": 15000 },
-                "items": { "select": "article[data-at=\"job-item\"]" },
-                "fields": {
-                    "title": { "selectorText": "[data-at=\"job-item-title\"]" },
-                    "company": { "selectorText": "[data-at=\"job-item-company-name\"]" },
-                    "url": {
-                        "selectorAttribute": {
-                            "selector": "a[data-at=\"job-item-title\"]",
-                            "attribute": "href"
-                        }
-                    },
-                    "locations": [
-                        { "selectorText": "[data-at=\"job-item-location\"]" }
-                    ]
-                }
-            }
-        })
-    }
-
-    fn browser_inventory_definition() -> Value {
-        json!({
-            "schemaVersion": 1,
-            "inventory": {
-                "navigate": { "url": "{{sourceConfig:startUrl}}" },
-                "waitFor": { "selector": "[data-job-card]", "timeoutMs": 15000 },
-                "items": { "select": "[data-job-card]" },
-                "fields": {
-                    "title": { "selectorText": "[data-job-title]" },
-                    "company": { "selectorText": "[data-company]" },
-                    "url": {
-                        "selectorAttribute": { "selector": "a", "attribute": "href" }
-                    },
-                    "locations": [
-                        { "selectorText": "[data-location]" }
-                    ]
-                }
-            }
-        })
     }
 
     fn browser_inventory_without_navigate_definition() -> Value {
@@ -1473,6 +1386,14 @@ mod tests {
                 manual_release: None,
             },
         }
+    }
+
+    fn write_json(path: impl AsRef<Path>, contents: &str) {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, contents).unwrap();
     }
 
     async fn migrated_pool() -> SqlitePool {

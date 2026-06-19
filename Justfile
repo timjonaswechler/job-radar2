@@ -15,7 +15,7 @@ app-data-dir:
 db-path:
     @printf "%s/job_radar.db\n" "$(python3 scripts/tauri-app-data-dir.py)"
 
-# Delete app-data SQLite DB family; keeps app-data/system-profiles/*.json. Set YES=1 to skip the prompt.
+# Delete app-data SQLite DB family; keeps custom source/profile JSON. Set YES=1 to skip the prompt.
 db-clear:
     @bash scripts/clear-sqlite-db.sh
 

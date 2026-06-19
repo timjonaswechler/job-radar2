@@ -40,8 +40,6 @@ pub struct AdapterMetadata {
     pub category: AdapterCategory,
     pub execution_mode: AdapterExecutionMode,
     pub source_config_schema: Value,
-    pub requires_system_profile: bool,
-    pub requires_browser_profile: bool,
     pub supports_manual_release: bool,
     pub auth_mode: AdapterAuthMode,
     pub risk_level: AdapterRiskLevel,
@@ -56,7 +54,8 @@ pub fn list_adapters() -> Vec<AdapterMetadata> {
     ]
 }
 
-pub fn get_adapter(key: &str) -> Option<AdapterMetadata> {
+#[cfg(test)]
+fn get_adapter(key: &str) -> Option<AdapterMetadata> {
     list_adapters()
         .into_iter()
         .find(|adapter| adapter.key == key)
@@ -66,11 +65,9 @@ fn declarative_endpoint_inventory() -> AdapterMetadata {
     AdapterMetadata {
         key: "declarative_endpoint_inventory".to_string(),
         name: "Deklaratives HTTP-Jobboard".to_string(),
-        description: "Technische Laufzeit für geladene Systemprofile, die HTML, JSON und HTTP-Endpunkte deterministisch beschreiben.".to_string(),
+        description: "Technische Laufzeit für Quellenprofile mit deklarativen HTML-, JSON- und HTTP-Endpunkt-Inventaren.".to_string(),
         category: AdapterCategory::Generic,
         execution_mode: AdapterExecutionMode::SourceInventory,
-        requires_system_profile: true,
-        requires_browser_profile: false,
         supports_manual_release: false,
         auth_mode: AdapterAuthMode::None,
         risk_level: AdapterRiskLevel::Stable,
@@ -82,7 +79,7 @@ fn declarative_endpoint_inventory() -> AdapterMetadata {
                     "type": "string",
                     "format": "uri",
                     "title": "Start-URL",
-                    "description": "URL, gegen die das Systemprofil geprüft und später abgefragt wird."
+                    "description": "URL, die der gewählte Zugriffspfad später abfragt."
                 },
                 "maxJobs": {
                     "type": "number",
@@ -98,11 +95,10 @@ fn declarative_sitemap_inventory() -> AdapterMetadata {
     AdapterMetadata {
         key: "declarative_sitemap_inventory".to_string(),
         name: "Deklaratives Sitemap-Jobboard".to_string(),
-        description: "Technische Laufzeit für geladene Systemprofile, die Jobinventare über Sitemaps beschreiben.".to_string(),
+        description: "Technische Laufzeit für Quellenprofile mit deklarativen Sitemap-Inventaren."
+            .to_string(),
         category: AdapterCategory::Generic,
         execution_mode: AdapterExecutionMode::SourceInventory,
-        requires_system_profile: true,
-        requires_browser_profile: false,
         supports_manual_release: false,
         auth_mode: AdapterAuthMode::None,
         risk_level: AdapterRiskLevel::Stable,
@@ -134,11 +130,9 @@ fn declarative_browser_inventory() -> AdapterMetadata {
     AdapterMetadata {
         key: "declarative_browser_inventory".to_string(),
         name: "Deklaratives Browser-Inventar".to_string(),
-        description: "Technische Laufzeit für Browserprofil-basierte Quellen, die gerenderte Webseiten über eine Browser-Laufzeit als Quellenbestand extrahieren.".to_string(),
+        description: "Technische Laufzeit für browserbasierte Zugriffspfade, die gerenderte Webseiten über die Browser-Laufzeit als Quellenbestand extrahieren.".to_string(),
         category: AdapterCategory::Browser,
         execution_mode: AdapterExecutionMode::SourceInventory,
-        requires_system_profile: false,
-        requires_browser_profile: true,
         supports_manual_release: true,
         auth_mode: AdapterAuthMode::ManualCookie,
         risk_level: AdapterRiskLevel::Fragile,
@@ -155,8 +149,6 @@ fn indeed_search() -> AdapterMetadata {
         description: "Eingebauter Job-Portal-Adapter für Indeed-Suchläufe; Suchtext, Ort und Radius gehören in Suchanfragen bzw. Einstellungen.".to_string(),
         category: AdapterCategory::JobBoard,
         execution_mode: AdapterExecutionMode::QueryParameterized,
-        requires_system_profile: false,
-        requires_browser_profile: true,
         supports_manual_release: true,
         auth_mode: AdapterAuthMode::ManualCookie,
         risk_level: AdapterRiskLevel::Restricted,
@@ -224,14 +216,13 @@ mod tests {
     }
 
     #[test]
-    fn declarative_inventory_runtimes_expose_profile_requirements() {
+    fn declarative_inventory_runtimes_are_source_inventory_adapters() {
         for adapter_key in [
             "declarative_endpoint_inventory",
             "declarative_sitemap_inventory",
+            "declarative_browser_inventory",
         ] {
             let adapter = get_adapter(adapter_key).unwrap();
-            assert!(adapter.requires_system_profile);
-            assert!(!adapter.requires_browser_profile);
             assert_eq!(
                 adapter.execution_mode,
                 AdapterExecutionMode::SourceInventory
@@ -239,12 +230,6 @@ mod tests {
         }
 
         let browser_inventory = get_adapter("declarative_browser_inventory").unwrap();
-        assert!(!browser_inventory.requires_system_profile);
-        assert!(browser_inventory.requires_browser_profile);
-        assert_eq!(
-            browser_inventory.execution_mode,
-            AdapterExecutionMode::SourceInventory
-        );
         assert_eq!(
             browser_inventory.source_config_schema,
             json!({ "type": "object" })
@@ -252,11 +237,11 @@ mod tests {
     }
 
     #[test]
-    fn adapter_metadata_serializes_camel_case_runtime_flags() {
+    fn adapter_metadata_omits_legacy_profile_requirement_flags() {
         let value =
             serde_json::to_value(get_adapter("declarative_endpoint_inventory").unwrap()).unwrap();
-        assert_eq!(value["requiresSystemProfile"], true);
-        assert_eq!(value["requiresBrowserProfile"], false);
+        assert!(value.get("requiresSystemProfile").is_none());
+        assert!(value.get("requiresBrowserProfile").is_none());
         assert_eq!(value["category"], "generic");
     }
 }

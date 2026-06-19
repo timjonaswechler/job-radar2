@@ -12,8 +12,6 @@ mod search_run_smoke;
 mod simple_json_path;
 mod source_detection;
 #[allow(dead_code)]
-mod source_model;
-#[allow(dead_code)]
 mod source_registry;
 
 pub use search_run_smoke::run_dev_search_run_smoke_cli;
