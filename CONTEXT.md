@@ -32,24 +32,20 @@ _Avoid_: Plugin, Scraper, Crawler, Quellentyp, Recruiting-System
 A reusable declarative understanding of a source class, recruiting system, career-system family, website, or website family. It describes how matching sources can be detected, which stable source configuration they need, which access path retrieves source data, and how retrieved data is interpreted as job postings. It is not tied to one individual source.
 _Avoid_: Adapter, Quelle, Suchprofil, Heuristik, Firmenadapter, hardcodiertes Portal
 
-**Systemprofil**:
-A Quellenprofil for a recruiting system or career-system family. It contains deterministic detection checks, extraction description, source configuration templates, and source configuration schema. Users and agents can create system profiles without changing Rust source code.
+**Systemprofil** (historisch/abgelöst):
+A legacy specialization of Quellenprofil for a recruiting system or career-system family. It is superseded by Quellenprofil documents in the Source Registry (`source-profiles/*.json`). Do not expose Systemprofil as an active public API or storage concept.
 _Avoid_: Adapter, Browserprofil, Heuristik, Firmenadapter, hardcodiertes Portal
 
-**Eingebautes Systemprofil**:
-A system profile that is versioned in the repository under `system-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
-_Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Systemwissen
+**Eingebautes Quellenprofil**:
+A source profile that is versioned in the repository under `source-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
+_Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Profilwissen
 
-**Custom-Systemprofil**:
-A user/runtime system profile stored as JSON in the OS app data directory under `system-profiles/*.json`. It may not override a built-in key.
+**Custom-Quellenprofil**:
+A user/runtime source profile stored as JSON in the OS app data directory under `source-profiles/*.json`. It may not override a built-in key.
 _Avoid_: Repo-Community-Ordner als Laufzeitquelle, Built-in-Override
 
 **Profilerkennung**:
 The deterministic process that checks a submitted source entry point against valid source profiles. A source profile is valid when its profile definition can be loaded and passes runtime validation. A profile is detected only when all required technical checks pass and evidence can be shown. When a profile is detected, profile detection should also recommend the selected access path and source configuration for the concrete source. Profile detection may use direct HTTP checks first and browser-assisted analysis as a second phase, but using a browser during detection does not imply that the detected source must use a browser access path. If multiple profiles pass the result is ambiguous, and if none pass the source entry point is unsupported by reusable profiles.
-_Avoid_: Raten, Heuristik, Domain-Mapping, Confidence-Scoring
-
-**Systemerkennung**:
-Profilerkennung scoped to Systemprofile.
 _Avoid_: Raten, Heuristik, Domain-Mapping, Confidence-Scoring
 
 **Browserbasierte Quelle**:
@@ -60,17 +56,9 @@ _Avoid_: Headless-Quelle, Scraping-Quelle
 The locally managed browser installation that Job Radar uses to inspect browser-based sources.
 _Avoid_: Systembrowser, Headless-Browser, Chromium-Download
 
-**Browserprofil**:
-A Quellenprofil for a website or website family whose access or extraction depends on rendered web pages. It defines the parameters expected from sources that use it and must remain reusable rather than describe only one individual source.
+**Browserprofil** (historisch/abgelöst):
+A legacy specialization of Quellenprofil for a website or website family whose access or extraction depends on rendered web pages. It is superseded by Quellenprofil documents with browser-capable Zugriffspfade, or by source-specific extraction for one-off pages. Do not expose Browserprofil as an active public API or storage concept.
 _Avoid_: Scraping-Regel, Website-Adapter, Plattformtyp, quellenspezifische Extraktion
-
-**Eingebautes Browserprofil**:
-A browser profile that is versioned in the repository under `browser-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
-_Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Browserwissen
-
-**Custom-Browserprofil**:
-A user/runtime browser profile stored as JSON in the OS app data directory under `browser-profiles/*.json`. It may not override a built-in key.
-_Avoid_: Repo-Community-Ordner als Laufzeitquelle, Built-in-Override
 
 **Profildefinition**:
 A declarative JSON description from which Job Radar can use or update a Quellenprofil. Validity is determined at runtime when the profile is loaded or used.

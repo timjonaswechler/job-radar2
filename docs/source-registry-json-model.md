@@ -233,13 +233,17 @@ source_keys_json
 
 Search runs/source runs store `source_key`; they do not need persistent source/profile snapshots. Consistency is guaranteed only inside a running search run by using the immutable registry snapshot loaded at run start.
 
-## Implementation plan
+## Implementation notes
 
-1. Add JSON schemas and Rust document structs for source profiles, sources, selected access paths, access path definitions, and registry diagnostics.
-2. Add `source_registry` that loads bundled built-ins plus app-data custom documents fresh, validates shape, checks key/file-name consistency, applies duplicate-key rules, and returns valid documents plus diagnostics.
-3. Create `source-profiles/builtin/` and `sources/builtin/`; migrate current `system-profiles/builtin/*.json`, `browser-profiles/builtin/*.json`, and seeded built-in sources into the new document shape.
-4. Squash/update the development SQLite schema: remove profile/source domain tables; change search requests from source IDs to source keys; change source-run records from source IDs to source keys.
-5. Replace system/browser profile loading in detection with source-registry based profile detection and access-path availability.
-6. Replace source execution input resolution with registry execution plans built at search-run start.
-7. Update Tauri commands/UI data loading to list sources/profiles/diagnostics from the registry instead of DB tables. UI polish can follow after the technical model is stable.
-8. Add tests for schema validation, duplicate-key diagnostics, missing profile/path diagnostics, sourceConfig validation, registry snapshot consistency, and search execution via profile and source-specific access paths.
+The JSON Source Registry cut is implemented directly:
+
+1. JSON schemas and Rust document structs cover source profiles, sources, selected access paths, access path definitions, and registry diagnostics.
+2. `source_registry` loads bundled built-ins plus app-data custom documents fresh, validates document shape, checks key/file-name consistency, applies duplicate-key rules, and returns valid documents plus diagnostics.
+3. Built-in source-profile and source documents live under `source-profiles/builtin/` and `sources/builtin/`.
+4. The current development SQLite schema has no source/profile domain tables; search requests store `source_keys_json`.
+5. Detection uses source-registry source profiles and profile access-path availability.
+6. Search execution resolves source keys into one registry execution-plan snapshot at run start.
+7. Tauri commands/UI list sources, profiles, and diagnostics from the registry instead of database-owned source/profile tables.
+8. Tests cover schema validation, duplicate-key diagnostics, missing profile/path diagnostics, registry snapshot consistency, and search execution via profile and source-specific access paths.
+
+The legacy `system-profiles/`, `browser-profiles/`, `system_profiles`, `browser_profiles`, and database-owned `sources` model is historical only; use this document and `docs/schemas/` for current authoring.

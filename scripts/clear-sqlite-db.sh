@@ -23,7 +23,7 @@ echo "SQLite database file family to delete:"
 for file in "${files[@]}"; do
   echo "  - $file"
 done
-echo "Custom system profiles are not deleted. Close the app before continuing."
+echo "Custom source/profile JSON documents are not deleted. Close the app before continuing."
 
 if [[ "${YES:-0}" != "1" ]]; then
   if [[ ! -t 0 ]]; then

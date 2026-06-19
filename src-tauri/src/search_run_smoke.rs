@@ -1,7 +1,10 @@
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use sqlx::SqlitePool;
-use std::{ffi::OsString, path::PathBuf};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     app::paths::AppPaths,
@@ -13,15 +16,14 @@ use crate::{
         default_search_run_result_path, DefaultSourceExecutor, SearchRunResult, SearchRunService,
         SourceExecutor,
     },
-    source_model::{
-        create_source, list_sources, list_system_profiles, CreateSourceInput, Source, SourceStatus,
+    source_registry::{
+        RegistrySource, SelectedAccessPath, SourceDocumentStatus, SourceRegistrySnapshot,
     },
 };
 
 const SMOKE_COMMAND: &str = "dev-search-run-smoke";
 const SMOKE_APP_DATA_DIR_ENV: &str = "JOB_RADAR_SMOKE_APP_DATA_DIR";
 const SCHOTT_SOURCE_KEY: &str = "schott_careers";
-const SCHOTT_ADAPTER_KEY: &str = "declarative_sitemap_inventory";
 const SCHOTT_SOURCE_NAME: &str = "SCHOTT Karriere";
 const SCHOTT_SITEMAP_URL: &str = "https://join.schott.com/sitemap.xml";
 const STEPSTONE_SOURCE_KEY: &str = "stepstone_de";
@@ -72,7 +74,7 @@ where
             .map_err(|error| error.to_string())?;
 
         if options.ensure_schott_source {
-            ensure_schott_smoke_source(&state.db).await?;
+            ensure_schott_smoke_source(&state.paths.app_data_dir)?;
         }
 
         let result_path = default_search_run_result_path();
@@ -192,31 +194,48 @@ fn smoke_source_keys() -> Vec<String> {
     ]
 }
 
-fn validate_smoke_source(source: &Source, expected_adapter_key: &str) -> Result<(), String> {
-    if source.adapter_key != expected_adapter_key {
-        return Err(format!(
-            "smoke source `{}` must use adapterKey `{expected_adapter_key}`, found `{}`",
-            source.key, source.adapter_key
-        ));
-    }
-
-    if source.status != SourceStatus::Active {
+fn validate_smoke_source(source: &RegistrySource) -> Result<(), String> {
+    let document = &source.document;
+    if document.status != SourceDocumentStatus::Active {
         return Err(format!(
             "smoke source `{}` must be active, found {:?}",
-            source.key, source.status
+            document.key, document.status
         ));
     }
 
-    Ok(())
+    match &document.selected_access_path {
+        SelectedAccessPath::Profile {
+            profile_key,
+            path_key,
+        } if profile_key == SUCCESSFACTORS_PROFILE_KEY && path_key == "sitemap_inventory" => {}
+        SelectedAccessPath::Profile {
+            profile_key,
+            path_key,
+        } => {
+            return Err(format!(
+                "smoke source `{}` must use source profile `{SUCCESSFACTORS_PROFILE_KEY}` path `sitemap_inventory`, found `{profile_key}` path `{path_key}`",
+                document.key
+            ));
+        }
+        SelectedAccessPath::SourceSpecific { adapter_key, .. } => {
+            return Err(format!(
+                "smoke source `{}` must use source profile `{SUCCESSFACTORS_PROFILE_KEY}` path `sitemap_inventory`, found source-specific adapter `{adapter_key}`",
+                document.key
+            ));
+        }
+    }
+
+    validate_schott_source_config(source)
 }
 
-fn validate_schott_source_config(source: &Source) -> Result<(), String> {
-    let url = source
+fn validate_schott_source_config(source: &RegistrySource) -> Result<(), String> {
+    let document = &source.document;
+    let url = document
         .source_config
         .get("url")
         .and_then(|value| value.as_str())
         .unwrap_or_default();
-    let recursive = source
+    let recursive = document
         .source_config
         .get("recursive")
         .and_then(|value| value.as_bool());
@@ -224,54 +243,78 @@ fn validate_schott_source_config(source: &Source) -> Result<(), String> {
     if url != SCHOTT_SITEMAP_URL || recursive != Some(false) {
         return Err(format!(
             "smoke source `{}` must use sourceConfig {{\"url\":\"{}\",\"recursive\":false}}",
-            source.key, SCHOTT_SITEMAP_URL
+            document.key, SCHOTT_SITEMAP_URL
         ));
     }
 
     Ok(())
 }
 
-async fn ensure_schott_smoke_source(pool: &SqlitePool) -> Result<Source, String> {
-    let sources = list_sources(pool).await?;
-    if let Some(source) = sources
-        .iter()
-        .find(|source| source.key == SCHOTT_SOURCE_KEY)
-    {
-        validate_smoke_source(source, SCHOTT_ADAPTER_KEY)?;
-        validate_schott_source_config(source)?;
+fn ensure_schott_smoke_source(app_data_dir: &Path) -> Result<RegistrySource, String> {
+    let snapshot = crate::source_registry::load_snapshot(app_data_dir);
+    if let Some(source) = snapshot.source(SCHOTT_SOURCE_KEY) {
+        validate_smoke_source(source)?;
         return Ok(source.clone());
     }
 
-    let system_profile = list_system_profiles(pool)
-        .await?
-        .into_iter()
-        .find(|profile| profile.key == SUCCESSFACTORS_PROFILE_KEY)
-        .ok_or_else(|| {
-            format!(
-                "built-in system profile `{SUCCESSFACTORS_PROFILE_KEY}` is missing; cannot create `{SCHOTT_SOURCE_KEY}`"
-            )
-        })?;
+    write_schott_smoke_source_file(app_data_dir)?;
+    let snapshot = crate::source_registry::load_snapshot(app_data_dir);
+    fail_on_schott_registry_diagnostics(&snapshot)?;
+    let source = snapshot.source(SCHOTT_SOURCE_KEY).ok_or_else(|| {
+        format!("source registry did not load `{SCHOTT_SOURCE_KEY}` after writing its source JSON")
+    })?;
+    validate_smoke_source(source)?;
+    Ok(source.clone())
+}
 
-    create_source(
-        pool,
-        CreateSourceInput {
-            key: SCHOTT_SOURCE_KEY.to_string(),
-            adapter_key: SCHOTT_ADAPTER_KEY.to_string(),
-            system_profile_id: Some(system_profile.id),
-            browser_profile_id: None,
-            name: SCHOTT_SOURCE_NAME.to_string(),
-            description: Some(
-                "Development smoke source for SCHOTT sitemap validation.".to_string(),
-            ),
-            source_config: json!({
-                "url": SCHOTT_SITEMAP_URL,
-                "recursive": false
-            }),
-            status: SourceStatus::Active,
-            validation_error: None,
-        },
+fn write_schott_smoke_source_file(app_data_dir: &Path) -> Result<(), String> {
+    let path = app_data_dir
+        .join("sources")
+        .join(format!("{SCHOTT_SOURCE_KEY}.json"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let document = schott_smoke_source_json();
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&document).map_err(|error| error.to_string())?,
     )
-    .await
+    .map_err(|error| error.to_string())
+}
+
+fn schott_smoke_source_json() -> Value {
+    json!({
+        "schemaVersion": 1,
+        "key": SCHOTT_SOURCE_KEY,
+        "name": SCHOTT_SOURCE_NAME,
+        "status": "active",
+        "sourceConfig": {
+            "url": SCHOTT_SITEMAP_URL,
+            "recursive": false
+        },
+        "selectedAccessPath": {
+            "type": "profile",
+            "profileKey": SUCCESSFACTORS_PROFILE_KEY,
+            "pathKey": "sitemap_inventory"
+        }
+    })
+}
+
+fn fail_on_schott_registry_diagnostics(snapshot: &SourceRegistrySnapshot) -> Result<(), String> {
+    let diagnostics = snapshot
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.key.as_deref() == Some(SCHOTT_SOURCE_KEY))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    if diagnostics.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "source registry rejected `{SCHOTT_SOURCE_KEY}`: {}",
+            diagnostics.join("; ")
+        ))
+    }
 }
 
 fn parse_smoke_cli_args<I>(args: I) -> Result<SmokeCliOptions, String>
@@ -366,15 +409,9 @@ fn serialized_label<T: Serialize>(value: &T) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        search_run_model::{
-            BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError,
-            SourceExecutionInput, SourceRunStatus,
-        },
-        source_model::{
-            create_browser_profile, create_system_profile, CreateBrowserProfileInput,
-            CreateSystemProfileInput,
-        },
+    use crate::search_run_model::{
+        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
+        SourceRunStatus,
     };
     use serde_json::Value;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -426,11 +463,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failure() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            let (_schott_id, _stepstone_id) = create_smoke_sources(&pool).await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_schott_smoke_source_file(temp_dir.path()).unwrap();
             let running_search_runs = RunningSearchRuns::default();
             let executor = FixtureSourceExecutor::new([
                 (
@@ -463,7 +500,6 @@ mod tests {
                     )),
                 ),
             ]);
-            let temp_dir = tempfile::tempdir().unwrap();
             let result_path = temp_dir.path().join("search-run-result.json");
             std::fs::write(&result_path, "stale smoke result").unwrap();
 
@@ -549,48 +585,38 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
-    fn ensure_schott_source_creates_only_missing_local_smoke_source() {
-        tauri::async_runtime::block_on(async {
-            let temp_dir = tempfile::tempdir().unwrap();
-            let pool = crate::db::connect_and_migrate(&temp_dir.path().join("job_radar.db"))
-                .await
-                .unwrap();
+    fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
 
-            let created = ensure_schott_smoke_source(&pool).await.unwrap();
-            let reused = ensure_schott_smoke_source(&pool).await.unwrap();
-            let sources = list_sources(&pool).await.unwrap();
+        let created = ensure_schott_smoke_source(temp_dir.path()).unwrap();
+        let reused = ensure_schott_smoke_source(temp_dir.path()).unwrap();
+        let snapshot = crate::source_registry::load_snapshot(temp_dir.path());
 
-            assert_eq!(created.id, reused.id);
-            assert_eq!(created.key, SCHOTT_SOURCE_KEY);
-            assert_eq!(created.adapter_key, SCHOTT_ADAPTER_KEY);
-            assert_eq!(created.name, SCHOTT_SOURCE_NAME);
-            assert_eq!(
-                created.source_config,
-                json!({
-                    "url": SCHOTT_SITEMAP_URL,
-                    "recursive": false
-                })
-            );
-            assert!(sources
+        assert_eq!(created.document.key, SCHOTT_SOURCE_KEY);
+        assert_eq!(reused.document.key, SCHOTT_SOURCE_KEY);
+        assert_eq!(created.document, reused.document);
+        validate_smoke_source(&created).unwrap();
+        assert!(snapshot.source(STEPSTONE_SOURCE_KEY).is_some());
+        assert!(temp_dir
+            .path()
+            .join(format!("sources/{SCHOTT_SOURCE_KEY}.json"))
+            .is_file());
+        assert_eq!(
+            snapshot
+                .valid_sources
                 .iter()
-                .any(|source| source.key == STEPSTONE_SOURCE_KEY));
-            assert_eq!(
-                sources
-                    .iter()
-                    .filter(|source| source.key == SCHOTT_SOURCE_KEY)
-                    .count(),
-                1
-            );
-        });
+                .filter(|source| source.document.key == SCHOTT_SOURCE_KEY)
+                .count(),
+            1
+        );
     }
 
     #[test]
-    #[ignore = "DB-owned source/profile tables were removed by #38; registry-backed flow follows in #39-#41"]
     fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
-            create_smoke_sources(&pool).await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_schott_smoke_source_file(temp_dir.path()).unwrap();
             let running_search_runs = RunningSearchRuns::default();
             let executor = FixtureSourceExecutor::new([
                 (
@@ -604,7 +630,6 @@ mod tests {
                 ),
                 (STEPSTONE_SOURCE_KEY, Ok(vec![])),
             ]);
-            let temp_dir = tempfile::tempdir().unwrap();
 
             let first = run_schott_stepstone_smoke(
                 &pool,
@@ -637,95 +662,6 @@ mod tests {
                 1
             );
         });
-    }
-
-    async fn create_smoke_sources(pool: &SqlitePool) -> (i64, i64) {
-        let system_profile = create_system_profile(
-            pool,
-            CreateSystemProfileInput {
-                key: SUCCESSFACTORS_PROFILE_KEY.to_string(),
-                name: "SAP SuccessFactors".to_string(),
-                description: None,
-                adapter_key: SCHOTT_ADAPTER_KEY.to_string(),
-                definition_schema_version: 1,
-                definition: json!({
-                    "detect": {
-                        "required": [
-                            { "htmlContains": "SAP SuccessFactors" }
-                        ]
-                    }
-                }),
-                source_config_schema: json!({
-                    "type": "object",
-                    "required": ["url"],
-                    "properties": {
-                        "url": { "type": "string", "format": "uri" },
-                        "recursive": { "type": "boolean" }
-                    }
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-        let schott = create_source(
-            pool,
-            CreateSourceInput {
-                key: SCHOTT_SOURCE_KEY.to_string(),
-                adapter_key: SCHOTT_ADAPTER_KEY.to_string(),
-                system_profile_id: Some(system_profile.id),
-                browser_profile_id: None,
-                name: SCHOTT_SOURCE_NAME.to_string(),
-                description: None,
-                source_config: json!({
-                    "url": SCHOTT_SITEMAP_URL,
-                    "recursive": false
-                }),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        let browser_profile = create_browser_profile(
-            pool,
-            CreateBrowserProfileInput {
-                key: "job_portal_manual_release".to_string(),
-                name: "Job-Portal Browserfreigabe".to_string(),
-                description: None,
-                name_i18n_key: None,
-                description_i18n_key: None,
-                definition_path: None,
-                definition_hash: None,
-                definition_schema_version: 1,
-                definition: json!({}),
-                source_config_schema: json!({}),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-        let stepstone = create_source(
-            pool,
-            CreateSourceInput {
-                key: STEPSTONE_SOURCE_KEY.to_string(),
-                adapter_key: "declarative_browser_inventory".to_string(),
-                system_profile_id: None,
-                browser_profile_id: Some(browser_profile.id),
-                name: "StepStone Deutschland".to_string(),
-                description: None,
-                source_config: json!({}),
-                status: SourceStatus::Active,
-                validation_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        (schott.id, stepstone.id)
     }
 
     fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {

@@ -93,19 +93,6 @@ fn render_template_expression(
     Ok(value)
 }
 
-pub(crate) fn is_supported_template_filter(filter: &str) -> bool {
-    matches!(
-        filter,
-        "technicalKey"
-            | "titleCase"
-            | "domainKey"
-            | "domainTitle"
-            | "urlDecode"
-            | "slugToTitle"
-            | "stripCareerSuffix"
-    )
-}
-
 fn apply_template_filter(filter: &str, value: &str) -> Result<String, TemplateError> {
     match filter {
         "technicalKey" => Ok(to_technical_key(value)),
