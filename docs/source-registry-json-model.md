@@ -81,7 +81,7 @@ Minimal shape:
   },
   "accessPaths": [
     {
-      "key": "boards_api",
+      "key": "endpoint_inventory",
       "adapterKey": "declarative_endpoint_inventory",
       "availability": {
         "requiredCaptures": ["boardSlug"],
@@ -94,8 +94,12 @@ Minimal shape:
       "sourceConfigSchema": {
         "type": "object",
         "required": ["boardSlug"],
+        "additionalProperties": false,
         "properties": {
-          "boardSlug": { "type": "string" },
+          "boardSlug": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+          },
           "startUrl": { "type": "string", "format": "uri" }
         }
       },
@@ -116,6 +120,27 @@ Semantics:
 - Access-path `sourceConfigSchema` contains path-specific fields.
 - Effective validation for a profiled source is profile schema + selected access-path schema.
 
+### Reusable source config field names
+
+Use shared field names when different recruiting systems expose the same concept. This keeps source documents and generated proposals predictable across profiles.
+
+- `boardSlug` is the preferred field/capture name for a vendor-local job-board token, tenant slug, board name, or postings API path segment. Examples include Ashby job board names, Greenhouse board tokens, and Lever site/postings slugs when the profile can resolve inventory from that value.
+- `boardSlug` is scoped by the selected profile; it is not globally unique and should not be used alone as a source key unless the key candidate has no better company/domain input.
+- `startUrl` is optional context for the submitted page or canonical career URL. Do not require it when inventory can be derived solely from `boardSlug`.
+- Provider-specific names are still allowed when the concept is genuinely different, but avoid introducing aliases such as `boardToken`, `companySlug`, or `postingSlug` for the same reusable board identifier.
+
+### Declarative inventory location fields
+
+`inventory.fields.locations` is an array of location expressions. Each expression may produce zero, one, or many locations:
+
+- a string result is one location by default;
+- an array result contributes each scalar array item as one location;
+- `null`, missing values, and empty strings are ignored;
+- duplicate locations are removed while preserving first-seen order;
+- optional `"split": "<delimiter>"` on a location expression splits string results by that delimiter after trimming parts.
+
+Do not split by punctuation implicitly: values such as `Berlin, Germany` are single locations unless the profile explicitly declares `split`.
+
 ## Source document
 
 Profile-backed source:
@@ -133,7 +158,7 @@ Profile-backed source:
   "selectedAccessPath": {
     "type": "profile",
     "profileKey": "greenhouse",
-    "pathKey": "boards_api"
+    "pathKey": "endpoint_inventory"
   }
 }
 ```
@@ -204,6 +229,12 @@ Flow:
 2. If blocked or unsupported, browser-assisted analysis may render the page, inspect DOM/HTML/embedded JSON/network requests, and retry profile/access-path matching.
 3. Browser use during detection does not imply that the resulting source uses a browser access path.
 4. If no reusable profile/access path is available, UI may offer source-specific extraction via element selection.
+
+Named captures from detection, for example `boardSlug`, are reusable evidence fields. They may feed identity candidates and `availability.sourceConfig` templates, and should use the shared field-name guidance above when the same concept appears across profiles.
+
+Detection `required` checks are conjunctive: every required check must pass. Optional `detect.anyOf` adds ordered OR-style alternatives after `required`: each alternative is an array of detection checks that must all pass, and the first passing alternative wins. If `anyOf` exists and no alternative passes, the profile does not match. Captures from `required` plus the selected alternative are available to identity templates, access-path availability, and `availability.sourceConfig`; captures from failed alternatives are discarded.
+
+When a regex check has `captureAs`, the detector stores the first non-empty capture group from the first regex match, so an alternative can normalize one URL shape into a reusable field such as `boardSlug`.
 
 A profile access path may be recommended only when:
 

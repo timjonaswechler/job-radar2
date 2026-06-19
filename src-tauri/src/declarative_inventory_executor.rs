@@ -405,21 +405,142 @@ fn render_locations(
         )
     })?;
 
-    locations
-        .iter()
-        .enumerate()
-        .map(|(index, location)| {
-            render_field_expression(
-                location,
-                context,
-                &format!("executionPlan.inventory.fields.locations[{index}]"),
-            )
-        })
-        .filter_map(|location| match location {
-            Ok(location) if location.trim().is_empty() => None,
-            other => Some(other),
-        })
-        .collect()
+    let mut rendered_locations = Vec::new();
+    for (index, location) in locations.iter().enumerate() {
+        rendered_locations.extend(render_location_expression(
+            location,
+            context,
+            &format!("executionPlan.inventory.fields.locations[{index}]"),
+        )?);
+    }
+    dedupe_preserving_order(&mut rendered_locations);
+    Ok(rendered_locations)
+}
+
+fn render_location_expression(
+    value: &Value,
+    context: &InventoryTemplateContext<'_>,
+    path: &str,
+) -> Result<Vec<String>, SourceExecutionError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| SourceExecutionError::Failed(format!("{path} must be a JSON object")))?;
+    let split = optional_location_split(object, path)?;
+
+    if let Some(template) = object.get("template").and_then(Value::as_str) {
+        let rendered = render_template(template, context).map_err(|error| {
+            SourceExecutionError::Failed(format!("{path}.template is invalid: {error}"))
+        })?;
+        return Ok(location_string_values(&rendered, split));
+    }
+
+    if let Some(json_path) = object.get("jsonPath") {
+        let json_path = json_path.as_str().ok_or_else(|| {
+            SourceExecutionError::Failed(format!("{path}.jsonPath must be a non-empty string"))
+        })?;
+        if json_path.trim().is_empty() {
+            return Err(SourceExecutionError::Failed(format!(
+                "{path}.jsonPath must be a non-empty string"
+            )));
+        }
+        let item = context.item.and_then(InventoryItem::json).ok_or_else(|| {
+            SourceExecutionError::Failed(format!(
+                "{path}.jsonPath is only available for JSON inventory items"
+            ))
+        })?;
+        let value = resolve_simple_json_path(item, json_path).map_err(|error| {
+            simple_json_path_execution_error(&format!("{path}.jsonPath"), error)
+        })?;
+        return json_location_value_to_strings(value, split, path);
+    }
+
+    Err(SourceExecutionError::Failed(format!(
+        "{path} must contain a template or jsonPath expression"
+    )))
+}
+
+fn optional_location_split<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    path: &str,
+) -> Result<Option<&'a str>, SourceExecutionError> {
+    let Some(split) = object.get("split") else {
+        return Ok(None);
+    };
+    let delimiter = split
+        .as_str()
+        .ok_or_else(|| SourceExecutionError::Failed(format!("{path}.split must be a string")))?;
+    if delimiter.is_empty() {
+        return Err(SourceExecutionError::Failed(format!(
+            "{path}.split must not be empty"
+        )));
+    }
+    Ok(Some(delimiter))
+}
+
+fn json_location_value_to_strings(
+    value: Option<&Value>,
+    split: Option<&str>,
+    path: &str,
+) -> Result<Vec<String>, SourceExecutionError> {
+    match value {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::String(value)) => Ok(location_string_values(value, split)),
+        Some(Value::Bool(value)) => Ok(location_string_values(&value.to_string(), None)),
+        Some(Value::Number(value)) => Ok(location_string_values(&value.to_string(), None)),
+        Some(Value::Array(values)) => {
+            let mut locations = Vec::new();
+            for (index, value) in values.iter().enumerate() {
+                match value {
+                    Value::Null => {}
+                    Value::String(value) => locations.extend(location_string_values(value, split)),
+                    Value::Bool(value) => locations.extend(location_string_values(&value.to_string(), None)),
+                    Value::Number(value) => {
+                        locations.extend(location_string_values(&value.to_string(), None))
+                    }
+                    Value::Array(_) | Value::Object(_) => {
+                        return Err(SourceExecutionError::Failed(format!(
+                            "{path}.jsonPath array item {index} must resolve to a string, number, boolean, or null"
+                        )));
+                    }
+                }
+            }
+            Ok(locations)
+        }
+        Some(Value::Object(_)) => Err(SourceExecutionError::Failed(format!(
+            "{path}.jsonPath must resolve to a string, number, boolean, null, or an array of those values"
+        ))),
+    }
+}
+
+fn location_string_values(value: &str, split: Option<&str>) -> Vec<String> {
+    match split {
+        Some(delimiter) => value
+            .split(delimiter)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect(),
+        None => {
+            let value = value.trim();
+            if value.is_empty() {
+                Vec::new()
+            } else {
+                vec![value.to_string()]
+            }
+        }
+    }
+}
+
+fn dedupe_preserving_order(values: &mut Vec<String>) {
+    let mut seen = Vec::<String>::new();
+    values.retain(|value| {
+        if seen.iter().any(|seen_value| seen_value == value) {
+            false
+        } else {
+            seen.push(value.clone());
+            true
+        }
+    });
 }
 
 fn render_field_expression(
@@ -763,6 +884,69 @@ mod tests {
     }
 
     #[test]
+    fn json_inventory_locations_expand_arrays_split_strings_and_dedupe() {
+        tauri::async_runtime::block_on(async {
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://example.test/jobs.json",
+                Ok(r#"{
+                  "jobs": [
+                    {
+                      "title": "Platform Engineer",
+                      "jobUrl": "https://example.test/jobs/platform",
+                      "locations": ["Berlin, Germany", "Munich, Germany"],
+                      "fallbackLocations": "Munich, Germany; Hamburg, Germany; "
+                    }
+                  ]
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let search_request = search_request();
+            let source = source_with_inventory(
+                DECLARATIVE_HTTP_ADAPTER_KEY,
+                json!({ "startUrl": "https://example.test/jobs.json" }),
+                json!({
+                    "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                    "parse": { "as": "json" },
+                    "items": {
+                        "select": { "jsonPath": "$.jobs" }
+                    },
+                    "fields": {
+                        "title": { "jsonPath": "$.title" },
+                        "url": { "jsonPath": "$.jobUrl" },
+                        "company": { "template": "{{sourceName}}" },
+                        "locations": [
+                            { "jsonPath": "$.locations" },
+                            { "jsonPath": "$.fallbackLocations", "split": ";" }
+                        ]
+                    }
+                }),
+            );
+
+            let candidates = executor
+                .execute(SourceExecutionInput {
+                    search_request: &search_request,
+                    source: &source,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidates,
+                vec![SourceCandidate {
+                    title: "Platform Engineer".to_string(),
+                    company: "Fixture Careers".to_string(),
+                    url: "https://example.test/jobs/platform".to_string(),
+                    locations: vec![
+                        "Berlin, Germany".to_string(),
+                        "Munich, Germany".to_string(),
+                        "Hamburg, Germany".to_string(),
+                    ],
+                }]
+            );
+        });
+    }
+
+    #[test]
     fn xml_inventory_source_runs_through_search_run_with_source_profile() {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool().await;
@@ -902,7 +1086,7 @@ mod tests {
                 "ashby",
                 "endpoint_inventory",
                 json!({
-                    "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true",
+                    "boardSlug": "focused",
                     "companyWebsite": "https://focused-energy.co"
                 }),
             );
@@ -949,6 +1133,140 @@ mod tests {
             assert_eq!(
                 executor.client.requested_urls(),
                 vec!["https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"]
+            );
+        });
+    }
+
+    #[test]
+    fn greenhouse_json_inventory_source_runs_through_search_run_with_source_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "d3",
+                "D3",
+                "greenhouse",
+                "endpoint_inventory",
+                json!({
+                    "boardSlug": "d3"
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["d3".to_string()], "backend").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://boards-api.greenhouse.io/v1/boards/d3/jobs",
+                Ok(r#"{
+                  "jobs": [
+                    {
+                      "title": "Backend Engineer - New Grad",
+                      "absolute_url": "https://job-boards.greenhouse.io/d3/jobs/4915295008",
+                      "location": { "name": "Los Angeles, CA" }
+                    }
+                  ]
+                }"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 1);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Backend Engineer - New Grad");
+            assert_eq!(posting.company, "D3");
+            assert_eq!(
+                posting.url,
+                "https://job-boards.greenhouse.io/d3/jobs/4915295008"
+            );
+            assert_eq!(posting.locations, vec!["Los Angeles, CA"]);
+            assert_eq!(posting.sources[0].source_key, "d3");
+            assert_eq!(posting.sources[0].source_name, "D3");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://boards-api.greenhouse.io/v1/boards/d3/jobs"]
+            );
+        });
+    }
+
+    #[test]
+    fn lever_json_inventory_source_runs_through_search_run_with_source_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let temp_dir = tempfile::tempdir().unwrap();
+            write_builtin_profile_source(
+                temp_dir.path(),
+                "leverdemo",
+                "Lever Demo",
+                "lever",
+                "endpoint_inventory",
+                json!({
+                    "boardSlug": "leverdemo"
+                }),
+            );
+            let search_request =
+                create_search_request(&pool, vec!["leverdemo".to_string()], "backend").await;
+            let fixture_client = FixtureInventoryHttpClient::new([(
+                "https://api.lever.co/v0/postings/leverdemo?mode=json",
+                Ok(r#"[
+                  {
+                    "text": "Backend Engineer",
+                    "hostedUrl": "https://jobs.lever.co/leverdemo/9d39183d-5d2f-4c2d-aabb-1aa2bb3cc4dd",
+                    "categories": {
+                      "location": "Berlin, Germany",
+                      "allLocations": ["Berlin, Germany", "Munich, Germany"]
+                    }
+                  }
+                ]"#),
+            )]);
+            let executor = DeclarativeInventoryExecutor::new(fixture_client);
+            let running_search_runs = RunningSearchRuns::default();
+
+            let result = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir.path().join("search-run-result.json"),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SearchRunStatus::Completed);
+            assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+            assert_eq!(result.source_runs[0].candidate_count, 1);
+            assert_eq!(result.source_runs[0].matched_count, 1);
+            assert_eq!(result.postings.len(), 1);
+            let posting = &result.postings[0];
+            assert_eq!(posting.title, "Backend Engineer");
+            assert_eq!(posting.company, "Lever Demo");
+            assert_eq!(
+                posting.url,
+                "https://jobs.lever.co/leverdemo/9d39183d-5d2f-4c2d-aabb-1aa2bb3cc4dd"
+            );
+            assert_eq!(
+                posting.locations,
+                vec!["Berlin, Germany", "Munich, Germany"]
+            );
+            assert_eq!(posting.sources[0].source_key, "leverdemo");
+            assert_eq!(posting.sources[0].source_name, "Lever Demo");
+            assert_eq!(
+                executor.client.requested_urls(),
+                vec!["https://api.lever.co/v0/postings/leverdemo?mode=json"]
             );
         });
     }

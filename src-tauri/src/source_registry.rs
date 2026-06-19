@@ -342,6 +342,8 @@ pub struct DetectionBlock {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub phases: Vec<DetectionPhase>,
     pub required: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub any_of: Option<Vec<Vec<Value>>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

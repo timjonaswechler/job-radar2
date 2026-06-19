@@ -261,7 +261,7 @@ async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
         return Ok(ProfileEvaluation::default());
     };
 
-    if detect.required.is_empty() {
+    if detect.required.is_empty() && detect.any_of.is_none() {
         return Ok(ProfileEvaluation::default());
     }
 
@@ -275,17 +275,30 @@ async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
         });
     }
 
-    let mut captures = HashMap::new();
-    let mut evidence = Vec::new();
+    let mut required_captures = HashMap::new();
+    let mut required_evidence = Vec::new();
 
     for check in &detect.required {
         let Some(check_evidence) =
-            evaluate_check(client, input_url, html, check, &mut captures).await?
+            evaluate_check(client, input_url, html, check, &mut required_captures).await?
         else {
             return Ok(ProfileEvaluation::default());
         };
-        evidence.push(check_evidence);
+        required_evidence.push(check_evidence);
     }
+
+    let Some((captures, evidence)) = evaluate_detection_any_of(
+        client,
+        input_url,
+        html,
+        detect.any_of.as_deref(),
+        &required_captures,
+        &required_evidence,
+    )
+    .await?
+    else {
+        return Ok(ProfileEvaluation::default());
+    };
 
     let mut evaluation = ProfileEvaluation::default();
     for access_path in &document.access_paths {
@@ -314,6 +327,44 @@ async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
 
 fn detect_supports_http(detect: &DetectionBlock) -> bool {
     detect.phases.is_empty() || detect.phases.contains(&DetectionPhase::Http)
+}
+
+async fn evaluate_detection_any_of<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    html: &str,
+    alternatives: Option<&[Vec<Value>]>,
+    required_captures: &HashMap<String, String>,
+    required_evidence: &[String],
+) -> Result<Option<(HashMap<String, String>, Vec<String>)>, String> {
+    let Some(alternatives) = alternatives else {
+        return Ok(Some((
+            required_captures.clone(),
+            required_evidence.to_vec(),
+        )));
+    };
+
+    for alternative in alternatives {
+        let mut captures = required_captures.clone();
+        let mut evidence = required_evidence.to_vec();
+        let mut passed = true;
+
+        for check in alternative {
+            let Some(check_evidence) =
+                evaluate_check(client, input_url, html, check, &mut captures).await?
+            else {
+                passed = false;
+                break;
+            };
+            evidence.push(check_evidence);
+        }
+
+        if passed {
+            return Ok(Some((captures, evidence)));
+        }
+    }
+
+    Ok(None)
 }
 
 async fn evaluate_access_path_availability<C: DetectionHttpClient + Sync>(
@@ -680,7 +731,12 @@ fn evaluate_regex(
     };
 
     if let Some(capture_key) = capture_as.and_then(Value::as_str) {
-        if let Some(value) = regex_captures.get(1) {
+        if let Some(value) = regex_captures
+            .iter()
+            .skip(1)
+            .flatten()
+            .find(|value| !value.as_str().trim().is_empty())
+        {
             captures.insert(capture_key.to_string(), value.as_str().to_string());
         }
     }
@@ -1239,6 +1295,152 @@ mod tests {
     }
 
     #[test]
+    fn source_profile_detection_any_of_first_matching_alternative_wins() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body>
+                    <main id="example-board-root"></main>
+                    <script>
+                      window.firstTenant = "alpha";
+                      window.secondTenant = "bravo";
+                    </script>
+                    <span>first-alt-ready</span>
+                </body></html>"#,
+            )]);
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[any_of_profile()],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
+            assert_eq!(result.key.as_deref(), Some("alpha"));
+            assert_eq!(result.name.as_deref(), Some("Alpha"));
+            assert_eq!(result.source_config.unwrap()["tenant"], "alpha");
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_any_of_later_alternative_can_match() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body>
+                    <main id="example-board-root"></main>
+                    <script>
+                      window.firstTenant = "alpha";
+                      window.secondTenant = "bravo";
+                    </script>
+                </body></html>"#,
+            )]);
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[any_of_profile()],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.key.as_deref(), Some("bravo"));
+            assert_eq!(result.name.as_deref(), Some("Bravo"));
+            assert_eq!(result.source_config.unwrap()["tenant"], "bravo");
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_any_of_without_matching_alternative_is_unsupported() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><main id="example-board-root"></main></body></html>"#,
+            )]);
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[any_of_profile()],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_any_of_does_not_bypass_required_checks() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><script>window.firstTenant = "alpha";</script></body></html>"#,
+            )]);
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[any_of_profile()],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+            assert!(result.matches.is_empty());
+        });
+    }
+
+    #[test]
+    fn source_profile_detection_captures_first_non_empty_regex_group() {
+        tauri::async_runtime::block_on(async {
+            let client = FixtureHttpClient::new([(
+                "https://example.com/jobs",
+                r#"<html><body><a href="https://second.example/bravo">Jobs</a></body></html>"#,
+            )]);
+            let profile = registry_profile(json!({
+                "schemaVersion": 1,
+                "key": "example_board",
+                "name": "Example Board",
+                "kind": "recruiting_system",
+                "detect": {
+                    "phases": ["http"],
+                    "required": [{
+                        "htmlRegex": "https://(?:first\\.example/([a-z]+)|second\\.example/([a-z]+))",
+                        "captureAs": "tenant"
+                    }]
+                },
+                "accessPaths": [{
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "availability": {
+                        "requiredCaptures": ["tenant"],
+                        "sourceConfig": {
+                            "tenant": "{{capture:tenant}}"
+                        }
+                    }
+                }]
+            }));
+
+            let result = detect_with_source_profiles(
+                &client,
+                &Url::parse("https://example.com/jobs").unwrap(),
+                &[profile],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.status, SourceDetectionStatus::Detected);
+            assert_eq!(result.source_config.unwrap()["tenant"], "bravo");
+        });
+    }
+
+    #[test]
     fn source_profile_detection_does_not_recommend_path_when_required_schema_config_is_missing() {
         tauri::async_runtime::block_on(async {
             let client = FixtureHttpClient::new([(
@@ -1378,7 +1580,8 @@ mod tests {
                     "endpoint_inventory",
                     "declarative_endpoint_inventory",
                     "\\.greenhouse\\.io",
-                    "https://openai.com/careers",
+                    "boardSlug",
+                    "openai",
                 ),
                 (
                     builtin_profile("ashby"),
@@ -1395,7 +1598,8 @@ mod tests {
                     "endpoint_inventory",
                     "declarative_endpoint_inventory",
                     "\\.ashbyhq\\.com",
-                    "https://api.ashbyhq.com/posting-api/job-board/example?includeCompensation=true",
+                    "boardSlug",
+                    "example",
                 ),
                 (
                     builtin_profile("lever"),
@@ -1414,7 +1618,8 @@ mod tests {
                     "endpoint_inventory",
                     "declarative_endpoint_inventory",
                     "jobs\\.lever\\.co",
-                    "https://lever-fixture.test/jobs",
+                    "boardSlug",
+                    "example",
                 ),
             ];
 
@@ -1426,7 +1631,8 @@ mod tests {
                 expected_path_key,
                 expected_adapter_key,
                 expected_evidence_marker,
-                expected_start_url,
+                expected_source_config_key,
+                expected_source_config_value,
             ) in scenarios
             {
                 let client = FixtureHttpClient::new([(input_url, html)]);
@@ -1447,9 +1653,92 @@ mod tests {
                     .evidence
                     .join("\n")
                     .contains(expected_evidence_marker));
+                let source_config = result.source_config.unwrap();
                 assert_eq!(
-                    result.source_config.unwrap()["startUrl"],
-                    expected_start_url
+                    source_config[expected_source_config_key],
+                    expected_source_config_value
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn lever_global_urls_detect_global_access_path_and_api() {
+        tauri::async_runtime::block_on(async {
+            let profile = builtin_profile("lever");
+            let cases = [
+                (
+                    "https://lever-fixture.test/jobs",
+                    r#"<a href="https://jobs.lever.co/acme/9d39183d-5d2f-4c2d-aabb-1aa2bb3cc4dd">Senior Rust Engineer</a>"#,
+                    "acme",
+                ),
+                (
+                    "https://lever-fixture.test/api-link",
+                    r#"<a href="https://api.lever.co/v0/postings/acme?mode=json">Lever postings API</a>"#,
+                    "acme",
+                ),
+            ];
+
+            for (input_url, html, expected_board_slug) in cases {
+                let client = FixtureHttpClient::new([(input_url, html)]);
+
+                let result = detect_with_source_profiles(
+                    &client,
+                    &Url::parse(input_url).unwrap(),
+                    &[profile.clone()],
+                )
+                .await
+                .unwrap();
+
+                assert_eq!(result.status, SourceDetectionStatus::Detected);
+                assert_eq!(result.profile_key.as_deref(), Some("lever"));
+                assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
+                let source_config = result.source_config.unwrap();
+                assert_eq!(source_config["boardSlug"], expected_board_slug);
+                assert_eq!(
+                    access_path_inventory_fetch_url(&profile, "endpoint_inventory"),
+                    "https://api.lever.co/v0/postings/{{sourceConfig:boardSlug}}?mode=json"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn lever_eu_urls_detect_eu_access_path_and_api() {
+        tauri::async_runtime::block_on(async {
+            let profile = builtin_profile("lever");
+            let cases = [
+                (
+                    "https://lever-fixture.test/eu-jobs",
+                    r#"<a href="https://jobs.eu.lever.co/acme-eu/9d39183d-5d2f-4c2d-aabb-1aa2bb3cc4dd">Senior Rust Engineer</a>"#,
+                    "acme-eu",
+                ),
+                (
+                    "https://lever-fixture.test/eu-api-link",
+                    r#"<a href="https://api.eu.lever.co/v0/postings/acme-eu?mode=json">Lever EU postings API</a>"#,
+                    "acme-eu",
+                ),
+            ];
+
+            for (input_url, html, expected_board_slug) in cases {
+                let client = FixtureHttpClient::new([(input_url, html)]);
+
+                let result = detect_with_source_profiles(
+                    &client,
+                    &Url::parse(input_url).unwrap(),
+                    &[profile.clone()],
+                )
+                .await
+                .unwrap();
+
+                assert_eq!(result.status, SourceDetectionStatus::Detected);
+                assert_eq!(result.profile_key.as_deref(), Some("lever"));
+                assert_eq!(result.path_key.as_deref(), Some("eu_endpoint_inventory"));
+                let source_config = result.source_config.unwrap();
+                assert_eq!(source_config["boardSlug"], expected_board_slug);
+                assert_eq!(
+                    access_path_inventory_fetch_url(&profile, "eu_endpoint_inventory"),
+                    "https://api.eu.lever.co/v0/postings/{{sourceConfig:boardSlug}}?mode=json"
                 );
             }
         });
@@ -1487,10 +1776,8 @@ mod tests {
             assert_eq!(result.key.as_deref(), Some("focused"));
             assert_eq!(result.name.as_deref(), Some("Focused"));
             let source_config = result.source_config.unwrap();
-            assert_eq!(
-                source_config["startUrl"],
-                "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
-            );
+            assert_eq!(source_config["boardSlug"], "focused");
+            assert!(source_config.get("startUrl").is_none());
             assert!(source_config.get("companyWebsite").is_none());
         });
     }
@@ -1922,6 +2209,44 @@ mod tests {
         });
     }
 
+    fn any_of_profile() -> RegistrySourceProfile {
+        registry_profile(json!({
+            "schemaVersion": 1,
+            "key": "example_board",
+            "name": "Example Board",
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [{ "htmlContains": "example-board-root" }],
+                "anyOf": [
+                    [
+                        {
+                            "htmlRegex": "firstTenant\\s*=\\s*\"([^\"]+)\"",
+                            "captureAs": "tenant"
+                        },
+                        { "htmlContains": "first-alt-ready" }
+                    ],
+                    [{
+                        "htmlRegex": "secondTenant\\s*=\\s*\"([^\"]+)\"",
+                        "captureAs": "tenant"
+                    }]
+                ]
+            },
+            "identity": {
+                "keyCandidates": ["{{capture:tenant|technicalKey}}"],
+                "nameCandidates": ["{{capture:tenant|titleCase}}"]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": {
+                    "requiredCaptures": ["tenant"],
+                    "sourceConfig": { "tenant": "{{capture:tenant}}" }
+                }
+            }]
+        }))
+    }
+
     fn matching_profile(key: &str) -> RegistrySourceProfile {
         registry_profile(json!({
             "schemaVersion": 1,
@@ -1962,6 +2287,21 @@ mod tests {
             )),
             other => panic!("unknown built-in source profile fixture {other}"),
         }
+    }
+
+    fn access_path_inventory_fetch_url<'a>(
+        profile: &'a RegistrySourceProfile,
+        path_key: &str,
+    ) -> &'a str {
+        profile
+            .document
+            .access_paths
+            .iter()
+            .find(|access_path| access_path.key == path_key)
+            .and_then(|access_path| access_path.inventory.as_ref())
+            .and_then(|inventory| inventory.pointer("/fetch/url"))
+            .and_then(Value::as_str)
+            .unwrap()
     }
 
     fn registry_profile(value: Value) -> RegistrySourceProfile {
