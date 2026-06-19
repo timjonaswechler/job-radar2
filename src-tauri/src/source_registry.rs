@@ -1192,6 +1192,37 @@ mod tests {
     }
 
     #[test]
+    fn muz_global_jobboard_builtin_schema_and_inventory_are_hardened() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snapshot = load_snapshot(temp_dir.path());
+        let profile = snapshot.profile("muz_global_jobboard").unwrap();
+        let access_path = profile
+            .document
+            .access_paths
+            .iter()
+            .find(|access_path| access_path.key == "endpoint_inventory")
+            .unwrap();
+
+        let source_config_schema = access_path.source_config_schema.as_ref().unwrap();
+        assert_eq!(source_config_schema["additionalProperties"], false);
+        assert_eq!(
+            source_config_schema["properties"]["apiBaseUrl"]["pattern"],
+            "^https?://.+/$"
+        );
+        assert_eq!(
+            source_config_schema["properties"]["configUrl"]["pattern"],
+            "^https?://.+/assets/js/jobboard\\.config\\.json$"
+        );
+        assert_eq!(
+            access_path.inventory.as_ref().unwrap()["fields"]["locations"],
+            json!([{
+                "jsonPath": "$.MatchedObjectDescriptor.PositionLocation",
+                "objectFields": ["CityName", "CountryName"]
+            }])
+        );
+    }
+
+    #[test]
     fn loads_valid_profile_backed_and_source_specific_documents() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_json(

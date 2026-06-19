@@ -137,9 +137,10 @@ Use shared field names when different recruiting systems expose the same concept
 - an array result contributes each scalar array item as one location;
 - `null`, missing values, and empty strings are ignored;
 - duplicate locations are removed while preserving first-seen order;
-- optional `"split": "<delimiter>"` on a location expression splits string results by that delimiter after trimming parts.
+- optional `"split": "<delimiter>"` on a location expression splits string results by that delimiter after trimming parts;
+- optional `"objectFields": ["fieldA", "fieldB"]` on a JSON location expression projects an object, or each object in an array, into one location string by reading the listed scalar fields and joining non-empty values with `, `.
 
-Do not split by punctuation implicitly: values such as `Berlin, Germany` are single locations unless the profile explicitly declares `split`.
+Do not split by punctuation implicitly: values such as `Berlin, Germany` are single locations unless the profile explicitly declares `split`. `objectFields` is for endpoint payloads that expose locations as arrays of objects, for example city/country records, without enabling general JSONPath wildcards.
 
 ### Declarative endpoint pagination
 
