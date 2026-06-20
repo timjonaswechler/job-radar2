@@ -55,11 +55,11 @@ impl SourceExecutor for DefaultSourceExecutor {
             match input.source.adapter_key.as_str() {
                 "declarative_endpoint_inventory" | "declarative_sitemap_inventory" => {
                     let executor =
-                        crate::declarative_inventory_executor::DeclarativeInventoryExecutor::new_reqwest();
+                        crate::declarative::inventory::DeclarativeInventoryExecutor::new_reqwest();
                     executor.execute(input).await
                 }
                 "declarative_browser_inventory" => {
-                    let executor = crate::declarative_browser_inventory_executor::DeclarativeBrowserInventoryExecutor::new_managed(
+                    let executor = crate::declarative::browser_inventory::DeclarativeBrowserInventoryExecutor::new_managed(
                         self.browser_runtime_dir.clone(),
                     );
                     executor.execute(input).await

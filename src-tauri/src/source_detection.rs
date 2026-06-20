@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::{
-    declarative_template::{
+    declarative::template::{
         render_template, title_case, to_technical_key, TemplateContext, TemplateError,
     },
     simple_json_path::simple_json_path_exists,
