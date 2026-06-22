@@ -35,7 +35,7 @@ pub(crate) fn normalize_locations(locations: Vec<String>) -> Vec<String> {
         if location.is_empty() {
             continue;
         }
-        if seen.insert(normalized_location_key(&location)) {
+        if seen.insert(normalized_text_key(&location)) {
             normalized_locations.push(location);
         }
     }
@@ -49,8 +49,4 @@ pub(crate) fn collapse_whitespace(value: &str) -> String {
 
 pub(crate) fn normalized_text_key(value: &str) -> String {
     collapse_whitespace(value).to_lowercase()
-}
-
-fn normalized_location_key(value: &str) -> String {
-    normalized_text_key(value)
 }

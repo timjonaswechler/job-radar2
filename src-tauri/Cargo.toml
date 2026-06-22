@@ -30,6 +30,8 @@ futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 regex = "1"
 roxmltree = "0.20"
+unicode-normalization = "0.1"
+unicode-segmentation = "1"
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util", "rt", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }
