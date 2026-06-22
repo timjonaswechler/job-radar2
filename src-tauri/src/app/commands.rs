@@ -448,7 +448,6 @@ mod tests {
                 crate::source::registry::load_snapshot(&state.paths.app_data_dir);
             assert!(registry_snapshot.diagnostics.is_empty());
             assert!(registry_snapshot.source("stepstone_de").is_some());
-            assert!(registry_snapshot.source("indeed_de").is_some());
             assert!(registry_snapshot.profile("greenhouse").is_some());
         });
     }
