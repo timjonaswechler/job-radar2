@@ -23,8 +23,8 @@
 //!   expressions and may yield zero or more locations.
 
 use crate::{
-    search_run_model::{SourceExecutionError, SourceExecutionSource},
-    source_registry::BrowserInteraction,
+    search::run::{SourceExecutionError, SourceExecutionSource},
+    source::registry::BrowserInteraction,
 };
 
 use super::*;

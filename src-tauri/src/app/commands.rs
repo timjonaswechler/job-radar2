@@ -233,28 +233,28 @@ pub fn list_adapters() -> Result<Vec<crate::adapter_registry::AdapterMetadata>, 
 
 fn load_source_registry_snapshot(
     app_data_dir: &Path,
-) -> crate::source_registry::SourceRegistrySnapshot {
-    crate::source_registry::load_snapshot(app_data_dir)
+) -> crate::source::registry::SourceRegistrySnapshot {
+    crate::source::registry::load_snapshot(app_data_dir)
 }
 
 #[tauri::command]
 pub fn list_source_registry_profiles(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source_registry::RegistrySourceProfile>, String> {
+) -> Result<Vec<crate::source::registry::RegistrySourceProfile>, String> {
     Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_profiles)
 }
 
 #[tauri::command]
 pub fn list_source_registry_sources(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source_registry::RegistrySource>, String> {
+) -> Result<Vec<crate::source::registry::RegistrySource>, String> {
     Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_sources)
 }
 
 #[tauri::command]
 pub fn list_source_registry_diagnostics(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source_registry::SourceRegistryDiagnostic>, String> {
+) -> Result<Vec<crate::source::registry::SourceRegistryDiagnostic>, String> {
     Ok(load_source_registry_snapshot(&state.paths.app_data_dir).diagnostics)
 }
 
@@ -262,16 +262,16 @@ pub fn list_source_registry_diagnostics(
 pub async fn detect_source_from_url(
     state: State<'_, AppState>,
     url: String,
-) -> Result<crate::source_detection::SourceDetectionResult, String> {
-    crate::source_detection::detect_source_from_url(&state.paths.app_data_dir, &url).await
+) -> Result<crate::source::detection::SourceDetectionResult, String> {
+    crate::source::detection::detect_source_from_url(&state.paths.app_data_dir, &url).await
 }
 
 #[tauri::command]
 pub async fn create_search_request(
     state: State<'_, AppState>,
-    input: crate::search_request_model::CreateSearchRequestInput,
-) -> Result<crate::search_request_model::SearchRequest, String> {
-    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+    input: crate::search::request::CreateSearchRequestInput,
+) -> Result<crate::search::request::SearchRequest, String> {
+    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
         .create(input)
         .await
 }
@@ -279,8 +279,8 @@ pub async fn create_search_request(
 #[tauri::command]
 pub async fn list_search_requests(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::search_request_model::SearchRequest>, String> {
-    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+) -> Result<Vec<crate::search::request::SearchRequest>, String> {
+    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
         .list()
         .await
 }
@@ -289,8 +289,8 @@ pub async fn list_search_requests(
 pub async fn get_search_request(
     state: State<'_, AppState>,
     id: i64,
-) -> Result<crate::search_request_model::SearchRequest, String> {
-    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+) -> Result<crate::search::request::SearchRequest, String> {
+    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
         .get(id)
         .await
 }
@@ -299,16 +299,16 @@ pub async fn get_search_request(
 pub async fn update_search_request(
     state: State<'_, AppState>,
     id: i64,
-    input: crate::search_request_model::UpdateSearchRequestInput,
-) -> Result<crate::search_request_model::SearchRequest, String> {
-    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+    input: crate::search::request::UpdateSearchRequestInput,
+) -> Result<crate::search::request::SearchRequest, String> {
+    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
         .update(id, input)
         .await
 }
 
 #[tauri::command]
 pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    crate::search_request_model::SearchRequestService::new(&state.db, &state.running_search_runs)
+    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
         .delete(id)
         .await
 }
@@ -317,15 +317,14 @@ pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Resul
 pub async fn run_search_request(
     state: State<'_, AppState>,
     id: i64,
-) -> Result<crate::search_run_model::SearchRunResult, String> {
-    let source_executor = crate::search_run_model::DefaultSourceExecutor::new(
-        state.paths.browser_runtime_dir.clone(),
-    );
-    crate::search_run_model::SearchRunService::new(
+) -> Result<crate::search::run::SearchRunResult, String> {
+    let source_executor =
+        crate::search::run::DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
+    crate::search::run::SearchRunService::new(
         &state.db,
         &state.running_search_runs,
         &source_executor,
-        crate::search_run_model::default_search_run_result_path(),
+        crate::search::run::default_search_run_result_path(),
         state.paths.app_data_dir.clone(),
     )
     .run(id)
@@ -446,7 +445,7 @@ mod tests {
             assert!(removed_tables.is_empty());
 
             let registry_snapshot =
-                crate::source_registry::load_snapshot(&state.paths.app_data_dir);
+                crate::source::registry::load_snapshot(&state.paths.app_data_dir);
             assert!(registry_snapshot.diagnostics.is_empty());
             assert!(registry_snapshot.source("stepstone_de").is_some());
             assert!(registry_snapshot.source("indeed_de").is_some());

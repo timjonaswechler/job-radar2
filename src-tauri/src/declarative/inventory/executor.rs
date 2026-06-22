@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     declarative::template::render_template,
-    search_run_model::{
+    search::run::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor,
     },

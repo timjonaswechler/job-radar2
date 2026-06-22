@@ -26,7 +26,7 @@ use dom_query::{Document, Matcher, Selection};
 use reqwest::Url;
 use serde_json::{Map, Value};
 
-use crate::search_run_model::{SourceCandidate, SourceExecutionError, SourceExecutionSource};
+use crate::search::run::{SourceCandidate, SourceExecutionError, SourceExecutionSource};
 
 use super::*;
 

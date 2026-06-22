@@ -1,16 +1,16 @@
 use super::*;
 use crate::{
     declarative::template::render_template,
-    search_request_model::{
+    search::request::{
         CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
         SearchRequestStatus, SearchRuleInput,
     },
-    search_run_model::{
+    search::run::{
         DefaultSourceExecutor, SearchRunService, SearchRunStatus, SourceCandidate,
         SourceExecutionError, SourceExecutionInput, SourceExecutionSource, SourceExecutor,
         SourceRunStatus,
     },
-    source_registry::ResolvedSelectedAccessPath,
+    source::registry::ResolvedSelectedAccessPath,
 };
 use reqwest::Url;
 use serde_json::{json, Value};

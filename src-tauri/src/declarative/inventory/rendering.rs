@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::{
     declarative::template::{render_template, TemplateContext, TemplateError},
-    search_run_model::{SourceExecutionError, SourceExecutionSource},
+    search::run::{SourceExecutionError, SourceExecutionSource},
     simple_json_path::resolve_simple_json_path,
 };
 
