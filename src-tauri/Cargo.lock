@@ -2145,6 +2145,8 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "tokio",
+ "unicode-normalization",
+ "unicode-segmentation",
  "uuid",
  "zip",
 ]
