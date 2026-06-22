@@ -1,15 +1,15 @@
 use super::*;
 use crate::{
-    search_request_model::{
+    search::request::{
         CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
         SearchRequestStatus, SearchRuleInput,
     },
-    search_run_model::{
+    search::run::{
         DefaultSourceExecutor, SearchRunService, SearchRunStatus, SourceCandidate,
         SourceExecutionError, SourceExecutionInput, SourceExecutionSource, SourceExecutor,
         SourceRunStatus,
     },
-    source_registry::{BrowserInteraction, ResolvedSelectedAccessPath},
+    source::registry::{BrowserInteraction, ResolvedSelectedAccessPath},
 };
 use reqwest::Url;
 use serde_json::{json, Value};
@@ -575,13 +575,10 @@ fn search_request() -> SearchRequest {
         status: SearchRequestStatus::Active,
         include_rules: vec![text_rule("Engineer")]
             .into_iter()
-            .map(|rule| crate::search_request_model::SearchRule {
-                target: crate::search_request_model::SearchRuleTarget::try_from(
-                    rule.target.as_str(),
-                )
-                .unwrap(),
-                kind: crate::search_request_model::SearchRuleKind::try_from(rule.kind.as_str())
+            .map(|rule| crate::search::request::SearchRule {
+                target: crate::search::request::SearchRuleTarget::try_from(rule.target.as_str())
                     .unwrap(),
+                kind: crate::search::request::SearchRuleKind::try_from(rule.kind.as_str()).unwrap(),
                 value: rule.value,
             })
             .collect(),

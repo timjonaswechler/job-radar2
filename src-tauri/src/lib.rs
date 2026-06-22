@@ -3,16 +3,11 @@ mod app;
 mod browser_runtime;
 mod db;
 mod declarative;
-mod search_request_model;
-mod search_run;
-mod search_run_model;
-mod search_run_smoke;
+mod search;
 mod simple_json_path;
-mod source_detection;
-#[allow(dead_code)]
-mod source_registry;
+mod source;
 
-pub use search_run_smoke::run_dev_search_run_smoke_cli;
+pub use search::smoke::run_dev_search_run_smoke_cli;
 
 use tauri::Manager;
 

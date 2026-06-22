@@ -27,9 +27,9 @@ use serde_json::{Map, Value};
 
 use crate::{
     declarative::template::{render_template, TemplateContext, TemplateError},
-    search_request_model::{SearchRequest, SearchRuleKind, SearchRuleTarget},
-    search_run::normalization::collapse_whitespace,
-    search_run_model::{SourceExecutionError, SourceExecutionInput, SourceExecutionSource},
+    search::normalization::collapse_whitespace,
+    search::request::{SearchRequest, SearchRuleKind, SearchRuleTarget},
+    search::run::{SourceExecutionError, SourceExecutionInput, SourceExecutionSource},
 };
 
 pub(super) fn render_query_url(

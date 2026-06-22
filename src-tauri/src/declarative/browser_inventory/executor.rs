@@ -25,7 +25,7 @@
 use serde_json::Value;
 use std::path::PathBuf;
 
-use crate::search_run_model::{
+use crate::search::run::{
     BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
     SourceExecutor,
 };
