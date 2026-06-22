@@ -16,6 +16,8 @@ dist-ssr
 *.local
 search-run-result.json
 backups/
+docs/reports/
+prompts/source-profile-fixture-workup.md
 
 # Editor directories and files
 .vscode/*
