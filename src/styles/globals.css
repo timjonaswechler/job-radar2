@@ -159,6 +159,7 @@
 
     html {
         font-family: var(--font-sans);
+        font-size: var(--job-radar-base-font-size, 16px);
         @apply font-sans;
     }
 

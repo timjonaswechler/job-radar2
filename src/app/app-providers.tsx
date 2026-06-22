@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
 import { CommandSearchProvider } from "@/context/command-search-provider"
+import { FontSizeProvider } from "@/context/font-size-provider"
 import { LocaleProvider } from "@/context/locale-provider"
 import { ThemeProvider } from "@/context/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -13,11 +14,13 @@ type AppProvidersProps = {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <ThemeProvider>
-      <LocaleProvider>
-        <TooltipProvider>
-          <CommandSearchProvider>{children}</CommandSearchProvider>
-        </TooltipProvider>
-      </LocaleProvider>
+      <FontSizeProvider>
+        <LocaleProvider>
+          <TooltipProvider>
+            <CommandSearchProvider>{children}</CommandSearchProvider>
+          </TooltipProvider>
+        </LocaleProvider>
+      </FontSizeProvider>
     </ThemeProvider>
   )
 }

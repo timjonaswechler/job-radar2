@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { AppHeader } from "./app-header";
@@ -17,11 +18,17 @@ const sidebarProviderStyle = {
 
 export function AppLayout({ title, children }: AppLayoutProps) {
   return (
-    <SidebarProvider style={sidebarProviderStyle}>
+    <SidebarProvider
+      className="h-svh overflow-hidden"
+      style={sidebarProviderStyle}
+    >
       <AppSidebar variant="inset" collapsible="icon" />
-      <SidebarInset className="relative z-20 min-w-0 peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]">
+      <SidebarInset className="relative z-20 min-h-0 min-w-0 overflow-hidden peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]">
         <AppHeader title={title} />
-        <main className="h-full min-w-0 p-4">{children}</main>
+
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="min-w-0 p-4">{children}</div>
+        </ScrollArea>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -7,6 +7,7 @@ export type AppPreferences = {
   theme: AppTheme
   language: SupportedLanguage
   defaultSearchRadiusKm: number
+  baseFontSizePx: number
 }
 
 export function getAppPreferences() {
@@ -27,4 +28,8 @@ export function setAppLanguage(language: SupportedLanguage) {
 
 export function setDefaultSearchRadiusKm(radiusKm: number) {
   return invoke<AppPreferences>("set_default_search_radius_km", { radiusKm })
+}
+
+export function setBaseFontSizePx(baseFontSizePx: number) {
+  return invoke<AppPreferences>("set_base_font_size_px", { baseFontSizePx })
 }

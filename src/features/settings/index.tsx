@@ -14,15 +14,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   getAppPreferences,
+  setBaseFontSizePx,
   setDefaultSearchRadiusKm,
   type AppPreferences,
 } from "@/lib/api/app-preferences";
+import { APP_SETTINGS, isBaseFontSizePx } from "@/lib/app-settings";
+import {
+  applyBaseFontSizeToDocument,
+  writeStoredBaseFontSizePx,
+} from "@/lib/font-size";
 
 const maxSearchRadiusKm = 500;
 
 export function SettingsFeature() {
   const [preferences, setPreferences] = useState<AppPreferences | null>(null);
   const [radiusText, setRadiusText] = useState("30");
+  const [baseFontSizeText, setBaseFontSizeText] = useState(
+    String(APP_SETTINGS.baseFontSizePx.default),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +45,9 @@ export function SettingsFeature() {
         if (cancelled) return;
         setPreferences(nextPreferences);
         setRadiusText(String(nextPreferences.defaultSearchRadiusKm));
+        setBaseFontSizeText(String(nextPreferences.baseFontSizePx));
+        writeStoredBaseFontSizePx(nextPreferences.baseFontSizePx);
+        applyBaseFontSizeToDocument(nextPreferences.baseFontSizePx);
         setError(null);
       })
       .catch((unknownError) => {
@@ -54,6 +66,8 @@ export function SettingsFeature() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!preferences) return;
+
     const radiusKm = Number(radiusText);
     if (!Number.isInteger(radiusKm) || radiusKm < 0 || radiusKm > maxSearchRadiusKm) {
       setError(`Der Standard-Suchradius muss zwischen 0 und ${maxSearchRadiusKm} km liegen.`);
@@ -61,12 +75,30 @@ export function SettingsFeature() {
       return;
     }
 
+    const baseFontSizePx = Number(baseFontSizeText);
+    if (!isBaseFontSizePx(baseFontSizePx)) {
+      setError(
+        `Die Basisschriftgröße muss zwischen ${APP_SETTINGS.baseFontSizePx.min} und ${APP_SETTINGS.baseFontSizePx.max} px liegen.`,
+      );
+      setSaved(false);
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
-      const nextPreferences = await setDefaultSearchRadiusKm(radiusKm);
+      let nextPreferences = preferences;
+      if (nextPreferences.defaultSearchRadiusKm !== radiusKm) {
+        nextPreferences = await setDefaultSearchRadiusKm(radiusKm);
+      }
+      if (nextPreferences.baseFontSizePx !== baseFontSizePx) {
+        nextPreferences = await setBaseFontSizePx(baseFontSizePx);
+      }
       setPreferences(nextPreferences);
       setRadiusText(String(nextPreferences.defaultSearchRadiusKm));
+      setBaseFontSizeText(String(nextPreferences.baseFontSizePx));
+      writeStoredBaseFontSizePx(nextPreferences.baseFontSizePx);
+      applyBaseFontSizeToDocument(nextPreferences.baseFontSizePx);
       setSaved(true);
     } catch (unknownError) {
       setError(String(unknownError));
@@ -86,7 +118,7 @@ export function SettingsFeature() {
               <FrameTitle>Einstellungen</FrameTitle>
             </div>
             <FrameDescription>
-              Globale Vorgaben für Suchläufe. Quellen speichern weiterhin nur stabile Portal- und Zugriffskonfiguration.
+              Globale Vorgaben für Darstellung und Suchläufe. Quellen speichern weiterhin nur stabile Portal- und Zugriffskonfiguration.
             </FrameDescription>
           </FrameHeader>
         </FramePanel>
@@ -106,6 +138,7 @@ export function SettingsFeature() {
           <AlertTitle>Einstellungen gespeichert</AlertTitle>
           <AlertDescription>
             Neuer Standard-Suchradius: {preferences?.defaultSearchRadiusKm ?? radiusText} km.
+            Basisschriftgröße: {preferences?.baseFontSizePx ?? baseFontSizeText} px.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -114,9 +147,9 @@ export function SettingsFeature() {
         <FramePanel>
           <form className="grid max-w-xl gap-4" onSubmit={(event) => void handleSubmit(event)}>
             <FrameHeader className="gap-1 px-0 pt-0">
-              <FrameTitle>Job-Portal-Suchläufe</FrameTitle>
+              <FrameTitle>Globale Vorgaben</FrameTitle>
               <FrameDescription>
-                Der Radius gilt als Standard für StepStone- und Indeed-Suchläufe. Suchtext und Ort werden erst im Suchlauf gesetzt.
+                Lege Darstellung und Standardwerte für Job-Portal-Suchläufe fest. Suchtext und Ort werden erst im Suchlauf gesetzt.
               </FrameDescription>
             </FrameHeader>
 
@@ -136,6 +169,29 @@ export function SettingsFeature() {
                 value={radiusText}
                 onChange={(event) => {
                   setRadiusText(event.target.value);
+                  setSaved(false);
+                }}
+                disabled={loading || saving}
+                required
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium" htmlFor="base-font-size-px">
+                Basisschriftgröße in px
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Setzt die Root-Schriftgröße. Rem-basierte Tailwind- und shadcn-Abstände skalieren dadurch mit.
+              </p>
+              <Input
+                id="base-font-size-px"
+                type="number"
+                min={APP_SETTINGS.baseFontSizePx.min}
+                max={APP_SETTINGS.baseFontSizePx.max}
+                step={1}
+                value={baseFontSizeText}
+                onChange={(event) => {
+                  setBaseFontSizeText(event.target.value);
                   setSaved(false);
                 }}
                 disabled={loading || saving}

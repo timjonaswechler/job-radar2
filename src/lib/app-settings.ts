@@ -13,6 +13,12 @@ export type AppSettings = {
     default: SupportedLanguage
     values: readonly SupportedLanguage[]
   }
+  baseFontSizePx: {
+    storageKey: string
+    default: number
+    min: number
+    max: number
+  }
 }
 
 export const APP_SETTINGS: AppSettings = {
@@ -26,6 +32,12 @@ export const APP_SETTINGS: AppSettings = {
     default: "de",
     values: ["de", "en"],
   },
+  baseFontSizePx: {
+    storageKey: "job-radar-base-font-size-px",
+    default: 16,
+    min: 12,
+    max: 24,
+  },
 }
 
 export function isAppTheme(value: string | null): value is AppTheme {
@@ -36,4 +48,12 @@ export function isAppLanguage(
   value: string | null | undefined
 ): value is SupportedLanguage {
   return APP_SETTINGS.language.values.includes(value as SupportedLanguage)
+}
+
+export function isBaseFontSizePx(value: number): boolean {
+  return (
+    Number.isInteger(value) &&
+    value >= APP_SETTINGS.baseFontSizePx.min &&
+    value <= APP_SETTINGS.baseFontSizePx.max
+  )
 }
