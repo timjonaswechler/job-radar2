@@ -19,6 +19,12 @@ use crate::{
 
 use super::*;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DetectionEvaluationMode {
+    UrlOnlyFastPath,
+    WithSubmittedHtml,
+}
+
 #[derive(Default)]
 pub(super) struct ProfileEvaluation {
     matches: Vec<SourceDetectionMatch>,
@@ -32,34 +38,75 @@ pub(in crate::source::detection) async fn detect_with_source_profiles<
     input_url: &Url,
     profiles: &[RegistrySourceProfile],
 ) -> Result<SourceDetectionResult, String> {
-    let mut warnings = Vec::new();
+    let fast_path_evaluation = evaluate_source_profiles(
+        client,
+        input_url,
+        "",
+        profiles,
+        DetectionEvaluationMode::UrlOnlyFastPath,
+    )
+    .await?;
+    if !fast_path_evaluation.matches.is_empty() {
+        return Ok(source_detection_result(fast_path_evaluation));
+    }
+
+    let mut initial_warnings = Vec::new();
     let html = match client.get_text(input_url.clone()).await {
         Ok(html) => html,
         Err(error) => {
-            warnings.push(format!(
+            initial_warnings.push(format!(
                 "initial source URL {} could not be fetched during profile detection: {error}",
                 input_url.as_str()
             ));
             String::new()
         }
     };
-    let mut matches = Vec::new();
+
+    let mut fallback_evaluation = evaluate_source_profiles(
+        client,
+        input_url,
+        &html,
+        profiles,
+        DetectionEvaluationMode::WithSubmittedHtml,
+    )
+    .await?;
+    initial_warnings.extend(fallback_evaluation.warnings);
+    fallback_evaluation.warnings = initial_warnings;
+
+    Ok(source_detection_result(fallback_evaluation))
+}
+
+async fn evaluate_source_profiles<C: DetectionHttpClient + Sync>(
+    client: &C,
+    input_url: &Url,
+    html: &str,
+    profiles: &[RegistrySourceProfile],
+    mode: DetectionEvaluationMode,
+) -> Result<ProfileEvaluation, String> {
+    let mut evaluation = ProfileEvaluation::default();
 
     for profile in profiles {
-        match evaluate_source_profile(client, input_url, &html, profile).await {
-            Ok(evaluation) => {
-                matches.extend(evaluation.matches);
-                warnings.extend(evaluation.warnings);
+        match evaluate_source_profile(client, input_url, html, profile, mode).await {
+            Ok(profile_evaluation) => {
+                evaluation.matches.extend(profile_evaluation.matches);
+                evaluation.warnings.extend(profile_evaluation.warnings);
             }
-            Err(error) => warnings.push(format!(
+            Err(error) => evaluation.warnings.push(format!(
                 "source profile `{}`: {error}",
                 profile.document.key
             )),
         }
     }
 
+    Ok(evaluation)
+}
+
+fn source_detection_result(evaluation: ProfileEvaluation) -> SourceDetectionResult {
+    let matches = evaluation.matches;
+    let warnings = evaluation.warnings;
+
     if matches.is_empty() {
-        return Ok(SourceDetectionResult {
+        return SourceDetectionResult {
             status: SourceDetectionStatus::Unsupported,
             adapter_key: None,
             profile_key: None,
@@ -74,11 +121,11 @@ pub(in crate::source::detection) async fn detect_with_source_profiles<
             evidence: Vec::new(),
             warnings,
             matches,
-        });
+        };
     }
 
     if matches.len() > 1 {
-        return Ok(SourceDetectionResult {
+        return SourceDetectionResult {
             status: SourceDetectionStatus::Ambiguous,
             adapter_key: None,
             profile_key: None,
@@ -93,11 +140,11 @@ pub(in crate::source::detection) async fn detect_with_source_profiles<
             evidence: Vec::new(),
             warnings,
             matches,
-        });
+        };
     }
 
     let detected = matches[0].clone();
-    Ok(SourceDetectionResult {
+    SourceDetectionResult {
         status: SourceDetectionStatus::Detected,
         adapter_key: Some(detected.adapter_key.clone()),
         profile_key: Some(detected.profile_key.clone()),
@@ -112,14 +159,15 @@ pub(in crate::source::detection) async fn detect_with_source_profiles<
         evidence: detected.evidence.clone(),
         warnings,
         matches,
-    })
+    }
 }
 
-pub(super) async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
+async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
     client: &C,
     input_url: &Url,
     html: &str,
     profile: &RegistrySourceProfile,
+    mode: DetectionEvaluationMode,
 ) -> Result<ProfileEvaluation, String> {
     let document = &profile.document;
     let Some(detect) = &document.detect else {
@@ -140,6 +188,37 @@ pub(super) async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
         });
     }
 
+    let fast_path_alternatives;
+    let alternatives = match mode {
+        DetectionEvaluationMode::UrlOnlyFastPath => {
+            if !checks_can_run_before_submitted_html(&detect.required) {
+                return Ok(ProfileEvaluation::default());
+            }
+
+            if let Some(alternatives) = detect.any_of.as_deref() {
+                fast_path_alternatives = alternatives
+                    .iter()
+                    .filter(|alternative| {
+                        detection_path_can_run_before_submitted_html(
+                            &detect.required,
+                            alternative.as_slice(),
+                        )
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if fast_path_alternatives.is_empty() {
+                    return Ok(ProfileEvaluation::default());
+                }
+                Some(fast_path_alternatives.as_slice())
+            } else if checks_include_input_url_regex(&detect.required) {
+                None
+            } else {
+                return Ok(ProfileEvaluation::default());
+            }
+        }
+        DetectionEvaluationMode::WithSubmittedHtml => detect.any_of.as_deref(),
+    };
+
     let mut required_captures = HashMap::new();
     let mut required_evidence = Vec::new();
 
@@ -156,7 +235,7 @@ pub(super) async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
         client,
         input_url,
         html,
-        detect.any_of.as_deref(),
+        alternatives,
         &required_captures,
         &required_evidence,
     )
@@ -192,6 +271,30 @@ pub(super) async fn evaluate_source_profile<C: DetectionHttpClient + Sync>(
 
 pub(super) fn detect_supports_http(detect: &DetectionBlock) -> bool {
     detect.phases.is_empty() || detect.phases.contains(&DetectionPhase::Http)
+}
+
+fn detection_path_can_run_before_submitted_html(required: &[Value], alternative: &[Value]) -> bool {
+    required
+        .iter()
+        .chain(alternative.iter())
+        .all(check_can_run_before_submitted_html)
+        && (checks_include_input_url_regex(required) || checks_include_input_url_regex(alternative))
+}
+
+fn checks_can_run_before_submitted_html(checks: &[Value]) -> bool {
+    checks.iter().all(check_can_run_before_submitted_html)
+}
+
+fn checks_include_input_url_regex(checks: &[Value]) -> bool {
+    checks
+        .iter()
+        .any(|check| check.get("inputUrlRegex").and_then(Value::as_str).is_some())
+}
+
+fn check_can_run_before_submitted_html(check: &Value) -> bool {
+    check.get("inputUrlRegex").and_then(Value::as_str).is_some()
+        || check.get("fetchText").and_then(Value::as_object).is_some()
+        || check.get("fetchJson").and_then(Value::as_object).is_some()
 }
 
 pub(super) async fn evaluate_detection_any_of<C: DetectionHttpClient + Sync>(

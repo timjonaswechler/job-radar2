@@ -3,9 +3,11 @@ use crate::source::registry::{
     RegistrySourceProfile, SourceProfileDocument, SourceRegistryDocumentOrigin,
 };
 use serde_json::json;
+use std::sync::Mutex;
 
 struct FixtureHttpClient {
     responses: HashMap<String, String>,
+    requests: Mutex<Vec<String>>,
 }
 
 impl FixtureHttpClient {
@@ -15,13 +17,19 @@ impl FixtureHttpClient {
                 .into_iter()
                 .map(|(url, body)| (url.to_string(), body.to_string()))
                 .collect(),
+            requests: Mutex::new(Vec::new()),
         }
+    }
+
+    fn requested_urls(&self) -> Vec<String> {
+        self.requests.lock().unwrap().clone()
     }
 }
 
 impl DetectionHttpClient for FixtureHttpClient {
     fn get_text(&self, url: Url) -> BoxedTextFuture<'_> {
         Box::pin(async move {
+            self.requests.lock().unwrap().push(url.as_str().to_string());
             self.responses
                 .get(url.as_str())
                 .cloned()
@@ -151,6 +159,128 @@ fn source_profile_detection_recommends_path_after_required_capture_and_availabil
 }
 
 #[test]
+fn source_profile_detection_uses_url_and_endpoint_fast_path_without_fetching_submitted_page() {
+    tauri::async_runtime::block_on(async {
+        let client = FixtureHttpClient::new([(
+            "https://acme.example-board.test/xml?language=en",
+            r#"<?xml version="1.0" encoding="UTF-8"?><example-jobs></example-jobs>"#,
+        )]);
+        let profile = registry_profile(json!({
+            "schemaVersion": 1,
+            "key": "example_board",
+            "name": "Example Board",
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [],
+                "anyOf": [[
+                    {
+                        "inputUrlRegex": "(?i)^https?://([a-z0-9-]+)\\.example-board\\.test(?:[/:?#]|$)",
+                        "captureAs": "tenant"
+                    },
+                    {
+                        "fetchText": {
+                            "url": "/xml?language=en",
+                            "contains": "<example-jobs"
+                        }
+                    }
+                ]]
+            },
+            "identity": {
+                "keyCandidates": ["{{capture:tenant|technicalKey}}"],
+                "nameCandidates": ["{{capture:tenant|titleCase}}"]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": {
+                    "requiredCaptures": ["tenant"],
+                    "sourceConfig": { "tenant": "{{capture:tenant}}" }
+                }
+            }]
+        }));
+
+        let result = detect_with_source_profiles(
+            &client,
+            &Url::parse("https://acme.example-board.test/").unwrap(),
+            &[profile],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SourceDetectionStatus::Detected);
+        assert_eq!(result.key.as_deref(), Some("acme"));
+        assert_eq!(result.source_config.unwrap()["tenant"], "acme");
+        assert!(result.warnings.is_empty());
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://acme.example-board.test/xml?language=en"]
+        );
+    });
+}
+
+#[test]
+fn source_profile_detection_uses_url_and_json_endpoint_fast_path_without_fetching_submitted_page() {
+    tauri::async_runtime::block_on(async {
+        let client = FixtureHttpClient::new([(
+            "https://acme.example-board.test/status.json",
+            r#"{"jobs":[{"title":"Engineer"}]}"#,
+        )]);
+        let profile = registry_profile(json!({
+            "schemaVersion": 1,
+            "key": "example_board",
+            "name": "Example Board",
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [],
+                "anyOf": [[
+                    {
+                        "inputUrlRegex": "(?i)^https?://([a-z0-9-]+)\\.example-board\\.test(?:[/:?#]|$)",
+                        "captureAs": "tenant"
+                    },
+                    {
+                        "fetchJson": {
+                            "url": "/status.json",
+                            "pathExists": "$.jobs"
+                        }
+                    }
+                ]]
+            },
+            "identity": {
+                "keyCandidates": ["{{capture:tenant|technicalKey}}"],
+                "nameCandidates": ["{{capture:tenant|titleCase}}"]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": {
+                    "requiredCaptures": ["tenant"],
+                    "sourceConfig": { "tenant": "{{capture:tenant}}" }
+                }
+            }]
+        }));
+
+        let result = detect_with_source_profiles(
+            &client,
+            &Url::parse("https://acme.example-board.test/").unwrap(),
+            &[profile],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SourceDetectionStatus::Detected);
+        assert_eq!(result.key.as_deref(), Some("acme"));
+        assert_eq!(result.source_config.unwrap()["tenant"], "acme");
+        assert!(result.warnings.is_empty());
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://acme.example-board.test/status.json"]
+        );
+    });
+}
+
+#[test]
 fn source_profile_detection_can_capture_from_input_url() {
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([(
@@ -200,7 +330,8 @@ fn source_profile_detection_can_capture_from_input_url() {
 }
 
 #[test]
-fn source_profile_detection_can_continue_after_initial_fetch_failure() {
+fn source_profile_detection_uses_required_url_and_endpoint_checks_without_fetching_submitted_page()
+{
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([(
             "https://acme.example-board.test/xml?language=en",
@@ -251,9 +382,11 @@ fn source_profile_detection_can_continue_after_initial_fetch_failure() {
         assert_eq!(result.status, SourceDetectionStatus::Detected);
         assert_eq!(result.key.as_deref(), Some("acme"));
         assert_eq!(result.source_config.unwrap()["tenant"], "acme");
-        let warnings = result.warnings.join("\n");
-        assert!(warnings.contains("https://acme.example-board.test/"));
-        assert!(warnings.contains("not found"));
+        assert!(result.warnings.is_empty());
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://acme.example-board.test/xml?language=en"]
+        );
     });
 }
 
@@ -400,6 +533,47 @@ fn source_profile_detection_captures_first_non_empty_regex_group() {
 
         assert_eq!(result.status, SourceDetectionStatus::Detected);
         assert_eq!(result.source_config.unwrap()["tenant"], "bravo");
+    });
+}
+
+#[test]
+fn html_dependent_detection_fetches_submitted_page_during_fallback() {
+    tauri::async_runtime::block_on(async {
+        let client = FixtureHttpClient::new([(
+            "https://html-board.example/jobs",
+            r#"<html><body><main id="html-board-root">Jobs</main></body></html>"#,
+        )]);
+        let profile = registry_profile(json!({
+            "schemaVersion": 1,
+            "key": "html_board",
+            "name": "HTML Board",
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [{ "htmlContains": "html-board-root" }]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": { "sourceConfig": { "startUrl": "{{inputUrl}}" } }
+            }]
+        }));
+
+        let result = detect_with_source_profiles(
+            &client,
+            &Url::parse("https://html-board.example/jobs").unwrap(),
+            &[profile],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SourceDetectionStatus::Detected);
+        assert_eq!(result.profile_key.as_deref(), Some("html_board"));
+        assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://html-board.example/jobs"]
+        );
     });
 }
 
@@ -831,23 +1005,12 @@ fn greenhouse_ashby_and_lever_do_not_detect_company_domain_only_pages() {
 }
 
 #[test]
-fn detects_personio_hosted_page_with_xml_feed_config() {
+fn detects_personio_hosted_page_with_xml_feed_config_without_fetching_submitted_page() {
     tauri::async_runtime::block_on(async {
-        let client = FixtureHttpClient::new([
-            (
-                "https://demo.jobs.personio.de/",
-                r#"
-                    <html>
-                      <head><title>Jobs bei Demo AG</title></head>
-                      <body><h1>Jobs bei Demo AG</h1></body>
-                    </html>
-                    "#,
-            ),
-            (
-                "https://demo.jobs.personio.de/xml?language=en",
-                r#"<?xml version="1.0" encoding="UTF-8"?><workzag-jobs></workzag-jobs>"#,
-            ),
-        ]);
+        let client = FixtureHttpClient::new([(
+            "https://demo.jobs.personio.de/xml?language=en",
+            r#"<?xml version="1.0" encoding="UTF-8"?><workzag-jobs></workzag-jobs>"#,
+        )]);
 
         let result = detect_with_source_profiles(
             &client,
@@ -871,36 +1034,50 @@ fn detects_personio_hosted_page_with_xml_feed_config() {
         assert_eq!(source_config["personioHost"], "demo.jobs.personio.de");
         assert_eq!(source_config["language"], "en");
         assert_eq!(source_config["startUrl"], "https://demo.jobs.personio.de/");
+        assert!(result.warnings.is_empty());
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://demo.jobs.personio.de/xml?language=en"]
+        );
     });
 }
 
 #[test]
-fn detects_personio_hosted_page_when_initial_fetch_fails_but_xml_feed_works() {
+fn html_dependent_detection_keeps_initial_fetch_failure_as_non_fatal_warning() {
     tauri::async_runtime::block_on(async {
-        let client = FixtureHttpClient::new([(
-            "https://demo.jobs.personio.de/xml?language=en",
-            r#"<?xml version="1.0" encoding="UTF-8"?><workzag-jobs></workzag-jobs>"#,
-        )]);
+        let client = FixtureHttpClient::new([]);
+        let profile = registry_profile(json!({
+            "schemaVersion": 1,
+            "key": "html_board",
+            "name": "HTML Board",
+            "kind": "recruiting_system",
+            "detect": {
+                "phases": ["http"],
+                "required": [{ "htmlContains": "html-board-root" }]
+            },
+            "accessPaths": [{
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "availability": { "sourceConfig": { "startUrl": "{{inputUrl}}" } }
+            }]
+        }));
 
         let result = detect_with_source_profiles(
             &client,
-            &Url::parse("https://demo.jobs.personio.de/").unwrap(),
-            &[builtin_profile("personio")],
+            &Url::parse("https://html-board.example/jobs").unwrap(),
+            &[profile],
         )
         .await
         .unwrap();
 
-        assert_eq!(result.status, SourceDetectionStatus::Detected);
-        assert_eq!(result.profile_key.as_deref(), Some("personio"));
-        assert_eq!(result.path_key.as_deref(), Some("endpoint_inventory"));
-
-        let source_config = result.source_config.unwrap();
-        assert_eq!(source_config["boardSlug"], "demo");
-        assert_eq!(source_config["personioHost"], "demo.jobs.personio.de");
-        assert_eq!(source_config["language"], "en");
-
+        assert_eq!(result.status, SourceDetectionStatus::Unsupported);
+        assert!(result.matches.is_empty());
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://html-board.example/jobs"]
+        );
         let warnings = result.warnings.join("\n");
-        assert!(warnings.contains("https://demo.jobs.personio.de/"));
+        assert!(warnings.contains("https://html-board.example/jobs"));
         assert!(warnings.contains("not found"));
     });
 }
