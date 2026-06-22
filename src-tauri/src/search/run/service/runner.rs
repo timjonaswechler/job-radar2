@@ -47,8 +47,8 @@ impl<'a> SearchRunService<'a> {
             .await?;
         validate_executable_search_request(&search_request)?;
 
-        let include_rules = compile_rules(&search_request.include_rules, "includeRules")?;
-        let exclude_rules = compile_rules(&search_request.exclude_rules, "excludeRules")?;
+        let include_rules = compile_rules(&search_request.include_rules, "includeRules", false)?;
+        let exclude_rules = compile_rules(&search_request.exclude_rules, "excludeRules", true)?;
         let registry_snapshot =
             crate::source::registry::load_snapshot(&self.source_registry_app_data_dir);
         let selected_sources =

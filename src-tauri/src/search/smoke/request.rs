@@ -31,7 +31,7 @@ pub(super) async fn get_or_create_smoke_search_request(
 fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String]) -> bool {
     search_request.status == SearchRequestStatus::Active
         && search_request.include_rules == expected_rules(INCLUDE_RULE_VALUES)
-        && search_request.exclude_rules == expected_rules(EXCLUDE_RULE_VALUES)
+        && search_request.exclude_rules == expected_regex_rules(EXCLUDE_RULE_VALUES)
         && search_request.locations == vec![SMOKE_LOCATION.to_string()]
         && search_request.radius_km == Some(SMOKE_RADIUS_KM)
         && search_request.source_keys == source_keys
@@ -47,7 +47,7 @@ fn smoke_search_request_input(source_keys: Vec<String>) -> CreateSearchRequestIn
             .collect(),
         exclude_rules: EXCLUDE_RULE_VALUES
             .iter()
-            .map(|value| text_rule_input(value))
+            .map(|value| regex_rule_input(value))
             .collect(),
         locations: vec![SMOKE_LOCATION.to_string()],
         radius_km: Some(SMOKE_RADIUS_KM),
@@ -66,10 +66,29 @@ pub(super) fn expected_rules(values: &[&str]) -> Vec<SearchRule> {
         .collect()
 }
 
+fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {
+    values
+        .iter()
+        .map(|value| SearchRule {
+            target: SearchRuleTarget::Title,
+            kind: SearchRuleKind::Regex,
+            value: (*value).to_string(),
+        })
+        .collect()
+}
+
 fn text_rule_input(value: &str) -> SearchRuleInput {
     SearchRuleInput {
         target: "title".to_string(),
         kind: "text".to_string(),
+        value: value.to_string(),
+    }
+}
+
+fn regex_rule_input(value: &str) -> SearchRuleInput {
+    SearchRuleInput {
+        target: "title".to_string(),
+        kind: "regex".to_string(),
         value: value.to_string(),
     }
 }
