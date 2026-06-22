@@ -10,4 +10,10 @@ pub(super) const SUCCESSFACTORS_PROFILE_KEY: &str = "successfactors";
 pub(super) const SMOKE_LOCATION: &str = "Mainz";
 pub(super) const SMOKE_RADIUS_KM: i64 = 30;
 pub(super) const INCLUDE_RULE_VALUES: &[&str] = &["Physik", "Laser"];
-pub(super) const EXCLUDE_RULE_VALUES: &[&str] = &["Praktikum", "Werkstudent", "Schülerpraktikum"];
+pub(super) const EXCLUDE_RULE_VALUES: &[&str] = &[
+    "Praktik(um|ant)",
+    "Werkstudent",
+    "Student",
+    "Masterthesis",
+    "Ausbildung",
+];

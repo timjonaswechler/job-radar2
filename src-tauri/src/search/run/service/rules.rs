@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 use crate::search::request::{SearchRule, SearchRuleKind, SearchRuleTarget};
 
@@ -17,6 +17,7 @@ pub(super) enum CompiledRuleMatcher {
 pub(super) fn compile_rules(
     rules: &[SearchRule],
     field: &str,
+    regex_case_insensitive: bool,
 ) -> Result<Vec<CompiledRule>, String> {
     rules
         .iter()
@@ -24,11 +25,14 @@ pub(super) fn compile_rules(
         .map(|(index, rule)| {
             let matcher = match rule.kind {
                 SearchRuleKind::Text => CompiledRuleMatcher::Text(rule.value.to_lowercase()),
-                SearchRuleKind::Regex => {
-                    CompiledRuleMatcher::Regex(Regex::new(&rule.value).map_err(|error| {
-                        format!("{field}[{index}].value saved regex is invalid: {error}")
-                    })?)
-                }
+                SearchRuleKind::Regex => CompiledRuleMatcher::Regex(
+                    RegexBuilder::new(&rule.value)
+                        .case_insensitive(regex_case_insensitive)
+                        .build()
+                        .map_err(|error| {
+                            format!("{field}[{index}].value saved regex is invalid: {error}")
+                        })?,
+                ),
             };
             Ok(CompiledRule {
                 target: rule.target,

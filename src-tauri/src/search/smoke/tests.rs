@@ -1,6 +1,8 @@
 use super::*;
 use crate::{
-    search::request::{RunningSearchRuns, SearchRequestService},
+    search::request::{
+        RunningSearchRuns, SearchRequestService, SearchRule, SearchRuleKind, SearchRuleTarget,
+    },
     search::run::{
         BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
         SourceExecutor, SourceRunStatus,
@@ -79,6 +81,30 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
                         &["Mainz"],
                     ),
                     candidate(
+                        "PraktikantIn Lasermaterialbearbeitung (mwd)",
+                        "SCHOTT",
+                        "https://join.schott.com/job/Mainz-PraktikantIn-Lasermaterialbearbeitung-55122/",
+                        &["Mainz"],
+                    ),
+                    candidate(
+                        "Ausbildung PhysiklaborantIn (mwd)",
+                        "SCHOTT",
+                        "https://join.schott.com/job/Mainz-Ausbildung-PhysiklaborantIn-55122/",
+                        &["Mainz"],
+                    ),
+                    candidate(
+                        "StudentIn Physik Technik Für Masterthesis Laser Materialbearbeitung",
+                        "SCHOTT",
+                        "https://join.schott.com/job/Mainz-StudentIn-Physik-Technik-Masterthesis-Laser-Materialbearbeitung-55122/",
+                        &["Mainz"],
+                    ),
+                    candidate(
+                        "Masterthesis Laser-/ Materialbearbeitung (m/w/d)*",
+                        "SCHOTT",
+                        "https://join.schott.com/job/Mainz-Masterthesis-Laser-Materialbearbeitung-55122/",
+                        &["Mainz"],
+                    ),
+                    candidate(
                         "ChemielaborantIn Analytik",
                         "SCHOTT",
                         "https://join.schott.com/job/Mainz-ChemielaborantIn-Analytik-55122/",
@@ -117,7 +143,13 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
         );
         assert_eq!(
             search_request.exclude_rules,
-            expected_rules(EXCLUDE_RULE_VALUES)
+            expected_regex_rules(&[
+                "Praktik(um|ant)",
+                "Werkstudent",
+                "Student",
+                "Masterthesis",
+                "Ausbildung",
+            ])
         );
         assert_eq!(search_request.locations, vec![SMOKE_LOCATION]);
         assert_eq!(search_request.radius_km, Some(SMOKE_RADIUS_KM));
@@ -132,7 +164,7 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
             summary.result.source_runs[0].status,
             SourceRunStatus::Completed
         );
-        assert_eq!(summary.result.source_runs[0].candidate_count, 3);
+        assert_eq!(summary.result.source_runs[0].candidate_count, 7);
         assert_eq!(summary.result.source_runs[0].matched_count, 1);
         assert_eq!(
             summary.result.source_runs[1].source_key,
@@ -255,6 +287,17 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
             1
         );
     });
+}
+
+fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {
+    values
+        .iter()
+        .map(|value| SearchRule {
+            target: SearchRuleTarget::Title,
+            kind: SearchRuleKind::Regex,
+            value: (*value).to_string(),
+        })
+        .collect()
 }
 
 fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {
