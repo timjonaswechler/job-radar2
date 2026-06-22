@@ -1,0 +1,21 @@
+mod cli;
+mod constants;
+mod request;
+mod runner;
+mod schott_source;
+#[cfg(test)]
+mod tests;
+
+pub use cli::run_dev_search_run_smoke_cli;
+pub(crate) use runner::{run_schott_stepstone_smoke, SearchRunSmokeSummary};
+
+#[cfg(test)]
+pub(in crate::search_run_smoke) use cli::serialized_label;
+#[cfg(test)]
+pub(in crate::search_run_smoke) use constants::*;
+#[cfg(test)]
+pub(in crate::search_run_smoke) use request::{expected_rules, smoke_source_keys};
+#[cfg(test)]
+pub(in crate::search_run_smoke) use schott_source::{
+    ensure_schott_smoke_source, validate_smoke_source, write_schott_smoke_source_file,
+};
