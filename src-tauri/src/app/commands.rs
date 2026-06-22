@@ -8,8 +8,12 @@ use crate::app::state::AppState;
 const SETTING_THEME: &str = "theme";
 const SETTING_LANGUAGE: &str = "language";
 const SETTING_DEFAULT_SEARCH_RADIUS_KM: &str = "default_search_radius_km";
+const SETTING_BASE_FONT_SIZE_PX: &str = "base_font_size_px";
 const DEFAULT_SEARCH_RADIUS_KM: u16 = 30;
 const MAX_SEARCH_RADIUS_KM: u16 = 500;
+const DEFAULT_BASE_FONT_SIZE_PX: u16 = 16;
+const MIN_BASE_FONT_SIZE_PX: u16 = 12;
+const MAX_BASE_FONT_SIZE_PX: u16 = 24;
 
 struct TauriBrowserRuntimeProgressReporter {
     app: AppHandle,
@@ -68,6 +72,7 @@ pub struct AppPreferences {
     theme: AppTheme,
     language: AppLanguage,
     default_search_radius_km: u16,
+    base_font_size_px: u16,
 }
 
 #[tauri::command]
@@ -109,12 +114,19 @@ pub async fn set_app_preferences(
     preferences: AppPreferences,
 ) -> Result<AppPreferences, String> {
     validate_search_radius(preferences.default_search_radius_km)?;
+    validate_base_font_size(preferences.base_font_size_px)?;
     write_setting(&state.db, SETTING_THEME, &preferences.theme).await?;
     write_setting(&state.db, SETTING_LANGUAGE, &preferences.language).await?;
     write_setting(
         &state.db,
         SETTING_DEFAULT_SEARCH_RADIUS_KM,
         &preferences.default_search_radius_km,
+    )
+    .await?;
+    write_setting(
+        &state.db,
+        SETTING_BASE_FONT_SIZE_PX,
+        &preferences.base_font_size_px,
     )
     .await?;
 
@@ -146,6 +158,16 @@ pub async fn set_default_search_radius_km(
 ) -> Result<AppPreferences, String> {
     validate_search_radius(radius_km)?;
     write_setting(&state.db, SETTING_DEFAULT_SEARCH_RADIUS_KM, &radius_km).await?;
+    read_app_preferences(&state.db).await
+}
+
+#[tauri::command]
+pub async fn set_base_font_size_px(
+    state: State<'_, AppState>,
+    base_font_size_px: u16,
+) -> Result<AppPreferences, String> {
+    validate_base_font_size(base_font_size_px)?;
+    write_setting(&state.db, SETTING_BASE_FONT_SIZE_PX, &base_font_size_px).await?;
     read_app_preferences(&state.db).await
 }
 
@@ -341,6 +363,12 @@ async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, Strin
             DEFAULT_SEARCH_RADIUS_KM,
         )
         .await?,
+        base_font_size_px: read_setting_or_default_value(
+            pool,
+            SETTING_BASE_FONT_SIZE_PX,
+            DEFAULT_BASE_FONT_SIZE_PX,
+        )
+        .await?,
     })
 }
 
@@ -372,6 +400,16 @@ fn validate_search_radius(radius_km: u16) -> Result<(), String> {
     if radius_km > MAX_SEARCH_RADIUS_KM {
         return Err(format!(
             "defaultSearchRadiusKm must be less than or equal to {MAX_SEARCH_RADIUS_KM}"
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_base_font_size(base_font_size_px: u16) -> Result<(), String> {
+    if !(MIN_BASE_FONT_SIZE_PX..=MAX_BASE_FONT_SIZE_PX).contains(&base_font_size_px) {
+        return Err(format!(
+            "baseFontSizePx must be between {MIN_BASE_FONT_SIZE_PX} and {MAX_BASE_FONT_SIZE_PX}"
         ));
     }
 
@@ -489,13 +527,20 @@ mod tests {
                 preferences.default_search_radius_km,
                 DEFAULT_SEARCH_RADIUS_KM
             );
+            assert_eq!(preferences.base_font_size_px, DEFAULT_BASE_FONT_SIZE_PX);
 
             write_setting(&state.db, SETTING_DEFAULT_SEARCH_RADIUS_KM, &50_u16)
                 .await
                 .unwrap();
+            write_setting(&state.db, SETTING_BASE_FONT_SIZE_PX, &18_u16)
+                .await
+                .unwrap();
             let preferences = read_app_preferences(&state.db).await.unwrap();
             assert_eq!(preferences.default_search_radius_km, 50);
+            assert_eq!(preferences.base_font_size_px, 18);
             assert!(validate_search_radius(MAX_SEARCH_RADIUS_KM + 1).is_err());
+            assert!(validate_base_font_size(MIN_BASE_FONT_SIZE_PX - 1).is_err());
+            assert!(validate_base_font_size(MAX_BASE_FONT_SIZE_PX + 1).is_err());
         });
     }
 

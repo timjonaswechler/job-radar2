@@ -190,7 +190,11 @@ export function SourcesFeature() {
               />
               Registry neu laden
             </Button>
-            <Badge variant={diagnostics.length ? "destructive-light" : "success-light"}>
+            <Badge
+              variant={
+                diagnostics.length ? "destructive-light" : "success-light"
+              }
+            >
               {diagnostics.length
                 ? `${diagnostics.length} Diagnose${diagnostics.length === 1 ? "" : "n"}`
                 : "Keine Diagnosen"}
@@ -226,14 +230,19 @@ export function SourcesFeature() {
       <Tabs defaultValue="sources" className="grid gap-4">
         <TabsList>
           <TabsTrigger value="sources">Quellen ({sources.length})</TabsTrigger>
-          <TabsTrigger value="profiles">Profile ({profiles.length})</TabsTrigger>
+          <TabsTrigger value="profiles">
+            Profile ({profiles.length})
+          </TabsTrigger>
           <TabsTrigger value="diagnostics">
             Diagnosen ({diagnostics.length})
           </TabsTrigger>
           <TabsTrigger value="runtime">Browser-Laufzeit</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sources" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+        <TabsContent
+          value="sources"
+          className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]"
+        >
           <Card>
             <CardHeader>
               <CardTitle>Gültige Quellen</CardTitle>
@@ -294,7 +303,10 @@ export function SourcesFeature() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="profiles" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <TabsContent
+          value="profiles"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+        >
           {loading ? (
             <p className="text-sm text-muted-foreground">Lade Profile…</p>
           ) : profiles.length ? (
@@ -317,7 +329,10 @@ export function SourcesFeature() {
         <TabsContent value="diagnostics" className="grid gap-3">
           {diagnostics.length ? (
             diagnostics.map((diagnostic, index) => (
-              <DiagnosticCard key={`${diagnostic.path}-${index}`} diagnostic={diagnostic} />
+              <DiagnosticCard
+                key={`${diagnostic.path}-${index}`}
+                diagnostic={diagnostic}
+              />
             ))
           ) : (
             <Alert>
@@ -373,7 +388,7 @@ function SourceListItem({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-medium">{source.document.name}</p>
+          <p className="font-medium text-xl">{source.document.name}</p>
           <p className="font-mono text-xs text-muted-foreground">
             {source.document.key}
           </p>
@@ -417,7 +432,10 @@ function SourceDetails({
       <dl className="grid gap-3">
         <DetailRow label="Source Key" value={source.document.key} mono />
         <DetailRow label="Name" value={source.document.name} />
-        <DetailRow label="Status" value={sourceStatusLabels[source.document.status]} />
+        <DetailRow
+          label="Status"
+          value={sourceStatusLabels[source.document.status]}
+        />
         <DetailRow label="Ursprung" value={originLabels[source.origin]} />
         <DetailRow label="Datei" value={source.path} mono />
         {adapterDisplay ? (
@@ -468,7 +486,11 @@ function AccessPathDetails({ selectedAccessPath }: AccessPathDetailsProps) {
       <div className="rounded-lg border p-3 text-sm">
         <p className="font-medium">Profil-Zugriffspfad</p>
         <dl className="mt-2 grid gap-2">
-          <DetailRow label="Profil-Key" value={selectedAccessPath.profileKey} mono />
+          <DetailRow
+            label="Profil-Key"
+            value={selectedAccessPath.profileKey}
+            mono
+          />
           <DetailRow label="Pfad-Key" value={selectedAccessPath.pathKey} mono />
         </dl>
       </div>
@@ -479,7 +501,11 @@ function AccessPathDetails({ selectedAccessPath }: AccessPathDetailsProps) {
     <div className="rounded-lg border p-3 text-sm">
       <p className="font-medium">Quellenspezifischer Zugriffspfad</p>
       <dl className="mt-2 grid gap-2">
-        <DetailRow label="Adapter-Key" value={selectedAccessPath.adapterKey} mono />
+        <DetailRow
+          label="Adapter-Key"
+          value={selectedAccessPath.adapterKey}
+          mono
+        />
       </dl>
     </div>
   );
@@ -510,7 +536,9 @@ function ProfileCard({ profile, adaptersByKey }: ProfileCardProps) {
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">{profileKindLabels[profile.document.kind]}</Badge>
+          <Badge variant="outline">
+            {profileKindLabels[profile.document.kind]}
+          </Badge>
           <Badge variant="outline">
             {accessPaths.length} Zugriffspfad
             {accessPaths.length === 1 ? "" : "e"}
@@ -548,7 +576,9 @@ function ProfileAccessPathRow({
     <div className="rounded-lg border p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-medium">{accessPath.name ?? accessPath.key}</p>
-        <Badge variant={adapterDisplay.registered ? "secondary" : "warning-light"}>
+        <Badge
+          variant={adapterDisplay.registered ? "secondary" : "warning-light"}
+        >
           {adapterDisplay.registered ? "registriert" : "unregistriert"}
         </Badge>
       </div>
