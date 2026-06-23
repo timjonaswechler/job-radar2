@@ -38,6 +38,7 @@ import {
   countOrigins,
   countProfileKinds,
   createProfileGridRows,
+  filterProfileGridRows,
   type DiagnosticIndex,
   type ProfileGridRow,
 } from "@/features/sources/registry-view-model";
@@ -88,23 +89,16 @@ export function ProfileRegistryDataGrid({
     [adaptersByKey, diagnosticIndex.byProfileKey, profiles],
   );
 
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLocaleLowerCase("de");
-
-    return rows.filter((row) => {
-      const matchesSearch =
-        !normalizedSearch || row.searchText.includes(normalizedSearch);
-      const matchesKind =
-        !selectedKinds.length || selectedKinds.includes(row.kind);
-      const matchesOrigin =
-        !selectedOrigins.length || selectedOrigins.includes(row.origin);
-      const matchesDiagnostics = !diagnosticsOnly || row.diagnosticsCount > 0;
-
-      return (
-        matchesSearch && matchesKind && matchesOrigin && matchesDiagnostics
-      );
-    });
-  }, [diagnosticsOnly, rows, searchQuery, selectedKinds, selectedOrigins]);
+  const filteredRows = useMemo(
+    () =>
+      filterProfileGridRows(rows, {
+        searchQuery,
+        kinds: selectedKinds,
+        origins: selectedOrigins,
+        diagnosticsOnly,
+      }),
+    [diagnosticsOnly, rows, searchQuery, selectedKinds, selectedOrigins],
+  );
 
   const kindCounts = useMemo(() => countProfileKinds(rows), [rows]);
   const originCounts = useMemo(() => countOrigins(rows), [rows]);
