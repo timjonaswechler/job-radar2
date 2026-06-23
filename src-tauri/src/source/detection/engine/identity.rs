@@ -33,8 +33,8 @@ pub(super) fn derive_source_identity(
     captures: &HashMap<String, String>,
 ) -> Result<SourceIdentity, String> {
     let fallback_company_name = derive_company_name(input_url);
-    let fallback_key = format!("{}", to_technical_key(&fallback_company_name));
-    let fallback_name = format!("{fallback_company_name}");
+    let fallback_key = to_technical_key(&fallback_company_name).to_string();
+    let fallback_name = fallback_company_name.to_string();
 
     let mut key_candidates = render_identity_candidates(
         identity

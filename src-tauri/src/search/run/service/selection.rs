@@ -4,7 +4,7 @@ use super::{super::SourceExecutionSource, SourceExecutionError};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum SelectedSearchRunSource {
-    Resolved(SourceExecutionSource),
+    Resolved(Box<SourceExecutionSource>),
     Missing {
         source_key: String,
         error: SourceExecutionError,
@@ -18,7 +18,7 @@ pub(super) fn resolve_selected_sources(
     source_keys
         .iter()
         .map(|source_key| match snapshot.resolve_source(source_key) {
-            Ok(source) => SelectedSearchRunSource::Resolved(source),
+            Ok(source) => SelectedSearchRunSource::Resolved(Box::new(source)),
             Err(message) => SelectedSearchRunSource::Missing {
                 source_key: source_key.clone(),
                 error: SourceExecutionError::Failed(message),

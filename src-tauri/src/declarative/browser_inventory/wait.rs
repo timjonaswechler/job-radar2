@@ -44,34 +44,34 @@ pub(super) fn parse_wait_for(
         return Ok(None);
     };
 
-    for (index, interaction) in interactions.iter().enumerate() {
-        match interaction {
-            BrowserInteraction::WaitFor {
-                selector,
-                timeout_ms,
-            } => {
-                let path = plan_path(source, &format!("executionPlan.interactions[{index}]"));
-                compile_selector(selector, &format!("{path}.selector"))?;
-                let timeout_ms = timeout_ms.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
-                if timeout_ms == 0 {
-                    return Err(SourceExecutionError::Failed(format!(
-                        "{path}.timeoutMs must be a positive integer"
-                    )));
-                }
+    let Some((index, interaction)) = interactions.iter().enumerate().next() else {
+        return Ok(None);
+    };
 
-                return Ok(Some(BrowserInventoryWait {
-                    selector: selector.to_string(),
-                    timeout_ms,
-                }));
-            }
-            BrowserInteraction::ClickIfVisible { .. } | BrowserInteraction::ClickUpToN { .. } => {
+    match interaction {
+        BrowserInteraction::WaitFor {
+            selector,
+            timeout_ms,
+        } => {
+            let path = plan_path(source, &format!("executionPlan.interactions[{index}]"));
+            compile_selector(selector, &format!("{path}.selector"))?;
+            let timeout_ms = timeout_ms.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
+            if timeout_ms == 0 {
                 return Err(SourceExecutionError::Failed(format!(
-                    "{} is not supported by the browser inventory executor yet",
-                    plan_path(source, &format!("executionPlan.interactions[{index}]"))
+                    "{path}.timeoutMs must be a positive integer"
                 )));
             }
+
+            Ok(Some(BrowserInventoryWait {
+                selector: selector.to_string(),
+                timeout_ms,
+            }))
+        }
+        BrowserInteraction::ClickIfVisible { .. } | BrowserInteraction::ClickUpToN { .. } => {
+            Err(SourceExecutionError::Failed(format!(
+                "{} is not supported by the browser inventory executor yet",
+                plan_path(source, &format!("executionPlan.interactions[{index}]"))
+            )))
         }
     }
-
-    Ok(None)
 }
