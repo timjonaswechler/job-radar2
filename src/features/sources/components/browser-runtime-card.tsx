@@ -12,13 +12,6 @@ import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge, type BadgeProps } from "@/components/reui/badge";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import {
@@ -31,6 +24,12 @@ import {
   type BrowserRuntimeState,
   type BrowserRuntimeStatus,
 } from "@/lib/api/browser-runtime";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 const runtimeStatusLabels: Record<BrowserRuntimeState, string> = {
   unsupported: "Nicht unterstützt",
@@ -41,7 +40,10 @@ const runtimeStatusLabels: Record<BrowserRuntimeState, string> = {
   invalid: "Ungültig",
 };
 
-const runtimeStatusVariants: Record<BrowserRuntimeState, BadgeProps["variant"]> = {
+const runtimeStatusVariants: Record<
+  BrowserRuntimeState,
+  BadgeProps["variant"]
+> = {
   unsupported: "invert-light",
   notInstalled: "warning-light",
   installing: "info-light",
@@ -50,7 +52,10 @@ const runtimeStatusVariants: Record<BrowserRuntimeState, BadgeProps["variant"]> 
   invalid: "destructive-light",
 };
 
-const progressPhaseLabels: Record<BrowserRuntimeInstallProgress["phase"], string> = {
+const progressPhaseLabels: Record<
+  BrowserRuntimeInstallProgress["phase"],
+  string
+> = {
   downloading: "Download",
   verifying: "Prüfung",
   extracting: "Entpacken",
@@ -63,9 +68,8 @@ type BusyAction = "refresh" | "install" | "check" | "uninstall" | null;
 
 export function BrowserRuntimeCard() {
   const [status, setStatus] = useState<BrowserRuntimeStatus | null>(null);
-  const [progress, setProgress] = useState<BrowserRuntimeInstallProgress | null>(
-    null,
-  );
+  const [progress, setProgress] =
+    useState<BrowserRuntimeInstallProgress | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkMessage, setCheckMessage] = useState<string | null>(null);
@@ -152,7 +156,8 @@ export function BrowserRuntimeCard() {
     !installActive &&
     !busyAction;
 
-  const installLabel = runtimeState === "updateRequired" ? "Aktualisieren" : "Installieren";
+  const installLabel =
+    runtimeState === "updateRequired" ? "Aktualisieren" : "Installieren";
 
   const handleRefresh = async () => {
     setCheckMessage(null);
@@ -225,157 +230,160 @@ export function BrowserRuntimeCard() {
   };
 
   return (
-    <Frame>
-      <FramePanel>
-        <FrameHeader className="gap-4 px-0 pt-0 sm:flex-row sm:items-start sm:justify-between">
-          <div className="grid gap-1.5">
-            <FrameTitle>Browser-Laufzeit</FrameTitle>
-            <FrameDescription>
-              Lokal verwaltete Browser-Installation für browserbasierte Quellen.
-            </FrameDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleRefresh()}
-              disabled={busyAction !== null}
-            >
-              <RefreshCwIcon className="size-4" aria-hidden="true" />
-              Aktualisieren
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void handleInstall()}
-              disabled={!canInstall}
-            >
-              <DownloadIcon className="size-4" aria-hidden="true" />
-              {busyAction === "install" ? "Installiere…" : installLabel}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleCheck()}
-              disabled={!canCheck}
-            >
-              <ShieldCheckIcon className="size-4" aria-hidden="true" />
-              Prüfen
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => void handleUninstall()}
-              disabled={!canUninstall}
-            >
-              <Trash2Icon className="size-4" aria-hidden="true" />
-              {busyAction === "uninstall" ? "Entferne…" : "Entfernen"}
-            </Button>
-          </div>
-        </FrameHeader>
+    <Card>
+      <CardHeader className="gap-4 px-0 pt-0 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-1.5">
+          <CardTitle>Browser-Laufzeit</CardTitle>
+          <CardDescription>
+            Lokal verwaltete Browser-Installation für browserbasierte Quellen.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleRefresh()}
+            disabled={busyAction !== null}
+          >
+            <RefreshCwIcon className="size-4" aria-hidden="true" />
+            Aktualisieren
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void handleInstall()}
+            disabled={!canInstall}
+          >
+            <DownloadIcon className="size-4" aria-hidden="true" />
+            {busyAction === "install" ? "Installiere…" : installLabel}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleCheck()}
+            disabled={!canCheck}
+          >
+            <ShieldCheckIcon className="size-4" aria-hidden="true" />
+            Prüfen
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => void handleUninstall()}
+            disabled={!canUninstall}
+          >
+            <Trash2Icon className="size-4" aria-hidden="true" />
+            {busyAction === "uninstall" ? "Entferne…" : "Entfernen"}
+          </Button>
+        </div>
+      </CardHeader>
 
-        {error ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircleIcon className="size-4" aria-hidden="true" />
-            <AlertTitle>Browser-Laufzeitfehler</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircleIcon className="size-4" aria-hidden="true" />
+          <AlertTitle>Browser-Laufzeitfehler</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        {checkMessage ? (
-          <Alert variant="info" className="mb-4">
-            <CheckCircle2Icon className="size-4" aria-hidden="true" />
-            <AlertTitle>Prüfergebnis</AlertTitle>
-            <AlertDescription>{checkMessage}</AlertDescription>
-          </Alert>
-        ) : null}
+      {checkMessage ? (
+        <Alert variant="info" className="mb-4">
+          <CheckCircle2Icon className="size-4" aria-hidden="true" />
+          <AlertTitle>Prüfergebnis</AlertTitle>
+          <AlertDescription>{checkMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
-          <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Status
-              </span>
-              {status ? (
-                <Badge
-                  variant={runtimeStatusVariants[status.status]}
-                  size="sm"
-                >
-                  {runtimeStatusLabels[status.status]}
-                </Badge>
-              ) : (
-                <Badge variant="outline" size="sm">
-                  Lädt…
-                </Badge>
-              )}
-            </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+        <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Status
+            </span>
             {status ? (
-              <dl className="grid gap-2 text-sm">
-                <RuntimeDetail label="Plattform" value={status.platform} />
-                <RuntimeDetail
-                  label="Erforderliche Version"
-                  value={status.requiredVersion ?? "—"}
-                />
-                <RuntimeDetail
-                  label="Installierte Version"
-                  value={status.installedVersion ?? "—"}
-                />
-              </dl>
+              <Badge variant={runtimeStatusVariants[status.status]} size="sm">
+                {runtimeStatusLabels[status.status]}
+              </Badge>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Status wird geladen…
-              </p>
+              <Badge variant="outline" size="sm">
+                Lädt…
+              </Badge>
             )}
           </div>
-
-          <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Pfade und Diagnose
-            </h3>
-            {status ? (
-              <dl className="grid gap-2 text-sm">
-                <RuntimeDetail label="Installationsordner" value={status.installDir} />
-                <RuntimeDetail
-                  label="Executable"
-                  value={status.executablePath ?? "—"}
-                />
-                {status.error ? (
-                  <RuntimeDetail label="Fehler" value={status.error} tone="danger" />
-                ) : null}
-              </dl>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Noch keine Statusdaten vorhanden.
-              </p>
-            )}
-          </div>
+          {status ? (
+            <dl className="grid gap-2 text-sm">
+              <RuntimeDetail label="Plattform" value={status.platform} />
+              <RuntimeDetail
+                label="Erforderliche Version"
+                value={status.requiredVersion ?? "—"}
+              />
+              <RuntimeDetail
+                label="Installierte Version"
+                value={status.installedVersion ?? "—"}
+              />
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Status wird geladen…
+            </p>
+          )}
         </div>
 
-        {progress ? (
-          <div className="mt-4 rounded-md border bg-muted/30 p-3">
-            <Progress value={progressPercent}>
-              <ProgressLabel>
-                Installation: {progressPhaseLabels[progress.phase]}
-              </ProgressLabel>
-              <span className="ml-auto text-xs/relaxed text-muted-foreground tabular-nums">
-                {progressPercent !== null ? `${progressPercent}%` : "—"}
-              </span>
-            </Progress>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {progress.totalBytes ? (
-                <span>
-                  {formatBytes(progress.downloadedBytes ?? 0)} / {formatBytes(progress.totalBytes)}
-                </span>
+        <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Pfade und Diagnose
+          </h3>
+          {status ? (
+            <dl className="grid gap-2 text-sm">
+              <RuntimeDetail
+                label="Installationsordner"
+                value={status.installDir}
+              />
+              <RuntimeDetail
+                label="Executable"
+                value={status.executablePath ?? "—"}
+              />
+              {status.error ? (
+                <RuntimeDetail
+                  label="Fehler"
+                  value={status.error}
+                  tone="danger"
+                />
               ) : null}
-              {progress.message ? <span>{progress.message}</span> : null}
-            </div>
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Noch keine Statusdaten vorhanden.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {progress ? (
+        <div className="mt-4 rounded-md border bg-muted/30 p-3">
+          <Progress value={progressPercent}>
+            <ProgressLabel>
+              Installation: {progressPhaseLabels[progress.phase]}
+            </ProgressLabel>
+            <span className="ml-auto text-xs/relaxed text-muted-foreground tabular-nums">
+              {progressPercent !== null ? `${progressPercent}%` : "—"}
+            </span>
+          </Progress>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {progress.totalBytes ? (
+              <span>
+                {formatBytes(progress.downloadedBytes ?? 0)} /{" "}
+                {formatBytes(progress.totalBytes)}
+              </span>
+            ) : null}
+            {progress.message ? <span>{progress.message}</span> : null}
           </div>
-        ) : null}
-      </FramePanel>
-    </Frame>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

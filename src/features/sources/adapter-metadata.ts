@@ -4,7 +4,6 @@ const adapterPriorityByKey = new Map<string, number>([
   ["declarative_endpoint_inventory", 10],
   ["declarative_sitemap_inventory", 20],
   ["declarative_browser_inventory", 30],
-  ["indeed_search", 90],
 ]);
 
 const adapterCategoryLabels: Record<AdapterMetadata["category"], string> = {

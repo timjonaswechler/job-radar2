@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::path::Path;
+use std::{fs, path::Path};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::app::state::AppState;
@@ -286,6 +286,66 @@ pub async fn detect_source_from_url(
     url: String,
 ) -> Result<crate::source::detection::SourceDetectionResult, String> {
     crate::source::detection::detect_source_from_url(&state.paths.app_data_dir, &url).await
+}
+
+#[tauri::command]
+pub fn create_custom_source(
+    state: State<'_, AppState>,
+    document: crate::source::registry::SourceDocument,
+) -> Result<crate::source::registry::RegistrySource, String> {
+    let snapshot = load_source_registry_snapshot(&state.paths.app_data_dir);
+
+    if snapshot
+        .valid_sources
+        .iter()
+        .any(|source| source.document.key == document.key)
+    {
+        return Err(format!(
+            "Eine Quelle mit dem Key `{}` existiert bereits.",
+            document.key
+        ));
+    }
+
+    if let crate::source::registry::SelectedAccessPath::Profile {
+        profile_key,
+        path_key,
+    } = &document.selected_access_path
+    {
+        let profile = snapshot
+            .profile(profile_key)
+            .ok_or_else(|| format!("Das Quellenprofil `{profile_key}` wurde nicht gefunden."))?;
+        let path_exists = profile
+            .document
+            .access_paths
+            .iter()
+            .any(|access_path| access_path.key == *path_key);
+        if !path_exists {
+            return Err(format!(
+                "Der Zugriffspfad `{path_key}` wurde im Profil `{profile_key}` nicht gefunden."
+            ));
+        }
+    }
+
+    fs::create_dir_all(&state.paths.sources_dir)
+        .map_err(|error| format!("Sources-Ordner konnte nicht angelegt werden: {error}"))?;
+    let path = state
+        .paths
+        .sources_dir
+        .join(format!("{}.json", document.key));
+    if path.exists() {
+        return Err(format!("Die Datei `{}` existiert bereits.", path.display()));
+    }
+
+    let contents = serde_json::to_string_pretty(&document)
+        .map_err(|error| format!("Quelle konnte nicht serialisiert werden: {error}"))?;
+    fs::write(&path, format!("{contents}\n"))
+        .map_err(|error| format!("Quelle konnte nicht geschrieben werden: {error}"))?;
+
+    Ok(crate::source::registry::RegistrySource {
+        origin: crate::source::registry::SourceRegistryDocumentOrigin::Custom,
+        path: path.to_string_lossy().to_string(),
+        document,
+    })
 }
 
 #[tauri::command]
