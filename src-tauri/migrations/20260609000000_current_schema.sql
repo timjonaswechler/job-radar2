@@ -24,12 +24,62 @@ CREATE TABLE search_requests(
   radius_km INTEGER NULL,
   source_keys_json TEXT NOT NULL DEFAULT '[]',
   validation_error TEXT NULL,
+  last_run_at TEXT NULL,
+  last_run_status TEXT NULL,
+  last_run_error TEXT NULL,
   created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(status IN('draft', 'active', 'disabled', 'invalid')),
+  CHECK(last_run_status IS NULL OR last_run_status IN('completed', 'completed_with_errors', 'failed', 'cancelled')),
   CHECK(json_valid(include_rules_json)),
   CHECK(json_valid(exclude_rules_json)),
   CHECK(json_valid(locations_json)),
   CHECK(json_valid(source_keys_json)),
   CHECK(radius_km IS NULL OR radius_km >= 0)
 );
+
+CREATE TABLE job_postings(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  locations_json TEXT NOT NULL DEFAULT '[]',
+  primary_source_id INTEGER NULL REFERENCES job_posting_sources(id) ON DELETE SET NULL,
+  read_state TEXT NOT NULL DEFAULT 'unread',
+  interest_state TEXT NOT NULL DEFAULT 'undecided',
+  preparation_state TEXT NOT NULL DEFAULT 'not_started',
+  application_state TEXT NOT NULL DEFAULT 'not_applied',
+  first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK(trim(title) <> ''),
+  CHECK(trim(company) <> ''),
+  CHECK(json_valid(locations_json)),
+  CHECK(read_state IN('unread', 'read')),
+  CHECK(interest_state IN('undecided', 'interested', 'dismissed')),
+  CHECK(preparation_state IN('not_started', 'in_progress', 'ready')),
+  CHECK(application_state IN('not_applied', 'submitted', 'in_process', 'rejected_by_company', 'withdrawn_by_me', 'accepted'))
+);
+
+CREATE TABLE job_posting_sources(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  posting_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+  source_key TEXT NOT NULL,
+  source_name_snapshot TEXT NOT NULL,
+  url TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK(trim(source_key) <> ''),
+  CHECK(trim(source_name_snapshot) <> ''),
+  CHECK(trim(url) <> ''),
+  UNIQUE(posting_id, source_key, url)
+);
+
+CREATE INDEX idx_job_posting_sources_url
+  ON job_posting_sources(url);
+
+CREATE INDEX idx_job_posting_sources_posting_id
+  ON job_posting_sources(posting_id);
+
+CREATE INDEX idx_job_postings_last_seen_at
+  ON job_postings(last_seen_at);

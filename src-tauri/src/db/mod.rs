@@ -23,6 +23,7 @@ pub async fn connect_and_migrate(db_path: &Path) -> Result<SqlitePool, Box<dyn E
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::Row;
     use std::fs;
 
     #[test]
@@ -42,9 +43,77 @@ mod tests {
             assert!(table_names.contains(&"app_metadata".to_string()));
             assert!(table_names.contains(&"app_settings".to_string()));
             assert!(table_names.contains(&"search_requests".to_string()));
+            assert!(table_names.contains(&"job_postings".to_string()));
+            assert!(table_names.contains(&"job_posting_sources".to_string()));
             assert!(!table_names.contains(&"system_profiles".to_string()));
             assert!(!table_names.contains(&"browser_profiles".to_string()));
             assert!(!table_names.contains(&"sources".to_string()));
+        });
+    }
+
+    #[test]
+    fn fresh_dev_schema_has_job_posting_work_item_tables() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let database_path = temp_dir.path().join("job_radar.db");
+
+            let pool = connect_and_migrate(&database_path).await.unwrap();
+
+            let search_request_columns = sqlx::query_scalar::<_, String>(
+                "SELECT name FROM pragma_table_info('search_requests') ORDER BY cid",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            assert!(search_request_columns.contains(&"last_run_at".to_string()));
+            assert!(search_request_columns.contains(&"last_run_status".to_string()));
+            assert!(search_request_columns.contains(&"last_run_error".to_string()));
+
+            let posting_state_defaults = sqlx::query(
+                "INSERT INTO job_postings (title, company)
+                 VALUES ('Laser Engineer', 'SCHOTT AG')
+                 RETURNING read_state, interest_state, preparation_state, application_state",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                posting_state_defaults
+                    .try_get::<String, _>("read_state")
+                    .unwrap(),
+                "unread"
+            );
+            assert_eq!(
+                posting_state_defaults
+                    .try_get::<String, _>("interest_state")
+                    .unwrap(),
+                "undecided"
+            );
+            assert_eq!(
+                posting_state_defaults
+                    .try_get::<String, _>("preparation_state")
+                    .unwrap(),
+                "not_started"
+            );
+            assert_eq!(
+                posting_state_defaults
+                    .try_get::<String, _>("application_state")
+                    .unwrap(),
+                "not_applied"
+            );
+
+            let posting_id = sqlx::query_scalar::<_, i64>("SELECT id FROM job_postings")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            sqlx::query(
+                "INSERT INTO job_posting_sources (posting_id, source_key, source_name_snapshot, url)
+                 VALUES (?1, 'schott_ag', 'SCHOTT AG', 'https://example.test/jobs/laser')",
+            )
+            .bind(posting_id)
+            .execute(&pool)
+            .await
+            .unwrap();
         });
     }
 

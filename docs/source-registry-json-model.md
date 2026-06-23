@@ -4,7 +4,7 @@ This document turns the profile/source model from issue #34 and ADRs 0006/0007 i
 
 ## Scope
 
-Job Radar treats sources and source profiles as authoritative JSON documents. SQLite stores search requests, search runs, results, caches, and diagnostics, but it does not own source/profile domain records.
+Job Radar treats sources and source profiles as authoritative JSON documents. SQLite stores search requests, persisted job-posting results, last-run state, caches, and diagnostics, but it does not own source/profile domain records or search-run history.
 
 ## Files
 
@@ -301,7 +301,7 @@ Search requests store source keys:
 source_keys_json
 ```
 
-Search runs/source runs store `source_key`; they do not need persistent source/profile snapshots. Consistency is guaranteed only inside a running search run by using the immutable registry snapshot loaded at run start.
+Search-run result DTOs and persisted job-posting source rows store `source_key`; they do not need persistent source/profile snapshots. Consistency is guaranteed only inside a running search run by using the immutable registry snapshot loaded at run start.
 
 ## Implementation notes
 
