@@ -1514,26 +1514,26 @@ fn matching_profile(key: &str) -> RegistrySourceProfile {
 
 fn builtin_profile(key: &str) -> RegistrySourceProfile {
     match key {
-        "ashby" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/ashby.json"
-        )),
-        "greenhouse" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/greenhouse.json"
-        )),
-        "lever" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/lever.json"
-        )),
+        "ashby" => {
+            registry_profile_from_str(include_str!("../../../resources/profiles/ashby.json"))
+        }
+        "greenhouse" => {
+            registry_profile_from_str(include_str!("../../../resources/profiles/greenhouse.json"))
+        }
+        "lever" => {
+            registry_profile_from_str(include_str!("../../../resources/profiles/lever.json"))
+        }
         "magnolia_esmp_job_search" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/magnolia_esmp_job_search.json"
+            "../../../resources/profiles/magnolia_esmp_job_search.json"
         )),
         "muz_global_jobboard" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/muz_global_jobboard.json"
+            "../../../resources/profiles/muz_global_jobboard.json"
         )),
-        "personio" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/personio.json"
-        )),
+        "personio" => {
+            registry_profile_from_str(include_str!("../../../resources/profiles/personio.json"))
+        }
         "successfactors" => registry_profile_from_str(include_str!(
-            "../../../../source-profiles/builtin/successfactors.json"
+            "../../../resources/profiles/successfactors.json"
         )),
         other => panic!("unknown built-in source profile fixture {other}"),
     }
