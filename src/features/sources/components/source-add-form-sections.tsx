@@ -105,6 +105,7 @@ type SourceIdentityFieldsProps = {
   form: SourceFormState;
   saveAttempted: boolean;
   saving: boolean;
+  selectPortalContainer?: HTMLElement | null;
   onNameChange: (name: string) => void;
   onKeyChange: (key: string) => void;
   onStatusChange: (status: SourceStatus) => void;
@@ -114,6 +115,7 @@ export function SourceIdentityFields({
   form,
   saveAttempted,
   saving,
+  selectPortalContainer,
   onNameChange,
   onKeyChange,
   onStatusChange,
@@ -167,16 +169,25 @@ export function SourceIdentityFields({
           <FieldLabel>Status</FieldLabel>
           <Select
             items={sourceStatusOptions}
+            modal={false}
             value={form.status}
             onValueChange={(value) => {
               if (!value) return;
               onStatusChange(value as SourceStatus);
             }}
           >
-            <SelectTrigger className="w-full" aria-label="Status wählen">
+            <SelectTrigger
+              className="w-full"
+              aria-label="Status wählen"
+              data-vaul-no-drag=""
+            >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              alignItemWithTrigger={false}
+              portalContainer={selectPortalContainer}
+              data-vaul-no-drag=""
+            >
               <SelectGroup>
                 {sourceStatusOptions.map(({ value, label }) => (
                   <SelectItem key={value} value={value}>
@@ -201,6 +212,7 @@ type SourceAccessPathFieldsProps = {
   availableAccessPaths: ProfileAccessPathDefinition[];
   saveAttempted: boolean;
   saving: boolean;
+  selectPortalContainer?: HTMLElement | null;
   onProfileChange: (profileKey: string) => void;
   onAccessPathChange: (pathKey: string) => void;
 };
@@ -211,6 +223,7 @@ export function SourceAccessPathFields({
   availableAccessPaths,
   saveAttempted,
   saving,
+  selectPortalContainer,
   onProfileChange,
   onAccessPathChange,
 }: SourceAccessPathFieldsProps) {
@@ -239,6 +252,7 @@ export function SourceAccessPathFields({
           <FieldLabel>Quellenprofil</FieldLabel>
           <Select
             items={profileItems}
+            modal={false}
             value={form.profileKey || null}
             onValueChange={(value) => {
               if (value) onProfileChange(value);
@@ -249,10 +263,15 @@ export function SourceAccessPathFields({
               aria-label="Quellenprofil wählen"
               aria-invalid={saveAttempted && !form.profileKey ? true : undefined}
               disabled={!profiles.length || saving}
+              data-vaul-no-drag=""
             >
               <SelectValue placeholder="Profil wählen" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              alignItemWithTrigger={false}
+              portalContainer={selectPortalContainer}
+              data-vaul-no-drag=""
+            >
               <SelectGroup>
                 {profileItems.map(({ value, label }) => (
                   <SelectItem key={value} value={value}>
@@ -271,6 +290,7 @@ export function SourceAccessPathFields({
           <FieldLabel>Zugriffspfad</FieldLabel>
           <Select
             items={accessPathItems}
+            modal={false}
             value={form.pathKey || null}
             onValueChange={(value) => {
               if (value) onAccessPathChange(value);
@@ -281,10 +301,15 @@ export function SourceAccessPathFields({
               aria-label="Zugriffspfad wählen"
               aria-invalid={saveAttempted && !form.pathKey ? true : undefined}
               disabled={!availableAccessPaths.length || saving}
+              data-vaul-no-drag=""
             >
               <SelectValue placeholder="Zugriffspfad wählen" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              alignItemWithTrigger={false}
+              portalContainer={selectPortalContainer}
+              data-vaul-no-drag=""
+            >
               <SelectGroup>
                 {accessPathItems.map(({ value, label }) => (
                   <SelectItem key={value} value={value}>

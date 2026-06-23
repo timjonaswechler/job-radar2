@@ -74,6 +74,8 @@ export function SourceAddDrawer({
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drawerContentElement, setDrawerContentElement] =
+    useState<HTMLDivElement | null>(null);
 
   const existingSourceKeys = useMemo(
     () => new Set(sources.map((source) => source.document.key)),
@@ -298,8 +300,11 @@ export function SourceAddDrawer({
   };
 
   return (
-    <Drawer open={open} onOpenChange={handleOpenChange} direction="right">
-      <DrawerContent className="h-full sm:max-w-xl lg:max-w-3xl">
+    <Drawer open={open} onOpenChange={handleOpenChange} direction="right" handleOnly>
+      <DrawerContent
+        ref={setDrawerContentElement}
+        className="h-full sm:max-w-xl lg:max-w-3xl"
+      >
         <DrawerHeader className="border-b pr-12">
           <DrawerTitle>Quelle hinzufügen</DrawerTitle>
           <DrawerDescription>
@@ -340,6 +345,7 @@ export function SourceAddDrawer({
               form={form}
               saveAttempted={saveAttempted}
               saving={saving}
+              selectPortalContainer={drawerContentElement}
               onNameChange={updateName}
               onKeyChange={updateKey}
               onStatusChange={(status) =>
@@ -353,6 +359,7 @@ export function SourceAddDrawer({
               availableAccessPaths={availableAccessPaths}
               saveAttempted={saveAttempted}
               saving={saving}
+              selectPortalContainer={drawerContentElement}
               onProfileChange={updateProfile}
               onAccessPathChange={updateAccessPath}
             />
