@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { SearchIcon, SparklesIcon } from "lucide-react";
 
 import {
@@ -31,7 +33,7 @@ import {
   sourceKeyPattern,
   type SourceFormState,
 } from "@/features/sources/source-add-model";
-import { sourceStatusLabels } from "@/features/sources/status";
+import { sourceStatusOptions } from "@/features/sources/status";
 import type {
   ProfileAccessPathDefinition,
   RegistrySourceProfile,
@@ -164,6 +166,7 @@ export function SourceIdentityFields({
         <Field>
           <FieldLabel>Status</FieldLabel>
           <Select
+            items={sourceStatusOptions}
             value={form.status}
             onValueChange={(value) => {
               if (!value) return;
@@ -175,7 +178,7 @@ export function SourceIdentityFields({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {Object.entries(sourceStatusLabels).map(([value, label]) => (
+                {sourceStatusOptions.map(({ value, label }) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
@@ -211,6 +214,23 @@ export function SourceAccessPathFields({
   onProfileChange,
   onAccessPathChange,
 }: SourceAccessPathFieldsProps) {
+  const profileItems = useMemo(
+    () =>
+      profiles.map((profile) => ({
+        value: profile.document.key,
+        label: `${profile.document.name} · ${profileKindLabels[profile.document.kind]}`,
+      })),
+    [profiles],
+  );
+  const accessPathItems = useMemo(
+    () =>
+      availableAccessPaths.map((accessPath) => ({
+        value: accessPath.key,
+        label: accessPathDisplayName(accessPath),
+      })),
+    [availableAccessPaths],
+  );
+
   return (
     <FieldSet>
       <FieldLegend>Profil und Zugriffspfad</FieldLegend>
@@ -218,6 +238,7 @@ export function SourceAccessPathFields({
         <Field data-invalid={saveAttempted && !form.profileKey ? true : undefined}>
           <FieldLabel>Quellenprofil</FieldLabel>
           <Select
+            items={profileItems}
             value={form.profileKey || null}
             onValueChange={(value) => {
               if (value) onProfileChange(value);
@@ -233,12 +254,9 @@ export function SourceAccessPathFields({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {profiles.map((profile) => (
-                  <SelectItem
-                    key={profile.document.key}
-                    value={profile.document.key}
-                  >
-                    {profile.document.name} · {profileKindLabels[profile.document.kind]}
+                {profileItems.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -252,6 +270,7 @@ export function SourceAccessPathFields({
         <Field data-invalid={saveAttempted && !form.pathKey ? true : undefined}>
           <FieldLabel>Zugriffspfad</FieldLabel>
           <Select
+            items={accessPathItems}
             value={form.pathKey || null}
             onValueChange={(value) => {
               if (value) onAccessPathChange(value);
@@ -267,9 +286,9 @@ export function SourceAccessPathFields({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {availableAccessPaths.map((accessPath) => (
-                  <SelectItem key={accessPath.key} value={accessPath.key}>
-                    {accessPathDisplayName(accessPath)}
+                {accessPathItems.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectGroup>
