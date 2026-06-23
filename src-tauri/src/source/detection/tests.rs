@@ -819,7 +819,7 @@ fn lever_global_urls_detect_global_access_path_and_api() {
             let result = detect_with_source_profiles(
                 &client,
                 &Url::parse(input_url).unwrap(),
-                &[profile.clone()],
+                std::slice::from_ref(&profile),
             )
             .await
             .unwrap();
@@ -860,7 +860,7 @@ fn lever_eu_urls_detect_eu_access_path_and_api() {
             let result = detect_with_source_profiles(
                 &client,
                 &Url::parse(input_url).unwrap(),
-                &[profile.clone()],
+                std::slice::from_ref(&profile),
             )
             .await
             .unwrap();
@@ -1100,7 +1100,7 @@ fn detects_personio_linked_board_without_matching_generic_mentions() {
         let detected = detect_with_source_profiles(
             &client,
             &Url::parse("https://example.com/careers").unwrap(),
-            &[profile.clone()],
+            std::slice::from_ref(&profile),
         )
         .await
         .unwrap();

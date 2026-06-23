@@ -59,7 +59,7 @@ impl<'a> SearchRunService<'a> {
 
         for selected_source in &selected_sources {
             let source = match selected_source {
-                SelectedSearchRunSource::Resolved(source) => source,
+                SelectedSearchRunSource::Resolved(source) => source.as_ref(),
                 SelectedSearchRunSource::Missing { source_key, error } => {
                     source_runs.push(source_run_failed_for_key(source_key, error.clone()));
                     continue;

@@ -7,6 +7,31 @@ use uuid::Uuid;
 
 use super::*;
 
+struct BrowserRuntimeInstallWorkspace {
+    install_id: String,
+    temp_dir: PathBuf,
+    archive_path: PathBuf,
+    extracted_dir: PathBuf,
+}
+
+impl BrowserRuntimeInstallWorkspace {
+    fn new(runtime_dir: &Path) -> Self {
+        let install_id = Uuid::new_v4().to_string();
+        let temp_dir = runtime_dir
+            .join(".tmp")
+            .join(format!("install-{install_id}"));
+        let archive_path = temp_dir.join("browser-runtime.zip");
+        let extracted_dir = temp_dir.join("extracted");
+
+        Self {
+            install_id,
+            temp_dir,
+            archive_path,
+            extracted_dir,
+        }
+    }
+}
+
 pub async fn install_runtime<D, E, P>(
     runtime_dir: &Path,
     spec: &BrowserRuntimeSpec,
@@ -30,12 +55,7 @@ where
         BrowserRuntimeState::Unsupported | BrowserRuntimeState::Installing => {}
     }
 
-    let install_id = Uuid::new_v4().to_string();
-    let temp_dir = runtime_dir
-        .join(".tmp")
-        .join(format!("install-{install_id}"));
-    let archive_path = temp_dir.join("browser-runtime.zip");
-    let extracted_dir = temp_dir.join("extracted");
+    let workspace = BrowserRuntimeInstallWorkspace::new(runtime_dir);
 
     let result = install_runtime_inner(
         runtime_dir,
@@ -43,17 +63,14 @@ where
         downloader,
         extractor,
         progress,
-        &install_id,
-        &temp_dir,
-        &archive_path,
-        &extracted_dir,
+        &workspace,
     )
     .await;
 
     if let Err(error) = &result {
         emit_progress(
             progress,
-            &install_id,
+            &workspace.install_id,
             BrowserRuntimeInstallPhase::Failed,
             None,
             None,
@@ -61,7 +78,7 @@ where
         );
     }
 
-    let _ = std::fs::remove_dir_all(&temp_dir);
+    let _ = std::fs::remove_dir_all(&workspace.temp_dir);
     result
 }
 
@@ -79,16 +96,18 @@ async fn install_runtime_inner<D, E, P>(
     downloader: &D,
     extractor: &E,
     progress: &P,
-    install_id: &str,
-    temp_dir: &Path,
-    archive_path: &Path,
-    extracted_dir: &Path,
+    workspace: &BrowserRuntimeInstallWorkspace,
 ) -> Result<BrowserRuntimeStatus, String>
 where
     D: RuntimeDownloader,
     E: RuntimeArchiveExtractor,
     P: BrowserRuntimeInstallProgressReporter,
 {
+    let install_id = workspace.install_id.as_str();
+    let temp_dir = workspace.temp_dir.as_path();
+    let archive_path = workspace.archive_path.as_path();
+    let extracted_dir = workspace.extracted_dir.as_path();
+
     std::fs::create_dir_all(temp_dir).map_err(|error| error.to_string())?;
 
     emit_progress(

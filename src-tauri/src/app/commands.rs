@@ -40,30 +40,20 @@ pub struct DatabaseInfo {
     sqlite_version: String,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AppTheme {
     Light,
+    #[default]
     Dark,
 }
 
-impl Default for AppTheme {
-    fn default() -> Self {
-        Self::Dark
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AppLanguage {
+    #[default]
     De,
     En,
-}
-
-impl Default for AppLanguage {
-    fn default() -> Self {
-        Self::De
-    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

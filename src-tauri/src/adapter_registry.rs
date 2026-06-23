@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 #[serde(rename_all = "snake_case")]
 pub enum AdapterExecutionMode {
     SourceInventory,
+    // Reserved for future query-parameterized job portal adapters exposed by the metadata API.
+    #[allow(dead_code)]
     QueryParameterized,
 }
 
@@ -12,6 +14,8 @@ pub enum AdapterExecutionMode {
 #[serde(rename_all = "snake_case")]
 pub enum AdapterCategory {
     Generic,
+    // Reserved for future built-in job portal adapters exposed by the metadata API.
+    #[allow(dead_code)]
     JobBoard,
     Browser,
 }
@@ -28,6 +32,8 @@ pub enum AdapterAuthMode {
 pub enum AdapterRiskLevel {
     Stable,
     Fragile,
+    // Reserved for future adapters that require stronger user-facing cautions.
+    #[allow(dead_code)]
     Restricted,
 }
 
