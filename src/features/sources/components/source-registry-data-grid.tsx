@@ -38,6 +38,7 @@ import {
   countOrigins,
   countSourceStatuses,
   createSourceGridRows,
+  filterSourceGridRows,
   type DiagnosticIndex,
   type SourceGridRow,
 } from "@/features/sources/registry-view-model";
@@ -93,23 +94,16 @@ export function SourceRegistryDataGrid({
     [adaptersByKey, diagnosticIndex.bySourceKey, profilesByKey, sources],
   );
 
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLocaleLowerCase("de");
-
-    return rows.filter((row) => {
-      const matchesSearch =
-        !normalizedSearch || row.searchText.includes(normalizedSearch);
-      const matchesStatus =
-        !selectedStatuses.length || selectedStatuses.includes(row.status);
-      const matchesOrigin =
-        !selectedOrigins.length || selectedOrigins.includes(row.origin);
-      const matchesDiagnostics = !diagnosticsOnly || row.diagnosticsCount > 0;
-
-      return (
-        matchesSearch && matchesStatus && matchesOrigin && matchesDiagnostics
-      );
-    });
-  }, [diagnosticsOnly, rows, searchQuery, selectedOrigins, selectedStatuses]);
+  const filteredRows = useMemo(
+    () =>
+      filterSourceGridRows(rows, {
+        searchQuery,
+        statuses: selectedStatuses,
+        origins: selectedOrigins,
+        diagnosticsOnly,
+      }),
+    [diagnosticsOnly, rows, searchQuery, selectedOrigins, selectedStatuses],
+  );
 
   const statusCounts = useMemo(() => countSourceStatuses(rows), [rows]);
   const originCounts = useMemo(() => countOrigins(rows), [rows]);

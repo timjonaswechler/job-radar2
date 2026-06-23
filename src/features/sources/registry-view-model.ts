@@ -69,6 +69,20 @@ export type ProfileGridRow = {
   profile: RegistrySourceProfile;
 };
 
+export type SourceGridFilters = {
+  searchQuery: string;
+  statuses: SourceStatus[];
+  origins: SourceRegistryDocumentOrigin[];
+  diagnosticsOnly: boolean;
+};
+
+export type ProfileGridFilters = {
+  searchQuery: string;
+  kinds: SourceProfileKind[];
+  origins: SourceRegistryDocumentOrigin[];
+  diagnosticsOnly: boolean;
+};
+
 export function buildDiagnosticIndex(
   sources: RegistrySource[],
   profiles: RegistrySourceProfile[],
@@ -230,6 +244,36 @@ export function createProfileGridRows(
   });
 }
 
+export function filterSourceGridRows(
+  rows: SourceGridRow[],
+  filters: SourceGridFilters,
+): SourceGridRow[] {
+  const normalizedSearch = normalizeRegistrySearchQuery(filters.searchQuery);
+
+  return rows.filter(
+    (row) =>
+      matchesRegistrySearch(row.searchText, normalizedSearch) &&
+      matchesSelectedValue(filters.statuses, row.status) &&
+      matchesSelectedValue(filters.origins, row.origin) &&
+      matchesDiagnosticsFilter(row.diagnosticsCount, filters.diagnosticsOnly),
+  );
+}
+
+export function filterProfileGridRows(
+  rows: ProfileGridRow[],
+  filters: ProfileGridFilters,
+): ProfileGridRow[] {
+  const normalizedSearch = normalizeRegistrySearchQuery(filters.searchQuery);
+
+  return rows.filter(
+    (row) =>
+      matchesRegistrySearch(row.searchText, normalizedSearch) &&
+      matchesSelectedValue(filters.kinds, row.kind) &&
+      matchesSelectedValue(filters.origins, row.origin) &&
+      matchesDiagnosticsFilter(row.diagnosticsCount, filters.diagnosticsOnly),
+  );
+}
+
 export function resolveSource(
   source: RegistrySource,
   profilesByKey: Map<string, RegistrySourceProfile>,
@@ -320,6 +364,25 @@ export function diagnosticCountLabel(count: number) {
 
 export function formatBoolean(value: boolean) {
   return value ? "Ja" : "Nein";
+}
+
+function normalizeRegistrySearchQuery(searchQuery: string) {
+  return searchQuery.trim().toLocaleLowerCase("de");
+}
+
+function matchesRegistrySearch(searchText: string, normalizedSearch: string) {
+  return !normalizedSearch || searchText.includes(normalizedSearch);
+}
+
+function matchesSelectedValue<T>(selectedValues: T[], value: T) {
+  return !selectedValues.length || selectedValues.includes(value);
+}
+
+function matchesDiagnosticsFilter(
+  diagnosticsCount: number,
+  diagnosticsOnly: boolean,
+) {
+  return !diagnosticsOnly || diagnosticsCount > 0;
 }
 
 function pushDiagnostic(
