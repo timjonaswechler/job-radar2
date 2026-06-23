@@ -50,6 +50,7 @@ pub fn run() {
             app::commands::list_source_registry_sources,
             app::commands::list_source_registry_diagnostics,
             app::commands::detect_source_from_url,
+            app::commands::create_custom_source,
             app::commands::create_search_request,
             app::commands::list_search_requests,
             app::commands::get_search_request,

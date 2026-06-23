@@ -211,3 +211,7 @@ export function listSourceRegistryDiagnostics() {
 export function detectSourceFromUrl(url: string) {
   return invoke<SourceDetectionResult>("detect_source_from_url", { url })
 }
+
+export function createCustomSource(document: SourceDocument) {
+  return invoke<RegistrySource>("create_custom_source", { document })
+}
