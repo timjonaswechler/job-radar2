@@ -59,7 +59,9 @@ impl<'a> SearchRequestService<'a> {
     pub async fn list(&self) -> Result<Vec<SearchRequest>, String> {
         let rows = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_keys_json, validation_error, created_at, updated_at
+                    radius_km, source_keys_json, validation_error,
+                    last_run_at, last_run_status, last_run_error,
+                    created_at, updated_at
              FROM search_requests
              ORDER BY id",
         )
@@ -73,7 +75,9 @@ impl<'a> SearchRequestService<'a> {
     pub async fn get(&self, id: i64) -> Result<SearchRequest, String> {
         let row = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_keys_json, validation_error, created_at, updated_at
+                    radius_km, source_keys_json, validation_error,
+                    last_run_at, last_run_status, last_run_error,
+                    created_at, updated_at
              FROM search_requests
              WHERE id = ?1",
         )

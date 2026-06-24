@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceCandidate {
@@ -8,13 +8,38 @@ pub struct SourceCandidate {
     pub locations: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchRunStatus {
     Completed,
     CompletedWithErrors,
     Failed,
     Cancelled,
+}
+
+impl SearchRunStatus {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::CompletedWithErrors => "completed_with_errors",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+impl TryFrom<&str> for SearchRunStatus {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "completed" => Ok(Self::Completed),
+            "completed_with_errors" => Ok(Self::CompletedWithErrors),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            _ => Err(format!("unknown search run status: {value}")),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -25,7 +50,17 @@ pub enum SourceRunStatus {
     Cancelled,
 }
 
-/// Current-result Suchlauf written to `search-run-result.json`.
+impl SourceRunStatus {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+/// Current-result Suchlauf optionally written to `search-run-result.json` in development.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRunResult {

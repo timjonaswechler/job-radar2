@@ -392,11 +392,11 @@ pub async fn run_search_request(
 ) -> Result<crate::search::run::SearchRunResult, String> {
     let source_executor =
         crate::search::run::DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
-    crate::search::run::SearchRunService::new(
+    crate::search::run::SearchRunService::new_with_result_artifact(
         &state.db,
         &state.running_search_runs,
         &source_executor,
-        crate::search::run::default_search_run_result_path(),
+        crate::search::run::default_search_run_result_artifact(),
         state.paths.app_data_dir.clone(),
     )
     .run(id)

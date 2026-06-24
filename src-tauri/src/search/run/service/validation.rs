@@ -1,8 +1,15 @@
-use crate::search::request::SearchRequest;
+use crate::search::request::{SearchRequest, SearchRequestStatus};
 
 pub(super) fn validate_executable_search_request(
     search_request: &SearchRequest,
 ) -> Result<(), String> {
+    if search_request.status != SearchRequestStatus::Active {
+        return Err(format!(
+            "search request {} cannot run unless status is active",
+            search_request.id
+        ));
+    }
+
     if let Some(validation_error) = &search_request.validation_error {
         return Err(format!(
             "search request {} cannot run with validationError: {validation_error}",

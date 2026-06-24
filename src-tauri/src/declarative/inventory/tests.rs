@@ -1452,6 +1452,9 @@ fn search_request() -> SearchRequest {
         radius_km: None,
         source_keys: vec!["fixture_source".to_string()],
         validation_error: None,
+        last_run_at: None,
+        last_run_status: None,
+        last_run_error: None,
         created_at: String::new(),
         updated_at: String::new(),
     }

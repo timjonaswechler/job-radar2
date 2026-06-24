@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::search::run::SearchRunStatus;
+
 use super::{SearchRequestStatus, SearchRule, SearchRuleInput};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -13,6 +15,9 @@ pub struct SearchRequest {
     pub radius_km: Option<i64>,
     pub source_keys: Vec<String>,
     pub validation_error: Option<String>,
+    pub last_run_at: Option<String>,
+    pub last_run_status: Option<SearchRunStatus>,
+    pub last_run_error: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

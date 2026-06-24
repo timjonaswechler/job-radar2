@@ -1,7 +1,3 @@
-// The import module is intentionally not wired into `run_search_request` yet;
-// issue #69 only adds the backend import surface and deterministic tests.
-#![cfg_attr(not(test), allow(dead_code))]
-
 pub(crate) mod matching;
 
 #[cfg(test)]
@@ -17,10 +13,12 @@ use crate::search::{
     run::{NormalizedPosting, PostingSource, SearchRunResult},
 };
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct JobPostingImportService<'a> {
     pool: &'a SqlitePool,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 impl<'a> JobPostingImportService<'a> {
     pub(crate) fn new(pool: &'a SqlitePool) -> Self {
         Self { pool }
@@ -30,23 +28,30 @@ impl<'a> JobPostingImportService<'a> {
         &self,
         result: &SearchRunResult,
     ) -> Result<(), String> {
-        validate_import_result(result)?;
-
         let mut transaction = self.pool.begin().await.map_err(db_error)?;
-
-        for posting in &result.postings {
-            match find_existing_posting(&mut transaction, posting).await? {
-                Some(posting_id) => {
-                    update_existing_posting(&mut transaction, posting_id, posting, result).await?;
-                }
-                None => {
-                    insert_new_posting(&mut transaction, posting, result).await?;
-                }
-            }
-        }
-
+        import_search_run_result_in_transaction(&mut transaction, result).await?;
         transaction.commit().await.map_err(db_error)
     }
+}
+
+pub(crate) async fn import_search_run_result_in_transaction(
+    transaction: &mut Transaction<'_, Sqlite>,
+    result: &SearchRunResult,
+) -> Result<(), String> {
+    validate_import_result(result)?;
+
+    for posting in &result.postings {
+        match find_existing_posting(transaction, posting).await? {
+            Some(posting_id) => {
+                update_existing_posting(transaction, posting_id, posting, result).await?;
+            }
+            None => {
+                insert_new_posting(transaction, posting, result).await?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_import_result(result: &SearchRunResult) -> Result<(), String> {
