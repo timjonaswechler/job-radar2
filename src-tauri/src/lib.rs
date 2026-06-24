@@ -57,6 +57,8 @@ pub fn run() {
             app::commands::update_search_request,
             app::commands::delete_search_request,
             app::commands::run_search_request,
+            app::commands::list_job_postings,
+            app::commands::update_job_posting_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
