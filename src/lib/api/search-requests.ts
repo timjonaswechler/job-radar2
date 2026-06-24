@@ -4,6 +4,12 @@ import type { SourceKey } from "@/lib/api/sources"
 
 export type SearchRequestStatus = "draft" | "active" | "disabled" | "invalid"
 
+export type SearchRunStatus =
+  | "completed"
+  | "completed_with_errors"
+  | "failed"
+  | "cancelled"
+
 export type SearchRuleTarget = "title"
 
 export type SearchRuleKind = "text" | "regex"
@@ -23,15 +29,12 @@ export type SearchRequest = {
   radiusKm: number | null
   sourceKeys: SourceKey[]
   validationError: string | null
+  lastRunAt: string | null
+  lastRunStatus: SearchRunStatus | null
+  lastRunError: string | null
   createdAt: string
   updatedAt: string
 }
-
-export type SearchRunStatus =
-  | "completed"
-  | "completed_with_errors"
-  | "failed"
-  | "cancelled"
 
 export type SourceRunStatus = "completed" | "failed" | "cancelled"
 

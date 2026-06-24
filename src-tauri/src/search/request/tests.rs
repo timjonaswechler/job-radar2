@@ -31,6 +31,9 @@ fn search_request_crud_round_trips_without_name() {
         assert_eq!(created.radius_km, Some(30));
         assert_eq!(created.source_keys, vec![source_key]);
         assert!(created.validation_error.is_none());
+        assert!(created.last_run_at.is_none());
+        assert!(created.last_run_status.is_none());
+        assert!(created.last_run_error.is_none());
         assert!(!created.created_at.is_empty());
         assert!(!created.updated_at.is_empty());
         let created_json = serde_json::to_value(&created).unwrap();

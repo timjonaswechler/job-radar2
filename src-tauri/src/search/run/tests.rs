@@ -100,6 +100,116 @@ impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
 }
 
 #[test]
+fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_empty() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let service = SearchRequestService::new(&pool, &running_search_runs);
+        let temp_dir = tempfile::tempdir().unwrap();
+        let executor = FixtureSourceExecutor::new([("test_source", Ok(vec![]))]);
+
+        for status in [
+            SearchRequestStatus::Draft,
+            SearchRequestStatus::Disabled,
+            SearchRequestStatus::Invalid,
+        ] {
+            let search_request = service
+                .create(CreateSearchRequestInput {
+                    status,
+                    include_rules: vec![text_rule("laser")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["test_source".to_string()],
+                })
+                .await
+                .unwrap();
+
+            let error = SearchRunService::new(
+                &pool,
+                &running_search_runs,
+                &executor,
+                temp_dir
+                    .path()
+                    .join(format!("{:?}-search-run-result.json", status)),
+                temp_dir.path(),
+            )
+            .run(search_request.id)
+            .await
+            .unwrap_err();
+
+            assert!(error.contains("cannot run unless status is active"));
+            let reloaded = service.get(search_request.id).await.unwrap();
+            assert!(reloaded.last_run_at.is_none());
+            assert!(reloaded.last_run_status.is_none());
+            assert!(reloaded.last_run_error.is_none());
+        }
+    });
+}
+
+#[test]
+fn completed_run_persists_postings_and_records_last_run_success() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("laser")],
+            vec![],
+        )
+        .await;
+        let executor = FixtureSourceExecutor::new([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/laser",
+                &["Mainz"],
+            )]),
+        )]);
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(posting_count, 1);
+        let source_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_posting_sources")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(source_count, 1);
+        let source_url: String = sqlx::query_scalar("SELECT url FROM job_posting_sources")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(source_url, "https://example.test/laser");
+
+        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
+            .get(search_request.id)
+            .await
+            .unwrap();
+        assert_eq!(reloaded.last_run_at, Some(result.generated_at));
+        assert_eq!(reloaded.last_run_status, Some(SearchRunStatus::Completed));
+        assert!(reloaded.last_run_error.is_none());
+    });
+}
+
+#[test]
 fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -811,6 +921,23 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
             result.source_runs[1].error.as_deref(),
             Some("fixture source failed")
         );
+        let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(posting_count, 1);
+        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
+            .get(search_request.id)
+            .await
+            .unwrap();
+        assert_eq!(reloaded.last_run_at, Some(result.generated_at.clone()));
+        assert_eq!(
+            reloaded.last_run_status,
+            Some(SearchRunStatus::CompletedWithErrors)
+        );
+        let last_run_error = reloaded.last_run_error.unwrap();
+        assert!(last_run_error.contains("source_two"));
+        assert!(last_run_error.contains("fixture source failed"));
 
         let result_json: Value =
             serde_json::from_str(&std::fs::read_to_string(result_path).unwrap()).unwrap();
@@ -867,6 +994,138 @@ fn total_source_failure_produces_failed_result_without_postings() {
             .source_runs
             .iter()
             .all(|source_run| source_run.status == SourceRunStatus::Failed));
+        let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(posting_count, 0);
+        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
+            .get(search_request.id)
+            .await
+            .unwrap();
+        assert_eq!(reloaded.last_run_at, Some(result.generated_at));
+        assert_eq!(reloaded.last_run_status, Some(SearchRunStatus::Failed));
+        let last_run_error = reloaded.last_run_error.unwrap();
+        assert!(last_run_error.contains("source_one"));
+        assert!(last_run_error.contains("first failed"));
+        assert!(last_run_error.contains("source_two"));
+        assert!(last_run_error.contains("second failed"));
+    });
+}
+
+#[test]
+fn persistence_failure_rolls_back_last_run_update() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("laser")],
+            vec![],
+        )
+        .await;
+        let inserted_posting = sqlx::query(
+            "INSERT INTO job_postings (
+               title, company, locations_json, first_seen_at, last_seen_at
+             )
+             VALUES ('Existing Laser Engineer', 'ACME', '{}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO job_posting_sources (
+               posting_id, source_key, source_name_snapshot, url, first_seen_at, last_seen_at
+             )
+             VALUES (?1, 'test_source', 'Test Source', 'https://example.test/laser', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+        )
+        .bind(inserted_posting.last_insert_rowid())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let executor = FixtureSourceExecutor::new([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/laser",
+                &["Mainz"],
+            )]),
+        )]);
+
+        let error = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap_err();
+
+        assert!(error.contains("invalid type"));
+        let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(posting_count, 1);
+        let source_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_posting_sources")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(source_count, 1);
+        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
+            .get(search_request.id)
+            .await
+            .unwrap();
+        assert!(reloaded.last_run_at.is_none());
+        assert!(reloaded.last_run_status.is_none());
+        assert!(reloaded.last_run_error.is_none());
+    });
+}
+
+#[test]
+fn disabled_search_run_result_artifact_does_not_write_json() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("engineer")],
+            vec![],
+        )
+        .await;
+        let result_path = temp_dir.path().join("disabled-search-run-result.json");
+        let executor = FixtureSourceExecutor::new([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/laser",
+                &[],
+            )]),
+        )]);
+        let running_search_runs = RunningSearchRuns::default();
+
+        let result = SearchRunService::new_with_result_artifact(
+            &pool,
+            &running_search_runs,
+            &executor,
+            SearchRunResultArtifact::Disabled,
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        assert!(!result_path.exists());
     });
 }
 

@@ -2,16 +2,18 @@ use std::{collections::HashMap, path::PathBuf};
 
 use sqlx::SqlitePool;
 
-use crate::{
-    search::normalization::normalize_source_candidate,
-    search::request::{RunningSearchRuns, SearchRequestService},
+use crate::search::{
+    normalization::normalize_source_candidate,
+    posting::import_search_run_result_in_transaction,
+    request::{RunningSearchRuns, SearchRequestService},
 };
 
-use super::super::{SearchRunResult, SourceExecutionInput, SourceExecutor};
+use super::super::{SearchRunResult, SearchRunStatus, SourceExecutionInput, SourceExecutor};
 use super::{
-    compile_rules, generated_at_timestamp, matches_any_rule, merge_postings, overall_status,
-    posting_source, resolve_selected_sources, source_run_completed, source_run_failed,
-    source_run_failed_for_key, validate_executable_search_request, write_search_run_result,
+    compile_rules, db_error, generated_at_timestamp, matches_any_rule, merge_postings,
+    overall_status, posting_source, resolve_selected_sources, source_run_completed,
+    source_run_failed, source_run_failed_for_key, update_search_request_last_run,
+    validate_executable_search_request, write_search_run_result, SearchRunResultArtifact,
     SelectedSearchRunSource, Treffer,
 };
 
@@ -19,7 +21,7 @@ pub struct SearchRunService<'a> {
     pool: &'a SqlitePool,
     running_search_runs: &'a RunningSearchRuns,
     source_executor: &'a dyn SourceExecutor,
-    result_path: PathBuf,
+    result_artifact: SearchRunResultArtifact,
     source_registry_app_data_dir: PathBuf,
 }
 
@@ -31,11 +33,27 @@ impl<'a> SearchRunService<'a> {
         result_path: impl Into<PathBuf>,
         source_registry_app_data_dir: impl Into<PathBuf>,
     ) -> Self {
+        Self::new_with_result_artifact(
+            pool,
+            running_search_runs,
+            source_executor,
+            SearchRunResultArtifact::WriteTo(result_path.into()),
+            source_registry_app_data_dir,
+        )
+    }
+
+    pub fn new_with_result_artifact(
+        pool: &'a SqlitePool,
+        running_search_runs: &'a RunningSearchRuns,
+        source_executor: &'a dyn SourceExecutor,
+        result_artifact: SearchRunResultArtifact,
+        source_registry_app_data_dir: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             pool,
             running_search_runs,
             source_executor,
-            result_path: result_path.into(),
+            result_artifact,
             source_registry_app_data_dir: source_registry_app_data_dir.into(),
         }
     }
@@ -115,7 +133,22 @@ impl<'a> SearchRunService<'a> {
             postings: merge_postings(treffers),
         };
 
-        write_search_run_result(&self.result_path, &result).await?;
+        let mut transaction = self.pool.begin().await.map_err(db_error)?;
+        if matches!(
+            result.status,
+            SearchRunStatus::Completed | SearchRunStatus::CompletedWithErrors
+        ) {
+            import_search_run_result_in_transaction(&mut transaction, &result).await?;
+        }
+        update_search_request_last_run(&mut transaction, &result).await?;
+        transaction.commit().await.map_err(db_error)?;
+
+        match &self.result_artifact {
+            SearchRunResultArtifact::Disabled => {}
+            SearchRunResultArtifact::WriteTo(path) => {
+                write_search_run_result(path, &result).await?
+            }
+        }
 
         Ok(result)
     }

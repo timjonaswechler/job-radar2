@@ -8,7 +8,9 @@ mod source_runs;
 mod validation;
 
 use merging::{merge_postings, Treffer};
-use persistence::{generated_at_timestamp, write_search_run_result};
+use persistence::{
+    db_error, generated_at_timestamp, update_search_request_last_run, write_search_run_result,
+};
 use rules::{compile_rules, matches_any_rule};
 use selection::{resolve_selected_sources, SelectedSearchRunSource};
 use source_runs::{
@@ -18,5 +20,7 @@ use source_runs::{
 use validation::validate_executable_search_request;
 
 pub use errors::SourceExecutionError;
-pub use persistence::default_search_run_result_path;
+pub use persistence::{
+    default_search_run_result_artifact, default_search_run_result_path, SearchRunResultArtifact,
+};
 pub use runner::SearchRunService;

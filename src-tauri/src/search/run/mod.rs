@@ -8,7 +8,11 @@ pub use execution::{
     BoxedSourceExecutionFuture, DefaultSourceExecutor, SourceExecutionInput, SourceExecutionSource,
     SourceExecutor,
 };
-pub use service::{default_search_run_result_path, SearchRunService, SourceExecutionError};
+#[allow(unused_imports)]
+pub use service::{
+    default_search_run_result_artifact, default_search_run_result_path, SearchRunResultArtifact,
+    SearchRunService, SourceExecutionError,
+};
 pub use types::{
     NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceCandidate,
     SourceRunResult, SourceRunStatus,
