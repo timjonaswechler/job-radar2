@@ -403,6 +403,26 @@ pub async fn run_search_request(
     .await
 }
 
+#[tauri::command]
+pub async fn list_job_postings(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::search::posting::JobPosting>, String> {
+    crate::search::posting::JobPostingService::new(&state.db)
+        .list()
+        .await
+}
+
+#[tauri::command]
+pub async fn update_job_posting_state(
+    state: State<'_, AppState>,
+    id: i64,
+    input: crate::search::posting::UpdateJobPostingStateInput,
+) -> Result<crate::search::posting::JobPosting, String> {
+    crate::search::posting::JobPostingService::new(&state.db)
+        .update_state(id, input)
+        .await
+}
+
 async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, String> {
     Ok(AppPreferences {
         theme: read_setting_or_default(pool, SETTING_THEME).await?,

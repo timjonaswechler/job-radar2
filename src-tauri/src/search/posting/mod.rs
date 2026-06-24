@@ -1,7 +1,15 @@
 pub(crate) mod matching;
+mod service;
 
 #[cfg(test)]
 mod tests;
+mod types;
+
+pub use service::JobPostingService;
+pub use types::{
+    ApplicationState, InterestState, JobPosting, JobPostingSource, PreparationState, ReadState,
+    UpdateJobPostingStateInput,
+};
 
 use std::collections::HashSet;
 
