@@ -1,5 +1,5 @@
-import type { de } from "./de"
-import type { TranslationShape } from "./types"
+import type { de } from "./de";
+import type { TranslationShape } from "./types";
 
 export const en = {
   common: {
@@ -30,6 +30,7 @@ export const en = {
     },
     items: {
       overview: "Overview",
+      postings: "Postings",
       sources: "Sources",
       settings: "Settings",
       postingsInbox: "Postings Inbox",
@@ -64,4 +65,4 @@ export const en = {
       },
     },
   },
-} as const satisfies TranslationShape<typeof de>
+} as const satisfies TranslationShape<typeof de>;

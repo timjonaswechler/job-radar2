@@ -1,4 +1,4 @@
-import type { TranslationTree } from "./types"
+import type { TranslationTree } from "./types";
 
 export const de = {
   common: {
@@ -29,6 +29,7 @@ export const de = {
     },
     items: {
       overview: "Übersicht",
+      postings: "Stellenanzeigen",
       sources: "Quellen",
       settings: "Einstellungen",
       postingsInbox: "Stellenanzeigen-Inbox",
@@ -50,7 +51,8 @@ export const de = {
     },
     ready: {
       title: "Alles bereit",
-      description: "Tauri ist verbunden, SQLite {{sqliteVersion}} ist erreichbar.",
+      description:
+        "Tauri ist verbunden, SQLite {{sqliteVersion}} ist erreichbar.",
     },
     failed: {
       title: "Startcheck fehlgeschlagen",
@@ -63,4 +65,4 @@ export const de = {
       },
     },
   },
-} as const satisfies TranslationTree
+} as const satisfies TranslationTree;

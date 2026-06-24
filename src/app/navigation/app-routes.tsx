@@ -1,6 +1,7 @@
 import { lazy, type ComponentType } from "react";
 
 import { HomePage } from "@/pages/home-page";
+import { PostingsPage } from "@/pages/postings-page";
 
 const SourcesPage = lazy(() =>
   import("@/pages/sources-page").then((module) => ({
@@ -36,6 +37,11 @@ export const appRoutes: AppRoute[] = [
     path: "/",
     title: "Übersicht",
     Component: HomePage,
+  },
+  {
+    path: "/postings",
+    title: "Postings",
+    Component: PostingsPage,
   },
   {
     path: "/sources",
