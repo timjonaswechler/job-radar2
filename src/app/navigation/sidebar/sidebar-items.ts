@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   Radar,
   Settings,
-  TextInitial,
   type LucideIcon,
 } from "lucide-react";
 import type { TranslationKey } from "@/lib/i18n/resources";
@@ -41,11 +40,6 @@ export const sidebarItems: NavGroup[] = [
         titleKey: "navigation.items.overview",
         url: "/",
         icon: LayoutDashboard,
-      },
-      {
-        titleKey: "navigation.items.postings",
-        url: "/postings",
-        icon: TextInitial,
       },
       {
         titleKey: "navigation.items.sources",

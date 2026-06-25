@@ -20,6 +20,7 @@ import {
 
 import { NavMain } from "@/components/layout/nav-main";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PostingsSidebar } from "@/features/postings/components/postings-sidebar";
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation();
@@ -40,9 +41,9 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
               </SidebarMenuButton>
               <Button
                 size="icon"
-                className="relative z-0 h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
+                className="relative z-0 size-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
                 variant="outline"
-                onClick={() => navigateTo("/stellenanzeigen")}
+                onClick={() => navigateTo("/postings")}
               >
                 <InboxIcon />
                 <span className="sr-only">
@@ -54,6 +55,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent className="relative z-10">
           <ScrollArea className="h-auto">
+            <PostingsSidebar />
             <NavMain items={sidebarItems} />
           </ScrollArea>
         </SidebarContent>
