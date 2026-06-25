@@ -5,12 +5,15 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 import {
   getJobPostingQueueCounts,
   listJobPostingsForQueue,
+  updateJobPostingState,
   type JobPosting,
 } from "@/lib/api/job-postings";
 import {
@@ -36,6 +39,7 @@ type PostingsWorkspaceContextValue = {
   listError: JobPostingsLoadError | null;
   listLoading: boolean;
   postings: JobPosting[];
+  markPostingAsRead: (postingId: number) => Promise<void>;
   refreshCounts: () => Promise<void>;
   refreshList: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
@@ -78,6 +82,7 @@ export function PostingsWorkspaceProvider({
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<JobPostingsLoadError | null>(null);
+  const pendingReadPostingIds = useRef(new Set<number>());
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -118,6 +123,60 @@ export function PostingsWorkspaceProvider({
     await Promise.all([refreshCounts(), refreshList()]);
   }, [refreshCounts, refreshList]);
 
+  const markPostingAsRead = useCallback(
+    async (postingId: number) => {
+      const posting = postings.find((item) => item.id === postingId);
+
+      if (
+        activeQueueId !== "inbox" ||
+        !posting ||
+        posting.readState === "read" ||
+        pendingReadPostingIds.current.has(postingId)
+      ) {
+        return;
+      }
+
+      pendingReadPostingIds.current.add(postingId);
+      setPostings((currentPostings) =>
+        currentPostings.map((item) =>
+          item.id === postingId ? { ...item, readState: "read" } : item,
+        ),
+      );
+      setCounts((currentCounts) => ({
+        ...currentCounts,
+        newInbox: Math.max(0, currentCounts.newInbox - 1),
+        reviewInbox: currentCounts.reviewInbox + 1,
+      }));
+
+      try {
+        const updatedPosting = await updateJobPostingState(postingId, {
+          readState: "read",
+        });
+
+        setPostings((currentPostings) =>
+          currentPostings.map((item) =>
+            item.id === postingId ? updatedPosting : item,
+          ),
+        );
+      } catch (unknownError) {
+        console.error("Failed to mark job posting as read", unknownError);
+        setPostings((currentPostings) =>
+          currentPostings.map((item) =>
+            item.id === postingId ? { ...item, readState: "unread" } : item,
+          ),
+        );
+        toast.error("Anzeige konnte nicht als gelesen markiert werden.", {
+          description:
+            "Der Neu-Status bleibt erhalten. Bitte versuche es gleich noch einmal.",
+        });
+      } finally {
+        pendingReadPostingIds.current.delete(postingId);
+        void refreshCounts();
+      }
+    },
+    [activeQueueId, postings, refreshCounts],
+  );
+
   useEffect(() => {
     void refreshCounts();
   }, [refreshCounts]);
@@ -136,6 +195,7 @@ export function PostingsWorkspaceProvider({
       listError,
       listLoading,
       postings,
+      markPostingAsRead,
       refreshCounts,
       refreshList,
       refreshWorkspace,
@@ -149,6 +209,7 @@ export function PostingsWorkspaceProvider({
       listError,
       listLoading,
       postings,
+      markPostingAsRead,
       refreshCounts,
       refreshList,
       refreshWorkspace,
