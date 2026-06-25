@@ -2,6 +2,14 @@ import { invoke } from "@tauri-apps/api/core"
 
 import type { SourceKey } from "@/lib/api/sources"
 
+export type JobPostingQueueId =
+  | "inbox"
+  | "interested"
+  | "preparation"
+  | "applied"
+  | "archive"
+  | "all"
+
 export type JobPostingReadState = "unread" | "read"
 
 export type JobPostingInterestState =
@@ -48,6 +56,11 @@ export type JobPosting = {
   sources: JobPostingSource[]
 }
 
+export type JobPostingQueueCounts = Record<JobPostingQueueId, number> & {
+  newInbox: number
+  reviewInbox: number
+}
+
 export type UpdateJobPostingStateInput = {
   readState?: JobPostingReadState
   interestState?: JobPostingInterestState
@@ -57,6 +70,14 @@ export type UpdateJobPostingStateInput = {
 
 export function listJobPostings() {
   return invoke<JobPosting[]>("list_job_postings")
+}
+
+export function listJobPostingsForQueue(queueId: JobPostingQueueId) {
+  return invoke<JobPosting[]>("list_job_postings_for_queue", { queueId })
+}
+
+export function getJobPostingQueueCounts() {
+  return invoke<JobPostingQueueCounts>("get_job_posting_queue_counts")
 }
 
 export function updateJobPostingState(

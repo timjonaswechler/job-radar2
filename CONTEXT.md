@@ -92,6 +92,14 @@ _Avoid_: Antipattern, Quelle, Suchlauf
 A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company + title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
 _Avoid_: Treffer, Quelle, Suchlauf
 
+**Stellenanzeigen-Queue**:
+A user-facing workflow slice for persisted job postings, derived from posting decision and application states. A queue helps users decide what needs attention next; it is not an additional storage lifecycle state.
+_Avoid_: Backend-Status, Tabellenfilter, Suchanfrage, Trefferliste
+
+**Stellenanzeigen-Inbox**:
+The Stellenanzeigen-Queue for postings that still need a user decision. Read-state indicators such as `Neu` and `Gelesen` can mark rows like unread/read mail, but they are not independent queues or hard-filtered lifecycle states.
+_Avoid_: Alle ungelesenen Anzeigen, Bewerbungsstatus, Archiv, Suchlauf-Inbox
+
 **Treffer**:
 The relationship that says a specific job posting matched a specific search request during a specific search run. The same job posting may be a Treffer for multiple search requests or search runs.
 _Avoid_: Stellenanzeige, Quelle

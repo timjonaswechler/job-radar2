@@ -624,6 +624,237 @@ fn lists_persisted_postings_by_last_seen_desc_then_id_desc() {
 }
 
 #[test]
+fn queue_counts_use_mailbox_workflow_mapping() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "New Inbox",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Review Inbox",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Interesting",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "interested",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Preparing",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "interested",
+                preparation_state: "in_progress",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Ready",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "interested",
+                preparation_state: "ready",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Submitted",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "interested",
+                preparation_state: "not_started",
+                application_state: "submitted",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "In Process Undecided",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "in_process",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Dismissed",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "dismissed",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Rejected",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "interested",
+                preparation_state: "not_started",
+                application_state: "rejected_by_company",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+
+        let counts = JobPostingService::new(&pool).queue_counts().await.unwrap();
+
+        assert_eq!(counts.all, 9);
+        assert_eq!(counts.inbox, 2);
+        assert_eq!(counts.new_inbox, 1);
+        assert_eq!(counts.review_inbox, 1);
+        assert_eq!(counts.interested, 1);
+        assert_eq!(counts.preparation, 2);
+        assert_eq!(counts.applied, 2);
+        assert_eq!(counts.archive, 2);
+    });
+}
+
+#[test]
+fn lists_postings_for_queue_with_same_mailbox_workflow_mapping() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Inbox",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Applied",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "submitted",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Archive",
+                company: "ACME GmbH",
+                locations: &[],
+                read_state: "read",
+                interest_state: "dismissed",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+
+        let inbox_titles = JobPostingService::new(&pool)
+            .list_for_queue(JobPostingQueueId::Inbox)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|posting| posting.title)
+            .collect::<Vec<_>>();
+        let applied_titles = JobPostingService::new(&pool)
+            .list_for_queue(JobPostingQueueId::Applied)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|posting| posting.title)
+            .collect::<Vec<_>>();
+        let archive_titles = JobPostingService::new(&pool)
+            .list_for_queue(JobPostingQueueId::Archive)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|posting| posting.title)
+            .collect::<Vec<_>>();
+
+        assert_eq!(inbox_titles, vec!["Inbox"]);
+        assert_eq!(applied_titles, vec!["Applied"]);
+        assert_eq!(archive_titles, vec!["Archive"]);
+    });
+}
+
+#[test]
 fn partial_state_update_changes_only_supplied_state_fields() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
