@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  listJobPostings,
-  type JobPosting,
-} from "@/lib/api/job-postings";
+import { listJobPostings, type JobPosting } from "@/lib/api/job-postings";
+
+export type JobPostingsLoadError = {
+  title: string;
+  description: string;
+};
 
 export function useJobPostings() {
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<JobPostingsLoadError | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -18,7 +20,12 @@ export function useJobPostings() {
       setPostings(nextPostings);
     } catch (unknownError) {
       setPostings([]);
-      setError(errorMessage(unknownError));
+      console.error("Failed to load job postings", unknownError);
+      setError({
+        title: "Stellenanzeigen konnten nicht geladen werden",
+        description:
+          "Die gespeicherten Anzeigen sind gerade nicht erreichbar. Prüfe, ob die lokale App-Datenbank verfügbar ist, und versuche es erneut.",
+      });
     } finally {
       setLoading(false);
     }
@@ -29,8 +36,4 @@ export function useJobPostings() {
   }, [refresh]);
 
   return { postings, loading, error, refresh };
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

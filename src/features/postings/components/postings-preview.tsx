@@ -16,28 +16,22 @@ import {
 } from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { JobPosting } from "@/lib/api/job-postings";
-import {
-  applicationStateLabels,
-  formatAbsoluteDate,
-  formatLocations,
-  getPrimaryQueueLabel,
-  getSourceLabel,
-  getWorkflowBadge,
-  preparationStateLabels,
-} from "@/features/postings/postings-view-model";
+import type { PostingPreviewViewModel } from "@/features/postings/postings-view-model";
 
 type PostingsPreviewProps = {
   loading: boolean;
-  posting: JobPosting | null;
+  posting: PostingPreviewViewModel | null;
 };
+
+const previewPanelClassName =
+  "flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto p-4";
 
 export function PostingsPreview({ loading, posting }: PostingsPreviewProps) {
   if (loading) return <PreviewSkeleton />;
 
   if (!posting) {
     return (
-      <aside className="flex min-h-full flex-col gap-4  border-l overflow-y-auto p-4">
+      <aside className={previewPanelClassName}>
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -55,49 +49,39 @@ export function PostingsPreview({ loading, posting }: PostingsPreviewProps) {
     );
   }
 
-  const workflowBadge = getWorkflowBadge(posting);
-
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
+    <aside className={previewPanelClassName}>
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-medium">
-          {posting.company.slice(0, 2).toUpperCase()}
+        <div className="flex size-10 shrink-0 items-center justify-center text-sm font-medium">
+          {posting.companyInitials}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium leading-5">{posting.title}</div>
           <div className="truncate text-xs text-muted-foreground">
-            {posting.company} · {formatLocations(posting.locations)}
+            {posting.subtitle}
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary" radius="full">
-          Nur Ansicht
-        </Badge>
-        <Badge variant={workflowBadge.variant} radius="full">
-          {workflowBadge.label}
-        </Badge>
+        {posting.badges.map((badge) => (
+          <Badge key={badge.label} variant={badge.variant} radius="full">
+            {badge.label}
+          </Badge>
+        ))}
       </div>
 
       <Separator />
 
       <div className="flex flex-col gap-3 text-sm">
-        <PreviewDetailRow label="Queue" value={getPrimaryQueueLabel(posting)} />
-        <PreviewDetailRow
-          label="Bewerbungsstand"
-          value={applicationStateLabels[posting.applicationState]}
-        />
-        <PreviewDetailRow
-          label="Vorbereitung"
-          value={preparationStateLabels[posting.preparationState]}
-        />
-        <PreviewDetailRow label="Quelle" value={getSourceLabel(posting)} />
-        <PreviewDetailRow
-          label="Zuletzt gesehen"
-          value={formatAbsoluteDate(posting.lastSeenAt)}
-        />
+        {posting.detailRows.map((row) => (
+          <PreviewDetailRow
+            key={row.label}
+            label={row.label}
+            value={row.value}
+          />
+        ))}
       </div>
 
       <Separator />
@@ -111,9 +95,9 @@ export function PostingsPreview({ loading, posting }: PostingsPreviewProps) {
           <div className="grid gap-1">
             <div className="font-medium">Detaildaten folgen später</div>
             <p className="text-muted-foreground">
-              Dieser Slice lädt echte Stellenanzeigen und zeigt die
-              Mailbox-Struktur. Bewerbungsaktionen, Stepper und echte
-              Detailinhalte bleiben bewusst außerhalb von #73.
+              Dieser Slice zeigt gespeicherte Stellenanzeigen in der
+              Mailbox-Liste. Bewerbungsaktionen, Stepper und ausgebaute
+              Detailinhalte bleiben bewusst separaten Issues vorbehalten.
             </p>
           </div>
         </div>
@@ -144,7 +128,7 @@ function PreviewDetailRow({ label, value }: { label: string; value: string }) {
 
 function PreviewSkeleton() {
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-4 p-4">
+    <aside className={previewPanelClassName}>
       <div className="flex items-start gap-3">
         <Skeleton className="size-10" />
         <div className="grid min-w-0 flex-1 gap-2">
