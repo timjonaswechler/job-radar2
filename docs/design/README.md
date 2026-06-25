@@ -11,6 +11,10 @@ Vor UI-Arbeit zuerst lesen:
 5. [`visual-direction.md`](visual-direction.md) — visuelle Richtung aus Screenshots und Video-Inspiration
 6. [`inspiration.md`](inspiration.md) — konkrete Referenzen als übertragbare Prinzipien, nicht als Kopiervorlage
 
+Ergänzende Domänen-/UI-Mappings:
+
+- [`job-posting-queues.md`](job-posting-queues.md) — Quelle der Wahrheit für Stellenanzeigen-Queues, Read-State-Indikatoren und Counts
+
 ## Grundsatz
 
 Job Radar ist eine ruhige, datengetriebene Arbeitsoberfläche. Die UI zeigt nicht automatisch alles, was Backend, Agenten oder Registry intern wissen. Sie bleibt aber fachlich treu zu den Backend- und Domainzuständen. Sie zeigt zuerst das, was Nutzer:innen hilft:

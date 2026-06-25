@@ -1,9 +1,12 @@
-import { AlertCircleIcon, FilterIcon, InboxIcon, Search } from "lucide-react";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+  AlertCircleIcon,
+  ListFilter,
+  InboxIcon,
+  Search,
+  MapPin,
+  Building2,
+} from "lucide-react";
+
 import { Badge } from "@/components/reui/badge";
 import {
   Alert,
@@ -19,20 +22,22 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import {
-  INBOX_ANCHORS,
-  type PostingInboxAnchorId,
-  type PostingListItemViewModel,
-  type PostingQueue,
+import type {
+  PostingListItemViewModel,
+  PostingQueue,
 } from "@/features/postings/postings-view-model";
-import type { JobPostingsLoadError } from "@/features/postings/use-job-postings";
+import type { JobPostingsLoadError } from "@/features/postings/postings-workspace-provider";
+import { cn } from "@/lib/utils";
 
 type PostingsListProps = {
-  activeInboxAnchorId: PostingInboxAnchorId | null;
   activeQueue: PostingQueue;
   error: JobPostingsLoadError | null;
   loading: boolean;
@@ -44,7 +49,6 @@ type PostingsListProps = {
 };
 
 export function PostingsList({
-  activeInboxAnchorId,
   activeQueue,
   error,
   loading,
@@ -77,19 +81,13 @@ export function PostingsList({
             aria-label="Filter folgen später"
             disabled
           >
-            <FilterIcon aria-hidden="true" />
+            <ListFilter aria-hidden="true" />
           </Button>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {activeQueue.description}
-          {activeInboxAnchorId ? (
-            <span>
-              {" "}
-              Prioritätsanker: {getInboxAnchorLabel(activeInboxAnchorId)} — die
-              Inbox-Liste bleibt vollständig.
-            </span>
-          ) : null}
+          {activeQueue.description} Neue und gelesene Anzeigen werden wie in
+          einem Postfach direkt in der Liste markiert.
         </p>
 
         <InputGroup className="h-7 w-full max-w-sm">
@@ -113,16 +111,11 @@ export function PostingsList({
           <PostingsListSkeleton />
         ) : postings.length ? (
           <ScrollArea className="h-full min-h-0 flex-1 overflow-hidden [&_[data-orientation=vertical][data-slot=scroll-area-scrollbar]]:w-1.5">
-            <div className="flex flex-col gap-1 px-2">
-              {postings.map((posting) => (
-                <PostingListRow
-                  key={posting.id}
-                  posting={posting}
-                  selected={posting.id === selectedPostingId}
-                  onSelect={() => onSelectPosting(posting.id)}
-                />
-              ))}
-            </div>
+            <FlatPostingsList
+              postings={postings}
+              selectedPostingId={selectedPostingId}
+              onSelectPosting={onSelectPosting}
+            />
           </ScrollArea>
         ) : (
           <PostingsListEmpty queueLabel={activeQueue.label} />
@@ -132,9 +125,26 @@ export function PostingsList({
   );
 }
 
-function getInboxAnchorLabel(anchorId: PostingInboxAnchorId) {
+function FlatPostingsList({
+  postings,
+  selectedPostingId,
+  onSelectPosting,
+}: {
+  postings: PostingListItemViewModel[];
+  selectedPostingId: number | null;
+  onSelectPosting: (postingId: number) => void;
+}) {
   return (
-    INBOX_ANCHORS.find((anchor) => anchor.id === anchorId)?.label ?? "Inbox"
+    <div className="flex flex-col gap-1 px-2">
+      {postings.map((posting) => (
+        <PostingListRow
+          key={posting.id}
+          posting={posting}
+          selected={posting.id === selectedPostingId}
+          onSelect={() => onSelectPosting(posting.id)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -222,10 +232,6 @@ function PostingListRow({
           <div className="flex w-full items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium leading-5">
               <span className="truncate">{posting.title}</span>
-              <span className="shrink-0 text-muted-foreground">·</span>
-              <span className="truncate text-muted-foreground">
-                {posting.company}
-              </span>
             </div>
             <time
               className="shrink-0 text-nowrap text-xs leading-5 text-muted-foreground"
@@ -235,14 +241,13 @@ function PostingListRow({
               {posting.lastActivityLabel}
             </time>
           </div>
-
           <div className="mt-1 flex min-w-0 items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
-              <span className="truncate">{posting.locationLabel}</span>
-              <span className="shrink-0">·</span>
-              <span className="truncate">{posting.primarySourceLabel}</span>
+              <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate text-muted-foreground">
+                {posting.company}
+              </span>
             </div>
-
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
               <Badge
                 variant={posting.readStateBadge.variant}
@@ -260,10 +265,17 @@ function PostingListRow({
               </Badge>
             </div>
           </div>
-
-          <div className="mt-2 flex h-6 min-w-0 items-center rounded-md border border-dashed bg-background/60 px-2 text-xs leading-none text-muted-foreground">
-            <span className="truncate">{posting.processSlotLabel}</span>
+          <div className="mt-1 flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+              <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate">{posting.locationLabel}</span>
+            </div>
           </div>
+          {posting.processSlotLabel ? (
+            <div className="mt-2 flex h-6 min-w-0 items-center rounded-md border border-dashed bg-background/60 px-2 text-xs leading-none text-muted-foreground">
+              <span className="truncate">{posting.processSlotLabel}</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </button>

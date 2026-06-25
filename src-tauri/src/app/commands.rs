@@ -413,6 +413,25 @@ pub async fn list_job_postings(
 }
 
 #[tauri::command]
+pub async fn list_job_postings_for_queue(
+    state: State<'_, AppState>,
+    queue_id: crate::search::posting::JobPostingQueueId,
+) -> Result<Vec<crate::search::posting::JobPosting>, String> {
+    crate::search::posting::JobPostingService::new(&state.db)
+        .list_for_queue(queue_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn get_job_posting_queue_counts(
+    state: State<'_, AppState>,
+) -> Result<crate::search::posting::JobPostingQueueCounts, String> {
+    crate::search::posting::JobPostingService::new(&state.db)
+        .queue_counts()
+        .await
+}
+
+#[tauri::command]
 pub async fn update_job_posting_state(
     state: State<'_, AppState>,
     id: i64,

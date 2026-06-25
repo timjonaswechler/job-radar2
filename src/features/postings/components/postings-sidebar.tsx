@@ -7,22 +7,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import {
-  createQueueCounts,
-  getPostingInboxAnchorUrl,
   getPostingQueueUrl,
-  INBOX_ANCHORS,
-  isPostingInboxAnchorPathActive,
   isPostingQueuePathActive,
   QUEUE_DEFINITIONS,
   type PostingQueueId,
   type QueueCounts,
 } from "@/features/postings/postings-view-model";
-import { useJobPostings } from "@/features/postings/use-job-postings";
+import { usePostingsWorkspace } from "@/features/postings/postings-workspace-provider";
 
 const primaryQueueIds = [
   "inbox",
@@ -34,8 +27,7 @@ const primaryQueueIds = [
 const viewQueueIds = ["archive", "all"] satisfies PostingQueueId[];
 
 export function PostingsSidebar() {
-  const { postings, loading, error } = useJobPostings();
-  const counts = createQueueCounts(postings);
+  const { counts, countsLoading, countsError } = usePostingsWorkspace();
   const pathname = window.location.pathname;
 
   return (
@@ -45,16 +37,16 @@ export function PostingsSidebar() {
         <QueueMenu
           counts={counts}
           ids={primaryQueueIds}
-          loading={loading}
+          loading={countsLoading}
           pathname={pathname}
-          showUnavailableCounts={Boolean(error)}
+          showUnavailableCounts={Boolean(countsError)}
         />
         <QueueMenu
           counts={counts}
           ids={viewQueueIds}
-          loading={loading}
+          loading={countsLoading}
           pathname={pathname}
-          showUnavailableCounts={Boolean(error)}
+          showUnavailableCounts={Boolean(countsError)}
         />
       </SidebarGroupContent>
     </SidebarGroup>
@@ -99,35 +91,6 @@ function QueueMenu({
               />
             </SidebarMenuButton>
 
-            {queue.id === "inbox" ? (
-              <SidebarMenuSub className="mr-0 pr-0 gap-px">
-                {INBOX_ANCHORS.map((anchor) => (
-                  <SidebarMenuSubItem key={anchor.id}>
-                    <SidebarMenuSubButton
-                      href={getPostingInboxAnchorUrl(anchor.id)}
-                      className="h-8 px-2"
-                      isActive={isPostingInboxAnchorPathActive(
-                        pathname,
-                        anchor.id,
-                      )}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        navigateTo(getPostingInboxAnchorUrl(anchor.id));
-                      }}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        {anchor.label}
-                      </span>
-                      <PostingQueueCount
-                        loading={loading}
-                        unavailable={showUnavailableCounts}
-                        value={counts[anchor.countKey]}
-                      />
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                ))}
-              </SidebarMenuSub>
-            ) : null}
           </SidebarMenuItem>
         );
       })}

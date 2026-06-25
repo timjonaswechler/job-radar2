@@ -5,56 +5,29 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { JobPosting } from "@/lib/api/job-postings";
-import {
-  createPostingItemViewModel,
-  getPostingInboxAnchorFromPath,
-  getPostingQueueIdFromPath,
-  getQueueDefinition,
-  isPostingInQueue,
-} from "@/features/postings/postings-view-model";
-import type { JobPostingsLoadError } from "@/features/postings/use-job-postings";
+import { createPostingItemViewModel } from "@/features/postings/postings-view-model";
+import { usePostingsWorkspace } from "@/features/postings/postings-workspace-provider";
 
 import { PostingsList } from "./postings-list";
 import { PostingsPreview } from "./postings-preview";
 
-type PostingsProps = {
-  error: JobPostingsLoadError | null;
-  loading: boolean;
-  postings: JobPosting[];
-  onRefresh: () => Promise<void>;
-};
-
-export function Postings({
-  error,
-  loading,
-  postings,
-  onRefresh,
-}: PostingsProps) {
-  const pathname = window.location.pathname;
-  const activeQueueId = getPostingQueueIdFromPath(pathname);
-  const activeInboxAnchorId = getPostingInboxAnchorFromPath(pathname);
+export function Postings() {
+  const { activeQueue, listError, listLoading, postings, refreshList } =
+    usePostingsWorkspace();
   const [selectedPostingId, setSelectedPostingId] = useState<number | null>(
     null,
   );
 
-  const activeQueue = getQueueDefinition(activeQueueId);
-  const activeQueuePostings = useMemo(
-    () =>
-      postings.filter((posting) => isPostingInQueue(posting, activeQueueId)),
-    [activeQueueId, postings],
-  );
   const activePostingItems = useMemo(
-    () => activeQueuePostings.map(createPostingItemViewModel),
-    [activeQueuePostings],
+    () => postings.map(createPostingItemViewModel),
+    [postings],
   );
   const activePostingRows = useMemo(
     () => activePostingItems.map((posting) => posting.row),
     [activePostingItems],
   );
-
   useEffect(() => {
-    if (loading) return;
+    if (listLoading) return;
 
     if (!activePostingItems.length) {
       setSelectedPostingId(null);
@@ -68,7 +41,7 @@ export function Postings({
     if (!selectedPostingIsVisible) {
       setSelectedPostingId(activePostingItems[0].id);
     }
-  }, [activePostingItems, loading, selectedPostingId]);
+  }, [activePostingItems, listLoading, selectedPostingId]);
 
   const selectedPosting =
     activePostingItems.find((posting) => posting.id === selectedPostingId) ??
@@ -87,13 +60,12 @@ export function Postings({
         className="h-full min-w-0"
       >
         <PostingsList
-          activeInboxAnchorId={activeInboxAnchorId}
           activeQueue={activeQueue}
-          error={error}
-          loading={loading}
+          error={listError}
+          loading={listLoading}
           postings={activePostingRows}
           selectedPostingId={selectedPostingId}
-          onRetry={onRefresh}
+          onRetry={refreshList}
           onSelectPosting={setSelectedPostingId}
         />
       </ResizablePanel>
@@ -108,7 +80,7 @@ export function Postings({
       >
         <PostingsPreview
           posting={selectedPosting?.preview ?? null}
-          loading={loading}
+          loading={listLoading}
         />
       </ResizablePanel>
     </ResizablePanelGroup>

@@ -30,6 +30,30 @@ pub struct JobPostingSource {
     pub last_seen_at: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobPostingQueueCounts {
+    pub inbox: i64,
+    pub interested: i64,
+    pub preparation: i64,
+    pub applied: i64,
+    pub archive: i64,
+    pub all: i64,
+    pub new_inbox: i64,
+    pub review_inbox: i64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobPostingQueueId {
+    Inbox,
+    Interested,
+    Preparation,
+    Applied,
+    Archive,
+    All,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadState {

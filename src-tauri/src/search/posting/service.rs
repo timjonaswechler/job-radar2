@@ -1,9 +1,35 @@
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 
 use super::{
-    ApplicationState, InterestState, JobPosting, JobPostingSource, PreparationState, ReadState,
-    UpdateJobPostingStateInput,
+    ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
+    JobPostingSource, PreparationState, ReadState, UpdateJobPostingStateInput,
 };
+
+const ARCHIVE_QUEUE_CONDITION: &str = "(interest_state = 'dismissed'
+    OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))";
+const APPLIED_QUEUE_CONDITION: &str = "(NOT (interest_state = 'dismissed'
+    OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))
+    AND application_state IN ('submitted', 'in_process'))";
+const INBOX_QUEUE_CONDITION: &str = "(NOT (interest_state = 'dismissed'
+    OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))
+    AND interest_state = 'undecided'
+    AND application_state = 'not_applied')";
+const NEW_INBOX_CONDITION: &str = "(NOT (interest_state = 'dismissed'
+    OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))
+    AND read_state = 'unread'
+    AND interest_state = 'undecided'
+    AND application_state = 'not_applied')";
+const REVIEW_INBOX_CONDITION: &str = "(NOT (interest_state = 'dismissed'
+    OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))
+    AND read_state = 'read'
+    AND interest_state = 'undecided'
+    AND application_state = 'not_applied')";
+const INTERESTED_QUEUE_CONDITION: &str = "(interest_state = 'interested'
+    AND preparation_state = 'not_started'
+    AND application_state = 'not_applied')";
+const PREPARATION_QUEUE_CONDITION: &str = "(interest_state = 'interested'
+    AND application_state = 'not_applied'
+    AND preparation_state IN ('in_progress', 'ready'))";
 
 pub struct JobPostingService<'a> {
     pool: &'a SqlitePool,
@@ -15,16 +41,28 @@ impl<'a> JobPostingService<'a> {
     }
 
     pub async fn list(&self) -> Result<Vec<JobPosting>, String> {
-        let rows = sqlx::query(
+        self.list_for_queue(JobPostingQueueId::All).await
+    }
+
+    pub async fn list_for_queue(
+        &self,
+        queue_id: JobPostingQueueId,
+    ) -> Result<Vec<JobPosting>, String> {
+        let where_clause = queue_condition(queue_id)
+            .map(|condition| format!("WHERE {condition}"))
+            .unwrap_or_default();
+        let sql = format!(
             "SELECT id, title, company, locations_json, primary_source_id,
                     read_state, interest_state, preparation_state, application_state,
                     first_seen_at, last_seen_at, created_at, updated_at
              FROM job_postings
-             ORDER BY last_seen_at DESC, id DESC",
-        )
-        .fetch_all(self.pool)
-        .await
-        .map_err(db_error)?;
+             {where_clause}
+             ORDER BY last_seen_at DESC, id DESC"
+        );
+        let rows = sqlx::query(&sql)
+            .fetch_all(self.pool)
+            .await
+            .map_err(db_error)?;
 
         let mut postings = Vec::with_capacity(rows.len());
         for row in rows {
@@ -32,6 +70,43 @@ impl<'a> JobPostingService<'a> {
         }
 
         Ok(postings)
+    }
+
+    pub async fn queue_counts(&self) -> Result<JobPostingQueueCounts, String> {
+        let sql = format!(
+            "SELECT
+                COUNT(*) AS all_count,
+                COALESCE(SUM(CASE WHEN {ARCHIVE_QUEUE_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS archive_count,
+                COALESCE(SUM(CASE WHEN {APPLIED_QUEUE_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS applied_count,
+                COALESCE(SUM(CASE WHEN {INBOX_QUEUE_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS inbox_count,
+                COALESCE(SUM(CASE WHEN {NEW_INBOX_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS new_inbox_count,
+                COALESCE(SUM(CASE WHEN {REVIEW_INBOX_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS review_inbox_count,
+                COALESCE(SUM(CASE WHEN {INTERESTED_QUEUE_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS interested_count,
+                COALESCE(SUM(CASE WHEN {PREPARATION_QUEUE_CONDITION}
+                    THEN 1 ELSE 0 END), 0) AS preparation_count
+             FROM job_postings"
+        );
+        let row = sqlx::query(&sql)
+            .fetch_one(self.pool)
+            .await
+            .map_err(db_error)?;
+
+        Ok(JobPostingQueueCounts {
+            inbox: row.try_get("inbox_count").map_err(db_error)?,
+            interested: row.try_get("interested_count").map_err(db_error)?,
+            preparation: row.try_get("preparation_count").map_err(db_error)?,
+            applied: row.try_get("applied_count").map_err(db_error)?,
+            archive: row.try_get("archive_count").map_err(db_error)?,
+            all: row.try_get("all_count").map_err(db_error)?,
+            new_inbox: row.try_get("new_inbox_count").map_err(db_error)?,
+            review_inbox: row.try_get("review_inbox_count").map_err(db_error)?,
+        })
     }
 
     pub async fn update_state(
@@ -146,6 +221,17 @@ impl<'a> JobPostingService<'a> {
         .map_err(db_error)?;
 
         rows.into_iter().map(source_from_row).collect()
+    }
+}
+
+fn queue_condition(queue_id: JobPostingQueueId) -> Option<&'static str> {
+    match queue_id {
+        JobPostingQueueId::All => None,
+        JobPostingQueueId::Archive => Some(ARCHIVE_QUEUE_CONDITION),
+        JobPostingQueueId::Applied => Some(APPLIED_QUEUE_CONDITION),
+        JobPostingQueueId::Inbox => Some(INBOX_QUEUE_CONDITION),
+        JobPostingQueueId::Interested => Some(INTERESTED_QUEUE_CONDITION),
+        JobPostingQueueId::Preparation => Some(PREPARATION_QUEUE_CONDITION),
     }
 }
 
