@@ -12,7 +12,9 @@ import type { BadgeProps } from "@/components/reui/badge";
 import type {
   JobPosting,
   JobPostingApplicationState,
+  JobPostingInterestState,
   JobPostingPreparationState,
+  JobPostingReadState,
 } from "@/lib/api/job-postings";
 
 export type PostingQueueId =
@@ -40,6 +42,41 @@ export type QueueCounts = Record<
 export type StatusBadge = {
   label: string;
   variant: BadgeProps["variant"];
+};
+
+export type PostingListItemViewModel = {
+  id: number;
+  title: string;
+  company: string;
+  locationLabel: string;
+  primarySourceLabel: string;
+  lastActivityLabel: string;
+  lastActivityDateTime: string;
+  lastActivityTitle: string;
+  isUnread: boolean;
+  readStateBadge: StatusBadge;
+  interestStateBadge: StatusBadge;
+  processSlotLabel: string;
+};
+
+export type PostingPreviewDetailRowViewModel = {
+  label: string;
+  value: string;
+};
+
+export type PostingPreviewViewModel = {
+  id: number;
+  title: string;
+  subtitle: string;
+  companyInitials: string;
+  badges: StatusBadge[];
+  detailRows: PostingPreviewDetailRowViewModel[];
+};
+
+export type PostingItemViewModel = {
+  id: number;
+  row: PostingListItemViewModel;
+  preview: PostingPreviewViewModel;
 };
 
 export type PostingInboxAnchor = {
@@ -93,6 +130,17 @@ export const INBOX_ANCHORS = [
   { id: "new", label: "Neu", countKey: "newInbox" },
   { id: "review", label: "Zu prüfen", countKey: "reviewInbox" },
 ] satisfies PostingInboxAnchor[];
+
+export const readStateLabels = {
+  unread: "Neu",
+  read: "Gelesen",
+} satisfies Record<JobPostingReadState, string>;
+
+export const interestStateLabels = {
+  undecided: "Offen",
+  interested: "Interessant",
+  dismissed: "Ausgeschlossen",
+} satisfies Record<JobPostingInterestState, string>;
 
 export const applicationStateLabels = {
   not_applied: "Nicht beworben",
@@ -277,11 +325,95 @@ export function getWorkflowBadge(posting: JobPosting): StatusBadge {
   return { label: "Zu prüfen", variant: "secondary" };
 }
 
+export function createPostingItemViewModel(
+  posting: JobPosting,
+): PostingItemViewModel {
+  const title = displayText(posting.title, "Titel offen");
+  const company = displayText(posting.company, "Unternehmen offen");
+  const locationLabel = formatLocations(posting.locations);
+  const primarySourceLabel = getPrimarySourceLabel(posting);
+  const lastActivityLabel = formatRelativeDate(posting.lastSeenAt);
+  const lastActivityTitle = formatAbsoluteDate(posting.lastSeenAt);
+  const processSlotLabel = getProcessSlotLabel(posting);
+
+  return {
+    id: posting.id,
+    row: {
+      id: posting.id,
+      title,
+      company,
+      locationLabel,
+      primarySourceLabel,
+      lastActivityLabel,
+      lastActivityDateTime: posting.lastSeenAt,
+      lastActivityTitle,
+      isUnread: posting.readState === "unread",
+      readStateBadge: getReadStateBadge(posting.readState),
+      interestStateBadge: getInterestStateBadge(posting.interestState),
+      processSlotLabel,
+    },
+    preview: {
+      id: posting.id,
+      title,
+      subtitle: `${company} · ${locationLabel}`,
+      companyInitials: getCompanyInitials(company),
+      badges: [
+        { label: "Nur Ansicht", variant: "secondary" },
+        getWorkflowBadge(posting),
+      ],
+      detailRows: [
+        { label: "Queue", value: getPrimaryQueueLabel(posting) },
+        {
+          label: "Bewerbungsstand",
+          value: applicationStateLabels[posting.applicationState],
+        },
+        {
+          label: "Vorbereitung",
+          value: preparationStateLabels[posting.preparationState],
+        },
+        { label: "Primäre Quelle", value: primarySourceLabel },
+        { label: "Zuletzt gesehen", value: lastActivityTitle },
+      ],
+    },
+  };
+}
+
+export function getReadStateBadge(readState: JobPostingReadState): StatusBadge {
+  if (readState === "unread") {
+    return { label: readStateLabels.unread, variant: "primary-light" };
+  }
+
+  return { label: readStateLabels.read, variant: "secondary" };
+}
+
+export function getInterestStateBadge(
+  interestState: JobPostingInterestState,
+): StatusBadge {
+  if (interestState === "interested") {
+    return { label: interestStateLabels.interested, variant: "success-light" };
+  }
+
+  if (interestState === "dismissed") {
+    return { label: interestStateLabels.dismissed, variant: "outline" };
+  }
+
+  return { label: interestStateLabels.undecided, variant: "secondary" };
+}
+
+export function getProcessSlotLabel(posting: JobPosting) {
+  if (posting.applicationState !== "not_applied") {
+    return `Prozess: ${applicationStateLabels[posting.applicationState]}`;
+  }
+
+  if (posting.preparationState !== "not_started") {
+    return `Prozess: ${preparationStateLabels[posting.preparationState]}`;
+  }
+
+  return "Prozess: Schrittfolge folgt";
+}
+
 export function getSourceLabel(posting: JobPosting) {
-  const sourceName =
-    posting.primarySource?.sourceNameSnapshot ??
-    posting.sources[0]?.sourceNameSnapshot ??
-    "Quelle offen";
+  const sourceName = getPrimarySourceLabel(posting);
   const sourceCount = posting.sources.length;
 
   if (sourceCount <= 1) return sourceName;
@@ -289,11 +421,23 @@ export function getSourceLabel(posting: JobPosting) {
   return `${sourceName} +${sourceCount - 1}`;
 }
 
-export function formatLocations(locations: string[]) {
-  if (!locations.length) return "Ort offen";
-  if (locations.length <= 2) return locations.join(", ");
+export function getPrimarySourceLabel(posting: JobPosting) {
+  return displayText(
+    posting.primarySource?.sourceNameSnapshot ??
+      posting.sources[0]?.sourceNameSnapshot,
+    "Quelle offen",
+  );
+}
 
-  return `${locations[0]} +${locations.length - 1}`;
+export function formatLocations(locations: string[]) {
+  const visibleLocations = locations
+    .map((location) => location.trim())
+    .filter(Boolean);
+
+  if (!visibleLocations.length) return "Ort offen";
+  if (visibleLocations.length <= 2) return visibleLocations.join(", ");
+
+  return `${visibleLocations[0]} +${visibleLocations.length - 1}`;
 }
 
 export function formatRelativeDate(value: string) {
@@ -329,4 +473,19 @@ export function formatAbsoluteDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function displayText(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim();
+
+  return trimmed ? trimmed : fallback;
+}
+
+function getCompanyInitials(company: string) {
+  const words = company.split(/\s+/).filter(Boolean);
+
+  if (!words.length || company === "Unternehmen offen") return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("de");
+
+  return `${words[0][0]}${words[1][0]}`.toLocaleUpperCase("de");
 }

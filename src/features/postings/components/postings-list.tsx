@@ -1,11 +1,4 @@
-import {
-  AlertCircleIcon,
-  Building2Icon,
-  FilterIcon,
-  InboxIcon,
-  MapPinIcon,
-  Search,
-} from "lucide-react";
+import { AlertCircleIcon, FilterIcon, InboxIcon, Search } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
@@ -29,25 +22,21 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { JobPosting } from "@/lib/api/job-postings";
 import { cn } from "@/lib/utils";
 import {
-  formatAbsoluteDate,
-  formatLocations,
-  formatRelativeDate,
-  getSourceLabel,
-  getWorkflowBadge,
   INBOX_ANCHORS,
   type PostingInboxAnchorId,
+  type PostingListItemViewModel,
   type PostingQueue,
 } from "@/features/postings/postings-view-model";
+import type { JobPostingsLoadError } from "@/features/postings/use-job-postings";
 
 type PostingsListProps = {
   activeInboxAnchorId: PostingInboxAnchorId | null;
   activeQueue: PostingQueue;
-  error: string | null;
+  error: JobPostingsLoadError | null;
   loading: boolean;
-  postings: JobPosting[];
+  postings: PostingListItemViewModel[];
   selectedPostingId: number | null;
   onRetry: () => Promise<void>;
   onSelectPosting: (postingId: number) => void;
@@ -66,44 +55,43 @@ export function PostingsList({
   className,
 }: PostingsListProps) {
   return (
-    <section className={cn("flex flex-col gap-3 py-3", className)}>
-      <div className="flex items-center justify-between gap-4 px-2 py-0.5">
-        <div className="flex  items-center gap-2">
-          <h1 className="truncate text-xl font-medium leading-none">
-            {activeQueue.label}
-          </h1>
-          {loading ? (
-            <Skeleton className="h-5 w-12" />
-          ) : (
-            <Badge variant="secondary" radius="full">
-              {postings.length}
-            </Badge>
-          )}
+    <section className={cn("flex h-full min-h-0 min-w-0 flex-col", className)}>
+      <div className="flex shrink-0 flex-col gap-3 p-4 pb-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-xl font-medium leading-none">
+              {activeQueue.label}
+            </h1>
+            {loading ? (
+              <Skeleton className="h-5 w-12" />
+            ) : (
+              <Badge variant="secondary" radius="full">
+                {postings.length}
+              </Badge>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Filter folgen später"
+            disabled
+          >
+            <FilterIcon aria-hidden="true" />
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Filter folgen später"
-          disabled
-        >
-          <FilterIcon aria-hidden="true" />
-        </Button>
-      </div>
 
-      <p className="px-2 text-xs text-muted-foreground">
-        {activeQueue.description}
-        {activeInboxAnchorId ? (
-          <span>
-            {" "}
-            Prioritätsanker: {getInboxAnchorLabel(activeInboxAnchorId)} — die
-            Inbox-Liste bleibt vollständig.
-          </span>
-        ) : null}
-      </p>
+        <p className="text-xs text-muted-foreground">
+          {activeQueue.description}
+          {activeInboxAnchorId ? (
+            <span>
+              {" "}
+              Prioritätsanker: {getInboxAnchorLabel(activeInboxAnchorId)} — die
+              Inbox-Liste bleibt vollständig.
+            </span>
+          ) : null}
+        </p>
 
-      <Separator />
-      <div className="px-2">
         <InputGroup className="h-7 w-full max-w-sm">
           <InputGroupInput
             className="h-7"
@@ -115,9 +103,10 @@ export function PostingsList({
           </InputGroupAddon>
         </InputGroup>
       </div>
+
       <Separator />
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col py-2">
         {error ? (
           <PostingsListError error={error} onRetry={onRetry} />
         ) : loading ? (
@@ -153,15 +142,15 @@ function PostingsListError({
   error,
   onRetry,
 }: {
-  error: string;
+  error: JobPostingsLoadError;
   onRetry: () => Promise<void>;
 }) {
   return (
-    <div className="p-4">
+    <div className="flex min-h-0 flex-1 p-4">
       <Alert variant="destructive">
         <AlertCircleIcon aria-hidden="true" />
-        <AlertTitle>Stellenanzeigen konnten nicht geladen werden</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
+        <AlertTitle>{error.title}</AlertTitle>
+        <AlertDescription>{error.description}</AlertDescription>
         <AlertAction>
           <Button
             type="button"
@@ -179,7 +168,7 @@ function PostingsListError({
 
 function PostingsListEmpty({ queueLabel }: { queueLabel: string }) {
   return (
-    <div className="flex min-h-80 p-4">
+    <div className="flex min-h-full flex-1 p-4">
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
@@ -202,20 +191,15 @@ function PostingListRow({
   selected,
   onSelect,
 }: {
-  posting: JobPosting;
+  posting: PostingListItemViewModel;
   selected: boolean;
   onSelect: () => void;
 }) {
-  const workflowBadge = getWorkflowBadge(posting);
-  const sourceLabel = getSourceLabel(posting);
-  const locationLabel = formatLocations(posting.locations);
-  const relativeLastSeen = formatRelativeDate(posting.lastSeenAt);
-  const absoluteLastSeen = formatAbsoluteDate(posting.lastSeenAt);
-
   return (
     <button
       type="button"
       aria-current={selected ? "true" : undefined}
+      aria-label={`${posting.title}, ${posting.company}`}
       className={cn(
         "w-full overflow-hidden rounded-lg px-2.5 py-2.5 text-left ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
         selected ? "bg-muted ring-1 ring-border" : "hover:bg-muted/75",
@@ -230,59 +214,55 @@ function PostingListRow({
           aria-hidden="true"
           className={cn(
             "mt-2 size-2 shrink-0 rounded-full",
-            posting.readState === "unread"
-              ? "bg-primary"
-              : "bg-muted-foreground/30",
+            posting.isUnread ? "bg-primary" : "bg-muted-foreground/30",
           )}
         />
 
         <div className="w-0 flex-1 overflow-hidden">
           <div className="flex w-full items-center justify-between gap-2">
-            <div className="truncate text-sm font-medium leading-5">
-              {posting.title}
+            <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium leading-5">
+              <span className="truncate">{posting.title}</span>
+              <span className="shrink-0 text-muted-foreground">·</span>
+              <span className="truncate text-muted-foreground">
+                {posting.company}
+              </span>
             </div>
             <time
-              className="text-nowrap text-xs leading-5 text-muted-foreground"
-              dateTime={posting.lastSeenAt}
-              title={absoluteLastSeen}
+              className="shrink-0 text-nowrap text-xs leading-5 text-muted-foreground"
+              dateTime={posting.lastActivityDateTime}
+              title={posting.lastActivityTitle}
             >
-              {relativeLastSeen}
+              {posting.lastActivityLabel}
             </time>
           </div>
 
-          <div className="flex min-w-0 items-end gap-2">
-            <div className="w-0 flex-1 overflow-hidden">
-              <div className="flex min-w-0 items-center gap-2 text-xs leading-4 text-foreground/90">
-                <Building2Icon aria-hidden="true" className="size-3" />
-                <span className="truncate font-medium">{posting.company}</span>
-              </div>
-              <div className="flex min-w-0 items-center gap-2 text-xs leading-4 text-muted-foreground">
-                <MapPinIcon aria-hidden="true" className="size-3" />
-                <span className="truncate">{locationLabel}</span>
-              </div>
+          <div className="mt-1 flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+              <span className="truncate">{posting.locationLabel}</span>
+              <span className="shrink-0">·</span>
+              <span className="truncate">{posting.primarySourceLabel}</span>
             </div>
 
-            <div className="flex max-w-40 flex-col items-end gap-1">
-              <div className="flex flex-wrap justify-end gap-1">
-                <Badge
-                  variant={
-                    posting.readState === "unread"
-                      ? "primary-light"
-                      : "secondary"
-                  }
-                  size="sm"
-                  radius="full"
-                >
-                  {posting.readState === "unread" ? "Neu" : "Gelesen"}
-                </Badge>
-                <Badge variant={workflowBadge.variant} size="sm" radius="full">
-                  {workflowBadge.label}
-                </Badge>
-              </div>
-              <span className="max-w-full truncate text-xs text-muted-foreground">
-                {sourceLabel}
-              </span>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              <Badge
+                variant={posting.readStateBadge.variant}
+                size="sm"
+                radius="full"
+              >
+                {posting.readStateBadge.label}
+              </Badge>
+              <Badge
+                variant={posting.interestStateBadge.variant}
+                size="sm"
+                radius="full"
+              >
+                {posting.interestStateBadge.label}
+              </Badge>
             </div>
+          </div>
+
+          <div className="mt-2 flex h-6 min-w-0 items-center rounded-md border border-dashed bg-background/60 px-2 text-xs leading-none text-muted-foreground">
+            <span className="truncate">{posting.processSlotLabel}</span>
           </div>
         </div>
       </div>
@@ -306,6 +286,7 @@ function PostingsListSkeleton() {
             <Skeleton className="h-5 w-14 rounded-full" />
             <Skeleton className="h-5 w-24 rounded-full" />
           </div>
+          <Skeleton className="h-6 w-full rounded-md" />
         </div>
       ))}
     </div>

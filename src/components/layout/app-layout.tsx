@@ -25,7 +25,9 @@ export function AppLayout({ title, children }: AppLayoutProps) {
       <SidebarInset className="relative z-20 min-h-0 min-w-0 overflow-hidden peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]">
         <AppHeader title={title} />
 
-        <div className="min-w-0 p-0">{children}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
