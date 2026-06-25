@@ -12,15 +12,15 @@ import { infrastructureItems } from "@/lib/navigation";
 
 export function HomeFeature() {
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4 p-2">
       <Frame>
         <FramePanel>
           <FrameHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="grid gap-1.5">
               <FrameTitle>Neutraler Startpunkt</FrameTitle>
               <FrameDescription>
-                Die technische Basis steht. Fachliche Konzepte bauen wir erst, wenn
-                wir sie gemeinsam benennen.
+                Die technische Basis steht. Fachliche Konzepte bauen wir erst,
+                wenn wir sie gemeinsam benennen.
               </FrameDescription>
             </div>
             <Button variant="outline">Bereit für den nächsten Slice</Button>

@@ -69,8 +69,14 @@ export function SettingsFeature() {
     if (!preferences) return;
 
     const radiusKm = Number(radiusText);
-    if (!Number.isInteger(radiusKm) || radiusKm < 0 || radiusKm > maxSearchRadiusKm) {
-      setError(`Der Standard-Suchradius muss zwischen 0 und ${maxSearchRadiusKm} km liegen.`);
+    if (
+      !Number.isInteger(radiusKm) ||
+      radiusKm < 0 ||
+      radiusKm > maxSearchRadiusKm
+    ) {
+      setError(
+        `Der Standard-Suchradius muss zwischen 0 und ${maxSearchRadiusKm} km liegen.`,
+      );
       setSaved(false);
       return;
     }
@@ -109,16 +115,20 @@ export function SettingsFeature() {
   };
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4 p-2">
       <Frame>
         <FramePanel>
           <FrameHeader className="gap-2">
             <div className="flex items-center gap-2">
-              <SettingsIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+              <SettingsIcon
+                className="size-5 text-muted-foreground"
+                aria-hidden="true"
+              />
               <FrameTitle>Einstellungen</FrameTitle>
             </div>
             <FrameDescription>
-              Globale Vorgaben für Darstellung und Suchläufe. Quellen speichern weiterhin nur stabile Portal- und Zugriffskonfiguration.
+              Globale Vorgaben für Darstellung und Suchläufe. Quellen speichern
+              weiterhin nur stabile Portal- und Zugriffskonfiguration.
             </FrameDescription>
           </FrameHeader>
         </FramePanel>
@@ -127,7 +137,9 @@ export function SettingsFeature() {
       {error ? (
         <Alert variant="destructive">
           <AlertCircleIcon className="size-4" aria-hidden="true" />
-          <AlertTitle>Einstellungen konnten nicht gespeichert werden</AlertTitle>
+          <AlertTitle>
+            Einstellungen konnten nicht gespeichert werden
+          </AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -137,28 +149,38 @@ export function SettingsFeature() {
           <CheckCircle2Icon className="size-4" aria-hidden="true" />
           <AlertTitle>Einstellungen gespeichert</AlertTitle>
           <AlertDescription>
-            Neuer Standard-Suchradius: {preferences?.defaultSearchRadiusKm ?? radiusText} km.
-            Basisschriftgröße: {preferences?.baseFontSizePx ?? baseFontSizeText} px.
+            Neuer Standard-Suchradius:{" "}
+            {preferences?.defaultSearchRadiusKm ?? radiusText} km.
+            Basisschriftgröße: {preferences?.baseFontSizePx ?? baseFontSizeText}{" "}
+            px.
           </AlertDescription>
         </Alert>
       ) : null}
 
       <Frame>
         <FramePanel>
-          <form className="grid max-w-xl gap-4" onSubmit={(event) => void handleSubmit(event)}>
+          <form
+            className="grid max-w-xl gap-4"
+            onSubmit={(event) => void handleSubmit(event)}
+          >
             <FrameHeader className="gap-1 px-0 pt-0">
               <FrameTitle>Globale Vorgaben</FrameTitle>
               <FrameDescription>
-                Lege Darstellung und Standardwerte für Job-Portal-Suchläufe fest. Suchtext und Ort werden erst im Suchlauf gesetzt.
+                Lege Darstellung und Standardwerte für Job-Portal-Suchläufe
+                fest. Suchtext und Ort werden erst im Suchlauf gesetzt.
               </FrameDescription>
             </FrameHeader>
 
             <div className="grid gap-1.5">
-              <label className="text-xs font-medium" htmlFor="default-search-radius-km">
+              <label
+                className="text-xs font-medium"
+                htmlFor="default-search-radius-km"
+              >
                 Standard-Suchradius in km
               </label>
               <p className="text-xs text-muted-foreground">
-                Wird später in internen URL-Templates als {"{radiusKm}"} eingesetzt. Nicht in einzelnen Quellen speichern.
+                Wird später in internen URL-Templates als {"{radiusKm}"}{" "}
+                eingesetzt. Nicht in einzelnen Quellen speichern.
               </p>
               <Input
                 id="default-search-radius-km"
@@ -177,11 +199,15 @@ export function SettingsFeature() {
             </div>
 
             <div className="grid gap-1.5">
-              <label className="text-xs font-medium" htmlFor="base-font-size-px">
+              <label
+                className="text-xs font-medium"
+                htmlFor="base-font-size-px"
+              >
                 Basisschriftgröße in px
               </label>
               <p className="text-xs text-muted-foreground">
-                Setzt die Root-Schriftgröße. Rem-basierte Tailwind- und shadcn-Abstände skalieren dadurch mit.
+                Setzt die Root-Schriftgröße. Rem-basierte Tailwind- und
+                shadcn-Abstände skalieren dadurch mit.
               </p>
               <Input
                 id="base-font-size-px"
