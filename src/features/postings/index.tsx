@@ -1,5 +1,18 @@
-import { Button } from "@/components/ui/button";
+import { Postings } from "@/features/postings/components/postings";
+import { PostingsLayout } from "@/features/postings/components/postings-layout";
+import { useJobPostings } from "@/features/postings/use-job-postings";
 
 export function PostingsFeature() {
-  return <Button variant="outline">Bereit für den nächsten Slice</Button>;
+  const { postings, loading, error, refresh } = useJobPostings();
+
+  return (
+    <PostingsLayout>
+      <Postings
+        error={error}
+        loading={loading}
+        postings={postings}
+        onRefresh={refresh}
+      />
+    </PostingsLayout>
+  );
 }

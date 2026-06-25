@@ -40,7 +40,7 @@ export const appRoutes: AppRoute[] = [
   },
   {
     path: "/postings",
-    title: "Postings",
+    title: "Stellenanzeigen",
     Component: PostingsPage,
   },
   {
@@ -57,7 +57,11 @@ export const appRoutes: AppRoute[] = [
 
 export function getAppRoute(pathname: string): AppRoute {
   return (
-    appRoutes.find((route) => route.path === pathname) ?? {
+    appRoutes.find(
+      (route) =>
+        route.path === pathname ||
+        (route.path !== "/" && pathname.startsWith(`${route.path}/`)),
+    ) ?? {
       path: pathname,
       title: "Nicht gefunden",
       Component: NotFoundPage,
