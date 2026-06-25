@@ -123,7 +123,7 @@ export function SourcesFeature() {
   }, [data, diagnostics.length, error, loading]);
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4 p-2">
       {error ? (
         <Alert variant="destructive">
           <AlertCircleIcon className="size-4" aria-hidden="true" />
