@@ -863,7 +863,9 @@ function DataGridTableBodyRowSkeleton({ children }: { children: ReactNode }) {
         props.tableLayout?.stripped &&
           "odd:bg-muted/90 odd:hover:bg-muted hover:bg-transparent",
         table.options.enableRowSelection && "*:first:relative",
-        props.tableClassNames?.bodyRow
+        typeof props.tableClassNames?.bodyRow === "string"
+          ? props.tableClassNames.bodyRow
+          : undefined
       )}
     >
       {children}
@@ -962,7 +964,9 @@ function DataGridTableBodyRow<TData>({
         pinnedBoundary === "top" && "[&>td]:shadow-[0_2px_0_rgba(0,0,0,0.03)]",
         pinnedBoundary === "bottom" &&
           "[&>td]:shadow-[0_2px_0_rgba(0,0,0,0.03)]",
-        props.tableClassNames?.bodyRow
+        typeof props.tableClassNames?.bodyRow === "function"
+          ? props.tableClassNames.bodyRow(row.original)
+          : props.tableClassNames?.bodyRow
       )}
     >
       {children}

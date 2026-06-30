@@ -33,6 +33,7 @@ import {
   ProfileFilterPopover,
   ProfileRegistryStateDot,
   RegistrySearchInput,
+  registryRowHealthClassName,
 } from "@/features/sources/components/registry-toolbar";
 import {
   countOrigins,
@@ -202,8 +203,11 @@ export function ProfileRegistryDataGrid({
         recordCount={filteredRows.length}
         isLoading={loading}
         loadingMessage="Profile werden geladen…"
-        emptyMessage="Keine gültigen Registry-Profile gefunden."
+        emptyMessage="Keine Registry-Profile gefunden."
         onRowClick={(row) => setSelectedRow(row)}
+        tableClassNames={{
+          bodyRow: (row) => registryRowHealthClassName(row.health),
+        }}
         tableLayout={{
           columnsPinnable: true,
           columnsResizable: false,

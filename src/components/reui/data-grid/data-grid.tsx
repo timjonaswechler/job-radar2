@@ -101,7 +101,7 @@ export interface DataGridProps<TData extends object> {
     headerRow?: string
     headerSticky?: string
     body?: string
-    bodyRow?: string
+    bodyRow?: string | ((row: TData) => string)
     footer?: string
     edgeCell?: string
   }
@@ -159,8 +159,7 @@ function DataGridProvider<TData extends object>({
       props.className,
       // eslint-disable-next-line react-hooks/exhaustive-deps
       JSON.stringify(props.tableLayout),
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      JSON.stringify(props.tableClassNames),
+      props.tableClassNames,
       tableState.sorting,
       tableState.pagination,
       tableState.columnFilters,

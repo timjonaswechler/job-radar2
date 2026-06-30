@@ -510,7 +510,7 @@
     "profileAccessPath": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "adapterKey"],
+      "required": ["key", "adapterKey", "postingDetail"],
       "properties": {
         "key": { "$ref": "#/$defs/technicalKey" },
         "name": { "type": "string", "minLength": 1 },

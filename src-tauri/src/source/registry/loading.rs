@@ -233,6 +233,7 @@ fn load_profile_documents(
             continue;
         }
 
+        push_missing_posting_detail_diagnostics(&document, &parsed, diagnostics);
         seen_keys.insert(parsed.key.clone(), (document.origin, document.path.clone()));
         valid_profiles.push(RegistrySourceProfile {
             origin: document.origin,
@@ -242,6 +243,27 @@ fn load_profile_documents(
     }
 
     valid_profiles
+}
+
+fn push_missing_posting_detail_diagnostics(
+    document: &RawRegistryDocument,
+    profile: &SourceProfileDocument,
+    diagnostics: &mut Vec<SourceRegistryDiagnostic>,
+) {
+    for (index, access_path) in profile.access_paths.iter().enumerate() {
+        if access_path.posting_detail.is_none() {
+            diagnostics.push(SourceRegistryDiagnostic {
+                code: SourceRegistryDiagnosticCode::InvalidShape,
+                document_kind: SourceRegistryDocumentKind::SourceProfile,
+                origin: document.origin,
+                path: document.path.clone(),
+                key: Some(profile.key.clone()),
+                message: format!(
+                    "accessPaths[{index}].postingDetail is required for complete source profiles"
+                ),
+            });
+        }
+    }
 }
 
 fn load_source_documents(
@@ -821,12 +843,12 @@ fn validate_source_references(
             continue;
         };
 
-        if !profile
+        let Some(access_path) = profile
             .document
             .access_paths
             .iter()
-            .any(|access_path| access_path.key == *path_key)
-        {
+            .find(|access_path| access_path.key == *path_key)
+        else {
             diagnostics.push(SourceRegistryDiagnostic {
                 code: SourceRegistryDiagnosticCode::MissingPathRef,
                 document_kind: SourceRegistryDocumentKind::Source,
@@ -839,6 +861,20 @@ fn validate_source_references(
                 ),
             });
             continue;
+        };
+
+        if access_path.posting_detail.is_none() {
+            diagnostics.push(SourceRegistryDiagnostic {
+                code: SourceRegistryDiagnosticCode::InvalidShape,
+                document_kind: SourceRegistryDocumentKind::Source,
+                origin: source.origin,
+                path: source.path.clone(),
+                key: Some(source.document.key.clone()),
+                message: format!(
+                    "source `{}` references profile `{profile_key}` path `{path_key}` without postingDetail; detail loading is disabled until the profile is completed",
+                    source.document.key
+                ),
+            });
         }
 
         valid_sources.push(source);

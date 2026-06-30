@@ -32,10 +32,6 @@ _Avoid_: Plugin, Scraper, Crawler, Quellentyp, Recruiting-System
 A reusable declarative understanding of a source class, recruiting system, career-system family, website, or website family. It describes how matching sources can be detected, which stable source configuration they need, which access path retrieves source data, and how retrieved data is interpreted as job postings. It is not tied to one individual source.
 _Avoid_: Adapter, Quelle, Suchprofil, Heuristik, Firmenadapter, hardcodiertes Portal
 
-**Systemprofil** (historisch/abgelöst):
-A legacy specialization of Quellenprofil for a recruiting system or career-system family. It is superseded by Quellenprofil documents in the Source Registry (`source-profiles/*.json`). Do not expose Systemprofil as an active public API or storage concept.
-_Avoid_: Adapter, Browserprofil, Heuristik, Firmenadapter, hardcodiertes Portal
-
 **Eingebautes Quellenprofil**:
 A source profile that is versioned in the repository under `source-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
 _Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Profilwissen

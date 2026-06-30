@@ -1103,7 +1103,7 @@ fn get_posting_detail_returns_unsupported_when_no_concrete_source_supports_detai
         )
         .await;
         set_primary_source(&pool, posting_id, source_id).await;
-        let snapshot = test_snapshot(
+        let snapshot = test_snapshot_with_diagnostics(
             vec![profile_without_detail_json("list_profile", "list_path")],
             vec![profile_source_json(
                 "list_only_source",
@@ -1112,6 +1112,10 @@ fn get_posting_detail_returns_unsupported_when_no_concrete_source_supports_detai
                 json!({}),
             )],
         );
+        assert!(snapshot
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("postingDetail is required")));
         let client = FixturePostingDetailHttpClient::new([]);
         let extractor =
             crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
@@ -1703,6 +1707,15 @@ fn test_snapshot(
     profile_documents: Vec<String>,
     source_documents: Vec<String>,
 ) -> SourceRegistrySnapshot {
+    let snapshot = test_snapshot_with_diagnostics(profile_documents, source_documents);
+    assert_eq!(snapshot.diagnostics, Vec::new());
+    snapshot
+}
+
+fn test_snapshot_with_diagnostics(
+    profile_documents: Vec<String>,
+    source_documents: Vec<String>,
+) -> SourceRegistrySnapshot {
     let temp_dir = tempfile::tempdir().unwrap();
     let profile_paths_and_json = profile_documents
         .iter()
@@ -1731,9 +1744,7 @@ fn test_snapshot(
         .map(|(path, document)| (path.as_str(), document.as_str()))
         .collect::<Vec<_>>();
 
-    let snapshot = load_snapshot_with_builtins(temp_dir.path(), &profile_refs, &source_refs);
-    assert_eq!(snapshot.diagnostics, Vec::new());
-    snapshot
+    load_snapshot_with_builtins(temp_dir.path(), &profile_refs, &source_refs)
 }
 
 fn document_key(document: &str) -> String {

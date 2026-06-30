@@ -93,7 +93,25 @@
             {
               "jsonPath": "$.categories.location"
             }
-          ]
+          ],
+          "postingMeta": {
+            "jobId": {
+              "jsonPath": "$.id"
+            }
+          }
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "https://api.lever.co/v0/postings/{{sourceConfig:boardSlug}}/{{postingMeta:jobId}}"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "fields": {
+          "descriptionText": {
+            "jsonPathHtml": "$.description"
+          }
         }
       }
     },
@@ -148,7 +166,25 @@
             {
               "jsonPath": "$.categories.location"
             }
-          ]
+          ],
+          "postingMeta": {
+            "jobId": {
+              "jsonPath": "$.id"
+            }
+          }
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "https://api.eu.lever.co/v0/postings/{{sourceConfig:boardSlug}}/{{postingMeta:jobId}}"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "fields": {
+          "descriptionText": {
+            "jsonPathHtml": "$.description"
+          }
         }
       }
     }

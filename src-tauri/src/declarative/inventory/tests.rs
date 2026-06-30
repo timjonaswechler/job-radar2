@@ -717,8 +717,87 @@ fn personio_xml_inventory_source_runs_through_search_run_with_source_profile() {
         assert_eq!(posting.sources[0].source_key, "demo_ag");
         assert_eq!(posting.sources[0].source_name, "Demo AG");
         assert_eq!(
+            posting.sources[0].posting_meta,
+            BTreeMap::from([("jobId".to_string(), "4103".to_string())])
+        );
+        assert_eq!(
             executor.client.requested_urls(),
             vec!["https://demo.jobs.personio.de/xml?language=en"]
+        );
+    });
+}
+
+#[test]
+fn workday_sitemap_inventory_source_runs_through_search_run_with_source_profile() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_builtin_profile_source(
+            temp_dir.path(),
+            "acme_careers",
+            "Acme Careers",
+            "workday",
+            "sitemap_inventory",
+            json!({
+                "startUrl": "https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers",
+                "workdayHost": "acme.wd1.myworkdayjobs.com",
+                "tenant": "acme",
+                "site": "AcmeCareers",
+                "sitemapUrl": "https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/siteMap.xml"
+            }),
+        );
+        let search_request =
+            create_search_request(&pool, vec!["acme_careers".to_string()], "engineer").await;
+        let fixture_client = FixtureInventoryHttpClient::new([(
+            "https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/siteMap.xml",
+            Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
+                <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                  <url>
+                    <loc>https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/job/Berlin/Senior-Engineer_R-123</loc>
+                  </url>
+                  <url>
+                    <loc>https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/job/Munich/Sales-Manager_R-456</loc>
+                  </url>
+                </urlset>"#),
+        )]);
+        let executor = DeclarativeInventoryExecutor::new(fixture_client);
+        let running_search_runs = RunningSearchRuns::default();
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
+        assert_eq!(result.source_runs[0].candidate_count, 2);
+        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(result.postings.len(), 1);
+        let posting = &result.postings[0];
+        assert_eq!(posting.title, "Senior Engineer");
+        assert_eq!(posting.company, "Acme Careers");
+        assert_eq!(
+            posting.url,
+            "https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/job/Berlin/Senior-Engineer_R-123"
+        );
+        assert!(posting.locations.is_empty());
+        assert_eq!(posting.sources[0].source_key, "acme_careers");
+        assert_eq!(
+            posting.sources[0].posting_meta,
+            BTreeMap::from([(
+                "jobId".to_string(),
+                "/job/Berlin/Senior-Engineer_R-123".to_string()
+            )])
+        );
+        assert_eq!(
+            executor.client.requested_urls(),
+            vec!["https://acme.wd1.myworkdayjobs.com/en-US/AcmeCareers/siteMap.xml"]
         );
     });
 }

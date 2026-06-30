@@ -583,9 +583,14 @@ mod tests {
 
             let registry_snapshot =
                 crate::source::registry::load_snapshot(&state.paths.app_data_dir);
-            assert!(registry_snapshot.diagnostics.is_empty());
-            assert!(registry_snapshot.source("stepstone_de").is_some());
             assert!(registry_snapshot.profile("greenhouse").is_some());
+            assert!(registry_snapshot.profile("stepstone_de").is_some());
+            assert!(registry_snapshot.source("stepstone_de").is_some());
+            assert!(
+                registry_snapshot.diagnostics.is_empty(),
+                "built-in registry diagnostics: {:#?}",
+                registry_snapshot.diagnostics
+            );
         });
     }
 
@@ -600,15 +605,23 @@ mod tests {
 
             let snapshot = load_source_registry_snapshot(&state.paths.app_data_dir);
 
-            assert!(snapshot.diagnostics.is_empty());
             assert!(snapshot
                 .valid_profiles
                 .iter()
                 .any(|profile| profile.document.key == "greenhouse"));
             assert!(snapshot
+                .valid_profiles
+                .iter()
+                .any(|profile| profile.document.key == "stepstone_de"));
+            assert!(snapshot
                 .valid_sources
                 .iter()
                 .any(|source| source.document.key == "stepstone_de"));
+            assert!(
+                snapshot.diagnostics.is_empty(),
+                "built-in registry diagnostics: {:#?}",
+                snapshot.diagnostics
+            );
         });
     }
 

@@ -23,6 +23,7 @@ import {
   profileKindEntries,
   sourceStatusEntries,
   type ProfileGridRow,
+  type RegistryRowHealth,
   type SourceGridRow,
 } from "@/features/sources/registry-view-model";
 import type {
@@ -70,41 +71,64 @@ export function RegistrySearchInput({
   );
 }
 
-type RegistryStateTone = "ready" | "diagnostic" | "invalid";
+type RegistryStateTone = "ready" | "warning" | "invalid";
 
 const registryStateDotClasses: Record<RegistryStateTone, string> = {
   ready: "bg-success",
-  diagnostic: "bg-warning",
+  warning: "bg-warning",
   invalid: "bg-destructive",
 };
 
+export function registryRowHealthClassName(health: RegistryRowHealth): string {
+  switch (health) {
+    case "invalid":
+      return "bg-destructive/5 opacity-60 hover:bg-destructive/10";
+    case "dependency_warning":
+      return "bg-warning/5 hover:bg-warning/10";
+    case "valid":
+      return "";
+  }
+}
+
 export function SourceRegistryStateDot({ row }: { row: SourceGridRow }) {
-  const invalid = row.status === "invalid";
-  const tone: RegistryStateTone = invalid
-    ? "invalid"
-    : row.diagnosticsCount > 0
-      ? "diagnostic"
-      : "ready";
-  const label = invalid
-    ? row.diagnosticsCount > 0
-      ? `Ungültig · ${diagnosticCountLabel(row.diagnosticsCount)}`
-      : "Ungültig"
-    : row.diagnosticsCount > 0
-      ? `${diagnosticCountLabel(row.diagnosticsCount)} · Details öffnen`
-      : "Alles OK";
+  const { label, tone } = registryStateDotState(
+    row.health,
+    row.diagnosticsCount,
+  );
 
   return <RegistryStateDot label={label} tone={tone} />;
 }
 
 export function ProfileRegistryStateDot({ row }: { row: ProfileGridRow }) {
-  const tone: RegistryStateTone =
-    row.diagnosticsCount > 0 ? "diagnostic" : "ready";
-  const label =
-    row.diagnosticsCount > 0
-      ? `${diagnosticCountLabel(row.diagnosticsCount)} · Details öffnen`
-      : "Alles OK";
+  const { label, tone } = registryStateDotState(
+    row.health,
+    row.diagnosticsCount,
+  );
 
   return <RegistryStateDot label={label} tone={tone} />;
+}
+
+function registryStateDotState(
+  health: RegistryRowHealth,
+  diagnosticsCount: number,
+): { label: string; tone: RegistryStateTone } {
+  switch (health) {
+    case "invalid":
+      return {
+        label:
+          diagnosticsCount > 0
+            ? `Ungültig · ${diagnosticCountLabel(diagnosticsCount)} · Details öffnen`
+            : "Ungültig",
+        tone: "invalid",
+      };
+    case "dependency_warning":
+      return {
+        label: `Abhängigkeit unvollständig · ${diagnosticCountLabel(diagnosticsCount)} · Details öffnen`,
+        tone: "warning",
+      };
+    case "valid":
+      return { label: "Alles OK", tone: "ready" };
+  }
 }
 
 function RegistryStateDot({

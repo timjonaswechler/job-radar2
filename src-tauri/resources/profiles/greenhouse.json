@@ -84,14 +84,14 @@
       },
       "postingDetail": {
         "fetch": {
-          "url": "{{posting:url}}"
+          "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs/{{postingMeta:jobId}}"
         },
         "parse": {
-          "as": "html"
+          "as": "json"
         },
         "fields": {
           "descriptionText": {
-            "selectorText": ".job__description"
+            "jsonPathHtml": "$.content"
           }
         }
       }

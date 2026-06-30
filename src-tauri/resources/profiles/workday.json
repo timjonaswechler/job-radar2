@@ -7,27 +7,128 @@
     "phases": ["http"],
     "required": [
       {
+        "inputUrlRegex": "(?i)^https?://([A-Za-z0-9.-]+\\.myworkdayjobs\\.com)(?:[/:?#]|$)",
+        "captureAs": "workdayHost"
+      },
+      {
+        "inputUrlRegex": "(?i)^https?://([A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com(?:[/:?#]|$)",
+        "captureAs": "tenant"
+      },
+      {
+        "inputUrlRegex": "(?i)^https?://[^/]+/(?:[a-z]{2}-[A-Z]{2}/)?([^/?#]+)",
+        "captureAs": "site"
+      },
+      {
         "htmlContains": "myworkday"
       }
     ]
   },
+  "identity": {
+    "keyCandidates": [
+      "{{capture:tenant|technicalKey}}",
+      "{{capture:site|technicalKey}}"
+    ],
+    "nameCandidates": [
+      "{{capture:tenant|titleCase}}",
+      "{{capture:site|titleCase}}"
+    ]
+  },
   "accessPaths": [
     {
-      "key": "endpoint_inventory",
-      "adapterKey": "declarative_endpoint_inventory",
+      "key": "sitemap_inventory",
+      "adapterKey": "declarative_sitemap_inventory",
       "availability": {
+        "requiredCaptures": ["workdayHost", "tenant", "site"],
         "sourceConfig": {
-          "startUrl": "{{inputUrl}}"
+          "startUrl": "{{inputUrl}}",
+          "workdayHost": "{{capture:workdayHost}}",
+          "tenant": "{{capture:tenant}}",
+          "site": "{{capture:site}}",
+          "sitemapUrl": "https://{{capture:workdayHost}}/en-US/{{capture:site}}/siteMap.xml"
         }
       },
       "sourceConfigSchema": {
         "type": "object",
-        "required": ["startUrl"],
+        "required": ["workdayHost", "tenant", "site", "sitemapUrl"],
+        "additionalProperties": false,
         "properties": {
           "startUrl": {
             "type": "string",
             "format": "uri",
             "title": "Start-URL"
+          },
+          "workdayHost": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9.-]+\\.myworkdayjobs\\.com$",
+            "title": "Workday Host"
+          },
+          "tenant": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Workday Tenant"
+          },
+          "site": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Workday Site"
+          },
+          "sitemapUrl": {
+            "type": "string",
+            "format": "uri",
+            "title": "Workday siteMap.xml"
+          }
+        }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "{{sourceConfig:sitemapUrl}}"
+        },
+        "parse": {
+          "as": "xml"
+        },
+        "items": {
+          "select": {
+            "xmlText": "loc"
+          },
+          "where": [
+            {
+              "regex": "(?i)/job/"
+            }
+          ],
+          "captures": [
+            {
+              "regex": "(?i)(?:/[a-z]{2}-[A-Z]{2})?/[^/?#]+(?P<externalPath>/job/(?:[^/?#]+/)*(?P<title>[^/?#_]+(?:[-_][^/?#_]+)*)_[A-Za-z0-9-]+)/?$"
+            }
+          ]
+        },
+        "fields": {
+          "title": {
+            "template": "{{capture:title|urlDecode|slugToTitle}}"
+          },
+          "url": {
+            "template": "{{itemText}}"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": [],
+          "postingMeta": {
+            "jobId": {
+              "template": "{{capture:externalPath}}"
+            }
+          }
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:jobId}}"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "fields": {
+          "descriptionText": {
+            "jsonPathHtml": "$.jobPostingInfo.jobDescription"
           }
         }
       }

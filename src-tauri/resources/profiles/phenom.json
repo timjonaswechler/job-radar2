@@ -47,6 +47,54 @@
             "title": "Maximale URLs"
           }
         }
+      },
+      "inventory": {
+        "fetch": {
+          "url": "{{sourceConfig:url}}"
+        },
+        "parse": {
+          "as": "xml"
+        },
+        "items": {
+          "select": {
+            "xmlText": "loc"
+          },
+          "where": [
+            {
+              "regex": "(?i)/job/"
+            }
+          ],
+          "captures": [
+            {
+              "regex": "(?i)/job/(?:[^/]+/)?(?P<title>[^/?#]+?)/?$"
+            }
+          ]
+        },
+        "fields": {
+          "title": {
+            "template": "{{capture:title|urlDecode|slugToTitle}}"
+          },
+          "url": {
+            "template": "{{itemText}}"
+          },
+          "company": {
+            "template": "{{sourceName}}"
+          },
+          "locations": []
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "{{posting:url}}"
+        },
+        "parse": {
+          "as": "html"
+        },
+        "fields": {
+          "descriptionText": {
+            "selectorText": "[data-ph-at-id='jobdescription'], [data-ph-at-id='job-description'], .job-description, .jobDescription, #job-description"
+          }
+        }
       }
     }
   ]

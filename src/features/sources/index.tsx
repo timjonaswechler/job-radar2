@@ -348,6 +348,13 @@ const profileTemplateSnippet: JsonValue = {
         },
       },
       inventory: {},
+      postingDetail: {
+        fetch: { url: "{{posting:url}}" },
+        parse: { as: "html" },
+        fields: {
+          descriptionText: { selectorText: ".job__description" },
+        },
+      },
     },
   ],
 };

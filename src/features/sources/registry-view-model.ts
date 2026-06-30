@@ -28,6 +28,15 @@ export type DiagnosticIndex = {
   unassigned: SourceRegistryDiagnostic[];
 };
 
+export type RegistryRowHealth = "valid" | "dependency_warning" | "invalid";
+
+export type RegistryRowDiagnosticSummary = {
+  health: RegistryRowHealth;
+  diagnosticsCount: number;
+  ownDiagnosticsCount: number;
+  dependencyDiagnosticsCount: number;
+};
+
 export type SourceResolution = {
   adapterKey: string | null;
   adapter: AdapterMetadata | null;
@@ -47,7 +56,10 @@ export type SourceGridRow = {
   adapterLabel: string;
   profileLabel: string;
   configSummary: string;
+  health: RegistryRowHealth;
   diagnosticsCount: number;
+  ownDiagnosticsCount: number;
+  dependencyDiagnosticsCount: number;
   path: string;
   searchText: string;
   source: RegistrySource;
@@ -63,7 +75,10 @@ export type ProfileGridRow = {
   accessPathCount: number;
   adapterSummary: string;
   schemaSummary: string;
+  health: RegistryRowHealth;
   diagnosticsCount: number;
+  ownDiagnosticsCount: number;
+  dependencyDiagnosticsCount: number;
   path: string;
   searchText: string;
   profile: RegistrySourceProfile;
@@ -139,8 +154,11 @@ export function createSourceGridRows(
     const adapterDisplay = resolution.adapterKey
       ? getAdapterDisplay(resolution.adapterKey, resolution.adapter)
       : null;
-    const diagnosticsCount =
-      diagnosticsBySourceKey.get(source.document.key)?.length ?? 0;
+    const diagnostics = diagnosticsBySourceKey.get(source.document.key) ?? [];
+    const diagnosticSummary = classifySourceRegistryRowHealth(
+      source,
+      diagnostics,
+    );
     const accessPathLabel = accessPathSummary(selectedAccessPath);
     const profileLabel =
       selectedAccessPath.type === "profile"
@@ -179,7 +197,10 @@ export function createSourceGridRows(
       adapterLabel,
       profileLabel,
       configSummary,
-      diagnosticsCount,
+      health: diagnosticSummary.health,
+      diagnosticsCount: diagnosticSummary.diagnosticsCount,
+      ownDiagnosticsCount: diagnosticSummary.ownDiagnosticsCount,
+      dependencyDiagnosticsCount: diagnosticSummary.dependencyDiagnosticsCount,
       path: source.path,
       searchText,
       source,
@@ -204,8 +225,8 @@ export function createProfileGridRows(
       return display.registered ? display.name : display.label;
     });
     const adapterSummary = summarizeList(adapterLabels, "Keine Adapter");
-    const diagnosticsCount =
-      diagnosticsByProfileKey.get(profile.document.key)?.length ?? 0;
+    const diagnostics = diagnosticsByProfileKey.get(profile.document.key) ?? [];
+    const diagnosticSummary = classifyProfileRegistryRowHealth(diagnostics);
     const kindLabel = profileKindLabels[profile.document.kind];
     const originLabel = originLabels[profile.origin];
     const schemaSummary = profileSchemaSummary(profile);
@@ -236,12 +257,50 @@ export function createProfileGridRows(
       accessPathCount: profile.document.accessPaths.length,
       adapterSummary,
       schemaSummary,
-      diagnosticsCount,
+      health: diagnosticSummary.health,
+      diagnosticsCount: diagnosticSummary.diagnosticsCount,
+      ownDiagnosticsCount: diagnosticSummary.ownDiagnosticsCount,
+      dependencyDiagnosticsCount: diagnosticSummary.dependencyDiagnosticsCount,
       path: profile.path,
       searchText,
       profile,
     };
   });
+}
+
+export function classifySourceRegistryRowHealth(
+  source: RegistrySource,
+  diagnostics: SourceRegistryDiagnostic[],
+): RegistryRowDiagnosticSummary {
+  const dependencyDiagnosticsCount = diagnostics.filter(
+    isSourceDependencyDiagnostic,
+  ).length;
+  const ownDiagnosticsCount = diagnostics.length - dependencyDiagnosticsCount;
+  let health: RegistryRowHealth = "valid";
+
+  if (source.document.status === "invalid" || ownDiagnosticsCount > 0) {
+    health = "invalid";
+  } else if (dependencyDiagnosticsCount > 0) {
+    health = "dependency_warning";
+  }
+
+  return {
+    health,
+    diagnosticsCount: diagnostics.length,
+    ownDiagnosticsCount,
+    dependencyDiagnosticsCount,
+  };
+}
+
+export function classifyProfileRegistryRowHealth(
+  diagnostics: SourceRegistryDiagnostic[],
+): RegistryRowDiagnosticSummary {
+  return {
+    health: diagnostics.length > 0 ? "invalid" : "valid",
+    diagnosticsCount: diagnostics.length,
+    ownDiagnosticsCount: diagnostics.length,
+    dependencyDiagnosticsCount: 0,
+  };
 }
 
 export function filterSourceGridRows(
@@ -383,6 +442,21 @@ function matchesDiagnosticsFilter(
   diagnosticsOnly: boolean,
 ) {
   return !diagnosticsOnly || diagnosticsCount > 0;
+}
+
+function isSourceDependencyDiagnostic(diagnostic: SourceRegistryDiagnostic) {
+  if (
+    diagnostic.code === "missing_profile_ref" ||
+    diagnostic.code === "missing_path_ref"
+  ) {
+    return true;
+  }
+
+  return (
+    diagnostic.code === "invalid_shape" &&
+    diagnostic.message.includes("references profile") &&
+    diagnostic.message.includes("without postingDetail")
+  );
 }
 
 function pushDiagnostic(
