@@ -468,9 +468,9 @@ fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(
     let parse = required_json_object_field(object, "parse", &format!("{path}.parse"))?;
     validate_allowed_object_keys(parse, &format!("{path}.parse"), &["as"])?;
     let parse_as = required_non_empty_string_field(parse, "as", &format!("{path}.parse.as"))?;
-    if parse_as != "html" {
+    if !matches!(parse_as, "html" | "json" | "xml") {
         return Err(format!(
-            "{path}.parse.as must be `html` for the postingDetail language"
+            "{path}.parse.as must be one of `html`, `json`, or `xml` for the postingDetail language"
         ));
     }
 
@@ -481,22 +481,88 @@ fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(
         "descriptionText",
         &format!("{path}.fields.descriptionText"),
     )?;
-    validate_allowed_object_keys(
+    validate_posting_detail_description_text_field(
         description_text,
+        parse_as,
         &format!("{path}.fields.descriptionText"),
-        &["selectorText"],
-    )?;
-    let selector = required_non_empty_string_field(
-        description_text,
-        "selectorText",
-        &format!("{path}.fields.descriptionText.selectorText"),
-    )?;
-    validate_css_selector(
-        selector,
-        &format!("{path}.fields.descriptionText.selectorText"),
     )?;
 
     Ok(())
+}
+
+fn validate_posting_detail_description_text_field(
+    description_text: &serde_json::Map<String, Value>,
+    parse_as: &str,
+    path: &str,
+) -> Result<(), String> {
+    match parse_as {
+        "html" => {
+            validate_allowed_object_keys(description_text, path, &["selectorText"])?;
+            let selector = required_non_empty_string_field(
+                description_text,
+                "selectorText",
+                &format!("{path}.selectorText"),
+            )?;
+            validate_css_selector(selector, &format!("{path}.selectorText"))
+        }
+        "json" => {
+            validate_exactly_one_posting_detail_key(
+                description_text,
+                path,
+                &["jsonPath", "jsonPathHtml"],
+                "jsonPath or jsonPathHtml for JSON postingDetail extraction",
+            )?;
+            validate_allowed_object_keys(description_text, path, &["jsonPath", "jsonPathHtml"])?;
+            for key in ["jsonPath", "jsonPathHtml"] {
+                if description_text.contains_key(key) {
+                    required_non_empty_string_field(
+                        description_text,
+                        key,
+                        &format!("{path}.{key}"),
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        "xml" => {
+            validate_exactly_one_posting_detail_key(
+                description_text,
+                path,
+                &["xmlText", "xmlTextHtml", "xmlElement"],
+                "xmlText, xmlTextHtml, or xmlElement for XML postingDetail extraction",
+            )?;
+            validate_allowed_object_keys(
+                description_text,
+                path,
+                &["xmlText", "xmlTextHtml", "xmlElement"],
+            )?;
+            for key in ["xmlText", "xmlTextHtml", "xmlElement"] {
+                if description_text.contains_key(key) {
+                    required_non_empty_string_field(
+                        description_text,
+                        key,
+                        &format!("{path}.{key}"),
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        _ => unreachable!("postingDetail parse.as was validated before field validation"),
+    }
+}
+
+fn validate_exactly_one_posting_detail_key(
+    object: &serde_json::Map<String, Value>,
+    path: &str,
+    keys: &[&str],
+    expected: &str,
+) -> Result<(), String> {
+    let count = keys.iter().filter(|key| object.contains_key(**key)).count();
+    if count == 1 {
+        Ok(())
+    } else {
+        Err(format!("{path} must contain exactly one of {expected}"))
+    }
 }
 
 fn validate_css_selector(selector: &str, path: &str) -> Result<(), String> {

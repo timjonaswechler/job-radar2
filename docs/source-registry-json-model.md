@@ -199,7 +199,7 @@ Do not split by punctuation implicitly: values such as `Berlin, Germany` are sin
 
 `postingDetail` describes lazy, posting-centered detail loading for one selected posting. It must not be used to add `descriptionText` to `inventory.fields`, because normal inventory runs should not fetch every detail page.
 
-First-slice language:
+HTML detail page example:
 
 ```json
 {
@@ -213,13 +213,46 @@ First-slice language:
 }
 ```
 
+Direct JSON detail document examples:
+
+```json
+{
+  "postingDetail": {
+    "fetch": { "url": "{{posting:url}}" },
+    "parse": { "as": "json" },
+    "fields": {
+      "descriptionText": { "jsonPath": "$.description" }
+    }
+  }
+}
+```
+
+Use `jsonPathHtml` instead of `jsonPath` when the JSON scalar contains an HTML fragment that should be stripped to normalized text.
+
+Direct XML detail document examples:
+
+```json
+{
+  "postingDetail": {
+    "fetch": { "url": "{{posting:url}}" },
+    "parse": { "as": "xml" },
+    "fields": {
+      "descriptionText": { "xmlTextHtml": "description" }
+    }
+  }
+}
+```
+
 Semantics:
 
 - `{{posting:url}}` is the selected persisted posting/source URL, not the source start URL and not a search-run value.
-- `parse.as: "html"` means the response body is parsed as HTML.
-- `fields.descriptionText.selectorText` is a CSS selector; the first non-empty selected text is returned as the Ausschreibungstext.
+- `parse.as` supports direct `html`, `json`, and `xml` documents where the fetched document itself represents the selected posting.
+- `fields.descriptionText.selectorText` is a CSS selector for HTML documents; the first non-empty selected text is returned as the Ausschreibungstext.
+- `fields.descriptionText.jsonPath` reads a JSON scalar as raw text. `jsonPathHtml` reads a JSON scalar as an HTML fragment before text normalization. Missing/null values and object/array values are rejected with runtime errors.
+- `fields.descriptionText.xmlText` reads immediate text/CDATA from the first matching element local name and rejects nested XML elements; use `xmlTextHtml` when that immediate text/CDATA contains HTML. `xmlElement` deliberately normalizes all descendant text of a matching element for nested XML descriptions.
+- Missing matches, empty extracted descriptions, malformed JSON/XML, and unsupported value shapes produce load errors instead of invented text.
 - Missing `postingDetail` means the profile/access path does not currently support detail extraction. Callers should surface an unsupported/error state honestly instead of inventing text.
-- The first slice deliberately does not include JSON detail APIs, browser-rendered detail extraction, refresh policy, or description persistence fields.
+- This direct-document slice deliberately does not include collection/feed item matching, browser-rendered detail extraction, refresh policy, or description persistence fields.
 
 Current built-in support starts with Greenhouse HTML detail pages. Other built-in profiles intentionally omit `postingDetail` until their detail-page/API extraction has been verified.
 

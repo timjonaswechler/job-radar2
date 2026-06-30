@@ -1,10 +1,12 @@
-use dom_query::{Document, Matcher};
+use dom_query::{Document as HtmlDocument, Matcher};
 use reqwest::Url;
+use roxmltree::{Document as XmlDocument, Node as XmlNode};
 use serde_json::Value;
 use std::{future::Future, pin::Pin, time::Duration};
 
 use crate::{
     declarative::template::{render_template, TemplateContext, TemplateError},
+    simple_json_path::resolve_simple_json_path,
     source::registry::ResolvedSourceExecutionPlan,
 };
 
@@ -123,22 +125,11 @@ where
 
         let parse = required_object(posting_detail, "parse", "postingDetail.parse")?;
         let parse_as = required_string(parse, "as", "postingDetail.parse.as")?;
-        if parse_as != "html" {
-            return Err(PostingDetailError::Failed(format!(
-                "postingDetail.parse.as `{parse_as}` is not supported by this extractor slice"
-            )));
-        }
-
         let fields = required_object(posting_detail, "fields", "postingDetail.fields")?;
         let description_text = required_object(
             fields,
             "descriptionText",
             "postingDetail.fields.descriptionText",
-        )?;
-        let selector = required_string(
-            description_text,
-            "selectorText",
-            "postingDetail.fields.descriptionText.selectorText",
         )?;
 
         let body = self
@@ -151,11 +142,26 @@ where
                     fetch_url.as_str()
                 ))
             })?;
-        extract_selector_text(
-            &body,
-            selector,
-            "postingDetail.fields.descriptionText.selectorText",
-        )
+
+        match parse_as {
+            "html" => {
+                let selector = required_string(
+                    description_text,
+                    "selectorText",
+                    "postingDetail.fields.descriptionText.selectorText",
+                )?;
+                extract_selector_text(
+                    &body,
+                    selector,
+                    "postingDetail.fields.descriptionText.selectorText",
+                )
+            }
+            "json" => extract_json_description_text(&body, description_text),
+            "xml" => extract_xml_description_text(&body, description_text),
+            _ => Err(PostingDetailError::Failed(format!(
+                "postingDetail.parse.as `{parse_as}` is not supported by this extractor slice"
+            ))),
+        }
     }
 }
 
@@ -185,7 +191,7 @@ fn extract_selector_text(
             "{path} must be a valid CSS selector for the postingDetail language: {error:?}"
         ))
     })?;
-    let document = Document::from(html);
+    let document = HtmlDocument::from(html);
     let description_text = document
         .select_matcher(&matcher)
         .iter()
@@ -198,6 +204,198 @@ fn extract_selector_text(
         })?;
 
     Ok(PostingDetail { description_text })
+}
+
+fn extract_json_description_text(
+    body: &str,
+    description_text: &serde_json::Map<String, Value>,
+) -> Result<PostingDetail, PostingDetailError> {
+    let document = serde_json::from_str::<Value>(body).map_err(|error| {
+        PostingDetailError::Failed(format!(
+            "could not parse postingDetail JSON document: {error}"
+        ))
+    })?;
+    let (key, raw_kind, json_path) = json_description_path(description_text)?;
+    let path = format!("postingDetail.fields.descriptionText.{key}");
+    let value = resolve_simple_json_path(&document, json_path)
+        .map_err(|error| PostingDetailError::Failed(format!("{path} {error}")))?;
+    let raw_description = json_description_value_to_string(value, &path)?;
+
+    normalize_raw_description(&raw_description, raw_kind, &path)
+}
+
+fn json_description_path<'a>(
+    description_text: &'a serde_json::Map<String, Value>,
+) -> Result<(&'static str, RawDescriptionKind, &'a str), PostingDetailError> {
+    if description_text.contains_key("jsonPath") {
+        return Ok((
+            "jsonPath",
+            RawDescriptionKind::Text,
+            required_string(
+                description_text,
+                "jsonPath",
+                "postingDetail.fields.descriptionText.jsonPath",
+            )?,
+        ));
+    }
+    if description_text.contains_key("jsonPathHtml") {
+        return Ok((
+            "jsonPathHtml",
+            RawDescriptionKind::Html,
+            required_string(
+                description_text,
+                "jsonPathHtml",
+                "postingDetail.fields.descriptionText.jsonPathHtml",
+            )?,
+        ));
+    }
+    Err(PostingDetailError::Failed(
+        "postingDetail.fields.descriptionText must contain jsonPath or jsonPathHtml for JSON postingDetail extraction".to_string(),
+    ))
+}
+
+fn json_description_value_to_string(
+    value: Option<&Value>,
+    path: &str,
+) -> Result<String, PostingDetailError> {
+    match value {
+        None | Some(Value::Null) => Err(PostingDetailError::Failed(format!(
+            "{path} did not match a posting detail value"
+        ))),
+        Some(Value::String(value)) => Ok(value.clone()),
+        Some(Value::Bool(value)) => Ok(value.to_string()),
+        Some(Value::Number(value)) => Ok(value.to_string()),
+        Some(Value::Array(_) | Value::Object(_)) => Err(PostingDetailError::Failed(format!(
+            "{path} must resolve to a string, number, boolean, or null"
+        ))),
+    }
+}
+
+fn extract_xml_description_text(
+    body: &str,
+    description_text: &serde_json::Map<String, Value>,
+) -> Result<PostingDetail, PostingDetailError> {
+    let document = XmlDocument::parse(body).map_err(|error| {
+        PostingDetailError::Failed(format!(
+            "could not parse postingDetail XML document: {error}"
+        ))
+    })?;
+    let (key, raw_kind, element_name) = xml_description_selector(description_text)?;
+    let path = format!("postingDetail.fields.descriptionText.{key}");
+
+    for node in document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == element_name)
+    {
+        let raw_description = match key {
+            "xmlText" | "xmlTextHtml" => xml_immediate_text(node, &path)?,
+            "xmlElement" => xml_descendant_text(node),
+            _ => unreachable!("validated XML description key"),
+        };
+        let normalized = match raw_kind {
+            RawDescriptionKind::Text => normalize_description_text(&raw_description),
+            RawDescriptionKind::Html => normalize_html_description_text(&raw_description),
+        };
+        if !normalized.is_empty() {
+            return Ok(PostingDetail {
+                description_text: normalized,
+            });
+        }
+    }
+
+    Err(PostingDetailError::Failed(format!(
+        "{path} did not match non-empty posting detail text"
+    )))
+}
+
+fn xml_description_selector<'a>(
+    description_text: &'a serde_json::Map<String, Value>,
+) -> Result<(&'static str, RawDescriptionKind, &'a str), PostingDetailError> {
+    if description_text.contains_key("xmlText") {
+        return Ok((
+            "xmlText",
+            RawDescriptionKind::Text,
+            required_string(
+                description_text,
+                "xmlText",
+                "postingDetail.fields.descriptionText.xmlText",
+            )?,
+        ));
+    }
+    if description_text.contains_key("xmlTextHtml") {
+        return Ok((
+            "xmlTextHtml",
+            RawDescriptionKind::Html,
+            required_string(
+                description_text,
+                "xmlTextHtml",
+                "postingDetail.fields.descriptionText.xmlTextHtml",
+            )?,
+        ));
+    }
+    if description_text.contains_key("xmlElement") {
+        return Ok((
+            "xmlElement",
+            RawDescriptionKind::Text,
+            required_string(
+                description_text,
+                "xmlElement",
+                "postingDetail.fields.descriptionText.xmlElement",
+            )?,
+        ));
+    }
+    Err(PostingDetailError::Failed(
+        "postingDetail.fields.descriptionText must contain xmlText, xmlTextHtml, or xmlElement for XML postingDetail extraction".to_string(),
+    ))
+}
+
+fn xml_immediate_text(node: XmlNode<'_, '_>, path: &str) -> Result<String, PostingDetailError> {
+    if node.children().any(|child| child.is_element()) {
+        return Err(PostingDetailError::Failed(format!(
+            "{path} matched nested XML; use xmlElement when nested element text should be normalized"
+        )));
+    }
+    Ok(node
+        .children()
+        .filter(|child| child.is_text())
+        .filter_map(|text| text.text())
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+fn xml_descendant_text(node: XmlNode<'_, '_>) -> String {
+    node.descendants()
+        .filter(|descendant| descendant.is_text())
+        .filter_map(|text| text.text())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RawDescriptionKind {
+    Text,
+    Html,
+}
+
+fn normalize_raw_description(
+    raw_description: &str,
+    raw_kind: RawDescriptionKind,
+    path: &str,
+) -> Result<PostingDetail, PostingDetailError> {
+    let description_text = match raw_kind {
+        RawDescriptionKind::Text => normalize_description_text(raw_description),
+        RawDescriptionKind::Html => normalize_html_description_text(raw_description),
+    };
+    if description_text.is_empty() {
+        return Err(PostingDetailError::Failed(format!(
+            "{path} did not resolve to non-empty posting detail text"
+        )));
+    }
+    Ok(PostingDetail { description_text })
+}
+
+fn normalize_html_description_text(value: &str) -> String {
+    normalize_description_text(&HtmlDocument::fragment(value).formatted_text().to_string())
 }
 
 fn normalize_description_text(value: &str) -> String {
@@ -464,6 +662,369 @@ mod tests {
             assert_eq!(
                 *requested_urls.lock().unwrap(),
                 vec!["https://example.test/jobs/42".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn posting_detail_extracts_direct_json_text_description() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.json".to_string(),
+                    r#"{ "description": "First paragraph.\n\nSecond paragraph." }"#.to_string(),
+                )]),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "json" },
+                "fields": {
+                    "descriptionText": { "jsonPath": "$.description" }
+                }
+            });
+
+            let detail = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.json")
+                .await
+                .unwrap();
+
+            assert_eq!(
+                detail.description_text,
+                "First paragraph. Second paragraph."
+            );
+            assert_eq!(
+                *requested_urls.lock().unwrap(),
+                vec!["https://example.test/jobs/42.json".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn posting_detail_extracts_direct_json_html_description() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.json".to_string(),
+                    r#"{ "description_html": "<p>First paragraph.</p><p>Second paragraph.</p>" }"#
+                        .to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "json" },
+                "fields": {
+                    "descriptionText": { "jsonPathHtml": "$.description_html" }
+                }
+            });
+
+            let detail = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.json")
+                .await
+                .unwrap();
+
+            assert_eq!(
+                detail.description_text,
+                "First paragraph. Second paragraph."
+            );
+        });
+    }
+
+    #[test]
+    fn malformed_json_detail_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.json".to_string(),
+                    "{ not json".to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "json" },
+                "fields": {
+                    "descriptionText": { "jsonPath": "$.description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.json")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Failed(_)));
+            assert!(error
+                .to_string()
+                .contains("could not parse postingDetail JSON document"));
+        });
+    }
+
+    #[test]
+    fn missing_json_description_value_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.json".to_string(),
+                    r#"{ "title": "Engineer" }"#.to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "json" },
+                "fields": {
+                    "descriptionText": { "jsonPath": "$.description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.json")
+                .await
+                .unwrap_err();
+
+            assert_eq!(
+                error.to_string(),
+                "postingDetail.fields.descriptionText.jsonPath did not match a posting detail value"
+            );
+        });
+    }
+
+    #[test]
+    fn json_object_or_array_description_value_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            for (url, response) in [
+                (
+                    "https://example.test/jobs/object.json",
+                    r#"{ "description": { "text": "Nested" } }"#,
+                ),
+                (
+                    "https://example.test/jobs/array.json",
+                    r#"{ "description": ["First", "Second"] }"#,
+                ),
+            ] {
+                let client = FakePostingDetailHttpClient {
+                    responses: HashMap::from([(url.to_string(), response.to_string())]),
+                    requested_urls: Arc::new(Mutex::new(Vec::new())),
+                };
+                let extractor = PostingDetailExtractor::new(client);
+                let posting_detail = json!({
+                    "fetch": { "url": "{{posting:url}}" },
+                    "parse": { "as": "json" },
+                    "fields": {
+                        "descriptionText": { "jsonPath": "$.description" }
+                    }
+                });
+
+                let error = extractor
+                    .load_description_text(Some(&posting_detail), url)
+                    .await
+                    .unwrap_err();
+
+                assert_eq!(
+                    error.to_string(),
+                    "postingDetail.fields.descriptionText.jsonPath must resolve to a string, number, boolean, or null"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn posting_detail_extracts_direct_xml_text_description() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    r#"<job><description>First paragraph.
+
+Second paragraph.</description></job>"#
+                        .to_string(),
+                )]),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlText": "description" }
+                }
+            });
+
+            let detail = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap();
+
+            assert_eq!(
+                detail.description_text,
+                "First paragraph. Second paragraph."
+            );
+            assert_eq!(
+                *requested_urls.lock().unwrap(),
+                vec!["https://example.test/jobs/42.xml".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn posting_detail_extracts_direct_xml_cdata_html_description() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    r#"<job><description><![CDATA[<p>First paragraph.</p><p>Second paragraph.</p>]]></description></job>"#.to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlTextHtml": "description" }
+                }
+            });
+
+            let detail = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap();
+
+            assert_eq!(
+                detail.description_text,
+                "First paragraph. Second paragraph."
+            );
+        });
+    }
+
+    #[test]
+    fn posting_detail_extracts_direct_xml_nested_element_description() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    r#"<job><description><p>First paragraph.</p><p>Second paragraph.</p></description></job>"#.to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlElement": "description" }
+                }
+            });
+
+            let detail = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap();
+
+            assert_eq!(
+                detail.description_text,
+                "First paragraph. Second paragraph."
+            );
+        });
+    }
+
+    #[test]
+    fn malformed_xml_detail_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    "<job><description>Unclosed".to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlText": "description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Failed(_)));
+            assert!(error
+                .to_string()
+                .contains("could not parse postingDetail XML document"));
+        });
+    }
+
+    #[test]
+    fn missing_xml_description_value_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    "<job><title>Engineer</title></job>".to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlText": "description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap_err();
+
+            assert_eq!(
+                error.to_string(),
+                "postingDetail.fields.descriptionText.xmlText did not match non-empty posting detail text"
+            );
+        });
+    }
+
+    #[test]
+    fn xml_text_description_with_nested_elements_returns_actionable_error() {
+        tauri::async_runtime::block_on(async {
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42.xml".to_string(),
+                    r#"<job><description><p>Nested paragraph.</p></description></job>"#.to_string(),
+                )]),
+                requested_urls: Arc::new(Mutex::new(Vec::new())),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "xml" },
+                "fields": {
+                    "descriptionText": { "xmlText": "description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42.xml")
+                .await
+                .unwrap_err();
+
+            assert_eq!(
+                error.to_string(),
+                "postingDetail.fields.descriptionText.xmlText matched nested XML; use xmlElement when nested element text should be normalized"
             );
         });
     }

@@ -83,7 +83,7 @@
       "additionalProperties": false,
       "required": ["as"],
       "properties": {
-        "as": { "const": "html" }
+        "as": { "enum": ["html", "json", "xml"] }
       }
     },
     "postingDetailFields": {
@@ -95,12 +95,56 @@
       }
     },
     "postingDescriptionTextField": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["selectorText"],
-      "properties": {
-        "selectorText": { "type": "string", "minLength": 1 }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["selectorText"],
+          "properties": {
+            "selectorText": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPath"],
+          "properties": {
+            "jsonPath": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPathHtml"],
+          "properties": {
+            "jsonPathHtml": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["xmlText"],
+          "properties": {
+            "xmlText": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["xmlTextHtml"],
+          "properties": {
+            "xmlTextHtml": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["xmlElement"],
+          "properties": {
+            "xmlElement": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
     },
     "inventoryPagination": {
       "oneOf": [{ "$ref": "#/$defs/pageCountPagination" }]
