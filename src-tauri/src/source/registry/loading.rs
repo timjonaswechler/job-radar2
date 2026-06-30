@@ -383,10 +383,103 @@ fn validate_access_path_json_blocks(
     )?;
     validate_json_object_option(access_path.query.as_ref(), &format!("{path}.query"))?;
     validate_json_object_option(access_path.inventory.as_ref(), &format!("{path}.inventory"))?;
+    validate_posting_detail_option(
+        access_path.posting_detail.as_ref(),
+        &format!("{path}.postingDetail"),
+    )?;
     validate_json_object_option(
         access_path.manual_release.as_ref(),
         &format!("{path}.manualRelease"),
     )
+}
+
+fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(), String> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    let object = json_object_map(value, path)?;
+    validate_allowed_object_keys(object, path, &["fetch", "parse", "fields"])?;
+
+    let fetch = required_json_object_field(object, "fetch", &format!("{path}.fetch"))?;
+    validate_allowed_object_keys(fetch, &format!("{path}.fetch"), &["url"])?;
+    required_non_empty_string_field(fetch, "url", &format!("{path}.fetch.url"))?;
+
+    let parse = required_json_object_field(object, "parse", &format!("{path}.parse"))?;
+    validate_allowed_object_keys(parse, &format!("{path}.parse"), &["as"])?;
+    let parse_as = required_non_empty_string_field(parse, "as", &format!("{path}.parse.as"))?;
+    if parse_as != "html" {
+        return Err(format!(
+            "{path}.parse.as must be `html` for the postingDetail language"
+        ));
+    }
+
+    let fields = required_json_object_field(object, "fields", &format!("{path}.fields"))?;
+    validate_allowed_object_keys(fields, &format!("{path}.fields"), &["descriptionText"])?;
+    let description_text = required_json_object_field(
+        fields,
+        "descriptionText",
+        &format!("{path}.fields.descriptionText"),
+    )?;
+    validate_allowed_object_keys(
+        description_text,
+        &format!("{path}.fields.descriptionText"),
+        &["selectorText"],
+    )?;
+    required_non_empty_string_field(
+        description_text,
+        "selectorText",
+        &format!("{path}.fields.descriptionText.selectorText"),
+    )?;
+
+    Ok(())
+}
+
+fn validate_allowed_object_keys(
+    object: &serde_json::Map<String, Value>,
+    path: &str,
+    allowed_keys: &[&str],
+) -> Result<(), String> {
+    for key in object.keys() {
+        if !allowed_keys.contains(&key.as_str()) {
+            return Err(format!("{path}.{key} is not supported"));
+        }
+    }
+    Ok(())
+}
+
+fn required_json_object_field<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a serde_json::Map<String, Value>, String> {
+    object
+        .get(key)
+        .ok_or_else(|| format!("{path} is required"))
+        .and_then(|value| json_object_map(value, path))
+}
+
+fn required_non_empty_string_field<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a str, String> {
+    let value = object
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("{path} must be a non-empty string"))?;
+    if value.trim().is_empty() {
+        return Err(format!("{path} must be a non-empty string"));
+    }
+    Ok(value)
+}
+
+fn json_object_map<'a>(
+    value: &'a Value,
+    path: &str,
+) -> Result<&'a serde_json::Map<String, Value>, String> {
+    value
+        .as_object()
+        .ok_or_else(|| format!("{path} must be a JSON object"))
 }
 
 fn parse_source_document(value: Value) -> Result<SourceDocument, String> {
