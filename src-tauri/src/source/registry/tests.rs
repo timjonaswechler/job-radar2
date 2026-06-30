@@ -469,7 +469,91 @@ fn reports_invalid_inventory_posting_meta_shape_as_invalid_shape() {
 }
 
 #[test]
+fn accepts_direct_json_and_xml_posting_detail_definitions() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "json_detail",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "json" },
+                        "fields": {
+                            "descriptionText": { "jsonPathHtml": "$.description_html" }
+                        }
+                    }
+                },
+                {
+                    "key": "xml_detail",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "xml" },
+                        "fields": {
+                            "descriptionText": { "xmlElement": "description" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(
+        snapshot.diagnostics.is_empty(),
+        "registry diagnostics: {:#?}",
+        snapshot.diagnostics
+    );
+    assert_eq!(snapshot.valid_profiles.len(), 1);
+}
+
+#[test]
 fn reports_invalid_posting_detail_definitions_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "pdf" },
+                        "fields": {
+                            "descriptionText": { "selectorText": ".job__description" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0].message.contains(
+        "accessPaths[0].postingDetail.parse.as must be one of `html`, `json`, or `xml` for the postingDetail language"
+    ));
+}
+
+#[test]
+fn reports_mismatched_posting_detail_field_language_as_invalid_shape() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_json(
         temp_dir.path().join("source-profiles/example_profile.json"),
@@ -500,7 +584,7 @@ fn reports_invalid_posting_detail_definitions_as_invalid_shape() {
     assert!(snapshot.valid_profiles.is_empty());
     assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
     assert!(snapshot.diagnostics[0].message.contains(
-        "accessPaths[0].postingDetail.parse.as must be `html` for the postingDetail language"
+        "accessPaths[0].postingDetail.fields.descriptionText must contain exactly one of jsonPath or jsonPathHtml for JSON postingDetail extraction"
     ));
 }
 
