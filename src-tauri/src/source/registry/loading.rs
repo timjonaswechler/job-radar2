@@ -1,3 +1,4 @@
+use dom_query::Matcher;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 use std::{
@@ -425,13 +426,23 @@ fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(
         &format!("{path}.fields.descriptionText"),
         &["selectorText"],
     )?;
-    required_non_empty_string_field(
+    let selector = required_non_empty_string_field(
         description_text,
         "selectorText",
         &format!("{path}.fields.descriptionText.selectorText"),
     )?;
+    validate_css_selector(
+        selector,
+        &format!("{path}.fields.descriptionText.selectorText"),
+    )?;
 
     Ok(())
+}
+
+fn validate_css_selector(selector: &str, path: &str) -> Result<(), String> {
+    Matcher::new(selector)
+        .map(|_| ())
+        .map_err(|error| format!("{path} must be a valid CSS selector: {error:?}"))
 }
 
 fn validate_allowed_object_keys(

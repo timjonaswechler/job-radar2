@@ -3,7 +3,10 @@ use reqwest::Url;
 use serde_json::Value;
 use std::{future::Future, pin::Pin, time::Duration};
 
-use crate::declarative::template::{render_template, TemplateContext, TemplateError};
+use crate::{
+    declarative::template::{render_template, TemplateContext, TemplateError},
+    source::registry::ResolvedSourceExecutionPlan,
+};
 
 pub(crate) type BoxedPostingDetailTextFuture<'a> =
     Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
@@ -38,6 +41,12 @@ impl PostingDetailHttpClient for ReqwestPostingDetailHttpClient {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PostingDetail {
     pub(crate) description_text: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PostingDetailSource<'a> {
+    pub(crate) source_key: &'a str,
+    pub(crate) url: &'a str,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,6 +86,22 @@ impl<C> PostingDetailExtractor<C>
 where
     C: PostingDetailHttpClient + Send + Sync,
 {
+    pub(crate) async fn load_source_description_text(
+        &self,
+        source: &ResolvedSourceExecutionPlan,
+        posting_source: PostingDetailSource<'_>,
+    ) -> Result<PostingDetail, PostingDetailError> {
+        if posting_source.source_key != source.key {
+            return Err(PostingDetailError::Failed(format!(
+                "posting source key `{}` does not match selected execution source `{}`",
+                posting_source.source_key, source.key
+            )));
+        }
+
+        self.load_description_text(source.posting_detail(), posting_source.url)
+            .await
+    }
+
     pub(crate) async fn load_description_text(
         &self,
         posting_detail: Option<&Value>,
@@ -232,6 +257,7 @@ fn parse_http_url(value: &str, path: &str) -> Result<Url, PostingDetailError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source::registry::{ResolvedSelectedAccessPath, ResolvedSourceExecutionPlan};
     use reqwest::Url;
     use serde_json::json;
     use std::{
@@ -281,6 +307,120 @@ mod tests {
     }
 
     #[test]
+    fn source_detail_pairing_uses_selected_source_access_path_and_posting_source_url() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://source-a.example/jobs/42".to_string(),
+                    r#"<section class="source-a-description">Source A description</section>"#
+                        .to_string(),
+                )]),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let source = resolved_source_plan(
+                "source_a",
+                Some(json!({
+                    "fetch": { "url": "{{posting:url}}" },
+                    "parse": { "as": "html" },
+                    "fields": {
+                        "descriptionText": { "selectorText": ".source-a-description" }
+                    }
+                })),
+            );
+
+            let detail = extractor
+                .load_source_description_text(
+                    &source,
+                    PostingDetailSource {
+                        source_key: "source_a",
+                        url: "https://source-a.example/jobs/42",
+                    },
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(detail.description_text, "Source A description");
+            assert_eq!(
+                *requested_urls.lock().unwrap(),
+                vec!["https://source-a.example/jobs/42".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn source_detail_pairing_rejects_mismatched_source_key_without_fetching() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::new(),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let source = resolved_source_plan(
+                "source_a",
+                Some(json!({
+                    "fetch": { "url": "{{posting:url}}" },
+                    "parse": { "as": "html" },
+                    "fields": {
+                        "descriptionText": { "selectorText": ".source-a-description" }
+                    }
+                })),
+            );
+
+            let error = extractor
+                .load_source_description_text(
+                    &source,
+                    PostingDetailSource {
+                        source_key: "source_b",
+                        url: "https://source-b.example/jobs/99",
+                    },
+                )
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Failed(_)));
+            assert_eq!(
+                error.to_string(),
+                "posting source key `source_b` does not match selected execution source `source_a`"
+            );
+            assert!(requested_urls.lock().unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn unsupported_profile_access_path_returns_unsupported_error() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::new(),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let source = resolved_source_plan("source_without_detail", None);
+
+            let error = extractor
+                .load_source_description_text(
+                    &source,
+                    PostingDetailSource {
+                        source_key: "source_without_detail",
+                        url: "https://example.test/jobs/42",
+                    },
+                )
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Unsupported(_)));
+            assert_eq!(
+                error.to_string(),
+                "selected access path has no postingDetail extraction"
+            );
+            assert!(requested_urls.lock().unwrap().is_empty());
+        });
+    }
+
+    #[test]
     fn posting_detail_uses_selected_posting_url_template_and_extracts_description_text() {
         tauri::async_runtime::block_on(async {
             let requested_urls = Arc::new(Mutex::new(Vec::new()));
@@ -326,5 +466,93 @@ mod tests {
                 vec!["https://example.test/jobs/42".to_string()]
             );
         });
+    }
+
+    #[test]
+    fn fetch_failure_returns_failed_error_with_requested_url() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::new(),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "html" },
+                "fields": {
+                    "descriptionText": { "selectorText": ".job__description" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/404")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Failed(_)));
+            assert_eq!(
+                error.to_string(),
+                "could not fetch posting detail https://example.test/jobs/404: missing fake response for https://example.test/jobs/404"
+            );
+            assert_eq!(
+                *requested_urls.lock().unwrap(),
+                vec!["https://example.test/jobs/404".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn invalid_selector_returns_failed_error() {
+        tauri::async_runtime::block_on(async {
+            let requested_urls = Arc::new(Mutex::new(Vec::new()));
+            let client = FakePostingDetailHttpClient {
+                responses: HashMap::from([(
+                    "https://example.test/jobs/42".to_string(),
+                    "<div>Body</div>".to_string(),
+                )]),
+                requested_urls: Arc::clone(&requested_urls),
+            };
+            let extractor = PostingDetailExtractor::new(client);
+            let posting_detail = json!({
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "html" },
+                "fields": {
+                    "descriptionText": { "selectorText": "[" }
+                }
+            });
+
+            let error = extractor
+                .load_description_text(Some(&posting_detail), "https://example.test/jobs/42")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(error, PostingDetailError::Failed(_)));
+            assert!(error.to_string().contains(
+                "postingDetail.fields.descriptionText.selectorText must be a valid CSS selector"
+            ));
+        });
+    }
+
+    fn resolved_source_plan(
+        key: &str,
+        posting_detail: Option<Value>,
+    ) -> ResolvedSourceExecutionPlan {
+        ResolvedSourceExecutionPlan {
+            key: key.to_string(),
+            name: key.to_string(),
+            adapter_key: "declarative_endpoint_inventory".to_string(),
+            source_config: json!({}),
+            effective_source_config_schema: json!({}),
+            selected_access_path: ResolvedSelectedAccessPath::Profile {
+                profile_key: "example_profile".to_string(),
+                path_key: "endpoint_inventory".to_string(),
+                query: None,
+                inventory: None,
+                posting_detail,
+                interactions: None,
+                manual_release: None,
+            },
+        }
     }
 }
