@@ -517,6 +517,150 @@ fn accepts_direct_json_and_xml_posting_detail_definitions() {
 }
 
 #[test]
+fn accepts_collection_posting_detail_definitions_with_items_and_match() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "xml_feed_detail",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{sourceConfig:detailFeedUrl}}" },
+                        "parse": { "as": "xml" },
+                        "items": {
+                            "select": { "xmlElement": "Job" }
+                        },
+                        "match": {
+                            "field": { "xmlText": "ReqId" },
+                            "equals": "{{postingMeta:jobId}}"
+                        },
+                        "fields": {
+                            "descriptionText": { "xmlTextHtml": "Job-Description" }
+                        }
+                    }
+                },
+                {
+                    "key": "json_feed_detail",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{sourceConfig:detailFeedUrl}}" },
+                        "parse": { "as": "json" },
+                        "items": {
+                            "select": { "jsonPath": "$.jobs" }
+                        },
+                        "match": {
+                            "field": { "jsonPath": "$.id" },
+                            "equals": "{{postingMeta:jobId}}"
+                        },
+                        "fields": {
+                            "descriptionText": { "jsonPathHtml": "$.description_html" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(
+        snapshot.diagnostics.is_empty(),
+        "registry diagnostics: {:#?}",
+        snapshot.diagnostics
+    );
+    assert_eq!(snapshot.valid_profiles.len(), 1);
+}
+
+#[test]
+fn reports_collection_posting_detail_without_match_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{sourceConfig:detailFeedUrl}}" },
+                        "parse": { "as": "xml" },
+                        "items": {
+                            "select": { "xmlElement": "Job" }
+                        },
+                        "fields": {
+                            "descriptionText": { "xmlTextHtml": "Job-Description" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0]
+        .message
+        .contains("accessPaths[0].postingDetail.match is required when accessPaths[0].postingDetail.items is declared"));
+}
+
+#[test]
+fn reports_mismatched_collection_posting_detail_language_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{sourceConfig:detailFeedUrl}}" },
+                        "parse": { "as": "json" },
+                        "items": {
+                            "select": { "xmlElement": "Job" }
+                        },
+                        "match": {
+                            "field": { "jsonPath": "$.id" },
+                            "equals": "{{postingMeta:jobId}}"
+                        },
+                        "fields": {
+                            "descriptionText": { "jsonPath": "$.description" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0]
+        .message
+        .contains("accessPaths[0].postingDetail.items.select.xmlElement is not supported"));
+}
+
+#[test]
 fn reports_invalid_posting_detail_definitions_as_invalid_shape() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_json(

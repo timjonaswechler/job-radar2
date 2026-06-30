@@ -67,8 +67,20 @@
       "properties": {
         "fetch": { "$ref": "#/$defs/postingDetailFetch" },
         "parse": { "$ref": "#/$defs/postingDetailParse" },
+        "items": { "$ref": "#/$defs/postingDetailItems" },
+        "match": { "$ref": "#/$defs/postingDetailMatch" },
         "fields": { "$ref": "#/$defs/postingDetailFields" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["items"] },
+          "then": { "required": ["match"] }
+        },
+        {
+          "if": { "required": ["match"] },
+          "then": { "required": ["items"] }
+        }
+      ]
     },
     "postingDetailFetch": {
       "type": "object",
@@ -85,6 +97,63 @@
       "properties": {
         "as": { "enum": ["html", "json", "xml"] }
       }
+    },
+    "postingDetailItems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["select"],
+      "properties": {
+        "select": { "$ref": "#/$defs/postingDetailItemSelector" }
+      }
+    },
+    "postingDetailItemSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPath"],
+          "properties": {
+            "jsonPath": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["xmlElement"],
+          "properties": {
+            "xmlElement": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "postingDetailMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "equals"],
+      "properties": {
+        "field": { "$ref": "#/$defs/postingDetailMatchField" },
+        "equals": { "type": "string", "minLength": 1 }
+      }
+    },
+    "postingDetailMatchField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPath"],
+          "properties": {
+            "jsonPath": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["xmlText"],
+          "properties": {
+            "xmlText": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
     },
     "postingDetailFields": {
       "type": "object",
