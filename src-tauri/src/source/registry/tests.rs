@@ -417,6 +417,42 @@ fn reports_invalid_posting_detail_definitions_as_invalid_shape() {
 }
 
 #[test]
+fn reports_invalid_posting_detail_css_selector_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "html" },
+                        "fields": {
+                            "descriptionText": { "selectorText": "[" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0].message.contains(
+        "accessPaths[0].postingDetail.fields.descriptionText.selectorText must be a valid CSS selector"
+    ));
+}
+
+#[test]
 fn reports_profile_access_paths_with_duplicate_keys_as_invalid_shape() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_json(
