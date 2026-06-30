@@ -55,7 +55,7 @@ export function Postings() {
       <ResizablePanel
         id="postings-list"
         defaultSize="35%"
-        minSize="28%"
+        minSize="15%"
         maxSize="55%"
         className="h-full min-w-0"
       >
