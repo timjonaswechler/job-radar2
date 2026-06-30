@@ -17,8 +17,8 @@ use self::json::{
 use self::pagination::{page_count_pagination_url, parse_page_count_pagination, resolve_json_u64};
 use self::rendering::{
     capture_item, compile_regex_list, optional_u64, parse_http_url, render_locations,
-    render_required_field, required_object_value, required_string, required_u64,
-    resolve_http_candidate_url, InventoryTemplateContext,
+    render_posting_meta, render_required_field, required_object_value, required_string,
+    required_u64, resolve_http_candidate_url, InventoryTemplateContext,
 };
 use self::xml::select_xml_items;
 

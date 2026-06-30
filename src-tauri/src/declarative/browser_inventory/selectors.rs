@@ -93,6 +93,7 @@ pub(super) fn extract_candidates(
             company,
             url,
             locations,
+            posting_meta: Default::default(),
         });
     }
 

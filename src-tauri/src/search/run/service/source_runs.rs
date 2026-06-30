@@ -10,6 +10,7 @@ pub(super) fn posting_source(source: &SourceExecutionSource, url: Option<String>
         source_key: source.key.clone(),
         source_name: source.name.clone(),
         url: url.unwrap_or_default(),
+        posting_meta: Default::default(),
     }
 }
 

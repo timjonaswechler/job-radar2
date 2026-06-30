@@ -155,6 +155,7 @@ where
                 .unwrap_or_else(|| raw_url.trim().to_string());
             let company = render_required_field(fields, "company", &context)?;
             let locations = render_locations(fields, &context)?;
+            let posting_meta = render_posting_meta(fields, &context)?;
 
             if title.trim().is_empty() || url.trim().is_empty() || company.trim().is_empty() {
                 continue;
@@ -165,6 +166,7 @@ where
                 company,
                 url,
                 locations,
+                posting_meta,
             });
         }
 

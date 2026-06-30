@@ -85,6 +85,12 @@ fn greenhouse_builtin_declares_html_posting_detail_without_inventory_description
     assert!(access_path.inventory.as_ref().unwrap()["fields"]
         .get("descriptionText")
         .is_none());
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+        json!({
+            "jobId": { "jsonPath": "$.id" }
+        })
+    );
 }
 
 #[test]
@@ -378,6 +384,88 @@ fn reports_invalid_selected_access_path_variants_and_source_specific_availabilit
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.message.contains("availability is not allowed")));
+}
+
+#[test]
+fn accepts_reserved_inventory_posting_meta_job_id_definition() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "inventory": {
+                        "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                        "parse": { "as": "json" },
+                        "items": { "select": { "jsonPath": "$.jobs" } },
+                        "fields": {
+                            "title": { "jsonPath": "$.title" },
+                            "url": { "jsonPath": "$.url" },
+                            "company": { "template": "{{sourceName}}" },
+                            "locations": [],
+                            "postingMeta": {
+                                "jobId": { "jsonPath": "$.id" }
+                            }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.diagnostics.is_empty());
+    assert_eq!(
+        snapshot.valid_profiles[0].document.access_paths[0]
+            .inventory
+            .as_ref()
+            .unwrap()["fields"]["postingMeta"],
+        json!({ "jobId": { "jsonPath": "$.id" } })
+    );
+}
+
+#[test]
+fn reports_invalid_inventory_posting_meta_shape_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "inventory": {
+                        "fields": {
+                            "postingMeta": {
+                                "department": { "jsonPath": "$.department" }
+                            }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0]
+        .message
+        .contains("accessPaths[0].inventory.fields.postingMeta.department is not supported"));
 }
 
 #[test]

@@ -23,7 +23,24 @@ pub(crate) fn normalize_source_candidate(candidate: SourceCandidate) -> Option<S
         company,
         url,
         locations,
+        posting_meta: normalize_posting_meta(candidate.posting_meta),
     })
+}
+
+fn normalize_posting_meta(
+    posting_meta: crate::search::run::PostingMeta,
+) -> crate::search::run::PostingMeta {
+    posting_meta
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let value = value.trim();
+            if value.is_empty() {
+                None
+            } else {
+                Some((key, value.to_string()))
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn normalize_locations(locations: Vec<String>) -> Vec<String> {

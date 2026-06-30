@@ -28,6 +28,7 @@ pub(super) fn merge_postings(treffers: Vec<Treffer>) -> Vec<NormalizedPosting> {
                 locations: treffer.candidate.locations,
                 sources: vec![PostingSource {
                     url: treffer.candidate.url,
+                    posting_meta: treffer.candidate.posting_meta,
                     ..treffer.source
                 }],
             });
@@ -62,9 +63,18 @@ fn merge_into_posting(posting: &mut NormalizedPosting, treffer: Treffer) {
 
     let source = PostingSource {
         url: treffer.candidate.url,
+        posting_meta: treffer.candidate.posting_meta,
         ..treffer.source
     };
-    if !posting.sources.iter().any(|existing| existing == &source) {
+    if !posting
+        .sources
+        .iter()
+        .any(|existing| same_source_row(existing, &source))
+    {
         posting.sources.push(source);
     }
+}
+
+fn same_source_row(left: &PostingSource, right: &PostingSource) -> bool {
+    left.source_key == right.source_key && left.url == right.url
 }

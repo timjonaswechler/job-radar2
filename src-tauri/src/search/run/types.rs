@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+pub type PostingMeta = BTreeMap<String, String>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceCandidate {
@@ -6,6 +9,7 @@ pub struct SourceCandidate {
     pub company: String,
     pub url: String,
     pub locations: Vec<String>,
+    pub posting_meta: PostingMeta,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -100,4 +104,6 @@ pub struct PostingSource {
     pub source_key: String,
     pub source_name: String,
     pub url: String,
+    #[serde(skip_serializing)]
+    pub posting_meta: PostingMeta,
 }

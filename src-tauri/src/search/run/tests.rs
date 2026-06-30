@@ -6,10 +6,10 @@ use crate::search::request::{
 use serde_json::{json, Value};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    SqlitePool,
+    Row, SqlitePool,
 };
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -639,6 +639,91 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
         assert!(optics_postings
             .iter()
             .any(|posting| posting.locations == vec!["Hamburg"]));
+    });
+}
+
+#[test]
+fn merging_and_import_preserve_per_source_posting_meta() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(
+            temp_dir.path(),
+            &[("source_one", "Source One"), ("source_two", "Source Two")],
+        );
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("laser")],
+            vec![],
+        )
+        .await;
+        let executor = FixtureSourceExecutor::new([
+            (
+                source_keys[0].clone(),
+                Ok(vec![candidate_with_meta(
+                    "Laser Engineer",
+                    "ACME",
+                    "https://source-one.test/laser",
+                    &["Mainz"],
+                    [("jobId", "source-one-42")],
+                )]),
+            ),
+            (
+                source_keys[1].clone(),
+                Ok(vec![candidate_with_meta(
+                    "Laser Engineer",
+                    "ACME",
+                    "https://source-two.test/laser",
+                    &["Mainz"],
+                    [("jobId", "source-two-99")],
+                )]),
+            ),
+        ]);
+        let running_search_runs = RunningSearchRuns::default();
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.postings[0].sources.len(), 2);
+        assert_eq!(
+            result.postings[0].sources[0].posting_meta,
+            BTreeMap::from([("jobId".to_string(), "source-one-42".to_string())])
+        );
+        assert_eq!(
+            result.postings[0].sources[1].posting_meta,
+            BTreeMap::from([("jobId".to_string(), "source-two-99".to_string())])
+        );
+
+        let rows = sqlx::query(
+            "SELECT source_key, posting_meta_json
+             FROM job_posting_sources
+             ORDER BY source_key",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get::<String, _>("source_key"), "source_one");
+        assert_eq!(
+            rows[0].get::<String, _>("posting_meta_json"),
+            r#"{"jobId":"source-one-42"}"#
+        );
+        assert_eq!(rows[1].get::<String, _>("source_key"), "source_two");
+        assert_eq!(
+            rows[1].get::<String, _>("posting_meta_json"),
+            r#"{"jobId":"source-two-99"}"#
+        );
     });
 }
 
@@ -1304,6 +1389,16 @@ fn write_json(path: impl AsRef<Path>, contents: &str) {
 }
 
 fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {
+    candidate_with_meta(title, company, url, locations, [])
+}
+
+fn candidate_with_meta(
+    title: &str,
+    company: &str,
+    url: &str,
+    locations: &[&str],
+    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
+) -> SourceCandidate {
     SourceCandidate {
         title: title.to_string(),
         company: company.to_string(),
@@ -1311,6 +1406,10 @@ fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> Sourc
         locations: locations
             .iter()
             .map(|location| (*location).to_string())
+            .collect(),
+        posting_meta: posting_meta
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect(),
     }
 }
