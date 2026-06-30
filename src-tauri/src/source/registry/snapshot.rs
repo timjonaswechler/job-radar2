@@ -89,6 +89,7 @@ impl SourceRegistrySnapshot {
                         path_key: path_key.clone(),
                         query: access_path.query.clone(),
                         inventory: access_path.inventory.clone(),
+                        posting_detail: access_path.posting_detail.clone(),
                         interactions: access_path.interactions.clone(),
                         manual_release: access_path.manual_release.clone(),
                     },
@@ -141,6 +142,10 @@ impl ResolvedSourceExecutionPlan {
         self.selected_access_path.inventory()
     }
 
+    pub fn posting_detail(&self) -> Option<&Value> {
+        self.selected_access_path.posting_detail()
+    }
+
     pub fn interactions(&self) -> Option<&[BrowserInteraction]> {
         self.selected_access_path.interactions()
     }
@@ -161,6 +166,8 @@ pub enum ResolvedSelectedAccessPath {
         query: Option<Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         inventory: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        posting_detail: Option<Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         interactions: Option<Vec<BrowserInteraction>>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -191,6 +198,13 @@ impl ResolvedSelectedAccessPath {
             Self::Profile { inventory, .. } | Self::SourceSpecific { inventory, .. } => {
                 inventory.as_ref()
             }
+        }
+    }
+
+    fn posting_detail(&self) -> Option<&Value> {
+        match self {
+            Self::Profile { posting_detail, .. } => posting_detail.as_ref(),
+            Self::SourceSpecific { .. } => None,
         }
     }
 

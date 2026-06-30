@@ -61,6 +61,33 @@ fn loads_migrated_builtin_source_registry_documents() {
 }
 
 #[test]
+fn greenhouse_builtin_declares_html_posting_detail_without_inventory_description_text() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("greenhouse").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "endpoint_inventory")
+        .unwrap();
+
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": { "selectorText": ".job__description" }
+            }
+        }))
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+}
+
+#[test]
 fn muz_global_jobboard_builtin_schema_and_inventory_are_hardened() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
@@ -354,6 +381,42 @@ fn reports_invalid_selected_access_path_variants_and_source_specific_availabilit
 }
 
 #[test]
+fn reports_invalid_posting_detail_definitions_as_invalid_shape() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "example_profile",
+            "name": "Example Profile",
+            "kind": "recruiting_system",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "json" },
+                        "fields": {
+                            "descriptionText": { "selectorText": ".job__description" }
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(snapshot.valid_profiles.is_empty());
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0].message.contains(
+        "accessPaths[0].postingDetail.parse.as must be `html` for the postingDetail language"
+    ));
+}
+
+#[test]
 fn reports_profile_access_paths_with_duplicate_keys_as_invalid_shape() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_json(
@@ -368,6 +431,54 @@ fn reports_profile_access_paths_with_duplicate_keys_as_invalid_shape() {
     assert!(snapshot.diagnostics[0]
         .message
         .contains("accessPaths contains duplicate key `boards_api`"));
+}
+
+#[test]
+fn resolves_profile_backed_execution_plan_with_posting_detail_separate_from_inventory() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir.path().join("source-profiles/example_profile.json"),
+        &profile_with_posting_detail_json(),
+    );
+    write_json(
+        temp_dir.path().join("sources/example_source.json"),
+        &profile_source_json("example_source", "example_profile", "endpoint_inventory"),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert!(
+        snapshot.diagnostics.is_empty(),
+        "registry diagnostics: {:#?}",
+        snapshot.diagnostics
+    );
+    let access_path = &snapshot.valid_profiles[0].document.access_paths[0];
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": { "selectorText": ".job__description" }
+            }
+        }))
+    );
+
+    let plan = snapshot.resolve_source("example_source").unwrap();
+    assert_eq!(
+        plan.posting_detail(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": { "selectorText": ".job__description" }
+            }
+        }))
+    );
+    assert!(plan.inventory().is_some());
+    assert!(plan.inventory().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
 }
 
 #[test]
@@ -612,6 +723,40 @@ fn profile_source_json(key: &str, profile_key: &str, path_key: &str) -> String {
             "profileKey": profile_key,
             "pathKey": path_key
         }
+    })
+    .to_string()
+}
+
+fn profile_with_posting_detail_json() -> String {
+    json!({
+        "schemaVersion": 1,
+        "key": "example_profile",
+        "name": "Example Profile",
+        "kind": "recruiting_system",
+        "accessPaths": [
+            {
+                "key": "endpoint_inventory",
+                "adapterKey": "declarative_endpoint_inventory",
+                "inventory": {
+                    "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                    "parse": { "as": "json" },
+                    "items": { "select": { "jsonPath": "$.jobs" } },
+                    "fields": {
+                        "title": { "jsonPath": "$.title" },
+                        "url": { "jsonPath": "$.url" },
+                        "company": { "template": "{{sourceName}}" },
+                        "locations": []
+                    }
+                },
+                "postingDetail": {
+                    "fetch": { "url": "{{posting:url}}" },
+                    "parse": { "as": "html" },
+                    "fields": {
+                        "descriptionText": { "selectorText": ".job__description" }
+                    }
+                }
+            }
+        ]
     })
     .to_string()
 }

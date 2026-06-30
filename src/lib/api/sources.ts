@@ -97,6 +97,7 @@ export type ProfileAccessPathDefinition = {
   availability?: AvailabilityBlock
   query?: JsonValue
   inventory?: JsonValue
+  postingDetail?: JsonValue
   interactions?: BrowserInteraction[]
   manualRelease?: JsonValue
 }

@@ -90,6 +90,8 @@ pub struct ProfileAccessPathDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inventory: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub posting_detail: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub interactions: Option<Vec<BrowserInteraction>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manual_release: Option<Value>,

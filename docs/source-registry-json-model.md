@@ -103,7 +103,14 @@ Minimal shape:
           "startUrl": { "type": "string", "format": "uri" }
         }
       },
-      "inventory": {}
+      "inventory": {},
+      "postingDetail": {
+        "fetch": { "url": "{{posting:url}}" },
+        "parse": { "as": "html" },
+        "fields": {
+          "descriptionText": { "selectorText": ".job__description" }
+        }
+      }
     }
   ]
 }
@@ -114,6 +121,8 @@ Semantics:
 - A source profile is reusable and must not be tailored to exactly one source.
 - `detect` identifies the reusable profile.
 - `accessPaths[]` defines allowed technical access paths.
+- `inventory` finds or lists candidate postings for a source/search run.
+- `postingDetail` is optional and loads detail text for one already-selected persisted posting; it is intentionally separate from `inventory`.
 - `availability` belongs only to profile access paths and decides whether that path is usable for a concrete submitted entry point.
 - `availability.sourceConfig` may contain templates and static values, but not search criteria.
 - Profile-level `sourceConfigSchema` contains fields common to all access paths.
@@ -157,6 +166,34 @@ Field expressions can use `jsonPath` on the structured item. Template expression
 - optional `"objectFields": ["fieldA", "fieldB"]` on a JSON location expression projects an object, or each object in an array, into one location string by reading the listed scalar fields and joining non-empty values with `, `.
 
 Do not split by punctuation implicitly: values such as `Berlin, Germany` are single locations unless the profile explicitly declares `split`. `objectFields` is for endpoint payloads that expose locations as arrays of objects, for example city/country records, without enabling general JSONPath wildcards.
+
+### Declarative posting detail extraction
+
+`postingDetail` describes lazy, posting-centered detail loading for one selected posting. It must not be used to add `descriptionText` to `inventory.fields`, because normal inventory runs should not fetch every detail page.
+
+First-slice language:
+
+```json
+{
+  "postingDetail": {
+    "fetch": { "url": "{{posting:url}}" },
+    "parse": { "as": "html" },
+    "fields": {
+      "descriptionText": { "selectorText": ".job__description" }
+    }
+  }
+}
+```
+
+Semantics:
+
+- `{{posting:url}}` is the selected persisted posting/source URL, not the source start URL and not a search-run value.
+- `parse.as: "html"` means the response body is parsed as HTML.
+- `fields.descriptionText.selectorText` is a CSS selector; the first non-empty selected text is returned as the Ausschreibungstext.
+- Missing `postingDetail` means the profile/access path does not currently support detail extraction. Callers should surface an unsupported/error state honestly instead of inventing text.
+- The first slice deliberately does not include JSON detail APIs, browser-rendered detail extraction, refresh policy, or persistence fields.
+
+Current built-in support starts with Greenhouse HTML detail pages. Other built-in profiles intentionally omit `postingDetail` until their detail-page/API extraction has been verified.
 
 ### Declarative endpoint pagination
 
