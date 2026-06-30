@@ -79,8 +79,81 @@
         {
           "if": { "required": ["match"] },
           "then": { "required": ["items"] }
+        },
+        {
+          "if": { "$ref": "#/$defs/htmlPostingDetailDocument" },
+          "then": {
+            "properties": {
+              "fields": { "$ref": "#/$defs/htmlPostingDetailFields" }
+            },
+            "not": {
+              "anyOf": [
+                { "required": ["items"] },
+                { "required": ["match"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "$ref": "#/$defs/jsonPostingDetailDocument" },
+          "then": {
+            "properties": {
+              "items": { "$ref": "#/$defs/jsonPostingDetailItems" },
+              "match": { "$ref": "#/$defs/jsonPostingDetailMatch" },
+              "fields": { "$ref": "#/$defs/jsonPostingDetailFields" }
+            }
+          }
+        },
+        {
+          "if": { "$ref": "#/$defs/xmlPostingDetailDocument" },
+          "then": {
+            "properties": {
+              "items": { "$ref": "#/$defs/xmlPostingDetailItems" },
+              "match": { "$ref": "#/$defs/xmlPostingDetailMatch" },
+              "fields": { "$ref": "#/$defs/xmlPostingDetailFields" }
+            }
+          }
         }
       ]
+    },
+    "htmlPostingDetailDocument": {
+      "type": "object",
+      "required": ["parse"],
+      "properties": {
+        "parse": {
+          "type": "object",
+          "required": ["as"],
+          "properties": {
+            "as": { "const": "html" }
+          }
+        }
+      }
+    },
+    "jsonPostingDetailDocument": {
+      "type": "object",
+      "required": ["parse"],
+      "properties": {
+        "parse": {
+          "type": "object",
+          "required": ["as"],
+          "properties": {
+            "as": { "const": "json" }
+          }
+        }
+      }
+    },
+    "xmlPostingDetailDocument": {
+      "type": "object",
+      "required": ["parse"],
+      "properties": {
+        "parse": {
+          "type": "object",
+          "required": ["as"],
+          "properties": {
+            "as": { "const": "xml" }
+          }
+        }
+      }
     },
     "postingDetailFetch": {
       "type": "object",
@@ -106,25 +179,43 @@
         "select": { "$ref": "#/$defs/postingDetailItemSelector" }
       }
     },
+    "jsonPostingDetailItems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["select"],
+      "properties": {
+        "select": { "$ref": "#/$defs/jsonPostingDetailItemSelector" }
+      }
+    },
+    "xmlPostingDetailItems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["select"],
+      "properties": {
+        "select": { "$ref": "#/$defs/xmlPostingDetailItemSelector" }
+      }
+    },
     "postingDetailItemSelector": {
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["jsonPath"],
-          "properties": {
-            "jsonPath": { "type": "string", "minLength": 1 }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["xmlElement"],
-          "properties": {
-            "xmlElement": { "type": "string", "minLength": 1 }
-          }
-        }
+        { "$ref": "#/$defs/jsonPostingDetailItemSelector" },
+        { "$ref": "#/$defs/xmlPostingDetailItemSelector" }
       ]
+    },
+    "jsonPostingDetailItemSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonPath"],
+      "properties": {
+        "jsonPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "xmlPostingDetailItemSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["xmlElement"],
+      "properties": {
+        "xmlElement": { "type": "string", "minLength": 1 }
+      }
     },
     "postingDetailMatch": {
       "type": "object",
@@ -135,25 +226,45 @@
         "equals": { "type": "string", "minLength": 1 }
       }
     },
+    "jsonPostingDetailMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "equals"],
+      "properties": {
+        "field": { "$ref": "#/$defs/jsonPostingDetailMatchField" },
+        "equals": { "type": "string", "minLength": 1 }
+      }
+    },
+    "xmlPostingDetailMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "equals"],
+      "properties": {
+        "field": { "$ref": "#/$defs/xmlPostingDetailMatchField" },
+        "equals": { "type": "string", "minLength": 1 }
+      }
+    },
     "postingDetailMatchField": {
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["jsonPath"],
-          "properties": {
-            "jsonPath": { "type": "string", "minLength": 1 }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["xmlText"],
-          "properties": {
-            "xmlText": { "type": "string", "minLength": 1 }
-          }
-        }
+        { "$ref": "#/$defs/jsonPostingDetailMatchField" },
+        { "$ref": "#/$defs/xmlPostingDetailMatchField" }
       ]
+    },
+    "jsonPostingDetailMatchField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonPath"],
+      "properties": {
+        "jsonPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "xmlPostingDetailMatchField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["xmlText"],
+      "properties": {
+        "xmlText": { "type": "string", "minLength": 1 }
+      }
     },
     "postingDetailFields": {
       "type": "object",
@@ -163,16 +274,47 @@
         "descriptionText": { "$ref": "#/$defs/postingDescriptionTextField" }
       }
     },
+    "htmlPostingDetailFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descriptionText"],
+      "properties": {
+        "descriptionText": { "$ref": "#/$defs/htmlPostingDescriptionTextField" }
+      }
+    },
+    "jsonPostingDetailFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descriptionText"],
+      "properties": {
+        "descriptionText": { "$ref": "#/$defs/jsonPostingDescriptionTextField" }
+      }
+    },
+    "xmlPostingDetailFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descriptionText"],
+      "properties": {
+        "descriptionText": { "$ref": "#/$defs/xmlPostingDescriptionTextField" }
+      }
+    },
     "postingDescriptionTextField": {
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["selectorText"],
-          "properties": {
-            "selectorText": { "type": "string", "minLength": 1 }
-          }
-        },
+        { "$ref": "#/$defs/htmlPostingDescriptionTextField" },
+        { "$ref": "#/$defs/jsonPostingDescriptionTextField" },
+        { "$ref": "#/$defs/xmlPostingDescriptionTextField" }
+      ]
+    },
+    "htmlPostingDescriptionTextField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectorText"],
+      "properties": {
+        "selectorText": { "type": "string", "minLength": 1 }
+      }
+    },
+    "jsonPostingDescriptionTextField": {
+      "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
@@ -188,7 +330,11 @@
           "properties": {
             "jsonPathHtml": { "type": "string", "minLength": 1 }
           }
-        },
+        }
+      ]
+    },
+    "xmlPostingDescriptionTextField": {
+      "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
