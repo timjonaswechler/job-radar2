@@ -1,11 +1,20 @@
 use super::*;
-use crate::search::run::{
-    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
+use crate::{
+    declarative::posting_detail::{BoxedPostingDetailTextFuture, PostingDetailHttpClient},
+    search::run::{
+        NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
+    },
+    source::registry::{load_snapshot_with_builtins, SourceRegistrySnapshot},
 };
-use serde_json::{from_str, json};
+use reqwest::Url;
+use serde_json::{from_str, json, Value};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
+};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
 };
 
 #[test]
@@ -925,6 +934,454 @@ fn lists_postings_for_queue_with_same_mailbox_workflow_mapping() {
 }
 
 #[test]
+fn get_posting_detail_loads_missing_description_marks_read_and_persists_text() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "detail_source",
+            "Detail Source",
+            "https://detail.example.test/jobs/laser",
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}",
+            )],
+            vec![profile_source_json(
+                "detail_source",
+                "detail_profile",
+                "detail_path",
+                json!({}),
+            )],
+        );
+        let client = FixturePostingDetailHttpClient::new([(
+            "https://detail.example.test/jobs/laser".to_string(),
+            Ok("<main><div class=\"description\">Persisted description</div></main>".to_string()),
+        )]);
+        let extractor =
+            crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        assert_eq!(detail.posting.read_state, ReadState::Read);
+        assert_eq!(
+            detail.posting.description_text.as_deref(),
+            Some("Persisted description")
+        );
+        assert_eq!(
+            detail.description_state,
+            PostingDescriptionState::Loaded {
+                text: "Persisted description".to_string()
+            }
+        );
+        assert_eq!(
+            persisted_description_text(&pool, posting_id)
+                .await
+                .as_deref(),
+            Some("Persisted description")
+        );
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://detail.example.test/jobs/laser"]
+        );
+    });
+}
+
+#[test]
+fn get_posting_detail_returns_existing_description_without_fetching() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        persist_description_text(&pool, posting_id, "Stored description").await;
+        let source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "detail_source",
+            "Detail Source",
+            "https://detail.example.test/jobs/laser",
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}",
+            )],
+            vec![profile_source_json(
+                "detail_source",
+                "detail_profile",
+                "detail_path",
+                json!({}),
+            )],
+        );
+        let client = FixturePostingDetailHttpClient::new([]);
+        let extractor =
+            crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        assert_eq!(detail.posting.read_state, ReadState::Read);
+        assert_eq!(
+            detail.description_state,
+            PostingDescriptionState::Loaded {
+                text: "Stored description".to_string()
+            }
+        );
+        assert!(client.requested_urls().is_empty());
+    });
+}
+
+#[test]
+fn get_posting_detail_returns_unsupported_when_no_concrete_source_supports_detail() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "list_only_source",
+            "List Only Source",
+            "https://list.example.test/jobs/laser",
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, source_id).await;
+        let snapshot = test_snapshot(
+            vec![profile_without_detail_json("list_profile", "list_path")],
+            vec![profile_source_json(
+                "list_only_source",
+                "list_profile",
+                "list_path",
+                json!({}),
+            )],
+        );
+        let client = FixturePostingDetailHttpClient::new([]);
+        let extractor =
+            crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        assert_eq!(detail.posting.read_state, ReadState::Read);
+        assert!(matches!(
+            detail.description_state,
+            PostingDescriptionState::Unsupported { .. }
+        ));
+        assert_eq!(persisted_description_text(&pool, posting_id).await, None);
+        assert!(client.requested_urls().is_empty());
+    });
+}
+
+#[test]
+fn get_posting_detail_falls_back_after_detail_capable_source_failure() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let primary_source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "primary_detail_source",
+            "Primary Detail Source",
+            "https://primary.example.test/jobs/laser",
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        insert_existing_source(
+            &pool,
+            posting_id,
+            "fallback_detail_source",
+            "Fallback Detail Source",
+            "https://fallback.example.test/jobs/laser",
+            "2026-06-02T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, primary_source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}",
+            )],
+            vec![
+                profile_source_json(
+                    "primary_detail_source",
+                    "detail_profile",
+                    "detail_path",
+                    json!({}),
+                ),
+                profile_source_json(
+                    "fallback_detail_source",
+                    "detail_profile",
+                    "detail_path",
+                    json!({}),
+                ),
+            ],
+        );
+        let client = FixturePostingDetailHttpClient::new([
+            (
+                "https://primary.example.test/jobs/laser".to_string(),
+                Err("network unavailable".to_string()),
+            ),
+            (
+                "https://fallback.example.test/jobs/laser".to_string(),
+                Ok("<div class=\"description\">Fallback description</div>".to_string()),
+            ),
+        ]);
+        let extractor =
+            crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client.requested_urls(),
+            vec![
+                "https://primary.example.test/jobs/laser",
+                "https://fallback.example.test/jobs/laser"
+            ]
+        );
+        assert_eq!(
+            detail.description_state,
+            PostingDescriptionState::Loaded {
+                text: "Fallback description".to_string()
+            }
+        );
+        assert_eq!(
+            persisted_description_text(&pool, posting_id)
+                .await
+                .as_deref(),
+            Some("Fallback description")
+        );
+    });
+}
+
+#[test]
+fn get_posting_detail_reports_failed_after_all_detail_capable_sources_fail() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "detail_source",
+            "Detail Source",
+            "https://detail.example.test/jobs/laser",
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}",
+            )],
+            vec![profile_source_json(
+                "detail_source",
+                "detail_profile",
+                "detail_path",
+                json!({}),
+            )],
+        );
+        let client = FixturePostingDetailHttpClient::new([(
+            "https://detail.example.test/jobs/laser".to_string(),
+            Err("HTTP 500".to_string()),
+        )]);
+        let extractor = crate::declarative::posting_detail::PostingDetailExtractor::new(client);
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        match detail.description_state {
+            PostingDescriptionState::Failed { message } => {
+                assert!(message.contains("detail_source"));
+                assert!(message.contains("HTTP 500"));
+            }
+            other => panic!("expected failed state, got {other:?}"),
+        }
+        assert_eq!(persisted_description_text(&pool, posting_id).await, None);
+    });
+}
+
+#[test]
+fn get_posting_detail_fetches_with_aligned_source_url_config_and_posting_meta() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let primary_source_id = insert_existing_source_with_meta(
+            &pool,
+            posting_id,
+            "primary_detail_source",
+            "Primary Detail Source",
+            "https://primary.example.test/jobs/laser",
+            [("jobId", "primary-42")],
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        insert_existing_source_with_meta(
+            &pool,
+            posting_id,
+            "fallback_detail_source",
+            "Fallback Detail Source",
+            "https://fallback.example.test/jobs/laser",
+            [("jobId", "fallback-99")],
+            "2026-06-02T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, primary_source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}?token={{sourceConfig:token}}&job={{postingMeta:jobId}}",
+            )],
+            vec![
+                profile_source_json(
+                    "primary_detail_source",
+                    "detail_profile",
+                    "detail_path",
+                    json!({ "token": "primary-token" }),
+                ),
+                profile_source_json(
+                    "fallback_detail_source",
+                    "detail_profile",
+                    "detail_path",
+                    json!({ "token": "fallback-token" }),
+                ),
+            ],
+        );
+        let client = FixturePostingDetailHttpClient::new([(
+            "https://primary.example.test/jobs/laser?token=primary-token&job=primary-42"
+                .to_string(),
+            Ok("<div class=\"description\">Primary aligned description</div>".to_string()),
+        )]);
+        let extractor =
+            crate::declarative::posting_detail::PostingDetailExtractor::new(client.clone());
+
+        let detail = JobPostingService::new(&pool)
+            .get_posting_detail_with_extractor(posting_id, &snapshot, &extractor)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client.requested_urls(),
+            vec!["https://primary.example.test/jobs/laser?token=primary-token&job=primary-42"]
+        );
+        assert_eq!(
+            detail.description_state,
+            PostingDescriptionState::Loaded {
+                text: "Primary aligned description".to_string()
+            }
+        );
+    });
+}
+
+#[test]
 fn partial_state_update_changes_only_supplied_state_fields() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1208,6 +1665,144 @@ fn invalid_persisted_locations_fail_with_posting_context() {
     });
 }
 
+#[derive(Clone, Default)]
+struct FixturePostingDetailHttpClient {
+    responses: Arc<Mutex<BTreeMap<String, Result<String, String>>>>,
+    requested_urls: Arc<Mutex<Vec<String>>>,
+}
+
+impl FixturePostingDetailHttpClient {
+    fn new(responses: impl IntoIterator<Item = (String, Result<String, String>)>) -> Self {
+        Self {
+            responses: Arc::new(Mutex::new(responses.into_iter().collect())),
+            requested_urls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn requested_urls(&self) -> Vec<String> {
+        self.requested_urls.lock().unwrap().clone()
+    }
+}
+
+impl PostingDetailHttpClient for FixturePostingDetailHttpClient {
+    fn get_text(&self, url: Url) -> BoxedPostingDetailTextFuture<'_> {
+        let url = url.to_string();
+        self.requested_urls.lock().unwrap().push(url.clone());
+        let result = self
+            .responses
+            .lock()
+            .unwrap()
+            .get(&url)
+            .cloned()
+            .unwrap_or_else(|| Err(format!("unexpected detail URL: {url}")));
+        Box::pin(async move { result })
+    }
+}
+
+fn test_snapshot(
+    profile_documents: Vec<String>,
+    source_documents: Vec<String>,
+) -> SourceRegistrySnapshot {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile_paths_and_json = profile_documents
+        .iter()
+        .map(|document| {
+            (
+                format!("source-profiles/builtin/{}.json", document_key(document)),
+                document,
+            )
+        })
+        .collect::<Vec<_>>();
+    let source_paths_and_json = source_documents
+        .iter()
+        .map(|document| {
+            (
+                format!("sources/builtin/{}.json", document_key(document)),
+                document,
+            )
+        })
+        .collect::<Vec<_>>();
+    let profile_refs = profile_paths_and_json
+        .iter()
+        .map(|(path, document)| (path.as_str(), document.as_str()))
+        .collect::<Vec<_>>();
+    let source_refs = source_paths_and_json
+        .iter()
+        .map(|(path, document)| (path.as_str(), document.as_str()))
+        .collect::<Vec<_>>();
+
+    let snapshot = load_snapshot_with_builtins(temp_dir.path(), &profile_refs, &source_refs);
+    assert_eq!(snapshot.diagnostics, Vec::new());
+    snapshot
+}
+
+fn document_key(document: &str) -> String {
+    serde_json::from_str::<Value>(document).unwrap()["key"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+fn detail_profile_json(profile_key: &str, path_key: &str, fetch_url: &str) -> String {
+    profile_json(
+        profile_key,
+        path_key,
+        Some(json!({
+            "fetch": { "url": fetch_url },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": { "selectorText": ".description" }
+            }
+        })),
+    )
+}
+
+fn profile_without_detail_json(profile_key: &str, path_key: &str) -> String {
+    profile_json(profile_key, path_key, None)
+}
+
+fn profile_json(profile_key: &str, path_key: &str, posting_detail: Option<Value>) -> String {
+    let mut access_path = json!({
+        "key": path_key,
+        "adapterKey": "declarative_endpoint_inventory",
+        "sourceConfigSchema": { "type": "object" },
+        "inventory": {}
+    });
+    if let Some(posting_detail) = posting_detail {
+        access_path["postingDetail"] = posting_detail;
+    }
+
+    json!({
+        "schemaVersion": 1,
+        "key": profile_key,
+        "name": profile_key,
+        "kind": "generic",
+        "accessPaths": [access_path]
+    })
+    .to_string()
+}
+
+fn profile_source_json(
+    source_key: &str,
+    profile_key: &str,
+    path_key: &str,
+    source_config: Value,
+) -> String {
+    json!({
+        "schemaVersion": 1,
+        "key": source_key,
+        "name": source_key,
+        "status": "active",
+        "sourceConfig": source_config,
+        "selectedAccessPath": {
+            "type": "profile",
+            "profileKey": profile_key,
+            "pathKey": path_key
+        }
+    })
+    .to_string()
+}
+
 fn search_run_result(postings: Vec<NormalizedPosting>) -> SearchRunResult {
     SearchRunResult {
         search_request_id: 1,
@@ -1309,21 +1904,67 @@ async fn insert_existing_source(
     url: &str,
     seen_at: &str,
 ) -> i64 {
+    insert_existing_source_with_meta(
+        pool,
+        posting_id,
+        source_key,
+        source_name_snapshot,
+        url,
+        [],
+        seen_at,
+    )
+    .await
+}
+
+async fn insert_existing_source_with_meta(
+    pool: &SqlitePool,
+    posting_id: i64,
+    source_key: &str,
+    source_name_snapshot: &str,
+    url: &str,
+    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
+    seen_at: &str,
+) -> i64 {
+    let posting_meta_json = serde_json::to_string(
+        &posting_meta
+            .into_iter()
+            .collect::<BTreeMap<&'static str, &'static str>>(),
+    )
+    .unwrap();
     sqlx::query(
         "INSERT INTO job_posting_sources (
-           posting_id, source_key, source_name_snapshot, url, first_seen_at, last_seen_at
+           posting_id, source_key, source_name_snapshot, url, posting_meta_json,
+           first_seen_at, last_seen_at
          )
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
     )
     .bind(posting_id)
     .bind(source_key)
     .bind(source_name_snapshot)
     .bind(url)
+    .bind(posting_meta_json)
     .bind(seen_at)
     .execute(pool)
     .await
     .unwrap()
     .last_insert_rowid()
+}
+
+async fn persist_description_text(pool: &SqlitePool, posting_id: i64, description_text: &str) {
+    sqlx::query("UPDATE job_postings SET description_text = ?1 WHERE id = ?2")
+        .bind(description_text)
+        .bind(posting_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn persisted_description_text(pool: &SqlitePool, posting_id: i64) -> Option<String> {
+    sqlx::query_scalar("SELECT description_text FROM job_postings WHERE id = ?1")
+        .bind(posting_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn set_primary_source(pool: &SqlitePool, posting_id: i64, source_id: i64) {

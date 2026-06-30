@@ -43,6 +43,7 @@ CREATE TABLE job_postings(
   title TEXT NOT NULL,
   company TEXT NOT NULL,
   locations_json TEXT NOT NULL DEFAULT '[]',
+  description_text TEXT NULL,
   primary_source_id INTEGER NULL REFERENCES job_posting_sources(id) ON DELETE SET NULL,
   read_state TEXT NOT NULL DEFAULT 'unread',
   interest_state TEXT NOT NULL DEFAULT 'undecided',

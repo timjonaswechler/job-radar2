@@ -423,6 +423,16 @@ pub async fn list_job_postings_for_queue(
 }
 
 #[tauri::command]
+pub async fn get_posting_detail(
+    state: State<'_, AppState>,
+    posting_id: i64,
+) -> Result<crate::search::posting::JobPostingDetail, String> {
+    crate::search::posting::JobPostingService::new(&state.db)
+        .get_posting_detail(posting_id, &state.paths.app_data_dir)
+        .await
+}
+
+#[tauri::command]
 pub async fn get_job_posting_queue_counts(
     state: State<'_, AppState>,
 ) -> Result<crate::search::posting::JobPostingQueueCounts, String> {

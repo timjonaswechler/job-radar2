@@ -44,6 +44,7 @@ export type JobPosting = {
   title: string
   company: string
   locations: string[]
+  descriptionText: string | null
   readState: JobPostingReadState
   interestState: JobPostingInterestState
   preparationState: JobPostingPreparationState
@@ -54,6 +55,15 @@ export type JobPosting = {
   updatedAt: string
   primarySource: JobPostingSource | null
   sources: JobPostingSource[]
+}
+
+export type PostingDescriptionState =
+  | { status: "loaded"; text: string }
+  | { status: "unsupported"; message: string }
+  | { status: "failed"; message: string }
+
+export type JobPostingDetail = JobPosting & {
+  descriptionState: PostingDescriptionState
 }
 
 export type JobPostingQueueCounts = Record<JobPostingQueueId, number> & {
@@ -74,6 +84,10 @@ export function listJobPostings() {
 
 export function listJobPostingsForQueue(queueId: JobPostingQueueId) {
   return invoke<JobPosting[]>("list_job_postings_for_queue", { queueId })
+}
+
+export function getPostingDetail(postingId: number) {
+  return invoke<JobPostingDetail>("get_posting_detail", { postingId })
 }
 
 export function getJobPostingQueueCounts() {

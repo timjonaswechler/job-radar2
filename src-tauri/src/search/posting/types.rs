@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -7,6 +8,7 @@ pub struct JobPosting {
     pub title: String,
     pub company: String,
     pub locations: Vec<String>,
+    pub description_text: Option<String>,
     pub read_state: ReadState,
     pub interest_state: InterestState,
     pub preparation_state: PreparationState,
@@ -26,8 +28,26 @@ pub struct JobPostingSource {
     pub source_key: String,
     pub source_name_snapshot: String,
     pub url: String,
+    #[serde(skip)]
+    pub(crate) posting_meta: BTreeMap<String, String>,
     pub first_seen_at: String,
     pub last_seen_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobPostingDetail {
+    #[serde(flatten)]
+    pub posting: JobPosting,
+    pub description_state: PostingDescriptionState,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum PostingDescriptionState {
+    Loaded { text: String },
+    Unsupported { message: String },
+    Failed { message: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
