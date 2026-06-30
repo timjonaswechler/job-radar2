@@ -459,7 +459,11 @@ fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(
         return Ok(());
     };
     let object = json_object_map(value, path)?;
-    validate_allowed_object_keys(object, path, &["fetch", "parse", "fields"])?;
+    validate_allowed_object_keys(
+        object,
+        path,
+        &["fetch", "parse", "fields", "items", "match"],
+    )?;
 
     let fetch = required_json_object_field(object, "fetch", &format!("{path}.fetch"))?;
     validate_allowed_object_keys(fetch, &format!("{path}.fetch"), &["url"])?;
@@ -486,6 +490,86 @@ fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(
         parse_as,
         &format!("{path}.fields.descriptionText"),
     )?;
+
+    validate_posting_detail_collection_option(object, parse_as, path)?;
+
+    Ok(())
+}
+
+fn validate_posting_detail_collection_option(
+    object: &serde_json::Map<String, Value>,
+    parse_as: &str,
+    path: &str,
+) -> Result<(), String> {
+    let has_items = object.contains_key("items");
+    let has_match = object.contains_key("match");
+    match (has_items, has_match) {
+        (false, false) => return Ok(()),
+        (true, false) => {
+            return Err(format!(
+                "{path}.match is required when {path}.items is declared"
+            ))
+        }
+        (false, true) => {
+            return Err(format!(
+                "{path}.items is required when {path}.match is declared"
+            ))
+        }
+        (true, true) => {}
+    }
+
+    if parse_as == "html" {
+        return Err(format!(
+            "{path}.items collection matching is supported only for json or xml postingDetail documents"
+        ));
+    }
+
+    let items = required_json_object_field(object, "items", &format!("{path}.items"))?;
+    validate_allowed_object_keys(items, &format!("{path}.items"), &["select"])?;
+    let select = required_json_object_field(items, "select", &format!("{path}.items.select"))?;
+    match parse_as {
+        "json" => {
+            validate_allowed_object_keys(select, &format!("{path}.items.select"), &["jsonPath"])?;
+            required_non_empty_string_field(
+                select,
+                "jsonPath",
+                &format!("{path}.items.select.jsonPath"),
+            )?;
+        }
+        "xml" => {
+            validate_allowed_object_keys(select, &format!("{path}.items.select"), &["xmlElement"])?;
+            required_non_empty_string_field(
+                select,
+                "xmlElement",
+                &format!("{path}.items.select.xmlElement"),
+            )?;
+        }
+        _ => unreachable!("postingDetail parse.as was validated before collection validation"),
+    }
+
+    let match_rule = required_json_object_field(object, "match", &format!("{path}.match"))?;
+    validate_allowed_object_keys(match_rule, &format!("{path}.match"), &["field", "equals"])?;
+    required_non_empty_string_field(match_rule, "equals", &format!("{path}.match.equals"))?;
+    let field = required_json_object_field(match_rule, "field", &format!("{path}.match.field"))?;
+    match parse_as {
+        "json" => {
+            validate_allowed_object_keys(field, &format!("{path}.match.field"), &["jsonPath"])?;
+            required_non_empty_string_field(
+                field,
+                "jsonPath",
+                &format!("{path}.match.field.jsonPath"),
+            )?;
+        }
+        "xml" => {
+            validate_allowed_object_keys(field, &format!("{path}.match.field"), &["xmlText"])?;
+            required_non_empty_string_field(
+                field,
+                "xmlText",
+                &format!("{path}.match.field.xmlText"),
+            )?;
+        }
+        _ => unreachable!("postingDetail parse.as was validated before collection validation"),
+    }
 
     Ok(())
 }
