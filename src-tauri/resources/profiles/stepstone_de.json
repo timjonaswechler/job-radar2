@@ -83,6 +83,19 @@
             }
           ]
         }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "{{posting:url}}"
+        },
+        "parse": {
+          "as": "html"
+        },
+        "fields": {
+          "descriptionText": {
+            "selectorText": "[data-at=\"job-ad-content\"], [data-at=\"job-detail-content\"], main"
+          }
+        }
       }
     }
   ]

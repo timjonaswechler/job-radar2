@@ -86,6 +86,19 @@
             }
           ]
         }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "{{posting:url}}"
+        },
+        "parse": {
+          "as": "html"
+        },
+        "fields": {
+          "descriptionText": {
+            "selectorText": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description'], .job-description, .jobDescription, .job-description__content"
+          }
+        }
       }
     }
   ]

@@ -52,7 +52,7 @@ export function SourceDetailsDrawer({
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       {row ? (
-        <DrawerContent className="h-full sm:max-w-xl lg:max-w-2xl">
+        <DrawerContent className="h-full sm:max-w-[500px] lg:max-w-[500px]">
           <DrawerHeader className="border-b pr-12">
             <DrawerTitle>{row.name}</DrawerTitle>
             <DrawerDescription>

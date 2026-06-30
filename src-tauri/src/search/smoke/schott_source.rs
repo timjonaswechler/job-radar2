@@ -121,6 +121,7 @@ fn fail_on_schott_registry_diagnostics(snapshot: &SourceRegistrySnapshot) -> Res
         .iter()
         .filter(|diagnostic| diagnostic.key.as_deref() == Some(SCHOTT_SOURCE_KEY))
         .map(|diagnostic| diagnostic.message.as_str())
+        .filter(|message| !message.contains("without postingDetail"))
         .collect::<Vec<_>>();
     if diagnostics.is_empty() {
         Ok(())

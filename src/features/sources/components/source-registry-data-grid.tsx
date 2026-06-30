@@ -33,6 +33,7 @@ import {
   RegistrySearchInput,
   SourceFilterPopover,
   SourceRegistryStateDot,
+  registryRowHealthClassName,
 } from "@/features/sources/components/registry-toolbar";
 import {
   countOrigins,
@@ -221,8 +222,11 @@ export function SourceRegistryDataGrid({
         recordCount={filteredRows.length}
         isLoading={loading}
         loadingMessage="Quellen werden geladen…"
-        emptyMessage="Keine gültigen Registry-Quellen gefunden."
+        emptyMessage="Keine Registry-Quellen gefunden."
         onRowClick={(row) => setSelectedRow(row)}
+        tableClassNames={{
+          bodyRow: (row) => registryRowHealthClassName(row.health),
+        }}
         tableLayout={{
           columnsPinnable: true,
           columnsResizable: false,
@@ -233,7 +237,7 @@ export function SourceRegistryDataGrid({
         <Frame className="px-1 w-full" stacked dense>
           <FrameHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="grid gap-1.5">
-              <FrameTitle>Gültige Registry-Quellen</FrameTitle>
+              <FrameTitle>Registry-Quellen</FrameTitle>
               <FrameDescription>
                 Der Punkt vor dem Namen zeigt den Registry-Zustand. Bei
                 Problemen Zeile anklicken, um Details im Drawer zu öffnen.

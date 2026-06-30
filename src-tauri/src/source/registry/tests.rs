@@ -61,7 +61,82 @@ fn loads_migrated_builtin_source_registry_documents() {
 }
 
 #[test]
-fn greenhouse_builtin_declares_html_posting_detail_without_inventory_description_text() {
+fn stepstone_builtin_declares_html_posting_detail_without_inventory_description_text() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("stepstone_de").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "browser_inventory")
+        .unwrap();
+
+    assert_eq!(access_path.adapter_key, "declarative_browser_inventory");
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("postingMeta")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": {
+                    "selectorText": "[data-at=\"job-ad-content\"], [data-at=\"job-detail-content\"], main"
+                }
+            }
+        }))
+    );
+}
+
+#[test]
+fn ashby_builtin_declares_json_collection_posting_detail_without_inventory_description_text() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("ashby").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "endpoint_inventory")
+        .unwrap();
+
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+        json!({
+            "jobId": { "jsonPath": "$.id" }
+        })
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": {
+                "url": "https://api.ashbyhq.com/posting-api/job-board/{{sourceConfig:boardSlug}}?includeCompensation=true"
+            },
+            "parse": { "as": "json" },
+            "items": {
+                "select": { "jsonPath": "$.jobs" }
+            },
+            "match": {
+                "field": { "jsonPath": "$.id" },
+                "equals": "{{postingMeta:jobId}}"
+            },
+            "fields": {
+                "descriptionText": { "jsonPathHtml": "$.descriptionHtml" }
+            }
+        }))
+    );
+}
+
+#[test]
+fn greenhouse_builtin_declares_json_posting_detail_without_inventory_description_text() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
     let profile = snapshot.profile("greenhouse").unwrap();
@@ -75,10 +150,12 @@ fn greenhouse_builtin_declares_html_posting_detail_without_inventory_description
     assert_eq!(
         access_path.posting_detail.as_ref(),
         Some(&json!({
-            "fetch": { "url": "{{posting:url}}" },
-            "parse": { "as": "html" },
+            "fetch": {
+                "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs/{{postingMeta:jobId}}"
+            },
+            "parse": { "as": "json" },
             "fields": {
-                "descriptionText": { "selectorText": ".job__description" }
+                "descriptionText": { "jsonPathHtml": "$.content" }
             }
         }))
     );
@@ -94,7 +171,86 @@ fn greenhouse_builtin_declares_html_posting_detail_without_inventory_description
 }
 
 #[test]
-fn muz_global_jobboard_builtin_schema_and_inventory_are_hardened() {
+fn lever_builtin_declares_json_posting_details_without_inventory_description_text() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("lever").unwrap();
+
+    let expectations = [
+        (
+            "endpoint_inventory",
+            "https://api.lever.co/v0/postings/{{sourceConfig:boardSlug}}/{{postingMeta:jobId}}",
+        ),
+        (
+            "eu_endpoint_inventory",
+            "https://api.eu.lever.co/v0/postings/{{sourceConfig:boardSlug}}/{{postingMeta:jobId}}",
+        ),
+    ];
+
+    for (access_path_key, detail_url) in expectations {
+        let access_path = profile
+            .document
+            .access_paths
+            .iter()
+            .find(|access_path| access_path.key == access_path_key)
+            .unwrap();
+
+        assert_eq!(
+            access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+            json!({
+                "jobId": { "jsonPath": "$.id" }
+            })
+        );
+        assert!(access_path.inventory.as_ref().unwrap()["fields"]
+            .get("descriptionText")
+            .is_none());
+        assert_eq!(
+            access_path.posting_detail.as_ref(),
+            Some(&json!({
+                "fetch": { "url": detail_url },
+                "parse": { "as": "json" },
+                "fields": {
+                    "descriptionText": { "jsonPathHtml": "$.description" }
+                }
+            }))
+        );
+    }
+}
+
+#[test]
+fn magnolia_esmp_builtin_declares_html_posting_detail_without_inventory_description_text() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("magnolia_esmp_job_search").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "endpoint_inventory")
+        .unwrap();
+
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("postingMeta")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": {
+                    "selectorText": "main article, main .job-detail, main .job-details, main .job-description, main [class*='job'][class*='description']"
+                }
+            }
+        }))
+    );
+}
+
+#[test]
+fn muz_global_jobboard_builtin_schema_inventory_and_posting_detail_are_hardened() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
     let profile = snapshot.profile("muz_global_jobboard").unwrap();
@@ -122,10 +278,40 @@ fn muz_global_jobboard_builtin_schema_and_inventory_are_hardened() {
             "objectFields": ["CityName", "CountryName"]
         }])
     );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+        json!({
+            "jobId": { "jsonPath": "$.MatchedObjectId" }
+        })
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": {
+                "url": "{{sourceConfig:apiBaseUrl}}search/%7B%22JobadID%22%3A%22{{postingMeta:jobId}}%22%2C%22SearchParamters%22%3A%7B%22FirstItem%22%3A1%2C%22CountItem%22%3A1%7D%7D.json"
+            },
+            "parse": { "as": "json" },
+            "items": {
+                "select": { "jsonPath": "$.SearchResult.SearchResultItems" }
+            },
+            "match": {
+                "field": { "jsonPath": "$.MatchedObjectId" },
+                "equals": "{{postingMeta:jobId}}"
+            },
+            "fields": {
+                "descriptionText": {
+                    "jsonPathHtml": "$.MatchedObjectDescriptor.UserArea.TextJobDescription"
+                }
+            }
+        }))
+    );
 }
 
 #[test]
-fn personio_builtin_schema_and_inventory_are_hardened() {
+fn personio_builtin_schema_inventory_and_posting_detail_are_hardened() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
     let profile = snapshot.profile("personio").unwrap();
@@ -153,6 +339,165 @@ fn personio_builtin_schema_and_inventory_are_hardened() {
     assert_eq!(
         access_path.inventory.as_ref().unwrap()["fields"]["url"],
         json!({ "template": "https://{{sourceConfig:personioHost}}/job/{{itemJson:$.id}}" })
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+        json!({
+            "jobId": { "jsonPath": "$.id" }
+        })
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": {
+                "url": "https://{{sourceConfig:personioHost}}/xml?language={{sourceConfig:language}}"
+            },
+            "parse": { "as": "xml" },
+            "items": {
+                "select": { "xmlElement": "position" }
+            },
+            "match": {
+                "field": { "xmlText": "id" },
+                "equals": "{{postingMeta:jobId}}"
+            },
+            "fields": {
+                "descriptionText": { "xmlTextHtml": "value" }
+            }
+        }))
+    );
+}
+
+#[test]
+fn phenom_builtin_declares_sitemap_inventory_and_html_posting_detail() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("phenom").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "sitemap_inventory")
+        .unwrap();
+
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["items"]["select"],
+        json!({ "xmlText": "loc" })
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["items"]["where"],
+        json!([{ "regex": "(?i)/job/" }])
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["title"],
+        json!({ "template": "{{capture:title|urlDecode|slugToTitle}}" })
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("postingMeta")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": {
+                    "selectorText": "[data-ph-at-id='jobdescription'], [data-ph-at-id='job-description'], .job-description, .jobDescription, #job-description"
+                }
+            }
+        }))
+    );
+}
+
+#[test]
+fn successfactors_builtin_declares_sitemap_inventory_and_html_posting_detail() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("successfactors").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "sitemap_inventory")
+        .unwrap();
+
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["items"]["select"],
+        json!({ "xmlText": "loc" })
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["items"]["where"],
+        json!([{ "regex": "(?i)/job/" }])
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("postingMeta")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": { "url": "{{posting:url}}" },
+            "parse": { "as": "html" },
+            "fields": {
+                "descriptionText": {
+                    "selectorText": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description'], .job-description, .jobDescription, .job-description__content"
+                }
+            }
+        }))
+    );
+}
+
+#[test]
+fn workday_builtin_declares_sitemap_inventory_and_cxs_posting_detail() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let snapshot = load_snapshot(temp_dir.path());
+    let profile = snapshot.profile("workday").unwrap();
+    let access_path = profile
+        .document
+        .access_paths
+        .iter()
+        .find(|access_path| access_path.key == "sitemap_inventory")
+        .unwrap();
+
+    let source_config_schema = access_path.source_config_schema.as_ref().unwrap();
+    assert_eq!(source_config_schema["additionalProperties"], false);
+    assert_eq!(
+        source_config_schema["required"],
+        json!(["workdayHost", "tenant", "site", "sitemapUrl"])
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["items"]["select"],
+        json!({ "xmlText": "loc" })
+    );
+    assert_eq!(
+        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
+        json!({
+            "jobId": { "template": "{{capture:externalPath}}" }
+        })
+    );
+    assert!(access_path.inventory.as_ref().unwrap()["fields"]
+        .get("descriptionText")
+        .is_none());
+    assert_eq!(
+        access_path.posting_detail.as_ref(),
+        Some(&json!({
+            "fetch": {
+                "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:jobId}}"
+            },
+            "parse": { "as": "json" },
+            "fields": {
+                "descriptionText": {
+                    "jsonPathHtml": "$.jobPostingInfo.jobDescription"
+                }
+            }
+        }))
     );
 }
 
@@ -413,6 +758,13 @@ fn accepts_reserved_inventory_posting_meta_job_id_definition() {
                                 "jobId": { "jsonPath": "$.id" }
                             }
                         }
+                    },
+                    "postingDetail": {
+                        "fetch": { "url": "{{posting:url}}" },
+                        "parse": { "as": "html" },
+                        "fields": {
+                            "descriptionText": { "selectorText": ".job__description" }
+                        }
                     }
                 }
             ]
@@ -430,6 +782,51 @@ fn accepts_reserved_inventory_posting_meta_job_id_definition() {
             .unwrap()["fields"]["postingMeta"],
         json!({ "jobId": { "jsonPath": "$.id" } })
     );
+}
+
+#[test]
+fn reports_profile_access_path_without_posting_detail_as_invalid_but_visible() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_json(
+        temp_dir
+            .path()
+            .join("source-profiles/missing_posting_detail.json"),
+        &json!({
+            "schemaVersion": 1,
+            "key": "missing_posting_detail",
+            "name": "Missing Posting Detail",
+            "kind": "generic",
+            "accessPaths": [
+                {
+                    "key": "endpoint_inventory",
+                    "adapterKey": "declarative_endpoint_inventory",
+                    "inventory": {
+                        "fetch": { "url": "https://example.test/jobs.json" },
+                        "parse": { "as": "json" },
+                        "items": { "select": { "jsonPath": "$.jobs" } },
+                        "fields": {
+                            "title": { "jsonPath": "$.title" },
+                            "url": { "jsonPath": "$.url" },
+                            "company": { "template": "{{sourceName}}" },
+                            "locations": []
+                        }
+                    }
+                }
+            ]
+        })
+        .to_string(),
+    );
+
+    let snapshot = load_custom_only_snapshot(temp_dir.path());
+
+    assert_eq!(
+        sorted_profile_keys(&snapshot),
+        vec!["missing_posting_detail"]
+    );
+    assert_diagnostic_codes(&snapshot, &[SourceRegistryDiagnosticCode::InvalidShape]);
+    assert!(snapshot.diagnostics[0]
+        .message
+        .contains("accessPaths[0].postingDetail is required"));
 }
 
 #[test]
@@ -1057,7 +1454,14 @@ fn profile_json(key: &str, access_path_keys: &[&str]) -> String {
                 "sourceConfig": { "boardSlug": "{{capture:boardSlug}}" }
             },
             "sourceConfigSchema": { "type": "object" },
-            "inventory": {}
+            "inventory": {},
+            "postingDetail": {
+                "fetch": { "url": "{{posting:url}}" },
+                "parse": { "as": "html" },
+                "fields": {
+                    "descriptionText": { "selectorText": ".job__description" }
+                }
+            }
         })).collect::<Vec<_>>()
     })
     .to_string()
@@ -1151,6 +1555,13 @@ fn profile_with_execution_plan_json() -> String {
                         "url": { "jsonPath": "$.url" },
                         "company": { "template": "{{sourceName}}" },
                         "locations": []
+                    }
+                },
+                "postingDetail": {
+                    "fetch": { "url": "{{posting:url}}" },
+                    "parse": { "as": "html" },
+                    "fields": {
+                        "descriptionText": { "selectorText": ".job__description" }
                     }
                 }
             }

@@ -84,6 +84,19 @@
             }
           ]
         }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "{{posting:url}}"
+        },
+        "parse": {
+          "as": "html"
+        },
+        "fields": {
+          "descriptionText": {
+            "selectorText": "main article, main .job-detail, main .job-details, main .job-description, main [class*='job'][class*='description']"
+          }
+        }
       }
     }
   ]

@@ -114,7 +114,36 @@
             {
               "jsonPath": "$.additionalOffices.office"
             }
-          ]
+          ],
+          "postingMeta": {
+            "jobId": {
+              "jsonPath": "$.id"
+            }
+          }
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "https://{{sourceConfig:personioHost}}/xml?language={{sourceConfig:language}}"
+        },
+        "parse": {
+          "as": "xml"
+        },
+        "items": {
+          "select": {
+            "xmlElement": "position"
+          }
+        },
+        "match": {
+          "field": {
+            "xmlText": "id"
+          },
+          "equals": "{{postingMeta:jobId}}"
+        },
+        "fields": {
+          "descriptionText": {
+            "xmlTextHtml": "value"
+          }
         }
       }
     }

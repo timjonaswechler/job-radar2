@@ -122,7 +122,7 @@ Semantics:
 - `detect` identifies the reusable profile.
 - `accessPaths[]` defines allowed technical access paths.
 - `inventory` finds or lists candidate postings for a source/search run.
-- `postingDetail` is optional and loads detail text for one already-selected persisted posting; it is intentionally separate from `inventory`.
+- `postingDetail` loads detail text for one already-selected persisted posting; shipped profile access paths must declare it and keep it intentionally separate from `inventory`.
 - `availability` belongs only to profile access paths and decides whether that path is usable for a concrete submitted entry point.
 - `availability.sourceConfig` may contain templates and static values, but not search criteria.
 - Profile-level `sourceConfigSchema` contains fields common to all access paths.
@@ -296,10 +296,10 @@ Semantics:
 - `items.select.xmlElement` selects XML item elements by local name. `match.field.xmlText` reads immediate text/CDATA from the first matching descendant element of each item and compares it to the rendered `match.equals` value.
 - `items.select.jsonPath` selects an array of JSON detail items. `match.field.jsonPath` reads a scalar value from each item and compares it to the rendered `match.equals` value.
 - Missing `postingMeta`, missing matches, multiple matches, empty extracted descriptions, malformed JSON/XML, and unsupported value shapes produce load errors instead of invented text.
-- Missing `postingDetail` means the profile/access path does not currently support detail extraction. Callers should surface an unsupported/error state honestly instead of inventing text.
+- Missing `postingDetail` means an external or legacy profile/access path does not currently support detail extraction. Callers should surface an unsupported/error state honestly instead of inventing text.
 - This slice deliberately does not include browser-rendered detail extraction, refresh policy, or description persistence fields.
 
-Current built-in support starts with Greenhouse HTML detail pages. Other built-in profiles intentionally omit `postingDetail` until their detail-page/API extraction has been verified.
+Built-in profiles must include a verified `postingDetail` path before they are considered complete. Profiles that still miss `postingDetail` remain visible in the registry with diagnostics and disabled/invalid UI markers so the remaining profile work is explicit. Current built-in complete support starts with Greenhouse HTML detail pages.
 
 ### Declarative endpoint pagination
 

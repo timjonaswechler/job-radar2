@@ -78,7 +78,36 @@
             {
               "jsonPath": "$.location"
             }
-          ]
+          ],
+          "postingMeta": {
+            "jobId": {
+              "jsonPath": "$.id"
+            }
+          }
+        }
+      },
+      "postingDetail": {
+        "fetch": {
+          "url": "https://api.ashbyhq.com/posting-api/job-board/{{sourceConfig:boardSlug}}?includeCompensation=true"
+        },
+        "parse": {
+          "as": "json"
+        },
+        "items": {
+          "select": {
+            "jsonPath": "$.jobs"
+          }
+        },
+        "match": {
+          "field": {
+            "jsonPath": "$.id"
+          },
+          "equals": "{{postingMeta:jobId}}"
+        },
+        "fields": {
+          "descriptionText": {
+            "jsonPathHtml": "$.descriptionHtml"
+          }
         }
       }
     }
