@@ -309,6 +309,7 @@ fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> Sourc
             .iter()
             .map(|location| (*location).to_string())
             .collect(),
+        posting_meta: Default::default(),
     }
 }
 

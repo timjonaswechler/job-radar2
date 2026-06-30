@@ -255,14 +255,18 @@ async fn upsert_posting_source(
     .await
     .map_err(db_error)?;
 
+    let posting_meta_json = serde_json::to_string(&source.posting_meta).map_err(json_error)?;
+
     if let Some(source_id) = existing_source_id {
         sqlx::query(
             "UPDATE job_posting_sources
              SET source_name_snapshot = ?1,
-                 last_seen_at = ?2
-             WHERE id = ?3",
+                 posting_meta_json = ?2,
+                 last_seen_at = ?3
+             WHERE id = ?4",
         )
         .bind(&source.source_name)
+        .bind(&posting_meta_json)
         .bind(seen_at)
         .bind(source_id)
         .execute(&mut **transaction)
@@ -274,14 +278,15 @@ async fn upsert_posting_source(
 
     let inserted_source = sqlx::query(
         "INSERT INTO job_posting_sources (
-           posting_id, source_key, source_name_snapshot, url, first_seen_at, last_seen_at
+           posting_id, source_key, source_name_snapshot, url, posting_meta_json, first_seen_at, last_seen_at
          )
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
     )
     .bind(posting_id)
     .bind(&source.source_key)
     .bind(&source.source_name)
     .bind(&source.url)
+    .bind(&posting_meta_json)
     .bind(seen_at)
     .execute(&mut **transaction)
     .await

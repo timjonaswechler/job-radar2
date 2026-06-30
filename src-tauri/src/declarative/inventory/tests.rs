@@ -16,7 +16,11 @@ use reqwest::Url;
 use serde_json::{json, Value};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
-use std::{collections::HashMap, path::Path, sync::Mutex};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    sync::Mutex,
+};
 
 struct FixtureInventoryHttpClient {
     responses: HashMap<String, Result<String, String>>,
@@ -218,6 +222,7 @@ fn xml_element_inventory_uses_json_path_and_item_json_template_fields() {
                 company: "Runtime Team".to_string(),
                 url: "https://example.test/jobs/runtime-42".to_string(),
                 locations: vec!["Berlin".to_string(), "Munich".to_string()],
+                posting_meta: Default::default(),
             }]
         );
         assert_eq!(
@@ -265,11 +270,69 @@ fn json_inventory_executes_from_resolved_execution_plan() {
                 company: "Fixture Careers".to_string(),
                 url: "https://example.test/jobs/laser".to_string(),
                 locations: vec!["Mainz".to_string()],
+                posting_meta: Default::default(),
             }]
         );
         assert_eq!(
             executor.client.requested_urls(),
             vec!["https://example.test/jobs.json"]
+        );
+    });
+}
+
+#[test]
+fn json_inventory_extracts_reserved_posting_meta_for_candidates() {
+    tauri::async_runtime::block_on(async {
+        let fixture_client = FixtureInventoryHttpClient::new([(
+            "https://example.test/jobs.json",
+            Ok(r#"{
+                  "jobs": [
+                    {
+                      "id": 4242,
+                      "title": "Laser Engineer",
+                      "jobUrl": "https://example.test/jobs/laser",
+                      "location": "Mainz"
+                    }
+                  ]
+                }"#),
+        )]);
+        let executor = DeclarativeInventoryExecutor::new(fixture_client);
+        let search_request = search_request();
+        let source = source_with_inventory(
+            DECLARATIVE_HTTP_ADAPTER_KEY,
+            json!({ "startUrl": "https://example.test/jobs.json" }),
+            json!({
+                "fetch": { "url": "{{sourceConfig:startUrl}}" },
+                "parse": { "as": "json" },
+                "items": {
+                    "select": { "jsonPath": "$.jobs" }
+                },
+                "fields": {
+                    "title": { "jsonPath": "$.title" },
+                    "url": { "jsonPath": "$.jobUrl" },
+                    "company": { "template": "{{sourceName}}" },
+                    "locations": [
+                        { "jsonPath": "$.location" }
+                    ],
+                    "postingMeta": {
+                        "jobId": { "jsonPath": "$.id" }
+                    }
+                }
+            }),
+        );
+
+        let candidates = executor
+            .execute(SourceExecutionInput {
+                search_request: &search_request,
+                source: &source,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].posting_meta,
+            BTreeMap::from([("jobId".to_string(), "4242".to_string())])
         );
     });
 }
@@ -358,18 +421,21 @@ fn json_inventory_paginates_endpoint_and_resolves_relative_urls() {
                     company: "Fixture Careers".to_string(),
                     url: "https://example.test/jobs/backend".to_string(),
                     locations: vec!["Berlin".to_string()],
+                    posting_meta: Default::default(),
                 },
                 SourceCandidate {
                     title: "Frontend Engineer".to_string(),
                     company: "Fixture Careers".to_string(),
                     url: "https://example.test/jobs/frontend".to_string(),
                     locations: vec!["Hamburg".to_string()],
+                    posting_meta: Default::default(),
                 },
                 SourceCandidate {
                     title: "Platform Engineer".to_string(),
                     company: "Fixture Careers".to_string(),
                     url: "https://example.test/jobs/platform".to_string(),
                     locations: vec!["Mainz".to_string()],
+                    posting_meta: Default::default(),
                 },
             ]
         );
@@ -441,6 +507,7 @@ fn json_inventory_locations_expand_arrays_split_strings_and_dedupe() {
                     "Munich, Germany".to_string(),
                     "Hamburg, Germany".to_string(),
                 ],
+                posting_meta: Default::default(),
             }]
         );
     });

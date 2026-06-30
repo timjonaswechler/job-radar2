@@ -296,6 +296,7 @@ fn browser_inventory_executes_from_resolved_execution_plan() {
                 company: "ACME GmbH".to_string(),
                 url: "https://example.test/jobs/laser".to_string(),
                 locations: vec!["Mainz".to_string()],
+                posting_meta: Default::default(),
             }]
         );
         assert_eq!(

@@ -125,8 +125,37 @@
         "locations": {
           "type": "array",
           "items": { "$ref": "#/$defs/locationFieldExpression" }
-        }
+        },
+        "postingMeta": { "$ref": "#/$defs/postingMetaFields" }
       }
+    },
+    "postingMetaFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "jobId": { "$ref": "#/$defs/postingMetaFieldExpression" }
+      }
+    },
+    "postingMetaFieldExpression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["template"],
+          "properties": {
+            "template": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonPath"],
+          "properties": {
+            "jsonPath": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
     },
     "locationFieldExpression": {
       "oneOf": [

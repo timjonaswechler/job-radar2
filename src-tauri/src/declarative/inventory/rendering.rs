@@ -1,7 +1,7 @@
 use regex::Regex;
 use reqwest::Url;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     declarative::template::{render_template, TemplateContext, TemplateError},
@@ -66,6 +66,36 @@ pub(super) fn render_required_field(
         context,
         &format!("executionPlan.inventory.fields.{field_name}"),
     )
+}
+
+pub(super) fn render_posting_meta(
+    fields: &serde_json::Map<String, Value>,
+    context: &InventoryTemplateContext<'_>,
+) -> Result<crate::search::run::PostingMeta, SourceExecutionError> {
+    let Some(posting_meta) = fields.get("postingMeta") else {
+        return Ok(BTreeMap::new());
+    };
+    let posting_meta = posting_meta.as_object().ok_or_else(|| {
+        SourceExecutionError::Failed(
+            "executionPlan.inventory.fields.postingMeta must be a JSON object".to_string(),
+        )
+    })?;
+
+    let mut rendered = BTreeMap::new();
+    for (key, expression) in posting_meta {
+        let path = format!("executionPlan.inventory.fields.postingMeta.{key}");
+        if key != "jobId" {
+            return Err(SourceExecutionError::Failed(format!(
+                "{path} is not supported"
+            )));
+        }
+        let value = render_field_expression(expression, context, &path)?;
+        let value = value.trim();
+        if !value.is_empty() {
+            rendered.insert(key.clone(), value.to_string());
+        }
+    }
+    Ok(rendered)
 }
 
 pub(super) fn render_locations(

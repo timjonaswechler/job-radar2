@@ -384,6 +384,10 @@ fn validate_access_path_json_blocks(
     )?;
     validate_json_object_option(access_path.query.as_ref(), &format!("{path}.query"))?;
     validate_json_object_option(access_path.inventory.as_ref(), &format!("{path}.inventory"))?;
+    validate_inventory_posting_meta_option(
+        access_path.inventory.as_ref(),
+        &format!("{path}.inventory"),
+    )?;
     validate_posting_detail_option(
         access_path.posting_detail.as_ref(),
         &format!("{path}.postingDetail"),
@@ -392,6 +396,62 @@ fn validate_access_path_json_blocks(
         access_path.manual_release.as_ref(),
         &format!("{path}.manualRelease"),
     )
+}
+
+fn validate_inventory_posting_meta_option(value: Option<&Value>, path: &str) -> Result<(), String> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    let object = json_object_map(value, path)?;
+    let Some(fields) = object.get("fields") else {
+        return Ok(());
+    };
+    let fields = json_object_map(fields, &format!("{path}.fields"))?;
+    let Some(posting_meta) = fields.get("postingMeta") else {
+        return Ok(());
+    };
+    let posting_meta = json_object_map(posting_meta, &format!("{path}.fields.postingMeta"))?;
+    if posting_meta.is_empty() {
+        return Err(format!(
+            "{path}.fields.postingMeta must declare at least one technical key"
+        ));
+    }
+    validate_allowed_object_keys(
+        posting_meta,
+        &format!("{path}.fields.postingMeta"),
+        &["jobId"],
+    )?;
+    for (key, expression) in posting_meta {
+        validate_inventory_posting_meta_expression(
+            expression,
+            &format!("{path}.fields.postingMeta.{key}"),
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_inventory_posting_meta_expression(value: &Value, path: &str) -> Result<(), String> {
+    let expression = json_object_map(value, path)?;
+    let has_template = expression.contains_key("template");
+    let has_json_path = expression.contains_key("jsonPath");
+    match (has_template, has_json_path) {
+        (true, false) => {
+            validate_allowed_object_keys(expression, path, &["template"])?;
+            required_non_empty_string_field(expression, "template", &format!("{path}.template"))?;
+            Ok(())
+        }
+        (false, true) => {
+            validate_allowed_object_keys(expression, path, &["jsonPath"])?;
+            required_non_empty_string_field(expression, "jsonPath", &format!("{path}.jsonPath"))?;
+            Ok(())
+        }
+        (true, true) => Err(format!(
+            "{path} must contain exactly one of template or jsonPath"
+        )),
+        (false, false) => Err(format!(
+            "{path} must contain exactly one of template or jsonPath"
+        )),
+    }
 }
 
 fn validate_posting_detail_option(value: Option<&Value>, path: &str) -> Result<(), String> {

@@ -14,6 +14,6 @@ pub use service::{
     SearchRunService, SourceExecutionError,
 };
 pub use types::{
-    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceCandidate,
-    SourceRunResult, SourceRunStatus,
+    NormalizedPosting, PostingMeta, PostingSource, SearchRunResult, SearchRunStatus,
+    SourceCandidate, SourceRunResult, SourceRunStatus,
 };

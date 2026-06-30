@@ -154,6 +154,34 @@ For XML feeds, `inventory.items.select.xmlText` selects all descendant elements 
 
 Field expressions can use `jsonPath` on the structured item. Template expressions may also read scalar structured-item fields via `{{itemJson:$.fieldName}}`, for example to combine a source-config host with a posting id.
 
+### Declarative inventory posting metadata
+
+`inventory.fields.postingMeta` is an optional object for hidden technical values that belong to the concrete posting source row, not to the merged user-facing Stellenanzeige. The first reserved key is `jobId`, the source-local external job identifier used by a later detail-loading path to re-identify the posting.
+
+Example:
+
+```json
+{
+  "fields": {
+    "title": { "jsonPath": "$.title" },
+    "url": { "jsonPath": "$.absolute_url" },
+    "company": { "template": "{{sourceName}}" },
+    "locations": [{ "jsonPath": "$.location.name" }],
+    "postingMeta": {
+      "jobId": { "jsonPath": "$.id" }
+    }
+  }
+}
+```
+
+Semantics:
+
+- `postingMeta` is technical and non-user-facing. Public posting list/read DTOs must not expose it as normal posting metadata.
+- `postingMeta.jobId` means “source-local external job identifier”. Vendor-specific raw names such as `id`, `ReqId`, or `jobId` belong only inside extraction rules.
+- Values are rendered as scalar strings using the same simple `template` or `jsonPath` expressions used by inventory fields; empty values are omitted.
+- Stored posting sources persist `postingMeta` as a JSON object. Imports update the stored JSON object to the latest extracted metadata for that exact `(posting_id, source_key, url)` source row; postings without metadata store `{}`.
+- User-facing metadata such as department, employment type, posted date, or remote mode should become explicit canonical fields instead of hidden `postingMeta` keys.
+
 ### Declarative inventory location fields
 
 `inventory.fields.locations` is an array of location expressions. Each expression may produce zero, one, or many locations:
@@ -191,7 +219,7 @@ Semantics:
 - `parse.as: "html"` means the response body is parsed as HTML.
 - `fields.descriptionText.selectorText` is a CSS selector; the first non-empty selected text is returned as the Ausschreibungstext.
 - Missing `postingDetail` means the profile/access path does not currently support detail extraction. Callers should surface an unsupported/error state honestly instead of inventing text.
-- The first slice deliberately does not include JSON detail APIs, browser-rendered detail extraction, refresh policy, or persistence fields.
+- The first slice deliberately does not include JSON detail APIs, browser-rendered detail extraction, refresh policy, or description persistence fields.
 
 Current built-in support starts with Greenhouse HTML detail pages. Other built-in profiles intentionally omit `postingDetail` until their detail-page/API extraction has been verified.
 

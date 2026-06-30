@@ -2,7 +2,7 @@ use super::*;
 use crate::search::run::{
     NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
 };
-use serde_json::from_str;
+use serde_json::{from_str, json};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
@@ -68,7 +68,7 @@ fn imports_new_posting_with_source_row_and_primary_source() {
         assert_eq!(table_count(&pool, "job_posting_sources").await, 2);
         let source_row = sqlx::query(
             "SELECT id, posting_id, source_key, source_name_snapshot, url,
-                    first_seen_at, last_seen_at
+                    posting_meta_json, first_seen_at, last_seen_at
              FROM job_posting_sources
              WHERE id = ?1",
         )
@@ -88,6 +88,7 @@ fn imports_new_posting_with_source_row_and_primary_source() {
             source_row.get::<String, _>("url"),
             "https://example.test/jobs/laser"
         );
+        assert_eq!(source_row.get::<String, _>("posting_meta_json"), "{}");
         assert_eq!(
             source_row.get::<String, _>("first_seen_at"),
             result.generated_at
@@ -96,6 +97,75 @@ fn imports_new_posting_with_source_row_and_primary_source() {
             source_row.get::<String, _>("last_seen_at"),
             result.generated_at
         );
+    });
+}
+
+#[test]
+fn imports_posting_meta_per_source_and_updates_existing_source_metadata() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let first_result = search_run_result(vec![posting(
+            "Laser Engineer",
+            "ACME GmbH",
+            &["Mainz"],
+            vec![source_with_meta(
+                "schott_ag",
+                "SCHOTT AG",
+                "https://example.test/jobs/laser",
+                [("jobId", "old-42")],
+            )],
+        )]);
+
+        JobPostingImportService::new(&pool)
+            .import_search_run_result(&first_result)
+            .await
+            .unwrap();
+
+        let initial_meta: String =
+            sqlx::query_scalar("SELECT posting_meta_json FROM job_posting_sources")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(initial_meta, json!({ "jobId": "old-42" }).to_string());
+
+        let second_result = search_run_result(vec![posting(
+            "Laser Engineer",
+            "ACME GmbH",
+            &["Mainz"],
+            vec![source_with_meta(
+                "schott_ag",
+                "SCHOTT AG Careers",
+                "https://example.test/jobs/laser",
+                [("jobId", "new-99")],
+            )],
+        )]);
+
+        JobPostingImportService::new(&pool)
+            .import_search_run_result(&second_result)
+            .await
+            .unwrap();
+
+        assert_eq!(table_count(&pool, "job_posting_sources").await, 1);
+        let updated_row = sqlx::query(
+            "SELECT source_name_snapshot, posting_meta_json
+             FROM job_posting_sources",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            updated_row.get::<String, _>("source_name_snapshot"),
+            "SCHOTT AG Careers"
+        );
+        assert_eq!(
+            updated_row.get::<String, _>("posting_meta_json"),
+            json!({ "jobId": "new-99" }).to_string()
+        );
+
+        let listed = JobPostingService::new(&pool).list().await.unwrap();
+        let listed_json = serde_json::to_value(&listed).unwrap();
+        assert!(listed_json[0]["sources"][0].get("postingMeta").is_none());
+        assert!(listed_json[0]["primarySource"].get("postingMeta").is_none());
     });
 }
 
@@ -1170,10 +1240,23 @@ fn posting(
 }
 
 fn source(source_key: &str, source_name: &str, url: &str) -> PostingSource {
+    source_with_meta(source_key, source_name, url, [])
+}
+
+fn source_with_meta(
+    source_key: &str,
+    source_name: &str,
+    url: &str,
+    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
+) -> PostingSource {
     PostingSource {
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         url: url.to_string(),
+        posting_meta: posting_meta
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
     }
 }
 

@@ -67,11 +67,13 @@ CREATE TABLE job_posting_sources(
   source_key TEXT NOT NULL,
   source_name_snapshot TEXT NOT NULL,
   url TEXT NOT NULL,
+  posting_meta_json TEXT NOT NULL DEFAULT '{}',
   first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(trim(source_key) <> ''),
   CHECK(trim(source_name_snapshot) <> ''),
   CHECK(trim(url) <> ''),
+  CHECK(json_valid(posting_meta_json) AND json_type(posting_meta_json) = 'object'),
   UNIQUE(posting_id, source_key, url)
 );
 
