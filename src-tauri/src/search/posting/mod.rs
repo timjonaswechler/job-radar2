@@ -7,8 +7,9 @@ mod types;
 
 pub use service::JobPostingService;
 pub use types::{
-    ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
-    JobPostingSource, PreparationState, ReadState, UpdateJobPostingStateInput,
+    ApplicationState, InterestState, JobPosting, JobPostingDetail, JobPostingQueueCounts,
+    JobPostingQueueId, JobPostingSource, PostingDescriptionState, PreparationState, ReadState,
+    UpdateJobPostingStateInput,
 };
 
 use std::collections::HashSet;

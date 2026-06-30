@@ -80,6 +80,7 @@ impl PostingDetailExtractor<ReqwestPostingDetailHttpClient> {
 }
 
 impl<C> PostingDetailExtractor<C> {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(client: C) -> Self {
         Self { client }
     }
@@ -112,6 +113,7 @@ where
         .await
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) async fn load_description_text(
         &self,
         posting_detail: Option<&Value>,

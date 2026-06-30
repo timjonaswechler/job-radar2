@@ -1,8 +1,17 @@
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
+use std::path::Path;
+
+use crate::{
+    declarative::posting_detail::{
+        PostingDetailExtractor, PostingDetailHttpClient, PostingDetailSource,
+    },
+    source::registry::SourceRegistrySnapshot,
+};
 
 use super::{
-    ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
-    JobPostingSource, PreparationState, ReadState, UpdateJobPostingStateInput,
+    ApplicationState, InterestState, JobPosting, JobPostingDetail, JobPostingQueueCounts,
+    JobPostingQueueId, JobPostingSource, PostingDescriptionState, PreparationState, ReadState,
+    UpdateJobPostingStateInput,
 };
 
 const ARCHIVE_QUEUE_CONDITION: &str = "(interest_state = 'dismissed'
@@ -52,7 +61,7 @@ impl<'a> JobPostingService<'a> {
             .map(|condition| format!("WHERE {condition}"))
             .unwrap_or_default();
         let sql = format!(
-            "SELECT id, title, company, locations_json, primary_source_id,
+            "SELECT id, title, company, locations_json, description_text, primary_source_id,
                     read_state, interest_state, preparation_state, application_state,
                     first_seen_at, last_seen_at, created_at, updated_at
              FROM job_postings
@@ -109,6 +118,116 @@ impl<'a> JobPostingService<'a> {
         })
     }
 
+    pub async fn get_posting_detail(
+        &self,
+        id: i64,
+        app_data_dir: impl AsRef<Path>,
+    ) -> Result<JobPostingDetail, String> {
+        let snapshot = crate::source::registry::load_snapshot(app_data_dir);
+        let extractor = PostingDetailExtractor::new_reqwest();
+        self.get_posting_detail_with_extractor(id, &snapshot, &extractor)
+            .await
+    }
+
+    pub(crate) async fn get_posting_detail_with_extractor<C>(
+        &self,
+        id: i64,
+        snapshot: &SourceRegistrySnapshot,
+        extractor: &PostingDetailExtractor<C>,
+    ) -> Result<JobPostingDetail, String>
+    where
+        C: PostingDetailHttpClient + Send + Sync,
+    {
+        let mut posting = self.get(id).await?;
+        if posting.read_state != ReadState::Read {
+            sqlx::query(
+                "UPDATE job_postings
+                 SET read_state = 'read',
+                     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 WHERE id = ?1",
+            )
+            .bind(id)
+            .execute(self.pool)
+            .await
+            .map_err(db_error)?;
+            posting = self.get(id).await?;
+        }
+
+        if let Some(text) = posting.description_text.clone() {
+            return Ok(JobPostingDetail {
+                posting,
+                description_state: PostingDescriptionState::Loaded { text },
+            });
+        }
+
+        let candidates = detail_capable_sources(&posting, snapshot);
+        if candidates.is_empty() {
+            return Ok(JobPostingDetail {
+                posting,
+                description_state: PostingDescriptionState::Unsupported {
+                    message: format!(
+                        "job posting {id} has no stored source with postingDetail extraction"
+                    ),
+                },
+            });
+        }
+
+        let mut failures = Vec::new();
+        for (posting_source, execution_plan) in candidates {
+            let posting_meta = if posting_source.posting_meta.is_empty() {
+                None
+            } else {
+                Some(&posting_source.posting_meta)
+            };
+            match extractor
+                .load_source_description_text(
+                    &execution_plan,
+                    PostingDetailSource {
+                        source_key: &posting_source.source_key,
+                        url: &posting_source.url,
+                        posting_meta,
+                    },
+                )
+                .await
+            {
+                Ok(detail) => {
+                    sqlx::query(
+                        "UPDATE job_postings
+                         SET description_text = ?1,
+                             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                         WHERE id = ?2",
+                    )
+                    .bind(&detail.description_text)
+                    .bind(id)
+                    .execute(self.pool)
+                    .await
+                    .map_err(db_error)?;
+                    let posting = self.get(id).await?;
+                    return Ok(JobPostingDetail {
+                        posting,
+                        description_state: PostingDescriptionState::Loaded {
+                            text: detail.description_text,
+                        },
+                    });
+                }
+                Err(error) => failures.push(format!(
+                    "{} ({}) failed: {}",
+                    posting_source.source_key, posting_source.url, error
+                )),
+            }
+        }
+
+        Ok(JobPostingDetail {
+            posting,
+            description_state: PostingDescriptionState::Failed {
+                message: format!(
+                    "description loading failed for all detail-capable sources: {}",
+                    failures.join("; ")
+                ),
+            },
+        })
+    }
+
     pub async fn update_state(
         &self,
         id: i64,
@@ -151,7 +270,7 @@ impl<'a> JobPostingService<'a> {
 
     async fn get(&self, id: i64) -> Result<JobPosting, String> {
         let row = sqlx::query(
-            "SELECT id, title, company, locations_json, primary_source_id,
+            "SELECT id, title, company, locations_json, description_text, primary_source_id,
                     read_state, interest_state, preparation_state, application_state,
                     first_seen_at, last_seen_at, created_at, updated_at
              FROM job_postings
@@ -195,6 +314,7 @@ impl<'a> JobPostingService<'a> {
                 &row.try_get::<String, _>("locations_json")
                     .map_err(db_error)?,
             )?,
+            description_text: row.try_get("description_text").map_err(db_error)?,
             read_state: ReadState::try_from(read_state.as_str())?,
             interest_state: InterestState::try_from(interest_state.as_str())?,
             preparation_state: PreparationState::try_from(preparation_state.as_str())?,
@@ -210,7 +330,8 @@ impl<'a> JobPostingService<'a> {
 
     async fn sources_for_posting(&self, posting_id: i64) -> Result<Vec<JobPostingSource>, String> {
         let rows = sqlx::query(
-            "SELECT id, source_key, source_name_snapshot, url, first_seen_at, last_seen_at
+            "SELECT id, source_key, source_name_snapshot, url, posting_meta_json,
+                    first_seen_at, last_seen_at
              FROM job_posting_sources
              WHERE posting_id = ?1
              ORDER BY id",
@@ -235,12 +356,62 @@ fn queue_condition(queue_id: JobPostingQueueId) -> Option<&'static str> {
     }
 }
 
+fn detail_capable_sources(
+    posting: &JobPosting,
+    snapshot: &SourceRegistrySnapshot,
+) -> Vec<(
+    JobPostingSource,
+    crate::source::registry::ResolvedSourceExecutionPlan,
+)> {
+    let mut candidates = Vec::new();
+    if let Some(primary_source) = &posting.primary_source {
+        push_detail_capable_source(&mut candidates, primary_source, snapshot);
+    }
+
+    for source in &posting.sources {
+        if posting
+            .primary_source
+            .as_ref()
+            .is_some_and(|primary_source| primary_source.id == source.id)
+        {
+            continue;
+        }
+        push_detail_capable_source(&mut candidates, source, snapshot);
+    }
+
+    candidates
+}
+
+fn push_detail_capable_source(
+    candidates: &mut Vec<(
+        JobPostingSource,
+        crate::source::registry::ResolvedSourceExecutionPlan,
+    )>,
+    source: &JobPostingSource,
+    snapshot: &SourceRegistrySnapshot,
+) {
+    if let Ok(execution_plan) = snapshot.resolve_source(&source.source_key) {
+        if execution_plan.posting_detail().is_some() {
+            candidates.push((source.clone(), execution_plan));
+        }
+    }
+}
+
 fn source_from_row(row: SqliteRow) -> Result<JobPostingSource, String> {
+    let id = row.try_get("id").map_err(db_error)?;
+    let posting_meta_json = row
+        .try_get::<String, _>("posting_meta_json")
+        .map_err(db_error)?;
+    let posting_meta = serde_json::from_str(&posting_meta_json).map_err(|error| {
+        format!("invalid posting_meta_json for job posting source {id}: {error}")
+    })?;
+
     Ok(JobPostingSource {
-        id: row.try_get("id").map_err(db_error)?,
+        id,
         source_key: row.try_get("source_key").map_err(db_error)?,
         source_name_snapshot: row.try_get("source_name_snapshot").map_err(db_error)?,
         url: row.try_get("url").map_err(db_error)?,
+        posting_meta,
         first_seen_at: row.try_get("first_seen_at").map_err(db_error)?,
         last_seen_at: row.try_get("last_seen_at").map_err(db_error)?,
     })
