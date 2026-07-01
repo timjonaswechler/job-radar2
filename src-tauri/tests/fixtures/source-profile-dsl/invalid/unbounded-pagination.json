@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "key": "unbounded_profile",
+  "name": "Unbounded Profile",
+  "kind": "generic",
+  "support": { "level": "experimental" },
+  "accessPaths": [
+    {
+      "key": "json_feed",
+      "name": "JSON feed",
+      "postingDiscovery": {
+        "strategies": [
+          {
+            "key": "json_api",
+            "fetch": {
+              "mode": "http",
+              "url": "https://example.test/jobs",
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "json_path", "jsonPath": "$.jobs" },
+            "pagination": {
+              "type": "page",
+              "pageParam": "page"
+            },
+            "extract": {
+              "fields": {
+                "title": { "type": "json_path", "jsonPath": "$.title" },
+                "company": { "type": "const", "value": "Example" },
+                "url": { "type": "json_path", "jsonPath": "$.url" }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

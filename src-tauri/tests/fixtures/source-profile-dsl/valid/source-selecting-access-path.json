@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "key": "example_source",
+  "name": "Example Source",
+  "status": "active",
+  "sourceConfig": {
+    "feedUrl": "https://example.test/jobs.json",
+    "language": "en"
+  },
+  "selectedAccessPath": {
+    "type": "profile_access_path",
+    "profileKey": "example_jobs",
+    "pathKey": "json_feed"
+  },
+  "sourceOverrides": {
+    "strategyOverrides": [
+      {
+        "step": "postingDiscovery",
+        "strategyKey": "json_api",
+        "acceptWhen": {
+          "minResults": 0
+        }
+      }
+    ]
+  }
+}
