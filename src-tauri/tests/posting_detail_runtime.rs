@@ -241,6 +241,63 @@ fn compiled_posting_detail_runtime_reports_missing_empty_and_too_short_descripti
 }
 
 #[test]
+fn compiled_posting_detail_runtime_extracts_xml_description_text() {
+    let plan = compiled_posting_detail_plan(
+        "{{posting:url}}",
+        json!({ "type": "xml" }),
+        json!({ "type": "xml_element", "element": "job" }),
+        json!({ "type": "xml_text", "textPath": "description", "cardinality": "one" }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.xml", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/42.xml",
+        r#"<jobs><job><description>First paragraph.
+
+Second paragraph.</description></job></jobs>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("First paragraph. Second paragraph.".to_string())
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_extracts_html_description_text_with_css() {
+    let plan = compiled_posting_detail_plan(
+        "{{posting:url}}",
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "main.job" }),
+        json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.html", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/42.html",
+        r#"<main class="job"><section class="description"><p>First paragraph.</p><p>Second paragraph.</p></section></main>"#.to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("First paragraph. Second paragraph.".to_string())
+    );
+}
+
+#[test]
 fn compiled_posting_detail_runtime_reports_fetch_parse_extract_and_missing_context_failures() {
     let plan = compiled_json_posting_detail_plan(
         "{{posting:url}}",
@@ -360,6 +417,24 @@ fn compiled_json_posting_detail_plan(
     captures: Option<Value>,
     min_description_length: Option<u64>,
 ) -> SourceExecutionPlan {
+    compiled_posting_detail_plan(
+        fetch_url,
+        json!({ "type": "json" }),
+        json!({ "type": "document" }),
+        description_text,
+        captures,
+        min_description_length,
+    )
+}
+
+fn compiled_posting_detail_plan(
+    fetch_url: &str,
+    parse: Value,
+    select: Value,
+    description_text: Value,
+    captures: Option<Value>,
+    min_description_length: Option<u64>,
+) -> SourceExecutionPlan {
     let mut strategy = json!({
         "key": "detail_api",
         "fetch": {
@@ -368,8 +443,8 @@ fn compiled_json_posting_detail_plan(
             "url": fetch_url,
             "timeoutMs": 10000
         },
-        "parse": { "type": "json" },
-        "select": { "type": "document" },
+        "parse": parse,
+        "select": select,
         "extract": { "fields": { "descriptionText": description_text } }
     });
     if let Some(captures) = captures {
