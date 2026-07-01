@@ -139,6 +139,44 @@ fn compiled_posting_detail_runtime_applies_explicit_text_transforms() {
 }
 
 #[test]
+fn compiled_posting_detail_runtime_combines_description_text_parts() {
+    let plan = compiled_json_posting_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "combine",
+            "join": "\n\n",
+            "parts": [
+                { "value": { "type": "json_path", "jsonPath": "$.intro", "cardinality": "one" } },
+                { "value": { "type": "json_path", "jsonPath": "$.body", "cardinality": "one" } },
+                { "value": { "type": "json_path", "jsonPath": "$.footer", "cardinality": "one" }, "optional": true }
+            ],
+            "transforms": [{ "type": "normalize_whitespace" }]
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/42.json",
+        json!({
+            "intro": "About the role.",
+            "body": "Build reliable DSL runtimes."
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("About the role. Build reliable DSL runtimes.".to_string())
+    );
+}
+
+#[test]
 fn compiled_posting_detail_runtime_reports_missing_empty_and_too_short_description_diagnostics() {
     let empty_plan = compiled_json_posting_detail_plan(
         "{{posting:url}}",

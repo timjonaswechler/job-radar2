@@ -8,7 +8,7 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::{
-            extract::{Cardinality, FieldExpression, ListFieldExpression},
+            extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression},
             transform::Transform,
             HttpMethod, ParseType, Select,
         },
@@ -839,10 +839,26 @@ fn raw_field_values<'a>(
                 }
             }
         },
+        FieldExpression::Combine {
+            parts,
+            join,
+            cardinality,
+            transforms,
+        } => combine_field_values(
+            item,
+            source_config,
+            parts,
+            join.as_deref().unwrap_or_default(),
+            path,
+            strategy_key,
+            item_index,
+            diagnostics,
+        )
+        .into_raw(*cardinality, transforms.as_ref()),
         _ => {
             diagnostics.push(runtime_error(
                 "unsupported_field_expression",
-                "postingDiscovery runtime slice supports const, template, sourceConfig, itemField, and JSONPath field expressions",
+                "postingDiscovery runtime slice supports const, template, sourceConfig, itemField, JSONPath, and combine field expressions",
                 path,
                 strategy_key,
                 json!({ "itemIndex": item_index }),
@@ -854,6 +870,67 @@ fn raw_field_values<'a>(
                 transforms: None,
             }
         }
+    }
+}
+
+fn combine_field_values(
+    item: &Value,
+    source_config: &SourceConfig,
+    parts: &[CombinePart],
+    join: &str,
+    path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> JsonStringsResult {
+    let mut values = Vec::new();
+    for (index, part) in parts.iter().enumerate() {
+        let part_path = format!("{path}/parts/{index}/value");
+        match evaluate_string_field(
+            item,
+            source_config,
+            &part.value,
+            &part_path,
+            strategy_key,
+            item_index,
+            diagnostics,
+        ) {
+            FieldEvaluation {
+                value: Some(value),
+                failed: false,
+            } => values.push(value),
+            FieldEvaluation {
+                value: None,
+                failed: false,
+            } if part.optional.unwrap_or(false) => {}
+            FieldEvaluation {
+                value: None,
+                failed: false,
+            } => {
+                diagnostics.push(runtime_error(
+                    "required_combine_part_missing",
+                    "Required combine part did not resolve to a non-empty string",
+                    &part_path,
+                    strategy_key,
+                    json!({ "itemIndex": item_index, "partIndex": index }),
+                ));
+                return JsonStringsResult {
+                    values: Vec::new(),
+                    failed: true,
+                };
+            }
+            FieldEvaluation { failed: true, .. } => {
+                return JsonStringsResult {
+                    values: Vec::new(),
+                    failed: true,
+                };
+            }
+        }
+    }
+
+    JsonStringsResult {
+        values: vec![values.join(join)],
+        failed: false,
     }
 }
 
