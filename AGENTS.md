@@ -1,35 +1,41 @@
-# Agent Instructions
+# AGENTS.md
 
-## UI and Design Work
+## Projektüberblick
 
-Before changing UI, read:
+Job Radar ist eine lokale Tauri-2-Desktop-App für wiederholbare Jobsuchen: Quellen beschreiben, Suchanfragen speichern, Suchläufe ausführen und Job-Postings zusammenführen.
 
-- `docs/design/README.md`
-- `docs/design/product-audience.md`
-- `docs/design/information-architecture.md`
-- `docs/design/ui-data-rules.md`
-- `docs/design/domain-ui-contract.md`
-- `docs/design/visual-direction.md`
-- `docs/design/inspiration.md`
+- Frontend: React/TypeScript/Vite in `src/`.
+- Backend: Rust/Tauri/SQLite in `src-tauri/src/`.
+- UI: shadcn/Base-UI-nahe Komponenten in `src/components/ui/` und `src/components/reui/`.
+- Rust-Crate-Root: `src-tauri/`.
 
-Core rules:
+## Wichtige Einstiegspunkte
 
-- Do not mirror backend schemas directly into the UI.
-- Keep UI states semantically faithful to backend/domain states; derived labels need explicit source data and derivation.
-- Show user-facing decision data first; put technical data behind progressive disclosure.
-- Prefer Data Grid/List + Detail Panel patterns for comparable work items.
-- Use Timeline/Activity patterns for chronological events.
-- Use Modals only for blocking or complex actions; use Popovers/Dropdowns for secondary actions.
-- Every new screen needs Empty, Loading, Error, Disabled, Hover/Focus states.
-- Use shadcn/reui components and semantic Tailwind tokens.
-- Do not use raw colors like `text-lime-500`, `bg-blue-50`, or arbitrary brand colors in product UI.
-- Treat `primary` as a true main-action color, not a general decorative brand color.
-- Use brand/accent color sparingly for small highlights, glows, active markers, and selected states.
+- `README.md` — Produktüberblick, lokale Befehle, Repo-Orientierung.
+- `CONTEXT.md` — kanonische Domain-Sprache; vor Begriffsumbenennungen lesen.
+- `docs/source-registry-json-model.md` — Source-/Source-Profile-Dokumentmodell.
+- `docs/prd/declarative-source-profile-dsl.md` — Zielbild der deklarativen Profile-DSL.
+- `docs/adr/` — Architekturentscheidungen.
+- `docs/dev-search-run-smoke.md` — manueller Live-Smoke für Suchläufe.
+- `handoff/` — laufende oder frühere Übergabepläne.
 
-For UI generated from backend data, create a visibility matrix before implementation:
+## Befehle
 
-```txt
-Field | Visible to user? | Why? | Disclosure level
+```bash
+npm run tauri -- dev                         # App starten
+npm run build                                # Frontend type-checken und bauen
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run smoke:search-run                     # manueller, netzwerkabhängiger Smoke
 ```
 
-Fields without a clear user-facing purpose stay hidden, advanced, or debug-only.
+## Arbeitsregeln
+
+- Domain-Begriffe aus `CONTEXT.md` verwenden: z. B. Source, Source Profile, Access Path, Search Request, Search Run.
+- Suchkriterien gehören zur Search Request, nicht in Source Config oder Source Profile.
+- Die Profile DSL bleibt deklarative Konfiguration; keine profile-spezifischen Rust-Sonderfälle einbauen.
+- Strategien sollen begrenzt sein und strukturierte Diagnostics liefern.
+- Diese Datei kurz halten: Details verlinken statt duplizieren.
+
+## Rust-Tests
+
+Für Logik, die über die öffentliche Crate-API sichtbar ist, bevorzugt Integration Tests als externe Tests unter `src-tauri/tests/*.rs` schreiben. In-Modul-Tests mit `#[cfg(test)]` nur für private Helper, enge Edge-Cases oder wenn bewusst Implementierungsdetails getestet werden.
