@@ -23,6 +23,11 @@ pub use profile_dsl::execution_plan::capabilities::{
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
+pub use profile_dsl::runtime::{
+    execute_posting_discovery, execute_posting_discovery_with_fetcher, PostingDiscoveryCandidate,
+    PostingDiscoveryExecutionResult, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
+    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ReqwestPostingDiscoveryFetcher,
+};
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source_profile::documents::SourceProfileDocument;
