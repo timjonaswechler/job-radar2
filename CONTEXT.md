@@ -47,12 +47,16 @@ The declarative JSON language used to describe Source Profiles, Access Paths, de
 _Avoid_: script, plugin API, scraper code, profile-specific Rust
 
 **Profile Compiler**:
-The semantic validation and compilation step that turns Source Profile JSON plus Source Config and Source Overrides into a typed Execution Plan. The compiler checks capability compatibility, boundedness, forbidden secrets, override validity, template variables, support metadata, and executable strategy shape.
-_Avoid_: JSON Schema only, direct execution, runtime guessing
+The semantic validation and compilation step that turns a concrete Source, its selected Source Profile Access Path or Source-owned Access Path, Source Config, and Source Overrides into a typed Execution Plan. The compiler checks capability compatibility, boundedness, forbidden secrets, override validity, template variables, support metadata, and executable strategy shape.
+_Avoid_: JSON Schema only, direct execution, runtime guessing, Rust compiler
 
 **Execution Plan**:
 The typed, validated plan produced by the Profile Compiler and executed by the declarative runtime. Runtime execution should use the Execution Plan rather than interpreting raw profile JSON directly.
 _Avoid_: raw profile document, adapter config, unvalidated JSON
+
+**Structured Diagnostic**:
+A machine-readable issue emitted by schema validation, registry loading, the Profile Compiler, source validation, detection, or runtime execution. A Structured Diagnostic has a category, stable code, human-readable message, severity, JSON Pointer path, optional strategy key, and optional machine-readable details. Diagnostic categories include `schema`, `registry`, `compiler`, `runtime`, and `source_validation`. The `compiler` category means diagnostics emitted while compiling a concrete Source and its selected Source Profile/Access Path/Source Config/Source Overrides into an Execution Plan; it does not refer to the Rust compiler.
+_Avoid_: free-form error string only, UI-only copy, Rust compiler diagnostic
 
 **Capability**:
 A generic DSL behavior that can be reused across Source Profiles, such as fetch, parse, select, extract, transform, pagination, fallback, browser interaction, validation, or diagnostics. New capabilities may require runtime code, but they must be generic and not tied to one ATS.
