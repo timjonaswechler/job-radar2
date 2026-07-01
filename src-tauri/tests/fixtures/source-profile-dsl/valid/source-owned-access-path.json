@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "key": "owned_source",
+  "name": "Owned Source",
+  "status": "draft",
+  "sourceConfig": {
+    "startUrl": "https://example.test/careers"
+  },
+  "sourceSupport": {
+    "level": "experimental",
+    "summary": "Inline schema-only Source-owned Access Path fixture."
+  },
+  "selectedAccessPath": {
+    "type": "source_owned_access_path",
+    "key": "html_page",
+    "name": "HTML page",
+    "sourceConfigSchema": {
+      "type": "object",
+      "required": ["startUrl"],
+      "properties": {
+        "startUrl": { "type": "string" }
+      }
+    },
+    "postingDiscovery": {
+      "strategies": [
+        {
+          "key": "html_cards",
+          "fetch": {
+            "mode": "browser",
+            "url": "{{sourceConfig:startUrl}}",
+            "timeoutMs": 30000,
+            "waits": [
+              {
+                "type": "selector",
+                "selector": ".job-card",
+                "timeoutMs": 10000
+              }
+            ],
+            "interactions": [
+              {
+                "type": "click_if_visible",
+                "selector": "button.load-more",
+                "maxCount": 2,
+                "waitAfterMs": 500
+              }
+            ]
+          },
+          "parse": { "type": "html" },
+          "select": {
+            "type": "css",
+            "selector": ".job-card"
+          },
+          "extract": {
+            "fields": {
+              "title": {
+                "type": "css_text",
+                "selector": ".job-title",
+                "cardinality": "one"
+              },
+              "company": {
+                "type": "const",
+                "value": "Owned Example"
+              },
+              "url": {
+                "type": "css_attribute",
+                "selector": "a",
+                "attribute": "href",
+                "cardinality": "one"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

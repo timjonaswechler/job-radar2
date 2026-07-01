@@ -39,3 +39,4 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"
+jsonschema = { version = "0.46.8", default-features = false }

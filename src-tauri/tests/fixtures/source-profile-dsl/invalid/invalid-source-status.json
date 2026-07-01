@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "key": "invalid_status_source",
+  "name": "Invalid Status Source",
+  "status": "invalid",
+  "sourceConfig": {
+    "feedUrl": "https://example.test/jobs.json"
+  },
+  "selectedAccessPath": {
+    "type": "profile_access_path",
+    "profileKey": "example_jobs",
+    "pathKey": "json_feed"
+  }
+}

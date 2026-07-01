@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "key": "source_specific_pascal_source",
+  "name": "SourceSpecific Source",
+  "status": "draft",
+  "sourceConfig": {},
+  "sourceSupport": { "level": "experimental" },
+  "selectedAccessPath": {
+    "type": "SourceSpecific",
+    "key": "old_inline_path",
+    "name": "Old inline path",
+    "postingDiscovery": {
+      "strategies": [
+        {
+          "key": "json_api",
+          "fetch": {
+            "mode": "http",
+            "url": "https://example.test/jobs",
+            "timeoutMs": 10000
+          },
+          "parse": { "type": "json" },
+          "select": { "type": "json_path", "jsonPath": "$.jobs" },
+          "extract": {
+            "fields": {
+              "title": { "type": "json_path", "jsonPath": "$.title" },
+              "company": { "type": "const", "value": "Example" },
+              "url": { "type": "json_path", "jsonPath": "$.url" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

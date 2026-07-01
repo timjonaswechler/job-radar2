@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 2,
+  "key": "example_jobs",
+  "name": "Example Jobs",
+  "kind": "generic",
+  "description": "Simple fixture profile for schema validation.",
+  "support": {
+    "level": "experimental",
+    "summary": "Schema-only fixture coverage.",
+    "evidence": [
+      {
+        "kind": "schema_check",
+        "reference": "src-tauri/tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "summary": "Validates the minimal reusable Source Profile shape."
+      }
+    ]
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["feedUrl"],
+    "properties": {
+      "feedUrl": { "type": "string" }
+    },
+    "additionalProperties": false
+  },
+  "accessPaths": [
+    {
+      "key": "json_feed",
+      "name": "JSON feed",
+      "sourceConfigSchema": {
+        "type": "object",
+        "properties": {
+          "language": { "type": "string" }
+        }
+      },
+      "postingDiscovery": {
+        "strategies": [
+          {
+            "key": "json_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{sourceConfig:feedUrl}}",
+              "headers": {
+                "accept": "application/json"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
+            "pagination": {
+              "type": "page",
+              "pageParam": "page",
+              "firstPage": 1,
+              "limits": {
+                "maxRequests": 3,
+                "maxItems": 100
+              }
+            },
+            "extract": {
+              "fields": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one",
+                  "transforms": [{ "type": "trim" }]
+                },
+                "company": {
+                  "type": "const",
+                  "value": "Example GmbH"
+                },
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                },
+                "locations": {
+                  "type": "json_path",
+                  "jsonPath": "$.locations",
+                  "cardinality": "all",
+                  "transforms": [
+                    { "type": "trim" },
+                    { "type": "dedupe" }
+                  ]
+                },
+                "postingMeta": {
+                  "jobId": {
+                    "type": "json_path",
+                    "jsonPath": "$.id",
+                    "cardinality": "one"
+                  }
+                }
+              }
+            },
+            "acceptWhen": {
+              "requiredFields": ["title", "company", "url"],
+              "minResults": 1
+            }
+          }
+        ]
+      },
+      "postingDetail": {
+        "strategies": [
+          {
+            "key": "detail_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{postingMeta:jobId}}",
+              "headers": {
+                "accept": "application/json"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "json_path",
+                  "jsonPath": "$.descriptionHtml",
+                  "cardinality": "one",
+                  "transforms": [
+                    { "type": "html_to_text" },
+                    { "type": "normalize_whitespace" }
+                  ]
+                }
+              }
+            },
+            "acceptWhen": {
+              "minDescriptionLength": 20
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
