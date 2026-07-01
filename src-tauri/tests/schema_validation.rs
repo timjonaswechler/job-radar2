@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use jsonschema::{Draft, Registry};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const SCHEMA_FILES: &[&str] = &[
     "src/schema/source-profile.schema.json",
@@ -97,6 +97,38 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
     );
 }
 
+#[test]
+fn structured_diagnostics_schema_matches_shared_contract() {
+    let harness = SchemaHarness::new();
+
+    harness.assert_diagnostics_valid(json!([
+        {
+            "category": "compiler",
+            "code": "missing_template_variable",
+            "message": "Source Config is missing required template variable tenant",
+            "severity": "error",
+            "path": "",
+            "strategyKey": "json_api",
+            "details": {
+                "missingVariable": "tenant",
+                "requiredBy": "fetch.url"
+            }
+        }
+    ]));
+
+    harness.assert_diagnostics_invalid(
+        json!([
+            {
+                "code": "missing_template_variable",
+                "message": "Source Config is missing required template variable tenant",
+                "severity": "error",
+                "path": "/sourceConfig/tenant"
+            }
+        ]),
+        &["category"],
+    );
+}
+
 struct SchemaHarness {
     manifest_dir: &'static str,
     registry: Registry<'static>,
@@ -159,14 +191,53 @@ impl SchemaHarness {
         }
     }
 
+    fn assert_diagnostics_valid(&self, diagnostics: Value) {
+        let errors = self.validate_instance(
+            "src/schema/profile-dsl/diagnostics.schema.json",
+            json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
+            diagnostics,
+        );
+        assert!(
+            errors.is_empty(),
+            "expected diagnostics to validate, but got:\n{}",
+            errors.join("\n")
+        );
+    }
+
+    fn assert_diagnostics_invalid(&self, diagnostics: Value, expected_fragments: &[&str]) {
+        let errors = self.validate_instance(
+            "src/schema/profile-dsl/diagnostics.schema.json",
+            json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
+            diagnostics,
+        );
+        assert!(
+            !errors.is_empty(),
+            "expected diagnostics to fail validation"
+        );
+
+        let joined_errors = errors.join("\n");
+        for expected_fragment in expected_fragments {
+            assert!(
+                joined_errors.contains(expected_fragment),
+                "expected diagnostic validation errors to mention `{expected_fragment}`, got:\n{joined_errors}"
+            );
+        }
+    }
+
     fn validate(&self, entrypoint: SchemaEntrypoint, fixture_path: &str) -> Vec<String> {
-        let schema = read_json(self.manifest_dir, entrypoint.path());
+        let schema_path = entrypoint.path();
+        let schema = read_json(self.manifest_dir, schema_path);
         let instance = read_json(self.manifest_dir, fixture_path);
+
+        self.validate_instance(schema_path, schema, instance)
+    }
+
+    fn validate_instance(&self, schema_path: &str, schema: Value, instance: Value) -> Vec<String> {
         let validator = jsonschema::options()
             .with_draft(Draft::Draft202012)
             .with_registry(&self.registry)
             .build(&schema)
-            .unwrap_or_else(|error| panic!("schema {} should compile: {error}", entrypoint.path()));
+            .unwrap_or_else(|error| panic!("schema {schema_path} should compile: {error}"));
 
         validator
             .iter_errors(&instance)

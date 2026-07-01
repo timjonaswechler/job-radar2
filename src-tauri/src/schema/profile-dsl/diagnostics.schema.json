@@ -11,18 +11,22 @@
       "type": "string",
       "enum": ["schema", "registry", "compiler", "runtime", "source_validation"]
     },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^($|/)"
+    },
     "diagnostic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "message", "severity", "path"],
+      "required": ["category", "code", "message", "severity", "path"],
       "properties": {
+        "category": { "$ref": "#/$defs/diagnosticCategory" },
         "code": { "$ref": "common.schema.json#/$defs/technicalKey" },
         "message": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
         "severity": { "$ref": "#/$defs/severity" },
-        "category": { "$ref": "#/$defs/diagnosticCategory" },
-        "path": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/jsonPointer" },
         "strategyKey": { "$ref": "common.schema.json#/$defs/technicalKey" },
-        "context": { "$ref": "common.schema.json#/$defs/jsonObject" }
+        "details": { "$ref": "common.schema.json#/$defs/jsonObject" }
       }
     },
     "diagnostics": {
