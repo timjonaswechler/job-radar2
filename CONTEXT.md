@@ -1,101 +1,135 @@
 # Job Radar
 
-Job Radar helps users observe job sources and prepare job discovery across different recruiting platforms and career systems.
+Job Radar helps users observe job sources, discover job postings across recruiting platforms and career systems, and manage postings as work items.
 
 ## Language
 
-**Quelle**:
-A saved, repeatable source configuration that tells Job Radar which concrete endpoint or entry point job postings may be retrieved or received from. A source may use a reusable profile and one selected access path from that profile or, as a fallback, source-specific extraction. A source does not contain search criteria such as keywords, job roles, location, region, or country; those belong to a search request.
-_Avoid_: Plattform, Portal, Connector, Ad-hoc-Suche, Suchprofil, Quellentyp
+Primary architecture and code vocabulary is English. German UI copy may use translated terms later, but Source/Profile DSL work uses the canonical English terms below.
 
-**Quellenkonfiguration**:
-The stable access configuration of a source, interpreted by the source's adapter. It does not include search criteria.
-_Avoid_: Suchkonfiguration, Suchprofil, Config
+**Source**:
+A saved, repeatable source configuration that tells Job Radar which concrete endpoint or entry point job postings may be discovered from. A Source either selects one Access Path from a reusable Source Profile or owns one inline Source-owned Access Path. A Source does not contain search criteria such as keywords, roles, preferred locations, countries, radius, include rules, or exclude rules; those belong to a Search Request.
+_Avoid_: Quelle, platform, portal, connector, search profile, source type
 
-**Zugriffspfad**:
-The profile-owned or source-specific execution description that tells Job Radar which technical access class retrieves source data, such as HTTP endpoint inventory, sitemap inventory, browser-rendered inventory, or query-parameterized portal access. A reusable source profile may offer multiple access paths. For sources that use a reusable profile, each allowed access path belongs to that profile; for sources with source-specific extraction, the access path belongs to that source-specific extraction.
-_Avoid_: Quelle, Quellenkonfiguration, Suchanfrage, Runtime-Haken
+**Source Config**:
+The stable access configuration of a Source, validated against the selected Source Profile and Access Path. Examples include host, tenant, site, board slug, language, feed URL, sitemap URL, or start URL. Source Config is normal configuration, not behavior override, and it does not contain search criteria.
+_Avoid_: Quellenkonfiguration, search config, search profile, source overrides
 
-**Gewählter Zugriffspfad**:
-The one access path selected by a concrete source from the access paths allowed by its reusable source profile. A source may not freely choose a runtime outside its profile; it only selects which profile-defined access path is used for this specific endpoint.
-_Avoid_: Runtime-Haken, Browser-Schalter, Adapterauswahl
+**Source Overrides**:
+Controlled Source-specific behavior changes applied to a selected reusable Source Profile Access Path before compiling the final Execution Plan. Source Overrides are for exceptional differences such as a tenant-specific selector, JSON path, transform, fetch detail, or validation threshold. They do not change the selected profile/path, do not alter the Source Config schema, and do not replace Source Config.
+_Avoid_: source config, plugin code, profile fork, arbitrary patch
 
-**Quellenspezifische Extraktion**:
-An interpretation rule set that belongs to exactly one source because no reusable profile describes that website or website family. It may explain how source data is accessed and how job postings and their fields are read for that source, but it is not a reusable profile and does not contain search criteria.
-_Avoid_: Quellenprofil, Browserprofil, Systemprofil, Suchprofil, Quellenkonfiguration
+**Source Profile**:
+A reusable declarative understanding of a source class, recruiting system, career-system family, website, or website family. A Source Profile describes how matching Sources can be detected, which stable Source Config they need, which Access Paths they offer, and how postings are discovered and interpreted. A Source Profile is not tied to one individual Source and is not a runtime adapter.
+_Avoid_: Quellenprofil, adapter, search profile, heuristic, company adapter, hardcoded portal
 
-**Adapter**:
-The technical runtime that knows how to execute a class of source access, such as declarative HTTP, declarative sitemap, declarative browser, or built-in job portal search. An adapter is not the recruiting system itself; reusable source-specific knowledge belongs in source profiles.
-_Avoid_: Plugin, Scraper, Crawler, Quellentyp, Recruiting-System
+**Built-in Source Profile**:
+A Source Profile versioned with the application and embedded into the app bundle. A custom profile may not override a built-in profile key.
+_Avoid_: loose external built-in file, database-owned built-in profile
 
-**Quellenprofil**:
-A reusable declarative understanding of a source class, recruiting system, career-system family, website, or website family. It describes how matching sources can be detected, which stable source configuration they need, which access path retrieves source data, and how retrieved data is interpreted as job postings. It is not tied to one individual source.
-_Avoid_: Adapter, Quelle, Suchprofil, Heuristik, Firmenadapter, hardcodiertes Portal
+**Custom Source Profile**:
+A user- or agent-authored Source Profile stored in the app data directory. It uses the same DSL, schema, compiler, and validation rules as built-in profiles. It may not use a key that collides with a built-in Source Profile.
+_Avoid_: built-in override, weaker custom model, runtime plugin
 
-**Eingebautes Quellenprofil**:
-A source profile that is versioned in the repository under `source-profiles/builtin/*.json` and embedded into the application bundle. The installed app must not depend on loose external built-in files.
-_Avoid_: externe Built-in-Datei, nur in der DB gespeichertes Profilwissen
+**Access Path**:
+A selectable profile-owned execution variant that describes how a Source can discover postings and load posting details through the declarative Profile DSL. An Access Path defines Source Config requirements and DSL strategies such as `postingDiscovery` and `postingDetail`; it does not select a runtime adapter.
+_Avoid_: Zugriffspfad, adapter key, browser switch, runtime hook
 
-**Custom-Quellenprofil**:
-A user/runtime source profile stored as JSON in the OS app data directory under `source-profiles/*.json`. It may not override a built-in key.
-_Avoid_: Repo-Community-Ordner als Laufzeitquelle, Built-in-Override
+**Selected Access Path**:
+The one Access Path selected by a concrete Source. A Source either selects a reusable Source Profile Access Path or owns one inline Source-owned Access Path; it does not combine multiple Access Paths.
+_Avoid_: adapter selection, runtime selection, profile mix
 
-**Profilerkennung**:
-The deterministic process that checks a submitted source entry point against valid source profiles. A source profile is valid when its profile definition can be loaded and passes runtime validation. A profile is detected only when all required technical checks pass and evidence can be shown. When a profile is detected, profile detection should also recommend the selected access path and source configuration for the concrete source. Profile detection may use direct HTTP checks first and browser-assisted analysis as a second phase, but using a browser during detection does not imply that the detected source must use a browser access path. If multiple profiles pass the result is ambiguous, and if none pass the source entry point is unsupported by reusable profiles.
-_Avoid_: Raten, Heuristik, Domain-Mapping, Confidence-Scoring
+**Source-owned Access Path**:
+An inline Access Path stored on exactly one Source when no reusable Source Profile fits. It uses the same declarative DSL capabilities as a profile Access Path, is not reusable, and is not considered during profile detection. It may later be promoted into a reusable Source Profile.
+_Avoid_: source-specific extraction, Quellenprofil, one-off profile, adapter
 
-**Browserbasierte Quelle**:
-A source inspected through rendered web pages rather than through a source-specific structured interface. It uses either a Quellenprofil with browser-based access or source-specific extraction to interpret the target website.
-_Avoid_: Headless-Quelle, Scraping-Quelle
+**Profile DSL**:
+The declarative JSON language used to describe Source Profiles, Access Paths, detection, posting discovery, posting detail loading, fallback strategies, extraction, transforms, bounded browser interactions, diagnostics, and support metadata. The DSL is configuration, not arbitrary code.
+_Avoid_: script, plugin API, scraper code, profile-specific Rust
 
-**Browser-Laufzeit**:
-The locally managed browser installation that Job Radar uses to inspect browser-based sources.
-_Avoid_: Systembrowser, Headless-Browser, Chromium-Download
+**Profile Compiler**:
+The semantic validation and compilation step that turns Source Profile JSON plus Source Config and Source Overrides into a typed Execution Plan. The compiler checks capability compatibility, boundedness, forbidden secrets, override validity, template variables, support metadata, and executable strategy shape.
+_Avoid_: JSON Schema only, direct execution, runtime guessing
 
-**Browserprofil** (historisch/abgelöst):
-A legacy specialization of Quellenprofil for a website or website family whose access or extraction depends on rendered web pages. It is superseded by Quellenprofil documents with browser-capable Zugriffspfade, or by source-specific extraction for one-off pages. Do not expose Browserprofil as an active public API or storage concept.
-_Avoid_: Scraping-Regel, Website-Adapter, Plattformtyp, quellenspezifische Extraktion
+**Execution Plan**:
+The typed, validated plan produced by the Profile Compiler and executed by the declarative runtime. Runtime execution should use the Execution Plan rather than interpreting raw profile JSON directly.
+_Avoid_: raw profile document, adapter config, unvalidated JSON
 
-**Profildefinition**:
-A declarative JSON description from which Job Radar can use or update a Quellenprofil. Validity is determined at runtime when the profile is loaded or used.
-_Avoid_: Scraping-Datei, Plugin-Datei, DB-Profil, Profilstatus, Profil-ID, Profil-Timestamp
+**Capability**:
+A generic DSL behavior that can be reused across Source Profiles, such as fetch, parse, select, extract, transform, pagination, fallback, browser interaction, validation, or diagnostics. New capabilities may require runtime code, but they must be generic and not tied to one ATS.
+_Avoid_: ATS adapter, profile-specific feature, special case
 
-**Arbeitsstatus**:
-The lifecycle state that indicates whether a managed item such as a source or search request is drafted, active, disabled, or invalid.
-_Avoid_: Enabled-Flag, Aktiv-Boolean, Quellstatus, Suchanfragenstatus, Profilstatus
+**Strategy**:
+A named, ordered execution option within `postingDiscovery` or `postingDetail`. Strategies can act as fallbacks; each strategy must be bounded and must produce diagnostics when it fails.
+_Avoid_: hidden fallback, unnamed branch, runtime guess
 
-**Suchanfrage**:
-A user-created, saved job-search intent that contains one or more search terms, optional location criteria such as location, region, country, and radius, and selects which saved sources Job Radar should use. A search request has an Arbeitsstatus; active requests may be used for automatic or planned search runs, while disabled requests are skipped there but may still be started manually.
-_Avoid_: Quelle, Profil, Suchlauf
+**Profile Detection**:
+The deterministic process that checks a submitted source entry point against valid Source Profiles and produces a Source Proposal. Detection may use HTTP and bounded browser probes, but browser use during detection does not imply that the selected Access Path uses browser fetch.
+_Avoid_: guessing, domain mapping, confidence-only scoring
 
-**Suchlauf**:
-A concrete execution of a search request at a specific time that produces current results. Search runs use the current saved request and do not create search-request versions or snapshots. One search run may use multiple selected sources and expose an outcome for those sources; it may be queued, running, completed, completed with errors, failed, or cancelled.
-_Avoid_: Suchanfrage, Quelle, Profil, Historie
+**Source Proposal**:
+The actionable result of Profile Detection. It includes the detected profile key, recommended Access Path key, proposed Source Config, key/name candidates, captures, evidence, support level, and diagnostics.
+_Avoid_: profile match only, unsupported guess
 
-**Quellenlauf**:
-The part of a search run that executes one selected source and exposes that source's outcome. A search run has one source run per selected source so that partial failures remain visible.
-_Avoid_: Suchlauf, Quelle
+**postingDiscovery**:
+The DSL step that discovers available postings from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies and returns normalized posting candidates with at least title, company, and URL. It may return locations, postingMeta, and descriptionText only when already available from discovery responses. It must not fetch every detail page just to populate descriptions.
+_Avoid_: inventory, crawling, postingDetail, Search Request criteria
 
-**Trefferregel**:
-The user-defined rule set of a search request that decides whether a retrieved job posting counts as a match. Job portals may apply search terms directly through their own search interface; source-inventory sources may require Job Radar to match locally, initially against the job title. A posting matches when at least one positive search term or expression matches.
-_Avoid_: Quelle, Suchlauf, Portal-Suche
+**postingDetail**:
+The lazy DSL step that loads detail fields for one concrete posting source occurrence. It can use the posting URL, Source Config, and postingMeta and may try multiple fallback strategies. In this DSL version it must support descriptionText extraction; additional canonical detail fields may be added later.
+_Avoid_: postingDiscovery, bulk detail fanout, inventory fields
 
-**Ausschlussregel**:
-The user-defined rule set of a search request that removes job postings from the match list after Trefferregeln have found them, regardless of which source produced the posting. Initially, exclusion rules apply to the job title, for example to remove postings containing terms such as CEO or internship. A posting is excluded when at least one exclusion term or expression matches.
-_Avoid_: Antipattern, Quelle, Suchlauf
+**postingMeta**:
+Hidden technical metadata captured during postingDiscovery for one posting source occurrence and used later by postingDetail. It is for source-local re-identifiers or detail-loading helpers such as jobId, externalPath, requisitionId, or detail API IDs. It is not user-facing metadata.
+_Avoid_: department, employment type, salary, remote mode, posted date, generic metadata
 
-**Stellenanzeige**:
-A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company + title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
-_Avoid_: Treffer, Quelle, Suchlauf
+**Support Level**:
+A declared robustness level for reusable profiles and source-owned access. Supported values are `verified`, `best_effort`, `experimental`, and `unsupported`. `verified` requires fixture evidence; `unsupported` may describe detection knowledge without executable Access Paths.
+_Avoid_: validity, status, confidence only
 
-**Stellenanzeigen-Queue**:
-A user-facing workflow slice for persisted job postings, derived from posting decision and application states. A queue helps users decide what needs attention next; it is not an additional storage lifecycle state.
-_Avoid_: Backend-Status, Tabellenfilter, Suchanfrage, Trefferliste
+**Validation State**:
+A derived state indicating whether a Source or profile can currently compile and execute. It is computed from schema, registry, compiler, and source validation diagnostics; it is not a persisted user status.
+_Avoid_: source status invalid, profile status
 
-**Stellenanzeigen-Inbox**:
-The Stellenanzeigen-Queue for postings that still need a user decision. Read-state indicators such as `Neu` and `Gelesen` can mark rows like unread/read mail, but they are not independent queues or hard-filtered lifecycle states.
-_Avoid_: Alle ungelesenen Anzeigen, Bewerbungsstatus, Archiv, Suchlauf-Inbox
+**Source Status**:
+The user-controlled lifecycle state of a Source: `draft`, `active`, or `disabled`. `invalid` is not a persisted Source Status; invalidity is a derived Validation State.
+_Avoid_: enabled flag, validation state, support level
 
-**Treffer**:
-The relationship that says a specific job posting matched a specific search request during a specific search run. The same job posting may be a Treffer for multiple search requests or search runs.
-_Avoid_: Stellenanzeige, Quelle
+**Browser Runtime**:
+The locally managed browser installation that Job Radar uses for browser fetch and bounded browser probes.
+_Avoid_: system browser, profile type, browser profile
+
+**Search Request**:
+A user-created, saved job-search intent containing search terms, optional location criteria, and selected Sources. Search criteria belong here, not in Source Config.
+_Avoid_: Source, profile, Search Run
+
+**Search Run**:
+A concrete execution of a Search Request at a specific time. A Search Run may include multiple Source Runs and may complete with errors when only some Sources fail.
+_Avoid_: Search Request, Source, run history
+
+**Source Run**:
+The part of a Search Run that executes one selected Source and exposes that Source's outcome. Source Runs make partial failures visible.
+_Avoid_: Search Run, Source
+
+**Match Rule**:
+The user-defined rule set of a Search Request that decides whether a discovered job posting counts as a match. For source-wide discovery, Job Radar initially applies matching locally after postingDiscovery.
+_Avoid_: Source, Source Config, portal query mapping
+
+**Exclusion Rule**:
+The user-defined rule set of a Search Request that removes postings from the match list after Match Rules have found them.
+_Avoid_: Source, Source Config, anti-pattern
+
+**Job Posting**:
+A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company and title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
+_Avoid_: match, Source, Search Run
+
+**Job Posting Queue**:
+A user-facing workflow slice for persisted Job Postings, derived from posting decision and application states. A queue helps users decide what needs attention next; it is not an additional storage lifecycle state.
+_Avoid_: backend status, table filter, Search Request, result list
+
+**Job Posting Inbox**:
+The Job Posting Queue for postings that still need a user decision. Read-state indicators can mark rows as unread/read, but they are not independent queues or hard-filtered lifecycle states.
+_Avoid_: all unread postings, application status, archive
+
+**Match**:
+The relationship that says a specific Job Posting matched a specific Search Request during a specific Search Run. The same Job Posting may be a Match for multiple Search Requests or Search Runs.
+_Avoid_: Job Posting, Source
