@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/common.schema.json",
+  "title": "Job Radar Profile DSL common definitions",
+  "$defs": {
+    "technicalKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_]*$",
+      "minLength": 1
+    },
+    "captureKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+      "minLength": 1
+    },
+    "jsonObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "jsonSchemaObject": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "templateString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceStatus": {
+      "type": "string",
+      "enum": ["draft", "active", "disabled"]
+    },
+    "supportLevel": {
+      "type": "string",
+      "enum": ["verified", "best_effort", "experimental", "unsupported"]
+    },
+    "supportMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": { "$ref": "#/$defs/supportLevel" },
+        "summary": { "$ref": "#/$defs/description" },
+        "knownIssues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/supportNote" }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/supportEvidence" }
+        }
+      }
+    },
+    "supportNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {
+        "message": { "$ref": "#/$defs/description" },
+        "scope": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "supportEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["fixture", "smoke", "manual_review", "schema_check"]
+        },
+        "reference": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/description" }
+      }
+    },
+    "canonicalPostingFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "company": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "url": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "locations": { "$ref": "extract.schema.json#/$defs/listFieldExpression" },
+        "postingMeta": {
+          "type": "object",
+          "additionalProperties": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+        },
+        "descriptionText": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+      }
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/fetch.schema.json",
+  "title": "Job Radar Profile DSL fetch definitions",
+  "$defs": {
+    "fetch": {
+      "oneOf": [
+        { "$ref": "#/$defs/httpFetch" },
+        { "$ref": "#/$defs/browserFetch" }
+      ]
+    },
+    "httpFetch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "url", "timeoutMs"],
+      "properties": {
+        "mode": { "const": "http" },
+        "method": { "type": "string", "enum": ["GET", "POST"] },
+        "url": { "$ref": "common.schema.json#/$defs/templateString" },
+        "headers": { "$ref": "#/$defs/publicHeaders" },
+        "body": { "$ref": "#/$defs/requestBody" },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
+    "publicHeaders": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^(accept|accept-language|content-type|user-agent|x-requested-with|referer)$"
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "requestBody": {
+      "oneOf": [
+        { "$ref": "#/$defs/jsonBody" },
+        { "$ref": "#/$defs/textBody" },
+        { "$ref": "#/$defs/formBody" }
+      ]
+    },
+    "jsonBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "json" },
+        "value": { "$ref": "common.schema.json#/$defs/jsonObject" }
+      }
+    },
+    "textBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "text" },
+        "value": { "$ref": "common.schema.json#/$defs/templateString" }
+      }
+    },
+    "formBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "fields"],
+      "properties": {
+        "type": { "const": "form" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/templateString" }
+        }
+      }
+    },
+    "browserFetch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "url", "timeoutMs"],
+      "properties": {
+        "mode": { "const": "browser" },
+        "url": { "$ref": "common.schema.json#/$defs/templateString" },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
+        "waits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/browserWait" }
+        },
+        "interactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/browserInteraction" }
+        }
+      }
+    },
+    "browserWait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "timeoutMs"],
+      "properties": {
+        "type": { "type": "string", "enum": ["selector", "network_idle"] },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
+    "browserInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector", "maxCount"],
+      "properties": {
+        "type": { "type": "string", "enum": ["click_if_visible", "click_until_gone"] },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "maxCount": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "waitAfterMs": { "type": "integer", "minimum": 0, "maximum": 60000 }
+      }
+    }
+  }
+}

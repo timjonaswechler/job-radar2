@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json",
+  "title": "Job Radar Profile DSL diagnostics",
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error"]
+    },
+    "diagnosticCategory": {
+      "type": "string",
+      "enum": ["schema", "registry", "compiler", "runtime", "source_validation"]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "severity", "path"],
+      "properties": {
+        "code": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "message": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "category": { "$ref": "#/$defs/diagnosticCategory" },
+        "path": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "strategyKey": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "context": { "$ref": "common.schema.json#/$defs/jsonObject" }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    }
+  }
+}

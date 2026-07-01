@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/select.schema.json",
+  "title": "Job Radar Profile DSL select definitions",
+  "$defs": {
+    "select": {
+      "oneOf": [
+        { "$ref": "#/$defs/directSelect" },
+        { "$ref": "#/$defs/jsonPathSelect" },
+        { "$ref": "#/$defs/xmlElementSelect" },
+        { "$ref": "#/$defs/xmlTextSelect" },
+        { "$ref": "#/$defs/cssSelect" },
+        { "$ref": "#/$defs/sitemapUrlSelect" }
+      ]
+    },
+    "directSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "document" }
+      }
+    },
+    "jsonPathSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "jsonPath"],
+      "properties": {
+        "type": { "const": "json_path" },
+        "jsonPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "xmlElementSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "element"],
+      "properties": {
+        "type": { "const": "xml_element" },
+        "element": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "xmlTextSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "textPath"],
+      "properties": {
+        "type": { "const": "xml_text" },
+        "textPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "cssSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "css" },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "sitemapUrlSelect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "sitemap_urls" },
+        "urlPattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "where": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/filter" }
+    },
+    "filter": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonEmptyFilter" },
+        { "$ref": "#/$defs/regexFilter" }
+      ]
+    },
+    "nonEmptyFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "field"],
+      "properties": {
+        "type": { "const": "non_empty" },
+        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+      }
+    },
+    "regexFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "field", "pattern"],
+      "properties": {
+        "type": { "const": "regex" },
+        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "pattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "captures": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/captureRule" }
+    },
+    "captureRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "pattern"],
+      "properties": {
+        "from": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "pattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

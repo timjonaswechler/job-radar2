@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source-profile.schema.json",
+  "title": "Job Radar Source Profile DSL document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "key", "name", "kind", "support", "accessPaths"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+    "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+    "kind": {
+      "type": "string",
+      "enum": ["recruiting_system", "job_portal", "website_family", "career_site", "generic"]
+    },
+    "description": { "$ref": "profile-dsl/common.schema.json#/$defs/description" },
+    "support": { "$ref": "profile-dsl/common.schema.json#/$defs/supportMetadata" },
+    "detect": { "$ref": "#/$defs/detection" },
+    "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonSchemaObject" },
+    "accessPaths": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/profileAccessPath" }
+    },
+    "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }
+  },
+  "$defs": {
+    "profileAccessPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "postingDiscovery"],
+      "properties": {
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "description": { "$ref": "profile-dsl/common.schema.json#/$defs/description" },
+        "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonSchemaObject" },
+        "knownIssues": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/supportNote" }
+        },
+        "postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },
+        "postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },
+        "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputUrlPatterns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inputUrlPattern" }
+        },
+        "recommendedAccessPathKey": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionEvidence" }
+        }
+      }
+    },
+    "inputUrlPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern"],
+      "properties": {
+        "pattern": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "captures": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/captureKey" }
+        }
+      }
+    },
+    "detectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["url", "http", "html", "browser"] },
+        "message": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "path": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

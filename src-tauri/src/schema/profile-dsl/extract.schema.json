@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/extract.schema.json",
+  "title": "Job Radar Profile DSL extract definitions",
+  "$defs": {
+    "cardinality": {
+      "type": "string",
+      "enum": ["one", "first", "optional", "all"]
+    },
+    "fieldExpression": {
+      "oneOf": [
+        { "$ref": "#/$defs/constExpression" },
+        { "$ref": "#/$defs/templateExpression" },
+        { "$ref": "#/$defs/sourceConfigExpression" },
+        { "$ref": "#/$defs/postingMetaExpression" },
+        { "$ref": "#/$defs/captureExpression" },
+        { "$ref": "#/$defs/itemFieldExpression" },
+        { "$ref": "#/$defs/jsonPathExpression" },
+        { "$ref": "#/$defs/xmlTextExpression" },
+        { "$ref": "#/$defs/xmlElementExpression" },
+        { "$ref": "#/$defs/cssTextExpression" },
+        { "$ref": "#/$defs/cssAttributeExpression" },
+        { "$ref": "#/$defs/combineExpression" }
+      ]
+    },
+    "listFieldExpression": {
+      "oneOf": [
+        { "$ref": "#/$defs/fieldExpression" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fieldExpression" }
+        }
+      ]
+    },
+    "baseOptions": {
+      "type": "object",
+      "properties": {
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "constExpression": {
+      "allOf": [
+        { "$ref": "#/$defs/baseOptions" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "const": "const" },
+            "value": { "type": ["string", "number", "boolean"] },
+            "cardinality": { "$ref": "#/$defs/cardinality" },
+            "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+          }
+        }
+      ]
+    },
+    "templateExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "template"],
+      "properties": {
+        "type": { "const": "template" },
+        "template": { "$ref": "common.schema.json#/$defs/templateString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "sourceConfigExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "source_config" },
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "postingMetaExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "posting_meta" },
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "captureExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "capture" },
+        "key": { "$ref": "common.schema.json#/$defs/captureKey" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "itemFieldExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "item_field" },
+        "key": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "jsonPathExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "jsonPath"],
+      "properties": {
+        "type": { "const": "json_path" },
+        "jsonPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "xmlTextExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "textPath"],
+      "properties": {
+        "type": { "const": "xml_text" },
+        "textPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "xmlElementExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "element"],
+      "properties": {
+        "type": { "const": "xml_element" },
+        "element": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "cssTextExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "const": "css_text" },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "cssAttributeExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector", "attribute"],
+      "properties": {
+        "type": { "const": "css_attribute" },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "attribute": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "combineExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "parts"],
+      "properties": {
+        "type": { "const": "combine" },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/combinePart" }
+        },
+        "join": { "type": "string" },
+        "cardinality": { "$ref": "#/$defs/cardinality" },
+        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" }
+      }
+    },
+    "combinePart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": { "$ref": "#/$defs/fieldExpression" },
+        "optional": { "type": "boolean" }
+      }
+    }
+  }
+}
