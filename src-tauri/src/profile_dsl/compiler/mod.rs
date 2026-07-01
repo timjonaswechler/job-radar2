@@ -1,8 +1,8 @@
 //! Profile Compiler for resolving concrete Sources into typed Execution Plans.
 //! The compiler performs semantic validation and intentionally performs no
 //! network, browser, parser, selector, extractor, transform, pagination, or
-//! runtime execution. Boundedness and security checks are handled by later
-//! compiler slices.
+//! runtime execution. It collects semantic, boundedness, and security
+//! diagnostics before producing executable plans.
 
 use serde::{Deserialize, Serialize};
 

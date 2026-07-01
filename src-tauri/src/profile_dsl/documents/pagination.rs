@@ -16,7 +16,8 @@ pub enum Pagination {
         page_size: Option<u64>,
         #[serde(rename = "totalPath", skip_serializing_if = "Option::is_none")]
         total_path: Option<String>,
-        limits: PaginationLimits,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        limits: Option<PaginationLimits>,
     },
     OffsetLimit {
         #[serde(rename = "offsetParam")]
@@ -28,14 +29,16 @@ pub enum Pagination {
         limit: u64,
         #[serde(rename = "totalPath", skip_serializing_if = "Option::is_none")]
         total_path: Option<String>,
-        limits: PaginationLimits,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        limits: Option<PaginationLimits>,
     },
     Cursor {
         #[serde(rename = "cursorParam")]
         cursor_param: String,
         #[serde(rename = "nextCursorPath")]
         next_cursor_path: String,
-        limits: PaginationLimits,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        limits: Option<PaginationLimits>,
     },
     Sitemap {
         #[serde(
@@ -45,14 +48,16 @@ pub enum Pagination {
         child_sitemap_selector: Option<Select>,
         #[serde(rename = "postingUrlSelector", skip_serializing_if = "Option::is_none")]
         posting_url_selector: Option<Select>,
-        limits: PaginationLimits,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        limits: Option<PaginationLimits>,
     },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PaginationLimits {
-    pub max_requests: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_requests: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_items: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
