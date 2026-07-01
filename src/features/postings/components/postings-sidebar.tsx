@@ -15,7 +15,7 @@ import {
   type PostingQueueId,
   type QueueCounts,
 } from "@/features/postings/postings-view-model";
-import { usePostingsWorkspace } from "@/features/postings/postings-workspace-provider";
+import { usePostingsCounts } from "@/features/postings/postings-workspace-provider";
 
 const primaryQueueIds = [
   "inbox",
@@ -27,7 +27,7 @@ const primaryQueueIds = [
 const viewQueueIds = ["archive", "all"] satisfies PostingQueueId[];
 
 export function PostingsSidebar() {
-  const { counts, countsLoading, countsError } = usePostingsWorkspace();
+  const { counts, countsLoading, countsError } = usePostingsCounts();
   const pathname = window.location.pathname;
 
   return (

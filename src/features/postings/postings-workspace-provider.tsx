@@ -1,6 +1,7 @@
 import {
   createContext,
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
@@ -30,28 +31,37 @@ export type JobPostingsLoadError = {
   description: string;
 };
 
-type PostingsWorkspaceContextValue = {
-  activeQueue: PostingQueue;
-  activeQueueId: PostingQueueId;
+type PostingsCountsContextValue = {
   counts: QueueCounts;
   countsError: JobPostingsLoadError | null;
   countsLoading: boolean;
+  refreshCounts: () => Promise<void>;
+};
+
+type PostingsListContextValue = {
+  activeQueue: PostingQueue;
+  activeQueueId: PostingQueueId;
   listError: JobPostingsLoadError | null;
   listLoading: boolean;
   postings: JobPosting[];
   markPostingAsRead: (postingId: number) => Promise<void>;
-  refreshCounts: () => Promise<void>;
   refreshList: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
 };
+
+type PostingsWorkspaceContextValue = PostingsCountsContextValue &
+  PostingsListContextValue;
 
 type PostingsWorkspaceProviderProps = {
   children: ReactNode;
   pathname: string;
 };
 
-const PostingsWorkspaceContext =
-  createContext<PostingsWorkspaceContextValue | null>(null);
+const PostingsCountsContext =
+  createContext<PostingsCountsContextValue | null>(null);
+const PostingsListContext = createContext<PostingsListContextValue | null>(
+  null,
+);
 
 const countsLoadError = {
   title: "Queue-Zahlen konnten nicht geladen werden",
@@ -80,9 +90,25 @@ export function PostingsWorkspaceProvider({
     null,
   );
   const [postings, setPostings] = useState<JobPosting[]>([]);
+  const postingsRef = useRef<JobPosting[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<JobPostingsLoadError | null>(null);
   const pendingReadPostingIds = useRef(new Set<number>());
+
+  const setPostingsState = useCallback(
+    (nextPostings: SetStateAction<JobPosting[]>) => {
+      setPostings((currentPostings) => {
+        const resolvedPostings =
+          typeof nextPostings === "function"
+            ? nextPostings(currentPostings)
+            : nextPostings;
+
+        postingsRef.current = resolvedPostings;
+        return resolvedPostings;
+      });
+    },
+    [],
+  );
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -100,7 +126,7 @@ export function PostingsWorkspaceProvider({
 
   const refreshList = useCallback(async () => {
     if (!shouldLoadPostings) {
-      setPostings([]);
+      setPostingsState([]);
       setListLoading(false);
       setListError(null);
       return;
@@ -109,15 +135,15 @@ export function PostingsWorkspaceProvider({
     try {
       setListLoading(true);
       setListError(null);
-      setPostings(await listJobPostingsForQueue(activeQueueId));
+      setPostingsState(await listJobPostingsForQueue(activeQueueId));
     } catch (unknownError) {
       console.error("Failed to load job postings", unknownError);
-      setPostings([]);
+      setPostingsState([]);
       setListError(listLoadError);
     } finally {
       setListLoading(false);
     }
-  }, [activeQueueId, shouldLoadPostings]);
+  }, [activeQueueId, setPostingsState, shouldLoadPostings]);
 
   const refreshWorkspace = useCallback(async () => {
     await Promise.all([refreshCounts(), refreshList()]);
@@ -125,7 +151,7 @@ export function PostingsWorkspaceProvider({
 
   const markPostingAsRead = useCallback(
     async (postingId: number) => {
-      const posting = postings.find((item) => item.id === postingId);
+      const posting = postingsRef.current.find((item) => item.id === postingId);
 
       if (
         activeQueueId !== "inbox" ||
@@ -137,7 +163,7 @@ export function PostingsWorkspaceProvider({
       }
 
       pendingReadPostingIds.current.add(postingId);
-      setPostings((currentPostings) =>
+      setPostingsState((currentPostings) =>
         currentPostings.map((item) =>
           item.id === postingId ? { ...item, readState: "read" } : item,
         ),
@@ -153,14 +179,14 @@ export function PostingsWorkspaceProvider({
           readState: "read",
         });
 
-        setPostings((currentPostings) =>
+        setPostingsState((currentPostings) =>
           currentPostings.map((item) =>
             item.id === postingId ? updatedPosting : item,
           ),
         );
       } catch (unknownError) {
         console.error("Failed to mark job posting as read", unknownError);
-        setPostings((currentPostings) =>
+        setPostingsState((currentPostings) =>
           currentPostings.map((item) =>
             item.id === postingId ? { ...item, readState: "unread" } : item,
           ),
@@ -174,7 +200,7 @@ export function PostingsWorkspaceProvider({
         void refreshCounts();
       }
     },
-    [activeQueueId, postings, refreshCounts],
+    [activeQueueId, refreshCounts, setPostingsState],
   );
 
   useEffect(() => {
@@ -185,52 +211,75 @@ export function PostingsWorkspaceProvider({
     void refreshList();
   }, [refreshList]);
 
-  const value = useMemo(
+  const countsValue = useMemo(
     () => ({
-      activeQueue,
-      activeQueueId,
       counts,
       countsError,
       countsLoading,
+      refreshCounts,
+    }),
+    [counts, countsError, countsLoading, refreshCounts],
+  );
+
+  const listValue = useMemo(
+    () => ({
+      activeQueue,
+      activeQueueId,
       listError,
       listLoading,
       postings,
       markPostingAsRead,
-      refreshCounts,
       refreshList,
       refreshWorkspace,
     }),
     [
       activeQueue,
       activeQueueId,
-      counts,
-      countsError,
-      countsLoading,
       listError,
       listLoading,
       postings,
       markPostingAsRead,
-      refreshCounts,
       refreshList,
       refreshWorkspace,
     ],
   );
 
   return (
-    <PostingsWorkspaceContext.Provider value={value}>
-      {children}
-    </PostingsWorkspaceContext.Provider>
+    <PostingsCountsContext.Provider value={countsValue}>
+      <PostingsListContext.Provider value={listValue}>
+        {children}
+      </PostingsListContext.Provider>
+    </PostingsCountsContext.Provider>
   );
 }
 
-export function usePostingsWorkspace() {
-  const context = useContext(PostingsWorkspaceContext);
+export function usePostingsCounts() {
+  const context = useContext(PostingsCountsContext);
 
   if (!context) {
     throw new Error(
-      "usePostingsWorkspace must be used within PostingsWorkspaceProvider.",
+      "usePostingsCounts must be used within PostingsWorkspaceProvider.",
     );
   }
 
   return context;
+}
+
+export function usePostingsList() {
+  const context = useContext(PostingsListContext);
+
+  if (!context) {
+    throw new Error(
+      "usePostingsList must be used within PostingsWorkspaceProvider.",
+    );
+  }
+
+  return context;
+}
+
+export function usePostingsWorkspace(): PostingsWorkspaceContextValue {
+  return {
+    ...usePostingsCounts(),
+    ...usePostingsList(),
+  };
 }
