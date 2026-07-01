@@ -24,9 +24,12 @@ pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::runtime::{
-    execute_posting_discovery, execute_posting_discovery_with_fetcher, PostingDiscoveryCandidate,
-    PostingDiscoveryExecutionResult, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
-    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ReqwestPostingDiscoveryFetcher,
+    execute_posting_detail, execute_posting_detail_with_fetcher, execute_posting_discovery,
+    execute_posting_discovery_with_fetcher, PostingDetailExecutionResult, PostingDetailFetchError,
+    PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
+    PostingDetailPostingOccurrence, PostingDiscoveryCandidate, PostingDiscoveryExecutionResult,
+    PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
+    PostingDiscoveryFetcher, ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
