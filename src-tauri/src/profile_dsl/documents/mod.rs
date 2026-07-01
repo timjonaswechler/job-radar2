@@ -13,6 +13,9 @@ pub mod strategy;
 pub mod support;
 pub mod transform;
 
+#[cfg(test)]
+mod serde_tests;
+
 pub use access_path::ReusableAccessPathDocument;
 pub use extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression};
 pub use fetch::{Fetch, HttpMethod, RequestBody};
