@@ -6,26 +6,26 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { createPostingItemViewModel } from "@/features/postings/postings-view-model";
-import { usePostingsWorkspace } from "@/features/postings/postings-workspace-provider";
+import { usePostingsList } from "@/features/postings/postings-workspace-provider";
 
 import { PostingsList } from "./postings-list";
 import { PostingsPreview } from "./postings-preview";
 
 export function Postings() {
   const { activeQueue, listError, listLoading, postings, refreshList } =
-    usePostingsWorkspace();
+    usePostingsList();
   const [selectedPostingId, setSelectedPostingId] = useState<number | null>(
     null,
   );
 
-  const activePostingItems = useMemo(
-    () => postings.map(createPostingItemViewModel),
-    [postings],
-  );
-  const activePostingRows = useMemo(
-    () => activePostingItems.map((posting) => posting.row),
-    [activePostingItems],
-  );
+  const { activePostingItems, activePostingRows } = useMemo(() => {
+    const items = postings.map(createPostingItemViewModel);
+
+    return {
+      activePostingItems: items,
+      activePostingRows: items.map((posting) => posting.row),
+    };
+  }, [postings]);
   useEffect(() => {
     if (listLoading) return;
 
@@ -43,9 +43,12 @@ export function Postings() {
     }
   }, [activePostingItems, listLoading, selectedPostingId]);
 
-  const selectedPosting =
-    activePostingItems.find((posting) => posting.id === selectedPostingId) ??
-    null;
+  const selectedPosting = useMemo(
+    () =>
+      activePostingItems.find((posting) => posting.id === selectedPostingId) ??
+      null,
+    [activePostingItems, selectedPostingId],
+  );
 
   return (
     <ResizablePanelGroup

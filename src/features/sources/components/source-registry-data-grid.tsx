@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import type {
   ColumnDef,
@@ -83,6 +83,7 @@ export function SourceRegistryDataGrid({
   >([]);
   const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
   const [selectedRow, setSelectedRow] = useState<SourceGridRow | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const rows = useMemo(
     () =>
@@ -98,12 +99,18 @@ export function SourceRegistryDataGrid({
   const filteredRows = useMemo(
     () =>
       filterSourceGridRows(rows, {
-        searchQuery,
+        searchQuery: deferredSearchQuery,
         statuses: selectedStatuses,
         origins: selectedOrigins,
         diagnosticsOnly,
       }),
-    [diagnosticsOnly, rows, searchQuery, selectedOrigins, selectedStatuses],
+    [
+      deferredSearchQuery,
+      diagnosticsOnly,
+      rows,
+      selectedOrigins,
+      selectedStatuses,
+    ],
   );
 
   const statusCounts = useMemo(() => countSourceStatuses(rows), [rows]);
@@ -213,7 +220,7 @@ export function SourceRegistryDataGrid({
 
   useEffect(() => {
     setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [diagnosticsOnly, searchQuery, selectedOrigins, selectedStatuses]);
+  }, [deferredSearchQuery, diagnosticsOnly, selectedOrigins, selectedStatuses]);
 
   return (
     <>

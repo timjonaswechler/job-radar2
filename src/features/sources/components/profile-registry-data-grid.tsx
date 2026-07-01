@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import type {
   ColumnDef,
@@ -79,6 +79,7 @@ export function ProfileRegistryDataGrid({
   >([]);
   const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProfileGridRow | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const rows = useMemo(
     () =>
@@ -93,12 +94,12 @@ export function ProfileRegistryDataGrid({
   const filteredRows = useMemo(
     () =>
       filterProfileGridRows(rows, {
-        searchQuery,
+        searchQuery: deferredSearchQuery,
         kinds: selectedKinds,
         origins: selectedOrigins,
         diagnosticsOnly,
       }),
-    [diagnosticsOnly, rows, searchQuery, selectedKinds, selectedOrigins],
+    [deferredSearchQuery, diagnosticsOnly, rows, selectedKinds, selectedOrigins],
   );
 
   const kindCounts = useMemo(() => countProfileKinds(rows), [rows]);
@@ -194,7 +195,7 @@ export function ProfileRegistryDataGrid({
 
   useEffect(() => {
     setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [diagnosticsOnly, searchQuery, selectedKinds, selectedOrigins]);
+  }, [deferredSearchQuery, diagnosticsOnly, selectedKinds, selectedOrigins]);
 
   return (
     <>
