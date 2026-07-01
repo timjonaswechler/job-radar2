@@ -9,7 +9,19 @@ mod simple_json_path;
 mod source;
 mod source_profile;
 
+pub use profile_dsl::compiler::{
+    compile_source_execution_plan, CompileSourceExecutionPlanResult, ProfileCompilerSnapshot,
+};
+pub use profile_dsl::diagnostics::{
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
+};
+pub use profile_dsl::documents::{Fetch, FieldExpression, Select, SupportLevel};
+pub use profile_dsl::execution_plan::{
+    ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
+};
 pub use search::smoke::run_dev_search_run_smoke_cli;
+pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
+pub use source_profile::documents::SourceProfileDocument;
 
 use tauri::Manager;
 
