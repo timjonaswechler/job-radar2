@@ -3,9 +3,11 @@ mod app;
 mod browser_runtime;
 mod db;
 mod declarative;
+mod profile_dsl;
 mod search;
 mod simple_json_path;
 mod source;
+mod source_profile;
 
 pub use search::smoke::run_dev_search_run_smoke_cli;
 

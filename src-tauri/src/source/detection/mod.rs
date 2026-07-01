@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+//! Legacy v1 Source detection. Kept temporarily until Source Proposal detection
+//! is rebuilt on the declarative Source Profile DSL.
+
 mod engine;
 #[cfg(test)]
 mod tests;
