@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
 
+use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -241,7 +242,7 @@ where
         }
     };
 
-    let document = match parse_json_document(
+    let document = match parse_response_document(
         &response.body,
         strategy,
         &base_path,
@@ -275,7 +276,7 @@ where
 
     let description_path = format!("{base_path}/extract/fields/descriptionText");
     let description = evaluate_string_field(
-        selected_document,
+        &selected_document,
         &plan.source_config,
         posting,
         &captures,
@@ -452,75 +453,208 @@ fn render_headers(
     Ok(rendered)
 }
 
-fn parse_json_document(
-    body: &str,
+enum ParsedDocument<'body> {
+    Json(Value),
+    Xml(roxmltree::Document<'body>),
+    Html(HtmlDocument),
+}
+
+#[derive(Clone)]
+enum RuntimeItem<'doc, 'body> {
+    Json(&'doc Value),
+    Xml(roxmltree::Node<'doc, 'body>),
+    Html(NodeRef<'doc>),
+    Text(String),
+}
+
+fn parse_response_document<'body>(
+    body: &'body str,
     strategy: &ExecutionPlanPostingDetailStrategy,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
-) -> Option<Value> {
-    if strategy.parse.parse_type != ParseType::Json {
-        diagnostics.push(runtime_error(
-            "unsupported_parse_type",
-            "postingDetail runtime slice supports only JSON parse",
-            format!("{base_path}/parse/type"),
-            strategy_key,
-            json!({ "supportedType": "json" }),
-        ));
-        return None;
-    }
-
-    match serde_json::from_str(body) {
-        Ok(document) => Some(document),
-        Err(error) => {
+) -> Option<ParsedDocument<'body>> {
+    match strategy.parse.parse_type {
+        ParseType::Json => match serde_json::from_str(body) {
+            Ok(document) => Some(ParsedDocument::Json(document)),
+            Err(error) => {
+                diagnostics.push(runtime_error(
+                    "json_parse_failed",
+                    format!("Fetched response could not be parsed as JSON: {error}"),
+                    format!("{base_path}/parse"),
+                    strategy_key,
+                    json!({ "error": error.to_string() }),
+                ));
+                None
+            }
+        },
+        ParseType::Xml => match roxmltree::Document::parse(body) {
+            Ok(document) => Some(ParsedDocument::Xml(document)),
+            Err(error) => {
+                diagnostics.push(runtime_error(
+                    "xml_parse_failed",
+                    format!("Fetched response could not be parsed as XML: {error}"),
+                    format!("{base_path}/parse"),
+                    strategy_key,
+                    json!({ "error": error.to_string() }),
+                ));
+                None
+            }
+        },
+        ParseType::Html => Some(ParsedDocument::Html(HtmlDocument::from(body))),
+        ParseType::Text => {
             diagnostics.push(runtime_error(
-                "json_parse_failed",
-                format!("Fetched response could not be parsed as JSON: {error}"),
-                format!("{base_path}/parse"),
+                "unsupported_parse_type",
+                "postingDetail runtime supports JSON, XML, and HTML parse types",
+                format!("{base_path}/parse/type"),
                 strategy_key,
-                json!({ "error": error.to_string() }),
+                json!({ "supportedTypes": ["json", "xml", "html"] }),
             ));
             None
         }
     }
 }
 
-fn select_detail_document<'a>(
-    document: &'a Value,
+fn select_detail_document<'doc, 'body>(
+    document: &'doc ParsedDocument<'body>,
     select: &Select,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
-) -> Option<&'a Value> {
-    match select {
-        Select::Document => Some(document),
-        Select::JsonPath { json_path } => match resolve_simple_json_path(document, json_path) {
-            Ok(Some(value)) => Some(value),
-            Ok(None) => {
-                diagnostics.push(runtime_error(
-                    "json_path_select_missing",
-                    "JSONPath selector did not match a posting detail document",
-                    format!("{base_path}/select/jsonPath"),
-                    strategy_key,
-                    json!({ "jsonPath": json_path }),
-                ));
-                None
+) -> Option<RuntimeItem<'doc, 'body>> {
+    match (document, select) {
+        (ParsedDocument::Json(document), Select::Document) => Some(RuntimeItem::Json(document)),
+        (ParsedDocument::Json(document), Select::JsonPath { json_path }) => {
+            match resolve_simple_json_path(document, json_path) {
+                Ok(Some(value)) => Some(RuntimeItem::Json(value)),
+                Ok(None) => {
+                    diagnostics.push(runtime_error(
+                        "json_path_select_missing",
+                        "JSONPath selector did not match a posting detail document",
+                        format!("{base_path}/select/jsonPath"),
+                        strategy_key,
+                        json!({ "jsonPath": json_path }),
+                    ));
+                    None
+                }
+                Err(error) => {
+                    diagnostics.push(runtime_error(
+                        "json_path_select_failed",
+                        format!("JSONPath selector is invalid: {error}"),
+                        format!("{base_path}/select/jsonPath"),
+                        strategy_key,
+                        json!({ "jsonPath": json_path, "error": error.to_string() }),
+                    ));
+                    None
+                }
             }
-            Err(error) => {
-                diagnostics.push(runtime_error(
-                    "json_path_select_failed",
-                    format!("JSONPath selector is invalid: {error}"),
-                    format!("{base_path}/select/jsonPath"),
-                    strategy_key,
-                    json!({ "jsonPath": json_path, "error": error.to_string() }),
-                ));
-                None
+        }
+        (ParsedDocument::Xml(document), Select::Document) => {
+            Some(RuntimeItem::Xml(document.root_element()))
+        }
+        (ParsedDocument::Xml(document), Select::XmlElement { element }) => {
+            let mut items = xml_descendant_elements(document.root_element(), element);
+            match items.len() {
+                0 => {
+                    diagnostics.push(runtime_error(
+                        "xml_select_missing",
+                        "XML element selector did not match a posting detail document",
+                        format!("{base_path}/select/element"),
+                        strategy_key,
+                        json!({ "element": element }),
+                    ));
+                    None
+                }
+                1 => Some(RuntimeItem::Xml(items.remove(0))),
+                count => {
+                    diagnostics.push(runtime_error(
+                        "xml_select_multiple",
+                        "XML element selector matched multiple posting detail documents",
+                        format!("{base_path}/select/element"),
+                        strategy_key,
+                        json!({ "element": element, "actualCount": count }),
+                    ));
+                    None
+                }
             }
-        },
+        }
+        (ParsedDocument::Xml(document), Select::XmlText { text_path }) => {
+            let texts = xml_path_texts(document.root_element(), text_path);
+            match texts.len() {
+                0 => {
+                    diagnostics.push(runtime_error(
+                        "xml_text_select_missing",
+                        "XML text selector did not match posting detail text",
+                        format!("{base_path}/select/textPath"),
+                        strategy_key,
+                        json!({ "textPath": text_path }),
+                    ));
+                    None
+                }
+                1 => Some(RuntimeItem::Text(texts.into_iter().next().unwrap())),
+                count => {
+                    diagnostics.push(runtime_error(
+                        "xml_text_select_multiple",
+                        "XML text selector matched multiple posting detail text values",
+                        format!("{base_path}/select/textPath"),
+                        strategy_key,
+                        json!({ "textPath": text_path, "actualCount": count }),
+                    ));
+                    None
+                }
+            }
+        }
+        (ParsedDocument::Html(document), Select::Document) => {
+            Some(RuntimeItem::Html(document.tree.root()))
+        }
+        (ParsedDocument::Html(document), Select::Css { selector }) => {
+            let matcher = match Matcher::new(selector) {
+                Ok(matcher) => matcher,
+                Err(error) => {
+                    diagnostics.push(runtime_error(
+                        "css_select_failed",
+                        format!("CSS selector is invalid: {error:?}"),
+                        format!("{base_path}/select/selector"),
+                        strategy_key,
+                        json!({ "selector": selector, "error": format!("{error:?}") }),
+                    ));
+                    return None;
+                }
+            };
+            let mut nodes = document
+                .select_matcher(&matcher)
+                .nodes()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>();
+            match nodes.len() {
+                0 => {
+                    diagnostics.push(runtime_error(
+                        "css_select_missing",
+                        "CSS selector did not match a posting detail document",
+                        format!("{base_path}/select/selector"),
+                        strategy_key,
+                        json!({ "selector": selector }),
+                    ));
+                    None
+                }
+                1 => Some(RuntimeItem::Html(nodes.remove(0))),
+                count => {
+                    diagnostics.push(runtime_error(
+                        "css_select_multiple",
+                        "CSS selector matched multiple posting detail documents",
+                        format!("{base_path}/select/selector"),
+                        strategy_key,
+                        json!({ "selector": selector, "actualCount": count }),
+                    ));
+                    None
+                }
+            }
+        }
         _ => {
             diagnostics.push(runtime_error(
                 "unsupported_select_type",
-                "postingDetail runtime slice supports only direct document or JSONPath selection for JSON responses",
+                "Select type is not compatible with the parsed response document",
                 format!("{base_path}/select"),
                 strategy_key,
                 json!({}),
@@ -540,6 +674,7 @@ fn evaluate_strategy_captures(
 ) -> Option<BTreeMap<String, String>> {
     let mut captures = BTreeMap::new();
     let empty_document = Value::Null;
+    let empty_item = RuntimeItem::Json(&empty_document);
     let Some(capture_rules) = &strategy.captures else {
         return Some(captures);
     };
@@ -548,7 +683,7 @@ fn evaluate_strategy_captures(
         let path = format!("{base_path}/captures/{key}");
         let context_captures = captures.clone();
         let evaluation = evaluate_string_field(
-            &empty_document,
+            &empty_item,
             source_config,
             posting,
             &context_captures,
@@ -648,7 +783,7 @@ struct FieldEvaluation {
 }
 
 fn evaluate_string_field(
-    document: &Value,
+    document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
@@ -762,7 +897,7 @@ struct RawFieldValues<'a> {
 }
 
 fn raw_field_values<'a>(
-    document: &Value,
+    document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
@@ -782,30 +917,40 @@ fn raw_field_values<'a>(
             json_path,
             cardinality,
             transforms,
-        } => match resolve_simple_json_path(document, json_path) {
-            Ok(Some(value)) => json_value_to_strings(value, path, strategy_key, diagnostics)
-                .into_raw(*cardinality, transforms.as_ref()),
-            Ok(None) => RawFieldValues {
-                values: Vec::new(),
-                failed: false,
-                cardinality: *cardinality,
-                transforms: transforms.as_ref(),
-            },
-            Err(error) => {
-                diagnostics.push(runtime_error(
-                    "field_json_path_failed",
-                    format!("Field JSONPath is invalid: {error}"),
-                    path,
-                    strategy_key,
-                    json!({ "jsonPath": json_path, "error": error.to_string() }),
-                ));
-                RawFieldValues {
+        } => match document {
+            RuntimeItem::Json(value) => match resolve_simple_json_path(value, json_path) {
+                Ok(Some(value)) => json_value_to_strings(value, path, strategy_key, diagnostics)
+                    .into_raw(*cardinality, transforms.as_ref()),
+                Ok(None) => RawFieldValues {
                     values: Vec::new(),
-                    failed: true,
+                    failed: false,
                     cardinality: *cardinality,
                     transforms: transforms.as_ref(),
+                },
+                Err(error) => {
+                    diagnostics.push(runtime_error(
+                        "field_json_path_failed",
+                        format!("Field JSONPath is invalid: {error}"),
+                        path,
+                        strategy_key,
+                        json!({ "jsonPath": json_path, "error": error.to_string() }),
+                    ));
+                    RawFieldValues {
+                        values: Vec::new(),
+                        failed: true,
+                        cardinality: *cardinality,
+                        transforms: transforms.as_ref(),
+                    }
                 }
-            }
+            },
+            _ => incompatible_field_expression(
+                "field_json_path_incompatible",
+                path,
+                strategy_key,
+                *cardinality,
+                transforms.as_ref(),
+                diagnostics,
+            ),
         },
         FieldExpression::SourceConfig {
             key,
@@ -845,10 +990,24 @@ fn raw_field_values<'a>(
             key,
             cardinality,
             transforms,
-        } => match document.get(key) {
-            Some(value) => json_value_to_strings(value, path, strategy_key, diagnostics)
-                .into_raw(*cardinality, transforms.as_ref()),
-            None => RawFieldValues {
+        } => match document {
+            RuntimeItem::Json(value) => match value.get(key) {
+                Some(value) => json_value_to_strings(value, path, strategy_key, diagnostics)
+                    .into_raw(*cardinality, transforms.as_ref()),
+                None => RawFieldValues {
+                    values: Vec::new(),
+                    failed: false,
+                    cardinality: *cardinality,
+                    transforms: transforms.as_ref(),
+                },
+            },
+            RuntimeItem::Text(value) if key == "value" || key == "." => RawFieldValues {
+                values: vec![value.clone()],
+                failed: false,
+                cardinality: *cardinality,
+                transforms: transforms.as_ref(),
+            },
+            _ => RawFieldValues {
                 values: Vec::new(),
                 failed: false,
                 cardinality: *cardinality,
@@ -890,6 +1049,92 @@ fn raw_field_values<'a>(
                 }
             }
         }
+        FieldExpression::XmlText {
+            text_path,
+            cardinality,
+            transforms,
+        } => match document {
+            RuntimeItem::Xml(node) => RawFieldValues {
+                values: xml_path_texts(*node, text_path),
+                failed: false,
+                cardinality: *cardinality,
+                transforms: transforms.as_ref(),
+            },
+            RuntimeItem::Text(value) if text_path == "." => RawFieldValues {
+                values: vec![value.clone()],
+                failed: false,
+                cardinality: *cardinality,
+                transforms: transforms.as_ref(),
+            },
+            _ => incompatible_field_expression(
+                "field_xml_text_incompatible",
+                path,
+                strategy_key,
+                *cardinality,
+                transforms.as_ref(),
+                diagnostics,
+            ),
+        },
+        FieldExpression::XmlElement {
+            element,
+            cardinality,
+            transforms,
+        } => match document {
+            RuntimeItem::Xml(node) => RawFieldValues {
+                values: xml_descendant_elements(*node, element)
+                    .into_iter()
+                    .map(xml_node_text)
+                    .collect(),
+                failed: false,
+                cardinality: *cardinality,
+                transforms: transforms.as_ref(),
+            },
+            _ => incompatible_field_expression(
+                "field_xml_element_incompatible",
+                path,
+                strategy_key,
+                *cardinality,
+                transforms.as_ref(),
+                diagnostics,
+            ),
+        },
+        FieldExpression::CssText {
+            selector,
+            cardinality,
+            transforms,
+        } => match document {
+            RuntimeItem::Html(node) => {
+                css_text_values(node, selector, path, strategy_key, diagnostics)
+                    .into_raw(*cardinality, transforms.as_ref())
+            }
+            _ => incompatible_field_expression(
+                "field_css_text_incompatible",
+                path,
+                strategy_key,
+                *cardinality,
+                transforms.as_ref(),
+                diagnostics,
+            ),
+        },
+        FieldExpression::CssAttribute {
+            selector,
+            attribute,
+            cardinality,
+            transforms,
+        } => match document {
+            RuntimeItem::Html(node) => {
+                css_attribute_values(node, selector, attribute, path, strategy_key, diagnostics)
+                    .into_raw(*cardinality, transforms.as_ref())
+            }
+            _ => incompatible_field_expression(
+                "field_css_attribute_incompatible",
+                path,
+                strategy_key,
+                *cardinality,
+                transforms.as_ref(),
+                diagnostics,
+            ),
+        },
         FieldExpression::Combine {
             parts,
             join,
@@ -907,26 +1152,11 @@ fn raw_field_values<'a>(
             diagnostics,
         )
         .into_raw(*cardinality, transforms.as_ref()),
-        _ => {
-            diagnostics.push(runtime_error(
-                "unsupported_field_expression",
-                "postingDetail runtime slice supports const, template, sourceConfig, postingMeta, captures, itemField, JSONPath, and combine field expressions",
-                path,
-                strategy_key,
-                json!({}),
-            ));
-            RawFieldValues {
-                values: Vec::new(),
-                failed: true,
-                cardinality: None,
-                transforms: None,
-            }
-        }
     }
 }
 
 fn combine_field_values(
-    document: &Value,
+    document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
@@ -986,6 +1216,165 @@ fn combine_field_values(
         values: vec![values.join(join)],
         failed: false,
     }
+}
+
+fn incompatible_field_expression<'a>(
+    code: &'static str,
+    path: &str,
+    strategy_key: Option<&str>,
+    cardinality: Option<Cardinality>,
+    transforms: Option<&'a Vec<Transform>>,
+    diagnostics: &mut Diagnostics,
+) -> RawFieldValues<'a> {
+    diagnostics.push(runtime_error(
+        code,
+        "Field expression is not compatible with the selected detail document type",
+        path,
+        strategy_key,
+        json!({}),
+    ));
+    RawFieldValues {
+        values: Vec::new(),
+        failed: true,
+        cardinality,
+        transforms,
+    }
+}
+
+fn css_text_values(
+    node: &NodeRef<'_>,
+    selector: &str,
+    path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> JsonStringsResult {
+    let Some(selection) = select_relative_html(node, selector, path, strategy_key, diagnostics)
+    else {
+        return JsonStringsResult {
+            values: Vec::new(),
+            failed: true,
+        };
+    };
+    JsonStringsResult {
+        values: selection
+            .iter()
+            .map(|selected| selected.formatted_text().to_string())
+            .collect(),
+        failed: false,
+    }
+}
+
+fn css_attribute_values(
+    node: &NodeRef<'_>,
+    selector: &str,
+    attribute: &str,
+    path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> JsonStringsResult {
+    let Some(selection) = select_relative_html(node, selector, path, strategy_key, diagnostics)
+    else {
+        return JsonStringsResult {
+            values: Vec::new(),
+            failed: true,
+        };
+    };
+    JsonStringsResult {
+        values: selection
+            .iter()
+            .filter_map(|selected| selected.attr(attribute).map(|value| value.to_string()))
+            .collect(),
+        failed: false,
+    }
+}
+
+fn select_relative_html<'a>(
+    node: &NodeRef<'a>,
+    selector: &str,
+    path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<HtmlSelection<'a>> {
+    let matcher = match Matcher::new(selector) {
+        Ok(matcher) => matcher,
+        Err(error) => {
+            diagnostics.push(runtime_error(
+                "field_css_selector_failed",
+                format!("Field CSS selector is invalid: {error:?}"),
+                path,
+                strategy_key,
+                json!({ "selector": selector, "error": format!("{error:?}") }),
+            ));
+            return None;
+        }
+    };
+    Some(HtmlSelection::from(node.clone()).select_matcher(&matcher))
+}
+
+fn xml_descendant_elements<'a, 'input>(
+    node: roxmltree::Node<'a, 'input>,
+    element: &str,
+) -> Vec<roxmltree::Node<'a, 'input>> {
+    node.descendants()
+        .filter(|candidate| candidate.is_element() && candidate.tag_name().name() == element)
+        .collect()
+}
+
+fn xml_path_texts(node: roxmltree::Node<'_, '_>, text_path: &str) -> Vec<String> {
+    xml_path_nodes(node, text_path)
+        .into_iter()
+        .map(xml_node_text)
+        .collect()
+}
+
+fn xml_path_nodes<'a, 'input>(
+    node: roxmltree::Node<'a, 'input>,
+    path: &str,
+) -> Vec<roxmltree::Node<'a, 'input>> {
+    let trimmed = path.trim();
+    if trimmed == "." || trimmed.is_empty() {
+        return vec![node];
+    }
+
+    let parts = trimmed
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        return vec![node];
+    }
+
+    if parts.len() == 1 {
+        return xml_descendant_elements(node, parts[0]);
+    }
+
+    let mut current = vec![node];
+    for (index, part) in parts.into_iter().enumerate() {
+        let mut next = Vec::new();
+        for candidate in current {
+            if index == 0 && candidate.is_element() && candidate.tag_name().name() == part {
+                next.push(candidate);
+            }
+            next.extend(
+                candidate
+                    .children()
+                    .filter(|child| child.is_element() && child.tag_name().name() == part),
+            );
+        }
+        current = next;
+        if current.is_empty() {
+            break;
+        }
+    }
+    current
+}
+
+fn xml_node_text(node: roxmltree::Node<'_, '_>) -> String {
+    node.descendants()
+        .filter(|descendant| descendant.is_text())
+        .filter_map(|descendant| descendant.text())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 struct JsonStringsResult {

@@ -555,6 +555,152 @@ fn compiled_posting_discovery_rejects_template_transform_pipes() {
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_extracts_xml_posting_fields() {
+    let fields = json!({
+        "title": { "type": "xml_text", "textPath": "title", "cardinality": "one" },
+        "company": { "type": "xml_text", "textPath": "company", "cardinality": "one" },
+        "url": { "type": "xml_text", "textPath": "url", "cardinality": "one" },
+        "locations": { "type": "xml_element", "element": "location", "cardinality": "all" },
+        "postingMeta": {
+            "jobId": { "type": "xml_text", "textPath": "id", "cardinality": "one" }
+        }
+    });
+    let plan = compiled_posting_discovery_plan(
+        json!({ "type": "xml" }),
+        json!({ "type": "xml_element", "element": "job" }),
+        fields,
+        "https://example.test/jobs.xml",
+    );
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.xml",
+        r#"<jobs>
+            <job>
+              <id> 42 </id>
+              <title> Senior   Rust
+Engineer </title>
+              <company> Example GmbH </company>
+              <url> https://example.test/jobs/42 </url>
+              <locations><location> Berlin </location><location>Berlin</location><location> Remote </location></locations>
+            </job>
+        </jobs>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+    assert_eq!(result.candidates[0].company, "Example GmbH");
+    assert_eq!(result.candidates[0].url, "https://example.test/jobs/42");
+    assert_eq!(result.candidates[0].locations, vec!["Berlin", "Remote"]);
+    assert_eq!(result.candidates[0].posting_meta["jobId"], "42");
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_extracts_html_posting_fields_with_css() {
+    let fields = json!({
+        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
+        "company": { "type": "css_text", "selector": ".company", "cardinality": "one" },
+        "url": { "type": "css_attribute", "selector": "a.apply", "attribute": "href", "cardinality": "one" },
+        "locations": { "type": "css_text", "selector": ".location", "cardinality": "all" }
+    });
+    let plan = compiled_posting_discovery_plan(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "article.posting" }),
+        fields,
+        "https://example.test/jobs.html",
+    );
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.html",
+        r#"<html><body>
+            <article class="posting">
+              <h2 class="title"> Staff   Frontend
+Engineer </h2>
+              <span class="company"> Example GmbH </span>
+              <a class="apply" href="https://example.test/jobs/frontend">Apply</a>
+              <span class="location"> Berlin </span><span class="location">Remote</span>
+            </article>
+        </body></html>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Staff Frontend Engineer");
+    assert_eq!(result.candidates[0].company, "Example GmbH");
+    assert_eq!(
+        result.candidates[0].url,
+        "https://example.test/jobs/frontend"
+    );
+    assert_eq!(result.candidates[0].locations, vec!["Berlin", "Remote"]);
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_reports_xml_and_html_diagnostics() {
+    let xml_plan = compiled_posting_discovery_plan(
+        json!({ "type": "xml" }),
+        json!({ "type": "xml_element", "element": "job" }),
+        default_xml_fields(),
+        "https://example.test/jobs.xml",
+    );
+    let xml_parse_failure = block_on(execute_posting_discovery_with_fetcher(
+        &xml_plan,
+        &FakeFetcher::new([("https://example.test/jobs.xml", "<jobs><job>".to_string())]),
+    ));
+    assert_runtime_diagnostic(&xml_parse_failure.diagnostics[0], "xml_parse_failed");
+    assert_eq!(
+        xml_parse_failure.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/parse"
+    );
+
+    let html_select_plan = compiled_posting_discovery_plan(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "[" }),
+        default_html_fields(),
+        "https://example.test/jobs.html",
+    );
+    let html_select_failure = block_on(execute_posting_discovery_with_fetcher(
+        &html_select_plan,
+        &FakeFetcher::new([(
+            "https://example.test/jobs.html",
+            "<article></article>".to_string(),
+        )]),
+    ));
+    assert_runtime_diagnostic(&html_select_failure.diagnostics[0], "css_select_failed");
+    assert_eq!(
+        html_select_failure.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/select/selector"
+    );
+
+    let mut html_fields = default_html_fields();
+    html_fields["title"] = json!({ "type": "css_text", "selector": "[", "cardinality": "one" });
+    let html_extract_plan = compiled_posting_discovery_plan(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "article" }),
+        html_fields,
+        "https://example.test/jobs.html",
+    );
+    let html_extract_failure = block_on(execute_posting_discovery_with_fetcher(
+        &html_extract_plan,
+        &FakeFetcher::new([(
+            "https://example.test/jobs.html",
+            "<article><a class='apply' href='https://example.test/jobs/1'></a><span class='company'>Example GmbH</span></article>".to_string(),
+        )]),
+    ));
+    assert_runtime_diagnostic(
+        &html_extract_failure.diagnostics[0],
+        "field_css_selector_failed",
+    );
+    assert_eq!(
+        html_extract_failure.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/extract/fields/title"
+    );
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_reports_fetch_parse_select_and_extract_failures() {
     let plan = compiled_json_posting_discovery_plan(default_fields(), default_select());
     let fetch_failure = block_on(execute_posting_discovery_with_fetcher(
@@ -651,6 +797,20 @@ impl PostingDiscoveryFetcher for FakeFetcher {
 }
 
 fn compiled_json_posting_discovery_plan(fields: Value, select: Value) -> SourceExecutionPlan {
+    compiled_posting_discovery_plan(
+        json!({ "type": "json" }),
+        select,
+        fields,
+        "https://example.test/jobs.json",
+    )
+}
+
+fn compiled_posting_discovery_plan(
+    parse: Value,
+    select: Value,
+    fields: Value,
+    feed_url: &'static str,
+) -> SourceExecutionPlan {
     let profile: SourceProfileDocument = serde_json::from_value(json!({
         "schemaVersion": 2,
         "key": "example_jobs",
@@ -678,7 +838,7 @@ fn compiled_json_posting_discovery_plan(fields: Value, select: Value) -> SourceE
                         "url": "{{sourceConfig:feedUrl}}",
                         "timeoutMs": 10000
                     },
-                    "parse": { "type": "json" },
+                    "parse": parse,
                     "select": select,
                     "extract": { "fields": fields }
                 }]
@@ -691,7 +851,7 @@ fn compiled_json_posting_discovery_plan(fields: Value, select: Value) -> SourceE
         "key": "example_source",
         "name": "Example Source",
         "status": "active",
-        "sourceConfig": { "feedUrl": "https://example.test/jobs.json" },
+        "sourceConfig": { "feedUrl": feed_url },
         "selectedAccessPath": {
             "type": "profile_access_path",
             "profileKey": "example_jobs",
@@ -772,6 +932,22 @@ fn default_fields() -> Value {
         "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
         "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
         "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+    })
+}
+
+fn default_xml_fields() -> Value {
+    json!({
+        "title": { "type": "xml_text", "textPath": "title", "cardinality": "one" },
+        "company": { "type": "xml_text", "textPath": "company", "cardinality": "one" },
+        "url": { "type": "xml_text", "textPath": "url", "cardinality": "one" }
+    })
+}
+
+fn default_html_fields() -> Value {
+    json!({
+        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
+        "company": { "type": "css_text", "selector": ".company", "cardinality": "one" },
+        "url": { "type": "css_attribute", "selector": "a.apply", "attribute": "href", "cardinality": "one" }
     })
 }
 
