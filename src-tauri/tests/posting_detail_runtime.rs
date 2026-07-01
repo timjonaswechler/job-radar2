@@ -109,6 +109,36 @@ fn compiled_posting_detail_runtime_normalizes_html_in_json_description_text() {
 }
 
 #[test]
+fn compiled_posting_detail_runtime_applies_explicit_text_transforms() {
+    let plan = compiled_json_posting_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.descriptionSlug",
+            "cardinality": "one",
+            "transforms": [{ "type": "url_decode" }, { "type": "slug_to_title" }]
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/42.json",
+        json!({ "descriptionSlug": "senior%20rust-engineer" }).to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("Senior Rust Engineer".to_string())
+    );
+}
+
+#[test]
 fn compiled_posting_detail_runtime_reports_missing_empty_and_too_short_description_diagnostics() {
     let empty_plan = compiled_json_posting_detail_plan(
         "{{posting:url}}",

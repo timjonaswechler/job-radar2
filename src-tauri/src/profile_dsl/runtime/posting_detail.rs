@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
 
-use dom_query::Document as HtmlDocument;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -22,6 +21,8 @@ use crate::{
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
 };
+
+use super::transform::{apply_transform_pipeline, normalize_whitespace};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -678,16 +679,18 @@ fn evaluate_string_field(
         };
     }
 
-    let mut normalized_values = Vec::new();
-    for value in values {
-        let Some(value) =
-            apply_string_transforms(value, transforms, path, strategy_key, diagnostics)
-        else {
+    let values = match apply_transforms(values, transforms, path, strategy_key, diagnostics) {
+        Some(values) => values,
+        None => {
             return FieldEvaluation {
                 value: None,
                 failed: true,
             };
-        };
+        }
+    };
+
+    let mut normalized_values = Vec::new();
+    for value in values {
         let value = normalize_whitespace(value.trim());
         if !value.is_empty() {
             normalized_values.push(value);
@@ -992,34 +995,26 @@ fn json_value_to_strings(
     }
 }
 
-fn apply_string_transforms(
-    mut value: String,
+fn apply_transforms(
+    values: Vec<String>,
     transforms: Option<&Vec<Transform>>,
     path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
-) -> Option<String> {
-    for transform in transforms.into_iter().flatten() {
-        match transform {
-            Transform::Trim => value = value.trim().to_string(),
-            Transform::NormalizeWhitespace => value = normalize_whitespace(&value),
-            Transform::HtmlToText => value = normalize_html_text(&value),
-            Transform::ToString => {}
-            unsupported => {
-                diagnostics.push(runtime_error(
-                    "unsupported_transform",
-                    "postingDetail runtime slice supports only trim, normalize_whitespace, html_to_text, and to_string transforms for scalar fields",
-                    path,
-                    strategy_key,
-                    json!({
-                        "transform": serde_json::to_value(unsupported).unwrap_or_else(|_| json!({})),
-                    }),
-                ));
-                return None;
-            }
+) -> Option<Vec<String>> {
+    match apply_transform_pipeline(values, transforms) {
+        Ok(values) => Some(values),
+        Err(error) => {
+            diagnostics.push(runtime_error(
+                error.code,
+                error.message,
+                path,
+                strategy_key,
+                json!({ "transform": error.transform }),
+            ));
+            None
         }
     }
-    Some(value)
 }
 
 struct TemplateRuntimeContext<'a> {
@@ -1108,14 +1103,6 @@ fn posting_value_as_string(posting: &PostingDetailPostingOccurrence, key: &str) 
         "locations" if !posting.locations.is_empty() => Some(posting.locations.join(", ")),
         _ => None,
     }
-}
-
-fn normalize_html_text(value: &str) -> String {
-    normalize_whitespace(&HtmlDocument::fragment(value).formatted_text().to_string())
-}
-
-fn normalize_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn runtime_error(

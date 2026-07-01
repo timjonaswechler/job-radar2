@@ -1,5 +1,6 @@
 pub(crate) mod posting_detail;
 pub(crate) mod posting_discovery;
+pub(crate) mod transform;
 
 pub use posting_detail::{
     execute_posting_detail, execute_posting_detail_with_fetcher, PostingDetailExecutionResult,
