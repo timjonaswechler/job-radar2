@@ -8,6 +8,7 @@ use crate::profile_dsl::execution_plan::{
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 
+use super::boundedness::validate_boundedness;
 use super::capabilities::validate_capability_compatibility;
 use super::compiler_error;
 use super::has_error_diagnostics;
@@ -16,6 +17,7 @@ use super::keys::{
     validate_posting_discovery_strategy_keys, validate_reusable_access_path_keys,
 };
 use super::overrides::validate_source_overrides;
+use super::security::validate_security;
 use super::source_config::{
     source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
 };
@@ -184,6 +186,18 @@ fn validate_profile_access_path(
     validate_capability_compatibility(
         &access_path.posting_discovery,
         access_path.posting_detail.as_ref(),
+        access_path_base.clone(),
+        diagnostics,
+    );
+    validate_boundedness(
+        &access_path.posting_discovery,
+        access_path.posting_detail.as_ref(),
+        access_path_base.clone(),
+        diagnostics,
+    );
+    validate_security(
+        &access_path.posting_discovery,
+        access_path.posting_detail.as_ref(),
         access_path_base,
         diagnostics,
     );
@@ -294,6 +308,18 @@ fn validate_source_owned_access_path(
         diagnostics,
     );
     validate_capability_compatibility(
+        posting_discovery,
+        posting_detail,
+        "/selectedAccessPath".to_string(),
+        diagnostics,
+    );
+    validate_boundedness(
+        posting_discovery,
+        posting_detail,
+        "/selectedAccessPath".to_string(),
+        diagnostics,
+    );
+    validate_security(
         posting_discovery,
         posting_detail,
         "/selectedAccessPath".to_string(),

@@ -15,13 +15,15 @@ pub enum Fetch {
         headers: Option<BTreeMap<String, String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<RequestBody>,
-        #[serde(rename = "timeoutMs")]
-        timeout_ms: u64,
+        #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        retry: Option<RetryPolicy>,
     },
     Browser {
         url: String,
-        #[serde(rename = "timeoutMs")]
-        timeout_ms: u64,
+        #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         waits: Option<Vec<BrowserWait>>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,19 +48,26 @@ pub enum RequestBody {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RetryPolicy {
+    #[serde(rename = "maxAttempts", skip_serializing_if = "Option::is_none")]
+    pub max_attempts: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BrowserWait {
     Selector {
         #[serde(skip_serializing_if = "Option::is_none")]
         selector: Option<String>,
-        #[serde(rename = "timeoutMs")]
-        timeout_ms: u64,
+        #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
     },
     NetworkIdle {
         #[serde(skip_serializing_if = "Option::is_none")]
         selector: Option<String>,
-        #[serde(rename = "timeoutMs")]
-        timeout_ms: u64,
+        #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
     },
 }
 
@@ -67,16 +76,36 @@ pub enum BrowserWait {
 pub enum BrowserInteraction {
     ClickIfVisible {
         selector: String,
-        #[serde(rename = "maxCount")]
-        max_count: u64,
+        #[serde(rename = "maxCount", skip_serializing_if = "Option::is_none")]
+        max_count: Option<u64>,
         #[serde(rename = "waitAfterMs", skip_serializing_if = "Option::is_none")]
         wait_after_ms: Option<u64>,
     },
     ClickUntilGone {
         selector: String,
-        #[serde(rename = "maxCount")]
-        max_count: u64,
+        #[serde(rename = "maxCount", skip_serializing_if = "Option::is_none")]
+        max_count: Option<u64>,
         #[serde(rename = "waitAfterMs", skip_serializing_if = "Option::is_none")]
         wait_after_ms: Option<u64>,
+    },
+    ExecuteScript {
+        script: String,
+    },
+    Eval {
+        expression: String,
+    },
+    MutateDom {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mutation: Option<String>,
+    },
+    LoginFlow {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+    },
+    CaptchaBypass {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
     },
 }
