@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/strategy.schema.json",
+  "title": "Job Radar Profile DSL strategy definitions",
+  "$defs": {
+    "postingDiscoveryStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategies"],
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/postingDiscoveryStrategy" }
+        },
+        "acceptWhen": { "$ref": "#/$defs/acceptance" }
+      }
+    },
+    "postingDetailStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategies"],
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/postingDetailStrategy" }
+        },
+        "acceptWhen": { "$ref": "#/$defs/acceptance" }
+      }
+    },
+    "postingDiscoveryStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "fetch", "parse", "select", "extract"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "description": { "$ref": "common.schema.json#/$defs/description" },
+        "fetch": { "$ref": "fetch.schema.json#/$defs/fetch" },
+        "pagination": { "$ref": "pagination.schema.json#/$defs/pagination" },
+        "parse": { "$ref": "parse.schema.json#/$defs/parse" },
+        "select": { "$ref": "select.schema.json#/$defs/select" },
+        "where": { "$ref": "select.schema.json#/$defs/where" },
+        "captures": { "$ref": "select.schema.json#/$defs/captures" },
+        "extract": { "$ref": "#/$defs/postingDiscoveryExtraction" },
+        "acceptWhen": { "$ref": "#/$defs/acceptance" },
+        "diagnostics": { "$ref": "diagnostics.schema.json#/$defs/diagnostics" }
+      }
+    },
+    "postingDetailStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "fetch", "parse", "select", "extract"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "description": { "$ref": "common.schema.json#/$defs/description" },
+        "fetch": { "$ref": "fetch.schema.json#/$defs/fetch" },
+        "parse": { "$ref": "parse.schema.json#/$defs/parse" },
+        "select": { "$ref": "select.schema.json#/$defs/select" },
+        "where": { "$ref": "select.schema.json#/$defs/where" },
+        "captures": { "$ref": "select.schema.json#/$defs/captures" },
+        "match": { "$ref": "#/$defs/match" },
+        "extract": { "$ref": "#/$defs/postingDetailExtraction" },
+        "acceptWhen": { "$ref": "#/$defs/acceptance" },
+        "diagnostics": { "$ref": "diagnostics.schema.json#/$defs/diagnostics" }
+      }
+    },
+    "postingDiscoveryExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "allOf": [
+            { "$ref": "common.schema.json#/$defs/canonicalPostingFields" },
+            { "required": ["title", "company", "url"] }
+          ]
+        }
+      }
+    },
+    "postingDetailExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["descriptionText"],
+          "properties": {
+            "descriptionText": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+          }
+        }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right"],
+      "properties": {
+        "left": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "right": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredFields": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        },
+        "minDescriptionLength": { "type": "integer", "minimum": 1 },
+        "minResults": { "type": "integer", "minimum": 0 },
+        "maxErrorRatio": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

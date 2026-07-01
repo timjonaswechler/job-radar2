@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/pagination.schema.json",
+  "title": "Job Radar Profile DSL pagination definitions",
+  "$defs": {
+    "pagination": {
+      "oneOf": [
+        { "$ref": "#/$defs/pagePagination" },
+        { "$ref": "#/$defs/offsetLimitPagination" },
+        { "$ref": "#/$defs/cursorPagination" },
+        { "$ref": "#/$defs/sitemapPagination" }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxRequests"],
+      "properties": {
+        "maxRequests": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "maxItems": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maxDepth": { "type": "integer", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "pagePagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pageParam", "limits"],
+      "properties": {
+        "type": { "const": "page" },
+        "pageParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "firstPage": { "type": "integer", "minimum": 0 },
+        "pageSizeParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "pageSize": { "type": "integer", "minimum": 1 },
+        "totalPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    },
+    "offsetLimitPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "offsetParam", "limitParam", "limit", "limits"],
+      "properties": {
+        "type": { "const": "offset_limit" },
+        "offsetParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "limitParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "startOffset": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1 },
+        "totalPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    },
+    "cursorPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "cursorParam", "nextCursorPath", "limits"],
+      "properties": {
+        "type": { "const": "cursor" },
+        "cursorParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "nextCursorPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    },
+    "sitemapPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "limits"],
+      "properties": {
+        "type": { "const": "sitemap" },
+        "childSitemapSelector": { "$ref": "select.schema.json#/$defs/select" },
+        "postingUrlSelector": { "$ref": "select.schema.json#/$defs/select" },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    }
+  }
+}

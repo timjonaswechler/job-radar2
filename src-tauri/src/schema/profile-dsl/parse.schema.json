@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/parse.schema.json",
+  "title": "Job Radar Profile DSL parse definitions",
+  "$defs": {
+    "parse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["json", "xml", "html", "text"] },
+        "charset": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}
