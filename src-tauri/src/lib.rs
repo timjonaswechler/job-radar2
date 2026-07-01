@@ -15,7 +15,11 @@ pub use profile_dsl::compiler::{
 pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-pub use profile_dsl::documents::{Fetch, FieldExpression, Select, SupportLevel};
+pub use profile_dsl::documents::{Fetch, FieldExpression, HttpMethod, Select, SupportLevel};
+pub use profile_dsl::execution_plan::capabilities::{
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
+    ExecutionPlanPagination,
+};
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };

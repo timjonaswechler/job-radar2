@@ -2,6 +2,9 @@ use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
     PostingDetailStep, PostingDiscoveryStep, ReusableAccessPathDocument,
 };
+use crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBuildError;
+use crate::profile_dsl::execution_plan::posting_detail::compile_posting_detail_step;
+use crate::profile_dsl::execution_plan::posting_discovery::compile_posting_discovery_step;
 use crate::profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
@@ -57,6 +60,25 @@ fn compile_profile_access_path(
         return None;
     }
 
+    let posting_discovery = compile_posting_discovery_step(
+        &access_path.posting_discovery,
+        &access_path_step_path(path_index, "postingDiscovery"),
+    )
+    .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+    .ok()?;
+    let posting_detail = access_path
+        .posting_detail
+        .as_ref()
+        .map(|posting_detail| {
+            compile_posting_detail_step(
+                posting_detail,
+                &access_path_step_path(path_index, "postingDetail"),
+            )
+        })
+        .transpose()
+        .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+        .ok()?;
+
     Some(SourceExecutionPlan {
         source: ExecutionPlanSource {
             key: source.key.clone(),
@@ -70,8 +92,8 @@ fn compile_profile_access_path(
         },
         source_config: source.source_config.clone(),
         source_overrides: source.source_overrides.clone(),
-        posting_discovery: access_path.posting_discovery.clone(),
-        posting_detail: access_path.posting_detail.clone(),
+        posting_discovery,
+        posting_detail,
     })
 }
 
@@ -228,6 +250,19 @@ fn compile_source_owned_access_path(
         return None;
     }
 
+    let compiled_posting_discovery =
+        compile_posting_discovery_step(posting_discovery, "/selectedAccessPath/postingDiscovery")
+            .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+            .ok()?;
+    let compiled_posting_detail = posting_detail
+        .as_ref()
+        .map(|posting_detail| {
+            compile_posting_detail_step(posting_detail, "/selectedAccessPath/postingDetail")
+        })
+        .transpose()
+        .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+        .ok()?;
+
     Some(SourceExecutionPlan {
         source: ExecutionPlanSource {
             key: source.key.clone(),
@@ -239,8 +274,8 @@ fn compile_source_owned_access_path(
         },
         source_config: source.source_config.clone(),
         source_overrides: source.source_overrides.clone(),
-        posting_discovery: posting_discovery.clone(),
-        posting_detail: posting_detail.clone(),
+        posting_discovery: compiled_posting_discovery,
+        posting_detail: compiled_posting_detail,
     })
 }
 
@@ -325,6 +360,18 @@ fn validate_source_owned_access_path(
         "/selectedAccessPath".to_string(),
         diagnostics,
     );
+}
+
+fn push_compiled_plan_invariant(error: ExecutionPlanBuildError, diagnostics: &mut Diagnostics) {
+    diagnostics.push(compiler_error(
+        "compiled_execution_plan_invariant_violation",
+        format!(
+            "Validated Profile DSL could not be converted into a strict Execution Plan: {}",
+            error.message
+        ),
+        error.path,
+        serde_json::json!({ "invariant": "strict_execution_plan" }),
+    ));
 }
 
 fn access_path_base_path(path_index: Option<usize>) -> String {

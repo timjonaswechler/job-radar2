@@ -2,8 +2,9 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source_execution_plan, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
-    ProfileCompilerSnapshot, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
-    SourceStatus,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
+    ExecutionPlanPagination, ProfileCompilerSnapshot, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceStatus,
 };
 
 #[test]
@@ -32,10 +33,42 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
         "https://example.test/jobs.json"
     );
     assert!(plan.source_overrides.is_some());
-    assert_eq!(plan.posting_discovery.strategies[0].key, "json_api");
+    let discovery_strategy = &plan.posting_discovery.strategies[0];
+    assert_eq!(discovery_strategy.key, "json_api");
     assert_eq!(
-        plan.posting_detail.as_ref().unwrap().strategies[0].key,
-        "detail_api"
+        discovery_strategy.fetch,
+        ExecutionPlanFetch::Http {
+            method: Some(job_radar_lib::HttpMethod::Get),
+            url: "{{sourceConfig:feedUrl}}".to_string(),
+            headers: Some(std::collections::BTreeMap::from([(
+                "accept".to_string(),
+                "application/json".to_string(),
+            )])),
+            body: None,
+            timeout_ms: 10000,
+            retry: None,
+        }
+    );
+    let Some(ExecutionPlanPagination::Page { limits, .. }) = &discovery_strategy.pagination else {
+        panic!("expected compiled page pagination with concrete limits");
+    };
+    assert_eq!(limits.max_requests, Some(3));
+    assert_eq!(limits.max_items, Some(100));
+    let detail_strategy = &plan.posting_detail.as_ref().unwrap().strategies[0];
+    assert_eq!(detail_strategy.key, "detail_api");
+    assert_eq!(
+        detail_strategy.fetch,
+        ExecutionPlanFetch::Http {
+            method: Some(job_radar_lib::HttpMethod::Get),
+            url: "{{postingMeta:jobId}}".to_string(),
+            headers: Some(std::collections::BTreeMap::from([(
+                "accept".to_string(),
+                "application/json".to_string(),
+            )])),
+            body: None,
+            timeout_ms: 10000,
+            retry: None,
+        }
     );
     assert_eq!(
         plan.selected_access_path,
@@ -70,7 +103,33 @@ fn compiler_resolves_source_owned_access_path() {
         "https://example.test/careers"
     );
     assert_eq!(plan.source_overrides, None);
-    assert_eq!(plan.posting_discovery.strategies[0].key, "html_cards");
+    let discovery_strategy = &plan.posting_discovery.strategies[0];
+    assert_eq!(discovery_strategy.key, "html_cards");
+    let ExecutionPlanFetch::Browser {
+        timeout_ms,
+        waits,
+        interactions,
+        ..
+    } = &discovery_strategy.fetch
+    else {
+        panic!("expected source-owned Access Path to compile a strict browser fetch");
+    };
+    assert_eq!(*timeout_ms, 30000);
+    assert_eq!(
+        waits,
+        &vec![ExecutionPlanBrowserWait::Selector {
+            selector: Some(".job-card".to_string()),
+            timeout_ms: 10000,
+        }]
+    );
+    assert_eq!(
+        interactions,
+        &vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
+            selector: "button.load-more".to_string(),
+            max_count: 2,
+            wait_after_ms: Some(500),
+        }]
+    );
     assert_eq!(plan.posting_detail, None);
     assert_eq!(
         plan.selected_access_path,
