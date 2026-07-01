@@ -1,3 +1,9 @@
+//! Legacy v1 Source/Profile registry document model.
+//!
+//! Kept temporarily while the declarative Source Profile DSL hard cut is
+//! introduced. New code should use `crate::source_profile::documents`,
+//! `crate::source::documents`, and `crate::profile_dsl::documents`.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

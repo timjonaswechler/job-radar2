@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+//! Legacy v1 Source registry. Kept temporarily until the new
+//! `source_profile` registry and declarative Profile DSL integration replace it.
+
 mod builtins;
 mod diagnostics;
 mod documents;
