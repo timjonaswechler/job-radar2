@@ -1,0 +1,9 @@
+# Replace v1 source profiles with a declarative Source Profile DSL
+
+Job Radar will replace the v1 Source Profile model with a declarative JSON Source Profile DSL that is compiled into a typed Execution Plan before runtime execution. ATS and career-site behavior should be described through reusable generic capabilities such as fetch, parse, select, extract, transform, pagination, fallback, browser mode, and diagnostics; individual ATS profiles must not require profile-specific Rust adapters.
+
+This is a pre-production hard cut: there is no v1 compatibility layer, no automatic migration of old profile documents, and no parallel v1/v2 execution path. The old adapter-key-driven split between endpoint, sitemap, browser inventory, and posting detail runtimes is replaced by one declarative profile runtime whose behavior comes from the selected Source Profile Access Path, Source Config, Source Overrides, and compiled Execution Plan.
+
+The DSL is intentionally built from stable primitives: Source Profile, Access Path, Source-owned Access Path, Source Config, Source Overrides, support metadata, Strategy, Fetch, Pagination, Parse, Select, Filter, Capture, Match, Extract, Cardinality, Transform, Combine, Template, Validate/acceptance checks, and Diagnostic. New ATS behavior should be modeled by composing these primitives; if behavior is missing, the codebase may add a new generic primitive or extend an existing one, but must not add ATS-specific execution branches.
+
+Consequences: JSON Schema validates document shape, while the Profile Compiler owns semantic validation, security checks, boundedness, override application, and execution-plan diagnostics. Built-in and custom profiles use the same DSL and compiler rules; custom profiles may not override built-in profile keys. Browser extraction remains supported as a fetch mode inside the DSL, not as a separate profile type.
