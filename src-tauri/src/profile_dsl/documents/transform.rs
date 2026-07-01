@@ -4,11 +4,16 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Transform {
     Trim,
+    #[serde(alias = "normalizeWhitespace")]
     NormalizeWhitespace,
+    #[serde(alias = "htmlToText")]
     HtmlToText,
+    #[serde(alias = "urlDecode")]
     UrlDecode,
+    #[serde(alias = "slugToTitle")]
     SlugToTitle,
     Dedupe,
+    #[serde(alias = "toString")]
     ToString,
     Split {
         separator: String,

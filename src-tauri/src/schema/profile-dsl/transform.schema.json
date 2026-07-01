@@ -25,11 +25,16 @@
           "enum": [
             "trim",
             "normalize_whitespace",
+            "normalizeWhitespace",
             "html_to_text",
+            "htmlToText",
             "url_decode",
+            "urlDecode",
             "slug_to_title",
+            "slugToTitle",
             "dedupe",
-            "to_string"
+            "to_string",
+            "toString"
           ]
         }
       }

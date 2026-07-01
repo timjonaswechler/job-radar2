@@ -499,6 +499,20 @@ fn validate_template_string(
     diagnostics: &mut Diagnostics,
 ) {
     for reference in template_references(template) {
+        if reference.contains('|') {
+            let mut diagnostic = compiler_error(
+                "template_transform_pipes_unsupported",
+                format!(
+                    "Template reference `{{{{{reference}}}}}` uses pipe syntax; transforms must be declared in transforms[]"
+                ),
+                path,
+                serde_json::json!({ "reference": reference }),
+            );
+            diagnostic.strategy_key = Some(strategy_key.to_string());
+            diagnostics.push(diagnostic);
+            continue;
+        }
+
         let Some((namespace, key)) = split_template_reference(&reference) else {
             let mut diagnostic = compiler_error(
                 "invalid_template_reference",

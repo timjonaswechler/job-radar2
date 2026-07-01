@@ -24,6 +24,8 @@ use crate::{
     source::documents::SourceConfig,
 };
 
+use super::transform::{apply_transform_pipeline, normalize_whitespace};
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostingDiscoveryExecutionResult {
@@ -618,21 +620,25 @@ fn evaluate_string_field(
         };
     }
 
-    let mut normalized_values = Vec::new();
-    for value in values {
-        let Some(value) = apply_string_transforms(
-            value,
-            transforms,
-            path,
-            strategy_key,
-            item_index,
-            diagnostics,
-        ) else {
+    let values = match apply_transforms(
+        values,
+        transforms,
+        path,
+        strategy_key,
+        item_index,
+        diagnostics,
+    ) {
+        Some(values) => values,
+        None => {
             return FieldEvaluation {
                 value: None,
                 failed: true,
             };
-        };
+        }
+    };
+
+    let mut normalized_values = Vec::new();
+    for value in values {
         let value = normalize_whitespace(value.trim());
         if !value.is_empty() {
             normalized_values.push(value);
@@ -939,35 +945,30 @@ fn json_value_to_strings(
     }
 }
 
-fn apply_string_transforms(
-    mut value: String,
+fn apply_transforms(
+    values: Vec<String>,
     transforms: Option<&Vec<Transform>>,
     path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
     diagnostics: &mut Diagnostics,
-) -> Option<String> {
-    for transform in transforms.into_iter().flatten() {
-        match transform {
-            Transform::Trim => value = value.trim().to_string(),
-            Transform::NormalizeWhitespace => value = normalize_whitespace(&value),
-            Transform::ToString => {}
-            unsupported => {
-                diagnostics.push(runtime_error(
-                    "unsupported_transform",
-                    "postingDiscovery runtime slice supports only trim and normalize_whitespace transforms for scalar fields",
-                    path,
-                    strategy_key,
-                    json!({
-                        "itemIndex": item_index,
-                        "transform": serde_json::to_value(unsupported).unwrap_or_else(|_| json!({})),
-                    }),
-                ));
-                return None;
-            }
+) -> Option<Vec<String>> {
+    match apply_transform_pipeline(values, transforms) {
+        Ok(values) => Some(values),
+        Err(error) => {
+            diagnostics.push(runtime_error(
+                error.code,
+                error.message,
+                path,
+                strategy_key,
+                json!({
+                    "itemIndex": item_index,
+                    "transform": error.transform,
+                }),
+            ));
+            None
         }
     }
-    Some(value)
 }
 
 fn extract_locations_field(
@@ -1008,54 +1009,24 @@ fn extract_locations_field(
         if failed {
             continue;
         }
+        let Some(values) = apply_transforms(
+            values,
+            transforms,
+            &expression_path,
+            strategy_key,
+            item_index,
+            diagnostics,
+        ) else {
+            continue;
+        };
         for value in values {
-            if let Some(value) = apply_location_transforms(
-                value,
-                transforms,
-                &expression_path,
-                strategy_key,
-                item_index,
-                diagnostics,
-            ) {
-                let value = normalize_whitespace(value.trim());
-                if !value.is_empty() && !locations.contains(&value) {
-                    locations.push(value);
-                }
+            let value = normalize_whitespace(value.trim());
+            if !value.is_empty() && !locations.contains(&value) {
+                locations.push(value);
             }
         }
     }
     locations
-}
-
-fn apply_location_transforms(
-    mut value: String,
-    transforms: Option<&Vec<Transform>>,
-    path: &str,
-    strategy_key: Option<&str>,
-    item_index: usize,
-    diagnostics: &mut Diagnostics,
-) -> Option<String> {
-    for transform in transforms.into_iter().flatten() {
-        match transform {
-            Transform::Trim => value = value.trim().to_string(),
-            Transform::NormalizeWhitespace => value = normalize_whitespace(&value),
-            Transform::Dedupe | Transform::ToString => {}
-            unsupported => {
-                diagnostics.push(runtime_error(
-                    "unsupported_transform",
-                    "postingDiscovery runtime slice supports only trim, normalize_whitespace, and dedupe transforms for locations",
-                    path,
-                    strategy_key,
-                    json!({
-                        "itemIndex": item_index,
-                        "transform": serde_json::to_value(unsupported).unwrap_or_else(|_| json!({})),
-                    }),
-                ));
-                return None;
-            }
-        }
-    }
-    Some(value)
 }
 
 fn render_source_config_template(
@@ -1105,10 +1076,6 @@ fn render_source_config_variable(
             "sourceConfig `{key}` must be a string, number, or boolean for template rendering"
         )),
     }
-}
-
-fn normalize_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn runtime_error(

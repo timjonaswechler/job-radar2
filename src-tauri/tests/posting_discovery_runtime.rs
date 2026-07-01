@@ -139,6 +139,170 @@ fn compiled_posting_discovery_runtime_applies_explicit_whitespace_transforms() {
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in_order() {
+    let mut fields = default_fields();
+    fields["title"] = json!({
+        "type": "json_path",
+        "jsonPath": "$.titleSlug",
+        "cardinality": "one",
+        "transforms": [{ "type": "url_decode" }, { "type": "slug_to_title" }]
+    });
+    let plan = compiled_json_posting_discovery_plan(fields, default_select());
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "titleSlug": "senior%20rust-engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1"
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_dedupes_string_arrays_before_cardinality() {
+    let mut fields = default_fields();
+    fields["title"] = json!({
+        "type": "json_path",
+        "jsonPath": "$.titles",
+        "cardinality": "one",
+        "transforms": [{ "type": "dedupe" }]
+    });
+    let plan = compiled_json_posting_discovery_plan(fields, default_select());
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "titles": ["Rust Engineer", "Rust Engineer"],
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1"
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates[0].title, "Rust Engineer");
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_splits_and_dedupes_location_arrays_in_order() {
+    let mut fields = default_fields();
+    fields["locations"] = json!({
+        "type": "json_path",
+        "jsonPath": "$.locationsText",
+        "cardinality": "one",
+        "transforms": [
+            { "type": "split", "separator": ";" },
+            { "type": "trim" },
+            { "type": "dedupe" }
+        ]
+    });
+    let plan = compiled_json_posting_discovery_plan(fields, default_select());
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "title": "Rust Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1",
+                "locationsText": " Berlin ;Remote; Berlin; München "
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.candidates[0].locations,
+        vec!["Berlin", "Remote", "München"]
+    );
+}
+
+#[test]
+fn compiled_posting_discovery_rejects_template_transform_pipes() {
+    let mut fields = default_fields();
+    fields["company"] = json!({
+        "type": "template",
+        "template": "{{sourceConfig:feedUrl|slugToTitle}}",
+        "cardinality": "one"
+    });
+
+    let profile: SourceProfileDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "example_jobs",
+        "name": "Example Jobs",
+        "kind": "generic",
+        "support": { "level": "experimental" },
+        "sourceConfigSchema": {
+            "type": "object",
+            "required": ["feedUrl"],
+            "properties": { "feedUrl": { "type": "string" } },
+            "additionalProperties": false
+        },
+        "accessPaths": [{
+            "key": "json_feed",
+            "name": "JSON feed",
+            "postingDiscovery": {
+                "strategies": [{
+                    "key": "json_api",
+                    "fetch": {
+                        "mode": "http",
+                        "method": "GET",
+                        "url": "{{sourceConfig:feedUrl}}",
+                        "timeoutMs": 10000
+                    },
+                    "parse": { "type": "json" },
+                    "select": { "type": "json_path", "jsonPath": "$.jobs" },
+                    "extract": { "fields": fields }
+                }]
+            }
+        }]
+    }))
+    .unwrap();
+    let source: SourceDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "example_source",
+        "name": "Example Source",
+        "status": "active",
+        "sourceConfig": { "feedUrl": "https://example.test/jobs.json" },
+        "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "example_jobs",
+            "pathKey": "json_feed"
+        }
+    }))
+    .unwrap();
+
+    let result = compile_source_execution_plan(
+        &ProfileCompilerSnapshot {
+            profiles: vec![profile],
+            sources: vec![source],
+        },
+        "example_source",
+    );
+
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "template_transform_pipes_unsupported"
+            && diagnostic.category == DiagnosticCategory::Compiler
+            && diagnostic.path
+                == "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"
+    }));
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_reports_fetch_parse_select_and_extract_failures() {
     let plan = compiled_json_posting_discovery_plan(default_fields(), default_select());
     let fetch_failure = block_on(execute_posting_discovery_with_fetcher(
