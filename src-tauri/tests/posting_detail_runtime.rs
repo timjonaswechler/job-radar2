@@ -3,11 +3,12 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 use job_radar_lib::{
     compile_source_execution_plan, execute_posting_detail_with_clients,
     execute_posting_detail_with_fetcher, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PostingDetailFetchError,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PostingDetailFetchError,
     PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
     PostingDetailPostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
     ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ProfileCompilerSnapshot, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -245,6 +246,77 @@ fn compiled_posting_detail_runtime_renders_fetch_templates_from_all_runtime_cont
         Some("Rendered from all template contexts.".to_string())
     );
     assert_eq!(fetcher.requests()[0].url, expected_url);
+}
+
+#[test]
+fn compiled_posting_detail_runtime_posts_rendered_json_body() {
+    let plan = compiled_posting_detail_plan_with_fetch(
+        json!({
+            "mode": "http",
+            "method": "POST",
+            "url": "{{sourceConfig:apiBase}}/detail",
+            "headers": { "content-type": "application/json" },
+            "body": {
+                "type": "json",
+                "value": {
+                    "jobId": "{{postingMeta:jobId}}",
+                    "tenant": "{{postingMeta:tenant}}",
+                    "postingUrl": "{{posting:url}}",
+                    "source": "{{source:name}}"
+                }
+            },
+            "timeoutMs": 15000
+        }),
+        json!({ "type": "json" }),
+        json!({ "type": "document" }),
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence(
+        "https://example.test/jobs/42",
+        [("jobId", "REQ-42"), ("tenant", "acme_jobs")],
+    );
+    let fetcher = FakeDetailFetcher::new([(
+        "https://api.example.test/detail",
+        json!({ "description": "Detail POST response." }).to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("Detail POST response.".to_string())
+    );
+    let request = &fetcher.requests()[0];
+    assert_eq!(request.method, HttpMethod::Post);
+    assert_eq!(request.url, "https://api.example.test/detail");
+    assert_eq!(request.timeout_ms, 15_000);
+    assert_eq!(
+        request.headers,
+        BTreeMap::from_iter([("content-type".to_string(), "application/json".to_string())])
+    );
+    assert_eq!(
+        request.body,
+        Some(RequestBody::Json {
+            value: serde_json::Map::from_iter([
+                ("jobId".to_string(), json!("REQ-42")),
+                (
+                    "postingUrl".to_string(),
+                    json!("https://example.test/jobs/42")
+                ),
+                ("source".to_string(), json!("Example Source")),
+                ("tenant".to_string(), json!("acme_jobs")),
+            ])
+        })
+    );
 }
 
 #[test]

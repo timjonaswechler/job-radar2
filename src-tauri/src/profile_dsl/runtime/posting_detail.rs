@@ -13,7 +13,7 @@ use crate::{
             extract::{Cardinality, CombinePart, FieldExpression},
             select::CaptureRule,
             transform::Transform,
-            HttpMethod, ParseType, Select,
+            HttpMethod, ParseType, RequestBody, Select,
         },
         execution_plan::{
             capabilities::ExecutionPlanFetch, posting_detail::ExecutionPlanPostingDetailStrategy,
@@ -66,11 +66,12 @@ pub struct PostingDetailPostingOccurrence {
     pub posting_meta: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PostingDetailFetchRequest {
     pub method: HttpMethod,
     pub url: String,
     pub headers: BTreeMap<String, String>,
+    pub body: Option<RequestBody>,
     pub timeout_ms: u64,
 }
 
@@ -146,6 +147,25 @@ impl PostingDetailFetcher for ReqwestPostingDetailFetcher {
                 .timeout(Duration::from_millis(request.timeout_ms));
             for (name, value) in &request.headers {
                 builder = builder.header(name, value);
+            }
+            if let Some(body) = &request.body {
+                builder = match body {
+                    RequestBody::Json { value } => {
+                        if !request
+                            .headers
+                            .keys()
+                            .any(|name| name.eq_ignore_ascii_case("content-type"))
+                        {
+                            builder = builder.header("content-type", "application/json");
+                        }
+                        builder.body(
+                            serde_json::to_string(value)
+                                .map_err(|error| PostingDetailFetchError::new(error.to_string()))?,
+                        )
+                    }
+                    RequestBody::Text { value } => builder.body(value.clone()),
+                    RequestBody::Form { fields } => builder.form(fields),
+                };
             }
             let response = builder
                 .send()

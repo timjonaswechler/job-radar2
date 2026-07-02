@@ -3,11 +3,12 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 use job_radar_lib::{
     compile_source_execution_plan, execute_posting_discovery_with_clients,
     execute_posting_discovery_with_fetcher, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PostingDiscoveryFetchError,
-    PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileCompilerSnapshot,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod,
+    PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
+    PostingDiscoveryFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -21,6 +22,8 @@ mod failure_diagnostics;
 mod fallback_acceptance;
 #[path = "posting_discovery_runtime/pagination.rs"]
 mod pagination;
+#[path = "posting_discovery_runtime/post_request_bodies.rs"]
+mod post_request_bodies;
 #[path = "posting_discovery_runtime/template_validation.rs"]
 mod template_validation;
 #[path = "posting_discovery_runtime/transforms_and_combine.rs"]

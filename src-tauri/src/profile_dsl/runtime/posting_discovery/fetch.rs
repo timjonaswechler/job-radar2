@@ -110,6 +110,7 @@ where
             method,
             url,
             headers,
+            body,
             timeout_ms,
             ..
         } => {
@@ -118,6 +119,7 @@ where
                 *method,
                 url,
                 headers.as_ref(),
+                body.as_ref(),
                 *timeout_ms,
                 source_config,
                 source_name,
@@ -159,6 +161,7 @@ async fn fetch_http_strategy_document<F>(
     method: Option<HttpMethod>,
     url: &str,
     headers: Option<&BTreeMap<String, String>>,
+    body: Option<&RequestBody>,
     timeout_ms: u64,
     source_config: &SourceConfig,
     source_name: &str,
@@ -172,13 +175,13 @@ where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
 {
     let method = method.unwrap_or(HttpMethod::Get);
-    if method != HttpMethod::Get {
+    if method == HttpMethod::Get && body.is_some() {
         diagnostics.push(runtime_error(
-            "unsupported_http_method",
-            "postingDiscovery runtime slice supports only HTTP GET",
-            format!("{base_path}/fetch/method"),
+            "unsupported_http_body_for_method",
+            "HTTP GET fetch requests cannot declare a request body",
+            format!("{base_path}/fetch/body"),
             strategy_key,
-            json!({ "supportedMethod": "GET" }),
+            json!({ "method": "GET" }),
         ));
         return None;
     }
@@ -198,10 +201,39 @@ where
             }
         };
 
+    let rendered_headers = match render_headers(headers, source_config, source_name) {
+        Ok(headers) => headers,
+        Err(message) => {
+            diagnostics.push(runtime_error(
+                "fetch_header_template_failed",
+                format!("Fetch header template could not be rendered: {message}"),
+                format!("{base_path}/fetch/headers"),
+                strategy_key,
+                json!({}),
+            ));
+            return None;
+        }
+    };
+
+    let rendered_body = match render_request_body(body, source_config, source_name) {
+        Ok(body) => body,
+        Err(message) => {
+            diagnostics.push(runtime_error(
+                "fetch_body_template_failed",
+                format!("Fetch body template could not be rendered: {message}"),
+                format!("{base_path}/fetch/body"),
+                strategy_key,
+                json!({}),
+            ));
+            return None;
+        }
+    };
+
     let request = PostingDiscoveryFetchRequest {
         method,
         url: rendered_url.clone(),
-        headers: headers.cloned().unwrap_or_default(),
+        headers: rendered_headers,
+        body: rendered_body,
         timeout_ms,
     };
 
@@ -211,7 +243,8 @@ where
             diagnostics.push(runtime_error(
                 "fetch_failed",
                 format!(
-                    "HTTP GET fetch failed for {rendered_url}: {}",
+                    "HTTP {} fetch failed for {rendered_url}: {}",
+                    http_method_label(method),
                     error.message
                 ),
                 format!("{base_path}/fetch"),
@@ -289,6 +322,97 @@ fn render_fetch_url(
         None => render_source_config_template(url, source_config, source_name)?,
     };
     Ok(append_query_params(rendered, query_params))
+}
+
+fn render_headers(
+    headers: Option<&BTreeMap<String, String>>,
+    source_config: &SourceConfig,
+    source_name: &str,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut rendered = BTreeMap::new();
+    for (name, value) in headers.into_iter().flatten() {
+        rendered.insert(
+            name.clone(),
+            render_source_config_template(value, source_config, source_name)?,
+        );
+    }
+    Ok(rendered)
+}
+
+fn render_request_body(
+    body: Option<&RequestBody>,
+    source_config: &SourceConfig,
+    source_name: &str,
+) -> Result<Option<RequestBody>, String> {
+    let Some(body) = body else {
+        return Ok(None);
+    };
+    match body {
+        RequestBody::Json { value } => Ok(Some(RequestBody::Json {
+            value: value
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        render_json_body_value(value, source_config, source_name)?,
+                    ))
+                })
+                .collect::<Result<serde_json::Map<String, Value>, String>>()?,
+        })),
+        RequestBody::Text { value } => Ok(Some(RequestBody::Text {
+            value: render_source_config_template(value, source_config, source_name)?,
+        })),
+        RequestBody::Form { fields } => Ok(Some(RequestBody::Form {
+            fields: fields
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        render_source_config_template(value, source_config, source_name)?,
+                    ))
+                })
+                .collect::<Result<BTreeMap<String, String>, String>>()?,
+        })),
+    }
+}
+
+fn render_json_body_value(
+    value: &Value,
+    source_config: &SourceConfig,
+    source_name: &str,
+) -> Result<Value, String> {
+    match value {
+        Value::String(value) => Ok(Value::String(render_source_config_template(
+            value,
+            source_config,
+            source_name,
+        )?)),
+        Value::Array(values) => Ok(Value::Array(
+            values
+                .iter()
+                .map(|value| render_json_body_value(value, source_config, source_name))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        Value::Object(values) => Ok(Value::Object(
+            values
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        render_json_body_value(value, source_config, source_name)?,
+                    ))
+                })
+                .collect::<Result<serde_json::Map<String, Value>, String>>()?,
+        )),
+        Value::Null | Value::Bool(_) | Value::Number(_) => Ok(value.clone()),
+    }
+}
+
+fn http_method_label(method: HttpMethod) -> &'static str {
+    match method {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+    }
 }
 
 fn append_query_params(url: String, query_params: &[(&str, String)]) -> String {
