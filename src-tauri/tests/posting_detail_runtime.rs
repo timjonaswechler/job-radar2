@@ -46,6 +46,172 @@ fn compiled_posting_detail_runtime_extracts_direct_json_description_text() {
 }
 
 #[test]
+fn compiled_posting_detail_runtime_falls_back_to_first_accepted_strategy() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![
+            json!({
+                "key": "short_detail_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/jobs/short.json",
+                    "timeoutMs": 10000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "document" },
+                "extract": {
+                    "fields": {
+                        "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                    }
+                },
+                "acceptWhen": { "minDescriptionLength": 20 }
+            }),
+            json!({
+                "key": "fallback_detail_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/jobs/fallback.json",
+                    "timeoutMs": 10000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "document" },
+                "extract": {
+                    "fields": {
+                        "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                    }
+                }
+            }),
+        ],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([
+        (
+            "https://example.test/jobs/short.json",
+            json!({ "description": "Too short" }).to_string(),
+        ),
+        (
+            "https://example.test/jobs/fallback.json",
+            json!({ "description": "Fallback detail description." }).to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(
+        result.description_text,
+        Some("Fallback detail description.".to_string())
+    );
+    assert_eq!(
+        fetcher
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect::<Vec<_>>(),
+        vec![
+            "https://example.test/jobs/short.json".to_string(),
+            "https://example.test/jobs/fallback.json".to_string(),
+        ]
+    );
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "description_too_short");
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("short_detail_api")
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_combines_step_and_strategy_acceptance() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        Some(json!({ "minDescriptionLength": 20 })),
+        vec![json!({
+            "key": "detail_api",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/jobs/short.json",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+                "fields": {
+                    "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                }
+            },
+            "acceptWhen": { "minDescriptionLength": 5 }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/short.json",
+        json!({ "description": "Too short" }).to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_eq!(result.diagnostics.len(), 2);
+    assert_runtime_diagnostic(&result.diagnostics[0], "description_too_short");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDetail/acceptWhen/minDescriptionLength"
+    );
+    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
+    assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");
+}
+
+#[test]
+fn compiled_posting_detail_runtime_reports_unsupported_max_error_ratio() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![json!({
+            "key": "detail_api",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/jobs/detail.json",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+                "fields": {
+                    "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                }
+            },
+            "acceptWhen": { "maxErrorRatio": 0.25 }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/detail.json",
+        json!({ "description": "Detailed role description." }).to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_eq!(
+        result.diagnostics[0].code,
+        "acceptance_max_error_ratio_unsupported"
+    );
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDetail/strategies/0/acceptWhen/maxErrorRatio"
+    );
+    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
+}
+
+#[test]
 fn compiled_posting_detail_runtime_renders_fetch_templates_from_all_runtime_contexts() {
     let plan = compiled_json_posting_detail_plan(
         "{{sourceConfig:apiBase}}/{{captures:tenant}}/{{postingMeta:jobId}}?u={{posting:url}}",
@@ -719,6 +885,88 @@ fn compiled_posting_detail_plan_with_fetch(
             sources: vec![source],
         },
         "example_source",
+    );
+    assert_eq!(result.diagnostics, Vec::new());
+    result.execution_plan.expect("fixture plan should compile")
+}
+
+fn compiled_posting_detail_plan_with_strategies(
+    step_accept_when: Option<Value>,
+    strategies: Vec<Value>,
+) -> SourceExecutionPlan {
+    let mut posting_detail = json!({ "strategies": strategies });
+    if let Some(accept_when) = step_accept_when {
+        posting_detail["acceptWhen"] = accept_when;
+    }
+
+    let profile: SourceProfileDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "fallback_detail_jobs",
+        "name": "Fallback Detail Jobs",
+        "kind": "generic",
+        "support": {
+            "level": "experimental",
+            "summary": "Posting detail fallback runtime fixture."
+        },
+        "sourceConfigSchema": {
+            "type": "object",
+            "required": ["feedUrl", "apiBase"],
+            "properties": {
+                "feedUrl": { "type": "string" },
+                "apiBase": { "type": "string" }
+            },
+            "additionalProperties": false
+        },
+        "accessPaths": [{
+            "key": "json_feed",
+            "name": "JSON feed",
+            "postingDiscovery": {
+                "strategies": [{
+                    "key": "json_api",
+                    "fetch": {
+                        "mode": "http",
+                        "method": "GET",
+                        "url": "{{sourceConfig:feedUrl}}",
+                        "timeoutMs": 10000
+                    },
+                    "parse": { "type": "json" },
+                    "select": { "type": "json_path", "jsonPath": "$.jobs" },
+                    "extract": {
+                        "fields": {
+                            "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
+                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
+                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                        }
+                    }
+                }]
+            },
+            "postingDetail": posting_detail
+        }]
+    }))
+    .unwrap();
+    let source: SourceDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "fallback_detail_source",
+        "name": "Fallback Detail Source",
+        "status": "active",
+        "sourceConfig": {
+            "feedUrl": "https://example.test/jobs.json",
+            "apiBase": "https://api.example.test"
+        },
+        "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "fallback_detail_jobs",
+            "pathKey": "json_feed"
+        }
+    }))
+    .unwrap();
+
+    let result = compile_source_execution_plan(
+        &ProfileCompilerSnapshot {
+            profiles: vec![profile],
+            sources: vec![source],
+        },
+        "fallback_detail_source",
     );
     assert_eq!(result.diagnostics, Vec::new());
     result.execution_plan.expect("fixture plan should compile")

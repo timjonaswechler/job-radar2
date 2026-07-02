@@ -17,6 +17,8 @@ mod core;
 mod document_types_and_browser;
 #[path = "posting_discovery_runtime/failure_diagnostics.rs"]
 mod failure_diagnostics;
+#[path = "posting_discovery_runtime/fallback_acceptance.rs"]
+mod fallback_acceptance;
 #[path = "posting_discovery_runtime/pagination.rs"]
 mod pagination;
 #[path = "posting_discovery_runtime/template_validation.rs"]

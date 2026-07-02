@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
+        documents::strategy::Acceptance,
         documents::{
             extract::{Cardinality, CombinePart, FieldExpression},
             select::CaptureRule,
@@ -203,8 +204,7 @@ where
         };
     };
 
-    let Some((strategy_index, strategy)) = posting_detail.strategies.iter().enumerate().next()
-    else {
+    if posting_detail.strategies.is_empty() {
         return PostingDetailExecutionResult {
             description_text: None,
             diagnostics: vec![runtime_error(
@@ -215,9 +215,46 @@ where
                 json!({}),
             )],
         };
-    };
+    }
 
-    execute_strategy(plan, posting, fetcher, browser, strategy_index, strategy).await
+    let mut diagnostics = Vec::new();
+    for (strategy_index, strategy) in posting_detail.strategies.iter().enumerate() {
+        let attempt = execute_strategy(
+            plan,
+            posting,
+            fetcher,
+            browser,
+            strategy_index,
+            strategy,
+            posting_detail.accept_when.as_ref(),
+        )
+        .await;
+        if attempt.accepted {
+            diagnostics.extend(attempt.result.diagnostics);
+            return PostingDetailExecutionResult {
+                description_text: attempt.result.description_text,
+                diagnostics,
+            };
+        }
+        diagnostics.extend(attempt.result.diagnostics);
+    }
+
+    diagnostics.push(runtime_error(
+        "fallback_exhausted",
+        "postingDetail fallback strategies were exhausted without an accepted result",
+        "/postingDetail/strategies",
+        None,
+        json!({}),
+    ));
+    PostingDetailExecutionResult {
+        description_text: None,
+        diagnostics,
+    }
+}
+
+struct PostingDetailStrategyAttempt {
+    result: PostingDetailExecutionResult,
+    accepted: bool,
 }
 
 async fn execute_strategy<F, B>(
@@ -227,7 +264,8 @@ async fn execute_strategy<F, B>(
     browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanPostingDetailStrategy,
-) -> PostingDetailExecutionResult
+    step_acceptance: Option<&Acceptance>,
+) -> PostingDetailStrategyAttempt
 where
     F: PostingDetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -245,12 +283,7 @@ where
         &mut diagnostics,
     ) {
         Some(captures) => captures,
-        None => {
-            return PostingDetailExecutionResult {
-                description_text: None,
-                diagnostics,
-            }
-        }
+        None => return rejected_detail_attempt(diagnostics),
     };
 
     let response = match fetch_strategy_document(
@@ -267,12 +300,7 @@ where
     .await
     {
         Some(response) => response,
-        None => {
-            return PostingDetailExecutionResult {
-                description_text: None,
-                diagnostics,
-            }
-        }
+        None => return rejected_detail_attempt(diagnostics),
     };
 
     let document = match parse_response_document(
@@ -283,12 +311,7 @@ where
         &mut diagnostics,
     ) {
         Some(document) => document,
-        None => {
-            return PostingDetailExecutionResult {
-                description_text: None,
-                diagnostics,
-            }
-        }
+        None => return rejected_detail_attempt(diagnostics),
     };
 
     let selected_document = match select_detail_document(
@@ -299,12 +322,7 @@ where
         &mut diagnostics,
     ) {
         Some(document) => document,
-        None => {
-            return PostingDetailExecutionResult {
-                description_text: None,
-                diagnostics,
-            }
-        }
+        None => return rejected_detail_attempt(diagnostics),
     };
 
     let description_path = format!("{base_path}/extract/fields/descriptionText");
@@ -329,47 +347,149 @@ where
                 json!({}),
             ));
         }
-        return PostingDetailExecutionResult {
-            description_text: None,
-            diagnostics,
-        };
+        return rejected_detail_attempt(diagnostics);
     };
 
     let description = normalize_whitespace(description.trim());
-    if let Some(minimum) = strategy
-        .accept_when
-        .as_ref()
-        .and_then(|acceptance| acceptance.min_description_length)
-        .or_else(|| {
-            plan.posting_detail
-                .as_ref()
-                .and_then(|step| step.accept_when.as_ref())
-                .and_then(|acceptance| acceptance.min_description_length)
-        })
+    let accepted = accept_posting_detail_result(
+        &description,
+        step_acceptance,
+        strategy.accept_when.as_ref(),
+        &base_path,
+        strategy_key.as_deref(),
+        &mut diagnostics,
+    );
+    PostingDetailStrategyAttempt {
+        result: PostingDetailExecutionResult {
+            description_text: accepted.then_some(description),
+            diagnostics,
+        },
+        accepted,
+    }
+}
+
+fn rejected_detail_attempt(diagnostics: Diagnostics) -> PostingDetailStrategyAttempt {
+    PostingDetailStrategyAttempt {
+        result: PostingDetailExecutionResult {
+            description_text: None,
+            diagnostics,
+        },
+        accepted: false,
+    }
+}
+
+fn accept_posting_detail_result(
+    description: &str,
+    step_acceptance: Option<&Acceptance>,
+    strategy_acceptance: Option<&Acceptance>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> bool {
+    if let Some((ratio, owner_path)) =
+        detail_first_max_error_ratio(step_acceptance, strategy_acceptance, base_path)
     {
+        diagnostics.push(runtime_error(
+            "acceptance_max_error_ratio_unsupported",
+            "acceptWhen.maxErrorRatio is not supported by the postingDetail runtime result model yet",
+            format!("{owner_path}/acceptWhen/maxErrorRatio"),
+            strategy_key,
+            json!({ "maxErrorRatio": ratio }),
+        ));
+        return false;
+    }
+
+    for (field, owner_path) in
+        detail_required_field_rules(step_acceptance, strategy_acceptance, base_path)
+    {
+        if field != "descriptionText" || description.trim().is_empty() {
+            diagnostics.push(runtime_error(
+                "acceptance_required_field_missing",
+                format!("postingDetail result is missing required normalized field `{field}`"),
+                format!("{owner_path}/acceptWhen/requiredFields"),
+                strategy_key,
+                json!({ "field": field }),
+            ));
+            return false;
+        }
+    }
+
+    if let Some((minimum, owner_path)) = detail_stricter_u64_acceptance(
+        step_acceptance.and_then(|acceptance| acceptance.min_description_length),
+        strategy_acceptance.and_then(|acceptance| acceptance.min_description_length),
+        base_path,
+    ) {
         if description.chars().count() < minimum as usize {
             diagnostics.push(runtime_error(
                 "description_too_short",
                 format!(
                     "postingDetail descriptionText is shorter than the configured minimum of {minimum} characters"
                 ),
-                &description_path,
-                strategy_key.as_deref(),
+                format!("{owner_path}/acceptWhen/minDescriptionLength"),
+                strategy_key,
                 json!({
                     "minDescriptionLength": minimum,
                     "actualLength": description.chars().count(),
                 }),
             ));
-            return PostingDetailExecutionResult {
-                description_text: None,
-                diagnostics,
-            };
+            return false;
         }
     }
 
-    PostingDetailExecutionResult {
-        description_text: Some(description),
-        diagnostics,
+    true
+}
+
+fn detail_first_max_error_ratio(
+    step_acceptance: Option<&Acceptance>,
+    strategy_acceptance: Option<&Acceptance>,
+    base_path: &str,
+) -> Option<(f64, String)> {
+    step_acceptance
+        .and_then(|acceptance| acceptance.max_error_ratio)
+        .map(|ratio| (ratio, "/postingDetail".to_string()))
+        .or_else(|| {
+            strategy_acceptance
+                .and_then(|acceptance| acceptance.max_error_ratio)
+                .map(|ratio| (ratio, base_path.to_string()))
+        })
+}
+
+fn detail_required_field_rules(
+    step_acceptance: Option<&Acceptance>,
+    strategy_acceptance: Option<&Acceptance>,
+    base_path: &str,
+) -> Vec<(String, String)> {
+    let mut rules = Vec::new();
+    if let Some(fields) = step_acceptance.and_then(|acceptance| acceptance.required_fields.as_ref())
+    {
+        rules.extend(
+            fields
+                .iter()
+                .map(|field| (field.clone(), "/postingDetail".to_string())),
+        );
+    }
+    if let Some(fields) =
+        strategy_acceptance.and_then(|acceptance| acceptance.required_fields.as_ref())
+    {
+        for field in fields {
+            if !rules.iter().any(|(existing, _)| existing == field) {
+                rules.push((field.clone(), base_path.to_string()));
+            }
+        }
+    }
+    rules
+}
+
+fn detail_stricter_u64_acceptance(
+    step_value: Option<u64>,
+    strategy_value: Option<u64>,
+    base_path: &str,
+) -> Option<(u64, String)> {
+    match (step_value, strategy_value) {
+        (Some(step), Some(strategy)) if strategy >= step => Some((strategy, base_path.to_string())),
+        (Some(step), Some(_)) | (Some(step), None) => Some((step, "/postingDetail".to_string())),
+        (None, Some(strategy)) => Some((strategy, base_path.to_string())),
+        (None, None) => None,
     }
 }
 
