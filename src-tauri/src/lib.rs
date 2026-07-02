@@ -1,4 +1,3 @@
-mod adapter_registry;
 mod app;
 mod browser_runtime;
 mod db;
@@ -39,6 +38,7 @@ pub use profile_dsl::runtime::{
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
+pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
     detect_source_proposal, detect_source_proposal_with_clients,
     detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
@@ -46,6 +46,10 @@ pub use source_profile::detection::{
     SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedSourceProfile,
 };
 pub use source_profile::documents::SourceProfileDocument;
+pub use source_profile::registry::{
+    load_snapshot as load_source_profile_registry_snapshot, RegistrySource, RegistrySourceProfile,
+    SourceProfileRegistrySnapshot,
+};
 
 use tauri::Manager;
 
@@ -83,12 +87,12 @@ pub fn run() {
             app::commands::install_browser_runtime,
             app::commands::uninstall_browser_runtime,
             app::commands::check_browser_runtime,
-            app::commands::list_adapters,
-            app::commands::list_source_registry_profiles,
-            app::commands::list_source_registry_sources,
-            app::commands::list_source_registry_diagnostics,
+            app::commands::get_source_profile_registry_snapshot,
+            app::commands::list_source_profiles,
+            app::commands::list_sources,
+            app::commands::list_source_diagnostics,
             app::commands::detect_source_from_url,
-            app::commands::create_custom_source,
+            app::commands::create_source,
             app::commands::create_search_request,
             app::commands::list_search_requests,
             app::commands::get_search_request,

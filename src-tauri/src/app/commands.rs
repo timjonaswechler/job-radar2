@@ -238,36 +238,40 @@ fn browser_runtime_installing(state: &AppState) -> bool {
     }
 }
 
-#[tauri::command]
-pub fn list_adapters() -> Result<Vec<crate::adapter_registry::AdapterMetadata>, String> {
-    Ok(crate::adapter_registry::list_adapters())
-}
-
-fn load_source_registry_snapshot(
+fn load_source_profile_registry_snapshot(
     app_data_dir: &Path,
-) -> crate::source::registry::SourceRegistrySnapshot {
-    crate::source::registry::load_snapshot(app_data_dir)
+) -> crate::source_profile::registry::SourceProfileRegistrySnapshot {
+    crate::source_profile::registry::load_snapshot(app_data_dir)
 }
 
 #[tauri::command]
-pub fn list_source_registry_profiles(
+pub fn get_source_profile_registry_snapshot(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source::registry::RegistrySourceProfile>, String> {
-    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_profiles)
+) -> Result<crate::source_profile::registry::SourceProfileRegistrySnapshot, String> {
+    Ok(load_source_profile_registry_snapshot(
+        &state.paths.app_data_dir,
+    ))
 }
 
 #[tauri::command]
-pub fn list_source_registry_sources(
+pub fn list_source_profiles(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source::registry::RegistrySource>, String> {
-    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).valid_sources)
+) -> Result<Vec<crate::source_profile::registry::RegistrySourceProfile>, String> {
+    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).profiles)
 }
 
 #[tauri::command]
-pub fn list_source_registry_diagnostics(
+pub fn list_sources(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::source::registry::SourceRegistryDiagnostic>, String> {
-    Ok(load_source_registry_snapshot(&state.paths.app_data_dir).diagnostics)
+) -> Result<Vec<crate::source_profile::registry::RegistrySource>, String> {
+    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).sources)
+}
+
+#[tauri::command]
+pub fn list_source_diagnostics(
+    state: State<'_, AppState>,
+) -> Result<crate::profile_dsl::diagnostics::Diagnostics, String> {
+    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).diagnostics)
 }
 
 #[tauri::command]
@@ -279,41 +283,17 @@ pub async fn detect_source_from_url(
 }
 
 #[tauri::command]
-pub fn create_custom_source(
+pub fn create_source(
     state: State<'_, AppState>,
-    document: crate::source::registry::SourceDocument,
-) -> Result<crate::source::registry::RegistrySource, String> {
-    let snapshot = load_source_registry_snapshot(&state.paths.app_data_dir);
+    document: crate::source::documents::SourceDocument,
+) -> Result<crate::source_profile::registry::RegistrySource, String> {
+    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
 
-    if snapshot
-        .valid_sources
-        .iter()
-        .any(|source| source.document.key == document.key)
-    {
+    if snapshot.source(&document.key).is_some() {
         return Err(format!(
-            "Eine Quelle mit dem Key `{}` existiert bereits.",
+            "Eine Source mit dem Key `{}` existiert bereits.",
             document.key
         ));
-    }
-
-    if let crate::source::registry::SelectedAccessPath::Profile {
-        profile_key,
-        path_key,
-    } = &document.selected_access_path
-    {
-        let profile = snapshot
-            .profile(profile_key)
-            .ok_or_else(|| format!("Das Quellenprofil `{profile_key}` wurde nicht gefunden."))?;
-        let path_exists = profile
-            .document
-            .access_paths
-            .iter()
-            .any(|access_path| access_path.key == *path_key);
-        if !path_exists {
-            return Err(format!(
-                "Der Zugriffspfad `{path_key}` wurde im Profil `{profile_key}` nicht gefunden."
-            ));
-        }
     }
 
     fs::create_dir_all(&state.paths.sources_dir)
@@ -327,14 +307,16 @@ pub fn create_custom_source(
     }
 
     let contents = serde_json::to_string_pretty(&document)
-        .map_err(|error| format!("Quelle konnte nicht serialisiert werden: {error}"))?;
+        .map_err(|error| format!("Source konnte nicht serialisiert werden: {error}"))?;
     fs::write(&path, format!("{contents}\n"))
-        .map_err(|error| format!("Quelle konnte nicht geschrieben werden: {error}"))?;
+        .map_err(|error| format!("Source konnte nicht geschrieben werden: {error}"))?;
 
-    Ok(crate::source::registry::RegistrySource {
-        origin: crate::source::registry::SourceRegistryDocumentOrigin::Custom,
-        path: path.to_string_lossy().to_string(),
-        document,
+    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    snapshot.source(&document.key).cloned().ok_or_else(|| {
+        format!(
+            "Source `{}` wurde nach dem Schreiben nicht gefunden.",
+            document.key
+        )
     })
 }
 
@@ -582,10 +564,9 @@ mod tests {
             assert!(removed_tables.is_empty());
 
             let registry_snapshot =
-                crate::source::registry::load_snapshot(&state.paths.app_data_dir);
-            assert!(registry_snapshot.profile("ashby").is_some());
-            assert!(registry_snapshot.profile("stepstone_de").is_some());
-            assert!(registry_snapshot.source("stepstone_de").is_some());
+                crate::source_profile::registry::load_snapshot(&state.paths.app_data_dir);
+            assert!(registry_snapshot.profile("greenhouse").is_some());
+            assert!(registry_snapshot.profile("workday").is_some());
             assert!(
                 registry_snapshot.diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",
@@ -595,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn source_registry_commands_read_current_registry_snapshot() {
+    fn source_profile_registry_commands_read_current_registry_snapshot() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let paths =
@@ -603,20 +584,16 @@ mod tests {
                     .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
-            let snapshot = load_source_registry_snapshot(&state.paths.app_data_dir);
+            let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
 
             assert!(snapshot
-                .valid_profiles
+                .profiles
                 .iter()
-                .any(|profile| profile.document.key == "ashby"));
+                .any(|profile| profile.document.key == "greenhouse"));
             assert!(snapshot
-                .valid_profiles
+                .profiles
                 .iter()
-                .any(|profile| profile.document.key == "stepstone_de"));
-            assert!(snapshot
-                .valid_sources
-                .iter()
-                .any(|source| source.document.key == "stepstone_de"));
+                .any(|profile| profile.document.key == "workday"));
             assert!(
                 snapshot.diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",
