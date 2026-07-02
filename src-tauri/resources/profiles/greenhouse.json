@@ -1,99 +1,152 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "key": "greenhouse",
   "name": "Greenhouse",
   "kind": "recruiting_system",
-  "detect": {
-    "phases": ["http"],
-    "required": [
+  "description": "Greenhouse Job Board API profile for public board posting discovery and lazy posting detail extraction.",
+  "support": {
+    "level": "verified",
+    "summary": "Verified against deterministic offline Greenhouse Job Board API-compatible discovery and detail fixtures.",
+    "evidence": [
       {
-        "htmlRegex": "(?i)https?://(?:(?:boards|job-boards)\\.greenhouse\\.io/(?:embed/job_board(?:/js)?\\?[^\\\"'<>\\s]*\\bfor=)?|boards-api\\.greenhouse\\.io/v1/boards/)([a-z0-9][a-z0-9_-]*)(?:(?:/(?:jobs|departments|offices|sections)[^\\\"'<>\\s]*)|(?:/[?#&\\\"'<>\\s]?)|[?#&\\\"'<>\\s]|$)",
-        "captureAs": "boardSlug"
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/greenhouse/posting-discovery-response.json",
+        "summary": "postingDiscovery fixture executes through the public Profile Compiler and shared Profile DSL runtime."
+      },
+      {
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/greenhouse/posting-detail-9001-response.json",
+        "summary": "postingDetail fixture extracts normalized descriptionText from HTML-in-JSON content through the shared Profile DSL runtime."
       }
     ]
   },
-  "identity": {
-    "keyCandidates": [
-      "{{capture:boardSlug|technicalKey}}"
+  "detect": {
+    "recommendedAccessPathKey": "boards_api",
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
+        "captures": ["boardSlug"]
+      },
+      {
+        "pattern": "(?i)^https?://boards-api\\.greenhouse\\.io/v1/boards/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:/(?:jobs|departments|offices|sections).*)?$",
+        "captures": ["boardSlug"]
+      }
     ],
-    "nameCandidates": [
-      "{{capture:boardSlug|titleCase}}"
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Greenhouse board URLs and Boards API URLs include a reusable board slug."
+      }
     ]
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["boardSlug"],
+    "additionalProperties": false,
+    "properties": {
+      "boardSlug": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+        "title": "Greenhouse board slug"
+      }
+    }
   },
   "accessPaths": [
     {
-      "key": "endpoint_inventory",
-      "adapterKey": "declarative_endpoint_inventory",
-      "availability": {
-        "requiredCaptures": ["boardSlug"],
-        "sourceConfig": {
-          "boardSlug": "{{capture:boardSlug}}",
-          "startUrl": "{{inputUrl}}"
-        }
-      },
-      "sourceConfigSchema": {
-        "type": "object",
-        "required": ["boardSlug"],
-        "additionalProperties": false,
-        "properties": {
-          "boardSlug": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
-            "title": "Greenhouse board token"
-          },
-          "startUrl": {
-            "type": "string",
-            "format": "uri",
-            "title": "Start-URL"
-          }
-        }
-      },
-      "inventory": {
-        "fetch": {
-          "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs"
-        },
-        "parse": {
-          "as": "json"
-        },
-        "items": {
-          "select": {
-            "jsonPath": "$.jobs"
-          }
-        },
-        "fields": {
-          "title": {
-            "jsonPath": "$.title"
-          },
-          "url": {
-            "jsonPath": "$.absolute_url"
-          },
-          "company": {
-            "template": "{{sourceName}}"
-          },
-          "locations": [
-            {
-              "jsonPath": "$.location.name"
+      "key": "boards_api",
+      "name": "Greenhouse Boards API",
+      "description": "Discover jobs from GET /v1/boards/{boardSlug}/jobs and load one posting from GET /v1/boards/{boardSlug}/jobs/{jobId}.",
+      "postingDiscovery": {
+        "strategies": [
+          {
+            "key": "jobs_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs",
+              "headers": {
+                "accept": "application/json"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
+            "extract": {
+              "fields": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one",
+                  "transforms": [{ "type": "trim" }]
+                },
+                "company": {
+                  "type": "template",
+                  "template": "{{source:name}}",
+                  "cardinality": "one"
+                },
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.absolute_url",
+                  "cardinality": "one"
+                },
+                "locations": {
+                  "type": "json_path",
+                  "jsonPath": "$.location.name",
+                  "cardinality": "optional"
+                },
+                "postingMeta": {
+                  "jobId": {
+                    "type": "json_path",
+                    "jsonPath": "$.id",
+                    "cardinality": "one",
+                    "transforms": [{ "type": "to_string" }]
+                  }
+                }
+              }
+            },
+            "acceptWhen": {
+              "requiredFields": ["title", "company", "url", "postingMeta.jobId"],
+              "minResults": 1
             }
-          ],
-          "postingMeta": {
-            "jobId": {
-              "jsonPath": "$.id"
-            }
           }
-        }
+        ]
       },
       "postingDetail": {
-        "fetch": {
-          "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs/{{postingMeta:jobId}}"
-        },
-        "parse": {
-          "as": "json"
-        },
-        "fields": {
-          "descriptionText": {
-            "jsonPathHtml": "$.content"
+        "strategies": [
+          {
+            "key": "job_detail_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs/{{postingMeta:jobId}}",
+              "headers": {
+                "accept": "application/json"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "json_path",
+                  "jsonPath": "$.content",
+                  "cardinality": "one",
+                  "transforms": [
+                    { "type": "html_to_text" },
+                    { "type": "normalize_whitespace" }
+                  ]
+                }
+              }
+            },
+            "acceptWhen": {
+              "minDescriptionLength": 20
+            }
           }
-        }
+        ]
       }
     }
   ]

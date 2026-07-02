@@ -9,6 +9,7 @@ use super::*;
 pub(super) fn evaluate_strategy_captures(
     strategy: &ExecutionPlanPostingDetailStrategy,
     source_config: &SourceConfig,
+    source_name: &str,
     posting: &PostingDetailPostingOccurrence,
     base_path: &str,
     strategy_key: Option<&str>,
@@ -27,6 +28,7 @@ pub(super) fn evaluate_strategy_captures(
         let evaluation = evaluate_string_field(
             &empty_item,
             source_config,
+            source_name,
             posting,
             &context_captures,
             &rule.from,
@@ -127,6 +129,7 @@ pub(super) struct FieldEvaluation {
 pub(super) fn evaluate_string_field(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     expression: &FieldExpression,
@@ -142,6 +145,7 @@ pub(super) fn evaluate_string_field(
     } = raw_field_values(
         document,
         source_config,
+        source_name,
         posting,
         captures,
         expression,
@@ -241,6 +245,7 @@ pub(super) struct RawFieldValues<'a> {
 fn raw_field_values<'a>(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     expression: &'a FieldExpression,
@@ -363,6 +368,7 @@ fn raw_field_values<'a>(
         } => {
             let context = TemplateRuntimeContext {
                 source_config,
+                source_name,
                 posting,
                 posting_meta: &posting.posting_meta,
                 captures,
@@ -485,6 +491,7 @@ fn raw_field_values<'a>(
         } => combine_field_values(
             document,
             source_config,
+            source_name,
             posting,
             captures,
             parts,
@@ -500,6 +507,7 @@ fn raw_field_values<'a>(
 fn combine_field_values(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     parts: &[CombinePart],
@@ -514,6 +522,7 @@ fn combine_field_values(
         match evaluate_string_field(
             document,
             source_config,
+            source_name,
             posting,
             captures,
             &part.value,

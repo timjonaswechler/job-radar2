@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) struct TemplateRuntimeContext<'a> {
     pub(super) source_config: &'a SourceConfig,
+    pub(super) source_name: &'a str,
     pub(super) posting: &'a PostingDetailPostingOccurrence,
     pub(super) posting_meta: &'a BTreeMap<String, String>,
     pub(super) captures: &'a BTreeMap<String, String>,
@@ -60,6 +61,8 @@ fn render_template_variable(
             .ok_or_else(|| format!("postingMeta `{key}` is missing")),
         "posting" => posting_value_as_string(context.posting, key)
             .ok_or_else(|| format!("posting `{key}` is missing or not scalar")),
+        "source" if key == "name" => Ok(context.source_name.to_string()),
+        "source" => Err(format!("source `{key}` is missing or not scalar")),
         _ => Err(format!("unsupported template namespace `{namespace}`")),
     }
 }

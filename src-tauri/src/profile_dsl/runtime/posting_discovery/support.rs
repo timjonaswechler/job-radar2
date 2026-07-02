@@ -3,13 +3,14 @@ use super::*;
 pub(super) fn render_source_config_template(
     template: &str,
     source_config: &SourceConfig,
+    source_name: &str,
 ) -> Result<String, String> {
     let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
     let mut first_error = None;
     let rendered = placeholder_regex
         .replace_all(template, |captures: &regex::Captures<'_>| {
             let variable = captures[1].trim();
-            match render_source_config_variable(variable, source_config) {
+            match render_template_variable(variable, source_config, source_name) {
                 Ok(value) => value,
                 Err(error) => {
                     if first_error.is_none() {
@@ -28,24 +29,39 @@ pub(super) fn render_source_config_template(
     }
 }
 
-fn render_source_config_variable(
+fn render_template_variable(
     variable: &str,
     source_config: &SourceConfig,
+    source_name: &str,
 ) -> Result<String, String> {
-    let Some(key) = variable.strip_prefix("sourceConfig:") else {
-        return Err(format!("unsupported template variable `{variable}`"));
+    let Some((namespace, key)) = split_template_variable(variable) else {
+        return Err(format!(
+            "template variable `{variable}` must use namespace:key syntax"
+        ));
     };
-    let value = source_config
-        .get(key)
-        .ok_or_else(|| format!("sourceConfig `{key}` is missing"))?;
-    match value {
-        Value::String(value) => Ok(value.clone()),
-        Value::Number(value) => Ok(value.to_string()),
-        Value::Bool(value) => Ok(value.to_string()),
-        Value::Null => Err(format!("sourceConfig `{key}` is null")),
-        Value::Array(_) | Value::Object(_) => Err(format!(
-            "sourceConfig `{key}` must be a string, number, or boolean for template rendering"
-        )),
+
+    match namespace {
+        "sourceConfig" => source_config_value_as_string(source_config, key)
+            .ok_or_else(|| format!("sourceConfig `{key}` is missing or not scalar")),
+        "source" if key == "name" => Ok(source_name.to_string()),
+        "source" => Err(format!("source `{key}` is missing or not scalar")),
+        _ => Err(format!("unsupported template namespace `{namespace}`")),
+    }
+}
+
+fn split_template_variable(variable: &str) -> Option<(&str, &str)> {
+    variable
+        .split_once(':')
+        .or_else(|| variable.split_once('.'))
+        .filter(|(namespace, key)| !namespace.is_empty() && !key.is_empty())
+}
+
+fn source_config_value_as_string(source_config: &SourceConfig, key: &str) -> Option<String> {
+    match source_config.get(key)? {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        Value::Bool(value) => Some(value.to_string()),
+        Value::Null | Value::Array(_) | Value::Object(_) => None,
     }
 }
 

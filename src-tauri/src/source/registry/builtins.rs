@@ -6,10 +6,6 @@ pub const BUILTIN_SOURCE_PROFILE_JSON_FILES: &[EmbeddedSourceRegistryDocument<'s
         include_str!("../../../resources/profiles/ashby.json"),
     ),
     (
-        "source-profiles/builtin/greenhouse.json",
-        include_str!("../../../resources/profiles/greenhouse.json"),
-    ),
-    (
         "source-profiles/builtin/lever.json",
         include_str!("../../../resources/profiles/lever.json"),
     ),

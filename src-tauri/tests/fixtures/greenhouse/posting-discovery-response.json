@@ -1,0 +1,23 @@
+{
+  "jobs": [
+    {
+      "id": 9001,
+      "title": "Staff Platform Engineer",
+      "absolute_url": "https://job-boards.greenhouse.io/acmejobs/jobs/9001",
+      "location": {
+        "name": "Berlin, Germany"
+      }
+    },
+    {
+      "id": 9002,
+      "title": "Product Designer",
+      "absolute_url": "https://job-boards.greenhouse.io/acmejobs/jobs/9002",
+      "location": {
+        "name": "Remote"
+      }
+    }
+  ],
+  "meta": {
+    "total": 2
+  }
+}

@@ -6,6 +6,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
+    source_name: &str,
     posting: &PostingDetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     base_path: &str,
@@ -18,6 +19,7 @@ where
 {
     let context = TemplateRuntimeContext {
         source_config,
+        source_name,
         posting,
         posting_meta: &posting.posting_meta,
         captures,

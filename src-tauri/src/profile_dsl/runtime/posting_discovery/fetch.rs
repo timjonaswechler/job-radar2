@@ -6,6 +6,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
+    source_name: &str,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -19,6 +20,7 @@ where
         browser,
         fetch,
         source_config,
+        source_name,
         &[],
         base_path,
         strategy_key,
@@ -32,6 +34,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
+    source_name: &str,
     query_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
@@ -46,6 +49,7 @@ where
         browser,
         fetch,
         source_config,
+        source_name,
         None,
         query_params,
         base_path,
@@ -60,6 +64,7 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
+    source_name: &str,
     url_override: &str,
     base_path: &str,
     strategy_key: Option<&str>,
@@ -74,6 +79,7 @@ where
         browser,
         fetch,
         source_config,
+        source_name,
         Some(url_override),
         &[],
         base_path,
@@ -88,6 +94,7 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
+    source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
     base_path: &str,
@@ -113,6 +120,7 @@ where
                 headers.as_ref(),
                 *timeout_ms,
                 source_config,
+                source_name,
                 url_override,
                 query_params,
                 base_path,
@@ -134,6 +142,7 @@ where
                 waits,
                 interactions,
                 source_config,
+                source_name,
                 url_override,
                 query_params,
                 base_path,
@@ -152,6 +161,7 @@ async fn fetch_http_strategy_document<F>(
     headers: Option<&BTreeMap<String, String>>,
     timeout_ms: u64,
     source_config: &SourceConfig,
+    source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
     base_path: &str,
@@ -173,19 +183,20 @@ where
         return None;
     }
 
-    let rendered_url = match render_fetch_url(url, source_config, url_override, query_params) {
-        Ok(url) => url,
-        Err(message) => {
-            diagnostics.push(runtime_error(
-                "fetch_url_template_failed",
-                format!("Fetch URL template could not be rendered: {message}"),
-                format!("{base_path}/fetch/url"),
-                strategy_key,
-                json!({ "template": url }),
-            ));
-            return None;
-        }
-    };
+    let rendered_url =
+        match render_fetch_url(url, source_config, source_name, url_override, query_params) {
+            Ok(url) => url,
+            Err(message) => {
+                diagnostics.push(runtime_error(
+                    "fetch_url_template_failed",
+                    format!("Fetch URL template could not be rendered: {message}"),
+                    format!("{base_path}/fetch/url"),
+                    strategy_key,
+                    json!({ "template": url }),
+                ));
+                return None;
+            }
+        };
 
     let request = PostingDiscoveryFetchRequest {
         method,
@@ -219,6 +230,7 @@ async fn fetch_browser_strategy_document<B>(
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
     interactions: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserInteraction],
     source_config: &SourceConfig,
+    source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
     base_path: &str,
@@ -228,19 +240,20 @@ async fn fetch_browser_strategy_document<B>(
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let rendered_url = match render_fetch_url(url, source_config, url_override, query_params) {
-        Ok(url) => url,
-        Err(message) => {
-            diagnostics.push(runtime_error(
-                "fetch_url_template_failed",
-                format!("Fetch URL template could not be rendered: {message}"),
-                format!("{base_path}/fetch/url"),
-                strategy_key,
-                json!({ "template": url }),
-            ));
-            return None;
-        }
-    };
+    let rendered_url =
+        match render_fetch_url(url, source_config, source_name, url_override, query_params) {
+            Ok(url) => url,
+            Err(message) => {
+                diagnostics.push(runtime_error(
+                    "fetch_url_template_failed",
+                    format!("Fetch URL template could not be rendered: {message}"),
+                    format!("{base_path}/fetch/url"),
+                    strategy_key,
+                    json!({ "template": url }),
+                ));
+                return None;
+            }
+        };
 
     let request = ProfileBrowserFetchRequest {
         url: rendered_url.clone(),
@@ -267,12 +280,13 @@ where
 fn render_fetch_url(
     url: &str,
     source_config: &SourceConfig,
+    source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
 ) -> Result<String, String> {
     let rendered = match url_override {
         Some(url) => url.to_string(),
-        None => render_source_config_template(url, source_config)?,
+        None => render_source_config_template(url, source_config, source_name)?,
     };
     Ok(append_query_params(rendered, query_params))
 }

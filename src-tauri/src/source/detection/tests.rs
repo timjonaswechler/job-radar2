@@ -698,28 +698,9 @@ fn detection_template_context_uses_shared_renderer_and_filters() {
 }
 
 #[test]
-fn detects_greenhouse_ashby_and_lever_with_profile_path_and_creatable_config() {
+fn detects_ashby_and_lever_with_profile_path_and_creatable_config() {
     tauri::async_runtime::block_on(async {
         let scenarios = [
-            (
-                builtin_profile("greenhouse"),
-                "https://openai.com/careers",
-                r#"
-                    <html>
-                      <body>
-                        <h1>OpenAI Careers</h1>
-                        <script src="https://boards.greenhouse.io/embed/job_board/js?for=openai"></script>
-                        <a href="https://boards.greenhouse.io/openai">Job board</a>
-                      </body>
-                    </html>
-                    "#,
-                "greenhouse",
-                "endpoint_inventory",
-                "declarative_endpoint_inventory",
-                "\\.greenhouse\\.io",
-                "boardSlug",
-                "openai",
-            ),
             (
                 builtin_profile("ashby"),
                 "https://ashby-fixture.test/careers",
@@ -917,19 +898,9 @@ fn ashby_identity_uses_board_slug_candidates_when_profile_captures_it() {
 }
 
 #[test]
-fn greenhouse_ashby_and_lever_ignore_generic_vendor_mentions_without_board_or_api_evidence() {
+fn ashby_and_lever_ignore_generic_vendor_mentions_without_board_or_api_evidence() {
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([
-            (
-                "https://example.com/greenhouse-mention",
-                r#"
-                    <html>
-                      <body>
-                        <p>We use a vendor listed at https://www.greenhouse.io/.</p>
-                      </body>
-                    </html>
-                    "#,
-            ),
             (
                 "https://example.com/ashby-mention",
                 r#"
@@ -951,14 +922,9 @@ fn greenhouse_ashby_and_lever_ignore_generic_vendor_mentions_without_board_or_ap
                     "#,
             ),
         ]);
-        let profiles = vec![
-            builtin_profile("greenhouse"),
-            builtin_profile("ashby"),
-            builtin_profile("lever"),
-        ];
+        let profiles = vec![builtin_profile("ashby"), builtin_profile("lever")];
 
         for input_url in [
-            "https://example.com/greenhouse-mention",
             "https://example.com/ashby-mention",
             "https://example.com/lever-mention",
         ] {
@@ -974,7 +940,7 @@ fn greenhouse_ashby_and_lever_ignore_generic_vendor_mentions_without_board_or_ap
 }
 
 #[test]
-fn greenhouse_ashby_and_lever_do_not_detect_company_domain_only_pages() {
+fn ashby_and_lever_do_not_detect_company_domain_only_pages() {
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([
             (
@@ -986,11 +952,7 @@ fn greenhouse_ashby_and_lever_do_not_detect_company_domain_only_pages() {
                 r#"<html><body><h1>Helsing Careers</h1><p>Open roles.</p></body></html>"#,
             ),
         ]);
-        let profiles = vec![
-            builtin_profile("greenhouse"),
-            builtin_profile("ashby"),
-            builtin_profile("lever"),
-        ];
+        let profiles = vec![builtin_profile("ashby"), builtin_profile("lever")];
 
         for input_url in ["https://openai.com/careers", "https://helsing.ai/careers"] {
             let result =
@@ -1516,9 +1478,6 @@ fn builtin_profile(key: &str) -> RegistrySourceProfile {
     match key {
         "ashby" => {
             registry_profile_from_str(include_str!("../../../resources/profiles/ashby.json"))
-        }
-        "greenhouse" => {
-            registry_profile_from_str(include_str!("../../../resources/profiles/greenhouse.json"))
         }
         "lever" => {
             registry_profile_from_str(include_str!("../../../resources/profiles/lever.json"))

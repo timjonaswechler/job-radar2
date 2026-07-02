@@ -10,6 +10,7 @@ pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
     fields: &ExecutionPlanPostingDiscoveryFields,
     source_config: &SourceConfig,
+    source_name: &str,
     base_path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
@@ -18,6 +19,7 @@ pub(super) fn extract_candidate(
     let title = extract_required_string_field(
         item,
         source_config,
+        source_name,
         &fields.title,
         &format!("{base_path}/extract/fields/title"),
         strategy_key,
@@ -27,6 +29,7 @@ pub(super) fn extract_candidate(
     let company = extract_required_string_field(
         item,
         source_config,
+        source_name,
         &fields.company,
         &format!("{base_path}/extract/fields/company"),
         strategy_key,
@@ -36,6 +39,7 @@ pub(super) fn extract_candidate(
     let url = extract_required_string_field(
         item,
         source_config,
+        source_name,
         &fields.url,
         &format!("{base_path}/extract/fields/url"),
         strategy_key,
@@ -50,6 +54,7 @@ pub(super) fn extract_candidate(
             extract_locations_field(
                 item,
                 source_config,
+                source_name,
                 expression,
                 &format!("{base_path}/extract/fields/locations"),
                 strategy_key,
@@ -71,6 +76,7 @@ pub(super) fn extract_candidate(
                 } = evaluate_string_field(
                     item,
                     source_config,
+                    source_name,
                     expression,
                     &format!("{base_path}/extract/fields/postingMeta/{key}"),
                     strategy_key,
@@ -88,6 +94,7 @@ pub(super) fn extract_candidate(
         match evaluate_string_field(
             item,
             source_config,
+            source_name,
             expression,
             &format!("{base_path}/extract/fields/descriptionText"),
             strategy_key,
@@ -118,6 +125,7 @@ pub(super) fn extract_candidate(
 fn extract_required_string_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     expression: &FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -127,6 +135,7 @@ fn extract_required_string_field(
     match evaluate_string_field(
         item,
         source_config,
+        source_name,
         expression,
         path,
         strategy_key,
@@ -163,6 +172,7 @@ struct FieldEvaluation {
 fn evaluate_string_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     expression: &FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -177,6 +187,7 @@ fn evaluate_string_field(
     } = raw_field_values(
         item,
         source_config,
+        source_name,
         expression,
         path,
         strategy_key,
@@ -302,6 +313,7 @@ pub(super) struct RawFieldValues<'a> {
 fn raw_field_values<'a>(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     expression: &'a FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -411,7 +423,7 @@ fn raw_field_values<'a>(
             template,
             cardinality,
             transforms,
-        } => match render_source_config_template(template, source_config) {
+        } => match render_source_config_template(template, source_config, source_name) {
             Ok(value) => RawFieldValues {
                 values: vec![value],
                 failed: false,
@@ -538,6 +550,7 @@ fn raw_field_values<'a>(
         } => combine_field_values(
             item,
             source_config,
+            source_name,
             parts,
             join.as_deref().unwrap_or_default(),
             path,
@@ -567,6 +580,7 @@ fn raw_field_values<'a>(
 fn combine_field_values(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     parts: &[CombinePart],
     join: &str,
     path: &str,
@@ -580,6 +594,7 @@ fn combine_field_values(
         match evaluate_string_field(
             item,
             source_config,
+            source_name,
             &part.value,
             &part_path,
             strategy_key,
@@ -678,6 +693,7 @@ fn apply_transforms(
 fn extract_locations_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
+    source_name: &str,
     expression: &ListFieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -704,6 +720,7 @@ fn extract_locations_field(
         } = raw_field_values(
             item,
             source_config,
+            source_name,
             expression,
             &expression_path,
             strategy_key,

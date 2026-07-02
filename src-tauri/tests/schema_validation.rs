@@ -49,6 +49,10 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
         SchemaEntrypoint::Source,
         "tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json",
     );
+    harness.assert_valid(
+        SchemaEntrypoint::SourceProfile,
+        "resources/profiles/greenhouse.json",
+    );
 }
 
 #[test]

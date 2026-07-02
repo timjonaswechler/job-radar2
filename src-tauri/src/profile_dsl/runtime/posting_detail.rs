@@ -277,6 +277,7 @@ where
     let captures = match evaluate_strategy_captures(
         strategy,
         &plan.source_config,
+        &plan.source.name,
         posting,
         &base_path,
         strategy_key.as_deref(),
@@ -291,6 +292,7 @@ where
         browser,
         &strategy.fetch,
         &plan.source_config,
+        &plan.source.name,
         posting,
         &captures,
         &base_path,
@@ -329,6 +331,7 @@ where
     let description = evaluate_string_field(
         &selected_document,
         &plan.source_config,
+        &plan.source.name,
         posting,
         &captures,
         &strategy.extract.fields.description_text,

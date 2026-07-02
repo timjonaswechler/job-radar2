@@ -576,6 +576,7 @@ fn validate_variable_reference(
             }
             canonical_posting_keys().contains(key)
         }
+        "source" => canonical_source_keys().contains(key),
         _ => {
             push_template_diagnostic(
                 diagnostics,
@@ -660,4 +661,8 @@ fn canonical_posting_keys() -> HashSet<&'static str> {
     ["title", "company", "url", "locations", "descriptionText"]
         .into_iter()
         .collect()
+}
+
+fn canonical_source_keys() -> HashSet<&'static str> {
+    ["name"].into_iter().collect()
 }

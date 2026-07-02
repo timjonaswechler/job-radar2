@@ -17,7 +17,6 @@ fn loads_migrated_builtin_source_registry_documents() {
         sorted_profile_keys(&snapshot),
         vec![
             "ashby",
-            "greenhouse",
             "lever",
             "magnolia_esmp_job_search",
             "muz_global_jobboard",
@@ -50,14 +49,6 @@ fn loads_migrated_builtin_source_registry_documents() {
         .iter()
         .any(|path| path.key == "browser_inventory"
             && path.adapter_key == "declarative_browser_inventory"));
-
-    let greenhouse = snapshot.profile("greenhouse").unwrap();
-    assert!(greenhouse
-        .document
-        .access_paths
-        .iter()
-        .any(|path| path.key == "endpoint_inventory"
-            && path.adapter_key == "declarative_endpoint_inventory"));
 }
 
 #[test]
@@ -132,41 +123,6 @@ fn ashby_builtin_declares_json_collection_posting_detail_without_inventory_descr
                 "descriptionText": { "jsonPathHtml": "$.descriptionHtml" }
             }
         }))
-    );
-}
-
-#[test]
-fn greenhouse_builtin_declares_json_posting_detail_without_inventory_description_text() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let snapshot = load_snapshot(temp_dir.path());
-    let profile = snapshot.profile("greenhouse").unwrap();
-    let access_path = profile
-        .document
-        .access_paths
-        .iter()
-        .find(|access_path| access_path.key == "endpoint_inventory")
-        .unwrap();
-
-    assert_eq!(
-        access_path.posting_detail.as_ref(),
-        Some(&json!({
-            "fetch": {
-                "url": "https://boards-api.greenhouse.io/v1/boards/{{sourceConfig:boardSlug}}/jobs/{{postingMeta:jobId}}"
-            },
-            "parse": { "as": "json" },
-            "fields": {
-                "descriptionText": { "jsonPathHtml": "$.content" }
-            }
-        }))
-    );
-    assert!(access_path.inventory.as_ref().unwrap()["fields"]
-        .get("descriptionText")
-        .is_none());
-    assert_eq!(
-        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
-        json!({
-            "jobId": { "jsonPath": "$.id" }
-        })
     );
 }
 

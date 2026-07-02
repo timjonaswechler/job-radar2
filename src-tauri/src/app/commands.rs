@@ -583,7 +583,7 @@ mod tests {
 
             let registry_snapshot =
                 crate::source::registry::load_snapshot(&state.paths.app_data_dir);
-            assert!(registry_snapshot.profile("greenhouse").is_some());
+            assert!(registry_snapshot.profile("ashby").is_some());
             assert!(registry_snapshot.profile("stepstone_de").is_some());
             assert!(registry_snapshot.source("stepstone_de").is_some());
             assert!(
@@ -608,7 +608,7 @@ mod tests {
             assert!(snapshot
                 .valid_profiles
                 .iter()
-                .any(|profile| profile.document.key == "greenhouse"));
+                .any(|profile| profile.document.key == "ashby"));
             assert!(snapshot
                 .valid_profiles
                 .iter()
