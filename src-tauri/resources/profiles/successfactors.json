@@ -27,6 +27,12 @@
   },
   "detect": {
     "recommendedAccessPathKey": "rmk_sitemap_html",
+    "sourceConfig": {
+      "baseUrl": "https://{{capture:successFactorsHost}}",
+      "sitemapUrl": "https://{{capture:successFactorsHost}}/sitemap.xml"
+    },
+    "keyCandidates": ["{{capture:successFactorsHost|domainKey}}"],
+    "nameCandidates": ["{{capture:successFactorsHost|domainTitle}}"],
     "inputUrlPatterns": [
       {
         "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",

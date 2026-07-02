@@ -27,6 +27,14 @@
   },
   "detect": {
     "recommendedAccessPathKey": "cxs_api",
+    "sourceConfig": {
+      "workdayHost": "{{capture:workdayHost}}",
+      "tenant": "{{capture:tenant}}",
+      "site": "{{capture:site}}",
+      "startUrl": "{{inputUrl}}"
+    },
+    "keyCandidates": ["{{capture:tenant|technicalKey}}_{{capture:site|technicalKey}}"],
+    "nameCandidates": ["{{capture:tenant|slugToTitle}} {{capture:site|slugToTitle}}"],
     "inputUrlPatterns": [
       {
         "pattern": "(?i)^https?://(?<workdayHost>(?<tenant>[A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com)(?:/[a-z]{2}-[A-Z]{2})?/(?<site>[A-Za-z0-9_-]+)(?:[/?#].*)?$",

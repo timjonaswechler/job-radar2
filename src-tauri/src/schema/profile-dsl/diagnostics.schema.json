@@ -9,7 +9,7 @@
     },
     "diagnosticCategory": {
       "type": "string",
-      "enum": ["schema", "registry", "compiler", "runtime", "source_validation"]
+      "enum": ["schema", "registry", "compiler", "runtime", "detection", "source_validation"]
     },
     "jsonPointer": {
       "type": "string",

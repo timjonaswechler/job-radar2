@@ -51,6 +51,23 @@
           "items": { "$ref": "#/$defs/inputUrlPattern" }
         },
         "recommendedAccessPathKey": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "sourceConfig": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" },
+        "keyCandidates": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+        },
+        "nameCandidates": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+        },
+        "httpChecks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionHttpCheck" }
+        },
+        "browserProbes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionBrowserProbe" }
+        },
         "evidence": {
           "type": "array",
           "items": { "$ref": "#/$defs/detectionEvidence" }
@@ -77,6 +94,52 @@
         "kind": { "type": "string", "enum": ["url", "http", "html", "browser"] },
         "message": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
         "path": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "detectionHttpCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "url"],
+      "properties": {
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "expectStatus": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "contains": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "regex": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "evidence": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "detectionBrowserProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "url"],
+      "properties": {
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "waits": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/fetch.schema.json#/$defs/browserWait" }
+        },
+        "interactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectionBrowserInteraction" }
+        },
+        "htmlContains": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "htmlRegex": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "evidence": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "detectionBrowserInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "type": "string", "enum": ["click_if_visible", "click_until_gone"] },
+        "selector": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "maxCount": { "type": "integer", "minimum": 1 },
+        "waitAfterMs": { "type": "integer", "minimum": 0 }
       }
     }
   }

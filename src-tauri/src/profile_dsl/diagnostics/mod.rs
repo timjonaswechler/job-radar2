@@ -21,6 +21,7 @@ pub enum DiagnosticCategory {
     /// diagnostic category.
     Compiler,
     Runtime,
+    Detection,
     SourceValidation,
 }
 

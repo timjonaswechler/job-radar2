@@ -22,6 +22,11 @@
   },
   "detect": {
     "recommendedAccessPathKey": "boards_api",
+    "sourceConfig": {
+      "boardSlug": "{{capture:boardSlug}}"
+    },
+    "keyCandidates": ["{{capture:boardSlug|technicalKey}}"],
+    "nameCandidates": ["{{capture:boardSlug|slugToTitle}}"],
     "inputUrlPatterns": [
       {
         "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
