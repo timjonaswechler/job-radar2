@@ -17,6 +17,8 @@ mod core;
 mod document_types_and_browser;
 #[path = "posting_discovery_runtime/failure_diagnostics.rs"]
 mod failure_diagnostics;
+#[path = "posting_discovery_runtime/pagination.rs"]
+mod pagination;
 #[path = "posting_discovery_runtime/template_validation.rs"]
 mod template_validation;
 #[path = "posting_discovery_runtime/transforms_and_combine.rs"]
@@ -141,6 +143,39 @@ fn compiled_posting_discovery_plan(
     fields: Value,
     feed_url: &'static str,
 ) -> SourceExecutionPlan {
+    compiled_posting_discovery_plan_with_strategy(
+        parse,
+        select,
+        fields,
+        feed_url,
+        serde_json::Map::new(),
+    )
+}
+
+fn compiled_posting_discovery_plan_with_strategy(
+    parse: Value,
+    select: Value,
+    fields: Value,
+    feed_url: &'static str,
+    extra_strategy_fields: serde_json::Map<String, Value>,
+) -> SourceExecutionPlan {
+    let mut strategy = serde_json::Map::from_iter([
+        ("key".to_string(), json!("json_api")),
+        (
+            "fetch".to_string(),
+            json!({
+                "mode": "http",
+                "method": "GET",
+                "url": "{{sourceConfig:feedUrl}}",
+                "timeoutMs": 10000
+            }),
+        ),
+        ("parse".to_string(), parse),
+        ("select".to_string(), select),
+        ("extract".to_string(), json!({ "fields": fields })),
+    ]);
+    strategy.extend(extra_strategy_fields);
+
     let profile: SourceProfileDocument = serde_json::from_value(json!({
         "schemaVersion": 2,
         "key": "example_jobs",
@@ -160,18 +195,7 @@ fn compiled_posting_discovery_plan(
             "key": "json_feed",
             "name": "JSON feed",
             "postingDiscovery": {
-                "strategies": [{
-                    "key": "json_api",
-                    "fetch": {
-                        "mode": "http",
-                        "method": "GET",
-                        "url": "{{sourceConfig:feedUrl}}",
-                        "timeoutMs": 10000
-                    },
-                    "parse": parse,
-                    "select": select,
-                    "extract": { "fields": fields }
-                }]
+                "strategies": [Value::Object(strategy)]
             }
         }]
     }))

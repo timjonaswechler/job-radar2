@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    future::Future,
+    pin::Pin,
+    time::Duration,
+};
 
 use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
@@ -14,7 +19,7 @@ use crate::{
             HttpMethod, ParseType, Select,
         },
         execution_plan::{
-            capabilities::ExecutionPlanFetch,
+            capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
             posting_discovery::{
                 ExecutionPlanPostingDiscoveryFields, ExecutionPlanPostingDiscoveryStrategy,
             },
@@ -39,9 +44,9 @@ mod fetch;
 mod support;
 mod values;
 
-use document::{parse_response_document, select_items};
+use document::{parse_response_document, select_items, select_sitemap_url_items};
 use extract::extract_candidate;
-use fetch::fetch_strategy_document;
+use fetch::{fetch_strategy_document_at_url, fetch_strategy_document_with_query_params};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -218,76 +223,512 @@ where
     let strategy_key = Some(strategy.key.clone());
     let mut diagnostics = Vec::new();
 
-    let response = match fetch_strategy_document(
+    if let Some(pagination) = &strategy.pagination {
+        return execute_paginated_strategy(
+            plan,
+            fetcher,
+            browser,
+            strategy,
+            pagination,
+            &base_path,
+            strategy_key.as_deref(),
+            diagnostics,
+        )
+        .await;
+    }
+
+    let output = execute_single_strategy_fetch(
+        plan,
+        fetcher,
+        browser,
+        strategy,
+        &[],
+        None,
+        &base_path,
+        strategy_key.as_deref(),
+        &mut diagnostics,
+    )
+    .await;
+
+    PostingDiscoveryExecutionResult {
+        candidates: output.candidates,
+        diagnostics,
+    }
+}
+
+async fn execute_paginated_strategy<F, B>(
+    plan: &SourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+    strategy: &ExecutionPlanPostingDiscoveryStrategy,
+    pagination: &ExecutionPlanPagination,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    mut diagnostics: Diagnostics,
+) -> PostingDiscoveryExecutionResult
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    match pagination {
+        ExecutionPlanPagination::Page {
+            page_param,
+            first_page,
+            page_size_param,
+            page_size,
+            total_path,
+            limits,
+        } => {
+            let max_requests = limits.max_requests.unwrap_or(1);
+            let mut candidates = Vec::new();
+            for request_index in 0..max_requests {
+                let page = first_page.unwrap_or(1) + request_index;
+                let mut query_params = vec![(page_param.as_str(), page.to_string())];
+                if let (Some(page_size_param), Some(page_size)) = (page_size_param, page_size) {
+                    query_params.push((page_size_param.as_str(), page_size.to_string()));
+                }
+                let page_output = execute_single_strategy_fetch(
+                    plan,
+                    fetcher,
+                    browser,
+                    strategy,
+                    &query_params,
+                    total_path.as_deref(),
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                )
+                .await;
+                let page_candidates = page_output.candidates;
+                if page_candidates.is_empty() {
+                    break;
+                }
+                if append_page_candidates(
+                    &mut candidates,
+                    page_candidates,
+                    limits.max_items,
+                    "page",
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                ) {
+                    break;
+                }
+                if page_total_exhausted(
+                    page_output.total_count,
+                    request_index,
+                    *page_size,
+                    candidates.len(),
+                ) {
+                    break;
+                }
+                if request_index + 1 == max_requests {
+                    diagnostics.push(runtime_warning(
+                        "pagination_max_requests_reached",
+                        "Pagination stopped after reaching maxRequests",
+                        format!("{base_path}/pagination/limits/maxRequests"),
+                        strategy_key,
+                        json!({ "maxRequests": max_requests, "paginationType": "page" }),
+                    ));
+                }
+            }
+            PostingDiscoveryExecutionResult {
+                candidates,
+                diagnostics,
+            }
+        }
+        ExecutionPlanPagination::OffsetLimit {
+            offset_param,
+            limit_param,
+            start_offset,
+            limit,
+            total_path,
+            limits,
+        } => {
+            let max_requests = limits.max_requests.unwrap_or(1);
+            let mut candidates = Vec::new();
+            for request_index in 0..max_requests {
+                let offset = start_offset.unwrap_or(0) + request_index * limit;
+                let query_params = [
+                    (offset_param.as_str(), offset.to_string()),
+                    (limit_param.as_str(), limit.to_string()),
+                ];
+                let page_output = execute_single_strategy_fetch(
+                    plan,
+                    fetcher,
+                    browser,
+                    strategy,
+                    &query_params,
+                    total_path.as_deref(),
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                )
+                .await;
+                let page_candidates = page_output.candidates;
+                if page_candidates.is_empty() {
+                    break;
+                }
+                if append_page_candidates(
+                    &mut candidates,
+                    page_candidates,
+                    limits.max_items,
+                    "offset_limit",
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                ) {
+                    break;
+                }
+                if page_output
+                    .total_count
+                    .is_some_and(|total| offset.saturating_add(*limit) >= total)
+                {
+                    break;
+                }
+                if request_index + 1 == max_requests {
+                    diagnostics.push(runtime_warning(
+                        "pagination_max_requests_reached",
+                        "Pagination stopped after reaching maxRequests",
+                        format!("{base_path}/pagination/limits/maxRequests"),
+                        strategy_key,
+                        json!({ "maxRequests": max_requests, "paginationType": "offset_limit" }),
+                    ));
+                }
+            }
+            PostingDiscoveryExecutionResult {
+                candidates,
+                diagnostics,
+            }
+        }
+        ExecutionPlanPagination::Cursor { .. } => {
+            diagnostics.push(runtime_error(
+                "unsupported_cursor_pagination",
+                "Cursor pagination is not implemented in this runtime slice",
+                format!("{base_path}/pagination"),
+                strategy_key,
+                json!({ "paginationType": "cursor" }),
+            ));
+            PostingDiscoveryExecutionResult {
+                candidates: Vec::new(),
+                diagnostics,
+            }
+        }
+        ExecutionPlanPagination::Sitemap {
+            child_sitemap_selector,
+            posting_url_selector,
+            limits,
+        } => {
+            let mut candidates = Vec::new();
+            let mut queue = VecDeque::from([(None::<String>, 0_u64)]);
+            let mut request_count = 0_u64;
+            let max_requests = limits.max_requests.unwrap_or(1);
+            let max_depth = limits.max_depth.unwrap_or(0);
+
+            while let Some((url_override, depth)) = queue.pop_front() {
+                if request_count >= max_requests {
+                    diagnostics.push(runtime_warning(
+                        "pagination_max_requests_reached",
+                        "Sitemap pagination stopped after reaching maxRequests",
+                        format!("{base_path}/pagination/limits/maxRequests"),
+                        strategy_key,
+                        json!({ "maxRequests": max_requests, "paginationType": "sitemap" }),
+                    ));
+                    break;
+                }
+
+                let response = match &url_override {
+                    Some(url) => {
+                        fetch_strategy_document_at_url(
+                            fetcher,
+                            browser,
+                            &strategy.fetch,
+                            &plan.source_config,
+                            url,
+                            base_path,
+                            strategy_key,
+                            &mut diagnostics,
+                        )
+                        .await
+                    }
+                    None => {
+                        fetch_strategy_document_with_query_params(
+                            fetcher,
+                            browser,
+                            &strategy.fetch,
+                            &plan.source_config,
+                            &[],
+                            base_path,
+                            strategy_key,
+                            &mut diagnostics,
+                        )
+                        .await
+                    }
+                };
+                let Some(response) = response else { break };
+                request_count += 1;
+
+                let document = match parse_response_document(
+                    &response.body,
+                    strategy,
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                ) {
+                    Some(document) => document,
+                    None => break,
+                };
+
+                if let Some(items) = select_sitemap_url_items(
+                    &document,
+                    posting_url_selector.as_ref(),
+                    &format!("{base_path}/pagination/postingUrlSelector"),
+                    strategy_key,
+                    &mut diagnostics,
+                ) {
+                    let page_candidates = extract_candidates_from_items(
+                        plan,
+                        strategy,
+                        items,
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    );
+                    if append_page_candidates(
+                        &mut candidates,
+                        page_candidates,
+                        limits.max_items,
+                        "sitemap",
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    ) {
+                        break;
+                    }
+                }
+
+                if child_sitemap_selector.is_some() {
+                    if let Some(child_items) = select_sitemap_url_items(
+                        &document,
+                        child_sitemap_selector.as_ref(),
+                        &format!("{base_path}/pagination/childSitemapSelector"),
+                        strategy_key,
+                        &mut diagnostics,
+                    ) {
+                        let child_urls = text_items_to_urls(child_items);
+                        if depth < max_depth {
+                            for child_url in child_urls {
+                                queue.push_back((Some(child_url), depth + 1));
+                            }
+                        } else if !child_urls.is_empty() {
+                            diagnostics.push(runtime_warning(
+                                "pagination_max_depth_reached",
+                                "Sitemap pagination did not follow child sitemap URLs because maxDepth was reached",
+                                format!("{base_path}/pagination/limits/maxDepth"),
+                                strategy_key,
+                                json!({ "maxDepth": max_depth, "paginationType": "sitemap" }),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            PostingDiscoveryExecutionResult {
+                candidates,
+                diagnostics,
+            }
+        }
+    }
+}
+
+fn append_page_candidates(
+    candidates: &mut Vec<PostingDiscoveryCandidate>,
+    page_candidates: Vec<PostingDiscoveryCandidate>,
+    max_items: Option<u64>,
+    pagination_type: &str,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> bool {
+    let Some(max_items) = max_items else {
+        candidates.extend(page_candidates);
+        return false;
+    };
+
+    for candidate in page_candidates {
+        if candidates.len() as u64 >= max_items {
+            diagnostics.push(runtime_warning(
+                "pagination_max_items_reached",
+                "Pagination stopped accumulating candidates after reaching maxItems",
+                format!("{base_path}/pagination/limits/maxItems"),
+                strategy_key,
+                json!({ "maxItems": max_items, "paginationType": pagination_type }),
+            ));
+            return true;
+        }
+        candidates.push(candidate);
+    }
+
+    false
+}
+
+fn text_items_to_urls(items: Vec<document::RuntimeItem<'_, '_>>) -> Vec<String> {
+    items
+        .into_iter()
+        .filter_map(|item| match item {
+            document::RuntimeItem::Text(url) => Some(url),
+            _ => None,
+        })
+        .collect()
+}
+
+struct StrategyFetchOutput {
+    candidates: Vec<PostingDiscoveryCandidate>,
+    total_count: Option<u64>,
+}
+
+async fn execute_single_strategy_fetch<F, B>(
+    plan: &SourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+    strategy: &ExecutionPlanPostingDiscoveryStrategy,
+    query_params: &[(&str, String)],
+    total_path: Option<&str>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> StrategyFetchOutput
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    let response = match fetch_strategy_document_with_query_params(
         fetcher,
         browser,
         &strategy.fetch,
         &plan.source_config,
-        &base_path,
-        strategy_key.as_deref(),
-        &mut diagnostics,
+        query_params,
+        base_path,
+        strategy_key,
+        diagnostics,
     )
     .await
     {
         Some(response) => response,
         None => {
-            return PostingDiscoveryExecutionResult {
+            return StrategyFetchOutput {
                 candidates: Vec::new(),
-                diagnostics,
+                total_count: None,
             }
         }
     };
 
-    let document = match parse_response_document(
-        &response.body,
+    extract_candidates_from_response(
+        plan,
         strategy,
-        &base_path,
-        strategy_key.as_deref(),
-        &mut diagnostics,
-    ) {
-        Some(document) => document,
-        None => {
-            return PostingDiscoveryExecutionResult {
-                candidates: Vec::new(),
-                diagnostics,
+        &response.body,
+        total_path,
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+}
+
+fn extract_candidates_from_response(
+    plan: &SourceExecutionPlan,
+    strategy: &ExecutionPlanPostingDiscoveryStrategy,
+    body: &str,
+    total_path: Option<&str>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> StrategyFetchOutput {
+    let document =
+        match parse_response_document(body, strategy, base_path, strategy_key, diagnostics) {
+            Some(document) => document,
+            None => {
+                return StrategyFetchOutput {
+                    candidates: Vec::new(),
+                    total_count: None,
+                }
             }
-        }
-    };
+        };
+    let total_count = total_path.and_then(|path| extract_total_count(&document, path));
 
     let items = match select_items(
         &document,
         &strategy.select,
-        &base_path,
-        strategy_key.as_deref(),
-        &mut diagnostics,
+        base_path,
+        strategy_key,
+        diagnostics,
     ) {
         Some(items) => items,
         None => {
-            return PostingDiscoveryExecutionResult {
+            return StrategyFetchOutput {
                 candidates: Vec::new(),
-                diagnostics,
+                total_count,
             }
         }
     };
 
+    let candidates =
+        extract_candidates_from_items(plan, strategy, items, base_path, strategy_key, diagnostics);
+    StrategyFetchOutput {
+        candidates,
+        total_count,
+    }
+}
+
+fn extract_candidates_from_items(
+    plan: &SourceExecutionPlan,
+    strategy: &ExecutionPlanPostingDiscoveryStrategy,
+    items: Vec<document::RuntimeItem<'_, '_>>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Vec<PostingDiscoveryCandidate> {
     let mut candidates = Vec::new();
     for (item_index, item) in items.into_iter().enumerate() {
         if let Some(candidate) = extract_candidate(
             &item,
             &strategy.extract.fields,
             &plan.source_config,
-            &base_path,
-            strategy_key.as_deref(),
+            base_path,
+            strategy_key,
             item_index,
-            &mut diagnostics,
+            diagnostics,
         ) {
             candidates.push(candidate);
         }
     }
+    candidates
+}
 
-    PostingDiscoveryExecutionResult {
-        candidates,
-        diagnostics,
+fn extract_total_count(document: &document::ParsedDocument<'_>, total_path: &str) -> Option<u64> {
+    let document::ParsedDocument::Json(value) = document else {
+        return None;
+    };
+    let value = resolve_simple_json_path(value, total_path).ok().flatten()?;
+    match value {
+        Value::Number(number) => number.as_u64(),
+        Value::String(value) => value.parse::<u64>().ok(),
+        _ => None,
+    }
+}
+
+fn page_total_exhausted(
+    total_count: Option<u64>,
+    request_index: u64,
+    page_size: Option<u64>,
+    accumulated_candidates: usize,
+) -> bool {
+    let Some(total_count) = total_count else {
+        return false;
+    };
+    if let Some(page_size) = page_size {
+        request_index.saturating_add(1).saturating_mul(page_size) >= total_count
+    } else {
+        accumulated_candidates as u64 >= total_count
     }
 }
 
@@ -298,11 +739,46 @@ fn runtime_error(
     strategy_key: Option<&str>,
     details: Value,
 ) -> Diagnostic {
+    runtime_diagnostic(
+        code,
+        message,
+        DiagnosticSeverity::Error,
+        path,
+        strategy_key,
+        details,
+    )
+}
+
+fn runtime_warning(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    path: impl Into<String>,
+    strategy_key: Option<&str>,
+    details: Value,
+) -> Diagnostic {
+    runtime_diagnostic(
+        code,
+        message,
+        DiagnosticSeverity::Warning,
+        path,
+        strategy_key,
+        details,
+    )
+}
+
+fn runtime_diagnostic(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    severity: DiagnosticSeverity,
+    path: impl Into<String>,
+    strategy_key: Option<&str>,
+    details: Value,
+) -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Runtime,
         code: code.into(),
         message: message.into(),
-        severity: DiagnosticSeverity::Error,
+        severity,
         path: path.into(),
         strategy_key: strategy_key.map(ToString::to_string),
         details: Some(details),

@@ -1,4 +1,4 @@
-use super::values::{xml_descendant_elements, xml_path_texts};
+use super::values::{xml_descendant_elements, xml_node_text, xml_path_texts};
 use super::*;
 
 pub(super) enum ParsedDocument<'body> {
@@ -61,6 +61,68 @@ pub(super) fn parse_response_document<'body>(
             None
         }
     }
+}
+
+pub(super) fn select_sitemap_url_items<'doc, 'body>(
+    document: &'doc ParsedDocument<'body>,
+    select: Option<&Select>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<Vec<RuntimeItem<'doc, 'body>>> {
+    let url_pattern = match select {
+        Some(Select::SitemapUrls { url_pattern }) => url_pattern.as_deref(),
+        None => None,
+        Some(_) => {
+            diagnostics.push(runtime_error(
+                "unsupported_sitemap_url_selector",
+                "Sitemap pagination URL selectors must use sitemap_urls",
+                base_path,
+                strategy_key,
+                json!({}),
+            ));
+            return None;
+        }
+    };
+
+    let ParsedDocument::Xml(document) = document else {
+        diagnostics.push(runtime_error(
+            "unsupported_sitemap_document_type",
+            "Sitemap pagination requires an XML document",
+            base_path,
+            strategy_key,
+            json!({}),
+        ));
+        return None;
+    };
+
+    let pattern = match url_pattern {
+        Some(pattern) => match Regex::new(pattern) {
+            Ok(pattern) => Some(pattern),
+            Err(error) => {
+                diagnostics.push(runtime_error(
+                    "sitemap_url_pattern_failed",
+                    format!("Sitemap URL pattern is invalid: {error}"),
+                    base_path,
+                    strategy_key,
+                    json!({ "pattern": pattern, "error": error.to_string() }),
+                ));
+                return None;
+            }
+        },
+        None => None,
+    };
+
+    let items = xml_descendant_elements(document.root_element(), "loc")
+        .into_iter()
+        .map(xml_node_text)
+        .map(|url| normalize_whitespace(url.trim()))
+        .filter(|url| !url.is_empty())
+        .filter(|url| pattern.as_ref().is_none_or(|pattern| pattern.is_match(url)))
+        .map(RuntimeItem::Text)
+        .collect::<Vec<_>>();
+
+    Some(items)
 }
 
 pub(super) fn select_items<'doc, 'body>(

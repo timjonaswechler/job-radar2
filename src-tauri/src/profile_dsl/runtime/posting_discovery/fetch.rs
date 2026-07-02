@@ -14,6 +14,90 @@ where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
+    fetch_strategy_document_with_query_params(
+        fetcher,
+        browser,
+        fetch,
+        source_config,
+        &[],
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+    .await
+}
+
+pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
+    fetcher: &F,
+    browser: &B,
+    fetch: &ExecutionPlanFetch,
+    source_config: &SourceConfig,
+    query_params: &[(&str, String)],
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PostingDiscoveryFetchResponse>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    fetch_strategy_document_with_url_options(
+        fetcher,
+        browser,
+        fetch,
+        source_config,
+        None,
+        query_params,
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+    .await
+}
+
+pub(super) async fn fetch_strategy_document_at_url<F, B>(
+    fetcher: &F,
+    browser: &B,
+    fetch: &ExecutionPlanFetch,
+    source_config: &SourceConfig,
+    url_override: &str,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PostingDiscoveryFetchResponse>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    fetch_strategy_document_with_url_options(
+        fetcher,
+        browser,
+        fetch,
+        source_config,
+        Some(url_override),
+        &[],
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+    .await
+}
+
+async fn fetch_strategy_document_with_url_options<F, B>(
+    fetcher: &F,
+    browser: &B,
+    fetch: &ExecutionPlanFetch,
+    source_config: &SourceConfig,
+    url_override: Option<&str>,
+    query_params: &[(&str, String)],
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PostingDiscoveryFetchResponse>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
     match fetch {
         ExecutionPlanFetch::Http {
             method,
@@ -29,6 +113,8 @@ where
                 headers.as_ref(),
                 *timeout_ms,
                 source_config,
+                url_override,
+                query_params,
                 base_path,
                 strategy_key,
                 diagnostics,
@@ -48,6 +134,8 @@ where
                 waits,
                 interactions,
                 source_config,
+                url_override,
+                query_params,
                 base_path,
                 strategy_key,
                 diagnostics,
@@ -64,6 +152,8 @@ async fn fetch_http_strategy_document<F>(
     headers: Option<&BTreeMap<String, String>>,
     timeout_ms: u64,
     source_config: &SourceConfig,
+    url_override: Option<&str>,
+    query_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -83,7 +173,7 @@ where
         return None;
     }
 
-    let rendered_url = match render_source_config_template(url, source_config) {
+    let rendered_url = match render_fetch_url(url, source_config, url_override, query_params) {
         Ok(url) => url,
         Err(message) => {
             diagnostics.push(runtime_error(
@@ -129,6 +219,8 @@ async fn fetch_browser_strategy_document<B>(
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
     interactions: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserInteraction],
     source_config: &SourceConfig,
+    url_override: Option<&str>,
+    query_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -136,7 +228,7 @@ async fn fetch_browser_strategy_document<B>(
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let rendered_url = match render_source_config_template(url, source_config) {
+    let rendered_url = match render_fetch_url(url, source_config, url_override, query_params) {
         Ok(url) => url,
         Err(message) => {
             diagnostics.push(runtime_error(
@@ -170,4 +262,63 @@ where
             None
         }
     }
+}
+
+fn render_fetch_url(
+    url: &str,
+    source_config: &SourceConfig,
+    url_override: Option<&str>,
+    query_params: &[(&str, String)],
+) -> Result<String, String> {
+    let rendered = match url_override {
+        Some(url) => url.to_string(),
+        None => render_source_config_template(url, source_config)?,
+    };
+    Ok(append_query_params(rendered, query_params))
+}
+
+fn append_query_params(url: String, query_params: &[(&str, String)]) -> String {
+    if query_params.is_empty() {
+        return url;
+    }
+
+    let (without_fragment, fragment) = match url.split_once('#') {
+        Some((prefix, suffix)) => (prefix, Some(suffix)),
+        None => (url.as_str(), None),
+    };
+    let (path, query) = match without_fragment.split_once('?') {
+        Some((path, query)) => (path, Some(query)),
+        None => (without_fragment, None),
+    };
+
+    let replaced_names = query_params
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut pairs = query
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .filter(|pair| !pair.is_empty())
+        .filter(|pair| {
+            let name = pair.split_once('=').map(|(name, _)| name).unwrap_or(pair);
+            !replaced_names.contains(name)
+        })
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    pairs.extend(
+        query_params
+            .iter()
+            .map(|(name, value)| format!("{name}={value}")),
+    );
+
+    let mut rendered = path.to_string();
+    if !pairs.is_empty() {
+        rendered.push('?');
+        rendered.push_str(&pairs.join("&"));
+    }
+    if let Some(fragment) = fragment {
+        rendered.push('#');
+        rendered.push_str(fragment);
+    }
+    rendered
 }
