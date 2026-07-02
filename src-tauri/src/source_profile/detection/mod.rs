@@ -9,9 +9,16 @@ use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 use crate::profile_dsl::documents::SupportLevel;
+use crate::profile_dsl::execution_plan::capabilities::{
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
+};
+use crate::profile_dsl::runtime::{
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+};
 use crate::source_profile::documents::{
-    DetectionBrowserProbe, DetectionEvidenceKind, DetectionHttpCheck, ProfileDetectionDocument,
-    SourceProfileDocument,
+    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionEvidenceKind, DetectionHttpCheck,
+    ProfileDetectionDocument, SourceProfileDocument,
 };
 
 pub type BoxedDetectionHttpFuture<'a> =
@@ -124,6 +131,28 @@ pub async fn detect_source_proposal_with_http_client<C: DetectionHttpClient + Sy
     profiles: &[SourceProfileDocument],
     http_client: &C,
 ) -> SourceProposalDetectionResult {
+    detect_source_proposal_internal(input_url, profiles, http_client, None).await
+}
+
+pub async fn detect_source_proposal_with_clients<C, B>(
+    input_url: &str,
+    profiles: &[SourceProfileDocument],
+    http_client: &C,
+    browser_client: &B,
+) -> SourceProposalDetectionResult
+where
+    C: DetectionHttpClient + Sync,
+    B: ProfileBrowserClient + Sync,
+{
+    detect_source_proposal_internal(input_url, profiles, http_client, Some(browser_client)).await
+}
+
+async fn detect_source_proposal_internal<C: DetectionHttpClient + Sync>(
+    input_url: &str,
+    profiles: &[SourceProfileDocument],
+    http_client: &C,
+    browser_client: Option<&(dyn ProfileBrowserClient + Sync)>,
+) -> SourceProposalDetectionResult {
     let mut diagnostics = Vec::new();
     let input_url = input_url.trim();
     if input_url.is_empty() {
@@ -142,7 +171,14 @@ pub async fn detect_source_proposal_with_http_client<C: DetectionHttpClient + Sy
     let mut failed = false;
 
     for (profile_index, profile) in profiles.iter().enumerate() {
-        let candidate = evaluate_profile(input_url, profile_index, profile, http_client).await;
+        let candidate = evaluate_profile(
+            input_url,
+            profile_index,
+            profile,
+            http_client,
+            browser_client,
+        )
+        .await;
         diagnostics.extend(candidate.diagnostics);
         if let Some(proposal) = candidate.proposal {
             proposals.push(proposal);
@@ -197,6 +233,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     profile_index: usize,
     profile: &SourceProfileDocument,
     http_client: &C,
+    browser_client: Option<&(dyn ProfileBrowserClient + Sync)>,
 ) -> Candidate {
     let Some(detect) = &profile.detect else {
         return Candidate {
@@ -244,17 +281,57 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
 
     if let Some(browser_probes) = detect.browser_probes.as_deref() {
         if !browser_probes.is_empty() {
-            diagnostics.extend(browser_probe_unavailable_diagnostics(
-                browser_probes,
-                &base_path,
-                &profile.key,
-            ));
-            return Candidate {
-                proposal: None,
-                unsupported: None,
-                failed: true,
-                diagnostics,
+            let Some(browser_client) = browser_client else {
+                diagnostics.extend(browser_probe_unavailable_diagnostics(
+                    browser_probes,
+                    &base_path,
+                    &profile.key,
+                ));
+                return Candidate {
+                    proposal: None,
+                    unsupported: None,
+                    failed: true,
+                    diagnostics,
+                };
             };
+            let source_config_for_probes =
+                match build_source_config(input_url, profile, detect, &captures) {
+                    Ok(source_config) => source_config,
+                    Err(error) => {
+                        return Candidate {
+                            proposal: None,
+                            unsupported: None,
+                            failed: true,
+                            diagnostics: vec![template_diagnostic(
+                                error,
+                                &format!("{base_path}/sourceConfig"),
+                                None,
+                            )],
+                        };
+                    }
+                };
+            if !evaluate_browser_probes(
+                input_url,
+                browser_probes,
+                &mut captures,
+                source_config_for_probes.as_object(),
+                &mut evidence,
+                &mut diagnostics,
+                browser_client,
+                &base_path,
+            )
+            .await
+            {
+                let failed = diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
+                return Candidate {
+                    proposal: None,
+                    unsupported: None,
+                    failed,
+                    diagnostics,
+                };
+            }
         }
     }
 
@@ -470,6 +547,318 @@ async fn evaluate_http_checks<C: DetectionHttpClient + Sync>(
     }
 
     true
+}
+
+async fn evaluate_browser_probes(
+    input_url: &str,
+    probes: &[DetectionBrowserProbe],
+    captures: &mut BTreeMap<String, String>,
+    source_config: Option<&Map<String, Value>>,
+    evidence: &mut Vec<SourceProposalEvidence>,
+    diagnostics: &mut Diagnostics,
+    browser_client: &(dyn ProfileBrowserClient + Sync),
+    base_path: &str,
+) -> bool {
+    for (index, probe) in probes.iter().enumerate() {
+        let probe_path = format!("{base_path}/browserProbes/{index}");
+        let rendered_url = match render_detection_template_with_source_config(
+            &probe.url,
+            input_url,
+            captures,
+            source_config,
+        ) {
+            Ok(url) => url,
+            Err(error) => {
+                diagnostics.push(template_diagnostic(
+                    error,
+                    &format!("{probe_path}/url"),
+                    Some(&probe.key),
+                ));
+                return false;
+            }
+        };
+
+        let request = match browser_probe_request(probe, rendered_url.clone(), &probe_path) {
+            Ok(request) => request,
+            Err(diagnostic) => {
+                diagnostics.push(diagnostic);
+                return false;
+            }
+        };
+
+        let response = match browser_client.render(request).await {
+            Ok(response) => response,
+            Err(error) => {
+                diagnostics.push(browser_probe_error_diagnostic(
+                    error,
+                    &rendered_url,
+                    &probe_path,
+                    &probe.key,
+                ));
+                return false;
+            }
+        };
+
+        if !evaluate_rendered_html_checks(
+            probe,
+            &response,
+            captures,
+            evidence,
+            diagnostics,
+            &probe_path,
+        ) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn browser_probe_request(
+    probe: &DetectionBrowserProbe,
+    rendered_url: String,
+    probe_path: &str,
+) -> Result<ProfileBrowserFetchRequest, Diagnostic> {
+    let timeout_ms = probe.timeout_ms.unwrap_or(10_000);
+    if timeout_ms == 0 {
+        return Err(detection_error(
+            "browser_probe_timeout_required",
+            format!(
+                "Browser probe `{}` must declare a positive timeoutMs or use the bounded default",
+                probe.key
+            ),
+            format!("{probe_path}/timeoutMs"),
+            Some(&probe.key),
+            serde_json::json!({ "probeKey": probe.key }),
+        ));
+    }
+
+    let mut waits = Vec::new();
+    for (index, wait) in probe
+        .waits
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .enumerate()
+    {
+        let path = format!("{probe_path}/waits/{index}");
+        let timeout_ms = match wait {
+            crate::profile_dsl::documents::BrowserWait::Selector { timeout_ms, .. }
+            | crate::profile_dsl::documents::BrowserWait::NetworkIdle { timeout_ms, .. } => {
+                timeout_ms.filter(|value| *value > 0).ok_or_else(|| {
+                    detection_error(
+                        "browser_wait_timeout_required",
+                        format!(
+                            "Browser probe `{}` wait must declare a positive timeoutMs",
+                            probe.key
+                        ),
+                        format!("{path}/timeoutMs"),
+                        Some(&probe.key),
+                        serde_json::json!({ "probeKey": probe.key }),
+                    )
+                })?
+            }
+        };
+        waits.push(match wait {
+            crate::profile_dsl::documents::BrowserWait::Selector { selector, .. } => {
+                ExecutionPlanBrowserWait::Selector {
+                    selector: selector.clone(),
+                    timeout_ms,
+                }
+            }
+            crate::profile_dsl::documents::BrowserWait::NetworkIdle { selector, .. } => {
+                ExecutionPlanBrowserWait::NetworkIdle {
+                    selector: selector.clone(),
+                    timeout_ms,
+                }
+            }
+        });
+    }
+
+    let mut interactions = Vec::new();
+    for (index, interaction) in probe
+        .interactions
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .enumerate()
+    {
+        let path = format!("{probe_path}/interactions/{index}");
+        interactions.push(match interaction {
+            DetectionBrowserInteraction::ClickIfVisible {
+                selector,
+                max_count,
+                wait_after_ms,
+            } => ExecutionPlanBrowserInteraction::ClickIfVisible {
+                selector: selector.clone(),
+                max_count: max_count.filter(|value| *value > 0).ok_or_else(|| {
+                    detection_error(
+                        "browser_interaction_max_count_required",
+                        format!(
+                            "Browser probe `{}` interaction must declare a positive maxCount",
+                            probe.key
+                        ),
+                        format!("{path}/maxCount"),
+                        Some(&probe.key),
+                        serde_json::json!({ "probeKey": probe.key }),
+                    )
+                })?,
+                wait_after_ms: *wait_after_ms,
+            },
+            DetectionBrowserInteraction::ClickUntilGone {
+                selector,
+                max_count,
+                wait_after_ms,
+            } => ExecutionPlanBrowserInteraction::ClickUntilGone {
+                selector: selector.clone(),
+                max_count: max_count.filter(|value| *value > 0).ok_or_else(|| {
+                    detection_error(
+                        "browser_interaction_max_count_required",
+                        format!(
+                            "Browser probe `{}` interaction must declare a positive maxCount",
+                            probe.key
+                        ),
+                        format!("{path}/maxCount"),
+                        Some(&probe.key),
+                        serde_json::json!({ "probeKey": probe.key }),
+                    )
+                })?,
+                wait_after_ms: *wait_after_ms,
+            },
+        });
+    }
+
+    Ok(ProfileBrowserFetchRequest {
+        url: rendered_url,
+        timeout_ms,
+        waits,
+        interactions,
+    })
+}
+
+fn evaluate_rendered_html_checks(
+    probe: &DetectionBrowserProbe,
+    response: &ProfileBrowserFetchResponse,
+    captures: &mut BTreeMap<String, String>,
+    evidence: &mut Vec<SourceProposalEvidence>,
+    diagnostics: &mut Diagnostics,
+    probe_path: &str,
+) -> bool {
+    if let Some(needle) = &probe.html_contains {
+        if !response.body.contains(needle) {
+            diagnostics.push(detection_warning(
+                "browser_probe_html_contains_mismatch",
+                format!(
+                    "Browser probe `{}` rendered HTML did not contain the required text",
+                    probe.key
+                ),
+                format!("{probe_path}/htmlContains"),
+                Some(&probe.key),
+                serde_json::json!({ "probeKey": probe.key }),
+            ));
+            return false;
+        }
+    }
+
+    if let Some(pattern) = &probe.html_regex {
+        let regex = match Regex::new(pattern) {
+            Ok(regex) => regex,
+            Err(error) => {
+                diagnostics.push(detection_error(
+                    "invalid_browser_probe_html_regex",
+                    format!(
+                        "Browser probe `{}` has an invalid regex: {error}",
+                        probe.key
+                    ),
+                    format!("{probe_path}/htmlRegex"),
+                    Some(&probe.key),
+                    serde_json::json!({ "probeKey": probe.key }),
+                ));
+                return false;
+            }
+        };
+        let Some(matches) = regex.captures(&response.body) else {
+            diagnostics.push(detection_warning(
+                "browser_probe_html_regex_mismatch",
+                format!(
+                    "Browser probe `{}` rendered HTML did not match the required regex",
+                    probe.key
+                ),
+                format!("{probe_path}/htmlRegex"),
+                Some(&probe.key),
+                serde_json::json!({ "probeKey": probe.key }),
+            ));
+            return false;
+        };
+        for name in regex.capture_names().flatten() {
+            if let Some(value) = matches.name(name).map(|capture| capture.as_str()) {
+                if !value.trim().is_empty() {
+                    captures.insert(name.to_string(), value.to_string());
+                }
+            }
+        }
+    }
+
+    evidence.push(SourceProposalEvidence {
+        kind: DetectionEvidenceKind::Browser,
+        message: probe
+            .evidence
+            .clone()
+            .unwrap_or_else(|| format!("Browser probe `{}` matched rendered HTML", probe.key)),
+        path: Some(probe_path.to_string()),
+        probe_key: Some(probe.key.clone()),
+    });
+
+    true
+}
+
+fn browser_probe_error_diagnostic(
+    error: ProfileBrowserFetchError,
+    rendered_url: &str,
+    probe_path: &str,
+    probe_key: &str,
+) -> Diagnostic {
+    let (code, path) = match error.kind {
+        ProfileBrowserFetchErrorKind::RuntimeUnavailable => {
+            ("browser_runtime_unavailable", probe_path.to_string())
+        }
+        ProfileBrowserFetchErrorKind::NavigationFailed => {
+            ("browser_navigation_failed", format!("{probe_path}/url"))
+        }
+        ProfileBrowserFetchErrorKind::WaitTimeout { wait_index } => (
+            "browser_wait_timeout",
+            wait_index
+                .map(|index| format!("{probe_path}/waits/{index}"))
+                .unwrap_or_else(|| format!("{probe_path}/waits")),
+        ),
+        ProfileBrowserFetchErrorKind::InteractionFailed { interaction_index } => (
+            "browser_interaction_failed",
+            interaction_index
+                .map(|index| format!("{probe_path}/interactions/{index}"))
+                .unwrap_or_else(|| format!("{probe_path}/interactions")),
+        ),
+        ProfileBrowserFetchErrorKind::RenderTimeout => {
+            ("browser_render_timeout", format!("{probe_path}/timeoutMs"))
+        }
+        ProfileBrowserFetchErrorKind::ContentReadFailed => {
+            ("browser_content_read_failed", probe_path.to_string())
+        }
+    };
+
+    detection_error(
+        code,
+        format!(
+            "Browser probe `{probe_key}` failed for {rendered_url}: {}",
+            error.message
+        ),
+        path,
+        Some(probe_key),
+        serde_json::json!({
+            "probeKey": probe_key,
+            "url": rendered_url,
+            "error": error.message,
+        }),
+    )
 }
 
 fn browser_probe_unavailable_diagnostics(
@@ -787,6 +1176,7 @@ fn detection_document_evidence(detect: &ProfileDetectionDocument) -> Vec<SourceP
 struct DetectionTemplateContext<'a> {
     input_url: &'a str,
     captures: &'a BTreeMap<String, String>,
+    source_config: Option<&'a Map<String, Value>>,
 }
 
 impl TemplateContext for DetectionTemplateContext<'_> {
@@ -797,6 +1187,15 @@ impl TemplateContext for DetectionTemplateContext<'_> {
         if let Some(capture_key) = variable.strip_prefix("capture:") {
             return Ok(self.captures.get(capture_key).cloned());
         }
+        if let Some(source_config_key) = variable
+            .strip_prefix("sourceConfig:")
+            .or_else(|| variable.strip_prefix("sourceConfig."))
+        {
+            return Ok(self
+                .source_config
+                .and_then(|source_config| source_config.get(source_config_key))
+                .and_then(json_scalar_as_string));
+        }
         Ok(None)
     }
 }
@@ -806,13 +1205,32 @@ fn render_detection_template(
     input_url: &str,
     captures: &BTreeMap<String, String>,
 ) -> Result<String, TemplateError> {
+    render_detection_template_with_source_config(template, input_url, captures, None)
+}
+
+fn render_detection_template_with_source_config(
+    template: &str,
+    input_url: &str,
+    captures: &BTreeMap<String, String>,
+    source_config: Option<&Map<String, Value>>,
+) -> Result<String, TemplateError> {
     render_template(
         template,
         &DetectionTemplateContext {
             input_url,
             captures,
+            source_config,
         },
     )
+}
+
+fn json_scalar_as_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        Value::Bool(value) => Some(value.to_string()),
+        Value::Null | Value::Array(_) | Value::Object(_) => None,
+    }
 }
 
 fn template_diagnostic(error: TemplateError, path: &str, probe_key: Option<&str>) -> Diagnostic {

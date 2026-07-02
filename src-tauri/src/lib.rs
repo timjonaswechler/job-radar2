@@ -40,8 +40,9 @@ pub use profile_dsl::runtime::{
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source_profile::detection::{
-    detect_source_proposal, detect_source_proposal_with_http_client, DetectionHttpClient,
-    DetectionHttpError, DetectionHttpResponse, SourceProposal, SourceProposalDetectionResult,
+    detect_source_proposal, detect_source_proposal_with_clients,
+    detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
+    DetectionHttpResponse, SourceProposal, SourceProposalDetectionResult,
     SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedSourceProfile,
 };
 pub use source_profile::documents::SourceProfileDocument;

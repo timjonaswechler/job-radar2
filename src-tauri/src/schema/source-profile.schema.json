@@ -134,7 +134,7 @@
     "detectionBrowserInteraction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "selector"],
+      "required": ["type", "selector", "maxCount"],
       "properties": {
         "type": { "type": "string", "enum": ["click_if_visible", "click_until_gone"] },
         "selector": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },

@@ -1,8 +1,11 @@
 use std::{collections::HashMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
-    DetectionHttpResponse, DiagnosticCategory, DiagnosticSeverity, SourceProfileDocument,
+    detect_source_proposal_with_clients, detect_source_proposal_with_http_client,
+    DetectionHttpClient, DetectionHttpError, DetectionHttpResponse, DiagnosticCategory,
+    DiagnosticSeverity, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, SourceProfileDocument,
     SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
@@ -248,6 +251,375 @@ fn source_profile_detection_reports_failed_http_check_as_structured_diagnostic()
 }
 
 #[test]
+fn source_profile_detection_browser_probe_contributes_evidence_captures_and_bounded_request() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}?board={{capture:boardSlug}}",
+            "timeoutMs": 10000,
+            "waits": [
+                { "type": "selector", "selector": ".jobs", "timeoutMs": 5000 },
+                { "type": "network_idle", "timeoutMs": 250 }
+            ],
+            "interactions": [{
+                "type": "click_if_visible",
+                "selector": "button.load-more",
+                "maxCount": 2,
+                "waitAfterMs": 100
+            }],
+            "htmlContains": "ExampleJobs",
+            "htmlRegex": "data-org=\\\"(?<organizationName>[^\\\"]+)\\\"",
+            "evidence": "Rendered jobs page identifies ExampleJobs."
+        }],
+        "sourceConfig": { "boardSlug": "{{capture:boardSlug}}" },
+        "nameCandidates": ["{{capture:organizationName}}"]
+    }));
+    let browser = FakeBrowser::new([(
+        "https://jobs.example.test/acme?board=acme",
+        "<main class=\"jobs\" data-org=\"ACME GmbH\">ExampleJobs</main>".to_string(),
+    )]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let proposal = result.proposal.unwrap();
+    assert_eq!(
+        proposal.captures.get("organizationName"),
+        Some(&"ACME GmbH".to_string())
+    );
+    assert_eq!(proposal.name_candidates, vec!["ACME GmbH"]);
+    assert!(proposal.evidence.iter().any(|evidence| {
+        let serialized = serde_json::to_value(evidence).unwrap();
+        serialized["kind"] == "browser"
+            && evidence.probe_key.as_deref() == Some("rendered_jobs_page")
+            && evidence.message == "Rendered jobs page identifies ExampleJobs."
+    }));
+
+    let requests = browser.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url, "https://jobs.example.test/acme?board=acme");
+    assert_eq!(requests[0].timeout_ms, 10000);
+    assert_eq!(
+        requests[0].waits,
+        vec![
+            ExecutionPlanBrowserWait::Selector {
+                selector: Some(".jobs".to_string()),
+                timeout_ms: 5000,
+            },
+            ExecutionPlanBrowserWait::NetworkIdle {
+                selector: None,
+                timeout_ms: 250,
+            },
+        ]
+    );
+    assert_eq!(
+        requests[0].interactions,
+        vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
+            selector: "button.load-more".to_string(),
+            max_count: 2,
+            wait_after_ms: Some(100),
+        }]
+    );
+}
+
+#[test]
+fn source_profile_detection_browser_probe_url_can_use_proposed_source_config() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^(?<baseUrl>https://jobs\\.example\\.test)/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "sourceConfig": {
+            "baseUrl": "{{capture:baseUrl}}",
+            "boardSlug": "{{capture:boardSlug}}"
+        },
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{sourceConfig:baseUrl}}/rendered/{{sourceConfig:boardSlug}}",
+            "timeoutMs": 10000,
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new([(
+        "https://jobs.example.test/rendered/acme",
+        "<main>ExampleJobs</main>".to_string(),
+    )]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        browser.requests()[0].url,
+        "https://jobs.example.test/rendered/acme"
+    );
+}
+
+#[test]
+fn source_profile_detection_reports_browser_wait_timeout_as_structured_diagnostic() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "waits": [{ "type": "selector", "selector": ".jobs", "timeoutMs": 5000 }],
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
+        ProfileBrowserFetchErrorKind::WaitTimeout {
+            wait_index: Some(0),
+        },
+        "selector .jobs did not appear",
+    ));
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "browser_wait_timeout"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
+fn source_profile_detection_maps_browser_runtime_failures_to_stable_diagnostics() {
+    let cases = [
+        (
+            ProfileBrowserFetchErrorKind::RuntimeUnavailable,
+            "browser runtime is not installed",
+            "browser_runtime_unavailable",
+            "/profiles/0/detect/browserProbes/0",
+        ),
+        (
+            ProfileBrowserFetchErrorKind::NavigationFailed,
+            "navigation failed",
+            "browser_navigation_failed",
+            "/profiles/0/detect/browserProbes/0/url",
+        ),
+        (
+            ProfileBrowserFetchErrorKind::InteractionFailed {
+                interaction_index: Some(0),
+            },
+            "click failed",
+            "browser_interaction_failed",
+            "/profiles/0/detect/browserProbes/0/interactions/0",
+        ),
+        (
+            ProfileBrowserFetchErrorKind::RenderTimeout,
+            "render timed out",
+            "browser_render_timeout",
+            "/profiles/0/detect/browserProbes/0/timeoutMs",
+        ),
+        (
+            ProfileBrowserFetchErrorKind::ContentReadFailed,
+            "content could not be read",
+            "browser_content_read_failed",
+            "/profiles/0/detect/browserProbes/0",
+        ),
+    ];
+
+    for (kind, message, expected_code, expected_path) in cases {
+        let profile = fixture_profile(json!({
+            "recommendedAccessPathKey": "api",
+            "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+            "browserProbes": [{
+                "key": "rendered_jobs_page",
+                "url": "{{inputUrl}}",
+                "timeoutMs": 10000,
+                "interactions": [{
+                    "type": "click_if_visible",
+                    "selector": "button.load-more",
+                    "maxCount": 1
+                }],
+                "htmlContains": "ExampleJobs"
+            }]
+        }));
+        let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(kind, message));
+
+        let result = block_on(detect_source_proposal_with_clients(
+            "https://jobs.example.test/acme",
+            &[profile],
+            &FakeHttpClient::default(),
+            &browser,
+        ));
+
+        assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+        assert!(result.proposal.is_none());
+        assert!(
+            result.diagnostics.iter().any(|diagnostic| {
+                diagnostic.category == DiagnosticCategory::Detection
+                    && diagnostic.severity == DiagnosticSeverity::Error
+                    && diagnostic.code == expected_code
+                    && diagnostic.path == expected_path
+                    && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+            }),
+            "missing {expected_code} at {expected_path}: {:?}",
+            result.diagnostics
+        );
+    }
+}
+
+#[test]
+fn source_profile_detection_reports_browser_non_match_without_proposal() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new([(
+        "https://jobs.example.test/acme",
+        "<main>Different renderer</main>".to_string(),
+    )]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Unsupported);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Warning
+            && diagnostic.code == "browser_probe_html_contains_mismatch"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/htmlContains"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
+fn source_profile_detection_rejects_unbounded_browser_probe_render_timeout() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 0,
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "browser_probe_timeout_required"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
+fn source_profile_detection_rejects_unbounded_browser_probe_waits_and_interactions() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "waits": [{ "type": "selector", "selector": ".jobs" }],
+            "interactions": [{ "type": "click_until_gone", "selector": "button.load-more" }],
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "browser_wait_timeout_required"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0/timeoutMs"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
+fn source_profile_detection_rejects_unbounded_browser_probe_interactions_before_rendering() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "interactions": [{ "type": "click_until_gone", "selector": "button.load-more" }],
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "browser_interaction_max_count_required"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/interactions/0/maxCount"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
 fn source_profile_detection_reports_browser_probe_required_when_executor_is_unavailable() {
     let profile = fixture_profile(json!({
         "recommendedAccessPathKey": "api",
@@ -294,6 +666,61 @@ impl FakeHttpClient {
         Self {
             responses: HashMap::from([(url.to_string(), Err(error))]),
         }
+    }
+}
+
+struct FakeBrowser {
+    responses: HashMap<String, Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>,
+    requests: std::sync::Mutex<Vec<ProfileBrowserFetchRequest>>,
+}
+
+impl FakeBrowser {
+    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
+        Self {
+            responses: responses
+                .into_iter()
+                .map(|(url, body)| (url.to_string(), Ok(ProfileBrowserFetchResponse { body })))
+                .collect(),
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn failing(error: ProfileBrowserFetchError) -> Self {
+        Self {
+            responses: HashMap::from([("*".to_string(), Err(error))]),
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<ProfileBrowserFetchRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ProfileBrowserClient for FakeBrowser {
+    fn render<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.requests.lock().unwrap().push(request.clone());
+            self.responses
+                .get(&request.url)
+                .or_else(|| self.responses.get("*"))
+                .cloned()
+                .unwrap_or_else(|| {
+                    Err(ProfileBrowserFetchError::new(
+                        ProfileBrowserFetchErrorKind::NavigationFailed,
+                        format!("missing fake browser response for {}", request.url),
+                    ))
+                })
+        })
     }
 }
 
