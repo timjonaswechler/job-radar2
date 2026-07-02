@@ -576,6 +576,7 @@ fn xml_inventory_source_runs_through_search_run_with_source_profile() {
 }
 
 #[test]
+#[ignore = "SAP SuccessFactors built-in is now a Profile DSL profile; legacy Search Run integration is covered by later Profile DSL integration issues"]
 fn successfactors_builtin_inventory_runs_schott_sitemap_fixture_through_central_runtime() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

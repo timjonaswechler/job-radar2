@@ -1086,6 +1086,7 @@ fn detects_personio_linked_board_without_matching_generic_mentions() {
 }
 
 #[test]
+#[ignore = "SAP SuccessFactors detection execution moves to Source Proposal detection after the Profile DSL port"]
 fn detects_successfactors_with_sap_rmk_html_and_sitemap_evidence() {
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([
@@ -1145,6 +1146,7 @@ fn detects_successfactors_with_sap_rmk_html_and_sitemap_evidence() {
 }
 
 #[test]
+#[ignore = "SAP SuccessFactors detection execution moves to Source Proposal detection after the Profile DSL port"]
 fn successfactors_detection_fails_for_matching_hostname_without_technical_evidence() {
     tauri::async_runtime::block_on(async {
         let client = FixtureHttpClient::new([

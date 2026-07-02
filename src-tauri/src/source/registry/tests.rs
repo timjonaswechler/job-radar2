@@ -371,7 +371,7 @@ fn phenom_builtin_declares_sitemap_inventory_and_html_posting_detail() {
 }
 
 #[test]
-fn successfactors_builtin_declares_sitemap_inventory_and_html_posting_detail() {
+fn successfactors_builtin_declares_profile_dsl_access_path_for_legacy_registry_visibility() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
     let profile = snapshot.profile("successfactors").unwrap();
@@ -379,34 +379,25 @@ fn successfactors_builtin_declares_sitemap_inventory_and_html_posting_detail() {
         .document
         .access_paths
         .iter()
-        .find(|access_path| access_path.key == "sitemap_inventory")
+        .find(|access_path| access_path.key == "rmk_sitemap_html")
         .unwrap();
 
+    assert_eq!(access_path.adapter_key, "profile_dsl");
+    assert!(access_path.inventory.is_none());
+    let source_config_schema = profile.document.source_config_schema.as_ref().unwrap();
+    assert_eq!(source_config_schema["additionalProperties"], false);
     assert_eq!(
-        access_path.inventory.as_ref().unwrap()["items"]["select"],
-        json!({ "xmlText": "loc" })
+        source_config_schema["required"],
+        json!(["baseUrl", "sitemapUrl"])
+    );
+    let posting_detail = access_path.posting_detail.as_ref().unwrap();
+    assert_eq!(
+        posting_detail["strategies"][0]["fetch"]["url"],
+        "{{posting:url}}"
     );
     assert_eq!(
-        access_path.inventory.as_ref().unwrap()["items"]["where"],
-        json!([{ "regex": "(?i)/job/" }])
-    );
-    assert!(access_path.inventory.as_ref().unwrap()["fields"]
-        .get("descriptionText")
-        .is_none());
-    assert!(access_path.inventory.as_ref().unwrap()["fields"]
-        .get("postingMeta")
-        .is_none());
-    assert_eq!(
-        access_path.posting_detail.as_ref(),
-        Some(&json!({
-            "fetch": { "url": "{{posting:url}}" },
-            "parse": { "as": "html" },
-            "fields": {
-                "descriptionText": {
-                    "selectorText": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description'], .job-description, .jobDescription, .job-description__content"
-                }
-            }
-        }))
+        posting_detail["strategies"][1]["key"],
+        "fallback_html_description"
     );
 }
 

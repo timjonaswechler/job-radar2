@@ -5,9 +5,129 @@ use super::values::{
     xml_node_text, xml_path_texts, JsonStringsResult,
 };
 use super::*;
+use crate::profile_dsl::documents::select::{CaptureRule, Captures};
+
+fn evaluate_strategy_captures(
+    item: &RuntimeItem<'_, '_>,
+    capture_rules: Option<&Captures>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> Option<BTreeMap<String, String>> {
+    let mut captures = BTreeMap::new();
+    let Some(capture_rules) = capture_rules else {
+        return Some(captures);
+    };
+
+    for (key, rule) in capture_rules {
+        let path = format!("{base_path}/captures/{key}");
+        let context_captures = captures.clone();
+        let evaluation = evaluate_string_field(
+            item,
+            source_config,
+            source_name,
+            &context_captures,
+            &rule.from,
+            &format!("{path}/from"),
+            strategy_key,
+            item_index,
+            diagnostics,
+        );
+        if evaluation.failed {
+            return None;
+        }
+        let Some(value) = evaluation.value else {
+            diagnostics.push(runtime_error(
+                "capture_source_missing",
+                format!("Capture `{key}` source did not resolve to text"),
+                &path,
+                strategy_key,
+                json!({ "captureKey": key, "itemIndex": item_index }),
+            ));
+            return None;
+        };
+        let captured = apply_capture_rule(
+            key,
+            &value,
+            rule,
+            &path,
+            strategy_key,
+            item_index,
+            diagnostics,
+        )?;
+        captures.insert(key.clone(), captured);
+    }
+
+    Some(captures)
+}
+
+fn apply_capture_rule(
+    key: &str,
+    value: &str,
+    rule: &CaptureRule,
+    path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> Option<String> {
+    let regex = match Regex::new(&rule.pattern) {
+        Ok(regex) => regex,
+        Err(error) => {
+            diagnostics.push(runtime_error(
+                "capture_pattern_invalid",
+                format!("Capture `{key}` pattern is invalid: {error}"),
+                format!("{path}/pattern"),
+                strategy_key,
+                json!({ "captureKey": key, "itemIndex": item_index, "error": error.to_string() }),
+            ));
+            return None;
+        }
+    };
+    let Some(regex_captures) = regex.captures(value) else {
+        diagnostics.push(runtime_error(
+            "capture_not_matched",
+            format!("Capture `{key}` pattern did not match runtime text"),
+            path,
+            strategy_key,
+            json!({ "captureKey": key, "itemIndex": item_index }),
+        ));
+        return None;
+    };
+
+    let captured = regex_captures
+        .name("value")
+        .or_else(|| {
+            regex
+                .capture_names()
+                .flatten()
+                .find_map(|name| regex_captures.name(name))
+        })
+        .or_else(|| regex_captures.get(1))
+        .or_else(|| regex_captures.get(0))
+        .map(|matched| matched.as_str().trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    match captured {
+        Some(value) => Some(value),
+        None => {
+            diagnostics.push(runtime_error(
+                "capture_empty",
+                format!("Capture `{key}` resolved to empty text"),
+                path,
+                strategy_key,
+                json!({ "captureKey": key, "itemIndex": item_index }),
+            ));
+            None
+        }
+    }
+}
 
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
+    capture_rules: Option<&Captures>,
     fields: &ExecutionPlanPostingDiscoveryFields,
     source_config: &SourceConfig,
     source_name: &str,
@@ -16,10 +136,22 @@ pub(super) fn extract_candidate(
     item_index: usize,
     diagnostics: &mut Diagnostics,
 ) -> Option<PostingDiscoveryCandidate> {
+    let captures = evaluate_strategy_captures(
+        item,
+        capture_rules,
+        source_config,
+        source_name,
+        base_path,
+        strategy_key,
+        item_index,
+        diagnostics,
+    )?;
+
     let title = extract_required_string_field(
         item,
         source_config,
         source_name,
+        &captures,
         &fields.title,
         &format!("{base_path}/extract/fields/title"),
         strategy_key,
@@ -30,6 +162,7 @@ pub(super) fn extract_candidate(
         item,
         source_config,
         source_name,
+        &captures,
         &fields.company,
         &format!("{base_path}/extract/fields/company"),
         strategy_key,
@@ -40,6 +173,7 @@ pub(super) fn extract_candidate(
         item,
         source_config,
         source_name,
+        &captures,
         &fields.url,
         &format!("{base_path}/extract/fields/url"),
         strategy_key,
@@ -55,6 +189,7 @@ pub(super) fn extract_candidate(
                 item,
                 source_config,
                 source_name,
+                &captures,
                 expression,
                 &format!("{base_path}/extract/fields/locations"),
                 strategy_key,
@@ -77,6 +212,7 @@ pub(super) fn extract_candidate(
                     item,
                     source_config,
                     source_name,
+                    &captures,
                     expression,
                     &format!("{base_path}/extract/fields/postingMeta/{key}"),
                     strategy_key,
@@ -95,6 +231,7 @@ pub(super) fn extract_candidate(
             item,
             source_config,
             source_name,
+            &captures,
             expression,
             &format!("{base_path}/extract/fields/descriptionText"),
             strategy_key,
@@ -126,6 +263,7 @@ fn extract_required_string_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
+    captures: &BTreeMap<String, String>,
     expression: &FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -136,6 +274,7 @@ fn extract_required_string_field(
         item,
         source_config,
         source_name,
+        captures,
         expression,
         path,
         strategy_key,
@@ -173,6 +312,7 @@ fn evaluate_string_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
+    captures: &BTreeMap<String, String>,
     expression: &FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -188,6 +328,7 @@ fn evaluate_string_field(
         item,
         source_config,
         source_name,
+        captures,
         expression,
         path,
         strategy_key,
@@ -314,6 +455,7 @@ fn raw_field_values<'a>(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
+    captures: &BTreeMap<String, String>,
     expression: &'a FieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -388,6 +530,16 @@ fn raw_field_values<'a>(
                 cardinality: *cardinality,
                 transforms: transforms.as_ref(),
             },
+        },
+        FieldExpression::Capture {
+            key,
+            cardinality,
+            transforms,
+        } => RawFieldValues {
+            values: captures.get(key).cloned().into_iter().collect(),
+            failed: false,
+            cardinality: *cardinality,
+            transforms: transforms.as_ref(),
         },
         FieldExpression::ItemField {
             key,
@@ -551,6 +703,7 @@ fn raw_field_values<'a>(
             item,
             source_config,
             source_name,
+            captures,
             parts,
             join.as_deref().unwrap_or_default(),
             path,
@@ -562,7 +715,7 @@ fn raw_field_values<'a>(
         _ => {
             diagnostics.push(runtime_error(
                 "unsupported_field_expression",
-                "postingDiscovery runtime supports const, template, sourceConfig, itemField, JSONPath, XML, CSS, and combine field expressions",
+                "postingDiscovery runtime supports const, template, sourceConfig, capture, itemField, JSONPath, XML, CSS, and combine field expressions",
                 path,
                 strategy_key,
                 json!({ "itemIndex": item_index }),
@@ -581,6 +734,7 @@ fn combine_field_values(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
+    captures: &BTreeMap<String, String>,
     parts: &[CombinePart],
     join: &str,
     path: &str,
@@ -595,6 +749,7 @@ fn combine_field_values(
             item,
             source_config,
             source_name,
+            captures,
             &part.value,
             &part_path,
             strategy_key,
@@ -694,6 +849,7 @@ fn extract_locations_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
+    captures: &BTreeMap<String, String>,
     expression: &ListFieldExpression,
     path: &str,
     strategy_key: Option<&str>,
@@ -721,6 +877,7 @@ fn extract_locations_field(
             item,
             source_config,
             source_name,
+            captures,
             expression,
             &expression_path,
             strategy_key,

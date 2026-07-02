@@ -1,104 +1,232 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "key": "successfactors",
   "name": "SAP SuccessFactors",
   "kind": "recruiting_system",
-  "detect": {
-    "phases": ["http"],
-    "required": [
+  "description": "SAP SuccessFactors Recruiting Marketing sitemap profile for XML posting discovery and lazy HTML detail extraction with ordered fallback selectors.",
+  "support": {
+    "level": "verified",
+    "summary": "Verified against deterministic offline SAP SuccessFactors/RMK-compatible sitemap discovery and HTML detail fixtures.",
+    "evidence": [
       {
-        "htmlRegex": "(?is)(?:SAP\\s+SuccessFactors|SuccessFactors).*?(?:RMK|Recruiting\\s+Marketing|sap-rmk)|(?:RMK|Recruiting\\s+Marketing|sap-rmk).*?(?:SAP\\s+SuccessFactors|SuccessFactors)"
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/successfactors/posting-discovery-sitemap.xml",
+        "summary": "postingDiscovery fixture executes bounded sitemap/XML discovery through the public Profile Compiler and shared Profile DSL runtime."
       },
       {
-        "fetchText": {
-          "url": "/sitemap.xml",
-          "regex": "(?is)<urlset\\b[^>]*>.*<url>\\s*<loc>https?://[^<]+/job/[^<]+</loc>.*</url>.*</urlset>"
-        }
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/successfactors/posting-detail-1001-primary.html",
+        "summary": "postingDetail fixture extracts normalized descriptionText from a primary SuccessFactors/RMK-compatible HTML detail selector."
+      },
+      {
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/successfactors/posting-detail-2002-fallback.html",
+        "summary": "postingDetail fixture preserves failed primary-strategy diagnostics and succeeds through an ordered fallback HTML selector."
       }
     ]
   },
+  "detect": {
+    "recommendedAccessPathKey": "rmk_sitemap_html",
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",
+        "captures": ["successFactorsHost"]
+      },
+      {
+        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/sitemap\\.xml(?:[?#].*)?$",
+        "captures": ["successFactorsHost"]
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Common SAP SuccessFactors/RMK career sites expose posting URLs and sitemap URLs on one public host."
+      },
+      {
+        "kind": "http",
+        "message": "Profile execution expects a public XML sitemap containing job detail URLs."
+      }
+    ]
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["baseUrl", "sitemapUrl"],
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Career site base URL"
+      },
+      "sitemapUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Sitemap URL"
+      },
+      "maxUrls": {
+        "type": "number",
+        "minimum": 1,
+        "title": "Optional authoring note for desired maximum posting URLs"
+      }
+    }
+  },
   "accessPaths": [
     {
-      "key": "sitemap_inventory",
-      "adapterKey": "declarative_sitemap_inventory",
-      "availability": {
-        "sourceConfig": {
-          "url": "{{origin}}/sitemap.xml",
-          "recursive": false
-        }
-      },
-      "sourceConfigSchema": {
-        "type": "object",
-        "required": ["url"],
-        "properties": {
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "title": "Sitemap-URL"
-          },
-          "recursive": {
-            "type": "boolean",
-            "default": false,
-            "title": "Sitemap rekursiv auswerten"
-          },
-          "maxUrls": {
-            "type": "number",
-            "minimum": 1,
-            "title": "Maximale URLs"
+      "key": "rmk_sitemap_html",
+      "name": "RMK sitemap and HTML detail pages",
+      "description": "Discover postings from a bounded public XML sitemap and load descriptions from SuccessFactors/RMK-style HTML detail pages with fallback selectors.",
+      "postingDiscovery": {
+        "strategies": [
+          {
+            "key": "sitemap_job_urls",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{sourceConfig:sitemapUrl}}",
+              "headers": {
+                "accept": "application/xml,text/xml"
+              },
+              "timeoutMs": 10000
+            },
+            "pagination": {
+              "type": "sitemap",
+              "postingUrlSelector": {
+                "type": "sitemap_urls",
+                "urlPattern": "(?i)/job/"
+              },
+              "limits": {
+                "maxRequests": 1,
+                "maxItems": 50
+              }
+            },
+            "parse": { "type": "xml" },
+            "select": { "type": "document" },
+            "captures": {
+              "location": {
+                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
+                "pattern": "(?i)/job/(?<value>[^/?#-]+)-"
+              },
+              "title": {
+                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
+                "pattern": "(?i)/job/[^/?#-]+-(?<value>.+?)-[0-9]+(?:[/?#]|$)"
+              },
+              "jobId": {
+                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
+                "pattern": "(?i)-(?<value>[0-9]+)(?:[/?#]|$)"
+              },
+              "externalPath": {
+                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
+                "pattern": "(?i)^https?://[^/]+(?<value>/job/[^?#]+)"
+              }
+            },
+            "extract": {
+              "fields": {
+                "title": {
+                  "type": "capture",
+                  "key": "title",
+                  "cardinality": "one",
+                  "transforms": [
+                    { "type": "url_decode" },
+                    { "type": "slug_to_title" }
+                  ]
+                },
+                "company": {
+                  "type": "template",
+                  "template": "{{source:name}}",
+                  "cardinality": "one"
+                },
+                "url": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
+                "locations": {
+                  "type": "capture",
+                  "key": "location",
+                  "cardinality": "one",
+                  "transforms": [
+                    { "type": "url_decode" },
+                    { "type": "slug_to_title" }
+                  ]
+                },
+                "postingMeta": {
+                  "jobId": {
+                    "type": "capture",
+                    "key": "jobId",
+                    "cardinality": "one"
+                  },
+                  "externalPath": {
+                    "type": "capture",
+                    "key": "externalPath",
+                    "cardinality": "one"
+                  }
+                }
+              }
+            },
+            "acceptWhen": {
+              "requiredFields": ["title", "company", "url", "locations", "postingMeta.jobId", "postingMeta.externalPath"],
+              "minResults": 1
+            }
           }
-        }
-      },
-      "inventory": {
-        "fetch": {
-          "url": "{{sourceConfig:url}}"
-        },
-        "parse": {
-          "as": "xml"
-        },
-        "items": {
-          "select": {
-            "xmlText": "loc"
-          },
-          "where": [
-            {
-              "regex": "(?i)/job/"
-            }
-          ],
-          "captures": [
-            {
-              "regex": "(?i)/job/(?P<location>[^/-]+)-(?P<title>.+?)(?:-\\d+)?(?:-\\d+)?/?$"
-            }
-          ]
-        },
-        "fields": {
-          "title": {
-            "template": "{{capture:title|urlDecode|slugToTitle}}"
-          },
-          "url": {
-            "template": "{{itemText}}"
-          },
-          "company": {
-            "template": "{{sourceName}}"
-          },
-          "locations": [
-            {
-              "template": "{{capture:location|urlDecode|slugToTitle}}"
-            }
-          ]
-        }
+        ]
       },
       "postingDetail": {
-        "fetch": {
-          "url": "{{posting:url}}"
-        },
-        "parse": {
-          "as": "html"
-        },
-        "fields": {
-          "descriptionText": {
-            "selectorText": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description'], .job-description, .jobDescription, .job-description__content"
+        "strategies": [
+          {
+            "key": "primary_html_description",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{posting:url}}",
+              "headers": {
+                "accept": "text/html"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "html" },
+            "select": { "type": "document" },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "css_text",
+                  "selector": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description']",
+                  "cardinality": "first",
+                  "transforms": [{ "type": "normalize_whitespace" }]
+                }
+              }
+            },
+            "acceptWhen": {
+              "minDescriptionLength": 40
+            }
+          },
+          {
+            "key": "fallback_html_description",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{posting:url}}",
+              "headers": {
+                "accept": "text/html"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "html" },
+            "select": { "type": "document" },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "css_text",
+                  "selector": ".job-description__content, .job-description, .jobDescription, #job-description, main [class*='description']",
+                  "cardinality": "first",
+                  "transforms": [{ "type": "normalize_whitespace" }]
+                }
+              }
+            },
+            "acceptWhen": {
+              "minDescriptionLength": 40
+            }
           }
-        }
+        ]
       }
     }
   ]

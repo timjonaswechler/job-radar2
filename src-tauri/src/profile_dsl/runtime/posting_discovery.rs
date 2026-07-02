@@ -1050,6 +1050,7 @@ fn extract_candidates_from_items(
     for (item_index, item) in items.into_iter().enumerate() {
         if let Some(candidate) = extract_candidate(
             &item,
+            strategy.captures.as_ref(),
             &strategy.extract.fields,
             &plan.source_config,
             &plan.source.name,

@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Senior Platform Engineer",
+    "company": "Acme Robotics",
+    "url": "https://jobs.example-successfactors.test/job/berlin-senior-platform-engineer-1001",
+    "locations": ["Berlin"],
+    "postingMeta": {
+      "externalPath": "/job/berlin-senior-platform-engineer-1001",
+      "jobId": "1001"
+    }
+  },
+  {
+    "title": "Data Product Manager",
+    "company": "Acme Robotics",
+    "url": "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002",
+    "locations": ["Munich"],
+    "postingMeta": {
+      "externalPath": "/job/munich-data-product-manager-2002",
+      "jobId": "2002"
+    }
+  }
+]
