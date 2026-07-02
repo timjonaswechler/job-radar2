@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, HashSet, VecDeque},
     future::Future,
     pin::Pin,
     time::Duration,
@@ -244,6 +244,7 @@ where
         strategy,
         &[],
         None,
+        None,
         &base_path,
         strategy_key.as_deref(),
         &mut diagnostics,
@@ -294,6 +295,7 @@ where
                     strategy,
                     &query_params,
                     total_path.as_deref(),
+                    None,
                     base_path,
                     strategy_key,
                     &mut diagnostics,
@@ -360,6 +362,7 @@ where
                     strategy,
                     &query_params,
                     total_path.as_deref(),
+                    None,
                     base_path,
                     strategy_key,
                     &mut diagnostics,
@@ -401,16 +404,75 @@ where
                 diagnostics,
             }
         }
-        ExecutionPlanPagination::Cursor { .. } => {
-            diagnostics.push(runtime_error(
-                "unsupported_cursor_pagination",
-                "Cursor pagination is not implemented in this runtime slice",
-                format!("{base_path}/pagination"),
-                strategy_key,
-                json!({ "paginationType": "cursor" }),
-            ));
+        ExecutionPlanPagination::Cursor {
+            cursor_param,
+            next_cursor_path,
+            limits,
+        } => {
+            let max_requests = limits.max_requests.unwrap_or(1);
+            let mut candidates = Vec::new();
+            let mut seen_cursors = HashSet::new();
+            let mut cursor = None::<String>;
+
+            for request_index in 0..max_requests {
+                let query_params = cursor
+                    .as_ref()
+                    .map(|cursor| vec![(cursor_param.as_str(), cursor.clone())])
+                    .unwrap_or_default();
+                let page_output = execute_single_strategy_fetch(
+                    plan,
+                    fetcher,
+                    browser,
+                    strategy,
+                    &query_params,
+                    None,
+                    Some(next_cursor_path.as_str()),
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                )
+                .await;
+
+                if append_page_candidates(
+                    &mut candidates,
+                    page_output.candidates,
+                    limits.max_items,
+                    "cursor",
+                    base_path,
+                    strategy_key,
+                    &mut diagnostics,
+                ) {
+                    break;
+                }
+
+                let Some(next_cursor) = page_output.next_cursor else {
+                    break;
+                };
+                if !seen_cursors.insert(next_cursor.clone()) {
+                    diagnostics.push(runtime_warning(
+                        "pagination_duplicate_cursor",
+                        "Cursor pagination stopped after detecting a duplicate cursor value",
+                        format!("{base_path}/pagination/nextCursorPath"),
+                        strategy_key,
+                        json!({ "cursor": next_cursor, "paginationType": "cursor" }),
+                    ));
+                    break;
+                }
+                if request_index + 1 == max_requests {
+                    diagnostics.push(runtime_warning(
+                        "pagination_max_requests_reached",
+                        "Pagination stopped after reaching maxRequests",
+                        format!("{base_path}/pagination/limits/maxRequests"),
+                        strategy_key,
+                        json!({ "maxRequests": max_requests, "paginationType": "cursor" }),
+                    ));
+                    break;
+                }
+                cursor = Some(next_cursor);
+            }
+
             PostingDiscoveryExecutionResult {
-                candidates: Vec::new(),
+                candidates,
                 diagnostics,
             }
         }
@@ -585,6 +647,7 @@ fn text_items_to_urls(items: Vec<document::RuntimeItem<'_, '_>>) -> Vec<String> 
 struct StrategyFetchOutput {
     candidates: Vec<PostingDiscoveryCandidate>,
     total_count: Option<u64>,
+    next_cursor: Option<String>,
 }
 
 async fn execute_single_strategy_fetch<F, B>(
@@ -594,6 +657,7 @@ async fn execute_single_strategy_fetch<F, B>(
     strategy: &ExecutionPlanPostingDiscoveryStrategy,
     query_params: &[(&str, String)],
     total_path: Option<&str>,
+    next_cursor_path: Option<&str>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -619,6 +683,7 @@ where
             return StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count: None,
+                next_cursor: None,
             }
         }
     };
@@ -628,6 +693,7 @@ where
         strategy,
         &response.body,
         total_path,
+        next_cursor_path,
         base_path,
         strategy_key,
         diagnostics,
@@ -639,6 +705,7 @@ fn extract_candidates_from_response(
     strategy: &ExecutionPlanPostingDiscoveryStrategy,
     body: &str,
     total_path: Option<&str>,
+    next_cursor_path: Option<&str>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -650,10 +717,12 @@ fn extract_candidates_from_response(
                 return StrategyFetchOutput {
                     candidates: Vec::new(),
                     total_count: None,
+                    next_cursor: None,
                 }
             }
         };
     let total_count = total_path.and_then(|path| extract_total_count(&document, path));
+    let next_cursor = next_cursor_path.and_then(|path| extract_next_cursor(&document, path));
 
     let items = match select_items(
         &document,
@@ -667,6 +736,7 @@ fn extract_candidates_from_response(
             return StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count,
+                next_cursor,
             }
         }
     };
@@ -676,6 +746,7 @@ fn extract_candidates_from_response(
     StrategyFetchOutput {
         candidates,
         total_count,
+        next_cursor,
     }
 }
 
@@ -713,6 +784,32 @@ fn extract_total_count(document: &document::ParsedDocument<'_>, total_path: &str
         Value::Number(number) => number.as_u64(),
         Value::String(value) => value.parse::<u64>().ok(),
         _ => None,
+    }
+}
+
+fn extract_next_cursor(
+    document: &document::ParsedDocument<'_>,
+    next_cursor_path: &str,
+) -> Option<String> {
+    let document::ParsedDocument::Json(value) = document else {
+        return None;
+    };
+    let value = resolve_simple_json_path(value, next_cursor_path)
+        .ok()
+        .flatten()?;
+    match value {
+        Value::String(value) => non_empty_cursor(value),
+        Value::Number(number) => non_empty_cursor(&number.to_string()),
+        _ => None,
+    }
+}
+
+fn non_empty_cursor(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 

@@ -427,7 +427,77 @@ fn compiled_posting_discovery_runtime_reports_sitemap_max_requests_limit() {
 }
 
 #[test]
-fn compiled_posting_discovery_runtime_reports_cursor_pagination_as_unimplemented() {
+fn compiled_posting_discovery_runtime_executes_bounded_cursor_pagination() {
+    let plan = compiled_posting_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json?tenant=acme",
+        serde_json::Map::from_iter([(
+            "pagination".to_string(),
+            json!({
+                "type": "cursor",
+                "cursorParam": "cursor",
+                "nextCursorPath": "$.nextCursor",
+                "limits": { "maxRequests": 2 }
+            }),
+        )]),
+    );
+    let fetcher = FakeFetcher::new([
+        (
+            "https://example.test/jobs.json?tenant=acme",
+            json!({
+                "jobs": [
+                    { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                ],
+                "nextCursor": "page-2"
+            })
+            .to_string(),
+        ),
+        (
+            "https://example.test/jobs.json?tenant=acme&cursor=page-2",
+            json!({
+                "jobs": [
+                    { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
+                ],
+                "nextCursor": "page-3"
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        fetcher
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect::<Vec<_>>(),
+        vec![
+            "https://example.test/jobs.json?tenant=acme".to_string(),
+            "https://example.test/jobs.json?tenant=acme&cursor=page-2".to_string(),
+        ]
+    );
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
+    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(
+        result.diagnostics[0].code,
+        "pagination_max_requests_reached"
+    );
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+    );
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_stops_cursor_pagination_when_next_cursor_is_missing_or_empty()
+{
     let plan = compiled_posting_discovery_plan_with_strategy(
         json!({ "type": "json" }),
         default_select(),
@@ -439,7 +509,119 @@ fn compiled_posting_discovery_runtime_reports_cursor_pagination_as_unimplemented
                 "type": "cursor",
                 "cursorParam": "cursor",
                 "nextCursorPath": "$.nextCursor",
-                "limits": { "maxRequests": 2 }
+                "limits": { "maxRequests": 5 }
+            }),
+        )]),
+    );
+    let missing_cursor_fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [
+                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+            ]
+        })
+        .to_string(),
+    )]);
+    let empty_cursor_fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [
+                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+            ],
+            "nextCursor": "   "
+        })
+        .to_string(),
+    )]);
+
+    let missing_result = block_on(execute_posting_discovery_with_fetcher(
+        &plan,
+        &missing_cursor_fetcher,
+    ));
+    let empty_result = block_on(execute_posting_discovery_with_fetcher(
+        &plan,
+        &empty_cursor_fetcher,
+    ));
+
+    assert_eq!(missing_result.diagnostics, Vec::new());
+    assert_eq!(missing_result.candidates.len(), 1);
+    assert_eq!(missing_cursor_fetcher.requests().len(), 1);
+    assert_eq!(empty_result.diagnostics, Vec::new());
+    assert_eq!(empty_result.candidates.len(), 1);
+    assert_eq!(empty_cursor_fetcher.requests().len(), 1);
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_reports_duplicate_cursor_loop() {
+    let plan = compiled_posting_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        serde_json::Map::from_iter([(
+            "pagination".to_string(),
+            json!({
+                "type": "cursor",
+                "cursorParam": "cursor",
+                "nextCursorPath": "$.nextCursor",
+                "limits": { "maxRequests": 5 }
+            }),
+        )]),
+    );
+    let fetcher = FakeFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                ],
+                "nextCursor": "page-2"
+            })
+            .to_string(),
+        ),
+        (
+            "https://example.test/jobs.json?cursor=page-2",
+            json!({
+                "jobs": [
+                    { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
+                ],
+                "nextCursor": "page-2"
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(fetcher.requests().len(), 2);
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
+    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(result.diagnostics[0].code, "pagination_duplicate_cursor");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/pagination/nextCursorPath"
+    );
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("json_api")
+    );
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_reports_cursor_max_items_limit() {
+    let plan = compiled_posting_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        serde_json::Map::from_iter([(
+            "pagination".to_string(),
+            json!({
+                "type": "cursor",
+                "cursorParam": "cursor",
+                "nextCursorPath": "$.nextCursor",
+                "limits": { "maxRequests": 5, "maxItems": 1 }
             }),
         )]),
     );
@@ -447,7 +629,8 @@ fn compiled_posting_discovery_runtime_reports_cursor_pagination_as_unimplemented
         "https://example.test/jobs.json",
         json!({
             "jobs": [
-                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" },
+                { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
             ],
             "nextCursor": "page-2"
         })
@@ -456,15 +639,20 @@ fn compiled_posting_discovery_runtime_reports_cursor_pagination_as_unimplemented
 
     let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
-    assert!(fetcher.requests().is_empty());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(fetcher.requests().len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
-    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Error);
-    assert_eq!(result.diagnostics[0].code, "unsupported_cursor_pagination");
+    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(result.diagnostics[0].code, "pagination_max_items_reached");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination"
+        "/postingDiscovery/strategies/0/pagination/limits/maxItems"
+    );
+    assert_eq!(
+        result.diagnostics[0].details.as_ref().unwrap()["paginationType"],
+        "cursor"
     );
 }
 

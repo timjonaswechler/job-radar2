@@ -71,6 +71,11 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
         &["support", "required"],
     );
     harness.assert_invalid(
+        SchemaEntrypoint::SourceProfile,
+        "tests/fixtures/source-profile-dsl/invalid/posting-detail-pagination.json",
+        &["pagination"],
+    );
+    harness.assert_invalid(
         SchemaEntrypoint::Source,
         "tests/fixtures/source-profile-dsl/invalid/invalid-source-status.json",
         &["invalid"],
