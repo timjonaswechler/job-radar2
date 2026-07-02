@@ -22,6 +22,7 @@ where
         source_config,
         source_name,
         &[],
+        &[],
         base_path,
         strategy_key,
         diagnostics,
@@ -36,6 +37,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     source_config: &SourceConfig,
     source_name: &str,
     query_params: &[(&str, String)],
+    json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -52,6 +54,7 @@ where
         source_name,
         None,
         query_params,
+        json_body_params,
         base_path,
         strategy_key,
         diagnostics,
@@ -82,6 +85,7 @@ where
         source_name,
         Some(url_override),
         &[],
+        &[],
         base_path,
         strategy_key,
         diagnostics,
@@ -97,6 +101,7 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
+    json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -125,6 +130,7 @@ where
                 source_name,
                 url_override,
                 query_params,
+                json_body_params,
                 base_path,
                 strategy_key,
                 diagnostics,
@@ -167,6 +173,7 @@ async fn fetch_http_strategy_document<F>(
     source_name: &str,
     url_override: Option<&str>,
     query_params: &[(&str, String)],
+    json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -215,19 +222,20 @@ where
         }
     };
 
-    let rendered_body = match render_request_body(body, source_config, source_name) {
-        Ok(body) => body,
-        Err(message) => {
-            diagnostics.push(runtime_error(
-                "fetch_body_template_failed",
-                format!("Fetch body template could not be rendered: {message}"),
-                format!("{base_path}/fetch/body"),
-                strategy_key,
-                json!({}),
-            ));
-            return None;
-        }
-    };
+    let rendered_body =
+        match render_request_body(body, source_config, source_name, json_body_params) {
+            Ok(body) => body,
+            Err(message) => {
+                diagnostics.push(runtime_error(
+                    "fetch_body_template_failed",
+                    format!("Fetch body template could not be rendered: {message}"),
+                    format!("{base_path}/fetch/body"),
+                    strategy_key,
+                    json!({}),
+                ));
+                return None;
+            }
+        };
 
     let request = PostingDiscoveryFetchRequest {
         method,
@@ -343,13 +351,14 @@ fn render_request_body(
     body: Option<&RequestBody>,
     source_config: &SourceConfig,
     source_name: &str,
+    json_body_params: &[(&str, String)],
 ) -> Result<Option<RequestBody>, String> {
     let Some(body) = body else {
         return Ok(None);
     };
     match body {
-        RequestBody::Json { value } => Ok(Some(RequestBody::Json {
-            value: value
+        RequestBody::Json { value } => {
+            let mut rendered = value
                 .iter()
                 .map(|(key, value)| {
                     Ok((
@@ -357,8 +366,12 @@ fn render_request_body(
                         render_json_body_value(value, source_config, source_name)?,
                     ))
                 })
-                .collect::<Result<serde_json::Map<String, Value>, String>>()?,
-        })),
+                .collect::<Result<serde_json::Map<String, Value>, String>>()?;
+            for (key, value) in json_body_params {
+                rendered.insert((*key).to_string(), render_pagination_json_value(value));
+            }
+            Ok(Some(RequestBody::Json { value: rendered }))
+        }
         RequestBody::Text { value } => Ok(Some(RequestBody::Text {
             value: render_source_config_template(value, source_config, source_name)?,
         })),
@@ -374,6 +387,14 @@ fn render_request_body(
                 .collect::<Result<BTreeMap<String, String>, String>>()?,
         })),
     }
+}
+
+fn render_pagination_json_value(value: &str) -> Value {
+    value
+        .parse::<u64>()
+        .map(serde_json::Number::from)
+        .map(Value::Number)
+        .unwrap_or_else(|_| Value::String(value.to_string()))
 }
 
 fn render_json_body_value(

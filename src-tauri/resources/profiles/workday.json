@@ -1,136 +1,202 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "key": "workday",
   "name": "Workday Recruiting",
   "kind": "recruiting_system",
-  "detect": {
-    "phases": ["http"],
-    "required": [
+  "description": "Workday CXS public careers API profile for HTTP POST posting discovery and lazy posting detail extraction.",
+  "support": {
+    "level": "verified",
+    "summary": "Verified against deterministic offline Workday CXS-compatible discovery, offset/limit pagination, and detail fixtures.",
+    "evidence": [
       {
-        "inputUrlRegex": "(?i)^https?://([A-Za-z0-9.-]+\\.myworkdayjobs\\.com)(?:[/:?#]|$)",
-        "captureAs": "workdayHost"
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/workday/posting-discovery-page-0-response.json",
+        "summary": "postingDiscovery fixture executes CXS POST discovery through the public Profile Compiler and shared Profile DSL runtime."
       },
       {
-        "inputUrlRegex": "(?i)^https?://([A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com(?:[/:?#]|$)",
-        "captureAs": "tenant"
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/workday/posting-discovery-page-2-response.json",
+        "summary": "postingDiscovery fixture exercises bounded offset/limit pagination through JSON request body parameters."
       },
       {
-        "inputUrlRegex": "(?i)^https?://[^/]+/(?:[a-z]{2}-[A-Z]{2}/)?([^/?#]+)",
-        "captureAs": "site"
-      },
-      {
-        "htmlContains": "myworkday"
+        "kind": "fixture",
+        "reference": "src-tauri/tests/fixtures/workday/posting-detail-jr-1001-response.json",
+        "summary": "postingDetail fixture extracts normalized descriptionText from Workday CXS HTML-in-JSON content through the shared Profile DSL runtime."
       }
     ]
   },
-  "identity": {
-    "keyCandidates": [
-      "{{capture:tenant|technicalKey}}",
-      "{{capture:site|technicalKey}}"
+  "detect": {
+    "recommendedAccessPathKey": "cxs_api",
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?<workdayHost>(?<tenant>[A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com)(?:/[a-z]{2}-[A-Z]{2})?/(?<site>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
+        "captures": ["workdayHost", "tenant", "site"]
+      },
+      {
+        "pattern": "(?i)^https?://(?<workdayHost>[A-Za-z0-9.-]+\\.myworkdayjobs\\.com)/wday/cxs/(?<tenant>[A-Za-z0-9_-]+)/(?<site>[A-Za-z0-9_-]+)(?:/jobs|/job/.*)?(?:[?#].*)?$",
+        "captures": ["workdayHost", "tenant", "site"]
+      }
     ],
-    "nameCandidates": [
-      "{{capture:tenant|titleCase}}",
-      "{{capture:site|titleCase}}"
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Workday public career URLs expose a myworkdayjobs host and site path; common tenant-host forms expose the tenant prefix."
+      },
+      {
+        "kind": "url",
+        "message": "Workday CXS API URLs expose host, tenant, and site path segments for a source-config proposal."
+      }
     ]
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "required": ["workdayHost", "tenant", "site"],
+    "additionalProperties": false,
+    "properties": {
+      "workdayHost": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9.-]+\\.myworkdayjobs\\.com$",
+        "title": "Workday host"
+      },
+      "tenant": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Workday tenant"
+      },
+      "site": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Workday site"
+      },
+      "startUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "Start URL"
+      }
+    }
   },
   "accessPaths": [
     {
-      "key": "sitemap_inventory",
-      "adapterKey": "declarative_sitemap_inventory",
-      "availability": {
-        "requiredCaptures": ["workdayHost", "tenant", "site"],
-        "sourceConfig": {
-          "startUrl": "{{inputUrl}}",
-          "workdayHost": "{{capture:workdayHost}}",
-          "tenant": "{{capture:tenant}}",
-          "site": "{{capture:site}}",
-          "sitemapUrl": "https://{{capture:workdayHost}}/en-US/{{capture:site}}/siteMap.xml"
-        }
-      },
-      "sourceConfigSchema": {
-        "type": "object",
-        "required": ["workdayHost", "tenant", "site", "sitemapUrl"],
-        "additionalProperties": false,
-        "properties": {
-          "startUrl": {
-            "type": "string",
-            "format": "uri",
-            "title": "Start-URL"
-          },
-          "workdayHost": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9.-]+\\.myworkdayjobs\\.com$",
-            "title": "Workday Host"
-          },
-          "tenant": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Workday Tenant"
-          },
-          "site": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Workday Site"
-          },
-          "sitemapUrl": {
-            "type": "string",
-            "format": "uri",
-            "title": "Workday siteMap.xml"
+      "key": "cxs_api",
+      "name": "Workday CXS API",
+      "description": "Discover jobs from POST /wday/cxs/{tenant}/{site}/jobs and load one posting from GET /wday/cxs/{tenant}/{site}{externalPath}.",
+      "postingDiscovery": {
+        "strategies": [
+          {
+            "key": "cxs_jobs_api",
+            "fetch": {
+              "mode": "http",
+              "method": "POST",
+              "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}/jobs",
+              "headers": {
+                "accept": "application/json",
+                "content-type": "application/json"
+              },
+              "body": {
+                "type": "json",
+                "value": {
+                  "appliedFacets": {},
+                  "limit": 0,
+                  "offset": 0
+                }
+              },
+              "timeoutMs": 10000
+            },
+            "pagination": {
+              "type": "offset_limit",
+              "offsetParam": "offset",
+              "limitParam": "limit",
+              "parameterLocation": "json_body",
+              "startOffset": 0,
+              "limit": 2,
+              "totalPath": "$.total",
+              "limits": { "maxRequests": 2 }
+            },
+            "parse": { "type": "json" },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobPostings"
+            },
+            "extract": {
+              "fields": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one",
+                  "transforms": [{ "type": "trim" }]
+                },
+                "company": {
+                  "type": "template",
+                  "template": "{{source:name}}",
+                  "cardinality": "one"
+                },
+                "url": {
+                  "type": "combine",
+                  "join": "",
+                  "cardinality": "one",
+                  "parts": [
+                    { "value": { "type": "const", "value": "https://" } },
+                    { "value": { "type": "source_config", "key": "workdayHost", "cardinality": "one" } },
+                    { "value": { "type": "const", "value": "/en-US/" } },
+                    { "value": { "type": "source_config", "key": "site", "cardinality": "one" } },
+                    { "value": { "type": "json_path", "jsonPath": "$.externalPath", "cardinality": "one" } }
+                  ]
+                },
+                "locations": {
+                  "type": "json_path",
+                  "jsonPath": "$.locationsText",
+                  "cardinality": "optional",
+                  "transforms": [{ "type": "trim" }]
+                },
+                "postingMeta": {
+                  "externalPath": {
+                    "type": "json_path",
+                    "jsonPath": "$.externalPath",
+                    "cardinality": "one"
+                  }
+                }
+              }
+            },
+            "acceptWhen": {
+              "requiredFields": ["title", "company", "url", "postingMeta.externalPath"],
+              "minResults": 1
+            }
           }
-        }
-      },
-      "inventory": {
-        "fetch": {
-          "url": "{{sourceConfig:sitemapUrl}}"
-        },
-        "parse": {
-          "as": "xml"
-        },
-        "items": {
-          "select": {
-            "xmlText": "loc"
-          },
-          "where": [
-            {
-              "regex": "(?i)/job/"
-            }
-          ],
-          "captures": [
-            {
-              "regex": "(?i)(?:/[a-z]{2}-[A-Z]{2})?/[^/?#]+(?P<externalPath>/job/(?:[^/?#]+/)*(?P<title>[^/?#_]+(?:[-_][^/?#_]+)*)_[A-Za-z0-9-]+)/?$"
-            }
-          ]
-        },
-        "fields": {
-          "title": {
-            "template": "{{capture:title|urlDecode|slugToTitle}}"
-          },
-          "url": {
-            "template": "{{itemText}}"
-          },
-          "company": {
-            "template": "{{sourceName}}"
-          },
-          "locations": [],
-          "postingMeta": {
-            "jobId": {
-              "template": "{{capture:externalPath}}"
-            }
-          }
-        }
+        ]
       },
       "postingDetail": {
-        "fetch": {
-          "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:jobId}}"
-        },
-        "parse": {
-          "as": "json"
-        },
-        "fields": {
-          "descriptionText": {
-            "jsonPathHtml": "$.jobPostingInfo.jobDescription"
+        "strategies": [
+          {
+            "key": "cxs_job_detail_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:externalPath}}",
+              "headers": {
+                "accept": "application/json"
+              },
+              "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "json_path",
+                  "jsonPath": "$.jobPostingInfo.jobDescription",
+                  "cardinality": "one",
+                  "transforms": [
+                    { "type": "html_to_text" },
+                    { "type": "normalize_whitespace" }
+                  ]
+                }
+              }
+            },
+            "acceptWhen": {
+              "minDescriptionLength": 20
+            }
           }
-        }
+        ]
       }
     }
   ]

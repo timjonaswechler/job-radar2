@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait, RetryPolicy};
-use crate::profile_dsl::documents::{Fetch, HttpMethod, Pagination, Parse, RequestBody, Select};
+use crate::profile_dsl::documents::{
+    Fetch, HttpMethod, Pagination, PaginationParameterLocation, Parse, RequestBody, Select,
+};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
@@ -81,6 +83,8 @@ pub enum ExecutionPlanPagination {
     Page {
         #[serde(rename = "pageParam")]
         page_param: String,
+        #[serde(rename = "parameterLocation")]
+        parameter_location: PaginationParameterLocation,
         #[serde(rename = "firstPage", skip_serializing_if = "Option::is_none")]
         first_page: Option<u64>,
         #[serde(rename = "pageSizeParam", skip_serializing_if = "Option::is_none")]
@@ -96,6 +100,8 @@ pub enum ExecutionPlanPagination {
         offset_param: String,
         #[serde(rename = "limitParam")]
         limit_param: String,
+        #[serde(rename = "parameterLocation")]
+        parameter_location: PaginationParameterLocation,
         #[serde(rename = "startOffset", skip_serializing_if = "Option::is_none")]
         start_offset: Option<u64>,
         limit: u64,
@@ -106,6 +112,8 @@ pub enum ExecutionPlanPagination {
     Cursor {
         #[serde(rename = "cursorParam")]
         cursor_param: String,
+        #[serde(rename = "parameterLocation")]
+        parameter_location: PaginationParameterLocation,
         #[serde(rename = "nextCursorPath")]
         next_cursor_path: String,
         limits: ExecutionPlanPaginationLimits,
@@ -274,6 +282,7 @@ pub(crate) fn compile_pagination(
     match pagination {
         Pagination::Page {
             page_param,
+            parameter_location,
             first_page,
             page_size_param,
             page_size,
@@ -281,6 +290,7 @@ pub(crate) fn compile_pagination(
             limits,
         } => Ok(ExecutionPlanPagination::Page {
             page_param: page_param.clone(),
+            parameter_location: parameter_location.unwrap_or(PaginationParameterLocation::Query),
             first_page: *first_page,
             page_size_param: page_size_param.clone(),
             page_size: *page_size,
@@ -290,6 +300,7 @@ pub(crate) fn compile_pagination(
         Pagination::OffsetLimit {
             offset_param,
             limit_param,
+            parameter_location,
             start_offset,
             limit,
             total_path,
@@ -297,6 +308,7 @@ pub(crate) fn compile_pagination(
         } => Ok(ExecutionPlanPagination::OffsetLimit {
             offset_param: offset_param.clone(),
             limit_param: limit_param.clone(),
+            parameter_location: parameter_location.unwrap_or(PaginationParameterLocation::Query),
             start_offset: *start_offset,
             limit: *limit,
             total_path: total_path.clone(),
@@ -304,10 +316,12 @@ pub(crate) fn compile_pagination(
         }),
         Pagination::Cursor {
             cursor_param,
+            parameter_location,
             next_cursor_path,
             limits,
         } => Ok(ExecutionPlanPagination::Cursor {
             cursor_param: cursor_param.clone(),
+            parameter_location: parameter_location.unwrap_or(PaginationParameterLocation::Query),
             next_cursor_path: next_cursor_path.clone(),
             limits: compile_pagination_limits(limits.as_ref(), &format!("{path}/limits"))?,
         }),

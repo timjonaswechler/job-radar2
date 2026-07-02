@@ -17,7 +17,7 @@ use crate::{
         documents::{
             extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression},
             transform::Transform,
-            HttpMethod, ParseType, RequestBody, Select,
+            HttpMethod, PaginationParameterLocation, ParseType, RequestBody, Select,
         },
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
@@ -310,6 +310,7 @@ where
         browser,
         strategy,
         &[],
+        PaginationParameterLocation::Query,
         None,
         None,
         &base_path,
@@ -360,6 +361,7 @@ where
     match pagination {
         ExecutionPlanPagination::Page {
             page_param,
+            parameter_location,
             first_page,
             page_size_param,
             page_size,
@@ -370,16 +372,17 @@ where
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
                 let page = first_page.unwrap_or(1) + request_index;
-                let mut query_params = vec![(page_param.as_str(), page.to_string())];
+                let mut pagination_params = vec![(page_param.as_str(), page.to_string())];
                 if let (Some(page_size_param), Some(page_size)) = (page_size_param, page_size) {
-                    query_params.push((page_size_param.as_str(), page_size.to_string()));
+                    pagination_params.push((page_size_param.as_str(), page_size.to_string()));
                 }
                 let page_output = execute_single_strategy_fetch(
                     plan,
                     fetcher,
                     browser,
                     strategy,
-                    &query_params,
+                    &pagination_params,
+                    *parameter_location,
                     total_path.as_deref(),
                     None,
                     base_path,
@@ -428,6 +431,7 @@ where
         ExecutionPlanPagination::OffsetLimit {
             offset_param,
             limit_param,
+            parameter_location,
             start_offset,
             limit,
             total_path,
@@ -437,7 +441,7 @@ where
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
                 let offset = start_offset.unwrap_or(0) + request_index * limit;
-                let query_params = [
+                let pagination_params = [
                     (offset_param.as_str(), offset.to_string()),
                     (limit_param.as_str(), limit.to_string()),
                 ];
@@ -446,7 +450,8 @@ where
                     fetcher,
                     browser,
                     strategy,
-                    &query_params,
+                    &pagination_params,
+                    *parameter_location,
                     total_path.as_deref(),
                     None,
                     base_path,
@@ -492,6 +497,7 @@ where
         }
         ExecutionPlanPagination::Cursor {
             cursor_param,
+            parameter_location,
             next_cursor_path,
             limits,
         } => {
@@ -501,7 +507,7 @@ where
             let mut cursor = None::<String>;
 
             for request_index in 0..max_requests {
-                let query_params = cursor
+                let pagination_params = cursor
                     .as_ref()
                     .map(|cursor| vec![(cursor_param.as_str(), cursor.clone())])
                     .unwrap_or_default();
@@ -510,7 +516,8 @@ where
                     fetcher,
                     browser,
                     strategy,
-                    &query_params,
+                    &pagination_params,
+                    *parameter_location,
                     None,
                     Some(next_cursor_path.as_str()),
                     base_path,
@@ -607,6 +614,7 @@ where
                             &strategy.fetch,
                             &plan.source_config,
                             &plan.source.name,
+                            &[],
                             &[],
                             base_path,
                             strategy_key,
@@ -907,12 +915,33 @@ struct StrategyFetchOutput {
     next_cursor: Option<String>,
 }
 
+fn query_params_for_location<'a>(
+    params: &'a [(&'a str, String)],
+    location: PaginationParameterLocation,
+) -> &'a [(&'a str, String)] {
+    match location {
+        PaginationParameterLocation::Query => params,
+        PaginationParameterLocation::JsonBody => &[],
+    }
+}
+
+fn json_body_params_for_location<'a>(
+    params: &'a [(&'a str, String)],
+    location: PaginationParameterLocation,
+) -> &'a [(&'a str, String)] {
+    match location {
+        PaginationParameterLocation::Query => &[],
+        PaginationParameterLocation::JsonBody => params,
+    }
+}
+
 async fn execute_single_strategy_fetch<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
     strategy: &ExecutionPlanPostingDiscoveryStrategy,
-    query_params: &[(&str, String)],
+    pagination_params: &[(&str, String)],
+    parameter_location: PaginationParameterLocation,
     total_path: Option<&str>,
     next_cursor_path: Option<&str>,
     base_path: &str,
@@ -929,7 +958,8 @@ where
         &strategy.fetch,
         &plan.source_config,
         &plan.source.name,
-        query_params,
+        query_params_for_location(pagination_params, parameter_location),
+        json_body_params_for_location(pagination_params, parameter_location),
         base_path,
         strategy_key,
         diagnostics,

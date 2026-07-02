@@ -20,7 +20,7 @@ pub use access_path::ReusableAccessPathDocument;
 pub use extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression};
 pub use fetch::{Fetch, HttpMethod, RequestBody};
 pub use overrides::{OverridableStep, SourceOverrides, StrategyOverride};
-pub use pagination::{Pagination, PaginationLimits};
+pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};
 pub use parse::{Parse, ParseType};
 pub use posting_detail::{
     PostingDetailExtraction, PostingDetailFields, PostingDetailStep, PostingDetailStrategy,

@@ -713,3 +713,86 @@ fn compiled_posting_discovery_runtime_executes_bounded_offset_limit_pagination()
         ]
     );
 }
+
+#[test]
+fn compiled_posting_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
+    let mut extra = serde_json::Map::new();
+    extra.insert(
+        "fetch".to_string(),
+        json!({
+            "mode": "http",
+            "method": "POST",
+            "url": "{{sourceConfig:feedUrl}}",
+            "headers": {
+                "accept": "application/json",
+                "content-type": "application/json"
+            },
+            "body": {
+                "type": "json",
+                "value": {
+                    "appliedFacets": {},
+                    "limit": 0,
+                    "offset": 0
+                }
+            },
+            "timeoutMs": 10000
+        }),
+    );
+    extra.insert(
+        "pagination".to_string(),
+        json!({
+            "type": "offset_limit",
+            "offsetParam": "offset",
+            "limitParam": "limit",
+            "parameterLocation": "json_body",
+            "startOffset": 0,
+            "limit": 2,
+            "totalPath": "$.total",
+            "limits": { "maxRequests": 2 }
+        }),
+    );
+    let plan = compiled_posting_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        extra,
+    );
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "total": 4,
+            "jobs": [
+                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+            ]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.candidates.len(), 2);
+    let requests = fetcher.requests();
+    assert_eq!(requests[0].url, "https://example.test/jobs.json");
+    assert_eq!(requests[1].url, "https://example.test/jobs.json");
+    assert_eq!(
+        requests[0].body,
+        Some(RequestBody::Json {
+            value: serde_json::Map::from_iter([
+                ("appliedFacets".to_string(), json!({})),
+                ("limit".to_string(), json!(2)),
+                ("offset".to_string(), json!(0)),
+            ])
+        })
+    );
+    assert_eq!(
+        requests[1].body,
+        Some(RequestBody::Json {
+            value: serde_json::Map::from_iter([
+                ("appliedFacets".to_string(), json!({})),
+                ("limit".to_string(), json!(2)),
+                ("offset".to_string(), json!(2)),
+            ])
+        })
+    );
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "title": "Senior Platform Engineer",
+    "company": "Acme Robotics",
+    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001",
+    "locations": ["Berlin, Germany"],
+    "postingMeta": {
+      "externalPath": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+    }
+  },
+  {
+    "title": "Frontend Product Engineer",
+    "company": "Acme Robotics",
+    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Remote/Frontend-Product-Engineer_JR-1002",
+    "locations": ["Remote - Germany"],
+    "postingMeta": {
+      "externalPath": "/job/Germany-Remote/Frontend-Product-Engineer_JR-1002"
+    }
+  },
+  {
+    "title": "Data Integration Engineer",
+    "company": "Acme Robotics",
+    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Munich/Data-Integration-Engineer_JR-1003",
+    "locations": ["Munich, Germany"],
+    "postingMeta": {
+      "externalPath": "/job/Germany-Munich/Data-Integration-Engineer_JR-1003"
+    }
+  }
+]

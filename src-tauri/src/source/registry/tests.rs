@@ -411,7 +411,7 @@ fn successfactors_builtin_declares_sitemap_inventory_and_html_posting_detail() {
 }
 
 #[test]
-fn workday_builtin_declares_sitemap_inventory_and_cxs_posting_detail() {
+fn workday_builtin_declares_cxs_profile_dsl_access_path_for_legacy_registry_visibility() {
     let temp_dir = tempfile::tempdir().unwrap();
     let snapshot = load_snapshot(temp_dir.path());
     let profile = snapshot.profile("workday").unwrap();
@@ -419,41 +419,20 @@ fn workday_builtin_declares_sitemap_inventory_and_cxs_posting_detail() {
         .document
         .access_paths
         .iter()
-        .find(|access_path| access_path.key == "sitemap_inventory")
+        .find(|access_path| access_path.key == "cxs_api")
         .unwrap();
 
-    let source_config_schema = access_path.source_config_schema.as_ref().unwrap();
+    assert_eq!(access_path.adapter_key, "profile_dsl");
+    assert!(access_path.inventory.is_none());
+    let source_config_schema = profile.document.source_config_schema.as_ref().unwrap();
     assert_eq!(source_config_schema["additionalProperties"], false);
     assert_eq!(
         source_config_schema["required"],
-        json!(["workdayHost", "tenant", "site", "sitemapUrl"])
+        json!(["workdayHost", "tenant", "site"])
     );
     assert_eq!(
-        access_path.inventory.as_ref().unwrap()["items"]["select"],
-        json!({ "xmlText": "loc" })
-    );
-    assert_eq!(
-        access_path.inventory.as_ref().unwrap()["fields"]["postingMeta"],
-        json!({
-            "jobId": { "template": "{{capture:externalPath}}" }
-        })
-    );
-    assert!(access_path.inventory.as_ref().unwrap()["fields"]
-        .get("descriptionText")
-        .is_none());
-    assert_eq!(
-        access_path.posting_detail.as_ref(),
-        Some(&json!({
-            "fetch": {
-                "url": "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:jobId}}"
-            },
-            "parse": { "as": "json" },
-            "fields": {
-                "descriptionText": {
-                    "jsonPathHtml": "$.jobPostingInfo.jobDescription"
-                }
-            }
-        }))
+        access_path.posting_detail.as_ref().unwrap()["strategies"][0]["fetch"]["url"],
+        "https://{{sourceConfig:workdayHost}}/wday/cxs/{{sourceConfig:tenant}}/{{sourceConfig:site}}{{postingMeta:externalPath}}"
     );
 }
 

@@ -340,9 +340,19 @@ fn parse_registry_document<T>(
 }
 
 fn parse_profile_document(value: Value) -> Result<SourceProfileDocument, String> {
-    let document = serde_json::from_value::<SourceProfileDocument>(value)
-        .map_err(|error| format!("source profile document shape is invalid: {error}"))?;
+    match serde_json::from_value::<SourceProfileDocument>(value.clone()) {
+        Ok(document) => validate_legacy_profile_document(document),
+        Err(legacy_error) => parse_profile_dsl_document(value).map_err(|dsl_error| {
+            format!(
+                "source profile document shape is invalid: {legacy_error}; Profile DSL shape is invalid: {dsl_error}"
+            )
+        }),
+    }
+}
 
+fn validate_legacy_profile_document(
+    document: SourceProfileDocument,
+) -> Result<SourceProfileDocument, String> {
     validate_schema_version(document.schema_version)?;
     validate_technical_key("key", &document.key)?;
     validate_required_text("name", &document.name)?;
@@ -375,6 +385,102 @@ fn parse_profile_document(value: Value) -> Result<SourceProfileDocument, String>
     }
 
     Ok(document)
+}
+
+fn parse_profile_dsl_document(value: Value) -> Result<SourceProfileDocument, String> {
+    let document =
+        serde_json::from_value::<crate::source_profile::documents::SourceProfileDocument>(value)
+            .map_err(|error| error.to_string())?;
+    validate_technical_key("key", &document.key)?;
+    validate_required_text("name", &document.name)?;
+    if document.access_paths.is_empty() {
+        return Err("accessPaths must contain at least one access path".to_string());
+    }
+
+    let access_paths = document
+        .access_paths
+        .into_iter()
+        .map(|access_path| {
+            let posting_detail = access_path
+                .posting_detail
+                .as_ref()
+                .map(serde_json::to_value)
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            Ok(ProfileAccessPathDefinition {
+                key: access_path.key,
+                name: Some(access_path.name),
+                adapter_key: "profile_dsl".to_string(),
+                source_config_schema: access_path.source_config_schema.map(Value::Object),
+                availability: None,
+                query: None,
+                inventory: None,
+                posting_detail,
+                interactions: None,
+                manual_release: None,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let converted = SourceProfileDocument {
+        schema_version: 1,
+        key: document.key,
+        name: document.name,
+        kind: convert_profile_dsl_kind(document.kind),
+        detect: None,
+        identity: None,
+        source_config_schema: document.source_config_schema.map(Value::Object),
+        access_paths,
+    };
+
+    validate_converted_profile_dsl_document(converted)
+}
+
+fn validate_converted_profile_dsl_document(
+    document: SourceProfileDocument,
+) -> Result<SourceProfileDocument, String> {
+    validate_technical_key("key", &document.key)?;
+    validate_required_text("name", &document.name)?;
+    validate_json_object_option(document.source_config_schema.as_ref(), "sourceConfigSchema")?;
+    let mut access_path_keys = HashSet::new();
+    for (index, access_path) in document.access_paths.iter().enumerate() {
+        let path = format!("accessPaths[{index}]");
+        validate_technical_key(&format!("{path}.key"), &access_path.key)?;
+        if !access_path_keys.insert(access_path.key.clone()) {
+            return Err(format!(
+                "accessPaths contains duplicate key `{}`",
+                access_path.key
+            ));
+        }
+        validate_technical_key(&format!("{path}.adapterKey"), &access_path.adapter_key)?;
+        validate_json_object_option(
+            access_path.source_config_schema.as_ref(),
+            &format!("{path}.sourceConfigSchema"),
+        )?;
+        validate_json_object_option(
+            access_path.posting_detail.as_ref(),
+            &format!("{path}.postingDetail"),
+        )?;
+    }
+    Ok(document)
+}
+
+fn convert_profile_dsl_kind(
+    kind: crate::source_profile::documents::SourceProfileKind,
+) -> SourceProfileKind {
+    match kind {
+        crate::source_profile::documents::SourceProfileKind::RecruitingSystem => {
+            SourceProfileKind::RecruitingSystem
+        }
+        crate::source_profile::documents::SourceProfileKind::JobPortal => {
+            SourceProfileKind::JobPortal
+        }
+        crate::source_profile::documents::SourceProfileKind::WebsiteFamily
+        | crate::source_profile::documents::SourceProfileKind::CareerSite => {
+            SourceProfileKind::WebsiteFamily
+        }
+        crate::source_profile::documents::SourceProfileKind::Generic => SourceProfileKind::Generic,
+    }
 }
 
 fn validate_profile_identity(identity: &SourceProfileIdentity) -> Result<(), String> {
