@@ -1,9 +1,12 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_posting_detail_with_fetcher, Diagnostic,
-    DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
-    PostingDetailFetchResponse, PostingDetailFetcher, PostingDetailPostingOccurrence,
+    compile_source_execution_plan, execute_posting_detail_with_clients,
+    execute_posting_detail_with_fetcher, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PostingDetailFetchError,
+    PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
+    PostingDetailPostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     ProfileCompilerSnapshot, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
@@ -298,6 +301,89 @@ fn compiled_posting_detail_runtime_extracts_html_description_text_with_css() {
 }
 
 #[test]
+fn compiled_posting_detail_runtime_uses_browser_fetch_rendered_html() {
+    let plan = compiled_browser_posting_detail_plan(
+        "{{posting:url}}?tenant={{postingMeta:tenant}}",
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "main.job" }),
+        json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
+    );
+    let posting = posting_occurrence(
+        "https://example.test/jobs/42.html",
+        [("tenant", "acme"), ("jobId", "42")],
+    );
+    let fetcher = FakeDetailFetcher::new([]);
+    let browser = FakeBrowser::new([(
+        "https://example.test/jobs/42.html?tenant=acme",
+        r#"<main class="job"><section class="description">Rendered browser detail.</section></main>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_clients(
+        &plan, &posting, &fetcher, &browser,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("Rendered browser detail.".to_string())
+    );
+    assert!(fetcher.requests().is_empty());
+    let browser_requests = browser.requests();
+    assert_eq!(browser_requests.len(), 1);
+    assert_eq!(
+        browser_requests[0].url,
+        "https://example.test/jobs/42.html?tenant=acme"
+    );
+    assert_eq!(
+        browser_requests[0].waits,
+        vec![ExecutionPlanBrowserWait::Selector {
+            selector: Some("main.job".to_string()),
+            timeout_ms: 5000,
+        }]
+    );
+    assert_eq!(
+        browser_requests[0].interactions,
+        vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
+            selector: "button.cookie-banner".to_string(),
+            max_count: 2,
+            wait_after_ms: Some(100),
+        }]
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_reports_browser_interaction_diagnostics() {
+    let plan = compiled_browser_posting_detail_plan(
+        "{{posting:url}}",
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "main.job" }),
+        json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
+    );
+    let fetcher = FakeDetailFetcher::new([]);
+    let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
+        ProfileBrowserFetchErrorKind::InteractionFailed {
+            interaction_index: Some(0),
+        },
+        "click_until_gone reached maxCount",
+    ));
+
+    let result = block_on(execute_posting_detail_with_clients(
+        &plan,
+        &posting_occurrence("https://example.test/jobs/42.html", []),
+        &fetcher,
+        &browser,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_runtime_diagnostic(&result.diagnostics[0], "browser_interaction_failed");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDetail/strategies/0/fetch/interactions/0"
+    );
+}
+
+#[test]
 fn compiled_posting_detail_runtime_reports_fetch_parse_extract_and_missing_context_failures() {
     let plan = compiled_json_posting_detail_plan(
         "{{posting:url}}",
@@ -411,6 +497,64 @@ impl PostingDetailFetcher for FakeDetailFetcher {
     }
 }
 
+struct FakeBrowser {
+    responses: BTreeMap<String, String>,
+    failure: Option<ProfileBrowserFetchError>,
+    requests: std::sync::Mutex<Vec<ProfileBrowserFetchRequest>>,
+}
+
+impl FakeBrowser {
+    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
+        Self {
+            responses: responses
+                .into_iter()
+                .map(|(url, body)| (url.to_string(), body))
+                .collect(),
+            failure: None,
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn failing(error: ProfileBrowserFetchError) -> Self {
+        Self {
+            responses: BTreeMap::new(),
+            failure: Some(error),
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<ProfileBrowserFetchRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ProfileBrowserClient for FakeBrowser {
+    fn render<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.requests.lock().unwrap().push(request.clone());
+            if let Some(error) = &self.failure {
+                return Err(error.clone());
+            }
+            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
+                ProfileBrowserFetchError::new(
+                    ProfileBrowserFetchErrorKind::NavigationFailed,
+                    format!("missing fake browser response for {}", request.url),
+                )
+            })?;
+            Ok(ProfileBrowserFetchResponse { body })
+        })
+    }
+}
+
 fn compiled_json_posting_detail_plan(
     fetch_url: &str,
     description_text: Value,
@@ -427,6 +571,37 @@ fn compiled_json_posting_detail_plan(
     )
 }
 
+fn compiled_browser_posting_detail_plan(
+    fetch_url: &str,
+    parse: Value,
+    select: Value,
+    description_text: Value,
+) -> SourceExecutionPlan {
+    compiled_posting_detail_plan_with_fetch(
+        json!({
+            "mode": "browser",
+            "url": fetch_url,
+            "timeoutMs": 30000,
+            "waits": [{
+                "type": "selector",
+                "selector": "main.job",
+                "timeoutMs": 5000
+            }],
+            "interactions": [{
+                "type": "click_until_gone",
+                "selector": "button.cookie-banner",
+                "maxCount": 2,
+                "waitAfterMs": 100
+            }]
+        }),
+        parse,
+        select,
+        description_text,
+        None,
+        None,
+    )
+}
+
 fn compiled_posting_detail_plan(
     fetch_url: &str,
     parse: Value,
@@ -435,14 +610,32 @@ fn compiled_posting_detail_plan(
     captures: Option<Value>,
     min_description_length: Option<u64>,
 ) -> SourceExecutionPlan {
-    let mut strategy = json!({
-        "key": "detail_api",
-        "fetch": {
+    compiled_posting_detail_plan_with_fetch(
+        json!({
             "mode": "http",
             "method": "GET",
             "url": fetch_url,
             "timeoutMs": 10000
-        },
+        }),
+        parse,
+        select,
+        description_text,
+        captures,
+        min_description_length,
+    )
+}
+
+fn compiled_posting_detail_plan_with_fetch(
+    fetch: Value,
+    parse: Value,
+    select: Value,
+    description_text: Value,
+    captures: Option<Value>,
+    min_description_length: Option<u64>,
+) -> SourceExecutionPlan {
+    let mut strategy = json!({
+        "key": "detail_api",
+        "fetch": fetch,
         "parse": parse,
         "select": select,
         "extract": { "fields": { "descriptionText": description_text } }

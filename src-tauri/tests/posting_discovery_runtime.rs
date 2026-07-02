@@ -1,9 +1,12 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_posting_discovery_with_fetcher, DiagnosticCategory,
-    DiagnosticSeverity, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
-    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ProfileCompilerSnapshot,
+    compile_source_execution_plan, execute_posting_discovery_with_clients,
+    execute_posting_discovery_with_fetcher, DiagnosticCategory, DiagnosticSeverity,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PostingDiscoveryFetchError,
+    PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileCompilerSnapshot,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
@@ -639,6 +642,103 @@ Engineer </h2>
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_uses_browser_fetch_rendered_html() {
+    let fields = json!({
+        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
+        "company": { "type": "css_text", "selector": ".company", "cardinality": "one" },
+        "url": { "type": "css_attribute", "selector": "a.apply", "attribute": "href", "cardinality": "one" }
+    });
+    let plan = compiled_browser_posting_discovery_plan(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "article.posting" }),
+        fields,
+        "https://example.test/rendered?tenant=acme",
+    );
+    let fetcher = FakeFetcher::new(std::iter::empty());
+    let browser = FakeBrowser::new([(
+        "https://example.test/rendered?tenant=acme",
+        r#"<html><body>
+            <article class="posting">
+              <h2 class="title"> Browser Rendered Engineer </h2>
+              <span class="company"> Example GmbH </span>
+              <a class="apply" href="https://example.test/jobs/browser">Apply</a>
+            </article>
+        </body></html>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_clients(
+        &plan, &fetcher, &browser,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Browser Rendered Engineer");
+    assert_eq!(result.candidates[0].company, "Example GmbH");
+    assert_eq!(
+        result.candidates[0].url,
+        "https://example.test/jobs/browser"
+    );
+    assert!(fetcher.requests().is_empty());
+    let browser_requests = browser.requests();
+    assert_eq!(browser_requests.len(), 1);
+    assert_eq!(
+        browser_requests[0].url,
+        "https://example.test/rendered?tenant=acme"
+    );
+    assert_eq!(browser_requests[0].timeout_ms, 30_000);
+    assert_eq!(
+        browser_requests[0].waits,
+        vec![
+            ExecutionPlanBrowserWait::Selector {
+                selector: Some("article.posting".to_string()),
+                timeout_ms: 5000,
+            },
+            ExecutionPlanBrowserWait::NetworkIdle {
+                selector: None,
+                timeout_ms: 250,
+            },
+        ]
+    );
+    assert_eq!(
+        browser_requests[0].interactions,
+        vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
+            selector: "button.load-more".to_string(),
+            max_count: 2,
+            wait_after_ms: Some(250),
+        }]
+    );
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_reports_browser_fetch_diagnostics() {
+    let plan = compiled_browser_posting_discovery_plan(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "article.posting" }),
+        default_html_fields(),
+        "https://example.test/rendered",
+    );
+    let fetcher = FakeFetcher::new(std::iter::empty());
+    let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
+        ProfileBrowserFetchErrorKind::WaitTimeout {
+            wait_index: Some(0),
+        },
+        "selector .posting did not appear",
+    ));
+
+    let result = block_on(execute_posting_discovery_with_clients(
+        &plan, &fetcher, &browser,
+    ));
+
+    assert!(result.candidates.is_empty());
+    assert_runtime_diagnostic(&result.diagnostics[0], "browser_wait_timeout");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/fetch/waits/0"
+    );
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_reports_xml_and_html_diagnostics() {
     let xml_plan = compiled_posting_discovery_plan(
         json!({ "type": "xml" }),
@@ -796,6 +896,64 @@ impl PostingDiscoveryFetcher for FakeFetcher {
     }
 }
 
+struct FakeBrowser {
+    responses: BTreeMap<String, String>,
+    failure: Option<ProfileBrowserFetchError>,
+    requests: std::sync::Mutex<Vec<ProfileBrowserFetchRequest>>,
+}
+
+impl FakeBrowser {
+    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
+        Self {
+            responses: responses
+                .into_iter()
+                .map(|(url, body)| (url.to_string(), body))
+                .collect(),
+            failure: None,
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn failing(error: ProfileBrowserFetchError) -> Self {
+        Self {
+            responses: BTreeMap::new(),
+            failure: Some(error),
+            requests: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<ProfileBrowserFetchRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ProfileBrowserClient for FakeBrowser {
+    fn render<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.requests.lock().unwrap().push(request.clone());
+            if let Some(error) = &self.failure {
+                return Err(error.clone());
+            }
+            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
+                ProfileBrowserFetchError::new(
+                    ProfileBrowserFetchErrorKind::NavigationFailed,
+                    format!("missing fake browser response for {}", request.url),
+                )
+            })?;
+            Ok(ProfileBrowserFetchResponse { body })
+        })
+    }
+}
+
 fn compiled_json_posting_discovery_plan(fields: Value, select: Value) -> SourceExecutionPlan {
     compiled_posting_discovery_plan(
         json!({ "type": "json" }),
@@ -869,6 +1027,90 @@ fn compiled_posting_discovery_plan(
     );
     assert_eq!(result.diagnostics, Vec::new());
     result.execution_plan.expect("fixture plan should compile")
+}
+
+fn compiled_browser_posting_discovery_plan(
+    parse: Value,
+    select: Value,
+    fields: Value,
+    page_url: &'static str,
+) -> SourceExecutionPlan {
+    let profile: SourceProfileDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "browser_jobs",
+        "name": "Browser Jobs",
+        "kind": "generic",
+        "support": {
+            "level": "experimental",
+            "summary": "Browser runtime fixture profile."
+        },
+        "sourceConfigSchema": {
+            "type": "object",
+            "required": ["pageUrl"],
+            "properties": { "pageUrl": { "type": "string" } },
+            "additionalProperties": false
+        },
+        "accessPaths": [{
+            "key": "browser_page",
+            "name": "Browser page",
+            "postingDiscovery": {
+                "strategies": [{
+                    "key": "browser_html",
+                    "fetch": {
+                        "mode": "browser",
+                        "url": "{{sourceConfig:pageUrl}}",
+                        "timeoutMs": 30000,
+                        "waits": [
+                            {
+                                "type": "selector",
+                                "selector": "article.posting",
+                                "timeoutMs": 5000
+                            },
+                            {
+                                "type": "network_idle",
+                                "timeoutMs": 250
+                            }
+                        ],
+                        "interactions": [{
+                            "type": "click_if_visible",
+                            "selector": "button.load-more",
+                            "maxCount": 2,
+                            "waitAfterMs": 250
+                        }]
+                    },
+                    "parse": parse,
+                    "select": select,
+                    "extract": { "fields": fields }
+                }]
+            }
+        }]
+    }))
+    .unwrap();
+    let source: SourceDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "browser_source",
+        "name": "Browser Source",
+        "status": "active",
+        "sourceConfig": { "pageUrl": page_url },
+        "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "browser_jobs",
+            "pathKey": "browser_page"
+        }
+    }))
+    .unwrap();
+
+    let result = compile_source_execution_plan(
+        &ProfileCompilerSnapshot {
+            profiles: vec![profile],
+            sources: vec![source],
+        },
+        "browser_source",
+    );
+    assert_eq!(result.diagnostics, Vec::new());
+    result
+        .execution_plan
+        .expect("browser fixture plan should compile")
 }
 
 fn source_owned_json_posting_discovery_plan(fields: Value) -> SourceExecutionPlan {

@@ -25,7 +25,13 @@ use crate::{
     source::documents::SourceConfig,
 };
 
-use super::transform::{apply_transform_pipeline, normalize_whitespace};
+use super::{
+    browser::{
+        ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+    },
+    transform::{apply_transform_pipeline, normalize_whitespace},
+};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,6 +163,18 @@ pub async fn execute_posting_discovery_with_fetcher<F>(
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
 {
+    execute_posting_discovery_with_clients(plan, fetcher, &UnavailableProfileBrowserClient).await
+}
+
+pub async fn execute_posting_discovery_with_clients<F, B>(
+    plan: &SourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+) -> PostingDiscoveryExecutionResult
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
     let Some((strategy_index, strategy)) =
         plan.posting_discovery.strategies.iter().enumerate().next()
     else {
@@ -172,17 +190,19 @@ where
         };
     };
 
-    execute_strategy(plan, fetcher, strategy_index, strategy).await
+    execute_strategy(plan, fetcher, browser, strategy_index, strategy).await
 }
 
-async fn execute_strategy<F>(
+async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
+    browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanPostingDiscoveryStrategy,
 ) -> PostingDiscoveryExecutionResult
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let base_path = format!("/postingDiscovery/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());
@@ -190,6 +210,7 @@ where
 
     let response = match fetch_strategy_document(
         fetcher,
+        browser,
         &strategy.fetch,
         &plan.source_config,
         &base_path,
@@ -260,8 +281,9 @@ where
     }
 }
 
-async fn fetch_strategy_document<F>(
+async fn fetch_strategy_document<F, B>(
     fetcher: &F,
+    browser: &B,
     fetch: &ExecutionPlanFetch,
     source_config: &SourceConfig,
     base_path: &str,
@@ -270,25 +292,65 @@ async fn fetch_strategy_document<F>(
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let ExecutionPlanFetch::Http {
-        method,
-        url,
-        headers,
-        timeout_ms,
-        ..
-    } = fetch
-    else {
-        diagnostics.push(runtime_error(
-            "unsupported_fetch_mode",
-            "postingDiscovery runtime slice supports only HTTP fetch",
-            format!("{base_path}/fetch"),
-            strategy_key,
-            json!({ "supportedMode": "http" }),
-        ));
-        return None;
-    };
+    match fetch {
+        ExecutionPlanFetch::Http {
+            method,
+            url,
+            headers,
+            timeout_ms,
+            ..
+        } => {
+            fetch_http_strategy_document(
+                fetcher,
+                *method,
+                url,
+                headers.as_ref(),
+                *timeout_ms,
+                source_config,
+                base_path,
+                strategy_key,
+                diagnostics,
+            )
+            .await
+        }
+        ExecutionPlanFetch::Browser {
+            url,
+            timeout_ms,
+            waits,
+            interactions,
+        } => {
+            fetch_browser_strategy_document(
+                browser,
+                url,
+                *timeout_ms,
+                waits,
+                interactions,
+                source_config,
+                base_path,
+                strategy_key,
+                diagnostics,
+            )
+            .await
+        }
+    }
+}
 
+async fn fetch_http_strategy_document<F>(
+    fetcher: &F,
+    method: Option<HttpMethod>,
+    url: &str,
+    headers: Option<&BTreeMap<String, String>>,
+    timeout_ms: u64,
+    source_config: &SourceConfig,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PostingDiscoveryFetchResponse>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+{
     let method = method.unwrap_or(HttpMethod::Get);
     if method != HttpMethod::Get {
         diagnostics.push(runtime_error(
@@ -318,8 +380,8 @@ where
     let request = PostingDiscoveryFetchRequest {
         method,
         url: rendered_url.clone(),
-        headers: headers.clone().unwrap_or_default(),
-        timeout_ms: *timeout_ms,
+        headers: headers.cloned().unwrap_or_default(),
+        timeout_ms,
     };
 
     match fetcher.fetch(request).await {
@@ -335,6 +397,56 @@ where
                 strategy_key,
                 json!({ "url": rendered_url, "error": error.message }),
             ));
+            None
+        }
+    }
+}
+
+async fn fetch_browser_strategy_document<B>(
+    browser: &B,
+    url: &str,
+    timeout_ms: u64,
+    waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
+    interactions: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserInteraction],
+    source_config: &SourceConfig,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PostingDiscoveryFetchResponse>
+where
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    let rendered_url = match render_source_config_template(url, source_config) {
+        Ok(url) => url,
+        Err(message) => {
+            diagnostics.push(runtime_error(
+                "fetch_url_template_failed",
+                format!("Fetch URL template could not be rendered: {message}"),
+                format!("{base_path}/fetch/url"),
+                strategy_key,
+                json!({ "template": url }),
+            ));
+            return None;
+        }
+    };
+
+    let request = ProfileBrowserFetchRequest {
+        url: rendered_url.clone(),
+        timeout_ms,
+        waits: waits.to_vec(),
+        interactions: interactions.to_vec(),
+    };
+
+    match browser.render(request).await {
+        Ok(ProfileBrowserFetchResponse { body }) => Some(PostingDiscoveryFetchResponse { body }),
+        Err(error) => {
+            push_browser_fetch_diagnostic(
+                error,
+                &rendered_url,
+                base_path,
+                strategy_key,
+                diagnostics,
+            );
             None
         }
     }
@@ -1549,6 +1661,51 @@ fn render_source_config_variable(
             "sourceConfig `{key}` must be a string, number, or boolean for template rendering"
         )),
     }
+}
+
+fn push_browser_fetch_diagnostic(
+    error: ProfileBrowserFetchError,
+    rendered_url: &str,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) {
+    let (code, path) = match error.kind {
+        ProfileBrowserFetchErrorKind::RuntimeUnavailable => {
+            ("browser_runtime_unavailable", format!("{base_path}/fetch"))
+        }
+        ProfileBrowserFetchErrorKind::NavigationFailed => (
+            "browser_navigation_failed",
+            format!("{base_path}/fetch/url"),
+        ),
+        ProfileBrowserFetchErrorKind::WaitTimeout { wait_index } => (
+            "browser_wait_timeout",
+            wait_index
+                .map(|index| format!("{base_path}/fetch/waits/{index}"))
+                .unwrap_or_else(|| format!("{base_path}/fetch/waits")),
+        ),
+        ProfileBrowserFetchErrorKind::InteractionFailed { interaction_index } => (
+            "browser_interaction_failed",
+            interaction_index
+                .map(|index| format!("{base_path}/fetch/interactions/{index}"))
+                .unwrap_or_else(|| format!("{base_path}/fetch/interactions")),
+        ),
+        ProfileBrowserFetchErrorKind::RenderTimeout => (
+            "browser_render_timeout",
+            format!("{base_path}/fetch/timeoutMs"),
+        ),
+        ProfileBrowserFetchErrorKind::ContentReadFailed => {
+            ("browser_content_read_failed", format!("{base_path}/fetch"))
+        }
+    };
+
+    diagnostics.push(runtime_error(
+        code,
+        format!("Browser fetch failed for {rendered_url}: {}", error.message),
+        path,
+        strategy_key,
+        json!({ "url": rendered_url, "error": error.message }),
+    ));
 }
 
 fn runtime_error(

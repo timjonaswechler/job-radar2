@@ -6,7 +6,10 @@ use futures_util::StreamExt;
 use std::{path::Path, time::Duration};
 use uuid::Uuid;
 
-use super::BrowserRuntimePageWait;
+use super::{
+    BrowserRuntimeInteraction, BrowserRuntimePageWait, BrowserRuntimeRenderError,
+    BrowserRuntimeRenderErrorKind, BrowserRuntimeRenderRequest, BrowserRuntimeWait,
+};
 
 pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<(), String> {
     let session_dir = runtime_session_dir(runtime_dir);
@@ -32,19 +35,52 @@ pub async fn render_page_html_with_wait(
     url: &str,
     wait_for: Option<&BrowserRuntimePageWait>,
 ) -> Result<String, String> {
+    let request = BrowserRuntimeRenderRequest {
+        url: url.to_string(),
+        timeout_ms: render_timeout_for_legacy_wait(wait_for).as_millis() as u64,
+        waits: wait_for
+            .map(|wait_for| {
+                vec![BrowserRuntimeWait::Selector {
+                    selector: Some(wait_for.selector.clone()),
+                    timeout_ms: wait_for.timeout_ms,
+                }]
+            })
+            .unwrap_or_default(),
+        interactions: Vec::new(),
+    };
+    render_page_html_with_actions(executable_path, runtime_dir, request)
+        .await
+        .map_err(|error| error.message)
+}
+
+pub async fn render_page_html_with_actions(
+    executable_path: &Path,
+    runtime_dir: &Path,
+    request: BrowserRuntimeRenderRequest,
+) -> Result<String, BrowserRuntimeRenderError> {
     let session_dir = runtime_session_dir(runtime_dir);
     tokio::fs::create_dir_all(&session_dir)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| {
+            BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
+                error.to_string(),
+            )
+        })?;
 
-    let result = render_page_html_with_session(executable_path, &session_dir, url, wait_for).await;
+    let result = render_page_html_with_session(executable_path, &session_dir, request).await;
     let cleanup_result = tokio::fs::remove_dir_all(&session_dir).await;
 
     match (result, cleanup_result) {
         (Err(error), _) => Err(error),
-        (Ok(_), Err(error)) if error.kind() != std::io::ErrorKind::NotFound => Err(format!(
-            "Managed browser runtime rendered page, but session cleanup failed: {error}"
-        )),
+        (Ok(_), Err(error)) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
+                format!(
+                    "Managed browser runtime rendered page, but session cleanup failed: {error}"
+                ),
+            ))
+        }
         (Ok(html), _) => Ok(html),
     }
 }
@@ -55,7 +91,7 @@ fn runtime_session_dir(runtime_dir: &Path) -> std::path::PathBuf {
         .join(format!("session-{}", Uuid::new_v4()))
 }
 
-fn render_timeout(wait_for: Option<&BrowserRuntimePageWait>) -> Duration {
+fn render_timeout_for_legacy_wait(wait_for: Option<&BrowserRuntimePageWait>) -> Duration {
     match wait_for {
         Some(wait_for) => {
             Duration::from_millis(wait_for.timeout_ms.saturating_add(5_000).max(30_000))
@@ -64,28 +100,140 @@ fn render_timeout(wait_for: Option<&BrowserRuntimePageWait>) -> Duration {
     }
 }
 
+async fn apply_wait(
+    page: &Page,
+    url: &str,
+    wait: &BrowserRuntimeWait,
+    wait_index: usize,
+) -> Result<(), BrowserRuntimeRenderError> {
+    match wait {
+        BrowserRuntimeWait::Selector {
+            selector,
+            timeout_ms,
+        } => {
+            let selector = selector.as_deref().ok_or_else(|| {
+                BrowserRuntimeRenderError::new(
+                    BrowserRuntimeRenderErrorKind::WaitTimeout {
+                        wait_index: Some(wait_index),
+                    },
+                    "Managed browser runtime selector wait is missing a selector",
+                )
+            })?;
+            wait_for_selector(page, url, selector, *timeout_ms, wait_index).await
+        }
+        BrowserRuntimeWait::NetworkIdle {
+            selector,
+            timeout_ms,
+        } => {
+            if let Some(selector) = selector {
+                wait_for_selector(page, url, selector, *timeout_ms, wait_index).await?;
+            }
+            tokio::time::sleep(Duration::from_millis(*timeout_ms)).await;
+            Ok(())
+        }
+    }
+}
+
 async fn wait_for_selector(
     page: &Page,
     url: &str,
-    wait_for: &BrowserRuntimePageWait,
-) -> Result<(), String> {
-    let timeout = Duration::from_millis(wait_for.timeout_ms);
+    selector: &str,
+    timeout_ms: u64,
+    wait_index: usize,
+) -> Result<(), BrowserRuntimeRenderError> {
+    let timeout = Duration::from_millis(timeout_ms);
     let started_at = tokio::time::Instant::now();
 
     loop {
-        let error = match page.find_element(wait_for.selector.clone()).await {
+        let error = match page.find_element(selector.to_string()).await {
             Ok(_) => return Ok(()),
             Err(error) => error.to_string(),
         };
 
         if started_at.elapsed() >= timeout {
-            return Err(format!(
-                "Managed browser runtime waitFor selector `{}` was not found for {url} within {} ms: {error}",
-                wait_for.selector, wait_for.timeout_ms
+            return Err(BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::WaitTimeout {
+                    wait_index: Some(wait_index),
+                },
+                format!(
+                    "Managed browser runtime waitFor selector `{selector}` was not found for {url} within {timeout_ms} ms: {error}"
+                ),
             ));
         }
 
         tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn apply_interaction(
+    page: &Page,
+    interaction: &BrowserRuntimeInteraction,
+    interaction_index: usize,
+) -> Result<(), BrowserRuntimeRenderError> {
+    match interaction {
+        BrowserRuntimeInteraction::ClickIfVisible {
+            selector,
+            max_count,
+            wait_after_ms,
+        } => {
+            for _ in 0..*max_count {
+                let Ok(element) = page.find_element(selector.clone()).await else {
+                    return Ok(());
+                };
+                element.click().await.map_err(|error| {
+                    BrowserRuntimeRenderError::new(
+                        BrowserRuntimeRenderErrorKind::InteractionFailed {
+                            interaction_index: Some(interaction_index),
+                        },
+                        format!(
+                            "Managed browser runtime click_if_visible failed for selector `{selector}`: {error}"
+                        ),
+                    )
+                })?;
+                sleep_after_interaction(*wait_after_ms).await;
+            }
+            Ok(())
+        }
+        BrowserRuntimeInteraction::ClickUntilGone {
+            selector,
+            max_count,
+            wait_after_ms,
+        } => {
+            for _ in 0..*max_count {
+                let Ok(element) = page.find_element(selector.clone()).await else {
+                    return Ok(());
+                };
+                element.click().await.map_err(|error| {
+                    BrowserRuntimeRenderError::new(
+                        BrowserRuntimeRenderErrorKind::InteractionFailed {
+                            interaction_index: Some(interaction_index),
+                        },
+                        format!(
+                            "Managed browser runtime click_until_gone failed for selector `{selector}`: {error}"
+                        ),
+                    )
+                })?;
+                sleep_after_interaction(*wait_after_ms).await;
+            }
+
+            if page.find_element(selector.clone()).await.is_ok() {
+                return Err(BrowserRuntimeRenderError::new(
+                    BrowserRuntimeRenderErrorKind::InteractionFailed {
+                        interaction_index: Some(interaction_index),
+                    },
+                    format!(
+                        "Managed browser runtime click_until_gone reached maxCount {max_count} while selector `{selector}` was still visible"
+                    ),
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn sleep_after_interaction(wait_after_ms: Option<u64>) {
+    if let Some(wait_after_ms) = wait_after_ms {
+        tokio::time::sleep(Duration::from_millis(wait_after_ms)).await;
     }
 }
 
@@ -111,40 +259,70 @@ async fn smoke_test_with_session(executable_path: &Path, session_dir: &Path) -> 
 async fn render_page_html_with_session(
     executable_path: &Path,
     session_dir: &Path,
-    url: &str,
-    wait_for: Option<&BrowserRuntimePageWait>,
-) -> Result<String, String> {
-    let (mut browser, handler_task) = launch_browser(executable_path, session_dir).await?;
-
-    let timeout = render_timeout(wait_for);
-    let page_result = match tokio::time::timeout(timeout, async {
-        let page = browser
-            .new_page("about:blank")
+    request: BrowserRuntimeRenderRequest,
+) -> Result<String, BrowserRuntimeRenderError> {
+    let (mut browser, handler_task) =
+        launch_browser(executable_path, session_dir)
             .await
-            .map_err(|error| format!("Managed browser runtime page failed: {error}"))?;
-        page.goto(url).await.map_err(|error| {
-            format!("Managed browser runtime navigation failed for {url}: {error}")
+            .map_err(|error| {
+                BrowserRuntimeRenderError::new(
+                    BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
+                    error,
+                )
+            })?;
+
+    let url = request.url.clone();
+    let timeout = Duration::from_millis(request.timeout_ms);
+    let page_result = match tokio::time::timeout(timeout, async {
+        let page = browser.new_page("about:blank").await.map_err(|error| {
+            BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
+                format!("Managed browser runtime page failed: {error}"),
+            )
         })?;
-        if let Some(wait_for) = wait_for {
-            wait_for_selector(&page, url, wait_for).await?;
-        } else {
+        page.goto(&request.url).await.map_err(|error| {
+            BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::NavigationFailed,
+                format!(
+                    "Managed browser runtime navigation failed for {}: {error}",
+                    request.url
+                ),
+            )
+        })?;
+        if request.waits.is_empty() && request.interactions.is_empty() {
             tokio::time::sleep(Duration::from_millis(1_500)).await;
         }
+        for (wait_index, wait) in request.waits.iter().enumerate() {
+            apply_wait(&page, &request.url, wait, wait_index).await?;
+        }
+        for (interaction_index, interaction) in request.interactions.iter().enumerate() {
+            apply_interaction(&page, interaction, interaction_index).await?;
+        }
         page.content().await.map_err(|error| {
-            format!("Managed browser runtime content read failed for {url}: {error}")
+            BrowserRuntimeRenderError::new(
+                BrowserRuntimeRenderErrorKind::ContentReadFailed,
+                format!(
+                    "Managed browser runtime content read failed for {}: {error}",
+                    request.url
+                ),
+            )
         })
     })
     .await
     {
         Ok(result) => result,
-        Err(_) => Err(format!("Managed browser runtime timed out rendering {url}")),
+        Err(_) => Err(BrowserRuntimeRenderError::new(
+            BrowserRuntimeRenderErrorKind::RenderTimeout,
+            format!("Managed browser runtime timed out rendering {url}"),
+        )),
     };
 
-    let close_result = browser
-        .close()
-        .await
-        .map(|_| ())
-        .map_err(|error| format!("Managed browser runtime failed to close: {error}"));
+    let close_result = browser.close().await.map(|_| ()).map_err(|error| {
+        BrowserRuntimeRenderError::new(
+            BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
+            format!("Managed browser runtime failed to close: {error}"),
+        )
+    });
     let _ = handler_task.await;
 
     match (page_result, close_result) {

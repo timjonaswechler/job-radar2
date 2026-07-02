@@ -83,6 +83,65 @@ pub struct BrowserRuntimePageWait {
     pub timeout_ms: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserRuntimeRenderRequest {
+    pub url: String,
+    pub timeout_ms: u64,
+    pub waits: Vec<BrowserRuntimeWait>,
+    pub interactions: Vec<BrowserRuntimeInteraction>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BrowserRuntimeWait {
+    Selector {
+        selector: Option<String>,
+        timeout_ms: u64,
+    },
+    NetworkIdle {
+        selector: Option<String>,
+        timeout_ms: u64,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BrowserRuntimeInteraction {
+    ClickIfVisible {
+        selector: String,
+        max_count: u64,
+        wait_after_ms: Option<u64>,
+    },
+    ClickUntilGone {
+        selector: String,
+        max_count: u64,
+        wait_after_ms: Option<u64>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserRuntimeRenderError {
+    pub kind: BrowserRuntimeRenderErrorKind,
+    pub message: String,
+}
+
+impl BrowserRuntimeRenderError {
+    pub fn new(kind: BrowserRuntimeRenderErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BrowserRuntimeRenderErrorKind {
+    RuntimeUnavailable,
+    NavigationFailed,
+    WaitTimeout { wait_index: Option<usize> },
+    InteractionFailed { interaction_index: Option<usize> },
+    RenderTimeout,
+    ContentReadFailed,
+}
+
 pub trait BrowserRuntimeInstallProgressReporter: Send + Sync {
     fn emit(&self, progress: BrowserRuntimeInstallProgress);
 }
