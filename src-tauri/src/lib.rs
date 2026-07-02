@@ -42,8 +42,9 @@ pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
     detect_source_proposal, detect_source_proposal_with_clients,
     detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
-    DetectionHttpResponse, SourceProposal, SourceProposalDetectionResult,
-    SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedSourceProfile,
+    DetectionHttpResponse, ReqwestDetectionHttpClient, SourceProposal,
+    SourceProposalDetectionResult, SourceProposalDetectionStatus, SourceProposalEvidence,
+    UnsupportedSourceProfile,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{
@@ -91,7 +92,7 @@ pub fn run() {
             app::commands::list_source_profiles,
             app::commands::list_sources,
             app::commands::list_source_diagnostics,
-            app::commands::detect_source_from_url,
+            app::commands::detect_source_proposal_from_url,
             app::commands::create_source,
             app::commands::create_search_request,
             app::commands::list_search_requests,

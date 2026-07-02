@@ -3,9 +3,9 @@ import type {
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySourceProfile,
-  SourceDetectionMatch,
-  SourceDetectionResult,
   SourceDocument,
+  SourceProposal,
+  SourceProposalDetectionResult,
   SourceStatus,
 } from "@/lib/api/sources";
 
@@ -42,29 +42,25 @@ export type DetectedSourceLike = {
 };
 
 export function detectedSourceFromResult(
-  result: SourceDetectionResult,
+  result: SourceProposalDetectionResult,
 ): DetectedSourceLike | null {
-  if (!result.profileKey || !result.pathKey || !result.key || !result.name) {
+  return result.proposal ? detectedSourceFromProposal(result.proposal) : null;
+}
+
+export function detectedSourceFromProposal(
+  proposal: SourceProposal,
+): DetectedSourceLike | null {
+  const key = proposal.keyCandidates[0];
+  const name = proposal.nameCandidates[0];
+  if (!proposal.profileKey || !proposal.recommendedAccessPathKey || !key || !name) {
     return null;
   }
   return {
-    profileKey: result.profileKey,
-    pathKey: result.pathKey,
-    key: result.key,
-    name: result.name,
-    sourceConfig: result.sourceConfig ?? {},
-  };
-}
-
-export function detectedSourceFromMatch(
-  match: SourceDetectionMatch,
-): DetectedSourceLike {
-  return {
-    profileKey: match.profileKey,
-    pathKey: match.pathKey,
-    key: match.key,
-    name: match.name,
-    sourceConfig: match.sourceConfig,
+    profileKey: proposal.profileKey,
+    pathKey: proposal.recommendedAccessPathKey,
+    key,
+    name,
+    sourceConfig: proposal.sourceConfig,
   };
 }
 

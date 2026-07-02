@@ -5,29 +5,31 @@ import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
-  SourceDetectionMatch,
-  SourceDetectionResult,
+  SourceProposal,
+  SourceProposalDetectionResult,
+  SourceProposalEvidence,
+  StructuredDiagnostic,
 } from "@/lib/api/sources";
 
 type SourceDetectionPanelProps = {
-  result: SourceDetectionResult | null;
-  onApplyMatch: (match: SourceDetectionMatch) => void;
+  result: SourceProposalDetectionResult | null;
+  onApplyProposal: (proposal: SourceProposal) => void;
 };
 
 export function SourceDetectionPanel({
   result,
-  onApplyMatch,
+  onApplyProposal,
 }: SourceDetectionPanelProps) {
   if (!result) return null;
 
-  if (result.status === "detected") {
+  if (result.status === "matched" && result.proposal) {
     return (
       <Alert variant="success">
         <CheckCircle2Icon aria-hidden="true" />
         <AlertTitle>Profil erkannt</AlertTitle>
         <AlertDescription>
-          <DetectionBadges result={result} />
-          <EvidenceList evidence={result.evidence} warnings={result.warnings} />
+          <DetectionBadges proposal={result.proposal} />
+          <EvidenceList evidence={result.proposal.evidence} diagnostics={result.diagnostics} />
         </AlertDescription>
       </Alert>
     );
@@ -41,41 +43,29 @@ export function SourceDetectionPanel({
         <AlertDescription>
           <p>Wähle den passenden Vorschlag aus. Danach kannst du alle Felder weiter bearbeiten.</p>
           <div className="grid w-full gap-2">
-            {result.matches.map((match) => (
-              <Card key={`${match.profileKey}-${match.pathKey}-${match.key}`}>
+            {(result.proposals ?? []).map((proposal) => (
+              <Card key={`${proposal.profileKey}-${proposal.recommendedAccessPathKey}`}>
                 <CardHeader className="flex-row items-start justify-between gap-3">
                   <div className="grid gap-1">
-                    <CardTitle>{match.name}</CardTitle>
+                    <CardTitle>{proposal.nameCandidates[0] ?? proposal.profileName}</CardTitle>
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary">{match.profileName}</Badge>
-                      <Badge variant="outline">{match.pathName ?? match.pathKey}</Badge>
+                      <Badge variant="secondary">{proposal.profileName}</Badge>
+                      <Badge variant="outline">{proposal.recommendedAccessPathName}</Badge>
                     </div>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => onApplyMatch(match)}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => onApplyProposal(proposal)}>
                     Übernehmen
                   </Button>
                 </CardHeader>
-                {match.evidence.length ? (
+                {proposal.evidence.length ? (
                   <CardContent>
-                    <EvidenceList evidence={match.evidence} warnings={[]} />
+                    <EvidenceList evidence={proposal.evidence} diagnostics={[]} />
                   </CardContent>
                 ) : null}
               </Card>
             ))}
           </div>
-          <EvidenceList evidence={result.evidence} warnings={result.warnings} />
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (result.status === "built_in_source") {
-    return (
-      <Alert variant="info">
-        <CheckCircle2Icon aria-hidden="true" />
-        <AlertTitle>Quelle ist bereits eingebaut</AlertTitle>
-        <AlertDescription>
-          <EvidenceList evidence={result.evidence} warnings={result.warnings} />
+          <EvidenceList evidence={[]} diagnostics={result.diagnostics} />
         </AlertDescription>
       </Alert>
     );
@@ -90,38 +80,46 @@ export function SourceDetectionPanel({
           Du kannst dieselben Felder manuell ausfüllen. Der eingegebene Link wurde, falls möglich,
           als Konfigurationswert <code>startUrl</code> übernommen.
         </p>
-        <EvidenceList evidence={result.evidence} warnings={result.warnings} />
+        <EvidenceList evidence={unsupportedEvidence(result)} diagnostics={result.diagnostics} />
       </AlertDescription>
     </Alert>
   );
 }
 
-function DetectionBadges({ result }: { result: SourceDetectionResult }) {
+function DetectionBadges({ proposal }: { proposal: SourceProposal }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {result.profileName ? <Badge variant="secondary">{result.profileName}</Badge> : null}
-      {result.pathName || result.pathKey ? (
-        <Badge variant="outline">{result.pathName ?? result.pathKey}</Badge>
-      ) : null}
-      {result.key ? <Badge variant="primary-outline">{result.key}</Badge> : null}
+      <Badge variant="secondary">{proposal.profileName}</Badge>
+      <Badge variant="outline">{proposal.recommendedAccessPathName}</Badge>
+      {proposal.keyCandidates[0] ? <Badge variant="primary-outline">{proposal.keyCandidates[0]}</Badge> : null}
     </div>
   );
 }
 
-function EvidenceList({ evidence, warnings }: { evidence: string[]; warnings: string[] }) {
+function EvidenceList({
+  evidence,
+  diagnostics,
+}: {
+  evidence: SourceProposalEvidence[];
+  diagnostics: StructuredDiagnostic[];
+}) {
   const visibleEvidence = evidence.slice(0, 3);
-  const visibleWarnings = warnings.slice(0, 3);
+  const visibleDiagnostics = diagnostics.slice(0, 3);
 
-  if (!visibleEvidence.length && !visibleWarnings.length) return null;
+  if (!visibleEvidence.length && !visibleDiagnostics.length) return null;
 
   return (
     <ul className="list-inside list-disc">
       {visibleEvidence.map((item) => (
-        <li key={`evidence-${item}`}>{item}</li>
+        <li key={`evidence-${item.kind}-${item.message}`}>{item.message}</li>
       ))}
-      {visibleWarnings.map((item) => (
-        <li key={`warning-${item}`}>{item}</li>
+      {visibleDiagnostics.map((item) => (
+        <li key={`diagnostic-${item.code}-${item.path}`}>{item.message}</li>
       ))}
     </ul>
   );
+}
+
+function unsupportedEvidence(result: SourceProposalDetectionResult) {
+  return (result.unsupportedProfiles ?? []).flatMap((profile) => profile.evidence);
 }

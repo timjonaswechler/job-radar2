@@ -25,7 +25,7 @@ import { SourceDetectionPanel } from "@/features/sources/components/source-detec
 import {
   buildSourceDocument,
   createEntryId,
-  detectedSourceFromMatch,
+  detectedSourceFromProposal,
   detectedSourceFromResult,
   emptySourceForm,
   errorMessage,
@@ -42,10 +42,10 @@ import {
 } from "@/features/sources/source-config-schema";
 import {
   createCustomSource,
-  detectSourceFromUrl,
+  detectSourceProposalFromUrl,
   type RegistrySource,
   type RegistrySourceProfile,
-  type SourceDetectionResult,
+  type SourceProposalDetectionResult,
 } from "@/lib/api/sources";
 
 type SourceAddDrawerProps = {
@@ -66,7 +66,7 @@ export function SourceAddDrawer({
   const [url, setUrl] = useState("");
   const [detecting, setDetecting] = useState(false);
   const [detectionResult, setDetectionResult] =
-    useState<SourceDetectionResult | null>(null);
+    useState<SourceProposalDetectionResult | null>(null);
   const [detectionError, setDetectionError] = useState<string | null>(null);
   const [form, setForm] = useState<SourceFormState>(emptySourceForm);
   const [keyTouched, setKeyTouched] = useState(false);
@@ -232,10 +232,10 @@ export function SourceAddDrawer({
     try {
       setDetecting(true);
       setDetectionError(null);
-      const result = await detectSourceFromUrl(trimmedUrl);
+      const result = await detectSourceProposalFromUrl(trimmedUrl);
       setDetectionResult(result);
 
-      if (result.status === "detected") {
+      if (result.status === "matched") {
         const detected = detectedSourceFromResult(result);
         if (detected) {
           applyDetectedSource(detected);
@@ -336,9 +336,10 @@ export function SourceAddDrawer({
 
             <SourceDetectionPanel
               result={detectionResult}
-              onApplyMatch={(match) =>
-                applyDetectedSource(detectedSourceFromMatch(match))
-              }
+              onApplyProposal={(proposal) => {
+                const detected = detectedSourceFromProposal(proposal);
+                if (detected) applyDetectedSource(detected);
+              }}
             />
 
             <SourceIdentityFields

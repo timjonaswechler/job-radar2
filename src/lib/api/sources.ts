@@ -154,41 +154,68 @@ export type RegistrySource = {
   document: SourceDocument
 }
 
-export type SourceDetectionStatus =
-  | "detected"
-  | "ambiguous"
+export type SupportLevel =
+  | "verified"
+  | "best_effort"
+  | "experimental"
   | "unsupported"
-  | "built_in_source"
 
-export type SourceDetectionMatch = {
-  adapterKey: string
-  profileKey: string
-  profileName: string
-  pathKey: string
-  pathName: string | null
-  key: SourceKey
-  name: string
-  keyCandidates: string[]
-  nameCandidates: string[]
-  sourceConfig: JsonValue
-  evidence: string[]
+export type StructuredDiagnostic = {
+  category:
+    | "schema"
+    | "registry"
+    | "compiler"
+    | "runtime"
+    | "detection"
+    | "source_validation"
+  code: string
+  message: string
+  severity: "info" | "warning" | "error"
+  path: string
+  strategyKey?: string
+  details?: JsonValue
 }
 
-export type SourceDetectionResult = {
-  status: SourceDetectionStatus
-  adapterKey: string | null
-  profileKey: string | null
-  profileName: string | null
-  pathKey: string | null
-  pathName: string | null
-  key: SourceKey | null
-  name: string | null
+export type SourceProposalEvidence = {
+  kind: "url" | "http" | "html" | "browser"
+  message: string
+  path?: string
+  probeKey?: string
+}
+
+export type SourceProposal = {
+  profileKey: string
+  profileName: string
+  recommendedAccessPathKey: string
+  recommendedAccessPathName: string
+  sourceConfig: JsonValue
   keyCandidates: string[]
   nameCandidates: string[]
-  sourceConfig: JsonValue | null
-  evidence: string[]
-  warnings: string[]
-  matches: SourceDetectionMatch[]
+  captures: Record<string, string>
+  evidence: SourceProposalEvidence[]
+  supportLevel: SupportLevel
+}
+
+export type UnsupportedSourceProfile = {
+  profileKey: string
+  profileName: string
+  supportLevel: SupportLevel
+  captures: Record<string, string>
+  evidence: SourceProposalEvidence[]
+}
+
+export type SourceProposalDetectionStatus =
+  | "matched"
+  | "ambiguous"
+  | "unsupported"
+  | "failed"
+
+export type SourceProposalDetectionResult = {
+  status: SourceProposalDetectionStatus
+  proposal?: SourceProposal
+  proposals?: SourceProposal[]
+  unsupportedProfiles?: UnsupportedSourceProfile[]
+  diagnostics: StructuredDiagnostic[]
 }
 
 export function listAdapters() {
@@ -209,8 +236,8 @@ export function listSourceRegistryDiagnostics() {
   )
 }
 
-export function detectSourceFromUrl(url: string) {
-  return invoke<SourceDetectionResult>("detect_source_from_url", { url })
+export function detectSourceProposalFromUrl(url: string) {
+  return invoke<SourceProposalDetectionResult>("detect_source_proposal_from_url", { url })
 }
 
 export function createCustomSource(document: SourceDocument) {

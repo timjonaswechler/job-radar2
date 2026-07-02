@@ -1,14 +1,13 @@
 #![allow(unused_imports)]
 
-//! Legacy v1 Source detection. Kept temporarily until Source Proposal detection
-//! is rebuilt on the declarative Source Profile DSL.
+//! Legacy v1 Source detection internals retained for pre-existing tests while
+//! the app boundary uses Source Proposal detection.
 
 mod engine;
 #[cfg(test)]
 mod tests;
 mod types;
 
-pub use engine::detect_source_from_url;
 pub use types::{SourceDetectionMatch, SourceDetectionResult, SourceDetectionStatus};
 
 #[cfg(test)]

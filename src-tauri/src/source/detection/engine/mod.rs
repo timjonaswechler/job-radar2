@@ -3,7 +3,6 @@
 mod checks;
 mod client;
 mod config;
-mod detector;
 mod evaluation;
 mod identity;
 mod templates;
@@ -17,8 +16,6 @@ use self::identity::*;
 use self::templates::*;
 use self::url::*;
 use super::*;
-
-pub use self::detector::detect_source_from_url;
 
 #[cfg(test)]
 pub(in crate::source::detection) use self::client::{BoxedTextFuture, DetectionHttpClient};

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future, pin::Pin};
+use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -56,6 +56,42 @@ impl DetectionHttpClient for NoopDetectionHttpClient {
             Err(DetectionHttpError::new(format!(
                 "HTTP detection client is not configured for `{url}`"
             )))
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReqwestDetectionHttpClient {
+    client: reqwest::Client,
+}
+
+impl ReqwestDetectionHttpClient {
+    pub fn new() -> Result<Self, String> {
+        let client = reqwest::Client::builder()
+            .user_agent("JobRadarProfileDetection/0.1")
+            .build()
+            .map_err(|error| error.to_string())?;
+        Ok(Self { client })
+    }
+}
+
+impl DetectionHttpClient for ReqwestDetectionHttpClient {
+    fn get_text<'a>(&'a self, url: String, timeout_ms: u64) -> BoxedDetectionHttpFuture<'a> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .get(&url)
+                .timeout(Duration::from_millis(timeout_ms.max(1)))
+                .send()
+                .await
+                .map_err(|error| {
+                    DetectionHttpError::new(format!("{url} could not be fetched: {error}"))
+                })?;
+            let status = response.status().as_u16();
+            let body = response.text().await.map_err(|error| {
+                DetectionHttpError::new(format!("{url} response body could not be read: {error}"))
+            })?;
+            Ok(DetectionHttpResponse { status, body })
         })
     }
 }
