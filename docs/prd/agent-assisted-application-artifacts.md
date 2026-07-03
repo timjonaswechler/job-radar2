@@ -258,6 +258,48 @@ Relevant Zed source permalinks from commit `17090674b34288db75128f96dfb336116e05
 - ACP client initialization/handshake:
   <https://github.com/zed-industries/zed/blob/17090674b34288db75128f96dfb336116e058ff2/crates/agent_servers/src/acp.rs#L981-L1045>
 
+## Lessons from T3 Code
+
+T3 Code is another useful architecture reference. Its code is MIT-licensed, but it solves a different problem: it is a web/desktop control plane for coding agents and external provider runtimes, not a small app-owned text generation runtime for domain artifacts. Use it as inspiration for provider/runtime seams and later external-agent integrations, not as MVP scope.
+
+T3 Code's README describes it as a minimal web GUI for coding agents such as Codex, Claude, Cursor, and OpenCode:
+<https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/README.md#L3-L14>
+
+### T3 Code architecture references
+
+Relevant T3 Code source permalinks from commit `32d17d3db55187b48389c005a319135b0badfea2`:
+
+- local Node.js WebSocket server between a React UI and provider runtimes:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/docs/architecture/overview.md#L3-L38>
+- provider adapter contract with session lifecycle, turns, approvals, rollback, and canonical event stream:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/provider/Services/ProviderAdapter.ts#L45-L125>
+- provider service as cross-provider router/validator that resolves provider instances before calling adapters:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/provider/Layers/ProviderService.ts#L522-L705>
+- Codex adapter translating app-owned turn inputs into provider runtime calls:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/provider/Layers/CodexAdapter.ts#L1369-L1570>
+- canonical runtime event vocabulary for provider-native events:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/packages/contracts/src/providerRuntime.ts#L148-L178>
+- provider instance model separating driver kind from user-configured instance id:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/packages/contracts/src/providerInstance.ts#L1-L33>
+- provider instance config envelope with opaque driver-specific config:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/packages/contracts/src/providerInstance.ts#L115-L131>
+- sensitive provider environment values stored separately and redacted from settings:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/serverSettings.ts#L325-L463>
+- file-based server secret store with restrictive permissions:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/auth/ServerSecretStore.ts#L158-L203>
+- ACP session runtime as later external-agent prior art, not MVP scope:
+  <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/apps/server/src/provider/acp/AcpSessionRuntime.ts#L86-L165>
+
+### T3 Code takeaways for Job Radar
+
+- Keep the UI behind app-owned commands/events; do not expose provider-native DTOs to React pages.
+- Use a provider adapter seam, but make Job Radar's MVP adapter smaller than T3 Code's coding-agent contract.
+- Prefer `AgentProviderConfig.id` / provider instance ids over assuming one configuration per provider kind.
+- Normalize provider output into app-owned Agent Messages or Agent Events before persistence.
+- Keep sensitive provider values outside ordinary settings rows/documents and redact them when settings are read back.
+- Treat external CLI agents and ACP as a later integration category, separate from normal LLM provider adapters.
+- Do not import coding-agent-specific concepts such as worktrees, terminal tools, checkpoint rollback, or file mutation approvals into the application-artifact MVP unless a concrete Job Radar use case appears.
+
 ## Other open-source references
 
 - Vercel AI SDK: provider-agnostic TypeScript AI toolkit with streaming, structured output, tools, and UI support.
