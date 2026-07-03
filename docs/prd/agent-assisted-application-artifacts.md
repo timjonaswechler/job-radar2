@@ -19,22 +19,26 @@ Different users have different AI workflows. Some will want bring-your-own-key A
 
 ## Goal
 
-Introduce a small, app-owned agent runtime for application artifacts:
+Introduce a small, provider-category-independent core for application artifacts:
 
 - page-specific Agent Tasks,
 - automatic prompt construction from domain-owned context,
 - persisted conversations,
 - artifact proposals instead of direct uncontrolled writes,
-- provider adapters that can start with OpenAI-compatible API access and later support more providers or external agents.
+- app-owned request/message/result types,
+- provider adapters for both app-owned model API access and later managed external agents.
+
+The first implementation should use the lighter, more controllable app-owned model API path. The design should still reserve a separate integration category for managing existing local agent CLIs and their own authentication later.
 
 ## Non-goals for the first slice
 
 - No autonomous workflow engine.
-- No external CLI/harness execution in the MVP.
-- No ACP integration in the MVP.
+- No external CLI/harness execution in the first implementation slice.
+- No ACP integration in the first implementation slice.
 - No direct agent mutation of application artifacts without user confirmation.
 - No agent-specific Rust special cases per UI page.
 - No API keys in frontend state, SQLite plain text, or settings JSON.
+- No assumption that app-owned model providers and managed external agents share the same runtime contract.
 
 ## Candidate domain language
 
@@ -44,7 +48,9 @@ These terms are candidate additions and should be validated before becoming cano
 - **Application Artifact**: A persisted user-facing artifact created during the application process for a Job Posting, such as a cover-letter draft, fit analysis, interview notes, or follow-up email.
 - **Artifact Version**: An immutable saved version of an Application Artifact. Agent output creates a proposal; accepting it creates a version.
 - **Agent Conversation**: The persisted message thread for one Agent Task, optionally associated with a Job Posting and/or Application Artifact.
-- **Agent Provider**: A configured way to obtain model output, e.g. OpenAI-compatible API access, Anthropic, Ollama, or later an external agent.
+- **Agent Provider**: A configured way to obtain agent/model output.
+- **Model API Provider**: An app-owned provider integration where Job Radar builds the request and calls a model API directly, e.g. OpenAI-compatible API access, Anthropic, Google Gemini, Ollama, or local OpenAI-compatible servers.
+- **External Agent Provider**: A managed existing agent integration where Job Radar launches or connects to an external agent runtime, e.g. Claude Code CLI, Codex CLI, Cursor Agent, OpenCode, or later ACP. The external agent owns more of its auth, model selection, tools, and runtime behavior.
 
 ## Proposed architecture
 
@@ -52,16 +58,21 @@ These terms are candidate additions and should be validated before becoming cano
 UI page
   -> Agent Task invocation
       -> Prompt Builder
-          -> Agent Runtime
+          -> Agent Runtime Core
               -> Conversation Store
               -> Artifact Store
               -> Agent Provider Adapter
-                  -> OpenAI-compatible API adapter        [MVP]
-                  -> Anthropic / Google / Ollama adapters [later]
-                  -> ACP / CLI external agent adapter     [later]
+                  -> Model API Provider Adapter family
+                      -> OpenAI-compatible API adapter        [first slice]
+                      -> Anthropic / Google / Ollama adapters [later]
+                  -> External Agent Provider Adapter family
+                      -> one-shot CLI agent adapter           [later]
+                      -> ACP external agent adapter           [later]
 ```
 
 The UI should not know provider-specific request shapes. It should invoke an Agent Task with domain context and render streamed or completed messages.
+
+The runtime core should use Job Radar-owned request/message/result types. Provider DTOs, CLI process details, SDK types, auth probing, and transport errors should be translated at the adapter edge.
 
 ## MVP slice
 
@@ -91,7 +102,7 @@ Build prompts from domain-owned context:
 - prior Agent Conversation messages,
 - current user instruction.
 
-External provider DTOs should be translated at the provider adapter edge. The Prompt Builder should produce app-owned request/message types.
+External provider DTOs should be translated at the provider adapter edge. The Prompt Builder should produce app-owned request/message types that can be consumed by either a Model API Provider Adapter or, later, an External Agent Provider Adapter.
 
 ### 3. Conversation persistence
 
@@ -140,11 +151,18 @@ ApplicationArtifactVersion
 
 Agent output should be shown as a proposal. The user explicitly accepts it to create a new Artifact Version.
 
-### 5. OpenAI-compatible Agent Provider
+### 5. Provider family strategy
 
-Start with one provider adapter:
+Support two provider families in the design, but implement only the lighter family first.
 
-- provider name,
+#### Model API Provider family
+
+This is the app-owned path: Job Radar builds the request, calls a model API directly, receives model output, persists an Agent Message, and shows the result as an artifact proposal.
+
+Start with one OpenAI-compatible provider adapter:
+
+- provider instance id,
+- provider display name,
 - base URL,
 - model ID,
 - API key reference,
@@ -154,6 +172,12 @@ Start with one provider adapter:
 This gives broad coverage for OpenAI, OpenRouter, LM Studio, local OpenAI-compatible servers, and some Ollama setups.
 
 API keys should be managed by the Rust/Tauri backend and stored in the OS keychain where possible. Environment variables can be a later option.
+
+#### External Agent Provider family
+
+This is the managed-existing-agent path: Job Radar would later probe and launch an already-installed agent CLI or connect through ACP. The external agent may own auth, subscriptions, model selection, tools, and runtime behavior.
+
+Do not implement this family in the first slice, but keep the core types and provider registry from assuming that all providers are direct model APIs.
 
 ## Later slices
 
@@ -180,11 +204,24 @@ Move from plain markdown to structured outputs such as:
 }
 ```
 
-### External agents / ACP
+### Managed external CLI agents / ACP
 
-After the app-owned runtime works, consider an external-agent adapter. This is a separate category from normal model providers.
+After the app-owned Model API Provider path works, consider an External Agent Provider Adapter. This is a separate category from normal model API providers.
 
 External agents usually own their own runtime, auth, tools, subscriptions, instructions, and model selection. Job Radar should treat them as a separate integration path rather than forcing them through the normal LLM provider adapter.
+
+A later first external-agent slice should be deliberately small:
+
+- configured provider instance id and command,
+- binary discovery / installation status,
+- auth-status probing where the CLI supports it,
+- one-shot prompt execution first,
+- stdout/stderr/result capture,
+- timeout and cancellation handling,
+- mapping into app-owned Agent Messages and Diagnostics,
+- no direct file writes or Application Artifact mutation by the external agent.
+
+ACP can come after a basic CLI/probe/spawn adapter proves that Job Radar benefits from managing existing external agents.
 
 ## Lessons from Zed
 
@@ -260,7 +297,7 @@ Relevant Zed source permalinks from commit `17090674b34288db75128f96dfb336116e05
 
 ## Lessons from T3 Code
 
-T3 Code is another useful architecture reference. Its code is MIT-licensed, but it solves a different problem: it is a web/desktop control plane for coding agents and external provider runtimes, not a small app-owned text generation runtime for domain artifacts. Use it as inspiration for provider/runtime seams and later external-agent integrations, not as MVP scope.
+T3 Code is another useful architecture reference. Its code is MIT-licensed, but it solves a different problem: it is a web/desktop control plane for coding agents and external provider runtimes, not a small app-owned text generation runtime for domain artifacts. Use it as inspiration for managing existing agent CLIs, their auth/probe/spawn lifecycle, provider/runtime seams, and later external-agent integrations, not as first-slice scope.
 
 T3 Code's README describes it as a minimal web GUI for coding agents such as Codex, Claude, Cursor, and OpenCode:
 <https://github.com/pingdotgg/t3code/blob/32d17d3db55187b48389c005a319135b0badfea2/README.md#L3-L14>
@@ -297,7 +334,8 @@ Relevant T3 Code source permalinks from commit `32d17d3db55187b48389c005a319135b
 - Prefer `AgentProviderConfig.id` / provider instance ids over assuming one configuration per provider kind.
 - Normalize provider output into app-owned Agent Messages or Agent Events before persistence.
 - Keep sensitive provider values outside ordinary settings rows/documents and redact them when settings are read back.
-- Treat external CLI agents and ACP as a later integration category, separate from normal LLM provider adapters.
+- Treat external CLI agents and ACP as a later integration category, separate from normal Model API Provider adapters.
+- When external agents are added, start with CLI auth/probe/spawn/result capture before adopting full T3-style orchestration concepts.
 - Do not import coding-agent-specific concepts such as worktrees, terminal tools, checkpoint rollback, or file mutation approvals into the application-artifact MVP unless a concrete Job Radar use case appears.
 
 ## Other open-source references
@@ -321,8 +359,9 @@ Relevant T3 Code source permalinks from commit `32d17d3db55187b48389c005a319135b
 4. Should the MVP use streaming responses or simple request/response first?
 5. Which keychain crate/API should the Rust backend use?
 6. Should OpenAI-compatible provider configuration live in SQLite, settings JSON, or both?
-7. How should accepted agent output be shown in the Job Posting Queue?
-8. Do we need a per-task safety policy before any generated content can be saved?
+7. What minimal provider registry shape keeps Model API Providers and External Agent Providers separate without overbuilding?
+8. How should accepted agent output be shown in the Job Posting Queue?
+9. Do we need a per-task safety policy before any generated content can be saved?
 
 ## Acceptance criteria for the design phase
 
@@ -331,7 +370,8 @@ Relevant T3 Code source permalinks from commit `32d17d3db55187b48389c005a319135b
 - Provider adapter seam is documented with app-owned request/response types.
 - Credential storage approach is documented before implementation.
 - The first Agent Task is chosen.
-- MVP excludes ACP/CLI execution explicitly.
+- First slice implements the Model API Provider path and excludes ACP/CLI execution explicitly.
+- External Agent Providers are documented as a separate later provider family, not as normal model API adapters.
 - Follow-up issues can be cut into small implementation slices.
 
 ## Possible implementation issues
@@ -339,9 +379,11 @@ Relevant T3 Code source permalinks from commit `32d17d3db55187b48389c005a319135b
 1. Add app-owned Agent Task and message types.
 2. Add SQLite tables for Agent Conversations and Messages.
 3. Add SQLite tables for Application Artifacts and Artifact Versions.
-4. Add Rust command/API for provider configuration and keychain-backed API key storage.
-5. Add OpenAI-compatible provider adapter.
-6. Add first page-level Agent Task, probably Job Posting fit analysis.
-7. Add UI conversation panel for one task.
-8. Add accept-as-artifact-version flow.
-9. Add tests around prompt construction, provider DTO translation, and artifact versioning.
+4. Add provider registry/config types with separate Model API Provider and External Agent Provider categories.
+5. Add Rust command/API for OpenAI-compatible provider configuration and keychain-backed API key storage.
+6. Add OpenAI-compatible Model API Provider adapter.
+7. Add first page-level Agent Task, probably Job Posting fit analysis.
+8. Add UI conversation panel for one task.
+9. Add accept-as-artifact-version flow.
+10. Add tests around prompt construction, provider DTO translation, and artifact versioning.
+11. Later: add one-shot External CLI Agent Provider probe/spawn/result-capture spike.
