@@ -4,7 +4,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::declarative::template::{render_template, TemplateContext, TemplateError};
+use crate::profile_dsl::template::{render_template, TemplateContext, TemplateError};
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
@@ -1182,7 +1182,7 @@ fn default_key_candidates(captures: &BTreeMap<String, String>, profile_key: &str
     captures
         .values()
         .next()
-        .map(|value| vec![crate::declarative::template::to_technical_key(value)])
+        .map(|value| vec![crate::profile_dsl::template::to_technical_key(value)])
         .unwrap_or_else(|| vec![profile_key.to_string()])
 }
 
@@ -1190,7 +1190,7 @@ fn default_name_candidates(captures: &BTreeMap<String, String>, profile_name: &s
     captures
         .values()
         .next()
-        .map(|value| vec![crate::declarative::template::title_case(value)])
+        .map(|value| vec![crate::profile_dsl::template::title_case(value)])
         .unwrap_or_else(|| vec![profile_name.to_string()])
 }
 

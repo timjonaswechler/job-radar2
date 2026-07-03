@@ -59,7 +59,7 @@ impl SourceExecutor for FixtureSourceExecutor {
 }
 
 #[test]
-#[ignore = "SAP SuccessFactors smoke source still targets the v1 registry path; Search Run Profile DSL integration is later scope"]
+#[ignore = "network-dependent development smoke path"]
 fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failure() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -212,13 +212,13 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
 }
 
 #[test]
-#[ignore = "SAP SuccessFactors smoke source still targets the v1 registry path; Search Run Profile DSL integration is later scope"]
+#[ignore = "network-dependent development smoke path"]
 fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
     let temp_dir = tempfile::tempdir().unwrap();
 
     let created = ensure_schott_smoke_source(temp_dir.path()).unwrap();
     let reused = ensure_schott_smoke_source(temp_dir.path()).unwrap();
-    let snapshot = crate::source::registry::load_snapshot(temp_dir.path());
+    let snapshot = crate::source_profile::registry::load_snapshot(temp_dir.path());
 
     assert_eq!(created.document.key, SCHOTT_SOURCE_KEY);
     assert_eq!(reused.document.key, SCHOTT_SOURCE_KEY);
@@ -231,7 +231,7 @@ fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
         .is_file());
     assert_eq!(
         snapshot
-            .valid_sources
+            .sources
             .iter()
             .filter(|source| source.document.key == SCHOTT_SOURCE_KEY)
             .count(),
@@ -240,7 +240,7 @@ fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
 }
 
 #[test]
-#[ignore = "SAP SuccessFactors smoke source still targets the v1 registry path; Search Run Profile DSL integration is later scope"]
+#[ignore = "network-dependent development smoke path"]
 fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

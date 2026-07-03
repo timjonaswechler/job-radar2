@@ -2,7 +2,6 @@ mod app;
 mod background_tasks;
 mod browser_runtime;
 mod db;
-mod declarative;
 mod profile_dsl;
 mod search;
 mod simple_json_path;

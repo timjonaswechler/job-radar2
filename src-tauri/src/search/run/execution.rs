@@ -1,5 +1,6 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
+#[cfg(test)]
 use serde_json::Value;
 
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
         },
     },
     search::request::SearchRequest,
-    source::registry::{BrowserInteraction, ResolvedSelectedAccessPath},
 };
 
 use super::{SourceCandidate, SourceExecutionError};
@@ -54,54 +54,12 @@ pub type BoxedSourceExecutionFuture<'a> =
 /// `SearchRunService` resolves selected Source keys through one Source Profile
 /// registry snapshot at run start, compiles active valid Sources into immutable
 /// typed Execution Plans, and passes those plans here. Active Search Runs must
-/// execute compiled `postingDiscovery`; they must not dispatch on `adapterKey`.
+/// execute compiled `postingDiscovery`; they must not use legacy adapter routing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SourceExecutionSource {
     pub key: String,
     pub name: String,
-    pub adapter_key: String,
-    pub source_config: Value,
-    pub effective_source_config_schema: Value,
-    pub selected_access_path: ResolvedSelectedAccessPath,
     pub execution_plan: SourceExecutionPlan,
-}
-
-impl SourceExecutionSource {
-    #[allow(dead_code)]
-    pub(crate) fn query(&self) -> Option<&Value> {
-        match &self.selected_access_path {
-            ResolvedSelectedAccessPath::Profile { query, .. }
-            | ResolvedSelectedAccessPath::SourceSpecific { query, .. } => query.as_ref(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn inventory(&self) -> Option<&Value> {
-        match &self.selected_access_path {
-            ResolvedSelectedAccessPath::Profile { inventory, .. }
-            | ResolvedSelectedAccessPath::SourceSpecific { inventory, .. } => inventory.as_ref(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn interactions(&self) -> Option<&[BrowserInteraction]> {
-        match &self.selected_access_path {
-            ResolvedSelectedAccessPath::Profile { interactions, .. }
-            | ResolvedSelectedAccessPath::SourceSpecific { interactions, .. } => {
-                interactions.as_deref()
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn manual_release(&self) -> Option<&Value> {
-        match &self.selected_access_path {
-            ResolvedSelectedAccessPath::Profile { manual_release, .. }
-            | ResolvedSelectedAccessPath::SourceSpecific { manual_release, .. } => {
-                manual_release.as_ref()
-            }
-        }
-    }
 }
 
 impl From<SourceExecutionPlan> for SourceExecutionSource {
@@ -109,15 +67,6 @@ impl From<SourceExecutionPlan> for SourceExecutionSource {
         Self {
             key: execution_plan.source.key.clone(),
             name: execution_plan.source.name.clone(),
-            adapter_key: "compiled_posting_discovery".to_string(),
-            source_config: Value::Object(execution_plan.source_config.clone()),
-            effective_source_config_schema: serde_json::json!({ "type": "object" }),
-            selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
-                query: None,
-                inventory: None,
-                interactions: None,
-                manual_release: None,
-            },
             execution_plan,
         }
     }

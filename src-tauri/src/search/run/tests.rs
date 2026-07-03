@@ -138,19 +138,19 @@ impl crate::profile_dsl::runtime::PostingDiscoveryFetcher for FixturePostingDisc
 
 struct RegistryMutatingPlanCaptureExecutor {
     profile_path: PathBuf,
-    seen_inventory_markers: Mutex<Vec<(String, String)>>,
+    seen_discovery_markers: Mutex<Vec<(String, String)>>,
 }
 
 impl RegistryMutatingPlanCaptureExecutor {
     fn new(profile_path: PathBuf) -> Self {
         Self {
             profile_path,
-            seen_inventory_markers: Mutex::new(Vec::new()),
+            seen_discovery_markers: Mutex::new(Vec::new()),
         }
     }
 
-    fn seen_inventory_markers(&self) -> Vec<(String, String)> {
-        self.seen_inventory_markers.lock().unwrap().clone()
+    fn seen_discovery_markers(&self) -> Vec<(String, String)> {
+        self.seen_discovery_markers.lock().unwrap().clone()
     }
 }
 
@@ -166,7 +166,7 @@ impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
                 .and_then(|strategy| strategy.description.as_deref())
                 .unwrap_or("missing")
                 .to_string();
-            self.seen_inventory_markers
+            self.seen_discovery_markers
                 .lock()
                 .unwrap()
                 .push((input.source.key.clone(), marker));
@@ -655,7 +655,7 @@ fn registry_file_changes_after_run_start_do_not_change_execution_plans() {
 
         assert_eq!(result.status, SearchRunStatus::Completed);
         assert_eq!(
-            executor.seen_inventory_markers(),
+            executor.seen_discovery_markers(),
             vec![
                 ("first_source".to_string(), "initial".to_string()),
                 ("second_source".to_string(), "initial".to_string()),

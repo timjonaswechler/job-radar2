@@ -5,7 +5,7 @@ use std::fmt;
 /// Resolves variables for the shared declarative template renderer.
 ///
 /// Context implementations own the variable vocabulary (for example detection
-/// input URL variables or inventory source/item variables). The renderer owns
+/// input URL variables or runtime source/item variables). The renderer owns
 /// placeholder parsing and the shared filter pipeline.
 pub(crate) trait TemplateContext {
     fn resolve_variable(&self, variable: &str) -> Result<Option<String>, TemplateError>;
@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_filters_cover_detection_and_inventory_templates() {
+    fn shared_filters_cover_detection_and_runtime_templates() {
         let context = MapTemplateContext {
             variables: HashMap::from([
                 ("raw", "Héllo GmbH & Co. KG"),

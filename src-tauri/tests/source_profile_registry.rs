@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    load_source_profile_registry_snapshot, DiagnosticCategory, DiagnosticSeverity,
+    compile_source_execution_plan, load_source_profile_registry_snapshot, DiagnosticCategory,
+    DiagnosticSeverity, ProfileCompilerSnapshot,
 };
 
 #[test]
@@ -41,6 +42,45 @@ fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collis
         diagnostic.details.as_ref().unwrap()["sourceProfileKey"],
         "greenhouse"
     );
+}
+
+#[test]
+fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert!(!crate_dir.join("src/adapter_registry.rs").exists());
+    assert!(!crate_dir.join("src/declarative").exists());
+    assert!(!crate_dir.join("src/source/registry").exists());
+    assert!(!crate_dir.join("src/source/detection").exists());
+
+    let snapshot = load_source_profile_registry_snapshot(tempfile::tempdir().unwrap().path());
+    let compiler_snapshot = ProfileCompilerSnapshot {
+        profiles: snapshot
+            .profiles
+            .iter()
+            .map(|profile| profile.document.clone())
+            .collect(),
+        sources: vec![serde_json::from_str(r#"{
+          "schemaVersion": 2,
+          "key": "greenhouse_fixture",
+          "name": "Greenhouse Fixture",
+          "status": "active",
+          "sourceConfig": {
+            "boardSlug": "example"
+          },
+          "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "greenhouse",
+            "pathKey": "boards_api"
+          }
+        }"#).unwrap()],
+    };
+    let result = compile_source_execution_plan(&compiler_snapshot, "greenhouse_fixture");
+    let plan = result
+        .execution_plan
+        .expect("new DSL Source should compile into an Execution Plan");
+    let serialized_plan = serde_json::to_string(&plan).unwrap();
+    assert!(!serialized_plan.contains("adapterKey"));
+    assert!(!serialized_plan.contains("list_adapters"));
 }
 
 #[test]
