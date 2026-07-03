@@ -54,6 +54,25 @@ pub(super) fn source_run_failed_for_key(
     source_run_failed_for_source(source_key, "", error)
 }
 
+pub(super) fn source_run_cancelled_for_key(source_key: &str) -> SourceRunResult {
+    source_run_cancelled_for_source(source_key, "")
+}
+
+pub(super) fn source_run_cancelled_for_source(
+    source_key: &str,
+    source_name: &str,
+) -> SourceRunResult {
+    SourceRunResult {
+        source_key: source_key.to_string(),
+        source_name: source_name.to_string(),
+        status: SourceRunStatus::Cancelled,
+        candidate_count: 0,
+        matched_count: 0,
+        diagnostics: Vec::new(),
+        error: Some("search run cancelled".to_string()),
+    }
+}
+
 pub(super) fn source_run_failed_for_source(
     source_key: &str,
     source_name: &str,
@@ -90,7 +109,7 @@ pub(super) fn source_run_skipped_for_source(
 pub(super) fn overall_status(source_runs: &[SourceRunResult]) -> SearchRunStatus {
     if source_runs
         .iter()
-        .all(|source_run| source_run.status == SourceRunStatus::Cancelled)
+        .any(|source_run| source_run.status == SourceRunStatus::Cancelled)
     {
         return SearchRunStatus::Cancelled;
     }

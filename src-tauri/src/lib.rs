@@ -1,4 +1,5 @@
 mod app;
+mod background_tasks;
 mod browser_runtime;
 mod db;
 mod declarative;
@@ -52,7 +53,19 @@ pub use source_profile::registry::{
     SourceProfileRegistrySnapshot,
 };
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+struct TauriBackgroundTaskNotifier {
+    app: tauri::AppHandle,
+}
+
+impl background_tasks::BackgroundTaskNotifier for TauriBackgroundTaskNotifier {
+    fn task_updated(&self, snapshot: &background_tasks::BackgroundTaskSnapshot) {
+        let _ = self
+            .app
+            .emit(background_tasks::BACKGROUND_TASK_UPDATED_EVENT, snapshot);
+    }
+}
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -67,7 +80,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let paths = app::paths::AppPaths::from_app(app.handle())?;
-            let app_state = tauri::async_runtime::block_on(app::state::AppState::new(paths))?;
+            let notifier = std::sync::Arc::new(TauriBackgroundTaskNotifier {
+                app: app.handle().clone(),
+            });
+            let app_state = tauri::async_runtime::block_on(
+                app::state::AppState::new_with_background_task_notifier(paths, notifier),
+            )?;
             let database_path = app_state.paths.database_path.clone();
 
             app.manage(app_state);
@@ -100,6 +118,8 @@ pub fn run() {
             app::commands::update_search_request,
             app::commands::delete_search_request,
             app::commands::run_search_request,
+            app::commands::get_background_task,
+            app::commands::cancel_background_task,
             app::commands::list_job_postings,
             app::commands::list_job_postings_for_queue,
             app::commands::get_posting_detail,

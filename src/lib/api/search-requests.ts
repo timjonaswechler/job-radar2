@@ -36,7 +36,22 @@ export type SearchRequest = {
   updatedAt: string
 }
 
-export type SourceRunStatus = "completed" | "failed" | "cancelled"
+export type SourceRunStatus = "completed" | "failed" | "cancelled" | "skipped"
+
+export type BackgroundTaskState =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+
+export type BackgroundTaskKind = "search_run" | { other: string }
+
+export type BackgroundTaskProgress = {
+  message: string
+  current: number | null
+  total: number | null
+}
 
 export type PostingSource = {
   sourceKey: string
@@ -58,6 +73,7 @@ export type SourceRunResult = {
   status: SourceRunStatus
   candidateCount: number
   matchedCount: number
+  diagnostics: unknown[]
   error: string | null
 }
 
@@ -67,6 +83,16 @@ export type SearchRunResult = {
   generatedAt: string
   sourceRuns: SourceRunResult[]
   postings: NormalizedPosting[]
+}
+
+export type BackgroundTaskSnapshot = {
+  taskId: string
+  kind: BackgroundTaskKind
+  state: BackgroundTaskState
+  progress: BackgroundTaskProgress | null
+  result: unknown | null
+  error: string | null
+  diagnostics: unknown[]
 }
 
 export type CreateSearchRequestInput = {
@@ -104,5 +130,13 @@ export function deleteSearchRequest(id: number) {
 }
 
 export function runSearchRequest(id: number) {
-  return invoke<SearchRunResult>("run_search_request", { id })
+  return invoke<BackgroundTaskSnapshot>("run_search_request", { id })
+}
+
+export function getBackgroundTask(taskId: string) {
+  return invoke<BackgroundTaskSnapshot>("get_background_task", { taskId })
+}
+
+export function cancelBackgroundTask(taskId: string) {
+  return invoke<BackgroundTaskSnapshot>("cancel_background_task", { taskId })
 }

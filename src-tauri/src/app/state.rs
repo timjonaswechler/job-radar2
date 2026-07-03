@@ -1,4 +1,5 @@
 use sqlx::SqlitePool;
+use std::sync::Arc;
 #[cfg(any(debug_assertions, test))]
 use std::{fs, io, path::Path};
 use tokio::sync::Mutex;
@@ -11,11 +12,23 @@ pub struct AppState {
     pub db: SqlitePool,
     pub paths: AppPaths,
     pub browser_runtime_install_lock: Mutex<()>,
-    pub running_search_runs: crate::search::request::RunningSearchRuns,
+    pub running_search_runs: Arc<crate::search::request::RunningSearchRuns>,
+    pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
 }
 
 impl AppState {
     pub async fn new(paths: AppPaths) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_background_task_notifier(
+            paths,
+            Arc::new(crate::background_tasks::NoopBackgroundTaskNotifier),
+        )
+        .await
+    }
+
+    pub async fn new_with_background_task_notifier(
+        paths: AppPaths,
+        notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         maybe_reset_dev_database(&paths)?;
         let db = crate::db::connect_and_migrate(&paths.database_path).await?;
 
@@ -23,7 +36,11 @@ impl AppState {
             db,
             paths,
             browser_runtime_install_lock: Mutex::new(()),
-            running_search_runs: crate::search::request::RunningSearchRuns::default(),
+            running_search_runs: Arc::new(crate::search::request::RunningSearchRuns::default()),
+            background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(
+                crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
+                notifier,
+            ),
         })
     }
 }

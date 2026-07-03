@@ -11,11 +11,11 @@ use crate::search::{
 use super::super::{SearchRunResult, SearchRunStatus, SourceExecutionInput, SourceExecutor};
 use super::{
     compile_rules, db_error, generated_at_timestamp, matches_any_rule, merge_postings,
-    overall_status, posting_source, resolve_selected_sources, source_run_completed,
-    source_run_failed, source_run_failed_for_key, source_run_failed_for_source,
-    source_run_skipped_for_source, update_search_request_last_run,
-    validate_executable_search_request, write_search_run_result, SearchRunResultArtifact,
-    SelectedSearchRunSource, Treffer,
+    overall_status, posting_source, resolve_selected_sources, source_run_cancelled_for_key,
+    source_run_cancelled_for_source, source_run_completed, source_run_failed,
+    source_run_failed_for_key, source_run_failed_for_source, source_run_skipped_for_source,
+    update_search_request_last_run, validate_executable_search_request, write_search_run_result,
+    SearchRunResultArtifact, SelectedSearchRunSource, Treffer,
 };
 
 pub struct SearchRunService<'a> {
@@ -60,6 +60,14 @@ impl<'a> SearchRunService<'a> {
     }
 
     pub async fn run(&self, search_request_id: i64) -> Result<SearchRunResult, String> {
+        self.run_with_cancellation(search_request_id, None).await
+    }
+
+    pub async fn run_with_cancellation(
+        &self,
+        search_request_id: i64,
+        cancellation_token: Option<&crate::background_tasks::CancellationToken>,
+    ) -> Result<SearchRunResult, String> {
         let _running_run = self.running_search_runs.begin(search_request_id)?;
         let search_request = SearchRequestService::new(self.pool, self.running_search_runs)
             .get(search_request_id)
@@ -77,6 +85,11 @@ impl<'a> SearchRunService<'a> {
         let mut candidates = Vec::new();
 
         for selected_source in &selected_sources {
+            if cancellation_token.is_some_and(|token| token.is_cancelled()) {
+                source_runs.push(cancelled_source_run_for_selected(selected_source));
+                continue;
+            }
+
             let source = match selected_source {
                 SelectedSearchRunSource::Resolved(source) => source.as_ref(),
                 SelectedSearchRunSource::Missing { source_key, error } => {
@@ -182,5 +195,28 @@ impl<'a> SearchRunService<'a> {
         }
 
         Ok(result)
+    }
+}
+
+fn cancelled_source_run_for_selected(
+    selected_source: &SelectedSearchRunSource,
+) -> super::super::SourceRunResult {
+    match selected_source {
+        SelectedSearchRunSource::Resolved(source) => {
+            source_run_cancelled_for_source(&source.key, &source.name)
+        }
+        SelectedSearchRunSource::Missing { source_key, .. } => {
+            source_run_cancelled_for_key(source_key)
+        }
+        SelectedSearchRunSource::Failed {
+            source_key,
+            source_name,
+            ..
+        }
+        | SelectedSearchRunSource::Skipped {
+            source_key,
+            source_name,
+            ..
+        } => source_run_cancelled_for_source(source_key, source_name),
     }
 }

@@ -1514,6 +1514,107 @@ fn persistence_failure_rolls_back_last_run_update() {
 }
 
 #[test]
+fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(
+            temp_dir.path(),
+            &[
+                ("valid_source", "Valid Source"),
+                ("failing_source", "Failing Source"),
+            ],
+        );
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("engineer")],
+            vec![],
+        )
+        .await;
+        let running_search_runs = std::sync::Arc::new(RunningSearchRuns::default());
+        let executor = FixtureSourceExecutor::new([
+            (
+                source_keys[0].clone(),
+                Ok(vec![candidate(
+                    "Laser Engineer",
+                    "ACME",
+                    "https://example.test/laser",
+                    &[],
+                )]),
+            ),
+            (
+                source_keys[1].clone(),
+                Err(SourceExecutionError::FailedWithDiagnostics {
+                    message: "fixture runtime failure".to_string(),
+                    diagnostics: vec![crate::profile_dsl::diagnostics::Diagnostic {
+                        category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
+                        code: "fixture_runtime_failure".to_string(),
+                        message: "Fixture runtime failure".to_string(),
+                        severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
+                        path: "/postingDiscovery/strategies/0".to_string(),
+                        strategy_key: Some("json_api".to_string()),
+                        details: Some(json!({ "fixture": true })),
+                    }],
+                }),
+            ),
+        ]);
+        let scheduler = crate::background_tasks::BackgroundTaskScheduler::new(
+            crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
+        );
+        let pool_for_task = pool.clone();
+        let app_data_dir = temp_dir.path().to_path_buf();
+        let running_for_task = running_search_runs.clone();
+
+        let task = scheduler
+            .schedule(
+                crate::background_tasks::BackgroundTaskSpec::search_run(),
+                move |_context| async move {
+                    let result = SearchRunService::new_with_result_artifact(
+                        &pool_for_task,
+                        running_for_task.as_ref(),
+                        &executor,
+                        SearchRunResultArtifact::Disabled,
+                        app_data_dir,
+                    )
+                    .run(search_request.id)
+                    .await;
+
+                    match result {
+                        Ok(result) => {
+                            crate::background_tasks::BackgroundTaskCompletion::Succeeded {
+                                result: serde_json::to_value(result).unwrap(),
+                            }
+                        }
+                        Err(error) => crate::background_tasks::BackgroundTaskCompletion::Failed {
+                            error,
+                            diagnostics: Vec::new(),
+                        },
+                    }
+                },
+            )
+            .unwrap();
+
+        let finished = wait_for_background_task_state(
+            &scheduler,
+            &task.task_id,
+            crate::background_tasks::BackgroundTaskState::Succeeded,
+        )
+        .await;
+        let result = finished.result.expect("scheduled Search Run stores result");
+
+        assert_eq!(result["status"], json!("completed_with_errors"));
+        assert_eq!(result["sourceRuns"][0]["status"], json!("completed"));
+        assert_eq!(result["sourceRuns"][1]["status"], json!("failed"));
+        assert_eq!(
+            result["sourceRuns"][1]["diagnostics"][0]["code"],
+            json!("fixture_runtime_failure")
+        );
+        assert_eq!(result["postings"][0]["title"], json!("Laser Engineer"));
+    });
+}
+
+#[test]
 fn disabled_search_run_result_artifact_does_not_write_json() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1794,6 +1895,21 @@ fn write_json(path: impl AsRef<Path>, contents: &str) {
         std::fs::create_dir_all(parent).unwrap();
     }
     std::fs::write(path, contents).unwrap();
+}
+
+async fn wait_for_background_task_state(
+    scheduler: &crate::background_tasks::BackgroundTaskScheduler,
+    task_id: &str,
+    state: crate::background_tasks::BackgroundTaskState,
+) -> crate::background_tasks::BackgroundTaskSnapshot {
+    for _ in 0..100 {
+        let snapshot = scheduler.get(task_id).unwrap();
+        if snapshot.state == state {
+            return snapshot;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("task {task_id} did not reach state {state:?}");
 }
 
 fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {

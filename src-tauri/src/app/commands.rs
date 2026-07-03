@@ -406,18 +406,93 @@ pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Resul
 pub async fn run_search_request(
     state: State<'_, AppState>,
     id: i64,
-) -> Result<crate::search::run::SearchRunResult, String> {
-    let source_executor =
-        crate::search::run::DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
-    crate::search::run::SearchRunService::new_with_result_artifact(
-        &state.db,
-        &state.running_search_runs,
-        &source_executor,
-        crate::search::run::default_search_run_result_artifact(),
-        state.paths.app_data_dir.clone(),
+) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
+    schedule_search_request_run(&state, id)
+}
+
+fn schedule_search_request_run(
+    state: &AppState,
+    id: i64,
+) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
+    let pool = state.db.clone();
+    let running_search_runs = state.running_search_runs.clone();
+    let browser_runtime_dir = state.paths.browser_runtime_dir.clone();
+    let app_data_dir = state.paths.app_data_dir.clone();
+
+    state.background_tasks.schedule(
+        crate::background_tasks::BackgroundTaskSpec::search_run(),
+        move |context| async move {
+            let _ = context.progress.report("running Search Run", None, None);
+            let source_executor =
+                crate::search::run::DefaultSourceExecutor::new(browser_runtime_dir);
+            let result = crate::search::run::SearchRunService::new_with_result_artifact(
+                &pool,
+                running_search_runs.as_ref(),
+                &source_executor,
+                crate::search::run::default_search_run_result_artifact(),
+                app_data_dir,
+            )
+            .run_with_cancellation(id, Some(&context.cancellation_token))
+            .await;
+
+            match result {
+                Ok(result)
+                    if result.status == crate::search::run::SearchRunStatus::Cancelled
+                        || context.cancellation_token.is_cancelled() =>
+                {
+                    crate::background_tasks::BackgroundTaskCompletion::Cancelled {
+                        error: Some("Search Run cancelled".to_string()),
+                        result: serde_json::to_value(result).ok(),
+                        diagnostics: Vec::new(),
+                    }
+                }
+                Ok(result) => crate::background_tasks::BackgroundTaskCompletion::Succeeded {
+                    result: serde_json::to_value(result).unwrap_or_else(
+                        |error| serde_json::json!({ "serializationError": error.to_string() }),
+                    ),
+                },
+                Err(error) => crate::background_tasks::BackgroundTaskCompletion::Failed {
+                    diagnostics: vec![background_task_error_diagnostic(
+                        "search_run_task_failed",
+                        &error,
+                    )],
+                    error,
+                },
+            }
+        },
     )
-    .run(id)
-    .await
+}
+
+#[tauri::command]
+pub fn get_background_task(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
+    state.background_tasks.get(&task_id)
+}
+
+#[tauri::command]
+pub fn cancel_background_task(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
+    state.background_tasks.cancel(&task_id)
+}
+
+fn background_task_error_diagnostic(
+    code: impl Into<String>,
+    message: impl Into<String>,
+) -> crate::profile_dsl::diagnostics::Diagnostic {
+    let message = message.into();
+    crate::profile_dsl::diagnostics::Diagnostic {
+        category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
+        code: code.into(),
+        message: message.clone(),
+        severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
+        path: "".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({ "message": message })),
+    }
 }
 
 #[tauri::command]
@@ -848,6 +923,52 @@ mod tests {
             assert!(validate_search_radius(MAX_SEARCH_RADIUS_KM + 1).is_err());
             assert!(validate_base_font_size(MIN_BASE_FONT_SIZE_PX - 1).is_err());
             assert!(validate_base_font_size(MAX_BASE_FONT_SIZE_PX + 1).is_err());
+        });
+    }
+
+    #[test]
+    fn run_search_request_command_seam_returns_queued_background_task_when_search_run_is_active() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let paths =
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
+            let state = AppState::new(paths).await.unwrap();
+            let (release_active, active_released) = tokio::sync::oneshot::channel::<()>();
+
+            let active = state
+                .background_tasks
+                .schedule(
+                    crate::background_tasks::BackgroundTaskSpec::search_run(),
+                    move |_context| async move {
+                        let _ = active_released.await;
+                        crate::background_tasks::BackgroundTaskCompletion::Succeeded {
+                            result: serde_json::json!({ "done": true }),
+                        }
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                active.state,
+                crate::background_tasks::BackgroundTaskState::Running
+            );
+
+            let queued = schedule_search_request_run(&state, 123).unwrap();
+
+            assert_eq!(
+                queued.kind,
+                crate::background_tasks::BackgroundTaskKind::SearchRun
+            );
+            assert_eq!(
+                queued.state,
+                crate::background_tasks::BackgroundTaskState::Queued
+            );
+            let cancelled = state.background_tasks.cancel(&queued.task_id).unwrap();
+            assert_eq!(
+                cancelled.state,
+                crate::background_tasks::BackgroundTaskState::Cancelled
+            );
+            release_active.send(()).unwrap();
         });
     }
 
