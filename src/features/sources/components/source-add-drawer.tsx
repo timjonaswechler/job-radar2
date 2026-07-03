@@ -41,7 +41,7 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/source-config-schema";
 import {
-  createCustomSource,
+  createSource,
   detectSourceProposalFromUrl,
   type RegistrySource,
   type RegistrySourceProfile,
@@ -280,7 +280,7 @@ export function SourceAddDrawer({
 
     try {
       setSaving(true);
-      await createCustomSource(buildResult.document);
+      await createSource(buildResult.document);
       try {
         await onCreated?.();
       } catch (refreshError) {

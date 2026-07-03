@@ -43,9 +43,11 @@ import {
   type DiagnosticIndex,
   type SourceGridRow,
 } from "@/features/sources/registry-view-model";
-import { sourceStatusBadgeVariants } from "@/features/sources/status";
+import {
+  sourceStatusBadgeVariants,
+  validationStateBadgeVariants,
+} from "@/features/sources/status";
 import type {
-  AdapterMetadata,
   RegistrySource,
   RegistrySourceProfile,
   SourceRegistryDocumentOrigin,
@@ -55,7 +57,6 @@ import type {
 type SourceRegistryDataGridProps = {
   sources: RegistrySource[];
   profilesByKey: Map<string, RegistrySourceProfile>;
-  adaptersByKey: Map<string, AdapterMetadata>;
   diagnosticIndex: DiagnosticIndex;
   loading: boolean;
   onAdd: () => void;
@@ -64,7 +65,6 @@ type SourceRegistryDataGridProps = {
 export function SourceRegistryDataGrid({
   sources,
   profilesByKey,
-  adaptersByKey,
   diagnosticIndex,
   loading,
   onAdd,
@@ -90,10 +90,9 @@ export function SourceRegistryDataGrid({
       createSourceGridRows(
         sources,
         profilesByKey,
-        adaptersByKey,
         diagnosticIndex.bySourceKey,
       ),
-    [adaptersByKey, diagnosticIndex.bySourceKey, profilesByKey, sources],
+    [diagnosticIndex.bySourceKey, profilesByKey, sources],
   );
 
   const filteredRows = useMemo(
@@ -156,6 +155,50 @@ export function SourceRegistryDataGrid({
           </Badge>
         ),
         size: 110,
+        enableSorting: true,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "validationStateLabel",
+        id: "validationStateLabel",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Validierung" visibility column={column} />
+        ),
+        cell: ({ row }) => (
+          <Badge variant={validationStateBadgeVariants[row.original.validationState]}>
+            {row.original.validationStateLabel}
+          </Badge>
+        ),
+        size: 130,
+        enableSorting: true,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "supportLabel",
+        id: "supportLabel",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Support" visibility column={column} />
+        ),
+        cell: ({ row }) => <Badge variant="outline">{row.original.supportLabel}</Badge>,
+        size: 130,
+        enableSorting: true,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "capabilitiesSummary",
+        id: "capabilitiesSummary",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Fähigkeiten" visibility column={column} />
+        ),
+        cell: ({ row }) => (
+          <span className="truncate text-muted-foreground">
+            {row.original.capabilitiesSummary}
+          </span>
+        ),
+        size: 170,
         enableSorting: true,
         enableHiding: true,
         enableResizing: true,
@@ -306,7 +349,6 @@ export function SourceRegistryDataGrid({
       <SourceDetailsDrawer
         row={selectedRow}
         profilesByKey={profilesByKey}
-        adaptersByKey={adaptersByKey}
         diagnostics={
           selectedRow
             ? (diagnosticIndex.bySourceKey.get(selectedRow.key) ?? [])

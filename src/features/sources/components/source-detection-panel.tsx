@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supportLevelLabels } from "@/features/sources/labels";
 import type {
   SourceProposal,
   SourceProposalDetectionResult,
@@ -29,6 +30,7 @@ export function SourceDetectionPanel({
         <AlertTitle>Profil erkannt</AlertTitle>
         <AlertDescription>
           <DetectionBadges proposal={result.proposal} />
+          <ProposalDetails proposal={result.proposal} />
           <EvidenceList evidence={result.proposal.evidence} diagnostics={result.diagnostics} />
         </AlertDescription>
       </Alert>
@@ -51,17 +53,17 @@ export function SourceDetectionPanel({
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="secondary">{proposal.profileName}</Badge>
                       <Badge variant="outline">{proposal.recommendedAccessPathName}</Badge>
+                      <Badge variant="outline">{supportLevelLabels[proposal.supportLevel]}</Badge>
                     </div>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => onApplyProposal(proposal)}>
                     Übernehmen
                   </Button>
                 </CardHeader>
-                {proposal.evidence.length ? (
-                  <CardContent>
-                    <EvidenceList evidence={proposal.evidence} diagnostics={[]} />
-                  </CardContent>
-                ) : null}
+                <CardContent className="grid gap-2">
+                  <ProposalDetails proposal={proposal} />
+                  <EvidenceList evidence={proposal.evidence} diagnostics={[]} />
+                </CardContent>
               </Card>
             ))}
           </div>
@@ -91,7 +93,39 @@ function DetectionBadges({ proposal }: { proposal: SourceProposal }) {
     <div className="flex flex-wrap gap-1">
       <Badge variant="secondary">{proposal.profileName}</Badge>
       <Badge variant="outline">{proposal.recommendedAccessPathName}</Badge>
+      <Badge variant="outline">{supportLevelLabels[proposal.supportLevel]}</Badge>
       {proposal.keyCandidates[0] ? <Badge variant="primary-outline">{proposal.keyCandidates[0]}</Badge> : null}
+    </div>
+  );
+}
+
+function ProposalDetails({ proposal }: { proposal: SourceProposal }) {
+  const captures = Object.entries(proposal.captures);
+  const configKeys = Object.keys(proposal.sourceConfig);
+
+  return (
+    <div className="grid gap-1 text-xs">
+      <p>
+        <span className="font-medium">Profil:</span> <code>{proposal.profileKey}</code>{" "}
+        · <span className="font-medium">Access Path:</span>{" "}
+        <code>{proposal.recommendedAccessPathKey}</code>
+      </p>
+      {configKeys.length ? (
+        <p>
+          <span className="font-medium">Source Config Vorschlag:</span>{" "}
+          {configKeys.map((key) => (
+            <code key={key} className="mr-1">{key}</code>
+          ))}
+        </p>
+      ) : null}
+      {captures.length ? (
+        <p>
+          <span className="font-medium">Captures:</span>{" "}
+          {captures.map(([key, value]) => (
+            <code key={key} className="mr-1">{key}={value}</code>
+          ))}
+        </p>
+      ) : null}
     </div>
   );
 }

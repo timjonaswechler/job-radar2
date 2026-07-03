@@ -32,10 +32,7 @@ import {
   type SourceRegistryInventory,
 } from "@/features/sources/registry-view-model";
 import {
-  listAdapters,
-  listSourceRegistryDiagnostics,
-  listSourceRegistryProfiles,
-  listSourceRegistrySources,
+  getSourceProfileRegistrySnapshot,
   type JsonValue,
   type RegistrySource,
   type RegistrySourceProfile,
@@ -51,13 +48,7 @@ function useSourceRegistryInventory() {
     try {
       setLoading(true);
       setError(null);
-      const [adapters, profiles, sources, diagnostics] = await Promise.all([
-        listAdapters(),
-        listSourceRegistryProfiles(),
-        listSourceRegistrySources(),
-        listSourceRegistryDiagnostics(),
-      ]);
-      const nextData = { adapters, profiles, sources, diagnostics };
+      const nextData = await getSourceProfileRegistrySnapshot();
       setData(nextData);
       return nextData;
     } catch (unknownError) {
@@ -83,15 +74,10 @@ export function SourcesFeature() {
     useState<SourceRegistryDocumentKind | null>(null);
   const initialDiagnosticToastShown = useRef(false);
 
-  const adapters = data?.adapters ?? [];
   const profiles = data?.profiles ?? [];
   const sources = data?.sources ?? [];
   const diagnostics = data?.diagnostics ?? [];
 
-  const adaptersByKey = useMemo(
-    () => new Map(adapters.map((adapter) => [adapter.key, adapter])),
-    [adapters],
-  );
   const profilesByKey = useMemo(
     () => new Map(profiles.map((profile) => [profile.document.key, profile])),
     [profiles],
@@ -148,7 +134,6 @@ export function SourcesFeature() {
           <SourceRegistryDataGrid
             sources={sources}
             profilesByKey={profilesByKey}
-            adaptersByKey={adaptersByKey}
             diagnosticIndex={diagnosticIndex}
             loading={loading}
             onAdd={() => setAddDrawerKind("source")}
@@ -158,7 +143,6 @@ export function SourcesFeature() {
         <TabsContent value="profiles">
           <ProfileRegistryDataGrid
             profiles={profiles}
-            adaptersByKey={adaptersByKey}
             diagnosticIndex={diagnosticIndex}
             loading={loading}
             onAdd={() => setAddDrawerKind("source_profile")}
@@ -330,30 +314,64 @@ function errorMessage(error: unknown) {
 }
 
 const profileTemplateSnippet: JsonValue = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   key: "example_profile",
   name: "Example Profile",
   kind: "generic",
+  support: {
+    level: "experimental",
+    summary: "Startpunkt für ein neues deklaratives Source Profile.",
+  },
+  sourceConfigSchema: {
+    type: "object",
+    required: ["startUrl"],
+    additionalProperties: false,
+    properties: {
+      startUrl: {
+        type: "string",
+        format: "uri",
+        title: "Start URL",
+      },
+    },
+  },
   accessPaths: [
     {
-      key: "endpoint_inventory",
-      adapterKey: "declarative_endpoint_inventory",
-      sourceConfigSchema: {
-        type: "object",
-        properties: {
-          startUrl: {
-            type: "string",
-            format: "uri",
+      key: "html_jobs",
+      name: "HTML jobs page",
+      postingDiscovery: {
+        strategies: [
+          {
+            key: "jobs_html",
+            fetch: {
+              mode: "http",
+              method: "GET",
+              url: "{{sourceConfig:startUrl}}",
+              timeoutMs: 10000,
+            },
+            parse: { type: "html" },
+            select: { type: "css", selector: ".job" },
+            extract: {
+              fields: {
+                title: {
+                  type: "css_text",
+                  selector: ".title",
+                  cardinality: "one",
+                },
+                company: {
+                  type: "template",
+                  template: "{{source:name}}",
+                  cardinality: "one",
+                },
+                url: {
+                  type: "css_attribute",
+                  selector: "a",
+                  attribute: "href",
+                  cardinality: "one",
+                },
+              },
+            },
           },
-        },
-      },
-      inventory: {},
-      postingDetail: {
-        fetch: { url: "{{posting:url}}" },
-        parse: { as: "html" },
-        fields: {
-          descriptionText: { selectorText: ".job__description" },
-        },
+        ],
       },
     },
   ],

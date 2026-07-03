@@ -1,31 +1,32 @@
-import { getAdapterDisplay } from "@/features/sources/adapter-metadata";
-import { originLabels, profileKindLabels } from "@/features/sources/labels";
+import { originLabels, profileKindLabels, supportLevelLabels, validationStateLabels } from "@/features/sources/labels";
 import { effectiveSourceConfigSchema } from "@/features/sources/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
-  AdapterMetadata,
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySource,
   RegistrySourceProfile,
   SelectedAccessPath,
+  SourceOwnedSelectedAccessPath,
   SourceProfileKind,
-  SourceRegistryDiagnostic,
+  SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
   SourceStatus,
+  StructuredDiagnostic,
+  SupportLevel,
+  ValidationStateKind,
 } from "@/lib/api/sources";
 
 export type SourceRegistryInventory = {
-  adapters: AdapterMetadata[];
   profiles: RegistrySourceProfile[];
   sources: RegistrySource[];
-  diagnostics: SourceRegistryDiagnostic[];
+  diagnostics: StructuredDiagnostic[];
 };
 
 export type DiagnosticIndex = {
-  bySourceKey: Map<string, SourceRegistryDiagnostic[]>;
-  byProfileKey: Map<string, SourceRegistryDiagnostic[]>;
-  unassigned: SourceRegistryDiagnostic[];
+  bySourceKey: Map<string, StructuredDiagnostic[]>;
+  byProfileKey: Map<string, StructuredDiagnostic[]>;
+  unassigned: StructuredDiagnostic[];
 };
 
 export type RegistryRowHealth = "valid" | "dependency_warning" | "invalid";
@@ -38,11 +39,12 @@ export type RegistryRowDiagnosticSummary = {
 };
 
 export type SourceResolution = {
-  adapterKey: string | null;
-  adapter: AdapterMetadata | null;
   profile: RegistrySourceProfile | null;
   profileAccessPath: ProfileAccessPathDefinition | null;
+  sourceOwnedAccessPath: SourceOwnedSelectedAccessPath | null;
   effectiveSourceConfigSchema: JsonValue;
+  supportLevel: SupportLevel | null;
+  capabilities: string[];
 };
 
 export type SourceGridRow = {
@@ -50,11 +52,15 @@ export type SourceGridRow = {
   name: string;
   status: SourceStatus;
   statusLabel: string;
+  validationState: ValidationStateKind;
+  validationStateLabel: string;
+  supportLevel: SupportLevel | null;
+  supportLabel: string;
   origin: SourceRegistryDocumentOrigin;
   originLabel: string;
   accessPathLabel: string;
-  adapterLabel: string;
   profileLabel: string;
+  capabilitiesSummary: string;
   configSummary: string;
   health: RegistryRowHealth;
   diagnosticsCount: number;
@@ -70,10 +76,12 @@ export type ProfileGridRow = {
   name: string;
   kind: SourceProfileKind;
   kindLabel: string;
+  supportLevel: SupportLevel;
+  supportLabel: string;
   origin: SourceRegistryDocumentOrigin;
   originLabel: string;
   accessPathCount: number;
-  adapterSummary: string;
+  capabilitiesSummary: string;
   schemaSummary: string;
   health: RegistryRowHealth;
   diagnosticsCount: number;
@@ -101,10 +109,10 @@ export type ProfileGridFilters = {
 export function buildDiagnosticIndex(
   sources: RegistrySource[],
   profiles: RegistrySourceProfile[],
-  diagnostics: SourceRegistryDiagnostic[],
+  diagnostics: StructuredDiagnostic[],
 ): DiagnosticIndex {
-  const bySourceKey = new Map<string, SourceRegistryDiagnostic[]>();
-  const byProfileKey = new Map<string, SourceRegistryDiagnostic[]>();
+  const bySourceKey = new Map<string, StructuredDiagnostic[]>();
+  const byProfileKey = new Map<string, StructuredDiagnostic[]>();
   const sourceKeys = new Set(sources.map((source) => source.document.key));
   const profileKeys = new Set(profiles.map((profile) => profile.document.key));
   const sourceKeyByPath = new Map(
@@ -113,23 +121,39 @@ export function buildDiagnosticIndex(
   const profileKeyByPath = new Map(
     profiles.map((profile) => [profile.path, profile.document.key]),
   );
-  const unassigned: SourceRegistryDiagnostic[] = [];
+  const unassigned: StructuredDiagnostic[] = [];
 
   for (const diagnostic of diagnostics) {
     let attached = false;
+    const details = diagnosticDetails(diagnostic);
+    const documentKind = diagnosticDocumentKind(diagnostic);
+    const diagnosticPath = diagnosticDocumentPath(diagnostic);
+    const detailSourceKey = stringValue(details.sourceKey);
+    const detailProfileKey = stringValue(details.sourceProfileKey);
+    const detailKey = stringValue(details.key);
 
-    if (diagnostic.documentKind === "source") {
-      const key = diagnostic.key ?? sourceKeyByPath.get(diagnostic.path);
-      if (key && sourceKeys.has(key)) {
-        pushDiagnostic(bySourceKey, key, diagnostic);
-        attached = true;
-      }
+    const sourceKey = detailSourceKey ?? (documentKind === "source" ? detailKey : null);
+    if (sourceKey && sourceKeys.has(sourceKey)) {
+      pushDiagnostic(bySourceKey, sourceKey, diagnostic);
+      attached = true;
     }
 
-    if (diagnostic.documentKind === "source_profile") {
-      const key = diagnostic.key ?? profileKeyByPath.get(diagnostic.path);
-      if (key && profileKeys.has(key)) {
-        pushDiagnostic(byProfileKey, key, diagnostic);
+    const profileKey =
+      detailProfileKey ?? (documentKind === "source_profile" ? detailKey : null);
+    if (profileKey && profileKeys.has(profileKey)) {
+      pushDiagnostic(byProfileKey, profileKey, diagnostic);
+      attached = true;
+    }
+
+    if (!attached && diagnosticPath) {
+      const sourcePathKey = sourceKeyByPath.get(diagnosticPath);
+      if (sourcePathKey) {
+        pushDiagnostic(bySourceKey, sourcePathKey, diagnostic);
+        attached = true;
+      }
+      const profilePathKey = profileKeyByPath.get(diagnosticPath);
+      if (profilePathKey) {
+        pushDiagnostic(byProfileKey, profilePathKey, diagnostic);
         attached = true;
       }
     }
@@ -145,41 +169,44 @@ export function buildDiagnosticIndex(
 export function createSourceGridRows(
   sources: RegistrySource[],
   profilesByKey: Map<string, RegistrySourceProfile>,
-  adaptersByKey: Map<string, AdapterMetadata>,
-  diagnosticsBySourceKey: Map<string, SourceRegistryDiagnostic[]>,
+  diagnosticsBySourceKey: Map<string, StructuredDiagnostic[]>,
 ): SourceGridRow[] {
   return sources.map((source) => {
-    const resolution = resolveSource(source, profilesByKey, adaptersByKey);
+    const resolution = resolveSource(source, profilesByKey);
     const selectedAccessPath = source.document.selectedAccessPath;
-    const adapterDisplay = resolution.adapterKey
-      ? getAdapterDisplay(resolution.adapterKey, resolution.adapter)
-      : null;
-    const diagnostics = diagnosticsBySourceKey.get(source.document.key) ?? [];
-    const diagnosticSummary = classifySourceRegistryRowHealth(
-      source,
-      diagnostics,
-    );
+    const diagnostics = uniqueDiagnostics([
+      ...(diagnosticsBySourceKey.get(source.document.key) ?? []),
+      ...(source.validationState.diagnostics ?? []),
+      ...(source.document.diagnostics ?? []),
+    ]);
+    const diagnosticSummary = classifySourceRegistryRowHealth(source, diagnostics);
     const accessPathLabel = accessPathSummary(selectedAccessPath);
     const profileLabel =
-      selectedAccessPath.type === "profile"
+      selectedAccessPath.type === "profile_access_path"
         ? `${selectedAccessPath.profileKey} / ${selectedAccessPath.pathKey}`
-        : "source_specific";
-    const adapterLabel = adapterDisplay?.label ?? "—";
+        : "Source-owned";
     const configSummary = jsonObjectSummary(source.document.sourceConfig);
     const statusLabel = sourceStatusLabels[source.document.status];
+    const validationStateLabel = validationStateLabels[source.validationState.state];
     const originLabel = originLabels[source.origin];
+    const supportLabel = resolution.supportLevel
+      ? supportLevelLabels[resolution.supportLevel]
+      : "—";
+    const capabilitiesSummary = summarizeList(resolution.capabilities, "keine Fähigkeiten");
     const searchText = [
       source.document.key,
       source.document.name,
       statusLabel,
       source.document.status,
+      validationStateLabel,
+      source.validationState.state,
       originLabel,
       source.origin,
       accessPathLabel,
       profileLabel,
       resolution.profile?.document.name ?? "",
-      adapterLabel,
-      resolution.adapterKey ?? "",
+      supportLabel,
+      capabilitiesSummary,
       configSummary,
       source.path,
     ]
@@ -191,11 +218,15 @@ export function createSourceGridRows(
       name: source.document.name,
       status: source.document.status,
       statusLabel,
+      validationState: source.validationState.state,
+      validationStateLabel,
+      supportLevel: resolution.supportLevel,
+      supportLabel,
       origin: source.origin,
       originLabel,
       accessPathLabel,
-      adapterLabel,
       profileLabel,
+      capabilitiesSummary,
       configSummary,
       health: diagnosticSummary.health,
       diagnosticsCount: diagnosticSummary.diagnosticsCount,
@@ -210,39 +241,33 @@ export function createSourceGridRows(
 
 export function createProfileGridRows(
   profiles: RegistrySourceProfile[],
-  adaptersByKey: Map<string, AdapterMetadata>,
-  diagnosticsByProfileKey: Map<string, SourceRegistryDiagnostic[]>,
+  diagnosticsByProfileKey: Map<string, StructuredDiagnostic[]>,
 ): ProfileGridRow[] {
   return profiles.map((profile) => {
-    const adapterKeys = unique(
-      profile.document.accessPaths.map((accessPath) => accessPath.adapterKey),
-    );
-    const adapterLabels = adapterKeys.map((adapterKey) => {
-      const display = getAdapterDisplay(
-        adapterKey,
-        adaptersByKey.get(adapterKey),
-      );
-      return display.registered ? display.name : display.label;
-    });
-    const adapterSummary = summarizeList(adapterLabels, "Keine Adapter");
-    const diagnostics = diagnosticsByProfileKey.get(profile.document.key) ?? [];
+    const diagnostics = uniqueDiagnostics([
+      ...(diagnosticsByProfileKey.get(profile.document.key) ?? []),
+      ...(profile.document.diagnostics ?? []),
+      ...profile.document.accessPaths.flatMap((accessPath) => accessPath.diagnostics ?? []),
+    ]);
     const diagnosticSummary = classifyProfileRegistryRowHealth(diagnostics);
     const kindLabel = profileKindLabels[profile.document.kind];
+    const supportLabel = supportLevelLabels[profile.document.support.level];
     const originLabel = originLabels[profile.origin];
     const schemaSummary = profileSchemaSummary(profile);
+    const capabilitiesSummary = summarizeList(profileCapabilities(profile), "keine Fähigkeiten");
     const searchText = [
       profile.document.key,
       profile.document.name,
       kindLabel,
       profile.document.kind,
+      supportLabel,
+      profile.document.support.level,
       originLabel,
       profile.origin,
-      adapterSummary,
+      capabilitiesSummary,
       schemaSummary,
       profile.path,
-      profile.document.accessPaths
-        .map((accessPath) => accessPath.key)
-        .join(" "),
+      profile.document.accessPaths.map((accessPath) => accessPath.key).join(" "),
     ]
       .join(" ")
       .toLocaleLowerCase("de");
@@ -252,10 +277,12 @@ export function createProfileGridRows(
       name: profile.document.name,
       kind: profile.document.kind,
       kindLabel,
+      supportLevel: profile.document.support.level,
+      supportLabel,
       origin: profile.origin,
       originLabel,
       accessPathCount: profile.document.accessPaths.length,
-      adapterSummary,
+      capabilitiesSummary,
       schemaSummary,
       health: diagnosticSummary.health,
       diagnosticsCount: diagnosticSummary.diagnosticsCount,
@@ -270,17 +297,15 @@ export function createProfileGridRows(
 
 export function classifySourceRegistryRowHealth(
   source: RegistrySource,
-  diagnostics: SourceRegistryDiagnostic[],
+  diagnostics: StructuredDiagnostic[],
 ): RegistryRowDiagnosticSummary {
-  const dependencyDiagnosticsCount = diagnostics.filter(
-    isSourceDependencyDiagnostic,
-  ).length;
+  const dependencyDiagnosticsCount = diagnostics.filter(isSourceDependencyDiagnostic).length;
   const ownDiagnosticsCount = diagnostics.length - dependencyDiagnosticsCount;
   let health: RegistryRowHealth = "valid";
 
-  if (source.document.status === "invalid" || ownDiagnosticsCount > 0) {
+  if (source.validationState.state === "invalid" || ownDiagnosticsCount > 0) {
     health = "invalid";
-  } else if (dependencyDiagnosticsCount > 0) {
+  } else if (dependencyDiagnosticsCount > 0 || source.validationState.state === "unknown") {
     health = "dependency_warning";
   }
 
@@ -293,10 +318,14 @@ export function classifySourceRegistryRowHealth(
 }
 
 export function classifyProfileRegistryRowHealth(
-  diagnostics: SourceRegistryDiagnostic[],
+  diagnostics: StructuredDiagnostic[],
 ): RegistryRowDiagnosticSummary {
   return {
-    health: diagnostics.length > 0 ? "invalid" : "valid",
+    health: diagnostics.some((diagnostic) => diagnostic.severity === "error")
+      ? "invalid"
+      : diagnostics.length > 0
+        ? "dependency_warning"
+        : "valid",
     diagnosticsCount: diagnostics.length,
     ownDiagnosticsCount: diagnostics.length,
     dependencyDiagnosticsCount: 0,
@@ -336,20 +365,20 @@ export function filterProfileGridRows(
 export function resolveSource(
   source: RegistrySource,
   profilesByKey: Map<string, RegistrySourceProfile>,
-  adaptersByKey: Map<string, AdapterMetadata>,
 ): SourceResolution {
   const selectedAccessPath = source.document.selectedAccessPath;
 
-  if (selectedAccessPath.type === "source_specific") {
+  if (selectedAccessPath.type === "source_owned_access_path") {
     return {
-      adapterKey: selectedAccessPath.adapterKey,
-      adapter: adaptersByKey.get(selectedAccessPath.adapterKey) ?? null,
       profile: null,
       profileAccessPath: null,
+      sourceOwnedAccessPath: selectedAccessPath,
       effectiveSourceConfigSchema: effectiveSourceConfigSchema(
         undefined,
         selectedAccessPath.sourceConfigSchema,
       ),
+      supportLevel: source.document.sourceSupport?.level ?? null,
+      capabilities: accessPathCapabilities(selectedAccessPath),
     };
   }
 
@@ -358,17 +387,17 @@ export function resolveSource(
     profile?.document.accessPaths.find(
       (accessPath) => accessPath.key === selectedAccessPath.pathKey,
     ) ?? null;
-  const adapterKey = profileAccessPath?.adapterKey ?? null;
 
   return {
-    adapterKey,
-    adapter: adapterKey ? (adaptersByKey.get(adapterKey) ?? null) : null,
     profile,
     profileAccessPath,
+    sourceOwnedAccessPath: null,
     effectiveSourceConfigSchema: effectiveSourceConfigSchema(
       profile?.document.sourceConfigSchema,
       profileAccessPath?.sourceConfigSchema,
     ),
+    supportLevel: profile?.document.support.level ?? null,
+    capabilities: profileAccessPath ? accessPathCapabilities(profileAccessPath) : [],
   };
 }
 
@@ -406,9 +435,7 @@ export function sourceStatusEntries() {
 }
 
 export function profileKindEntries() {
-  return Object.entries(profileKindLabels) as Array<
-    [SourceProfileKind, string]
-  >;
+  return Object.entries(profileKindLabels) as Array<[SourceProfileKind, string]>;
 }
 
 export function originEntries() {
@@ -423,6 +450,33 @@ export function diagnosticCountLabel(count: number) {
 
 export function formatBoolean(value: boolean) {
   return value ? "Ja" : "Nein";
+}
+
+export function diagnosticDocumentKind(
+  diagnostic: StructuredDiagnostic,
+): SourceRegistryDocumentKind | null {
+  const value = stringValue(diagnosticDetails(diagnostic).documentKind);
+  return value === "source" || value === "source_profile" ? value : null;
+}
+
+export function diagnosticDocumentOrigin(
+  diagnostic: StructuredDiagnostic,
+): SourceRegistryDocumentOrigin | null {
+  const value = stringValue(diagnosticDetails(diagnostic).origin);
+  return value === "built_in" || value === "custom" ? value : null;
+}
+
+export function diagnosticDocumentPath(diagnostic: StructuredDiagnostic): string | null {
+  return stringValue(diagnosticDetails(diagnostic).path);
+}
+
+export function diagnosticDocumentKey(diagnostic: StructuredDiagnostic): string | null {
+  const details = diagnosticDetails(diagnostic);
+  return (
+    stringValue(details.key) ??
+    stringValue(details.sourceKey) ??
+    stringValue(details.sourceProfileKey)
+  );
 }
 
 function normalizeRegistrySearchQuery(searchQuery: string) {
@@ -444,25 +498,19 @@ function matchesDiagnosticsFilter(
   return !diagnosticsOnly || diagnosticsCount > 0;
 }
 
-function isSourceDependencyDiagnostic(diagnostic: SourceRegistryDiagnostic) {
-  if (
-    diagnostic.code === "missing_profile_ref" ||
-    diagnostic.code === "missing_path_ref"
-  ) {
-    return true;
-  }
-
-  return (
-    diagnostic.code === "invalid_shape" &&
-    diagnostic.message.includes("references profile") &&
-    diagnostic.message.includes("without postingDetail")
-  );
+function isSourceDependencyDiagnostic(diagnostic: StructuredDiagnostic) {
+  return [
+    "missing_source_profile",
+    "missing_profile",
+    "missing_access_path",
+    "recommended_access_path_not_found",
+  ].includes(diagnostic.code);
 }
 
 function pushDiagnostic(
-  target: Map<string, SourceRegistryDiagnostic[]>,
+  target: Map<string, StructuredDiagnostic[]>,
   key: string,
-  diagnostic: SourceRegistryDiagnostic,
+  diagnostic: StructuredDiagnostic,
 ) {
   const diagnostics = target.get(key);
   if (diagnostics) {
@@ -473,8 +521,8 @@ function pushDiagnostic(
 }
 
 function accessPathSummary(selectedAccessPath: SelectedAccessPath) {
-  if (selectedAccessPath.type === "source_specific") {
-    return `quellenspezifisch · ${selectedAccessPath.adapterKey}`;
+  if (selectedAccessPath.type === "source_owned_access_path") {
+    return `Source-owned · ${selectedAccessPath.key}`;
   }
 
   return `Profil ${selectedAccessPath.profileKey} · Pfad ${selectedAccessPath.pathKey}`;
@@ -494,8 +542,7 @@ function jsonObjectKeys(value: JsonValue | undefined) {
 function profileSchemaSummary(profile: RegistrySourceProfile) {
   const parts = [
     profile.document.sourceConfigSchema ? "Profil-Schema" : null,
-    profile.document.detect ? "Detect" : null,
-    profile.document.identity ? "Identity" : null,
+    profile.document.detect ? "Detection" : null,
   ].filter(Boolean);
 
   const pathSchemaCount = profile.document.accessPaths.filter(
@@ -511,6 +558,19 @@ function profileSchemaSummary(profile: RegistrySourceProfile) {
   return parts.join(" · ") || "keine Zusatzblöcke";
 }
 
+function profileCapabilities(profile: RegistrySourceProfile) {
+  return unique(profile.document.accessPaths.flatMap(accessPathCapabilities));
+}
+
+function accessPathCapabilities(
+  accessPath: ProfileAccessPathDefinition | SourceOwnedSelectedAccessPath,
+) {
+  return [
+    accessPath.postingDiscovery ? "postingDiscovery" : null,
+    accessPath.postingDetail ? "postingDetail" : null,
+  ].filter(Boolean) as string[];
+}
+
 function summarizeList(values: string[], emptyLabel: string) {
   if (!values.length) return emptyLabel;
   if (values.length <= 3) return values.join(", ");
@@ -521,12 +581,27 @@ function unique(values: string[]) {
   return [...new Set(values)];
 }
 
+function uniqueDiagnostics(diagnostics: StructuredDiagnostic[]) {
+  const seen = new Set<string>();
+  return diagnostics.filter((diagnostic) => {
+    const key = [
+      diagnostic.category,
+      diagnostic.code,
+      diagnostic.path,
+      diagnostic.message,
+      diagnostic.strategyKey ?? "",
+    ].join("\0");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function zeroSourceStatusCounts(): Record<SourceStatus, number> {
   return {
     draft: 0,
     active: 0,
     disabled: 0,
-    invalid: 0,
   };
 }
 
@@ -535,6 +610,19 @@ function zeroProfileKindCounts(): Record<SourceProfileKind, number> {
     recruiting_system: 0,
     job_portal: 0,
     website_family: 0,
+    career_site: 0,
     generic: 0,
   };
+}
+
+function diagnosticDetails(diagnostic: StructuredDiagnostic) {
+  return isJsonObject(diagnostic.details) ? diagnostic.details : {};
+}
+
+function isJsonObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function stringValue(value: JsonValue | undefined): string | null {
+  return typeof value === "string" && value ? value : null;
 }

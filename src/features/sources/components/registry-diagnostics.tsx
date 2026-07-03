@@ -18,17 +18,23 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  diagnosticCodeLabels,
+  diagnosticCodeLabel,
   documentDirectoryLabels,
   documentKindLabels,
   originLabels,
 } from "@/features/sources/labels";
-import { diagnosticCountLabel } from "@/features/sources/registry-view-model";
-import type { SourceRegistryDiagnostic } from "@/lib/api/sources";
+import {
+  diagnosticCountLabel,
+  diagnosticDocumentKind,
+  diagnosticDocumentOrigin,
+  diagnosticDocumentPath,
+  diagnosticDocumentKey,
+} from "@/features/sources/registry-view-model";
+import type { StructuredDiagnostic } from "@/lib/api/sources";
 
 type InlineDiagnosticsProps = {
   title: string;
-  diagnostics: SourceRegistryDiagnostic[];
+  diagnostics: StructuredDiagnostic[];
 };
 
 export function InlineDiagnostics({
@@ -44,10 +50,7 @@ export function InlineDiagnostics({
         <AlertTitle>{title}</AlertTitle>
         <AlertDescription>
           <div className="grid gap-2">
-            <p>
-              {diagnosticCountLabel(diagnostics.length)} sind diesem Registry
-              Key oder Dokumentpfad zugeordnet.
-            </p>
+            <p>{diagnosticCountLabel(diagnostics.length)} sind zugeordnet.</p>
             <CollapsibleTrigger
               render={
                 <Button
@@ -81,77 +84,90 @@ export function InlineDiagnostics({
 }
 
 type DiagnosticSummaryProps = {
-  diagnostic: SourceRegistryDiagnostic;
+  diagnostic: StructuredDiagnostic;
 };
 
 function DiagnosticSummary({ diagnostic }: DiagnosticSummaryProps) {
+  const documentKind = diagnosticDocumentKind(diagnostic);
+  const origin = diagnosticDocumentOrigin(diagnostic);
+  const documentKey = diagnosticDocumentKey(diagnostic);
+  const documentPath = diagnosticDocumentPath(diagnostic);
+
   return (
     <div className="grid gap-1 rounded-md border bg-background p-2 text-xs">
       <div className="flex flex-wrap gap-1">
-        <Badge variant="warning-light">
-          {diagnosticCodeLabels[diagnostic.code]}
+        <Badge variant={diagnostic.severity === "error" ? "warning-light" : "outline"}>
+          {diagnosticCodeLabel(diagnostic.code)}
         </Badge>
-        <Badge variant="outline">
-          {documentKindLabels[diagnostic.documentKind]}
-        </Badge>
-        <Badge variant="outline">{originLabels[diagnostic.origin]}</Badge>
+        <Badge variant="outline">{diagnostic.category}</Badge>
+        {documentKind ? (
+          <Badge variant="outline">{documentKindLabels[documentKind]}</Badge>
+        ) : null}
+        {origin ? <Badge variant="outline">{originLabels[origin]}</Badge> : null}
       </div>
-      {diagnostic.key ? (
+      {documentKey ? (
         <p>
-          <span className="font-medium">Key:</span>{" "}
-          <code>{diagnostic.key}</code>
+          <span className="font-medium">Key:</span> <code>{documentKey}</code>
         </p>
       ) : null}
       <p>{diagnostic.message}</p>
       <p className="break-all font-mono text-muted-foreground">
-        {diagnostic.path}
+        {documentPath ?? diagnostic.path}
       </p>
     </div>
   );
 }
 
 type DiagnosticCardProps = {
-  diagnostic: SourceRegistryDiagnostic;
+  diagnostic: StructuredDiagnostic;
 };
 
 export function DiagnosticCard({ diagnostic }: DiagnosticCardProps) {
+  const documentKind = diagnosticDocumentKind(diagnostic);
+  const origin = diagnosticDocumentOrigin(diagnostic);
+  const documentKey = diagnosticDocumentKey(diagnostic);
+  const documentPath = diagnosticDocumentPath(diagnostic);
+
   return (
     <Card className="border-destructive/40">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <CardTitle className="text-base">
-              {diagnosticCodeLabels[diagnostic.code]}
+              {diagnosticCodeLabel(diagnostic.code)}
             </CardTitle>
             <CardDescription>
-              {documentKindLabels[diagnostic.documentKind]} ·{" "}
-              {originLabels[diagnostic.origin]} ·{" "}
-              {documentDirectoryLabels[diagnostic.documentKind]}
+              {documentKind ? documentKindLabels[documentKind] : diagnostic.category}
+              {origin ? ` · ${originLabels[origin]}` : ""}
+              {documentKind ? ` · ${documentDirectoryLabels[documentKind]}` : ""}
             </CardDescription>
           </div>
           <Badge variant="destructive-light">{diagnostic.code}</Badge>
         </div>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
-        {diagnostic.key ? (
+        {documentKey ? (
           <p>
-            <span className="font-medium">Key:</span>{" "}
-            <code>{diagnostic.key}</code>
+            <span className="font-medium">Key:</span> <code>{documentKey}</code>
           </p>
         ) : (
-          <p className="text-muted-foreground">Kein Key verfügbar.</p>
+          <p className="text-muted-foreground">Kein Registry-Key verfügbar.</p>
         )}
         <p>
-          <span className="font-medium">Dokumentart:</span>{" "}
-          {documentKindLabels[diagnostic.documentKind]}
+          <span className="font-medium">Kategorie:</span> {diagnostic.category}
         </p>
         <p>
-          <span className="font-medium">Ursprung:</span>{" "}
-          {originLabels[diagnostic.origin]}
+          <span className="font-medium">Schweregrad:</span> {diagnostic.severity}
         </p>
         <p className="break-all">
-          <span className="font-medium">Pfad:</span> {diagnostic.path}
+          <span className="font-medium">Pfad:</span> {documentPath ?? diagnostic.path}
         </p>
+        {diagnostic.strategyKey ? (
+          <p>
+            <span className="font-medium">Strategie:</span>{" "}
+            <code>{diagnostic.strategyKey}</code>
+          </p>
+        ) : null}
         <p>{diagnostic.message}</p>
       </CardContent>
     </Card>

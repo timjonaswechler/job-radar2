@@ -44,7 +44,6 @@ import {
   type ProfileGridRow,
 } from "@/features/sources/registry-view-model";
 import type {
-  AdapterMetadata,
   RegistrySourceProfile,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
@@ -52,7 +51,6 @@ import type {
 
 type ProfileRegistryDataGridProps = {
   profiles: RegistrySourceProfile[];
-  adaptersByKey: Map<string, AdapterMetadata>;
   diagnosticIndex: DiagnosticIndex;
   loading: boolean;
   onAdd: () => void;
@@ -60,7 +58,6 @@ type ProfileRegistryDataGridProps = {
 
 export function ProfileRegistryDataGrid({
   profiles,
-  adaptersByKey,
   diagnosticIndex,
   loading,
   onAdd,
@@ -85,10 +82,9 @@ export function ProfileRegistryDataGrid({
     () =>
       createProfileGridRows(
         profiles,
-        adaptersByKey,
         diagnosticIndex.byProfileKey,
       ),
-    [adaptersByKey, diagnosticIndex.byProfileKey, profiles],
+    [diagnosticIndex.byProfileKey, profiles],
   );
 
   const filteredRows = useMemo(
@@ -129,6 +125,34 @@ export function ProfileRegistryDataGrid({
         size: 230,
         enableSorting: true,
         enableHiding: false,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "supportLabel",
+        id: "supportLabel",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Support" visibility column={column} />
+        ),
+        cell: ({ row }) => <Badge variant="outline">{row.original.supportLabel}</Badge>,
+        size: 130,
+        enableSorting: true,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "capabilitiesSummary",
+        id: "capabilitiesSummary",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Fähigkeiten" visibility column={column} />
+        ),
+        cell: ({ row }) => (
+          <span className="truncate text-muted-foreground">
+            {row.original.capabilitiesSummary}
+          </span>
+        ),
+        size: 170,
+        enableSorting: true,
+        enableHiding: true,
         enableResizing: true,
       },
       {
@@ -280,7 +304,6 @@ export function ProfileRegistryDataGrid({
 
       <ProfileDetailsDrawer
         row={selectedRow}
-        adaptersByKey={adaptersByKey}
         diagnostics={
           selectedRow
             ? (diagnosticIndex.byProfileKey.get(selectedRow.key) ?? [])

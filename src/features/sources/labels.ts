@@ -1,9 +1,9 @@
 import type {
-  AdapterMetadata,
   SourceProfileKind,
-  SourceRegistryDiagnosticCode,
   SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
+  SupportLevel,
+  ValidationStateKind,
 } from "@/lib/api/sources";
 
 export const originLabels: Record<SourceRegistryDocumentOrigin, string> = {
@@ -25,26 +25,27 @@ export const profileKindLabels: Record<SourceProfileKind, string> = {
   recruiting_system: "Recruiting-System",
   job_portal: "Job-Portal",
   website_family: "Website-Familie",
+  career_site: "Karriere-Website",
   generic: "Generisch",
 };
 
-export const diagnosticCodeLabels: Record<
-  SourceRegistryDiagnosticCode,
-  string
-> = {
-  invalid_json: "Ungültiges JSON",
-  invalid_shape: "Ungültige Dokumentform",
-  filename_key_mismatch: "Dateiname passt nicht zum Key",
-  duplicate_key: "Doppelter Key",
-  missing_profile_ref: "Fehlendes Profil",
-  missing_path_ref: "Fehlender Zugriffspfad",
-  read_error: "Lesefehler",
+export const supportLevelLabels: Record<SupportLevel, string> = {
+  verified: "Verifiziert",
+  best_effort: "Best Effort",
+  experimental: "Experimentell",
+  unsupported: "Nicht unterstützt",
 };
 
-export const adapterExecutionModeLabels: Record<
-  AdapterMetadata["executionMode"],
-  string
-> = {
-  source_inventory: "Quellenbestand",
-  query_parameterized: "Suchparameterisiert",
+export const validationStateLabels: Record<ValidationStateKind, string> = {
+  unknown: "Unbekannt",
+  valid: "Valide",
+  invalid: "Ungültig",
 };
+
+export function diagnosticCodeLabel(code: string) {
+  return code
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase("de") + part.slice(1))
+    .join(" ");
+}

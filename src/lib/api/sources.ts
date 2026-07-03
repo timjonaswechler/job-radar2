@@ -8,157 +8,45 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue }
 
-export type SourceStatus = "draft" | "active" | "disabled" | "invalid"
+export type JsonObject = { [key: string]: JsonValue }
+
+export type SourceStatus = "draft" | "active" | "disabled"
 
 export type SourceKey = string
-
-export type AdapterExecutionMode = "source_inventory" | "query_parameterized"
-
-export type AdapterCategory = "job_board" | "generic" | "browser"
-
-export type AdapterAuthMode = "none" | "manual_cookie"
-
-export type AdapterRiskLevel = "stable" | "fragile" | "restricted"
-
-export type AdapterMetadata = {
-  key: string
-  name: string
-  description: string
-  category: AdapterCategory
-  executionMode: AdapterExecutionMode
-  sourceConfigSchema: JsonValue
-  supportsManualRelease: boolean
-  authMode: AdapterAuthMode
-  riskLevel: AdapterRiskLevel
-}
 
 export type SourceRegistryDocumentOrigin = "built_in" | "custom"
 
 export type SourceRegistryDocumentKind = "source_profile" | "source"
-
-export type SourceRegistryDiagnosticCode =
-  | "invalid_json"
-  | "invalid_shape"
-  | "filename_key_mismatch"
-  | "duplicate_key"
-  | "missing_profile_ref"
-  | "missing_path_ref"
-  | "read_error"
-
-export type SourceRegistryDiagnostic = {
-  code: SourceRegistryDiagnosticCode
-  documentKind: SourceRegistryDocumentKind
-  origin: SourceRegistryDocumentOrigin
-  path: string
-  key: string | null
-  message: string
-}
-
-export type SourceProfileKind =
-  | "recruiting_system"
-  | "job_portal"
-  | "website_family"
-  | "generic"
-
-export type DetectionPhase = "http" | "browser"
-
-export type DetectionBlock = {
-  phases?: DetectionPhase[]
-  required: JsonValue[]
-}
-
-export type SourceProfileIdentity = {
-  keyCandidates?: string[]
-  nameCandidates?: string[]
-  optionalSourceConfig?: JsonValue
-}
-
-export type AvailabilityBlock = {
-  requiredCaptures?: string[]
-  checks?: JsonValue[]
-  sourceConfig?: JsonValue
-}
-
-export type BrowserInteraction =
-  | { type: "waitFor"; selector: string; timeoutMs?: number }
-  | { type: "clickIfVisible"; selector: string; timeoutMs?: number }
-  | {
-      type: "clickUpToN"
-      selector: string
-      maxClicks: number
-      waitAfterClickMs?: number
-    }
-
-export type ProfileAccessPathDefinition = {
-  key: string
-  name?: string
-  adapterKey: string
-  sourceConfigSchema?: JsonValue
-  availability?: AvailabilityBlock
-  query?: JsonValue
-  inventory?: JsonValue
-  postingDetail?: JsonValue
-  interactions?: BrowserInteraction[]
-  manualRelease?: JsonValue
-}
-
-export type SourceProfileDocument = {
-  schemaVersion: 1
-  key: string
-  name: string
-  kind: SourceProfileKind
-  detect?: DetectionBlock
-  identity?: SourceProfileIdentity
-  sourceConfigSchema?: JsonValue
-  accessPaths: ProfileAccessPathDefinition[]
-}
-
-export type ProfileSelectedAccessPath = {
-  type: "profile"
-  profileKey: string
-  pathKey: string
-}
-
-export type SourceSpecificSelectedAccessPath = {
-  type: "source_specific"
-  adapterKey: string
-  sourceConfigSchema?: JsonValue
-  query?: JsonValue
-  inventory?: JsonValue
-  interactions?: BrowserInteraction[]
-  manualRelease?: JsonValue
-}
-
-export type SelectedAccessPath =
-  | ProfileSelectedAccessPath
-  | SourceSpecificSelectedAccessPath
-
-export type SourceDocument = {
-  schemaVersion: 1
-  key: SourceKey
-  name: string
-  status: SourceStatus
-  sourceConfig: JsonValue
-  selectedAccessPath: SelectedAccessPath
-}
-
-export type RegistrySourceProfile = {
-  origin: SourceRegistryDocumentOrigin
-  path: string
-  document: SourceProfileDocument
-}
-
-export type RegistrySource = {
-  origin: SourceRegistryDocumentOrigin
-  path: string
-  document: SourceDocument
-}
 
 export type SupportLevel =
   | "verified"
   | "best_effort"
   | "experimental"
   | "unsupported"
+
+export type SupportEvidenceKind =
+  | "fixture"
+  | "smoke"
+  | "manual_review"
+  | "schema_check"
+
+export type SupportNote = {
+  message: string
+  scope?: string
+}
+
+export type SupportEvidence = {
+  kind: SupportEvidenceKind
+  reference: string
+  summary?: string
+}
+
+export type SupportMetadata = {
+  level: SupportLevel
+  summary?: string
+  knownIssues?: SupportNote[]
+  evidence?: SupportEvidence[]
+}
 
 export type StructuredDiagnostic = {
   category:
@@ -176,8 +64,161 @@ export type StructuredDiagnostic = {
   details?: JsonValue
 }
 
+export type Diagnostics = StructuredDiagnostic[]
+
+export type SourceProfileKind =
+  | "recruiting_system"
+  | "job_portal"
+  | "website_family"
+  | "career_site"
+  | "generic"
+
+export type DetectionEvidenceKind = "url" | "http" | "html" | "browser"
+
+export type DetectionEvidence = {
+  kind: DetectionEvidenceKind
+  message: string
+  path?: string
+}
+
+export type DetectionHttpCheck = {
+  key: string
+  url: string
+  timeoutMs?: number
+  expectStatus?: number
+  contains?: string
+  regex?: string
+  evidence?: string
+}
+
+export type DetectionBrowserWait =
+  | { type: "selector"; selector: string; timeoutMs?: number }
+  | { type: "network_idle"; selector?: string; timeoutMs?: number }
+
+export type DetectionBrowserInteraction =
+  | {
+      type: "click_if_visible"
+      selector: string
+      maxCount?: number
+      waitAfterMs?: number
+    }
+  | {
+      type: "click_until_gone"
+      selector: string
+      maxCount?: number
+      waitAfterMs?: number
+    }
+
+export type DetectionBrowserProbe = {
+  key: string
+  url: string
+  timeoutMs?: number
+  waits?: DetectionBrowserWait[]
+  interactions?: DetectionBrowserInteraction[]
+  htmlContains?: string
+  htmlRegex?: string
+  evidence?: string
+}
+
+export type ProfileDetectionDocument = {
+  inputUrlPatterns?: Array<{ pattern: string; captures?: string[] }>
+  recommendedAccessPathKey?: string
+  sourceConfig?: JsonObject
+  keyCandidates?: string[]
+  nameCandidates?: string[]
+  httpChecks?: DetectionHttpCheck[]
+  browserProbes?: DetectionBrowserProbe[]
+  evidence?: DetectionEvidence[]
+}
+
+export type ProfileAccessPathDefinition = {
+  key: string
+  name: string
+  description?: string
+  sourceConfigSchema?: JsonValue
+  knownIssues?: SupportNote[]
+  postingDiscovery: JsonValue
+  postingDetail?: JsonValue
+  diagnostics?: Diagnostics
+}
+
+export type SourceProfileDocument = {
+  schemaVersion: 2
+  key: string
+  name: string
+  kind: SourceProfileKind
+  description?: string
+  support: SupportMetadata
+  detect?: ProfileDetectionDocument
+  sourceConfigSchema?: JsonValue
+  accessPaths: ProfileAccessPathDefinition[]
+  diagnostics?: Diagnostics
+}
+
+export type ProfileSelectedAccessPath = {
+  type: "profile_access_path"
+  profileKey: string
+  pathKey: string
+}
+
+export type SourceOwnedSelectedAccessPath = {
+  type: "source_owned_access_path"
+  key: string
+  name: string
+  description?: string
+  sourceConfigSchema?: JsonValue
+  postingDiscovery: JsonValue
+  postingDetail?: JsonValue
+  diagnostics?: Diagnostics
+}
+
+export type SelectedAccessPath =
+  | ProfileSelectedAccessPath
+  | SourceOwnedSelectedAccessPath
+
+export type SourceDocument = {
+  schemaVersion: 2
+  key: SourceKey
+  name: string
+  status: SourceStatus
+  sourceConfig: JsonObject
+  selectedAccessPath: SelectedAccessPath
+  sourceOverrides?: JsonValue
+  sourceSupport?: SupportMetadata
+  diagnostics?: Diagnostics
+}
+
+export type ValidationStateKind = "unknown" | "valid" | "invalid"
+
+export type SourceValidationState = {
+  sourceKey: string
+  state: ValidationStateKind
+  canCompile: boolean
+  canExecute: boolean
+  diagnostics?: Diagnostics
+}
+
+export type RegistrySourceProfile = {
+  origin: SourceRegistryDocumentOrigin
+  path: string
+  document: SourceProfileDocument
+}
+
+export type RegistrySource = {
+  origin: SourceRegistryDocumentOrigin
+  path: string
+  document: SourceDocument
+  validationState: SourceValidationState
+}
+
+export type SourceProfileRegistrySnapshot = {
+  profiles: RegistrySourceProfile[]
+  sources: RegistrySource[]
+  diagnostics: Diagnostics
+}
+
 export type SourceProposalEvidence = {
-  kind: "url" | "http" | "html" | "browser"
+  kind: DetectionEvidenceKind
   message: string
   path?: string
   probeKey?: string
@@ -188,7 +229,7 @@ export type SourceProposal = {
   profileName: string
   recommendedAccessPathKey: string
   recommendedAccessPathName: string
-  sourceConfig: JsonValue
+  sourceConfig: JsonObject
   keyCandidates: string[]
   nameCandidates: string[]
   captures: Record<string, string>
@@ -215,31 +256,31 @@ export type SourceProposalDetectionResult = {
   proposal?: SourceProposal
   proposals?: SourceProposal[]
   unsupportedProfiles?: UnsupportedSourceProfile[]
-  diagnostics: StructuredDiagnostic[]
+  diagnostics: Diagnostics
 }
 
-export function listAdapters() {
-  return invoke<AdapterMetadata[]>("list_adapters")
-}
-
-export function listSourceRegistryProfiles() {
-  return invoke<RegistrySourceProfile[]>("list_source_registry_profiles")
-}
-
-export function listSourceRegistrySources() {
-  return invoke<RegistrySource[]>("list_source_registry_sources")
-}
-
-export function listSourceRegistryDiagnostics() {
-  return invoke<SourceRegistryDiagnostic[]>(
-    "list_source_registry_diagnostics",
+export function getSourceProfileRegistrySnapshot() {
+  return invoke<SourceProfileRegistrySnapshot>(
+    "get_source_profile_registry_snapshot",
   )
+}
+
+export function listSourceProfiles() {
+  return invoke<RegistrySourceProfile[]>("list_source_profiles")
+}
+
+export function listSources() {
+  return invoke<RegistrySource[]>("list_sources")
+}
+
+export function listSourceDiagnostics() {
+  return invoke<Diagnostics>("list_source_diagnostics")
 }
 
 export function detectSourceProposalFromUrl(url: string) {
   return invoke<SourceProposalDetectionResult>("detect_source_proposal_from_url", { url })
 }
 
-export function createCustomSource(document: SourceDocument) {
-  return invoke<RegistrySource>("create_custom_source", { document })
+export function createSource(document: SourceDocument) {
+  return invoke<RegistrySource>("create_source", { document })
 }

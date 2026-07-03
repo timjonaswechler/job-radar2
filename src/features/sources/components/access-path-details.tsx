@@ -10,23 +10,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  formatAdapterCategory,
-  formatAdapterRisk,
-  getAdapterDisplay,
-} from "@/features/sources/adapter-metadata";
 import { DetailRow } from "@/features/sources/components/detail-row";
 import { OptionalJsonPreview } from "@/features/sources/components/json-preview";
-import { adapterExecutionModeLabels } from "@/features/sources/labels";
-import {
-  formatBoolean,
-  type SourceResolution,
-} from "@/features/sources/registry-view-model";
+import { InlineDiagnostics } from "@/features/sources/components/registry-diagnostics";
+import { supportLevelLabels } from "@/features/sources/labels";
+import type { SourceResolution } from "@/features/sources/registry-view-model";
 import type {
-  AdapterMetadata,
   ProfileAccessPathDefinition,
   SelectedAccessPath,
-  SourceSpecificSelectedAccessPath,
+  SourceOwnedSelectedAccessPath,
 } from "@/lib/api/sources";
 
 type AccessPathDetailsProps = {
@@ -38,15 +30,15 @@ export function AccessPathDetails({
   selectedAccessPath,
   resolution,
 }: AccessPathDetailsProps) {
-  if (selectedAccessPath.type === "profile") {
+  if (selectedAccessPath.type === "profile_access_path") {
     return (
       <div className="grid gap-3 rounded-lg border p-3 text-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-medium">Profil-Zugriffspfad</p>
             <p className="text-xs text-muted-foreground">
-              Quelle referenziert ein wiederverwendbares Quellenprofil und einen
-              dort definierten Zugriffspfad.
+              Die Source referenziert ein wiederverwendbares Source Profile und
+              einen dort definierten Access Path.
             </p>
           </div>
           <Badge
@@ -70,15 +62,22 @@ export function AccessPathDetails({
               value={resolution.profile.document.name}
             />
           ) : null}
+          {resolution.supportLevel ? (
+            <DetailRow
+              label="Support"
+              value={supportLevelLabels[resolution.supportLevel]}
+            />
+          ) : null}
           {resolution.profileAccessPath ? (
             <DetailRow
               label="Pfad-Name"
-              value={
-                resolution.profileAccessPath.name ??
-                resolution.profileAccessPath.key
-              }
+              value={resolution.profileAccessPath.name}
             />
           ) : null}
+          <DetailRow
+            label="Fähigkeiten"
+            value={resolution.capabilities.join(", ") || "—"}
+          />
         </dl>
         {resolution.profileAccessPath ? (
           <AccessPathJsonBlocks accessPath={resolution.profileAccessPath} />
@@ -87,8 +86,8 @@ export function AccessPathDetails({
             <AlertCircleIcon className="size-4" aria-hidden="true" />
             <AlertTitle>Zugriffspfad nicht gefunden</AlertTitle>
             <AlertDescription>
-              Die Registry sollte diese Quelle nicht als gültig laden, wenn das
-              Profil oder der Pfad fehlt. Bitte Diagnosen prüfen.
+              Die Registry sollte diese Source nicht als ausführbar markieren,
+              wenn das Profil oder der Pfad fehlt. Bitte Diagnosen prüfen.
             </AlertDescription>
           </Alert>
         )}
@@ -100,19 +99,26 @@ export function AccessPathDetails({
     <div className="grid gap-3 rounded-lg border p-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-medium">Quellenspezifischer Zugriffspfad</p>
+          <p className="font-medium">Source-owned Access Path</p>
           <p className="text-xs text-muted-foreground">
-            Der technische Zugriffspfad ist direkt im Source-Dokument
-            eingebettet und gehört nicht zu einem wiederverwendbaren Profil.
+            Der Access Path ist direkt im Source-Dokument eingebettet und gehört
+            nicht zu einem wiederverwendbaren Source Profile.
           </p>
         </div>
-        <Badge variant="secondary">source_specific</Badge>
+        <Badge variant="secondary">source-owned</Badge>
       </div>
       <dl className="grid gap-3 sm:grid-cols-2">
+        <DetailRow label="Pfad-Key" value={selectedAccessPath.key} mono />
+        <DetailRow label="Pfad-Name" value={selectedAccessPath.name} />
+        {resolution.supportLevel ? (
+          <DetailRow
+            label="Support"
+            value={supportLevelLabels[resolution.supportLevel]}
+          />
+        ) : null}
         <DetailRow
-          label="Adapter-Key"
-          value={selectedAccessPath.adapterKey}
-          mono
+          label="Fähigkeiten"
+          value={resolution.capabilities.join(", ") || "—"}
         />
       </dl>
       <AccessPathJsonBlocks accessPath={selectedAccessPath} />
@@ -122,15 +128,14 @@ export function AccessPathDetails({
 
 type ProfileAccessPathRowProps = {
   accessPath: ProfileAccessPathDefinition;
-  adapter: AdapterMetadata | undefined;
 };
 
-export function ProfileAccessPathRow({
-  accessPath,
-  adapter,
-}: ProfileAccessPathRowProps) {
+export function ProfileAccessPathRow({ accessPath }: ProfileAccessPathRowProps) {
   const [open, setOpen] = useState(false);
-  const adapterDisplay = getAdapterDisplay(accessPath.adapterKey, adapter);
+  const capabilities = [
+    accessPath.postingDiscovery ? "postingDiscovery" : null,
+    accessPath.postingDetail ? "postingDetail" : null,
+  ].filter(Boolean);
 
   return (
     <Collapsible
@@ -140,20 +145,17 @@ export function ProfileAccessPathRow({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-medium">{accessPath.name ?? accessPath.key}</p>
+          <p className="font-medium">{accessPath.name}</p>
           <p className="break-all font-mono text-xs text-muted-foreground">
-            {accessPath.key} · {adapterDisplay.key}
+            {accessPath.key}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-1">
-          <Badge
-            variant={adapterDisplay.registered ? "secondary" : "warning-light"}
-          >
-            {adapterDisplay.registered ? "registriert" : "unregistriert"}
-          </Badge>
-          {adapter ? (
-            <Badge variant="outline">{formatAdapterCategory(adapter)}</Badge>
-          ) : null}
+          {capabilities.map((capability) => (
+            <Badge key={capability} variant="outline">
+              {capability}
+            </Badge>
+          ))}
           <CollapsibleTrigger
             render={
               <Button
@@ -176,24 +178,14 @@ export function ProfileAccessPathRow({
       <CollapsibleContent className="mt-3 grid gap-3">
         <dl className="grid gap-3 sm:grid-cols-2">
           <DetailRow label="Pfad-Key" value={accessPath.key} mono />
-          <DetailRow label="Adapter-Key" value={accessPath.adapterKey} mono />
-          {adapter ? (
-            <>
-              <DetailRow label="Adapter" value={adapter.name} />
-              <DetailRow
-                label="Ausführung"
-                value={adapterExecutionModeLabels[adapter.executionMode]}
-              />
-              <DetailRow label="Risiko" value={formatAdapterRisk(adapter)} />
-              <DetailRow
-                label="Manuelle Freigabe"
-                value={formatBoolean(adapter.supportsManualRelease)}
-              />
-            </>
-          ) : null}
+          <DetailRow label="Pfad-Name" value={accessPath.name} />
+          <DetailRow
+            label="Fähigkeiten"
+            value={capabilities.join(", ") || "—"}
+          />
         </dl>
-        {adapter?.description ? (
-          <p className="text-xs text-muted-foreground">{adapter.description}</p>
+        {accessPath.description ? (
+          <p className="text-xs text-muted-foreground">{accessPath.description}</p>
         ) : null}
         <AccessPathJsonBlocks accessPath={accessPath} />
       </CollapsibleContent>
@@ -202,43 +194,39 @@ export function ProfileAccessPathRow({
 }
 
 type AccessPathJsonBlocksProps = {
-  accessPath: ProfileAccessPathDefinition | SourceSpecificSelectedAccessPath;
+  accessPath: ProfileAccessPathDefinition | SourceOwnedSelectedAccessPath;
 };
 
 function AccessPathJsonBlocks({ accessPath }: AccessPathJsonBlocksProps) {
   return (
     <div className="grid gap-2">
-      {"availability" in accessPath ? (
-        <OptionalJsonPreview
-          title="availability"
-          description="Erforderliche Captures, Checks und vorgeschlagene Source-Konfiguration für diesen Profilpfad."
-          value={accessPath.availability}
+      {accessPath.diagnostics?.length ? (
+        <InlineDiagnostics
+          title="Diagnosen zu diesem Access Path"
+          diagnostics={accessPath.diagnostics}
         />
       ) : null}
       <OptionalJsonPreview
         title="sourceConfigSchema"
-        description="Path-spezifisches Schema für sourceConfig."
+        description="Path-spezifisches Schema für Source Config. Search Request Kriterien gehören nicht hierher."
         value={accessPath.sourceConfigSchema}
       />
+      {"knownIssues" in accessPath ? (
+        <OptionalJsonPreview
+          title="knownIssues"
+          description="Bekannte Einschränkungen dieses Access Path."
+          value={accessPath.knownIssues}
+        />
+      ) : null}
       <OptionalJsonPreview
-        title="query"
-        description="Suchparameterisierte Anfrage-Definition für diesen Zugriffspfad."
-        value={accessPath.query}
+        title="postingDiscovery"
+        description="Deklarative source-weite Posting Discovery."
+        value={accessPath.postingDiscovery}
       />
       <OptionalJsonPreview
-        title="inventory"
-        description="Deklarative Extraktion des Quellenbestands."
-        value={accessPath.inventory}
-      />
-      <OptionalJsonPreview
-        title="interactions"
-        description="Begrenzte Browser-Interaktionen vor der Extraktion."
-        value={accessPath.interactions}
-      />
-      <OptionalJsonPreview
-        title="manualRelease"
-        description="Metadaten für manuelle Freigabe, falls der Adapter sie unterstützt."
-        value={accessPath.manualRelease}
+        title="postingDetail"
+        description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
+        value={accessPath.postingDetail}
       />
     </div>
   );

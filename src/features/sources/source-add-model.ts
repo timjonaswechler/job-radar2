@@ -101,13 +101,13 @@ export function buildSourceDocument({
 
   return {
     document: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       key: form.key,
       name: form.name.trim(),
       status: form.status,
       sourceConfig: configResult.value,
       selectedAccessPath: {
-        type: "profile",
+        type: "profile_access_path",
         profileKey: selectedProfile.document.key,
         pathKey: selectedAccessPath.key,
       },
