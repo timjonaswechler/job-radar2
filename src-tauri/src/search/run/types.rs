@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::profile_dsl::diagnostics::Diagnostics;
+
 pub type PostingMeta = BTreeMap<String, String>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,6 +54,7 @@ pub enum SourceRunStatus {
     Completed,
     Failed,
     Cancelled,
+    Skipped,
 }
 
 impl SourceRunStatus {
@@ -60,6 +63,7 @@ impl SourceRunStatus {
             Self::Completed => "completed",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+            Self::Skipped => "skipped",
         }
     }
 }
@@ -84,6 +88,7 @@ pub struct SourceRunResult {
     pub status: SourceRunStatus,
     pub candidate_count: usize,
     pub matched_count: usize,
+    pub diagnostics: Diagnostics,
     pub error: Option<String>,
 }
 

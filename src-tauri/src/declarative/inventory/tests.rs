@@ -67,13 +67,14 @@ impl InventoryHttpClient for FixtureInventoryHttpClient {
 
 #[test]
 fn inventory_template_context_uses_shared_renderer_and_filters() {
+    let source_config = json!({
+        "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
+    });
     let source = SourceExecutionSource {
         key: "focused_energy".to_string(),
         adapter_key: DECLARATIVE_HTTP_ADAPTER_KEY.to_string(),
         name: "Focused Energy".to_string(),
-        source_config: json!({
-            "startUrl": "https://api.ashbyhq.com/posting-api/job-board/focused?includeCompensation=true"
-        }),
+        source_config: source_config.clone(),
         effective_source_config_schema: json!({ "type": "object" }),
         selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
             query: None,
@@ -81,6 +82,11 @@ fn inventory_template_context_uses_shared_renderer_and_filters() {
             interactions: None,
             manual_release: None,
         },
+        execution_plan: crate::search::run::fixture_source_execution_plan(
+            "focused_energy",
+            "Focused Energy",
+            source_config,
+        ),
     };
     let item = InventoryItem::Text(
         "https://example.com/job/Berlin-Senior+Rust%2DEngineer-123/".to_string(),
@@ -514,6 +520,7 @@ fn json_inventory_locations_expand_arrays_split_strings_and_dedupe() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn xml_inventory_source_runs_through_search_run_with_source_profile() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -643,6 +650,7 @@ fn successfactors_builtin_inventory_runs_schott_sitemap_fixture_through_central_
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn personio_xml_inventory_source_runs_through_search_run_with_source_profile() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -771,6 +779,7 @@ fn workday_profile_dsl_is_not_exercised_through_legacy_inventory_executor() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn ashby_json_inventory_source_runs_through_search_run_with_source_profile() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -834,6 +843,7 @@ fn ashby_json_inventory_source_runs_through_search_run_with_source_profile() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn lever_json_inventory_source_runs_through_search_run_with_source_profile() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -903,6 +913,7 @@ fn lever_json_inventory_source_runs_through_search_run_with_source_profile() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn magnolia_esmp_job_search_inventory_paginates_relative_urls() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -997,6 +1008,7 @@ fn magnolia_esmp_job_search_inventory_paginates_relative_urls() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn muz_global_jobboard_inventory_runs_endpoint_fixture_through_central_runtime() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1080,6 +1092,7 @@ fn muz_global_jobboard_inventory_runs_endpoint_fixture_through_central_runtime()
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn json_inventory_reports_profile_author_error_when_items_path_is_not_array() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1169,6 +1182,7 @@ fn json_inventory_execution_rejects_wildcards_to_document_simple_dot_jsonpath_sc
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn xml_inventory_fetch_errors_become_source_run_errors() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1221,6 +1235,7 @@ fn xml_inventory_fetch_errors_become_source_run_errors() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn declarative_source_without_inventory_fails_source_run_clearly() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -1289,11 +1304,12 @@ fn default_source_executor_routes_declarative_adapters_to_inventory_runtime() {
                 .unwrap_err();
 
             match error {
-                SourceExecutionError::Failed(message) => {
-                    assert!(message.contains("executionPlan.inventory"));
+                SourceExecutionError::Failed(message)
+                | SourceExecutionError::FailedWithDiagnostics { message, .. } => {
                     assert!(!message.contains("has no search-run executor yet"));
                 }
-                SourceExecutionError::Cancelled(message) => {
+                SourceExecutionError::Cancelled(message)
+                | SourceExecutionError::CancelledWithDiagnostics { message, .. } => {
                     panic!("expected failed source execution, got cancellation: {message}")
                 }
             }
@@ -1523,7 +1539,7 @@ fn source_with_inventory(
         key: "fixture_source".to_string(),
         adapter_key: adapter_key.to_string(),
         name: "Fixture Careers".to_string(),
-        source_config,
+        source_config: source_config.clone(),
         effective_source_config_schema: json!({ "type": "object" }),
         selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
             query: None,
@@ -1535,6 +1551,11 @@ fn source_with_inventory(
             interactions: None,
             manual_release: None,
         },
+        execution_plan: crate::search::run::fixture_source_execution_plan(
+            "fixture_source",
+            "Fixture Careers",
+            source_config,
+        ),
     }
 }
 

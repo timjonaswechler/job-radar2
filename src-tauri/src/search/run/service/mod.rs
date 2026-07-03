@@ -15,7 +15,7 @@ use rules::{compile_rules, matches_any_rule};
 use selection::{resolve_selected_sources, SelectedSearchRunSource};
 use source_runs::{
     overall_status, posting_source, source_run_completed, source_run_failed,
-    source_run_failed_for_key,
+    source_run_failed_for_key, source_run_failed_for_source, source_run_skipped_for_source,
 };
 use validation::validate_executable_search_request;
 

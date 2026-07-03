@@ -4,9 +4,12 @@ mod service;
 mod tests;
 mod types;
 
+#[cfg(test)]
+pub(crate) use execution::fixture_source_execution_plan;
+#[allow(unused_imports)]
 pub use execution::{
-    BoxedSourceExecutionFuture, DefaultSourceExecutor, SourceExecutionInput, SourceExecutionSource,
-    SourceExecutor,
+    BoxedSourceExecutionFuture, DefaultSourceExecutor, SourceExecutionInput, SourceExecutionOutput,
+    SourceExecutionSource, SourceExecutor,
 };
 #[allow(unused_imports)]
 pub use service::{

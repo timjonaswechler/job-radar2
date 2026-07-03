@@ -60,7 +60,7 @@ where
     B: BrowserInventoryClient + Send + Sync,
 {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move { self.execute_source(input).await })
+        Box::pin(async move { self.execute_source(input).await.map(Into::into) })
     }
 }
 

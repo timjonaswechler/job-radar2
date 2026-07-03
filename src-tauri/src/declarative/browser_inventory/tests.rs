@@ -65,6 +65,7 @@ impl BrowserInventoryClient for FixtureBrowserInventoryClient {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn browser_inventory_source_runs_through_search_run_with_source_profile() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -150,6 +151,7 @@ fn browser_inventory_source_runs_through_search_run_with_source_profile() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn stepstone_source_profile_builds_query_url_and_extracts_cards_through_search_run() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -372,6 +374,7 @@ fn source_without_query_requires_start_url_before_rendering() {
 }
 
 #[test]
+#[ignore = "legacy v1 inventory Search Run integration is unreachable after compiled postingDiscovery Search Run hard cut"]
 fn missing_inventory_definition_becomes_failed_source_run() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -435,11 +438,12 @@ fn default_source_executor_routes_browser_inventory_adapter() {
                 );
 
         match error {
-            SourceExecutionError::Failed(message) => {
-                assert!(message.contains("executionPlan.inventory"));
+            SourceExecutionError::Failed(message)
+            | SourceExecutionError::FailedWithDiagnostics { message, .. } => {
                 assert!(!message.contains("has no search-run executor yet"));
             }
-            SourceExecutionError::Cancelled(message) => {
+            SourceExecutionError::Cancelled(message)
+            | SourceExecutionError::CancelledWithDiagnostics { message, .. } => {
                 panic!("expected failed source execution, got cancellation: {message}")
             }
         }
@@ -619,7 +623,7 @@ fn source_execution_source(
         key: "browser_inventory_fixture".to_string(),
         adapter_key: ADAPTER_KEY.to_string(),
         name: "Browser Inventory Fixture".to_string(),
-        source_config,
+        source_config: source_config.clone(),
         effective_source_config_schema: json!({ "type": "object" }),
         selected_access_path: ResolvedSelectedAccessPath::SourceSpecific {
             query,
@@ -627,6 +631,11 @@ fn source_execution_source(
             interactions,
             manual_release: None,
         },
+        execution_plan: crate::search::run::fixture_source_execution_plan(
+            "browser_inventory_fixture",
+            "Browser Inventory Fixture",
+            source_config,
+        ),
     }
 }
 

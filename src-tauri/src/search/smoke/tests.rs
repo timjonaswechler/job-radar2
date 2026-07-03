@@ -53,6 +53,7 @@ impl SourceExecutor for FixtureSourceExecutor {
                         input.source.key
                     )))
                 })
+                .map(Into::into)
         })
     }
 }

@@ -12,7 +12,8 @@ use super::super::{SearchRunResult, SearchRunStatus, SourceExecutionInput, Sourc
 use super::{
     compile_rules, db_error, generated_at_timestamp, matches_any_rule, merge_postings,
     overall_status, posting_source, resolve_selected_sources, source_run_completed,
-    source_run_failed, source_run_failed_for_key, update_search_request_last_run,
+    source_run_failed, source_run_failed_for_key, source_run_failed_for_source,
+    source_run_skipped_for_source, update_search_request_last_run,
     validate_executable_search_request, write_search_run_result, SearchRunResultArtifact,
     SelectedSearchRunSource, Treffer,
 };
@@ -68,7 +69,7 @@ impl<'a> SearchRunService<'a> {
         let include_rules = compile_rules(&search_request.include_rules, "includeRules", false)?;
         let exclude_rules = compile_rules(&search_request.exclude_rules, "excludeRules", true)?;
         let registry_snapshot =
-            crate::source::registry::load_snapshot(&self.source_registry_app_data_dir);
+            crate::source_profile::registry::load_snapshot(&self.source_registry_app_data_dir);
         let selected_sources =
             resolve_selected_sources(&registry_snapshot, &search_request.source_keys);
 
@@ -82,6 +83,32 @@ impl<'a> SearchRunService<'a> {
                     source_runs.push(source_run_failed_for_key(source_key, error.clone()));
                     continue;
                 }
+                SelectedSearchRunSource::Failed {
+                    source_key,
+                    source_name,
+                    error,
+                } => {
+                    source_runs.push(source_run_failed_for_source(
+                        source_key,
+                        source_name,
+                        error.clone(),
+                    ));
+                    continue;
+                }
+                SelectedSearchRunSource::Skipped {
+                    source_key,
+                    source_name,
+                    diagnostics,
+                    summary,
+                } => {
+                    source_runs.push(source_run_skipped_for_source(
+                        source_key,
+                        source_name,
+                        diagnostics.clone(),
+                        summary.clone(),
+                    ));
+                    continue;
+                }
             };
             let input = SourceExecutionInput {
                 search_request: &search_request,
@@ -89,15 +116,19 @@ impl<'a> SearchRunService<'a> {
             };
 
             match self.source_executor.execute(input).await {
-                Ok(source_candidates) => {
-                    let candidate_count = source_candidates.len();
-                    candidates.extend(source_candidates.into_iter().filter_map(|candidate| {
+                Ok(output) => {
+                    let candidate_count = output.candidates.len();
+                    candidates.extend(output.candidates.into_iter().filter_map(|candidate| {
                         normalize_source_candidate(candidate).map(|candidate| Treffer {
                             candidate,
                             source: posting_source(source, None),
                         })
                     }));
-                    source_runs.push(source_run_completed(source, candidate_count));
+                    source_runs.push(source_run_completed(
+                        source,
+                        candidate_count,
+                        output.diagnostics,
+                    ));
                 }
                 Err(error) => source_runs.push(source_run_failed(source, error)),
             }
