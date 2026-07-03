@@ -1,12 +1,15 @@
 use super::*;
 use crate::{
-    declarative::posting_detail::{BoxedPostingDetailTextFuture, PostingDetailHttpClient},
+    profile_dsl::runtime::{
+        PostingDetailFetchError, PostingDetailFetchRequest, PostingDetailFetchResponse,
+        PostingDetailFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
+        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+    },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
     },
-    source::registry::{load_snapshot_with_builtins, SourceRegistrySnapshot},
+    source_profile::registry::SourceProfileRegistrySnapshot,
 };
-use reqwest::Url;
 use serde_json::{from_str, json, Value};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
@@ -14,6 +17,8 @@ use sqlx::{
 };
 use std::{
     collections::BTreeMap,
+    future::Future,
+    pin::Pin,
     sync::{Arc, Mutex},
 };
 
@@ -25,6 +30,12 @@ mod state_updates;
 #[derive(Clone)]
 struct FixturePostingDetailHttpClient {
     responses: Arc<Mutex<BTreeMap<String, Result<String, String>>>>,
+    requested_urls: Arc<Mutex<Vec<String>>>,
+}
+
+#[derive(Clone, Default)]
+struct FixtureProfileBrowserClient {
+    responses: Arc<Mutex<BTreeMap<String, Result<String, ProfileBrowserFetchError>>>>,
     requested_urls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -41,9 +52,62 @@ impl FixturePostingDetailHttpClient {
     }
 }
 
-impl PostingDetailHttpClient for FixturePostingDetailHttpClient {
-    fn get_text(&self, url: Url) -> BoxedPostingDetailTextFuture<'_> {
-        let url = url.to_string();
+impl FixtureProfileBrowserClient {
+    fn new(
+        responses: impl IntoIterator<Item = (String, Result<String, ProfileBrowserFetchError>)>,
+    ) -> Self {
+        Self {
+            responses: Arc::new(Mutex::new(responses.into_iter().collect())),
+            requested_urls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn requested_urls(&self) -> Vec<String> {
+        self.requested_urls.lock().unwrap().clone()
+    }
+}
+
+impl ProfileBrowserClient for FixtureProfileBrowserClient {
+    fn render<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        let url = request.url;
+        self.requested_urls.lock().unwrap().push(url.clone());
+        let result = self
+            .responses
+            .lock()
+            .unwrap()
+            .get(&url)
+            .cloned()
+            .unwrap_or_else(|| {
+                Err(ProfileBrowserFetchError::new(
+                    crate::profile_dsl::runtime::ProfileBrowserFetchErrorKind::NavigationFailed,
+                    format!("unexpected browser detail URL: {url}"),
+                ))
+            });
+        Box::pin(async move { result.map(|body| ProfileBrowserFetchResponse { body }) })
+    }
+}
+
+impl PostingDetailFetcher for FixturePostingDetailHttpClient {
+    fn fetch<'a>(
+        &'a self,
+        request: PostingDetailFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        let url = request.url;
         self.requested_urls.lock().unwrap().push(url.clone());
         let result = self
             .responses
@@ -52,14 +116,18 @@ impl PostingDetailHttpClient for FixturePostingDetailHttpClient {
             .get(&url)
             .cloned()
             .unwrap_or_else(|| Err(format!("unexpected detail URL: {url}")));
-        Box::pin(async move { result })
+        Box::pin(async move {
+            result
+                .map(|body| PostingDetailFetchResponse { body })
+                .map_err(PostingDetailFetchError::new)
+        })
     }
 }
 
 fn test_snapshot(
     profile_documents: Vec<String>,
     source_documents: Vec<String>,
-) -> SourceRegistrySnapshot {
+) -> SourceProfileRegistrySnapshot {
     let snapshot = test_snapshot_with_diagnostics(profile_documents, source_documents);
     assert_eq!(snapshot.diagnostics, Vec::new());
     snapshot
@@ -68,36 +136,29 @@ fn test_snapshot(
 fn test_snapshot_with_diagnostics(
     profile_documents: Vec<String>,
     source_documents: Vec<String>,
-) -> SourceRegistrySnapshot {
+) -> SourceProfileRegistrySnapshot {
     let temp_dir = tempfile::tempdir().unwrap();
-    let profile_paths_and_json = profile_documents
-        .iter()
-        .map(|document| {
-            (
-                format!("source-profiles/builtin/{}.json", document_key(document)),
-                document,
-            )
-        })
-        .collect::<Vec<_>>();
-    let source_paths_and_json = source_documents
-        .iter()
-        .map(|document| {
-            (
-                format!("sources/builtin/{}.json", document_key(document)),
-                document,
-            )
-        })
-        .collect::<Vec<_>>();
-    let profile_refs = profile_paths_and_json
-        .iter()
-        .map(|(path, document)| (path.as_str(), document.as_str()))
-        .collect::<Vec<_>>();
-    let source_refs = source_paths_and_json
-        .iter()
-        .map(|(path, document)| (path.as_str(), document.as_str()))
-        .collect::<Vec<_>>();
+    let profile_dir = temp_dir.path().join("source-profiles");
+    let source_dir = temp_dir.path().join("sources");
+    std::fs::create_dir_all(&profile_dir).unwrap();
+    std::fs::create_dir_all(&source_dir).unwrap();
 
-    load_snapshot_with_builtins(temp_dir.path(), &profile_refs, &source_refs)
+    for document in &profile_documents {
+        std::fs::write(
+            profile_dir.join(format!("{}.json", document_key(document))),
+            document,
+        )
+        .unwrap();
+    }
+    for document in &source_documents {
+        std::fs::write(
+            source_dir.join(format!("{}.json", document_key(document))),
+            document,
+        )
+        .unwrap();
+    }
+
+    crate::source_profile::registry::load_snapshot(temp_dir.path())
 }
 
 fn document_key(document: &str) -> String {
@@ -126,24 +187,96 @@ fn profile_without_detail_json(profile_key: &str, path_key: &str) -> String {
 }
 
 fn profile_json(profile_key: &str, path_key: &str, posting_detail: Option<Value>) -> String {
+    profile_json_with_detail_step(
+        profile_key,
+        path_key,
+        posting_detail.map(posting_json_detail_step),
+    )
+}
+
+fn profile_json_with_detail_step(
+    profile_key: &str,
+    path_key: &str,
+    posting_detail: Option<Value>,
+) -> String {
     let mut access_path = json!({
         "key": path_key,
-        "adapterKey": "declarative_endpoint_inventory",
-        "sourceConfigSchema": { "type": "object" },
-        "inventory": {}
+        "name": path_key,
+        "sourceConfigSchema": {
+            "type": "object",
+            "properties": {
+                "token": { "type": "string" }
+            },
+            "additionalProperties": false
+        },
+        "postingDiscovery": {
+            "strategies": [{
+                "key": "fixture_discovery",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/jobs.json",
+                    "timeoutMs": 1000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "json_path", "jsonPath": "$.jobs" },
+                "extract": {
+                    "fields": {
+                        "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
+                        "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
+                        "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" },
+                        "postingMeta": {
+                            "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "optional" }
+                        }
+                    }
+                }
+            }]
+        }
     });
     if let Some(posting_detail) = posting_detail {
         access_path["postingDetail"] = posting_detail;
     }
 
     json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "key": profile_key,
         "name": profile_key,
         "kind": "generic",
+        "support": {
+            "level": "experimental",
+            "summary": "JobPostingService detail-loading fixture."
+        },
         "accessPaths": [access_path]
     })
     .to_string()
+}
+
+fn posting_json_detail_step(legacy_detail: Value) -> Value {
+    let fetch_url = legacy_detail["fetch"]["url"]
+        .as_str()
+        .expect("detail fixture has fetch.url");
+    json!({
+        "strategies": [{
+            "key": "fixture_detail",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": fetch_url,
+                "timeoutMs": 1000
+            },
+            "parse": { "type": "html" },
+            "select": { "type": "document" },
+            "extract": {
+                "fields": {
+                    "descriptionText": {
+                        "type": "css_text",
+                        "selector": ".description",
+                        "cardinality": "first"
+                    }
+                }
+            }
+        }]
+    })
 }
 
 fn profile_source_json(
@@ -153,13 +286,13 @@ fn profile_source_json(
     source_config: Value,
 ) -> String {
     json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "key": source_key,
         "name": source_key,
         "status": "active",
         "sourceConfig": source_config,
         "selectedAccessPath": {
-            "type": "profile",
+            "type": "profile_access_path",
             "profileKey": profile_key,
             "pathKey": path_key
         }

@@ -2,10 +2,15 @@ use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use std::path::Path;
 
 use crate::{
-    declarative::posting_detail::{
-        PostingDetailExtractor, PostingDetailHttpClient, PostingDetailSource,
+    profile_dsl::{
+        compiler::{compile_source_execution_plan, ProfileCompilerSnapshot},
+        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
+        runtime::{
+            execute_posting_detail_with_clients, ManagedProfileBrowserClient, PostingDetailFetcher,
+            PostingDetailPostingOccurrence, ProfileBrowserClient, ReqwestPostingDetailFetcher,
+        },
     },
-    source::registry::SourceRegistrySnapshot,
+    source_profile::registry::SourceProfileRegistrySnapshot,
 };
 
 use super::{
@@ -122,21 +127,25 @@ impl<'a> JobPostingService<'a> {
         &self,
         id: i64,
         app_data_dir: impl AsRef<Path>,
+        browser_runtime_dir: impl Into<std::path::PathBuf>,
     ) -> Result<JobPostingDetail, String> {
-        let snapshot = crate::source::registry::load_snapshot(app_data_dir);
-        let extractor = PostingDetailExtractor::new_reqwest();
-        self.get_posting_detail_with_extractor(id, &snapshot, &extractor)
+        let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
+        let fetcher = ReqwestPostingDetailFetcher::new();
+        let browser = ManagedProfileBrowserClient::new(browser_runtime_dir);
+        self.get_posting_detail_with_clients(id, &snapshot, &fetcher, &browser)
             .await
     }
 
-    pub(crate) async fn get_posting_detail_with_extractor<C>(
+    pub(crate) async fn get_posting_detail_with_clients<F, B>(
         &self,
         id: i64,
-        snapshot: &SourceRegistrySnapshot,
-        extractor: &PostingDetailExtractor<C>,
+        snapshot: &SourceProfileRegistrySnapshot,
+        fetcher: &F,
+        browser: &B,
     ) -> Result<JobPostingDetail, String>
     where
-        C: PostingDetailHttpClient + Send + Sync,
+        F: PostingDetailFetcher + Sync + ?Sized,
+        B: ProfileBrowserClient + Sync + ?Sized,
     {
         let mut posting = self.get(id).await?;
         if posting.read_state != ReadState::Read {
@@ -156,76 +165,146 @@ impl<'a> JobPostingService<'a> {
         if let Some(text) = posting.description_text.clone() {
             return Ok(JobPostingDetail {
                 posting,
-                description_state: PostingDescriptionState::Loaded { text },
-            });
-        }
-
-        let candidates = detail_capable_sources(&posting, snapshot);
-        if candidates.is_empty() {
-            return Ok(JobPostingDetail {
-                posting,
-                description_state: PostingDescriptionState::Unsupported {
-                    message: format!(
-                        "job posting {id} has no stored source with postingDetail extraction"
-                    ),
+                description_state: PostingDescriptionState::Loaded {
+                    text,
+                    diagnostics: Vec::new(),
                 },
             });
         }
 
-        let mut failures = Vec::new();
-        for (posting_source, execution_plan) in candidates {
-            let posting_meta = if posting_source.posting_meta.is_empty() {
-                None
-            } else {
-                Some(&posting_source.posting_meta)
+        let compiler_snapshot = compiler_snapshot(snapshot);
+        let mut diagnostics = Vec::new();
+        let mut attempted_detail_capable_source = false;
+
+        for posting_source in ordered_posting_sources(&posting) {
+            let Some(source) = snapshot.source(&posting_source.source_key) else {
+                diagnostics.push(detail_source_diagnostic(
+                    &posting_source,
+                    "source_not_found",
+                    format!(
+                        "Persisted posting source `{}` was not found in the Source Profile registry snapshot",
+                        posting_source.source_key
+                    ),
+                    "",
+                    serde_json::json!({ "sourceKey": posting_source.source_key }),
+                ));
+                continue;
             };
-            match extractor
-                .load_source_description_text(
-                    &execution_plan,
-                    PostingDetailSource {
-                        source_key: &posting_source.source_key,
-                        url: &posting_source.url,
-                        posting_meta,
-                    },
-                )
-                .await
-            {
-                Ok(detail) => {
-                    sqlx::query(
-                        "UPDATE job_postings
-                         SET description_text = ?1,
-                             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                         WHERE id = ?2",
-                    )
-                    .bind(&detail.description_text)
-                    .bind(id)
-                    .execute(self.pool)
-                    .await
-                    .map_err(db_error)?;
-                    let posting = self.get(id).await?;
-                    return Ok(JobPostingDetail {
-                        posting,
-                        description_state: PostingDescriptionState::Loaded {
-                            text: detail.description_text,
-                        },
-                    });
-                }
-                Err(error) => failures.push(format!(
-                    "{} ({}) failed: {}",
-                    posting_source.source_key, posting_source.url, error
-                )),
+
+            if !source.validation_state.can_compile {
+                diagnostics.extend(with_posting_source_context(
+                    source.validation_state.diagnostics.clone(),
+                    &posting_source,
+                ));
+                continue;
             }
+
+            let compile_result =
+                compile_source_execution_plan(&compiler_snapshot, &source.document.key);
+            if compile_result.execution_plan.is_none()
+                || has_error_diagnostics(&compile_result.diagnostics)
+            {
+                diagnostics.extend(with_posting_source_context(
+                    compile_result.diagnostics,
+                    &posting_source,
+                ));
+                continue;
+            }
+
+            diagnostics.extend(with_posting_source_context(
+                compile_result.diagnostics,
+                &posting_source,
+            ));
+            let execution_plan = compile_result
+                .execution_plan
+                .expect("compile result has an execution plan");
+            if execution_plan.posting_detail.is_none() {
+                diagnostics.push(detail_source_diagnostic(
+                    &posting_source,
+                    "posting_detail_missing",
+                    format!(
+                        "Source `{}` compiled successfully but does not provide postingDetail",
+                        source.document.key
+                    ),
+                    "/postingDetail",
+                    serde_json::json!({ "sourceKey": source.document.key }),
+                ));
+                continue;
+            }
+
+            attempted_detail_capable_source = true;
+            let result = execute_posting_detail_with_clients(
+                &execution_plan,
+                &posting_occurrence(&posting, &posting_source),
+                fetcher,
+                browser,
+            )
+            .await;
+            let result_diagnostics =
+                with_posting_source_context(result.diagnostics, &posting_source);
+
+            if let Some(description_text) = result.description_text {
+                diagnostics.extend(result_diagnostics);
+                sqlx::query(
+                    "UPDATE job_postings
+                     SET description_text = ?1,
+                         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                     WHERE id = ?2",
+                )
+                .bind(&description_text)
+                .bind(id)
+                .execute(self.pool)
+                .await
+                .map_err(db_error)?;
+                let posting = self.get(id).await?;
+                return Ok(JobPostingDetail {
+                    posting,
+                    description_state: PostingDescriptionState::Loaded {
+                        text: description_text,
+                        diagnostics,
+                    },
+                });
+            }
+
+            diagnostics.extend(result_diagnostics);
         }
 
-        Ok(JobPostingDetail {
-            posting,
-            description_state: PostingDescriptionState::Failed {
-                message: format!(
-                    "description loading failed for all detail-capable sources: {}",
-                    failures.join("; ")
-                ),
-            },
-        })
+        if attempted_detail_capable_source {
+            Ok(JobPostingDetail {
+                posting,
+                description_state: PostingDescriptionState::Failed {
+                    message: diagnostic_summary(
+                        &diagnostics,
+                        "description loading failed for all detail-capable persisted posting sources",
+                    ),
+                    diagnostics,
+                },
+            })
+        } else {
+            if diagnostics.is_empty() {
+                diagnostics.push(Diagnostic {
+                    category: DiagnosticCategory::SourceValidation,
+                    code: "posting_detail_source_missing".to_string(),
+                    message: format!(
+                        "Job Posting {id} has no persisted posting source that can provide compiled postingDetail"
+                    ),
+                    severity: DiagnosticSeverity::Error,
+                    path: "".to_string(),
+                    strategy_key: None,
+                    details: Some(serde_json::json!({ "postingId": id })),
+                });
+            }
+            Ok(JobPostingDetail {
+                posting,
+                description_state: PostingDescriptionState::Unsupported {
+                    message: diagnostic_summary(
+                        &diagnostics,
+                        "job posting has no persisted posting source that can provide compiled postingDetail",
+                    ),
+                    diagnostics,
+                },
+            })
+        }
     }
 
     pub async fn update_state(
@@ -356,16 +435,10 @@ fn queue_condition(queue_id: JobPostingQueueId) -> Option<&'static str> {
     }
 }
 
-fn detail_capable_sources(
-    posting: &JobPosting,
-    snapshot: &SourceRegistrySnapshot,
-) -> Vec<(
-    JobPostingSource,
-    crate::source::registry::ResolvedSourceExecutionPlan,
-)> {
-    let mut candidates = Vec::new();
+fn ordered_posting_sources(posting: &JobPosting) -> Vec<JobPostingSource> {
+    let mut sources = Vec::new();
     if let Some(primary_source) = &posting.primary_source {
-        push_detail_capable_source(&mut candidates, primary_source, snapshot);
+        sources.push(primary_source.clone());
     }
 
     for source in &posting.sources {
@@ -376,25 +449,115 @@ fn detail_capable_sources(
         {
             continue;
         }
-        push_detail_capable_source(&mut candidates, source, snapshot);
+        sources.push(source.clone());
     }
 
-    candidates
+    sources
 }
 
-fn push_detail_capable_source(
-    candidates: &mut Vec<(
-        JobPostingSource,
-        crate::source::registry::ResolvedSourceExecutionPlan,
-    )>,
-    source: &JobPostingSource,
-    snapshot: &SourceRegistrySnapshot,
-) {
-    if let Ok(execution_plan) = snapshot.resolve_source(&source.source_key) {
-        if execution_plan.posting_detail().is_some() {
-            candidates.push((source.clone(), execution_plan));
+fn compiler_snapshot(snapshot: &SourceProfileRegistrySnapshot) -> ProfileCompilerSnapshot {
+    ProfileCompilerSnapshot {
+        profiles: snapshot
+            .profiles
+            .iter()
+            .map(|profile| profile.document.clone())
+            .collect(),
+        sources: snapshot
+            .sources
+            .iter()
+            .map(|source| source.document.clone())
+            .collect(),
+    }
+}
+
+fn posting_occurrence(
+    posting: &JobPosting,
+    posting_source: &JobPostingSource,
+) -> PostingDetailPostingOccurrence {
+    PostingDetailPostingOccurrence {
+        url: posting_source.url.clone(),
+        title: Some(posting.title.clone()),
+        company: Some(posting.company.clone()),
+        locations: posting.locations.clone(),
+        description_text: posting.description_text.clone(),
+        posting_meta: posting_source.posting_meta.clone(),
+    }
+}
+
+fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+}
+
+fn with_posting_source_context(
+    diagnostics: Diagnostics,
+    posting_source: &JobPostingSource,
+) -> Diagnostics {
+    diagnostics
+        .into_iter()
+        .map(|diagnostic| with_posting_source_context_one(diagnostic, posting_source))
+        .collect()
+}
+
+fn with_posting_source_context_one(
+    mut diagnostic: Diagnostic,
+    posting_source: &JobPostingSource,
+) -> Diagnostic {
+    let original_details = diagnostic.details.take();
+    let mut details = original_details
+        .as_ref()
+        .and_then(|details| details.as_object().cloned())
+        .unwrap_or_default();
+    if details.is_empty() {
+        if let Some(original_details) = original_details.filter(|details| !details.is_object()) {
+            details.insert("originalDetails".to_string(), original_details);
         }
     }
+    details.insert(
+        "postingSourceId".to_string(),
+        serde_json::json!(posting_source.id),
+    );
+    details.insert(
+        "postingSourceKey".to_string(),
+        serde_json::json!(posting_source.source_key),
+    );
+    details.insert(
+        "postingUrl".to_string(),
+        serde_json::json!(posting_source.url),
+    );
+    diagnostic.details = Some(serde_json::Value::Object(details));
+    diagnostic
+}
+
+fn detail_source_diagnostic(
+    posting_source: &JobPostingSource,
+    code: impl Into<String>,
+    message: impl Into<String>,
+    path: impl Into<String>,
+    details: serde_json::Value,
+) -> Diagnostic {
+    with_posting_source_context_one(
+        Diagnostic {
+            category: DiagnosticCategory::SourceValidation,
+            code: code.into(),
+            message: message.into(),
+            severity: DiagnosticSeverity::Error,
+            path: path.into(),
+            strategy_key: None,
+            details: Some(details),
+        },
+        posting_source,
+    )
+}
+
+fn diagnostic_summary(diagnostics: &Diagnostics, fallback: &str) -> String {
+    diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .or_else(|| diagnostics.first())
+        .map(|diagnostic| diagnostic.message.clone())
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 fn source_from_row(row: SqliteRow) -> Result<JobPostingSource, String> {

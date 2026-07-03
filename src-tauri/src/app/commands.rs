@@ -445,7 +445,11 @@ pub async fn get_posting_detail(
     posting_id: i64,
 ) -> Result<crate::search::posting::JobPostingDetail, String> {
     crate::search::posting::JobPostingService::new(&state.db)
-        .get_posting_detail(posting_id, &state.paths.app_data_dir)
+        .get_posting_detail(
+            posting_id,
+            &state.paths.app_data_dir,
+            state.paths.browser_runtime_dir.clone(),
+        )
         .await
 }
 

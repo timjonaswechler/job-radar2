@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::profile_dsl::diagnostics::Diagnostics;
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobPosting {
@@ -42,12 +44,21 @@ pub struct JobPostingDetail {
     pub description_state: PostingDescriptionState,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum PostingDescriptionState {
-    Loaded { text: String },
-    Unsupported { message: String },
-    Failed { message: String },
+    Loaded {
+        text: String,
+        diagnostics: Diagnostics,
+    },
+    Unsupported {
+        message: String,
+        diagnostics: Diagnostics,
+    },
+    Failed {
+        message: String,
+        diagnostics: Diagnostics,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

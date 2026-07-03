@@ -38,7 +38,7 @@ mod fetch;
 mod support;
 mod values;
 
-use document::{parse_response_document, select_detail_document};
+use document::{parse_response_document, select_detail_document, RuntimeItem};
 use extract::{evaluate_strategy_captures, evaluate_string_field};
 use fetch::fetch_strategy_document;
 
@@ -346,6 +346,19 @@ where
         Some(document) => document,
         None => return rejected_detail_attempt(diagnostics),
     };
+    let selected_document = match match_detail_document(
+        selected_document,
+        plan,
+        posting,
+        &captures,
+        strategy,
+        &base_path,
+        strategy_key.as_deref(),
+        &mut diagnostics,
+    ) {
+        Some(document) => document,
+        None => return rejected_detail_attempt(diagnostics),
+    };
 
     let description_path = format!("{base_path}/extract/fields/descriptionText");
     let description = evaluate_string_field(
@@ -388,6 +401,119 @@ where
             diagnostics,
         },
         accepted,
+    }
+}
+
+fn match_detail_document<'doc, 'body>(
+    selected_document: RuntimeItem<'doc, 'body>,
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    strategy: &ExecutionPlanPostingDetailStrategy,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<RuntimeItem<'doc, 'body>> {
+    let Some(field_match) = &strategy.field_match else {
+        return Some(selected_document);
+    };
+
+    if let Some(key) = missing_posting_meta_key(&field_match.right, posting) {
+        diagnostics.push(runtime_error(
+            "posting_meta_missing",
+            format!("postingDetail match requires missing postingMeta `{key}`"),
+            format!("{base_path}/match/right"),
+            strategy_key,
+            json!({ "postingMetaKey": key }),
+        ));
+        return None;
+    }
+
+    let RuntimeItem::Json(Value::Array(items)) = selected_document else {
+        diagnostics.push(runtime_error(
+            "detail_match_unsupported_selection",
+            "postingDetail match currently requires a JSON array selected by the strategy",
+            format!("{base_path}/match"),
+            strategy_key,
+            json!({}),
+        ));
+        return None;
+    };
+
+    let mut matches = Vec::new();
+    let left_path = format!("{base_path}/match/left");
+    let right_path = format!("{base_path}/match/right");
+    for item in items {
+        let item_document = RuntimeItem::Json(item);
+        let left = evaluate_string_field(
+            &item_document,
+            &plan.source_config,
+            &plan.source.name,
+            posting,
+            captures,
+            &field_match.left,
+            &left_path,
+            strategy_key,
+            diagnostics,
+        );
+        let right = evaluate_string_field(
+            &item_document,
+            &plan.source_config,
+            &plan.source.name,
+            posting,
+            captures,
+            &field_match.right,
+            &right_path,
+            strategy_key,
+            diagnostics,
+        );
+        if left.failed || right.failed {
+            return None;
+        }
+        if left.value.is_some() && left.value == right.value {
+            matches.push(item);
+        }
+    }
+
+    match matches.len() {
+        0 => {
+            diagnostics.push(runtime_error(
+                "detail_match_missing",
+                "postingDetail match found no detail item for the selected posting",
+                format!("{base_path}/match"),
+                strategy_key,
+                json!({}),
+            ));
+            None
+        }
+        1 => Some(RuntimeItem::Json(matches.remove(0))),
+        count => {
+            diagnostics.push(runtime_error(
+                "detail_match_multiple",
+                format!(
+                    "postingDetail match found {count} detail items for the selected posting; expected exactly one"
+                ),
+                format!("{base_path}/match"),
+                strategy_key,
+                json!({ "actualCount": count }),
+            ));
+            None
+        }
+    }
+}
+
+fn missing_posting_meta_key<'a>(
+    expression: &'a FieldExpression,
+    posting: &PostingDetailPostingOccurrence,
+) -> Option<&'a str> {
+    match expression {
+        FieldExpression::PostingMeta { key, .. } if !posting.posting_meta.contains_key(key) => {
+            Some(key.as_str())
+        }
+        FieldExpression::Combine { parts, .. } => parts
+            .iter()
+            .find_map(|part| missing_posting_meta_key(&part.value, posting)),
+        _ => None,
     }
 }
 

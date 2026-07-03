@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 
-import type { SourceKey } from "@/lib/api/sources"
+import type { SourceKey, StructuredDiagnostic } from "@/lib/api/sources"
 
 export type JobPostingQueueId =
   | "inbox"
@@ -58,9 +58,9 @@ export type JobPosting = {
 }
 
 export type PostingDescriptionState =
-  | { status: "loaded"; text: string }
-  | { status: "unsupported"; message: string }
-  | { status: "failed"; message: string }
+  | { status: "loaded"; text: string; diagnostics: StructuredDiagnostic[] }
+  | { status: "unsupported"; message: string; diagnostics: StructuredDiagnostic[] }
+  | { status: "failed"; message: string; diagnostics: StructuredDiagnostic[] }
 
 export type JobPostingDetail = JobPosting & {
   descriptionState: PostingDescriptionState
