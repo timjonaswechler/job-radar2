@@ -4,13 +4,14 @@ use std::sync::Arc;
 use std::{fs, io, path::Path};
 use tokio::sync::Mutex;
 
-use crate::app::paths::AppPaths;
+use crate::app::{paths::AppPaths, resources::AppResources};
 
 pub const RESET_DEV_DB_ENV: &str = "JOB_RADAR_RESET_DEV_DB";
 
 pub struct AppState {
     pub db: SqlitePool,
     pub paths: AppPaths,
+    pub resources: AppResources,
     pub browser_runtime_install_lock: Mutex<()>,
     pub running_search_runs: Arc<crate::search::request::RunningSearchRuns>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
@@ -29,12 +30,26 @@ impl AppState {
         paths: AppPaths,
         notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_resources_and_background_task_notifier(
+            paths,
+            AppResources::default(),
+            notifier,
+        )
+        .await
+    }
+
+    pub async fn new_with_resources_and_background_task_notifier(
+        paths: AppPaths,
+        resources: AppResources,
+        notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         maybe_reset_dev_database(&paths)?;
         let db = crate::db::connect_and_migrate(&paths.database_path).await?;
 
         Ok(Self {
             db,
             paths,
+            resources,
             browser_runtime_install_lock: Mutex::new(()),
             running_search_runs: Arc::new(crate::search::request::RunningSearchRuns::default()),
             background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(

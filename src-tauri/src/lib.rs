@@ -79,16 +79,21 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let paths = app::paths::AppPaths::from_app(app.handle())?;
+            let resources = app::resources::AppResources::from_app(app.handle())?;
             let notifier = std::sync::Arc::new(TauriBackgroundTaskNotifier {
                 app: app.handle().clone(),
             });
             let app_state = tauri::async_runtime::block_on(
-                app::state::AppState::new_with_background_task_notifier(paths, notifier),
+                app::state::AppState::new_with_resources_and_background_task_notifier(
+                    paths, resources, notifier,
+                ),
             )?;
             let database_path = app_state.paths.database_path.clone();
+            let geo_seed_path = app_state.resources.geo_seed_path.clone();
 
             app.manage(app_state);
             println!("SQLite database: {}", database_path.display());
+            println!("Geo seed database: {}", geo_seed_path.display());
 
             Ok(())
         })
