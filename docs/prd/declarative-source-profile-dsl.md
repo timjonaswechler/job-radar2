@@ -2,9 +2,9 @@
 
 ## Problem Statement
 
-Job Radar needs to describe ATS and career-site integrations entirely as JSON so built-in profiles can be changed quickly and, later, a user with an agent can create the Source Profiles and Sources they need. The current v1 Source Profile model has grown by adding portal-specific schema branches and executor special cases. Each new real-world ATS variant exposes another missing feature, which makes the JSON Schema larger, harder to understand, and harder for agents or users to author safely.
+Job Radar needs to describe ATS and career-site integrations entirely as JSON so built-in profiles can be changed quickly and, later, a user with an agent can create the Source Profiles and Sources they need. The removed v1 Source Profile model had grown by adding portal-specific schema branches and executor special cases. Each new real-world ATS variant exposed another missing feature, which made the JSON Schema larger, harder to understand, and harder for agents or users to author safely.
 
-The current model also splits execution capability across specialized declarative adapters, such as endpoint inventory, sitemap inventory, browser inventory, and posting detail extraction. That makes the access model harder to reason about: the adapter key decides execution shape instead of the profile's declared capabilities. It also prevents a single Source Profile from naturally combining HTTP, browser, sitemap, XML, JSON, HTML, fallback, transform, and validation behavior.
+The removed v1 model also split execution capability across specialized declarative adapters, such as endpoint inventory, sitemap inventory, browser inventory, and posting detail extraction. That made the access model harder to reason about: the removed adapter key decided execution shape instead of the profile's declared capabilities. It also prevented a single Source Profile from naturally combining HTTP, browser, sitemap, XML, JSON, HTML, fallback, transform, and validation behavior.
 
 Job Radar is not in production yet. There is no requirement to preserve the v1 profile format, v1 schemas, or v1 executor compatibility. The correct product direction is a hard replacement: define a declarative Profile DSL, compile JSON into an execution plan, and remove v1 concepts that would otherwise become legacy baggage.
 
@@ -119,8 +119,8 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - ATS and career-site behavior must be describable through JSON profiles and Sources. A single ATS such as Workday, Personio, SuccessFactors, Greenhouse, or a custom career page must not require profile-specific Rust code.
 - New generic capabilities may require Rust implementation. Once added, a capability must be reusable across profiles rather than tied to one ATS.
 - The v1 Source Profile format is replaced with no compatibility layer, no automatic migration, no v1/v2 parallel runtime, and no legacy warnings for old profile JSON.
-- There is one declarative profile runtime. Profile execution is not selected by `adapterKey`.
-- `adapterKey` is removed from Source Profiles and Source-owned Access Paths. The selected profile, selected Access Path, Source Config, Source Overrides, and compiled Execution Plan determine execution.
+- There is one declarative profile runtime. Profile execution is not selected by the removed v1 `adapterKey` concept.
+- The v1 `adapterKey` field is removed from Source Profiles and Source-owned Access Paths. The selected profile, selected Access Path, Source Config, Source Overrides, and compiled Execution Plan determine execution.
 - `Access Path` remains a core concept. It is a selectable reusable variant within a Source Profile and can define Source Config requirements, `postingDiscovery`, `postingDetail`, and Access Path-specific limitations. It does not define or replace the reusable Source Profile's required `support.level`.
 - A concrete Source selects exactly one reusable profile Access Path or contains exactly one Source-owned Access Path. It cannot do both.
 - A Source-owned Access Path is an inline Access Path stored on one Source. It uses the same DSL capabilities as profile Access Paths, is not reusable, and is not considered during profile detection.

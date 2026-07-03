@@ -1,14 +1,14 @@
-# SCHOTT + StepStone search-run smoke
+# SCHOTT search-run smoke
 
-This is a manual backend-only development smoke for issue #19. It is network-dependent and is not part of the default deterministic test suite.
+This is a manual backend-only development smoke for the current Source/Profile DSL execution path. It is network-dependent and is not part of the default deterministic test suite.
 
-The smoke path creates or reuses an active Suchanfrage with:
+The smoke path creates or reuses an active Search Request with:
 
 - include rules: `Physik`, `Laser`
-- Ausschlussregeln: `Praktikum`, `Werkstudent`, `Schülerpraktikum`
+- exclusion rules: `Praktik(um|ant)`, `Werkstudent`, `Student`, `Masterthesis`, `Ausbildung`
 - location: `Mainz`
 - radius: `30`
-- sources: `schott_ag`, `stepstone_de`
+- source: `schott_ag`
 
 Running it overwrites `search-run-result.json` in the repository root.
 
@@ -26,26 +26,33 @@ You can also set the directory through an environment variable:
 JOB_RADAR_SMOKE_APP_DATA_DIR="/path/to/app-data" npm run smoke:search-run
 ```
 
-For a fresh development database, allow the smoke command to create the local SCHOTT smoke Quelle if it is missing:
+For a fresh development database, allow the smoke command to create the local SCHOTT smoke Source if it is missing:
 
 ```bash
 npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-source
 ```
 
-`stepstone_de` is a built-in source registry document. `--ensure-schott-source` creates only the local development source JSON document `sources/schott_ag.json` with source profile `successfactors`, access path `sitemap_inventory`, and source config:
+`--ensure-schott-source` writes only the local development Source document `sources/schott_ag.json`. The Source selects Source Profile `successfactors`, Access Path `rmk_sitemap_html`, and Source Config:
 
 ```json
 {
-  "url": "https://join.schott.com/sitemap.xml",
-  "recursive": false
+  "baseUrl": "https://join.schott.com",
+  "sitemapUrl": "https://join.schott.com/sitemap.xml"
 }
 ```
+
+## Current execution flow
+
+- The Source Profile registry loads built-in Source Profiles and the local `schott_ag` Source document.
+- Source validation derives `validationState` from schema, registry, and Profile Compiler diagnostics; Source status remains the user-controlled `active` lifecycle state.
+- At Search Run start, the selected Source Profile Access Path and Source Config compile into a typed Execution Plan.
+- The Search Run executes the compiled `postingDiscovery` plan for `schott_ag` and then applies Search Request match and exclusion rules locally.
+- Source Run diagnostics remain structured and source-scoped so one Source failure does not hide other Source outcomes.
 
 ## Expected validation
 
 - SCHOTT should complete when the sitemap is reachable and produce normalized postings with readable titles, URL, source reference, company derived from `SCHOTT AG`, and `Mainz` where the URL contains that location.
-- StepStone success is acceptable when available.
-- StepStone browser-inventory failure is acceptable only when `sourceRuns` contains an explicit `stepstone_de` error and the overall status is `completed_with_errors` if SCHOTT completed.
-- Final `postings` should not contain titles with the configured exclusion terms (`Praktikum`, `Werkstudent`, `Schülerpraktikum`).
+- Final `postings` should not contain titles matching the configured exclusion rules.
+- The overall status should be `completed` when SCHOTT succeeds. If SCHOTT fails because the live sitemap is unavailable or changed, the failure should be visible on the `schott_ag` Source Run with structured diagnostics.
 
-Do not add this command to CI or default test scripts; live SCHOTT/StepStone availability is intentionally human-in-the-loop validation only.
+Do not add this command to CI or default test scripts; live SCHOTT availability is intentionally human-in-the-loop validation only.

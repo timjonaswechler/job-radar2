@@ -70,15 +70,14 @@ Wenn du neu einsteigst, lies am besten in dieser Reihenfolge:
 
 1. diese README — die Produkt- und Einstiegsperspektive.
 2. [`CONTEXT.md`](CONTEXT.md) — die gemeinsame Sprache des Projekts.
-3. [`docs/source-registry-json-model.md`](docs/source-registry-json-model.md) — wie Quellen und Quellenprofile als Dokumente gedacht sind.
-4. [`docs/system-profiles.md`](docs/system-profiles.md) — kurzer Hinweis zu abgelösten Begriffen.
-5. [`docs/adr/`](docs/adr/) — Architekturentscheidungen und ihre Begründungen.
+3. [`docs/prd/declarative-source-profile-dsl.md`](docs/prd/declarative-source-profile-dsl.md) — Zielbild der aktuellen Source Profile DSL.
+4. [`docs/adr/0001-source-config-as-json-schema.md`](docs/adr/0001-source-config-as-json-schema.md) und [`docs/adr/0009-declarative-source-profile-dsl.md`](docs/adr/0009-declarative-source-profile-dsl.md) — zentrale Architekturentscheidungen zur Source/Profile DSL.
+5. [`docs/adr/`](docs/adr/) — weitere Architekturentscheidungen und ihre Begründungen.
 6. [`docs/dev-search-run-smoke.md`](docs/dev-search-run-smoke.md) — manueller Live-Smoke für einen realen Suchlauf.
 
-Die eingebauten Quellen- und Profilbeispiele liegen in:
+Die eingebauten Source-Profile liegen in:
 
-- [`source-profiles/builtin/`](source-profiles/builtin/)
-- [`sources/builtin/`](sources/builtin/)
+- [`src-tauri/resources/profiles/`](src-tauri/resources/profiles/)
 
 ## Lokal starten
 

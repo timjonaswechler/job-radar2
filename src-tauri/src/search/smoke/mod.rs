@@ -7,7 +7,7 @@ mod schott_source;
 mod tests;
 
 pub use cli::run_dev_search_run_smoke_cli;
-pub(crate) use runner::{run_schott_stepstone_smoke, SearchRunSmokeSummary};
+pub(crate) use runner::{run_schott_smoke, SearchRunSmokeSummary};
 
 #[cfg(test)]
 pub(in crate::search::smoke) use cli::serialized_label;

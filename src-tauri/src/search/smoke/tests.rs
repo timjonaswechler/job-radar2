@@ -60,7 +60,7 @@ impl SourceExecutor for FixtureSourceExecutor {
 
 #[test]
 #[ignore = "network-dependent development smoke path"]
-fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failure() {
+fn smoke_path_creates_exact_request_filters_results() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
@@ -114,17 +114,11 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
                     ),
                 ]),
             ),
-            (
-                STEPSTONE_SOURCE_KEY,
-                Err(SourceExecutionError::Failed(
-                    "stepstone fixture unavailable".to_string(),
-                )),
-            ),
         ]);
         let result_path = temp_dir.path().join("search-run-result.json");
         std::fs::write(&result_path, "stale smoke result").unwrap();
 
-        let summary = run_schott_stepstone_smoke(
+        let summary = run_schott_smoke(
             &pool,
             &running_search_runs,
             &executor,
@@ -157,10 +151,7 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
         assert_eq!(search_request.radius_km, Some(SMOKE_RADIUS_KM));
         assert_eq!(search_request.source_keys, smoke_source_keys());
 
-        assert_eq!(
-            serialized_label(&summary.result.status),
-            "completed_with_errors"
-        );
+        assert_eq!(serialized_label(&summary.result.status), "completed");
         assert_eq!(summary.result.source_runs[0].source_key, SCHOTT_SOURCE_KEY);
         assert_eq!(
             summary.result.source_runs[0].status,
@@ -168,18 +159,7 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
         );
         assert_eq!(summary.result.source_runs[0].candidate_count, 7);
         assert_eq!(summary.result.source_runs[0].matched_count, 1);
-        assert_eq!(
-            summary.result.source_runs[1].source_key,
-            STEPSTONE_SOURCE_KEY
-        );
-        assert_eq!(
-            summary.result.source_runs[1].status,
-            SourceRunStatus::Failed
-        );
-        assert_eq!(
-            summary.result.source_runs[1].error.as_deref(),
-            Some("stepstone fixture unavailable")
-        );
+        assert_eq!(summary.result.source_runs.len(), 1);
         assert_eq!(summary.result.postings.len(), 1);
         assert_eq!(
             summary.result.postings[0].title,
@@ -198,7 +178,7 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
             std::fs::read_to_string(&result_path).unwrap(),
             "stale smoke result"
         );
-        assert_eq!(result_json["status"], "completed_with_errors");
+        assert_eq!(result_json["status"], "completed");
         assert_eq!(
             result_json["postings"][0]["title"],
             "Laser Entwicklungsingenieur"
@@ -212,7 +192,6 @@ fn smoke_path_creates_exact_request_filters_results_and_records_stepstone_failur
 }
 
 #[test]
-#[ignore = "network-dependent development smoke path"]
 fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
     let temp_dir = tempfile::tempdir().unwrap();
 
@@ -224,7 +203,7 @@ fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
     assert_eq!(reused.document.key, SCHOTT_SOURCE_KEY);
     assert_eq!(created.document, reused.document);
     validate_smoke_source(&created).unwrap();
-    assert!(snapshot.source(STEPSTONE_SOURCE_KEY).is_some());
+    assert_eq!(smoke_source_keys(), vec![SCHOTT_SOURCE_KEY.to_string()]);
     assert!(temp_dir
         .path()
         .join(format!("sources/{SCHOTT_SOURCE_KEY}.json"))
@@ -247,20 +226,17 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_schott_smoke_source_file(temp_dir.path()).unwrap();
         let running_search_runs = RunningSearchRuns::default();
-        let executor = FixtureSourceExecutor::new([
-            (
-                SCHOTT_SOURCE_KEY,
-                Ok(vec![candidate(
-                    "Laser Ingenieur",
-                    "SCHOTT",
-                    "https://join.schott.com/job/Mainz-Laser-Ingenieur-55122/",
-                    &["Mainz"],
-                )]),
-            ),
-            (STEPSTONE_SOURCE_KEY, Ok(vec![])),
-        ]);
+        let executor = FixtureSourceExecutor::new([(
+            SCHOTT_SOURCE_KEY,
+            Ok(vec![candidate(
+                "Laser Ingenieur",
+                "SCHOTT",
+                "https://join.schott.com/job/Mainz-Laser-Ingenieur-55122/",
+                &["Mainz"],
+            )]),
+        )]);
 
-        let first = run_schott_stepstone_smoke(
+        let first = run_schott_smoke(
             &pool,
             &running_search_runs,
             &executor,
@@ -269,7 +245,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         )
         .await
         .unwrap();
-        let second = run_schott_stepstone_smoke(
+        let second = run_schott_smoke(
             &pool,
             &running_search_runs,
             &executor,

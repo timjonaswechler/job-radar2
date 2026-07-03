@@ -7,7 +7,6 @@ use crate::search::request::{
 
 use super::constants::{
     EXCLUDE_RULE_VALUES, INCLUDE_RULE_VALUES, SCHOTT_SOURCE_KEY, SMOKE_LOCATION, SMOKE_RADIUS_KM,
-    STEPSTONE_SOURCE_KEY,
 };
 
 pub(super) async fn get_or_create_smoke_search_request(
@@ -94,8 +93,5 @@ fn regex_rule_input(value: &str) -> SearchRuleInput {
 }
 
 pub(super) fn smoke_source_keys() -> Vec<String> {
-    vec![
-        SCHOTT_SOURCE_KEY.to_string(),
-        STEPSTONE_SOURCE_KEY.to_string(),
-    ]
+    vec![SCHOTT_SOURCE_KEY.to_string()]
 }

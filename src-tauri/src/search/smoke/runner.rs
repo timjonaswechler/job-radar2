@@ -18,7 +18,7 @@ pub(crate) struct SearchRunSmokeSummary {
     pub result: SearchRunResult,
 }
 
-pub(crate) async fn run_schott_stepstone_smoke(
+pub(crate) async fn run_schott_smoke(
     pool: &SqlitePool,
     running_search_runs: &RunningSearchRuns,
     source_executor: &dyn SourceExecutor,

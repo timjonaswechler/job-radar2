@@ -121,7 +121,9 @@ fn schott_smoke_source_json() -> Value {
     })
 }
 
-fn fail_on_schott_registry_diagnostics(snapshot: &SourceProfileRegistrySnapshot) -> Result<(), String> {
+fn fail_on_schott_registry_diagnostics(
+    snapshot: &SourceProfileRegistrySnapshot,
+) -> Result<(), String> {
     let diagnostics = snapshot
         .diagnostics
         .iter()

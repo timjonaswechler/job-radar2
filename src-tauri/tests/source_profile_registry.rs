@@ -1,9 +1,64 @@
-use std::{fs, path::Path};
+use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use job_radar_lib::{
     compile_source_execution_plan, load_source_profile_registry_snapshot, DiagnosticCategory,
-    DiagnosticSeverity, ProfileCompilerSnapshot,
+    DiagnosticSeverity, ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument,
 };
+
+#[test]
+fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_documents() {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let snapshot = load_source_profile_registry_snapshot(tempfile::tempdir().unwrap().path());
+
+    let profile_paths = json_files(&crate_dir.join("resources/profiles"));
+    let resource_profile_keys = file_stems(&profile_paths);
+    let embedded_profile_keys = snapshot
+        .profiles
+        .iter()
+        .filter(|profile| profile.origin == "built_in")
+        .map(|profile| profile.document.key.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(resource_profile_keys, embedded_profile_keys);
+
+    for path in profile_paths {
+        let text = fs::read_to_string(&path).unwrap();
+        assert_no_v1_resource_vocabulary(&path, &text);
+        let document: SourceProfileDocument = serde_json::from_str(&text).unwrap_or_else(|error| {
+            panic!(
+                "{} should be a Source Profile DSL document: {error}",
+                path.display()
+            )
+        });
+        assert_eq!(document.schema_version, 2, "{}", path.display());
+        assert!(!document.access_paths.is_empty(), "{}", path.display());
+    }
+
+    let source_paths = json_files(&crate_dir.join("resources/sources"));
+    let resource_source_keys = file_stems(&source_paths);
+    let embedded_source_keys = snapshot
+        .sources
+        .iter()
+        .filter(|source| source.origin == "built_in")
+        .map(|source| source.document.key.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(resource_source_keys, embedded_source_keys);
+
+    for path in source_paths {
+        let text = fs::read_to_string(&path).unwrap();
+        assert_no_v1_resource_vocabulary(&path, &text);
+        let document: SourceDocument = serde_json::from_str(&text).unwrap_or_else(|error| {
+            panic!(
+                "{} should be a Source DSL document: {error}",
+                path.display()
+            )
+        });
+        assert_eq!(document.schema_version, 2, "{}", path.display());
+    }
+}
 
 #[test]
 fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collision() {
@@ -59,7 +114,8 @@ fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
             .iter()
             .map(|profile| profile.document.clone())
             .collect(),
-        sources: vec![serde_json::from_str(r#"{
+        sources: vec![serde_json::from_str(
+            r#"{
           "schemaVersion": 2,
           "key": "greenhouse_fixture",
           "name": "Greenhouse Fixture",
@@ -72,7 +128,9 @@ fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
             "profileKey": "greenhouse",
             "pathKey": "boards_api"
           }
-        }"#).unwrap()],
+        }"#,
+        )
+        .unwrap()],
     };
     let result = compile_source_execution_plan(&compiler_snapshot, "greenhouse_fixture");
     let plan = result
@@ -254,6 +312,43 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
         DiagnosticCategory::Compiler,
         "unknown_strategy_override",
     );
+}
+
+fn json_files(directory: &Path) -> Vec<PathBuf> {
+    let mut paths = fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("could not read {}: {error}", directory.display()))
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|extension| extension.to_str()) == Some("json"))
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths
+}
+
+fn file_stems(paths: &[PathBuf]) -> BTreeSet<String> {
+    paths
+        .iter()
+        .map(|path| path.file_stem().unwrap().to_string_lossy().to_string())
+        .collect()
+}
+
+fn assert_no_v1_resource_vocabulary(path: &Path, text: &str) {
+    for forbidden in [
+        "adapterKey",
+        "adapter_key",
+        "declarative_endpoint_inventory",
+        "declarative_sitemap_inventory",
+        "declarative_browser_inventory",
+        "inventory",
+        "SourceSpecific",
+        "source_specific",
+        "\"status\": \"invalid\"",
+    ] {
+        assert!(
+            !text.contains(forbidden),
+            "{} contains removed v1 resource vocabulary `{forbidden}`",
+            path.display()
+        );
+    }
 }
 
 fn assert_diagnostic(

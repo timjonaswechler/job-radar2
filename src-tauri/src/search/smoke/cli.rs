@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     constants::{SMOKE_APP_DATA_DIR_ENV, SMOKE_COMMAND},
-    run_schott_stepstone_smoke,
+    run_schott_smoke,
     schott_source::ensure_schott_smoke_source,
     SearchRunSmokeSummary,
 };
@@ -50,7 +50,7 @@ where
 
         let result_path = default_search_run_result_path();
         let source_executor = DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
-        let summary = run_schott_stepstone_smoke(
+        let summary = run_schott_smoke(
             &state.db,
             &state.running_search_runs,
             &source_executor,
@@ -113,7 +113,7 @@ where
 }
 
 fn smoke_cli_help() -> &'static str {
-    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source]\n\nRuns the network-dependent SCHOTT + StepStone development smoke Suchlauf and overwrites search-run-result.json in the repository root. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
+    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source]\n\nRuns the network-dependent SCHOTT development smoke Search Run and overwrites search-run-result.json in the repository root. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
 }
 
 fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
