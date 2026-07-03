@@ -30,3 +30,4 @@ prompts/source-profile-fixture-workup.md
 *.njsproj
 *.sln
 *.sw?
+search-run-candidates.json

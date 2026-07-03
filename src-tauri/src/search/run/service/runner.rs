@@ -11,11 +11,12 @@ use crate::search::{
 use super::super::{SearchRunResult, SearchRunStatus, SourceExecutionInput, SourceExecutor};
 use super::{
     compile_rules, db_error, generated_at_timestamp, matches_any_rule, merge_postings,
-    overall_status, posting_source, resolve_selected_sources, source_run_cancelled_for_key,
-    source_run_cancelled_for_source, source_run_completed, source_run_failed,
-    source_run_failed_for_key, source_run_failed_for_source, source_run_skipped_for_source,
-    update_search_request_last_run, validate_executable_search_request, write_search_run_result,
-    SearchRunResultArtifact, SelectedSearchRunSource, Treffer,
+    overall_status, posting_source, resolve_selected_sources_with_options,
+    source_run_cancelled_for_key, source_run_cancelled_for_source, source_run_completed,
+    source_run_failed, source_run_failed_for_key, source_run_failed_for_source,
+    source_run_skipped_for_source, update_search_request_last_run,
+    validate_executable_search_request, write_search_run_result, SearchRunResultArtifact,
+    SelectedSearchRunSource, SourceSelectionOptions, Treffer,
 };
 
 pub struct SearchRunService<'a> {
@@ -24,6 +25,7 @@ pub struct SearchRunService<'a> {
     source_executor: &'a dyn SourceExecutor,
     result_artifact: SearchRunResultArtifact,
     source_registry_app_data_dir: PathBuf,
+    selection_options: SourceSelectionOptions,
 }
 
 impl<'a> SearchRunService<'a> {
@@ -56,7 +58,13 @@ impl<'a> SearchRunService<'a> {
             source_executor,
             result_artifact,
             source_registry_app_data_dir: source_registry_app_data_dir.into(),
+            selection_options: SourceSelectionOptions::default(),
         }
+    }
+
+    pub fn allowing_draft_sources(mut self, allow_draft_sources: bool) -> Self {
+        self.selection_options.allow_draft_sources = allow_draft_sources;
+        self
     }
 
     pub async fn run(&self, search_request_id: i64) -> Result<SearchRunResult, String> {
@@ -78,8 +86,11 @@ impl<'a> SearchRunService<'a> {
         let exclude_rules = compile_rules(&search_request.exclude_rules, "excludeRules", true)?;
         let registry_snapshot =
             crate::source_profile::registry::load_snapshot(&self.source_registry_app_data_dir);
-        let selected_sources =
-            resolve_selected_sources(&registry_snapshot, &search_request.source_keys);
+        let selected_sources = resolve_selected_sources_with_options(
+            &registry_snapshot,
+            &search_request.source_keys,
+            self.selection_options,
+        );
 
         let mut source_runs = Vec::with_capacity(selected_sources.len());
         let mut candidates = Vec::new();
@@ -123,10 +134,7 @@ impl<'a> SearchRunService<'a> {
                     continue;
                 }
             };
-            let input = SourceExecutionInput {
-                search_request: &search_request,
-                source,
-            };
+            let input = SourceExecutionInput { source };
 
             match self.source_executor.execute(input).await {
                 Ok(output) => {

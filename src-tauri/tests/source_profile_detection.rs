@@ -194,10 +194,22 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
 
     for (profile_file, input_url, expected_config) in cases {
         let profile = read_builtin_profile(profile_file);
+        let client = if profile_file == "successfactors.json" {
+            FakeHttpClient::with_response(
+                "https://jobs.example.com/sitemap.xml",
+                DetectionHttpResponse {
+                    status: 200,
+                    body: r#"<?xml version="1.0"?><urlset><url><loc>https://jobs.example.com/job/Berlin-Engineer-1001</loc></url></urlset>"#
+                        .to_string(),
+                },
+            )
+        } else {
+            FakeHttpClient::default()
+        };
         let result = block_on(detect_source_proposal_with_http_client(
             input_url,
             &[profile],
-            &FakeHttpClient::default(),
+            &client,
         ));
 
         assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
@@ -215,6 +227,65 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
         }
         assert_no_adapter_key(&serde_json::to_value(proposal).unwrap());
     }
+}
+
+#[test]
+fn successfactors_detection_requires_sitemap_job_url_evidence_for_sitemap_inputs() {
+    let profile = read_builtin_profile("successfactors.json");
+    let client = FakeHttpClient::with_response(
+        "https://openai.com/sitemap.xml",
+        DetectionHttpResponse {
+            status: 200,
+            body: r#"<?xml version="1.0"?><urlset><url><loc>https://openai.com/careers</loc></url></urlset>"#
+                .to_string(),
+        },
+    );
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://openai.com/sitemap.xml",
+        &[profile],
+        &client,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Unsupported);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "http_check_regex_mismatch"
+            && diagnostic.severity == DiagnosticSeverity::Warning
+    }));
+}
+
+#[test]
+fn successfactors_detection_accepts_sitemap_with_successfactors_job_urls() {
+    let profile = read_builtin_profile("successfactors.json");
+    let client = FakeHttpClient::with_response(
+        "https://join.schott.com/sitemap.xml",
+        DetectionHttpResponse {
+            status: 200,
+            body: r#"<?xml version="1.0"?><urlset><url><loc>https://join.schott.com/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/</loc></url></urlset>"#
+                .to_string(),
+        },
+    );
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://join.schott.com/sitemap.xml",
+        &[profile],
+        &client,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(
+        result.diagnostics.is_empty(),
+        "diagnostics: {:?}",
+        result.diagnostics
+    );
+    let proposal = result.proposal.unwrap();
+    assert_eq!(proposal.profile_key, "successfactors");
+    assert_eq!(proposal.source_config["baseUrl"], "https://join.schott.com");
+    assert_eq!(
+        proposal.source_config["sitemapUrl"],
+        "https://join.schott.com/sitemap.xml"
+    );
 }
 
 #[test]

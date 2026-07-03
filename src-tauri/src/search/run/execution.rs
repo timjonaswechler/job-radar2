@@ -1,18 +1,12 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
-#[cfg(test)]
-use serde_json::Value;
-
-use crate::{
-    profile_dsl::{
-        diagnostics::DiagnosticSeverity,
-        execution_plan::SourceExecutionPlan,
-        runtime::{
-            execute_posting_discovery_with_clients, ManagedProfileBrowserClient,
-            PostingDiscoveryCandidate, ReqwestPostingDiscoveryFetcher,
-        },
+use crate::profile_dsl::{
+    diagnostics::DiagnosticSeverity,
+    execution_plan::SourceExecutionPlan,
+    runtime::{
+        execute_posting_discovery_with_clients, ManagedProfileBrowserClient,
+        PostingDiscoveryCandidate, ReqwestPostingDiscoveryFetcher,
     },
-    search::request::SearchRequest,
 };
 
 use super::{SourceCandidate, SourceExecutionError};
@@ -73,7 +67,6 @@ impl From<SourceExecutionPlan> for SourceExecutionSource {
 }
 
 pub struct SourceExecutionInput<'a> {
-    pub search_request: &'a SearchRequest,
     pub source: &'a SourceExecutionSource,
 }
 
@@ -133,46 +126,6 @@ impl SourceExecutor for DefaultSourceExecutor {
             })
         })
     }
-}
-
-#[cfg(test)]
-pub(crate) fn fixture_source_execution_plan(
-    key: &str,
-    name: &str,
-    source_config: Value,
-) -> SourceExecutionPlan {
-    serde_json::from_value(serde_json::json!({
-        "source": { "key": key, "name": name },
-        "selectedAccessPath": {
-            "type": "source_owned_access_path",
-            "key": "fixture",
-            "name": "Fixture"
-        },
-        "sourceConfig": source_config,
-        "postingDiscovery": {
-            "strategies": [
-                {
-                    "key": "fixture",
-                    "fetch": {
-                        "mode": "http",
-                        "method": "GET",
-                        "url": "https://example.test/jobs.json",
-                        "timeoutMs": 1000
-                    },
-                    "parse": { "type": "json" },
-                    "select": { "type": "json_path", "jsonPath": "$.jobs" },
-                    "extract": {
-                        "fields": {
-                            "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
-                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
-                        }
-                    }
-                }
-            ]
-        }
-    }))
-    .expect("fixture execution plan should deserialize")
 }
 
 fn source_candidate(candidate: PostingDiscoveryCandidate) -> SourceCandidate {

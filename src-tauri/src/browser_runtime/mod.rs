@@ -10,7 +10,7 @@ mod tests;
 mod types;
 
 pub use archive::{RuntimeArchiveExtractor, ZipRuntimeArchiveExtractor};
-pub use control::{render_page_html_with_actions, render_page_html_with_wait};
+pub use control::render_page_html_with_actions;
 pub use download::{ReqwestRuntimeDownloader, RuntimeDownloader};
 pub use install::{install_runtime, uninstall_runtime};
 pub use spec::{current_platform, current_runtime_spec};
@@ -21,10 +21,9 @@ pub use status::{check_runtime, status_for_runtime_dir};
 pub use types::BrowserRuntimeArchiveFormat;
 pub use types::{
     BrowserRuntimeCheckResult, BrowserRuntimeInstallPhase, BrowserRuntimeInstallProgress,
-    BrowserRuntimeInstallProgressReporter, BrowserRuntimeInteraction, BrowserRuntimePageWait,
-    BrowserRuntimeRenderError, BrowserRuntimeRenderErrorKind, BrowserRuntimeRenderRequest,
-    BrowserRuntimeSpec, BrowserRuntimeState, BrowserRuntimeStatus, BrowserRuntimeWait,
-    INSTALL_PROGRESS_EVENT,
+    BrowserRuntimeInstallProgressReporter, BrowserRuntimeInteraction, BrowserRuntimeRenderError,
+    BrowserRuntimeRenderErrorKind, BrowserRuntimeRenderRequest, BrowserRuntimeSpec,
+    BrowserRuntimeState, BrowserRuntimeStatus, BrowserRuntimeWait, INSTALL_PROGRESS_EVENT,
 };
 
 use install::emit_progress;

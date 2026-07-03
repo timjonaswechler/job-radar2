@@ -10,7 +10,7 @@ The smoke path creates or reuses an active Search Request with:
 - radius: `30`
 - source: `schott_ag`
 
-Running it overwrites `search-run-result.json` in the repository root.
+Running it overwrites `search-run-result.json` and `search-run-candidates.json` in the repository root.
 
 ## Command
 
@@ -24,6 +24,23 @@ You can also set the directory through an environment variable:
 
 ```bash
 JOB_RADAR_SMOKE_APP_DATA_DIR="/path/to/app-data" npm run smoke:search-run
+```
+
+By default the smoke targets the development SCHOTT smoke Source key `schott_ag`. To run the same smoke Search Request against existing local Sources, pass one or more Source keys:
+
+```bash
+npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --source-key schott --source-key openai
+```
+
+The smoke writes two artifacts in the repository root:
+
+- `search-run-result.json` — final matched postings after Search Request filters.
+- `search-run-candidates.json` — raw discovered candidates per executed Source before matching/exclusion filters.
+
+Selected draft Sources are normally skipped, matching normal Search Run behavior. For local smoke validation you can execute draft Sources without changing their persisted Source Status:
+
+```bash
+npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --source-key schott --allow-draft
 ```
 
 For a fresh development database, allow the smoke command to create the local SCHOTT smoke Source if it is missing:

@@ -142,7 +142,6 @@ fn smoke_path_creates_exact_request_filters_results() {
             expected_regex_rules(&[
                 "Praktik(um|ant)",
                 "Werkstudent",
-                "Student",
                 "Masterthesis",
                 "Ausbildung",
             ])
@@ -219,6 +218,140 @@ fn ensure_schott_source_creates_only_missing_local_smoke_source_json() {
 }
 
 #[test]
+fn smoke_path_can_target_multiple_existing_sources() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_successfactors_source_file(temp_dir.path(), "schott", "SCHOTT");
+        write_successfactors_source_file(temp_dir.path(), "second_sap", "Second SAP");
+        let running_search_runs = RunningSearchRuns::default();
+        let executor = FixtureSourceExecutor::new([
+            (
+                "schott",
+                Ok(vec![candidate(
+                    "Laser Entwicklungsingenieur",
+                    "SCHOTT",
+                    "https://join.schott.com/job/Mainz-Laser-Entwicklungsingenieur-55122/",
+                    &["Mainz"],
+                )]),
+            ),
+            (
+                "second_sap",
+                Ok(vec![candidate(
+                    "Physik Ingenieur",
+                    "Second SAP",
+                    "https://second.example.test/job/Mainz-Physik-Ingenieur-1001",
+                    &["Mainz"],
+                )]),
+            ),
+        ]);
+
+        let summary = run_search_run_smoke(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+            vec!["schott".to_string(), "second_sap".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let search_request = SearchRequestService::new(&pool, &running_search_runs)
+            .get(summary.search_request_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            search_request.source_keys,
+            vec!["schott".to_string(), "second_sap".to_string()]
+        );
+        assert_eq!(serialized_label(&summary.result.status), "completed");
+        assert_eq!(summary.result.source_runs.len(), 2);
+        assert_eq!(summary.result.source_runs[0].source_key, "schott");
+        assert_eq!(summary.result.source_runs[1].source_key, "second_sap");
+        assert_eq!(summary.result.postings.len(), 2);
+
+        let candidates_json: Value = serde_json::from_str(
+            &std::fs::read_to_string(temp_dir.path().join("search-run-candidates.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(candidates_json["sources"].as_array().unwrap().len(), 2);
+        assert_eq!(candidates_json["sources"][0]["sourceKey"], "schott");
+        assert_eq!(
+            candidates_json["sources"][0]["candidates"][0]["title"],
+            "Laser Entwicklungsingenieur"
+        );
+        assert_eq!(candidates_json["sources"][1]["sourceKey"], "second_sap");
+        assert_eq!(
+            candidates_json["sources"][1]["candidates"][0]["title"],
+            "Physik Ingenieur"
+        );
+    });
+}
+
+#[test]
+fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_change() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_successfactors_source_file_with_status(
+            temp_dir.path(),
+            "draft_sap",
+            "Draft SAP",
+            "draft",
+        );
+        let running_search_runs = RunningSearchRuns::default();
+        let executor = FixtureSourceExecutor::new([(
+            "draft_sap",
+            Ok(vec![candidate(
+                "Laser Ingenieur",
+                "Draft SAP",
+                "https://draft.example.test/job/Mainz-Laser-Ingenieur-1001",
+                &["Mainz"],
+            )]),
+        )]);
+
+        let skipped = run_search_run_smoke(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+            vec!["draft_sap".to_string()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            skipped.result.source_runs[0].status,
+            SourceRunStatus::Skipped
+        );
+
+        let allowed = run_search_run_smoke_with_options(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+            vec!["draft_sap".to_string()],
+            true,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            allowed.result.source_runs[0].status,
+            SourceRunStatus::Completed
+        );
+        assert_eq!(allowed.result.source_runs[0].candidate_count, 1);
+
+        let persisted_source: Value = serde_json::from_str(
+            &std::fs::read_to_string(temp_dir.path().join("sources/draft_sap.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(persisted_source["status"], "draft");
+    });
+}
+
+#[test]
 #[ignore = "network-dependent development smoke path"]
 fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
     tauri::async_runtime::block_on(async {
@@ -267,6 +400,39 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
             1
         );
     });
+}
+
+fn write_successfactors_source_file(app_data_dir: &std::path::Path, key: &str, name: &str) {
+    write_successfactors_source_file_with_status(app_data_dir, key, name, "active");
+}
+
+fn write_successfactors_source_file_with_status(
+    app_data_dir: &std::path::Path,
+    key: &str,
+    name: &str,
+    status: &str,
+) {
+    std::fs::create_dir_all(app_data_dir.join("sources")).unwrap();
+    let document = serde_json::json!({
+        "schemaVersion": 2,
+        "key": key,
+        "name": name,
+        "status": status,
+        "sourceConfig": {
+            "baseUrl": "https://example.test",
+            "sitemapUrl": "https://example.test/sitemap.xml"
+        },
+        "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "successfactors",
+            "pathKey": "rmk_sitemap_html"
+        }
+    });
+    std::fs::write(
+        app_data_dir.join(format!("sources/{key}.json")),
+        serde_json::to_string_pretty(&document).unwrap(),
+    )
+    .unwrap();
 }
 
 fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {

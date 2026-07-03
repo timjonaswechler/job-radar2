@@ -33,13 +33,6 @@ pub(crate) fn resolve_simple_json_path<'a>(
     Ok(Some(current))
 }
 
-pub(crate) fn simple_json_path_exists(root: &Value, json_path: &str) -> bool {
-    resolve_simple_json_path(root, json_path)
-        .ok()
-        .flatten()
-        .is_some()
-}
-
 fn parse_simple_json_path(json_path: &str) -> Result<Vec<&str>, SimpleJsonPathError> {
     let json_path = json_path.trim();
     if json_path == "$" {

@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     constants::{SMOKE_APP_DATA_DIR_ENV, SMOKE_COMMAND},
-    run_schott_smoke,
+    run_search_run_smoke_with_options,
     schott_source::ensure_schott_smoke_source,
     SearchRunSmokeSummary,
 };
@@ -16,6 +16,8 @@ use super::{
 struct SmokeCliOptions {
     app_data_dir: Option<PathBuf>,
     ensure_schott_source: bool,
+    source_keys: Vec<String>,
+    allow_draft: bool,
     help: bool,
 }
 
@@ -50,12 +52,19 @@ where
 
         let result_path = default_search_run_result_path();
         let source_executor = DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
-        let summary = run_schott_smoke(
+        let source_keys = if options.source_keys.is_empty() {
+            super::request::smoke_source_keys()
+        } else {
+            options.source_keys
+        };
+        let summary = run_search_run_smoke_with_options(
             &state.db,
             &state.running_search_runs,
             &source_executor,
             result_path,
             state.paths.app_data_dir.clone(),
+            source_keys,
+            options.allow_draft,
         )
         .await?;
 
@@ -70,6 +79,8 @@ where
 {
     let mut app_data_dir = None;
     let mut ensure_schott_source = false;
+    let mut source_keys = Vec::new();
+    let mut allow_draft = false;
     let mut help = false;
     let mut args = args.into_iter().peekable();
 
@@ -82,11 +93,22 @@ where
             ensure_schott_source = true;
             continue;
         }
+        if arg == "--allow-draft" {
+            allow_draft = true;
+            continue;
+        }
         if arg == "--app-data-dir" {
             let value = args
                 .next()
                 .ok_or_else(|| "--app-data-dir requires a path".to_string())?;
             app_data_dir = Some(PathBuf::from(value));
+            continue;
+        }
+        if arg == "--source-key" {
+            let value = args
+                .next()
+                .ok_or_else(|| "--source-key requires a source key".to_string())?;
+            push_source_key(&mut source_keys, &value.to_string_lossy())?;
             continue;
         }
 
@@ -96,6 +118,10 @@ where
                 return Err("--app-data-dir requires a path".to_string());
             }
             app_data_dir = Some(PathBuf::from(value));
+            continue;
+        }
+        if let Some(value) = arg_string.strip_prefix("--source-key=") {
+            push_source_key(&mut source_keys, value)?;
             continue;
         }
 
@@ -108,12 +134,23 @@ where
     Ok(SmokeCliOptions {
         app_data_dir,
         ensure_schott_source,
+        source_keys,
+        allow_draft,
         help,
     })
 }
 
+fn push_source_key(source_keys: &mut Vec<String>, value: &str) -> Result<(), String> {
+    let source_key = value.trim();
+    if source_key.is_empty() {
+        return Err("--source-key requires a non-empty source key".to_string());
+    }
+    source_keys.push(source_key.to_string());
+    Ok(())
+}
+
 fn smoke_cli_help() -> &'static str {
-    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source]\n\nRuns the network-dependent SCHOTT development smoke Search Run and overwrites search-run-result.json in the repository root. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
+    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source] [--source-key <key> ...] [--allow-draft]\n\nRuns the network-dependent development smoke Search Run and overwrites search-run-result.json plus search-run-candidates.json in the repository root. By default it targets the SCHOTT smoke Source. Use --source-key repeatedly to target existing local Sources. Use --allow-draft to execute selected draft Sources for this smoke run without changing their persisted Source Status. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
 }
 
 fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
@@ -128,6 +165,7 @@ fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
         }
     );
     println!("Result path: {}", summary.result_path);
+    println!("Candidates path: {}", summary.candidates_path);
     println!(
         "Overall status: {}",
         serialized_label(&summary.result.status)

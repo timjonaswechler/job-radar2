@@ -7,8 +7,8 @@ use std::{path::Path, time::Duration};
 use uuid::Uuid;
 
 use super::{
-    BrowserRuntimeInteraction, BrowserRuntimePageWait, BrowserRuntimeRenderError,
-    BrowserRuntimeRenderErrorKind, BrowserRuntimeRenderRequest, BrowserRuntimeWait,
+    BrowserRuntimeInteraction, BrowserRuntimeRenderError, BrowserRuntimeRenderErrorKind,
+    BrowserRuntimeRenderRequest, BrowserRuntimeWait,
 };
 
 pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<(), String> {
@@ -27,30 +27,6 @@ pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<()
         )),
         (Ok(()), _) => Ok(()),
     }
-}
-
-pub async fn render_page_html_with_wait(
-    executable_path: &Path,
-    runtime_dir: &Path,
-    url: &str,
-    wait_for: Option<&BrowserRuntimePageWait>,
-) -> Result<String, String> {
-    let request = BrowserRuntimeRenderRequest {
-        url: url.to_string(),
-        timeout_ms: render_timeout_for_legacy_wait(wait_for).as_millis() as u64,
-        waits: wait_for
-            .map(|wait_for| {
-                vec![BrowserRuntimeWait::Selector {
-                    selector: Some(wait_for.selector.clone()),
-                    timeout_ms: wait_for.timeout_ms,
-                }]
-            })
-            .unwrap_or_default(),
-        interactions: Vec::new(),
-    };
-    render_page_html_with_actions(executable_path, runtime_dir, request)
-        .await
-        .map_err(|error| error.message)
 }
 
 pub async fn render_page_html_with_actions(
@@ -89,15 +65,6 @@ fn runtime_session_dir(runtime_dir: &Path) -> std::path::PathBuf {
     runtime_dir
         .join(".tmp")
         .join(format!("session-{}", Uuid::new_v4()))
-}
-
-fn render_timeout_for_legacy_wait(wait_for: Option<&BrowserRuntimePageWait>) -> Duration {
-    match wait_for {
-        Some(wait_for) => {
-            Duration::from_millis(wait_for.timeout_ms.saturating_add(5_000).max(30_000))
-        }
-        None => Duration::from_secs(30),
-    }
 }
 
 async fn apply_wait(

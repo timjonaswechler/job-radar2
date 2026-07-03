@@ -78,12 +78,6 @@ pub struct BrowserRuntimeCheckResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BrowserRuntimePageWait {
-    pub selector: String,
-    pub timeout_ms: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BrowserRuntimeRenderRequest {
     pub url: String,
     pub timeout_ms: u64,

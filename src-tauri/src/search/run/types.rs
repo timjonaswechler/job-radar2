@@ -5,7 +5,8 @@ use crate::profile_dsl::diagnostics::Diagnostics;
 
 pub type PostingMeta = BTreeMap<String, String>;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SourceCandidate {
     pub title: String,
     pub company: String,

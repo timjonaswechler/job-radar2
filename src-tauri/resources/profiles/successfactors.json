@@ -43,6 +43,16 @@
         "captures": ["successFactorsHost"]
       }
     ],
+    "httpChecks": [
+      {
+        "key": "sitemap_contains_successfactors_job_urls",
+        "url": "https://{{capture:successFactorsHost}}/sitemap.xml",
+        "timeoutMs": 10000,
+        "expectStatus": 200,
+        "regex": "(?is)<loc>https?://[^<]+/job/[^<]+(?:-[0-9]+|/[0-9]+/?)(?:[?#][^<]*)?</loc>",
+        "evidence": "Public sitemap contains SuccessFactors/RMK-style job detail URLs."
+      }
+    ],
     "evidence": [
       {
         "kind": "url",
@@ -102,26 +112,42 @@
               },
               "limits": {
                 "maxRequests": 1,
-                "maxItems": 50
+                "maxItems": 200
               }
             },
             "parse": { "type": "xml" },
             "select": { "type": "document" },
             "captures": {
               "location": {
-                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
-                "pattern": "(?i)/job/(?<value>[^/?#-]+)-"
+                "from": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
+                "pattern": "(?i)/job/(?<value>[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-"
               },
               "title": {
-                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
-                "pattern": "(?i)/job/[^/?#-]+-(?<value>.+?)-[0-9]+(?:[/?#]|$)"
+                "from": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
+                "pattern": "(?i)/job/(?:[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-(?<value>.+?)(?:-[0-9]+|/[0-9]+/?)(?:[?#]|$)"
               },
               "jobId": {
-                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
-                "pattern": "(?i)-(?<value>[0-9]+)(?:[/?#]|$)"
+                "from": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
+                "pattern": "(?i)(?:-|/)(?<value>[0-9]+)/?(?:[?#]|$)"
               },
               "externalPath": {
-                "from": { "type": "item_field", "key": "value", "cardinality": "one" },
+                "from": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
                 "pattern": "(?i)^https?://[^/]+(?<value>/job/[^?#]+)"
               }
             },
@@ -170,7 +196,14 @@
               }
             },
             "acceptWhen": {
-              "requiredFields": ["title", "company", "url", "locations", "postingMeta.jobId", "postingMeta.externalPath"],
+              "requiredFields": [
+                "title",
+                "company",
+                "url",
+                "locations",
+                "postingMeta.jobId",
+                "postingMeta.externalPath"
+              ],
               "minResults": 1
             }
           }

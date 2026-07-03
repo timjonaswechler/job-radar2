@@ -9,6 +9,11 @@ use crate::{
 
 use super::{super::SourceExecutionSource, SourceExecutionError};
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct SourceSelectionOptions {
+    pub allow_draft_sources: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum SelectedSearchRunSource {
     Resolved(Box<SourceExecutionSource>),
@@ -29,9 +34,10 @@ pub(super) enum SelectedSearchRunSource {
     },
 }
 
-pub(super) fn resolve_selected_sources(
+pub(super) fn resolve_selected_sources_with_options(
     snapshot: &SourceProfileRegistrySnapshot,
     source_keys: &[String],
+    options: SourceSelectionOptions,
 ) -> Vec<SelectedSearchRunSource> {
     let compiler_snapshot = ProfileCompilerSnapshot {
         profiles: snapshot
@@ -65,7 +71,9 @@ pub(super) fn resolve_selected_sources(
                 };
             };
 
-            if source.document.status != SourceStatus::Active {
+            let allow_draft_source = options.allow_draft_sources
+                && source.document.status == SourceStatus::Draft;
+            if source.document.status != SourceStatus::Active && !allow_draft_source {
                 let status = serde_json::to_value(source.document.status)
                     .expect("SourceStatus should serialize to a stable diagnostic value");
                 let diagnostics = vec![source_validation_diagnostic(
@@ -89,7 +97,7 @@ pub(super) fn resolve_selected_sources(
                 };
             }
 
-            if !source.validation_state.can_execute {
+            if !(source.validation_state.can_execute || allow_draft_source && source.validation_state.can_compile) {
                 let diagnostics = source.validation_state.diagnostics.clone();
                 return SelectedSearchRunSource::Failed {
                     source_key: source.document.key.clone(),
@@ -101,6 +109,16 @@ pub(super) fn resolve_selected_sources(
                 };
             }
 
+            let mut compiler_snapshot = compiler_snapshot.clone();
+            if allow_draft_source {
+                if let Some(source) = compiler_snapshot
+                    .sources
+                    .iter_mut()
+                    .find(|source| source.key == *source_key)
+                {
+                    source.status = SourceStatus::Active;
+                }
+            }
             let compile_result = compile_source_execution_plan(&compiler_snapshot, source_key);
             if compile_result.execution_plan.is_none() || has_error_diagnostics(&compile_result.diagnostics)
             {
