@@ -35,6 +35,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/geo_seed.sqlite"]
+    "resources": ["resources/geo_loc.sqlite"]
   }
 }

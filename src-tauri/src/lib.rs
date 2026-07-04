@@ -2,12 +2,17 @@ mod app;
 mod background_tasks;
 mod browser_runtime;
 mod db;
+mod geo;
 mod profile_dsl;
 mod search;
 mod simple_json_path;
 mod source;
 mod source_profile;
 
+pub use geo::{
+    distance_km, matches_location_filter, GeoDbResolver, GeoPoint, LocationFilterNotAppliedReason,
+    LocationMatchOutcome, ResolvedLocation,
+};
 pub use profile_dsl::compiler::{
     compile_source_execution_plan, CompileSourceExecutionPlanResult, ProfileCompilerSnapshot,
 };

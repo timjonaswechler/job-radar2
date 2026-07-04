@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use tauri::{path::BaseDirectory, AppHandle, Manager};
 
-const GEO_SEED_DB_PATH: &str = "resources/geo_seed.sqlite";
+const GEO_SEED_DB_PATH: &str = "resources/geo_loc.sqlite";
 
 #[derive(Clone, Debug)]
 pub struct AppResources {
