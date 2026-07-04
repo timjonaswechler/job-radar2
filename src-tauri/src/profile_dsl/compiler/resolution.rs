@@ -23,10 +23,90 @@ use super::overrides::{apply_source_overrides, EffectiveAccessPathSteps};
 use super::security::validate_security;
 use super::source_config::{
     source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
+    validate_source_config_contract,
 };
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
 use super::ProfileCompilerSnapshot;
+
+pub(super) fn validate_source_profile_document(
+    profile: &SourceProfileDocument,
+    diagnostics: &mut Diagnostics,
+) {
+    validate_support_metadata(
+        &profile.support,
+        "/support",
+        serde_json::json!({ "sourceProfileKey": profile.key }),
+        diagnostics,
+    );
+    validate_reusable_access_path_keys(profile, diagnostics);
+
+    for (path_index, access_path) in profile.access_paths.iter().enumerate() {
+        validate_source_config_contract(
+            profile.source_config_schema.as_ref(),
+            access_path.source_config_schema.as_ref(),
+            Some(path_index),
+            diagnostics,
+        );
+        validate_posting_discovery_strategy_keys(
+            &access_path.posting_discovery,
+            access_path_step_path(Some(path_index), "postingDiscovery"),
+            diagnostics,
+        );
+        if let Some(posting_detail) = &access_path.posting_detail {
+            validate_posting_detail_strategy_keys(
+                posting_detail,
+                access_path_step_path(Some(path_index), "postingDetail"),
+                diagnostics,
+            );
+        }
+
+        let access_path_base = access_path_base_path(Some(path_index));
+        validate_template_variables(
+            &access_path.posting_discovery,
+            access_path.posting_detail.as_ref(),
+            source_config_schema_keys(
+                profile.source_config_schema.as_ref(),
+                access_path.source_config_schema.as_ref(),
+            ),
+            access_path_base.clone(),
+            diagnostics,
+        );
+        validate_capability_compatibility(
+            &access_path.posting_discovery,
+            access_path.posting_detail.as_ref(),
+            access_path_base.clone(),
+            diagnostics,
+        );
+        validate_boundedness(
+            &access_path.posting_discovery,
+            access_path.posting_detail.as_ref(),
+            access_path_base.clone(),
+            diagnostics,
+        );
+        validate_security(
+            &access_path.posting_discovery,
+            access_path.posting_detail.as_ref(),
+            access_path_base.clone(),
+            diagnostics,
+        );
+
+        if !has_error_diagnostics(diagnostics) {
+            let _ = compile_posting_discovery_step(
+                &access_path.posting_discovery,
+                &access_path_step_path(Some(path_index), "postingDiscovery"),
+            )
+            .map_err(|error| push_compiled_plan_invariant(error, diagnostics));
+            if let Some(posting_detail) = &access_path.posting_detail {
+                let _ = compile_posting_detail_step(
+                    posting_detail,
+                    &access_path_step_path(Some(path_index), "postingDetail"),
+                )
+                .map_err(|error| push_compiled_plan_invariant(error, diagnostics));
+            }
+        }
+    }
+}
 
 pub(super) fn compile_selected_access_path(
     snapshot: &ProfileCompilerSnapshot,

@@ -107,7 +107,19 @@ pub(super) async fn evaluate_http_checks<C: DetectionHttpClient + Sync>(
                 return false;
             }
         };
-        let timeout_ms = check.timeout_ms.unwrap_or(10_000);
+        let Some(timeout_ms) = check.timeout_ms.filter(|timeout| *timeout > 0) else {
+            diagnostics.push(detection_error(
+                "http_check_timeout_required",
+                format!(
+                    "HTTP detection check `{}` must declare a positive timeoutMs",
+                    check.key
+                ),
+                format!("{check_path}/timeoutMs"),
+                Some(&check.key),
+                serde_json::json!({ "checkKey": check.key }),
+            ));
+            return false;
+        };
         let response = match http_client.get_text(rendered_url.clone(), timeout_ms).await {
             Ok(response) => response,
             Err(error) => {

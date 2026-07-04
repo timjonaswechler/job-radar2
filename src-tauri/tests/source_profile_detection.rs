@@ -58,6 +58,251 @@ fn source_profile_detection_returns_source_proposal_from_named_url_captures() {
 }
 
 #[test]
+fn source_profile_detection_reports_invalid_input_url_pattern_regex_as_structured_diagnostic() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^(?<boardSlug>[a-z0-9_-]+$" }]
+    }));
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "invalid_input_url_pattern_regex"
+            && diagnostic.path == "/profiles/0/detect/inputUrlPatterns/0/pattern"
+    }));
+}
+
+#[test]
+fn source_profile_detection_requires_explicit_http_check_timeout_before_fetching() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "httpChecks": [{
+            "key": "metadata_endpoint",
+            "url": "https://api.example.test/{{capture:boardSlug}}/metadata"
+        }]
+    }));
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "http_check_timeout_required"
+            && diagnostic.path == "/profiles/0/detect/httpChecks/0/timeoutMs"
+            && diagnostic.strategy_key.as_deref() == Some("metadata_endpoint")
+    }));
+}
+
+#[test]
+fn source_profile_detection_requires_explicit_browser_probe_timeout_before_rendering() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "browser_probe_timeout_required"
+            && diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"
+            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
+    }));
+}
+
+#[test]
+fn source_profile_detection_uses_access_path_schema_for_default_source_config() {
+    let mut profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<region>eu)$" }]
+    }));
+    profile.access_paths[0].source_config_schema = Some(
+        json!({
+            "type": "object",
+            "required": ["region"],
+            "properties": {
+                "region": { "type": "string", "enum": ["eu"], "pattern": "^eu$" }
+            },
+            "additionalProperties": false
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/eu",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.proposal.unwrap().source_config["region"], "eu");
+}
+
+#[test]
+fn source_profile_detection_validates_proposed_source_config_required_forbidden_and_unknown_properties(
+) {
+    let cases = [
+        (
+            json!({ "region": "eu" }),
+            "missing_source_config_required_property",
+            "/profiles/0/detect/sourceConfig/boardSlug",
+        ),
+        (
+            json!({ "boardSlug": "acme", "keyword": "engineer" }),
+            "forbidden_search_criteria_in_source_config",
+            "/profiles/0/detect/sourceConfig/keyword",
+        ),
+        (
+            json!({ "boardSlug": "acme", "unexpected": "value" }),
+            "unknown_source_config_property",
+            "/profiles/0/detect/sourceConfig/unexpected",
+        ),
+    ];
+
+    for (source_config, expected_code, expected_path) in cases {
+        let mut profile = fixture_profile(json!({
+            "recommendedAccessPathKey": "api",
+            "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/acme$" }],
+            "sourceConfig": source_config
+        }));
+        profile.source_config_schema = Some(
+            json!({
+                "type": "object",
+                "required": ["boardSlug"],
+                "properties": {
+                    "boardSlug": { "type": "string" }
+                },
+                "additionalProperties": false
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+
+        let result = block_on(detect_source_proposal_with_http_client(
+            "https://jobs.example.test/acme",
+            &[profile],
+            &FakeHttpClient::default(),
+        ));
+
+        assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+        assert!(result.proposal.is_none());
+        assert!(
+            result.diagnostics.iter().any(|diagnostic| {
+                diagnostic.category == DiagnosticCategory::Detection
+                    && diagnostic.severity == DiagnosticSeverity::Error
+                    && diagnostic.code == expected_code
+                    && diagnostic.path == expected_path
+            }),
+            "missing {expected_code} at {expected_path}: {:?}",
+            result.diagnostics
+        );
+    }
+}
+
+#[test]
+fn source_profile_detection_validates_proposed_source_config_types_enums_and_patterns() {
+    let cases = [
+        (
+            json!({ "boardSlug": 42, "region": "eu" }),
+            "invalid_source_config_property_type",
+        ),
+        (
+            json!({ "boardSlug": "acme", "region": "us" }),
+            "invalid_source_config_property_enum",
+        ),
+        (
+            json!({ "boardSlug": "ACME", "region": "eu" }),
+            "invalid_source_config_property_pattern",
+        ),
+    ];
+
+    for (source_config, expected_code) in cases {
+        let mut profile = fixture_profile(json!({
+            "recommendedAccessPathKey": "api",
+            "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/acme$" }],
+            "sourceConfig": source_config
+        }));
+        profile.source_config_schema = Some(
+            json!({
+                "type": "object",
+                "required": ["boardSlug"],
+                "properties": {
+                    "boardSlug": { "type": "string", "pattern": "^[a-z0-9_-]+$" }
+                },
+                "additionalProperties": false
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+        profile.access_paths[0].source_config_schema = Some(
+            json!({
+                "type": "object",
+                "required": ["region"],
+                "properties": {
+                    "region": { "type": "string", "enum": ["eu"] }
+                }
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+
+        let result = block_on(detect_source_proposal_with_http_client(
+            "https://jobs.example.test/acme",
+            &[profile],
+            &FakeHttpClient::default(),
+        ));
+
+        assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+        assert!(result.proposal.is_none());
+        assert!(
+            result.diagnostics.iter().any(|diagnostic| {
+                diagnostic.category == DiagnosticCategory::Detection
+                    && diagnostic.severity == DiagnosticSeverity::Error
+                    && diagnostic.code == expected_code
+            }),
+            "missing {expected_code}: {:?}",
+            result.diagnostics
+        );
+    }
+}
+
+#[test]
 fn source_profile_detection_http_checks_contribute_evidence_and_captures() {
     let profile = fixture_profile(json!({
         "recommendedAccessPathKey": "api",
@@ -67,6 +312,7 @@ fn source_profile_detection_http_checks_contribute_evidence_and_captures() {
         "httpChecks": [{
             "key": "metadata_endpoint",
             "url": "https://api.example.test/{{capture:boardSlug}}/metadata",
+            "timeoutMs": 10000,
             "expectStatus": 200,
             "contains": "ExampleJobs",
             "regex": "company=\\\"(?<organizationName>[^\\\"]+)\\\"",
@@ -296,6 +542,7 @@ fn source_profile_detection_reports_failed_http_check_as_structured_diagnostic()
         "httpChecks": [{
             "key": "metadata_endpoint",
             "url": "https://api.example.test/{{capture:boardSlug}}/metadata",
+            "timeoutMs": 10000,
             "expectStatus": 200
         }]
     }));

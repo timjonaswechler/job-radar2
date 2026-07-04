@@ -100,6 +100,11 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
         &["inventory"],
     );
     harness.assert_invalid(
+        SchemaEntrypoint::SourceProfile,
+        "tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json",
+        &["timeoutMs", "required"],
+    );
+    harness.assert_invalid(
         SchemaEntrypoint::Source,
         "tests/fixtures/source-profile-dsl/invalid/v1-source-specific.json",
         &["source_specific"],

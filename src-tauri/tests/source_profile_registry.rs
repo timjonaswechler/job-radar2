@@ -197,6 +197,42 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
 }
 
 #[test]
+fn registry_compiler_validates_unreferenced_custom_profiles() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let custom_profile_dir = temp_dir.path().join("source-profiles");
+    fs::create_dir_all(&custom_profile_dir).unwrap();
+
+    let mut profile: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(fixture_path(
+            "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]
+        .as_object_mut()
+        .unwrap()
+        .remove("timeoutMs");
+    fs::write(
+        custom_profile_dir.join("example_jobs.json"),
+        serde_json::to_string_pretty(&profile).unwrap(),
+    )
+    .unwrap();
+
+    let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
+
+    assert!(snapshot.profile("example_jobs").is_some());
+    assert!(snapshot.source("example_jobs").is_none());
+    assert!(snapshot.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Compiler
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "missing_fetch_timeout"
+            && diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"
+            && diagnostic.strategy_key.as_deref() == Some("json_api")
+    }));
+}
+
+#[test]
 fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnostics() {
     let temp_dir = tempfile::tempdir().unwrap();
     let custom_profile_dir = temp_dir.path().join("source-profiles");

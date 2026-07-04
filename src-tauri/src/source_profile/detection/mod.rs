@@ -27,7 +27,10 @@ pub use http::{
     BoxedDetectionHttpFuture, DetectionHttpClient, DetectionHttpError, DetectionHttpResponse,
     NoopDetectionHttpClient, ReqwestDetectionHttpClient,
 };
-use proposal::{build_source_config, build_source_proposal, detection_document_evidence};
+use proposal::{
+    build_source_config, build_source_proposal, detection_document_evidence,
+    recommended_access_path,
+};
 use templates::{
     render_detection_template, render_detection_template_with_source_config, template_diagnostic,
 };
@@ -217,18 +220,21 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     };
 
     let base_path = format!("/profiles/{profile_index}/detect");
+    let mut diagnostics = Vec::new();
     let Some((mut captures, mut evidence)) =
-        match_input_url_patterns(input_url, detect, &base_path)
+        match_input_url_patterns(input_url, detect, &base_path, &mut diagnostics)
     else {
+        let failed = diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
         return Candidate {
             proposal: None,
             unsupported: None,
-            failed: false,
-            diagnostics: Vec::new(),
+            failed,
+            diagnostics,
         };
     };
 
-    let mut diagnostics = Vec::new();
     if !evaluate_http_checks(
         input_url,
         detect.http_checks.as_deref().unwrap_or_default(),
@@ -266,22 +272,27 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
                     diagnostics,
                 };
             };
-            let source_config_for_probes =
-                match build_source_config(input_url, profile, detect, &captures) {
-                    Ok(source_config) => source_config,
-                    Err(error) => {
-                        return Candidate {
-                            proposal: None,
-                            unsupported: None,
-                            failed: true,
-                            diagnostics: vec![template_diagnostic(
-                                error,
-                                &format!("{base_path}/sourceConfig"),
-                                None,
-                            )],
-                        };
-                    }
-                };
+            let source_config_for_probes = match build_source_config(
+                input_url,
+                profile,
+                recommended_access_path(profile, detect),
+                detect,
+                &captures,
+            ) {
+                Ok(source_config) => source_config,
+                Err(error) => {
+                    return Candidate {
+                        proposal: None,
+                        unsupported: None,
+                        failed: true,
+                        diagnostics: vec![template_diagnostic(
+                            error,
+                            &format!("{base_path}/sourceConfig"),
+                            None,
+                        )],
+                    };
+                }
+            };
             if !evaluate_browser_probes(
                 input_url,
                 browser_probes,
@@ -342,6 +353,7 @@ fn match_input_url_patterns(
     input_url: &str,
     detect: &ProfileDetectionDocument,
     base_path: &str,
+    diagnostics: &mut Diagnostics,
 ) -> Option<(BTreeMap<String, String>, Vec<SourceProposalEvidence>)> {
     let patterns = detect.input_url_patterns.as_deref().unwrap_or_default();
     if patterns.is_empty() {
@@ -351,7 +363,16 @@ fn match_input_url_patterns(
     for (index, pattern) in patterns.iter().enumerate() {
         let regex = match Regex::new(&pattern.pattern) {
             Ok(regex) => regex,
-            Err(_) => continue,
+            Err(error) => {
+                diagnostics.push(detection_error(
+                    "invalid_input_url_pattern_regex",
+                    format!("Profile Detection input URL pattern is an invalid regex: {error}"),
+                    format!("{base_path}/inputUrlPatterns/{index}/pattern"),
+                    None,
+                    serde_json::json!({ "pattern": pattern.pattern }),
+                ));
+                return None;
+            }
         };
         let Some(matches) = regex.captures(input_url) else {
             continue;

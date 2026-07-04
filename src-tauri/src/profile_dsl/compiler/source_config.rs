@@ -23,22 +23,12 @@ pub(super) fn validate_source_config(
     access_path_index: Option<usize>,
     diagnostics: &mut Diagnostics,
 ) {
-    validate_source_config_schema(profile_schema, "/sourceConfigSchema", diagnostics);
-    let access_path_schema_path = access_path_index
-        .map(|index| format!("/accessPaths/{index}/sourceConfigSchema"))
-        .unwrap_or_else(|| "/selectedAccessPath/sourceConfigSchema".to_string());
-    validate_source_config_schema(access_path_schema, &access_path_schema_path, diagnostics);
-
-    let profile_properties = schema_property_keys(profile_schema);
-    let access_path_properties = schema_property_keys(access_path_schema);
-    for key in profile_properties.intersection(&access_path_properties) {
-        diagnostics.push(compiler_error(
-            "source_config_schema_property_redefinition",
-            format!("Access Path Source Config schema redefines profile-level property `{key}`"),
-            format!("{access_path_schema_path}/properties/{key}"),
-            serde_json::json!({ "property": key }),
-        ));
-    }
+    let contract = validate_source_config_contract(
+        profile_schema,
+        access_path_schema,
+        access_path_index,
+        diagnostics,
+    );
 
     let required = schema_required_keys(profile_schema)
         .into_iter()
@@ -55,13 +45,8 @@ pub(super) fn validate_source_config(
         }
     }
 
-    let allowed = profile_properties
-        .union(&access_path_properties)
-        .cloned()
-        .collect::<HashSet<_>>();
-    let additional_allowed = allowed.is_empty()
-        || !(schema_forbids_additional_properties(profile_schema)
-            || schema_forbids_additional_properties(access_path_schema));
+    let allowed = contract.allowed_properties;
+    let additional_allowed = contract.additional_allowed;
 
     for (key, value) in source_config {
         if is_search_request_criteria_key(key) {
@@ -96,6 +81,48 @@ pub(super) fn validate_source_config(
             }
         }
     }
+}
+
+pub(super) fn validate_source_config_contract(
+    profile_schema: Option<&JsonSchemaObject>,
+    access_path_schema: Option<&JsonSchemaObject>,
+    access_path_index: Option<usize>,
+    diagnostics: &mut Diagnostics,
+) -> SourceConfigContract {
+    validate_source_config_schema(profile_schema, "/sourceConfigSchema", diagnostics);
+    let access_path_schema_path = access_path_index
+        .map(|index| format!("/accessPaths/{index}/sourceConfigSchema"))
+        .unwrap_or_else(|| "/selectedAccessPath/sourceConfigSchema".to_string());
+    validate_source_config_schema(access_path_schema, &access_path_schema_path, diagnostics);
+
+    let profile_properties = schema_property_keys(profile_schema);
+    let access_path_properties = schema_property_keys(access_path_schema);
+    for key in profile_properties.intersection(&access_path_properties) {
+        diagnostics.push(compiler_error(
+            "source_config_schema_property_redefinition",
+            format!("Access Path Source Config schema redefines profile-level property `{key}`"),
+            format!("{access_path_schema_path}/properties/{key}"),
+            serde_json::json!({ "property": key }),
+        ));
+    }
+
+    let allowed_properties = profile_properties
+        .union(&access_path_properties)
+        .cloned()
+        .collect::<HashSet<_>>();
+    let additional_allowed = allowed_properties.is_empty()
+        || !(schema_forbids_additional_properties(profile_schema)
+            || schema_forbids_additional_properties(access_path_schema));
+
+    SourceConfigContract {
+        allowed_properties,
+        additional_allowed,
+    }
+}
+
+pub(super) struct SourceConfigContract {
+    pub allowed_properties: HashSet<String>,
+    pub additional_allowed: bool,
 }
 
 fn validate_source_config_schema(

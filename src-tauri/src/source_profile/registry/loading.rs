@@ -6,7 +6,7 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::profile_dsl::compiler::ProfileCompilerSnapshot;
+use crate::profile_dsl::compiler::{validate_source_profile_document, ProfileCompilerSnapshot};
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
@@ -230,6 +230,9 @@ fn load_profile_documents(
             ));
             continue;
         }
+
+        let profile_diagnostics = validate_source_profile_document(&parsed);
+        diagnostics.extend(profile_diagnostics);
 
         seen_keys.insert(parsed.key.clone(), (document.origin, document.path.clone()));
         profiles.push(RegistrySourceProfile {

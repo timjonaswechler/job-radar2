@@ -99,7 +99,7 @@
     "detectionHttpCheck": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "url"],
+      "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
@@ -113,7 +113,7 @@
     "detectionBrowserProbe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "url"],
+      "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },

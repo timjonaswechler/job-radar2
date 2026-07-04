@@ -90,19 +90,18 @@ fn browser_probe_request(
     rendered_url: String,
     probe_path: &str,
 ) -> Result<ProfileBrowserFetchRequest, Diagnostic> {
-    let timeout_ms = probe.timeout_ms.unwrap_or(10_000);
-    if timeout_ms == 0 {
+    let Some(timeout_ms) = probe.timeout_ms.filter(|timeout| *timeout > 0) else {
         return Err(detection_error(
             "browser_probe_timeout_required",
             format!(
-                "Browser probe `{}` must declare a positive timeoutMs or use the bounded default",
+                "Browser probe `{}` must declare a positive timeoutMs",
                 probe.key
             ),
             format!("{probe_path}/timeoutMs"),
             Some(&probe.key),
             serde_json::json!({ "probeKey": probe.key }),
         ));
-    }
+    };
 
     let mut waits = Vec::new();
     for (index, wait) in probe

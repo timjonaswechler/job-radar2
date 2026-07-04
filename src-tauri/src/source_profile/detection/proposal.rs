@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use regex::Regex;
 use serde_json::{Map, Value};
 
 use crate::profile_dsl::diagnostics::Diagnostic;
@@ -36,8 +37,10 @@ pub(super) fn build_source_proposal(
         )
     })?;
 
-    let source_config = build_source_config(input_url, profile, detect, &captures)
-        .map_err(|error| template_diagnostic(error, &format!("{base_path}/sourceConfig"), None))?;
+    let source_config =
+        build_source_config(input_url, profile, Some(access_path), detect, &captures).map_err(
+            |error| template_diagnostic(error, &format!("{base_path}/sourceConfig"), None),
+        )?;
     validate_source_config_for_detection(&source_config, profile, access_path, base_path)?;
     let key_candidates = render_candidate_templates(
         detect.key_candidates.as_deref(),
@@ -68,7 +71,7 @@ pub(super) fn build_source_proposal(
     })
 }
 
-fn recommended_access_path<'a>(
+pub(super) fn recommended_access_path<'a>(
     profile: &'a SourceProfileDocument,
     detect: &ProfileDetectionDocument,
 ) -> Option<&'a ReusableAccessPathDocument> {
@@ -128,7 +131,141 @@ fn validate_source_config_for_detection(
         }
     }
 
+    let allowed = schema_property_keys(profile.source_config_schema.as_ref())
+        .into_iter()
+        .chain(schema_property_keys(
+            access_path.source_config_schema.as_ref(),
+        ))
+        .collect::<std::collections::BTreeSet<_>>();
+    let additional_allowed = allowed.is_empty()
+        || !(schema_forbids_additional_properties(profile.source_config_schema.as_ref())
+            || schema_forbids_additional_properties(access_path.source_config_schema.as_ref()));
+
+    for (key, value) in source_config {
+        if !additional_allowed && !allowed.contains(key) {
+            return Err(detection_error(
+                "unknown_source_config_property",
+                format!("Source Config proposal property `{key}` is not declared by the effective Source Config schema"),
+                format!("{base_path}/sourceConfig/{key}"),
+                None,
+                serde_json::json!({ "property": key }),
+            ));
+        }
+
+        let Some(property_schema) = property_schema(profile.source_config_schema.as_ref(), key)
+            .or_else(|| property_schema(access_path.source_config_schema.as_ref(), key))
+        else {
+            continue;
+        };
+        validate_property_schema(key, value, property_schema, base_path)?;
+    }
+
     Ok(())
+}
+
+fn schema_property_keys(schema: Option<&Map<String, Value>>) -> Vec<String> {
+    schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object)
+        .map(|properties| properties.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn schema_forbids_additional_properties(schema: Option<&Map<String, Value>>) -> bool {
+    schema
+        .and_then(|schema| schema.get("additionalProperties"))
+        .and_then(Value::as_bool)
+        .is_some_and(|additional_properties| !additional_properties)
+}
+
+fn property_schema<'a>(schema: Option<&'a Map<String, Value>>, key: &str) -> Option<&'a Value> {
+    schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object)
+        .and_then(|properties| properties.get(key))
+}
+
+fn validate_property_schema(
+    key: &str,
+    value: &Value,
+    schema: &Value,
+    base_path: &str,
+) -> Result<(), Diagnostic> {
+    if let Some(expected_type) = schema.get("type").and_then(Value::as_str) {
+        if !json_value_matches_schema_type(value, expected_type) {
+            return Err(detection_error(
+                "invalid_source_config_property_type",
+                format!("Source Config proposal property `{key}` does not match schema type `{expected_type}`"),
+                format!("{base_path}/sourceConfig/{key}"),
+                None,
+                serde_json::json!({
+                    "property": key,
+                    "expectedType": expected_type,
+                }),
+            ));
+        }
+    }
+
+    if let Some(allowed_values) = schema.get("enum").and_then(Value::as_array) {
+        if !allowed_values.iter().any(|allowed| allowed == value) {
+            return Err(detection_error(
+                "invalid_source_config_property_enum",
+                format!(
+                    "Source Config proposal property `{key}` is not one of the allowed enum values"
+                ),
+                format!("{base_path}/sourceConfig/{key}"),
+                None,
+                serde_json::json!({
+                    "property": key,
+                    "allowedValues": allowed_values,
+                }),
+            ));
+        }
+    }
+
+    if let Some(pattern) = schema.get("pattern").and_then(Value::as_str) {
+        let regex = Regex::new(pattern).map_err(|error| {
+            detection_error(
+                "invalid_source_config_schema_pattern",
+                format!("Source Config schema pattern for `{key}` is an invalid regex: {error}"),
+                format!("{base_path}/sourceConfig/{key}"),
+                None,
+                serde_json::json!({
+                    "property": key,
+                    "pattern": pattern,
+                }),
+            )
+        })?;
+        if !value.as_str().is_some_and(|value| regex.is_match(value)) {
+            return Err(detection_error(
+                "invalid_source_config_property_pattern",
+                format!(
+                    "Source Config proposal property `{key}` does not match the required pattern"
+                ),
+                format!("{base_path}/sourceConfig/{key}"),
+                None,
+                serde_json::json!({
+                    "property": key,
+                    "pattern": pattern,
+                }),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn json_value_matches_schema_type(value: &Value, schema_type: &str) -> bool {
+    match schema_type {
+        "string" => value.is_string(),
+        "number" => value.is_number(),
+        "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+        "boolean" => value.is_boolean(),
+        "object" => value.is_object(),
+        "array" => value.is_array(),
+        "null" => value.is_null(),
+        _ => true,
+    }
 }
 
 fn required_schema_keys(schema: Option<&Map<String, Value>>) -> Vec<String> {
@@ -175,12 +312,16 @@ fn is_search_request_criteria_key(key: &str) -> bool {
 pub(super) fn build_source_config(
     input_url: &str,
     profile: &SourceProfileDocument,
+    access_path: Option<&ReusableAccessPathDocument>,
     detect: &ProfileDetectionDocument,
     captures: &BTreeMap<String, String>,
 ) -> Result<Value, TemplateError> {
     let Some(template) = &detect.source_config else {
         return Ok(Value::Object(default_source_config(
-            profile, input_url, captures,
+            profile,
+            access_path,
+            input_url,
+            captures,
         )));
     };
     render_json_object_templates(template, input_url, captures).map(Value::Object)
@@ -188,22 +329,49 @@ pub(super) fn build_source_config(
 
 fn default_source_config(
     profile: &SourceProfileDocument,
+    access_path: Option<&ReusableAccessPathDocument>,
     input_url: &str,
     captures: &BTreeMap<String, String>,
 ) -> Map<String, Value> {
     let mut source_config = Map::new();
-    if let Some(schema) = &profile.source_config_schema {
-        if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
-            for key in properties.keys() {
-                if let Some(value) = captures.get(key) {
-                    source_config.insert(key.clone(), Value::String(value.clone()));
-                } else if key == "startUrl" {
-                    source_config.insert(key.clone(), Value::String(input_url.to_string()));
-                }
+    insert_default_source_config_values(
+        &mut source_config,
+        profile.source_config_schema.as_ref(),
+        input_url,
+        captures,
+    );
+    if let Some(access_path) = access_path {
+        insert_default_source_config_values(
+            &mut source_config,
+            access_path.source_config_schema.as_ref(),
+            input_url,
+            captures,
+        );
+    }
+    source_config
+}
+
+fn insert_default_source_config_values(
+    source_config: &mut Map<String, Value>,
+    schema: Option<&Map<String, Value>>,
+    input_url: &str,
+    captures: &BTreeMap<String, String>,
+) {
+    if let Some(properties) = schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object)
+    {
+        for key in properties.keys() {
+            if source_config.contains_key(key) {
+                continue;
+            }
+            if let Some(value) = captures.get(key) {
+                source_config.insert(key.clone(), Value::String(value.clone()));
+            } else if key == "startUrl" {
+                source_config.insert(key.clone(), Value::String(input_url.to_string()));
             }
         }
     }
-    source_config
 }
 
 fn render_json_object_templates(

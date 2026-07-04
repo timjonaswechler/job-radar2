@@ -36,6 +36,12 @@ pub struct CompileSourceExecutionPlanResult {
     pub diagnostics: Diagnostics,
 }
 
+pub(crate) fn validate_source_profile_document(profile: &SourceProfileDocument) -> Diagnostics {
+    let mut diagnostics = Vec::new();
+    resolution::validate_source_profile_document(profile, &mut diagnostics);
+    diagnostics
+}
+
 pub fn compile_source_execution_plan(
     snapshot: &ProfileCompilerSnapshot,
     source_key: &str,
