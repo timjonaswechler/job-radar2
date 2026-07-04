@@ -141,6 +141,39 @@ fn compiler_structurally_validates_source_overrides() {
 }
 
 #[test]
+fn compiler_validates_capabilities_after_applying_source_overrides() {
+    let profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source
+        .source_overrides
+        .as_mut()
+        .unwrap()
+        .strategy_overrides
+        .as_mut()
+        .unwrap()[0]
+        .select = Some(Select::Css {
+        selector: ".job".to_string(),
+    });
+
+    let result = compile_source_execution_plan(
+        &ProfileCompilerSnapshot {
+            profiles: vec![profile],
+            sources: vec![source],
+        },
+        "example_source",
+    );
+
+    assert_eq!(result.execution_plan, None);
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "incompatible_parse_select_capability"
+            && diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"
+            && diagnostic.strategy_key.as_deref() == Some("json_api")
+    }));
+}
+
+#[test]
 fn compiler_validates_source_config_schema_and_rejects_search_request_criteria() {
     let mut profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");

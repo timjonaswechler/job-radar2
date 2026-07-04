@@ -85,6 +85,11 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
         &["invalid"],
     );
     harness.assert_invalid(
+        SchemaEntrypoint::Source,
+        "tests/fixtures/source-profile-dsl/invalid/source-override-transforms.json",
+        &["transforms"],
+    );
+    harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
         "tests/fixtures/source-profile-dsl/invalid/v1-adapter-key.json",
         &["adapterKey"],

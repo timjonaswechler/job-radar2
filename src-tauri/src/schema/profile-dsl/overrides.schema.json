@@ -26,7 +26,6 @@
           "type": "object",
           "additionalProperties": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
         },
-        "transforms": { "$ref": "transform.schema.json#/$defs/transforms" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
       }
     }

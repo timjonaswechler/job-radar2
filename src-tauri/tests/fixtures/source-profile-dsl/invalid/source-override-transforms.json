@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "key": "invalid_override_transforms",
+  "name": "Invalid Override Transforms",
+  "status": "active",
+  "sourceConfig": {
+    "feedUrl": "https://example.test/jobs.json"
+  },
+  "selectedAccessPath": {
+    "type": "profile_access_path",
+    "profileKey": "example_jobs",
+    "pathKey": "json_feed"
+  },
+  "sourceOverrides": {
+    "strategyOverrides": [
+      {
+        "step": "postingDiscovery",
+        "strategyKey": "json_api",
+        "transforms": [{ "type": "trim" }]
+      }
+    ]
+  }
+}

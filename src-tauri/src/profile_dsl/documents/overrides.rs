@@ -6,7 +6,6 @@ use crate::profile_dsl::documents::extract::FieldExpression;
 use crate::profile_dsl::documents::fetch::Fetch;
 use crate::profile_dsl::documents::select::Select;
 use crate::profile_dsl::documents::strategy::Acceptance;
-use crate::profile_dsl::documents::transform::Transform;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -26,8 +25,6 @@ pub struct StrategyOverride {
     pub select: Option<Select>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extract: Option<BTreeMap<String, FieldExpression>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transforms: Option<Vec<Transform>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }

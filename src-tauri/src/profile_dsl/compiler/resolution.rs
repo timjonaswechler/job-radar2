@@ -19,7 +19,7 @@ use super::keys::{
     access_path_index, validate_posting_detail_strategy_keys,
     validate_posting_discovery_strategy_keys, validate_reusable_access_path_keys,
 };
-use super::overrides::validate_source_overrides;
+use super::overrides::{apply_source_overrides, EffectiveAccessPathSteps};
 use super::security::validate_security;
 use super::source_config::{
     source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
@@ -55,18 +55,31 @@ fn compile_profile_access_path(
     let access_path = resolve_access_path(source, profile, profile_key, path_key, diagnostics)?;
     let path_index = access_path_index(profile, &access_path.key);
 
-    validate_profile_access_path(source, profile, access_path, path_index, diagnostics);
+    let effective_access_path = apply_source_overrides(
+        source.source_overrides.as_ref(),
+        &access_path.posting_discovery,
+        access_path.posting_detail.as_ref(),
+        diagnostics,
+    );
+    validate_profile_access_path(
+        source,
+        profile,
+        access_path,
+        &effective_access_path,
+        path_index,
+        diagnostics,
+    );
     if has_error_diagnostics(diagnostics) {
         return None;
     }
 
     let posting_discovery = compile_posting_discovery_step(
-        &access_path.posting_discovery,
+        &effective_access_path.posting_discovery,
         &access_path_step_path(path_index, "postingDiscovery"),
     )
     .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
     .ok()?;
-    let posting_detail = access_path
+    let posting_detail = effective_access_path
         .posting_detail
         .as_ref()
         .map(|posting_detail| {
@@ -91,7 +104,6 @@ fn compile_profile_access_path(
             path_name: access_path.name.clone(),
         },
         source_config: source.source_config.clone(),
-        source_overrides: source.source_overrides.clone(),
         posting_discovery,
         posting_detail,
     })
@@ -157,6 +169,7 @@ fn validate_profile_access_path(
     source: &SourceDocument,
     profile: &SourceProfileDocument,
     access_path: &ReusableAccessPathDocument,
+    effective_access_path: &EffectiveAccessPathSteps,
     path_index: Option<usize>,
     diagnostics: &mut Diagnostics,
 ) {
@@ -176,11 +189,11 @@ fn validate_profile_access_path(
     validate_reusable_access_path_keys(profile, diagnostics);
 
     validate_posting_discovery_strategy_keys(
-        &access_path.posting_discovery,
+        &effective_access_path.posting_discovery,
         access_path_step_path(path_index, "postingDiscovery"),
         diagnostics,
     );
-    if let Some(posting_detail) = &access_path.posting_detail {
+    if let Some(posting_detail) = &effective_access_path.posting_detail {
         validate_posting_detail_strategy_keys(
             posting_detail,
             access_path_step_path(path_index, "postingDetail"),
@@ -188,16 +201,10 @@ fn validate_profile_access_path(
         );
     }
 
-    validate_source_overrides(
-        source.source_overrides.as_ref(),
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
-        diagnostics,
-    );
     let access_path_base = access_path_base_path(path_index);
     validate_template_variables(
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
+        &effective_access_path.posting_discovery,
+        effective_access_path.posting_detail.as_ref(),
         source_config_schema_keys(
             profile.source_config_schema.as_ref(),
             access_path.source_config_schema.as_ref(),
@@ -206,20 +213,20 @@ fn validate_profile_access_path(
         diagnostics,
     );
     validate_capability_compatibility(
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
+        &effective_access_path.posting_discovery,
+        effective_access_path.posting_detail.as_ref(),
         access_path_base.clone(),
         diagnostics,
     );
     validate_boundedness(
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
+        &effective_access_path.posting_discovery,
+        effective_access_path.posting_detail.as_ref(),
         access_path_base.clone(),
         diagnostics,
     );
     validate_security(
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
+        &effective_access_path.posting_discovery,
+        effective_access_path.posting_detail.as_ref(),
         access_path_base,
         diagnostics,
     );
@@ -273,7 +280,6 @@ fn compile_source_owned_access_path(
             name: name.clone(),
         },
         source_config: source.source_config.clone(),
-        source_overrides: source.source_overrides.clone(),
         posting_discovery: compiled_posting_discovery,
         posting_detail: compiled_posting_detail,
     })

@@ -116,6 +116,35 @@ fn compiler_diagnoses_forbidden_headers_secret_body_fields_and_collects_multiple
 }
 
 #[test]
+fn compiler_validates_security_and_boundedness_after_applying_source_overrides() {
+    let profile = simple_profile_value();
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source["sourceOverrides"]["strategyOverrides"][0]["fetch"] = json!({
+        "mode": "http",
+        "method": "GET",
+        "url": "{{sourceConfig:feedUrl}}",
+        "headers": {
+            "authorization": "Bearer secret"
+        }
+    });
+
+    let result = compile_profile_and_source_values(profile, source);
+
+    assert_eq!(result.execution_plan, None);
+    assert_compiler_error(
+        &result,
+        "missing_fetch_timeout",
+        "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",
+    );
+    assert_compiler_error(
+        &result,
+        "forbidden_request_header",
+        "/accessPaths/0/postingDiscovery/strategies/0/fetch/headers/authorization",
+    );
+}
+
+#[test]
 fn compiler_diagnoses_unbounded_fetch_retry_and_pagination() {
     let mut profile = simple_profile_value();
     let strategy = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0];
@@ -244,10 +273,19 @@ fn compiler_diagnoses_prohibited_browser_behaviors() {
 }
 
 fn compile_profile_value(profile: Value) -> CompileSourceExecutionPlanResult {
+    let source: Value =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    compile_profile_and_source_values(profile, source)
+}
+
+fn compile_profile_and_source_values(
+    profile: Value,
+    source: Value,
+) -> CompileSourceExecutionPlanResult {
     let profile: SourceProfileDocument = serde_json::from_value(profile)
         .unwrap_or_else(|error| panic!("profile should deserialize: {error}"));
-    let source: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    let source: SourceDocument = serde_json::from_value(source)
+        .unwrap_or_else(|error| panic!("source should deserialize: {error}"));
 
     compile_source_execution_plan(
         &ProfileCompilerSnapshot {

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::documents::SourceOverrides;
 use crate::source::documents::SourceConfig;
 
 pub(crate) mod capabilities;
@@ -16,8 +15,6 @@ pub struct SourceExecutionPlan {
     pub source: ExecutionPlanSource,
     pub selected_access_path: ExecutionPlanAccessPath,
     pub source_config: SourceConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_overrides: Option<SourceOverrides>,
     pub posting_discovery: ExecutionPlanPostingDiscoveryStep,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub posting_detail: Option<ExecutionPlanPostingDetailStep>,

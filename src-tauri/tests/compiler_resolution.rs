@@ -32,7 +32,11 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
         plan.source_config["feedUrl"],
         "https://example.test/jobs.json"
     );
-    assert!(plan.source_overrides.is_some());
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap().get("sourceOverrides"),
+        None,
+        "Execution Plan must expose the effective plan, not raw Source Overrides"
+    );
     let discovery_strategy = &plan.posting_discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "json_api");
     assert_eq!(
@@ -54,6 +58,11 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
     };
     assert_eq!(limits.max_requests, Some(3));
     assert_eq!(limits.max_items, Some(100));
+    assert_eq!(
+        discovery_strategy.accept_when.as_ref().unwrap().min_results,
+        Some(0),
+        "Source Overrides must be applied before compiling the effective Execution Plan"
+    );
     let detail_strategy = &plan.posting_detail.as_ref().unwrap().strategies[0];
     assert_eq!(detail_strategy.key, "detail_api");
     assert_eq!(
@@ -102,7 +111,11 @@ fn compiler_resolves_source_owned_access_path() {
         plan.source_config["startUrl"],
         "https://example.test/careers"
     );
-    assert_eq!(plan.source_overrides, None);
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap().get("sourceOverrides"),
+        None,
+        "Source-owned Execution Plans also must not carry raw Source Overrides"
+    );
     let discovery_strategy = &plan.posting_discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "html_cards");
     let ExecutionPlanFetch::Browser {

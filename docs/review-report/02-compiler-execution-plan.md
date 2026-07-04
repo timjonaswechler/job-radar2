@@ -11,6 +11,10 @@ Reviewed range `bf0a3ba49ea5f555cad1f53dcc4ab8d6ad1407be..28bfd67f5f6a7688640f92
 
 Spec/standards inputs read: `AGENTS.md`, `README.md`, `CONTEXT.md`, `docs/prd/declarative-source-profile-dsl.md`, `docs/adr/0001-source-config-as-json-schema.md`, and `docs/adr/0009-declarative-source-profile-dsl.md`.
 
+## Resolution note
+
+2026-07-04: The Source Overrides blocker is addressed by compiling an effective Access Path before validation/execution-plan construction. `sourceOverrides.strategyOverrides` now apply only the allowlisted fields (`fetch`, `select`, supported `extract` fields, and `acceptWhen`) before template, capability, boundedness, security, and strict Execution Plan checks run. Raw Source Overrides are no longer carried on `SourceExecutionPlan`; top-level override `transforms` is removed from the Source Override schema/model.
+
 ## Commands/Inputs
 - `git diff --stat bf0a3ba49ea5f555cad1f53dcc4ab8d6ad1407be..28bfd67f5f6a7688640f925442d2019a05732b31 -- ...slice paths...` — inspected 20 added files / 3992 insertions.
 - `git diff --name-status bf0a3ba49ea5f555cad1f53dcc4ab8d6ad1407be..28bfd67f5f6a7688640f925442d2019a05732b31 -- ...slice paths...` — all slice files are additions.
