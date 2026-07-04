@@ -65,6 +65,10 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
             "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002",
             read_text("tests/fixtures/successfactors/posting-detail-2002-fallback.html"),
         ),
+        (
+            "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
+            read_text("tests/fixtures/successfactors/posting-detail-1405371733-schott.html"),
+        ),
     ]);
 
     let discovery = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
@@ -114,6 +118,28 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         Some("primary_html_description")
     );
 
+    let schott_style_candidate = &discovery.candidates[3];
+    let schott_style_detail = block_on(execute_posting_detail_with_fetcher(
+        &plan,
+        &posting_occurrence(schott_style_candidate),
+        &fetcher,
+    ));
+    let expected_schott_style_detail: Value =
+        read_json("tests/fixtures/successfactors/posting-detail-1405371733-expected.json");
+    assert_eq!(
+        schott_style_detail.description_text.as_deref(),
+        expected_schott_style_detail["descriptionText"].as_str()
+    );
+    assert_eq!(schott_style_detail.diagnostics.len(), 1);
+    assert_eq!(
+        schott_style_detail.diagnostics[0].code,
+        "description_empty"
+    );
+    assert_eq!(
+        schott_style_detail.diagnostics[0].strategy_key.as_deref(),
+        Some("primary_html_description")
+    );
+
     assert_eq!(
         fetcher.requested_urls(),
         vec![
@@ -123,6 +149,10 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
             "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002"
                 .to_string(),
             "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002"
+                .to_string(),
+            "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/"
+                .to_string(),
+            "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/"
                 .to_string(),
         ]
     );

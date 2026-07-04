@@ -255,7 +255,7 @@
               "fields": {
                 "descriptionText": {
                   "type": "css_text",
-                  "selector": ".job-description__content, .job-description, .jobDescription, #job-description, main [class*='description']",
+                  "selector": ".job-description__content, .job-description, .jobdescription, .jobDescription, #job-description, main [class*='description']",
                   "cardinality": "first",
                   "transforms": [{ "type": "normalize_whitespace" }]
                 }
