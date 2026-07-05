@@ -1,22 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { createPostingItemViewModel } from "@/features/postings/postings-view-model";
+import {
+  createPostingItemViewModel,
+  type PostingDetailLoadState,
+} from "@/features/postings/postings-view-model";
 import { usePostingsList } from "@/features/postings/postings-workspace-provider";
 
 import { PostingsList } from "./postings-list";
 import { PostingsPreview } from "./postings-preview";
 
 export function Postings() {
-  const { activeQueue, listError, listLoading, postings, refreshList } =
-    usePostingsList();
+  const {
+    activeQueue,
+    listError,
+    listLoading,
+    loadPostingDetail,
+    postings,
+    refreshList,
+  } = usePostingsList();
   const [selectedPostingId, setSelectedPostingId] = useState<number | null>(
     null,
   );
+  const [detailState, setDetailState] = useState<PostingDetailLoadState>({
+    status: "idle",
+  });
+  const detailRequestIdRef = useRef(0);
 
   const { activePostingItems, activePostingRows } = useMemo(() => {
     const items = postings.map(createPostingItemViewModel);
@@ -30,7 +43,9 @@ export function Postings() {
     if (listLoading) return;
 
     if (!activePostingItems.length) {
+      detailRequestIdRef.current += 1;
       setSelectedPostingId(null);
+      setDetailState({ status: "idle" });
       return;
     }
 
@@ -39,9 +54,37 @@ export function Postings() {
     );
 
     if (!selectedPostingIsVisible) {
+      detailRequestIdRef.current += 1;
       setSelectedPostingId(activePostingItems[0].id);
+      setDetailState({ status: "idle" });
     }
   }, [activePostingItems, listLoading, selectedPostingId]);
+
+  const handleSelectPosting = useCallback(
+    (postingId: number) => {
+      const requestId = detailRequestIdRef.current + 1;
+      detailRequestIdRef.current = requestId;
+      setSelectedPostingId(postingId);
+      setDetailState({ status: "loading", postingId });
+
+      void loadPostingDetail(postingId)
+        .then((detail) => {
+          if (detailRequestIdRef.current !== requestId) return;
+          setDetailState({ status: "loaded", postingId, detail });
+        })
+        .catch((unknownError) => {
+          if (detailRequestIdRef.current !== requestId) return;
+          console.error("Failed to load job posting detail", unknownError);
+          setDetailState({
+            status: "failed",
+            postingId,
+            message:
+              "Die Ausschreibung konnte gerade nicht geladen werden. Bitte versuche es erneut.",
+          });
+        });
+    },
+    [loadPostingDetail],
+  );
 
   const selectedPosting = useMemo(
     () =>
@@ -69,7 +112,7 @@ export function Postings() {
           postings={activePostingRows}
           selectedPostingId={selectedPostingId}
           onRetry={refreshList}
-          onSelectPosting={setSelectedPostingId}
+          onSelectPosting={handleSelectPosting}
         />
       </ResizablePanel>
 
@@ -82,8 +125,14 @@ export function Postings() {
         className="h-full min-w-0"
       >
         <PostingsPreview
+          detailState={detailState}
           posting={selectedPosting?.preview ?? null}
           loading={listLoading}
+          onRetryDetail={
+            selectedPostingId === null
+              ? undefined
+              : () => handleSelectPosting(selectedPostingId)
+          }
         />
       </ResizablePanel>
     </ResizablePanelGroup>

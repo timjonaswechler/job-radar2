@@ -2,6 +2,7 @@ import type { BadgeProps } from "@/components/reui/badge";
 import type {
   JobPosting,
   JobPostingApplicationState,
+  JobPostingDetail,
   JobPostingInterestState,
   JobPostingPreparationState,
   JobPostingReadState,
@@ -61,6 +62,12 @@ export type PostingPreviewViewModel = {
   badges: StatusBadge[];
   detailRows: PostingPreviewDetailRowViewModel[];
 };
+
+export type PostingDetailLoadState =
+  | { status: "idle" }
+  | { status: "loading"; postingId: number }
+  | { status: "loaded"; postingId: number; detail: JobPostingDetail }
+  | { status: "failed"; postingId: number; message: string };
 
 export type PostingItemViewModel = {
   id: number;

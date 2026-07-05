@@ -13,10 +13,13 @@ import { toast } from "sonner";
 
 import {
   getJobPostingQueueCounts,
+  getPostingDetail,
   listJobPostingsForQueue,
   updateJobPostingState,
   type JobPosting,
+  type JobPostingDetail,
 } from "@/lib/api/job-postings";
+import { loadPostingDetailForWorkspace } from "@/features/postings/posting-detail-workspace";
 import {
   EMPTY_QUEUE_COUNTS,
   getPostingQueueIdFromPath,
@@ -44,6 +47,7 @@ type PostingsListContextValue = {
   listError: JobPostingsLoadError | null;
   listLoading: boolean;
   postings: JobPosting[];
+  loadPostingDetail: (postingId: number) => Promise<JobPostingDetail>;
   markPostingAsRead: (postingId: number) => Promise<void>;
   refreshList: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
@@ -149,6 +153,19 @@ export function PostingsWorkspaceProvider({
     await Promise.all([refreshCounts(), refreshList()]);
   }, [refreshCounts, refreshList]);
 
+  const loadPostingDetail = useCallback(
+    async (postingId: number) =>
+      loadPostingDetailForWorkspace({
+        activeQueueId,
+        currentPostings: postingsRef.current,
+        postingId,
+        getPostingDetail,
+        setPostings: setPostingsState,
+        refreshCounts,
+      }),
+    [activeQueueId, refreshCounts, setPostingsState],
+  );
+
   const markPostingAsRead = useCallback(
     async (postingId: number) => {
       const posting = postingsRef.current.find((item) => item.id === postingId);
@@ -228,6 +245,7 @@ export function PostingsWorkspaceProvider({
       listError,
       listLoading,
       postings,
+      loadPostingDetail,
       markPostingAsRead,
       refreshList,
       refreshWorkspace,
@@ -238,6 +256,7 @@ export function PostingsWorkspaceProvider({
       listError,
       listLoading,
       postings,
+      loadPostingDetail,
       markPostingAsRead,
       refreshList,
       refreshWorkspace,
