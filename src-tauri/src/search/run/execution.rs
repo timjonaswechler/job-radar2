@@ -1,11 +1,17 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
-use crate::profile_dsl::{
-    diagnostics::DiagnosticSeverity,
-    execution_plan::SourceExecutionPlan,
-    runtime::{
-        execute_posting_discovery_with_clients, ManagedProfileBrowserClient,
-        PostingDiscoveryCandidate, ReqwestPostingDiscoveryFetcher,
+use crate::{
+    background_tasks::CancellationToken,
+    profile_dsl::{
+        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
+        execution_plan::SourceExecutionPlan,
+        runtime::{
+            execute_posting_discovery_with_clients, ManagedProfileBrowserClient,
+            PostingDiscoveryCandidate, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
+            PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ProfileBrowserClient,
+            ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+            ProfileBrowserFetchResponse, ReqwestPostingDiscoveryFetcher,
+        },
     },
 };
 
@@ -68,6 +74,9 @@ impl From<SourceExecutionPlan> for SourceExecutionSource {
 
 pub struct SourceExecutionInput<'a> {
     pub source: &'a SourceExecutionSource,
+    /// Cooperative Search Run cancellation token propagated from the background task.
+    /// Executors should stop active runtime work promptly where their local seams allow it.
+    pub cancellation_token: Option<&'a CancellationToken>,
 }
 
 pub trait SourceExecutor: Send + Sync {
@@ -91,40 +100,174 @@ impl SourceExecutor for DefaultSourceExecutor {
         Box::pin(async move {
             let fetcher = ReqwestPostingDiscoveryFetcher::new();
             let browser = ManagedProfileBrowserClient::new(self.browser_runtime_dir.clone());
-            let result = execute_posting_discovery_with_clients(
-                &input.source.execution_plan,
-                &fetcher,
-                &browser,
-            )
-            .await;
-            let execution_failed = result.candidates.is_empty()
-                && result
-                    .diagnostics
-                    .iter()
-                    .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
+            execute_posting_discovery_for_source(input, &fetcher, &browser).await
+        })
+    }
+}
 
-            if execution_failed {
-                let message = result
-                    .diagnostics
-                    .iter()
-                    .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-                    .map(|diagnostic| diagnostic.message.clone())
-                    .unwrap_or_else(|| "postingDiscovery failed".to_string());
-                return Err(SourceExecutionError::FailedWithDiagnostics {
-                    message,
-                    diagnostics: result.diagnostics,
-                });
+async fn execute_posting_discovery_for_source<F, B>(
+    input: SourceExecutionInput<'_>,
+    fetcher: &F,
+    browser: &B,
+) -> Result<SourceExecutionOutput, SourceExecutionError>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    if input
+        .cancellation_token
+        .is_some_and(CancellationToken::is_cancelled)
+    {
+        return Err(source_execution_cancelled_error(Vec::new()));
+    }
+
+    let fetcher = CancellablePostingDiscoveryFetcher {
+        inner: fetcher,
+        cancellation_token: input.cancellation_token,
+    };
+    let browser = CancellableProfileBrowserClient {
+        inner: browser,
+        cancellation_token: input.cancellation_token,
+    };
+    let result =
+        execute_posting_discovery_with_clients(&input.source.execution_plan, &fetcher, &browser)
+            .await;
+
+    if input
+        .cancellation_token
+        .is_some_and(CancellationToken::is_cancelled)
+    {
+        return Err(source_execution_cancelled_error(result.diagnostics));
+    }
+
+    let execution_failed = result.candidates.is_empty()
+        && result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
+
+    if execution_failed {
+        let message = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+            .map(|diagnostic| diagnostic.message.clone())
+            .unwrap_or_else(|| "postingDiscovery failed".to_string());
+        return Err(SourceExecutionError::FailedWithDiagnostics {
+            message,
+            diagnostics: result.diagnostics,
+        });
+    }
+
+    Ok(SourceExecutionOutput {
+        candidates: result
+            .candidates
+            .into_iter()
+            .map(source_candidate)
+            .collect(),
+        diagnostics: result.diagnostics,
+    })
+}
+
+struct CancellablePostingDiscoveryFetcher<'a, F: ?Sized> {
+    inner: &'a F,
+    cancellation_token: Option<&'a CancellationToken>,
+}
+
+impl<F> PostingDiscoveryFetcher for CancellablePostingDiscoveryFetcher<'_, F>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+{
+    fn fetch<'a>(
+        &'a self,
+        request: PostingDiscoveryFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            let Some(cancellation_token) = self.cancellation_token else {
+                return self.inner.fetch(request).await;
+            };
+            if cancellation_token.is_cancelled() {
+                return Err(posting_discovery_cancelled_fetch_error());
             }
 
-            Ok(SourceExecutionOutput {
-                candidates: result
-                    .candidates
-                    .into_iter()
-                    .map(source_candidate)
-                    .collect(),
-                diagnostics: result.diagnostics,
-            })
+            tokio::select! {
+                result = self.inner.fetch(request) => result,
+                _ = cancellation_token.cancelled() => Err(posting_discovery_cancelled_fetch_error()),
+            }
         })
+    }
+}
+
+struct CancellableProfileBrowserClient<'a, B: ?Sized> {
+    inner: &'a B,
+    cancellation_token: Option<&'a CancellationToken>,
+}
+
+impl<B> ProfileBrowserClient for CancellableProfileBrowserClient<'_, B>
+where
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    fn render<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            let Some(cancellation_token) = self.cancellation_token else {
+                return self.inner.render(request).await;
+            };
+            if cancellation_token.is_cancelled() {
+                return Err(profile_browser_cancelled_fetch_error());
+            }
+
+            let result = self.inner.render(request).await;
+            if cancellation_token.is_cancelled() {
+                return Err(profile_browser_cancelled_fetch_error());
+            }
+            result
+        })
+    }
+}
+
+fn posting_discovery_cancelled_fetch_error() -> PostingDiscoveryFetchError {
+    PostingDiscoveryFetchError::new("postingDiscovery cancelled")
+}
+
+fn profile_browser_cancelled_fetch_error() -> ProfileBrowserFetchError {
+    ProfileBrowserFetchError::new(
+        ProfileBrowserFetchErrorKind::RuntimeUnavailable,
+        "postingDiscovery cancelled",
+    )
+}
+
+fn source_execution_cancelled_error(mut diagnostics: Diagnostics) -> SourceExecutionError {
+    diagnostics.push(source_execution_cancelled_diagnostic());
+    SourceExecutionError::CancelledWithDiagnostics {
+        message: "postingDiscovery cancelled".to_string(),
+        diagnostics,
+    }
+}
+
+fn source_execution_cancelled_diagnostic() -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "source_execution_cancelled".to_string(),
+        message: "postingDiscovery cancelled".to_string(),
+        severity: DiagnosticSeverity::Error,
+        path: "/postingDiscovery".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({ "reason": "search_run_cancelled" })),
     }
 }
 

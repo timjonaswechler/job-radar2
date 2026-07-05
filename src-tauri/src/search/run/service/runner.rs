@@ -134,9 +134,15 @@ impl<'a> SearchRunService<'a> {
                     continue;
                 }
             };
-            let input = SourceExecutionInput { source };
+            let input = SourceExecutionInput {
+                source,
+                cancellation_token,
+            };
 
             match self.source_executor.execute(input).await {
+                Ok(_output) if cancellation_token.is_some_and(|token| token.is_cancelled()) => {
+                    source_runs.push(source_run_cancelled_for_source(&source.key, &source.name));
+                }
                 Ok(output) => {
                     let candidate_count = output.candidates.len();
                     candidates.extend(output.candidates.into_iter().filter_map(|candidate| {

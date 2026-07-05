@@ -74,6 +74,7 @@ impl BackgroundTaskSpec {
 pub enum BackgroundTaskState {
     Queued,
     Running,
+    Cancelling,
     Succeeded,
     Failed,
     Cancelled,
@@ -117,6 +118,12 @@ impl CancellationToken {
 
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
+    }
+
+    pub async fn cancelled(&self) {
+        while !self.is_cancelled() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
     }
 }
 
@@ -322,6 +329,11 @@ impl BackgroundTaskScheduler {
                     (snapshot, true)
                 }
                 BackgroundTaskState::Running => {
+                    entry.cancellation_token.cancel();
+                    entry.snapshot.state = BackgroundTaskState::Cancelling;
+                    (entry.snapshot.clone(), false)
+                }
+                BackgroundTaskState::Cancelling => {
                     entry.cancellation_token.cancel();
                     (entry.snapshot.clone(), false)
                 }
@@ -797,9 +809,7 @@ mod tests {
                 .schedule(
                     BackgroundTaskSpec::compatible_fixture("first"),
                     move |context| async move {
-                        while !context.cancellation_token.is_cancelled() {
-                            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-                        }
+                        context.cancellation_token.cancelled().await;
                         BackgroundTaskCompletion::Cancelled {
                             error: Some("cancelled".to_string()),
                             result: None,
@@ -821,10 +831,62 @@ mod tests {
 
             let queued_cancelled = scheduler.cancel(&queued.task_id).unwrap();
             assert_eq!(queued_cancelled.state, BackgroundTaskState::Cancelled);
-            scheduler.cancel(&first.task_id).unwrap();
+            let first_cancelling = scheduler.cancel(&first.task_id).unwrap();
+            assert_eq!(first_cancelling.state, BackgroundTaskState::Cancelling);
             let first_cancelled =
                 wait_for_state(&scheduler, &first.task_id, BackgroundTaskState::Cancelled).await;
             assert_eq!(first_cancelled.error.as_deref(), Some("cancelled"));
+        });
+    }
+
+    #[test]
+    fn running_task_cancellation_request_is_immediately_observable() {
+        tauri::async_runtime::block_on(async {
+            let snapshots = Arc::new(Mutex::new(Vec::<BackgroundTaskSnapshot>::new()));
+            let notifier = Arc::new(RecordingNotifier {
+                snapshots: snapshots.clone(),
+            });
+            let scheduler = BackgroundTaskScheduler::new_with_notifier(
+                BackgroundTaskSchedulerConfig::default(),
+                notifier,
+            );
+            let (started_tx, started_rx) = oneshot::channel::<()>();
+            let (release, released) = oneshot::channel::<()>();
+
+            let task = scheduler
+                .schedule(
+                    BackgroundTaskSpec::compatible_fixture("cancellable"),
+                    move |context| async move {
+                        started_tx.send(()).unwrap();
+                        let _ = released.await;
+                        if context.cancellation_token.is_cancelled() {
+                            return BackgroundTaskCompletion::Cancelled {
+                                error: Some("cancelled".to_string()),
+                                result: None,
+                                diagnostics: Vec::new(),
+                            };
+                        }
+                        BackgroundTaskCompletion::Succeeded {
+                            result: json!("done"),
+                        }
+                    },
+                )
+                .unwrap();
+            started_rx.await.unwrap();
+
+            let cancelling = scheduler.cancel(&task.task_id).unwrap();
+
+            assert_eq!(cancelling.state, BackgroundTaskState::Cancelling);
+            assert_eq!(
+                scheduler.get(&task.task_id).unwrap().state,
+                BackgroundTaskState::Cancelling
+            );
+            assert!(snapshots.lock().unwrap().iter().any(|snapshot| {
+                snapshot.task_id == task.task_id
+                    && snapshot.state == BackgroundTaskState::Cancelling
+            }));
+            release.send(()).unwrap();
+            wait_for_state(&scheduler, &task.task_id, BackgroundTaskState::Cancelled).await;
         });
     }
 

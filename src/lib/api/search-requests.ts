@@ -41,6 +41,7 @@ export type SourceRunStatus = "completed" | "failed" | "cancelled" | "skipped"
 export type BackgroundTaskState =
   | "queued"
   | "running"
+  | "cancelling"
   | "succeeded"
   | "failed"
   | "cancelled"

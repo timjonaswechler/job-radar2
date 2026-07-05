@@ -1,4 +1,5 @@
 use super::support::*;
+use std::sync::Mutex;
 
 #[test]
 fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
@@ -99,6 +100,132 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
         );
         assert_eq!(result["postings"][0]["title"], json!("Laser Engineer"));
     });
+}
+
+#[test]
+fn scheduled_search_run_cancellation_is_observable_and_reaches_active_source_executor() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(
+            temp_dir.path(),
+            &[("cancellable_source", "Cancellable Source")],
+        );
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("engineer")],
+            vec![],
+        )
+        .await;
+        let running_search_runs = std::sync::Arc::new(RunningSearchRuns::default());
+        let scheduler = crate::background_tasks::BackgroundTaskScheduler::new(
+            crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
+        );
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+        let executor = CancellationAwareExecutor::new(started_tx);
+        let pool_for_task = pool.clone();
+        let app_data_dir = temp_dir.path().to_path_buf();
+        let running_for_task = running_search_runs.clone();
+
+        let task = scheduler
+            .schedule(
+                crate::background_tasks::BackgroundTaskSpec::search_run(),
+                move |context| async move {
+                    let result = SearchRunService::new_with_result_artifact(
+                        &pool_for_task,
+                        running_for_task.as_ref(),
+                        &executor,
+                        SearchRunResultArtifact::Disabled,
+                        app_data_dir,
+                    )
+                    .run_with_cancellation(search_request.id, Some(&context.cancellation_token))
+                    .await;
+
+                    match result {
+                        Ok(result) if result.status == SearchRunStatus::Cancelled => {
+                            crate::background_tasks::BackgroundTaskCompletion::Cancelled {
+                                error: Some("Search Run cancelled".to_string()),
+                                result: serde_json::to_value(result).ok(),
+                                diagnostics: Vec::new(),
+                            }
+                        }
+                        Ok(result) => {
+                            crate::background_tasks::BackgroundTaskCompletion::Succeeded {
+                                result: serde_json::to_value(result).unwrap(),
+                            }
+                        }
+                        Err(error) => crate::background_tasks::BackgroundTaskCompletion::Failed {
+                            error,
+                            diagnostics: Vec::new(),
+                        },
+                    }
+                },
+            )
+            .unwrap();
+        started_rx.await.unwrap();
+
+        let cancelling = scheduler.cancel(&task.task_id).unwrap();
+
+        assert_eq!(
+            cancelling.state,
+            crate::background_tasks::BackgroundTaskState::Cancelling
+        );
+        let cancelled = wait_for_background_task_state(
+            &scheduler,
+            &task.task_id,
+            crate::background_tasks::BackgroundTaskState::Cancelled,
+        )
+        .await;
+        let result = cancelled
+            .result
+            .expect("cancelled Search Run stores result");
+        assert_eq!(result["status"], json!("cancelled"));
+        assert_eq!(result["sourceRuns"][0]["status"], json!("cancelled"));
+        assert_eq!(
+            result["sourceRuns"][0]["diagnostics"][0]["code"],
+            json!("source_execution_cancelled")
+        );
+    });
+}
+
+struct CancellationAwareExecutor {
+    started: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+impl CancellationAwareExecutor {
+    fn new(started: tokio::sync::oneshot::Sender<()>) -> Self {
+        Self {
+            started: Mutex::new(Some(started)),
+        }
+    }
+}
+
+impl SourceExecutor for CancellationAwareExecutor {
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
+        let token = input
+            .cancellation_token
+            .expect("Search Run passes cancellation token to SourceExecutor");
+        if let Some(started) = self.started.lock().unwrap().take() {
+            started.send(()).unwrap();
+        }
+
+        Box::pin(async move {
+            token.cancelled().await;
+            Err(SourceExecutionError::CancelledWithDiagnostics {
+                message: "postingDiscovery cancelled".to_string(),
+                diagnostics: vec![crate::profile_dsl::diagnostics::Diagnostic {
+                    category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
+                    code: "source_execution_cancelled".to_string(),
+                    message: "postingDiscovery cancelled".to_string(),
+                    severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
+                    path: "/postingDiscovery".to_string(),
+                    strategy_key: None,
+                    details: Some(json!({ "reason": "search_run_cancelled" })),
+                }],
+            })
+        })
+    }
 }
 
 #[test]
