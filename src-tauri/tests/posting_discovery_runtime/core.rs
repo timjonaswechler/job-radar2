@@ -78,6 +78,47 @@ fn compiled_posting_discovery_runtime_reports_required_field_and_cardinality_dia
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_applies_where_filters_before_extraction() {
+    let plan = compiled_posting_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        serde_json::Map::from_iter([(
+            "where".to_string(),
+            json!([
+                {
+                    "type": "regex",
+                    "field": { "type": "json_path", "jsonPath": "$.status", "cardinality": "one" },
+                    "pattern": "^open$"
+                },
+                {
+                    "type": "non_empty",
+                    "field": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" }
+                }
+            ]),
+        )]),
+    );
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [
+                { "status": "open", "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" },
+                { "status": "closed", "company": "Example GmbH", "url": "https://example.test/jobs/2" },
+                { "status": "open", "title": "", "company": "Example GmbH", "url": "https://example.test/jobs/3" }
+            ]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Rust Engineer");
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_preserves_successful_items_with_partial_diagnostics() {
     let plan = compiled_json_posting_discovery_plan(default_fields(), default_select());
     let fetcher = FakeFetcher::new([(

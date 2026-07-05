@@ -11,6 +11,7 @@ pub(super) enum ParsedDocument<'body> {
 pub(super) enum RuntimeItem<'doc, 'body> {
     Json(&'doc Value),
     Xml(roxmltree::Node<'doc, 'body>),
+    XmlCollection(Vec<roxmltree::Node<'doc, 'body>>),
     Html(NodeRef<'doc>),
     Text(String),
 }
@@ -66,6 +67,7 @@ pub(super) fn parse_response_document<'body>(
 pub(super) fn select_detail_document<'doc, 'body>(
     document: &'doc ParsedDocument<'body>,
     select: &Select,
+    allow_collection: bool,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -113,6 +115,7 @@ pub(super) fn select_detail_document<'doc, 'body>(
                     ));
                     None
                 }
+                _ if allow_collection => Some(RuntimeItem::XmlCollection(items)),
                 1 => Some(RuntimeItem::Xml(items.remove(0))),
                 count => {
                     diagnostics.push(runtime_error(

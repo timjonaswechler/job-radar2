@@ -5,7 +5,7 @@ use super::values::{
     xml_node_text, xml_path_texts, JsonStringsResult,
 };
 use super::*;
-use crate::profile_dsl::documents::select::{CaptureRule, Captures};
+use crate::profile_dsl::documents::select::{CaptureRule, Captures, Filter};
 
 mod captures;
 mod fields;
@@ -17,6 +17,7 @@ use fields::{apply_transforms, evaluate_string_field, raw_field_values, FieldEva
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
     capture_rules: Option<&Captures>,
+    conditions: Option<&Vec<Filter>>,
     fields: &ExecutionPlanPostingDiscoveryFields,
     source_config: &SourceConfig,
     source_name: &str,
@@ -35,6 +36,20 @@ pub(super) fn extract_candidate(
         item_index,
         diagnostics,
     )?;
+
+    if !item_matches_conditions(
+        item,
+        conditions,
+        source_config,
+        source_name,
+        &captures,
+        base_path,
+        strategy_key,
+        item_index,
+        diagnostics,
+    )? {
+        return None;
+    }
 
     let title = extract_required_string_field(
         item,
@@ -146,6 +161,84 @@ pub(super) fn extract_candidate(
         }),
         _ => None,
     }
+}
+
+fn item_matches_conditions(
+    item: &RuntimeItem<'_, '_>,
+    conditions: Option<&Vec<Filter>>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    captures: &BTreeMap<String, String>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> Option<bool> {
+    let Some(conditions) = conditions else {
+        return Some(true);
+    };
+
+    for (condition_index, condition) in conditions.iter().enumerate() {
+        let condition_path = format!("{base_path}/where/{condition_index}");
+        match condition {
+            Filter::NonEmpty { field } => {
+                let evaluation = evaluate_string_field(
+                    item,
+                    source_config,
+                    source_name,
+                    captures,
+                    field,
+                    &format!("{condition_path}/field"),
+                    strategy_key,
+                    item_index,
+                    diagnostics,
+                );
+                if evaluation.failed {
+                    return None;
+                }
+                if evaluation.value.is_none() {
+                    return Some(false);
+                }
+            }
+            Filter::Regex { field, pattern } => {
+                let regex = match Regex::new(pattern) {
+                    Ok(regex) => regex,
+                    Err(error) => {
+                        diagnostics.push(runtime_error(
+                            "where_pattern_invalid",
+                            format!("Where filter regex pattern is invalid: {error}"),
+                            format!("{condition_path}/pattern"),
+                            strategy_key,
+                            json!({ "pattern": pattern, "error": error.to_string() }),
+                        ));
+                        return None;
+                    }
+                };
+                let evaluation = evaluate_string_field(
+                    item,
+                    source_config,
+                    source_name,
+                    captures,
+                    field,
+                    &format!("{condition_path}/field"),
+                    strategy_key,
+                    item_index,
+                    diagnostics,
+                );
+                if evaluation.failed {
+                    return None;
+                }
+                let Some(value) = evaluation.value else {
+                    return Some(false);
+                };
+                if !regex.is_match(&value) {
+                    return Some(false);
+                }
+            }
+        }
+    }
+
+    Some(true)
 }
 
 fn extract_required_string_field(

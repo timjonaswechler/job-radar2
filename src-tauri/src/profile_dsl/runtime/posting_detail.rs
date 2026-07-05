@@ -11,7 +11,7 @@ use crate::{
         documents::strategy::Acceptance,
         documents::{
             extract::{Cardinality, CombinePart, FieldExpression},
-            select::CaptureRule,
+            select::{CaptureRule, Filter},
             transform::Transform,
             HttpMethod, ParseType, RequestBody, Select,
         },

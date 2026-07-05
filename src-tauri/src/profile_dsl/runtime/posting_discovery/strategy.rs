@@ -79,11 +79,21 @@ where
 }
 
 fn posting_discovery_execution_failed(result: &PostingDiscoveryExecutionResult) -> bool {
-    result.candidates.is_empty()
-        && result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+    result.diagnostics.iter().any(is_strategy_level_error)
+        || (result.candidates.is_empty()
+            && result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error))
+}
+
+fn is_strategy_level_error(diagnostic: &Diagnostic) -> bool {
+    diagnostic.severity == DiagnosticSeverity::Error
+        && diagnostic
+            .details
+            .as_ref()
+            .and_then(|details| details.get("itemIndex"))
+            .is_none()
 }
 
 pub(super) struct StrategyFetchOutput {
@@ -228,6 +238,7 @@ pub(super) fn extract_candidates_from_items(
         if let Some(candidate) = extract_candidate(
             &item,
             strategy.captures.as_ref(),
+            strategy.conditions.as_ref(),
             &strategy.extract.fields,
             &plan.source_config,
             &plan.source.name,

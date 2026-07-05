@@ -126,6 +126,128 @@ fn compiled_posting_detail_runtime_falls_back_to_first_accepted_strategy() {
 }
 
 #[test]
+fn compiled_posting_detail_runtime_applies_where_filters_before_extraction() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![
+            json!({
+                "key": "filtered_detail_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/jobs/filtered.json",
+                    "timeoutMs": 10000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "document" },
+                "where": [{
+                    "type": "regex",
+                    "field": { "type": "json_path", "jsonPath": "$.status", "cardinality": "one" },
+                    "pattern": "^published$"
+                }],
+                "extract": {
+                    "fields": {
+                        "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                    }
+                }
+            }),
+            json!({
+                "key": "fallback_detail_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/jobs/fallback.json",
+                    "timeoutMs": 10000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "document" },
+                "extract": {
+                    "fields": {
+                        "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                    }
+                }
+            }),
+        ],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([
+        (
+            "https://example.test/jobs/filtered.json",
+            json!({ "status": "draft", "description": "This draft description must be filtered before extraction." }).to_string(),
+        ),
+        (
+            "https://example.test/jobs/fallback.json",
+            json!({ "description": "Fallback detail description." }).to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(
+        result.description_text,
+        Some("Fallback detail description.".to_string())
+    );
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "where_condition_not_matched");
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("filtered_detail_api")
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_reports_invalid_where_regex_diagnostic() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![json!({
+            "key": "invalid_where_detail_api",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/jobs/invalid-where.json",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "where": [{
+                "type": "regex",
+                "field": { "type": "json_path", "jsonPath": "$.status", "cardinality": "one" },
+                "pattern": "["
+            }],
+            "extract": {
+                "fields": {
+                    "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
+                }
+            }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs/invalid-where.json",
+        json!({ "status": "published", "description": "This description is not extracted." })
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_runtime_diagnostic(&result.diagnostics[0], "where_pattern_invalid");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/postingDetail/strategies/0/where/0/pattern"
+    );
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("invalid_where_detail_api")
+    );
+    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
+}
+
+#[test]
 fn compiled_posting_detail_runtime_combines_step_and_strategy_acceptance() {
     let plan = compiled_posting_detail_plan_with_strategies(
         Some(json!({ "minDescriptionLength": 20 })),
@@ -508,6 +630,95 @@ Second paragraph.</description></job></jobs>"#
     assert_eq!(
         result.description_text,
         Some("First paragraph. Second paragraph.".to_string())
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_matches_xml_detail_collection() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![json!({
+            "key": "xml_feed_detail",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/jobs.xml",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "xml" },
+            "select": { "type": "xml_element", "element": "job" },
+            "match": {
+                "left": { "type": "xml_text", "textPath": "id", "cardinality": "one" },
+                "right": { "type": "posting_meta", "key": "jobId", "cardinality": "one" }
+            },
+            "extract": {
+                "fields": {
+                    "descriptionText": { "type": "xml_text", "textPath": "description", "cardinality": "one" }
+                }
+            }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42", [("jobId", "42")]);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/jobs.xml",
+        r#"<jobs>
+            <job><id>41</id><description>Wrong job.</description></job>
+            <job><id>42</id><description>Matched XML detail description.</description></job>
+        </jobs>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("Matched XML detail description.".to_string())
+    );
+}
+
+#[test]
+fn compiled_posting_detail_runtime_matches_one_item_xml_detail_collection() {
+    let plan = compiled_posting_detail_plan_with_strategies(
+        None,
+        vec![json!({
+            "key": "xml_feed_detail",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/one-job.xml",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "xml" },
+            "select": { "type": "xml_element", "element": "job" },
+            "match": {
+                "left": { "type": "xml_text", "textPath": "id", "cardinality": "one" },
+                "right": { "type": "posting_meta", "key": "jobId", "cardinality": "one" }
+            },
+            "extract": {
+                "fields": {
+                    "descriptionText": { "type": "xml_text", "textPath": "description", "cardinality": "one" }
+                }
+            }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42", [("jobId", "42")]);
+    let fetcher = FakeDetailFetcher::new([(
+        "https://example.test/one-job.xml",
+        r#"<jobs><job><id>42</id><description>Single XML detail description.</description></job></jobs>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_detail_with_fetcher(
+        &plan, &posting, &fetcher,
+    ));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result.description_text,
+        Some("Single XML detail description.".to_string())
     );
 }
 
@@ -1007,7 +1218,10 @@ fn compiled_posting_detail_plan_with_strategies(
                         "fields": {
                             "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
                             "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
-                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" },
+                            "postingMeta": {
+                                "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "one" }
+                            }
                         }
                     }
                 }]

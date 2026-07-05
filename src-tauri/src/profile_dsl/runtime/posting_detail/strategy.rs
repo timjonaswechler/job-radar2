@@ -67,6 +67,7 @@ where
     let selected_document = match select_detail_document(
         &document,
         &strategy.select,
+        strategy.field_match.is_some(),
         &base_path,
         strategy_key.as_deref(),
         &mut diagnostics,
@@ -87,6 +88,32 @@ where
         Some(document) => document,
         None => return rejected_detail_attempt(diagnostics),
     };
+
+    if strategy.field_match.is_none() {
+        match detail_document_matches_conditions(
+            &selected_document,
+            plan,
+            posting,
+            &captures,
+            strategy.conditions.as_ref(),
+            &base_path,
+            strategy_key.as_deref(),
+            &mut diagnostics,
+        ) {
+            Some(true) => {}
+            Some(false) => {
+                diagnostics.push(runtime_error(
+                    "where_condition_not_matched",
+                    "postingDetail where filters rejected the selected detail document",
+                    format!("{base_path}/where"),
+                    strategy_key.as_deref(),
+                    json!({}),
+                ));
+                return rejected_detail_attempt(diagnostics);
+            }
+            None => return rejected_detail_attempt(diagnostics),
+        }
+    }
 
     let description_path = format!("{base_path}/extract/fields/descriptionText");
     let description = evaluate_string_field(
@@ -157,52 +184,186 @@ fn match_detail_document<'doc, 'body>(
         return None;
     }
 
-    let RuntimeItem::Json(Value::Array(items)) = selected_document else {
-        diagnostics.push(runtime_error(
-            "detail_match_unsupported_selection",
-            "postingDetail match currently requires a JSON array selected by the strategy",
-            format!("{base_path}/match"),
+    match selected_document {
+        RuntimeItem::Json(Value::Array(items)) => match_json_detail_collection(
+            items,
+            plan,
+            posting,
+            captures,
+            strategy,
+            base_path,
             strategy_key,
-            json!({}),
-        ));
-        return None;
-    };
+            diagnostics,
+        ),
+        RuntimeItem::XmlCollection(items) => match_xml_detail_collection(
+            items,
+            plan,
+            posting,
+            captures,
+            strategy,
+            base_path,
+            strategy_key,
+            diagnostics,
+        ),
+        _ => {
+            diagnostics.push(runtime_error(
+                "detail_match_unsupported_selection",
+                "postingDetail match requires a JSON array or XML element collection selected by the strategy",
+                format!("{base_path}/match"),
+                strategy_key,
+                json!({}),
+            ));
+            None
+        }
+    }
+}
 
+fn match_json_detail_collection<'doc, 'body>(
+    items: &'doc [Value],
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    strategy: &ExecutionPlanPostingDetailStrategy,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<RuntimeItem<'doc, 'body>> {
+    let field_match = strategy.field_match.as_ref()?;
     let mut matches = Vec::new();
-    let left_path = format!("{base_path}/match/left");
-    let right_path = format!("{base_path}/match/right");
     for item in items {
         let item_document = RuntimeItem::Json(item);
-        let left = evaluate_string_field(
+        if !detail_document_matches_conditions(
             &item_document,
-            &plan.source_config,
-            &plan.source.name,
+            plan,
             posting,
             captures,
-            &field_match.left,
-            &left_path,
+            strategy.conditions.as_ref(),
+            base_path,
             strategy_key,
             diagnostics,
-        );
-        let right = evaluate_string_field(
-            &item_document,
-            &plan.source_config,
-            &plan.source.name,
-            posting,
-            captures,
-            &field_match.right,
-            &right_path,
-            strategy_key,
-            diagnostics,
-        );
-        if left.failed || right.failed {
-            return None;
+        )? {
+            continue;
         }
-        if left.value.is_some() && left.value == right.value {
+        if detail_document_matches_field(
+            &item_document,
+            field_match,
+            plan,
+            posting,
+            captures,
+            base_path,
+            strategy_key,
+            diagnostics,
+        )? {
             matches.push(item);
         }
     }
 
+    finish_detail_matches(
+        matches,
+        RuntimeItem::Json,
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+}
+
+fn match_xml_detail_collection<'doc, 'body>(
+    items: Vec<roxmltree::Node<'doc, 'body>>,
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    strategy: &ExecutionPlanPostingDetailStrategy,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<RuntimeItem<'doc, 'body>> {
+    let field_match = strategy.field_match.as_ref()?;
+    let mut matches = Vec::new();
+    for item in items {
+        let item_document = RuntimeItem::Xml(item);
+        if !detail_document_matches_conditions(
+            &item_document,
+            plan,
+            posting,
+            captures,
+            strategy.conditions.as_ref(),
+            base_path,
+            strategy_key,
+            diagnostics,
+        )? {
+            continue;
+        }
+        if detail_document_matches_field(
+            &item_document,
+            field_match,
+            plan,
+            posting,
+            captures,
+            base_path,
+            strategy_key,
+            diagnostics,
+        )? {
+            matches.push(item);
+        }
+    }
+
+    finish_detail_matches(
+        matches,
+        RuntimeItem::Xml,
+        base_path,
+        strategy_key,
+        diagnostics,
+    )
+}
+
+fn detail_document_matches_field(
+    item_document: &RuntimeItem<'_, '_>,
+    field_match: &crate::profile_dsl::documents::strategy::FieldMatch,
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<bool> {
+    let left_path = format!("{base_path}/match/left");
+    let right_path = format!("{base_path}/match/right");
+    let left = evaluate_string_field(
+        item_document,
+        &plan.source_config,
+        &plan.source.name,
+        posting,
+        captures,
+        &field_match.left,
+        &left_path,
+        strategy_key,
+        diagnostics,
+    );
+    let right = evaluate_string_field(
+        item_document,
+        &plan.source_config,
+        &plan.source.name,
+        posting,
+        captures,
+        &field_match.right,
+        &right_path,
+        strategy_key,
+        diagnostics,
+    );
+    if left.failed || right.failed {
+        return None;
+    }
+
+    Some(left.value.is_some() && left.value == right.value)
+}
+
+fn finish_detail_matches<'doc, 'body, T>(
+    mut matches: Vec<T>,
+    into_runtime_item: impl Fn(T) -> RuntimeItem<'doc, 'body>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<RuntimeItem<'doc, 'body>> {
     match matches.len() {
         0 => {
             diagnostics.push(runtime_error(
@@ -214,7 +375,7 @@ fn match_detail_document<'doc, 'body>(
             ));
             None
         }
-        1 => Some(RuntimeItem::Json(matches.remove(0))),
+        1 => Some(into_runtime_item(matches.remove(0))),
         count => {
             diagnostics.push(runtime_error(
                 "detail_match_multiple",
@@ -228,6 +389,83 @@ fn match_detail_document<'doc, 'body>(
             None
         }
     }
+}
+
+fn detail_document_matches_conditions(
+    item_document: &RuntimeItem<'_, '_>,
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    conditions: Option<&Vec<Filter>>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<bool> {
+    let Some(conditions) = conditions else {
+        return Some(true);
+    };
+
+    for (condition_index, condition) in conditions.iter().enumerate() {
+        let condition_path = format!("{base_path}/where/{condition_index}");
+        match condition {
+            Filter::NonEmpty { field } => {
+                let evaluation = evaluate_string_field(
+                    item_document,
+                    &plan.source_config,
+                    &plan.source.name,
+                    posting,
+                    captures,
+                    field,
+                    &format!("{condition_path}/field"),
+                    strategy_key,
+                    diagnostics,
+                );
+                if evaluation.failed {
+                    return None;
+                }
+                if evaluation.value.is_none() {
+                    return Some(false);
+                }
+            }
+            Filter::Regex { field, pattern } => {
+                let regex = match Regex::new(pattern) {
+                    Ok(regex) => regex,
+                    Err(error) => {
+                        diagnostics.push(runtime_error(
+                            "where_pattern_invalid",
+                            format!("Where filter regex pattern is invalid: {error}"),
+                            format!("{condition_path}/pattern"),
+                            strategy_key,
+                            json!({ "pattern": pattern, "error": error.to_string() }),
+                        ));
+                        return None;
+                    }
+                };
+                let evaluation = evaluate_string_field(
+                    item_document,
+                    &plan.source_config,
+                    &plan.source.name,
+                    posting,
+                    captures,
+                    field,
+                    &format!("{condition_path}/field"),
+                    strategy_key,
+                    diagnostics,
+                );
+                if evaluation.failed {
+                    return None;
+                }
+                let Some(value) = evaluation.value else {
+                    return Some(false);
+                };
+                if !regex.is_match(&value) {
+                    return Some(false);
+                }
+            }
+        }
+    }
+
+    Some(true)
 }
 
 fn missing_posting_meta_key<'a>(

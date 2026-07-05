@@ -88,6 +88,87 @@ fn compiled_posting_discovery_runtime_falls_back_to_first_accepted_strategy() {
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_falls_back_after_paginated_strategy_level_error() {
+    let plan = compiled_posting_discovery_plan_with_strategies(
+        None,
+        vec![
+            json!({
+                "key": "paginated_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/paginated.json",
+                    "timeoutMs": 10000
+                },
+                "pagination": {
+                    "type": "page",
+                    "pageParam": "page",
+                    "limits": { "maxRequests": 2 }
+                },
+                "parse": { "type": "json" },
+                "select": default_select(),
+                "extract": { "fields": default_fields() }
+            }),
+            json!({
+                "key": "fallback_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/fallback.json",
+                    "timeoutMs": 10000
+                },
+                "parse": { "type": "json" },
+                "select": default_select(),
+                "extract": { "fields": default_fields() }
+            }),
+        ],
+    );
+    let fetcher = FakeFetcher::new([
+        (
+            "https://example.test/paginated.json?page=1",
+            json!({
+                "jobs": [
+                    { "title": "Partial Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "https://example.test/fallback.json",
+            json!({
+                "jobs": [
+                    { "title": "Fallback Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
+                ]
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].title, "Fallback Engineer");
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("paginated_api")
+    );
+    assert_eq!(
+        fetcher
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect::<Vec<_>>(),
+        vec![
+            "https://example.test/paginated.json?page=1".to_string(),
+            "https://example.test/paginated.json?page=2".to_string(),
+            "https://example.test/fallback.json".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_combines_step_and_strategy_acceptance() {
     let plan = compiled_posting_discovery_plan_with_strategies(
         Some(json!({ "minResults": 2 })),
