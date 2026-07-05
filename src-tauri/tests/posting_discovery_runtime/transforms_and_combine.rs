@@ -85,6 +85,62 @@ fn compiled_posting_discovery_runtime_dedupes_string_arrays_before_cardinality()
 }
 
 #[test]
+fn compiled_posting_discovery_runtime_joins_arrays_before_cardinality() {
+    let mut fields = default_fields();
+    fields["title"] = json!({
+        "type": "json_path",
+        "jsonPath": "$.titleParts",
+        "cardinality": "one",
+        "transforms": [{ "type": "join", "separator": " " }]
+    });
+    let plan = compiled_json_posting_discovery_plan(fields, default_select());
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "titleParts": ["Senior", "Rust", "Engineer"],
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1"
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+}
+
+#[test]
+fn compiled_posting_discovery_runtime_applies_regex_replace_transforms() {
+    let mut fields = default_fields();
+    fields["title"] = json!({
+        "type": "json_path",
+        "jsonPath": "$.title",
+        "cardinality": "one",
+        "transforms": [{ "type": "regex_replace", "pattern": "\\s*\\(m/f/d\\)$", "replacement": "" }]
+    });
+    let plan = compiled_json_posting_discovery_plan(fields, default_select());
+    let fetcher = FakeFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "title": "Senior Rust Engineer (m/f/d)",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1"
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+}
+
+#[test]
 fn compiled_posting_discovery_runtime_combines_parts_in_declared_order() {
     let mut fields = default_fields();
     fields["title"] = json!({

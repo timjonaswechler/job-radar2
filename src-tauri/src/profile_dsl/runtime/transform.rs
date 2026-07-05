@@ -1,4 +1,5 @@
 use dom_query::Document as HtmlDocument;
+use regex::Regex;
 use serde_json::{json, Value};
 
 use crate::profile_dsl::documents::transform::Transform;
@@ -6,7 +7,7 @@ use crate::profile_dsl::documents::transform::Transform;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TransformPipelineError {
     pub code: &'static str,
-    pub message: &'static str,
+    pub message: String,
     pub transform: Value,
 }
 
@@ -52,9 +53,10 @@ pub(crate) fn apply_transform_pipeline(
                 drop_empty,
             } => {
                 if separator.is_empty() {
-                    return Err(unsupported_transform(
-                        transform,
+                    return Err(transform_error(
+                        "invalid_split_separator",
                         "split transform separator must not be empty",
+                        transform,
                     ));
                 }
                 let should_trim = trim_parts.unwrap_or(false);
@@ -76,24 +78,41 @@ pub(crate) fn apply_transform_pipeline(
                     .filter(|value| !(should_drop_empty && value.is_empty()))
                     .collect();
             }
+            Transform::Join { separator } => {
+                values = vec![values.join(separator)];
+            }
+            Transform::RegexReplace {
+                pattern,
+                replacement,
+            } => {
+                let regex = Regex::new(pattern).map_err(|error| {
+                    transform_error(
+                        "invalid_regex_replace_pattern",
+                        format!("regex_replace transform pattern is invalid: {error}"),
+                        transform,
+                    )
+                })?;
+                values = values
+                    .into_iter()
+                    .map(|value| regex.replace_all(&value, replacement.as_str()).to_string())
+                    .collect();
+            }
             Transform::Dedupe => values = dedupe_preserving_order(values),
             Transform::ToString => {}
-            Transform::Join { .. } | Transform::RegexReplace { .. } => {
-                return Err(unsupported_transform(
-                    transform,
-                    "runtime transform pipeline supports trim, normalize_whitespace, url_decode, slug_to_title, html_to_text, split, dedupe, and to_string",
-                ));
-            }
         }
     }
 
     Ok(values)
 }
 
-fn unsupported_transform(transform: &Transform, message: &'static str) -> TransformPipelineError {
+fn transform_error(
+    code: &'static str,
+    message: impl Into<String>,
+    transform: &Transform,
+) -> TransformPipelineError {
     TransformPipelineError {
-        code: "unsupported_transform",
-        message,
+        code,
+        message: message.into(),
         transform: serde_json::to_value(transform).unwrap_or_else(|_| json!({})),
     }
 }

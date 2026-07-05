@@ -122,6 +122,29 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
 }
 
 #[test]
+fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnostics() {
+    let harness = SchemaHarness::new();
+    let mut profile = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({
+        "mode": "browser",
+        "url": "{{sourceConfig:feedUrl}}",
+        "timeoutMs": 10000,
+        "interactions": [
+            { "type": "execute_script", "script": "return window.__jobs" }
+        ]
+    });
+
+    harness.assert_json_invalid(
+        SchemaEntrypoint::SourceProfile,
+        profile,
+        &["execute_script", "oneOf"],
+    );
+}
+
+#[test]
 fn structured_diagnostics_schema_matches_shared_contract() {
     let harness = SchemaHarness::new();
 
@@ -211,6 +234,30 @@ impl SchemaHarness {
             assert!(
                 joined_errors.contains(expected_fragment),
                 "expected validation errors for {fixture_path} to mention `{expected_fragment}`, got:\n{joined_errors}"
+            );
+        }
+    }
+
+    fn assert_json_invalid(
+        &self,
+        entrypoint: SchemaEntrypoint,
+        instance: Value,
+        expected_fragments: &[&str],
+    ) {
+        let schema_path = entrypoint.path();
+        let schema = read_json(self.manifest_dir, schema_path);
+        let errors = self.validate_instance(schema_path, schema, instance);
+        assert!(
+            !errors.is_empty(),
+            "expected inline instance to fail validation against {}",
+            entrypoint.path()
+        );
+
+        let joined_errors = errors.join("\n");
+        for expected_fragment in expected_fragments {
+            assert!(
+                joined_errors.contains(expected_fragment),
+                "expected validation errors to mention `{expected_fragment}`, got:\n{joined_errors}"
             );
         }
     }

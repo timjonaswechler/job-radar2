@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 
-import type { SourceKey } from "@/lib/api/sources"
+import type { SourceKey, StructuredDiagnostic } from "@/lib/api/sources"
 
 export type SearchRequestStatus = "draft" | "active" | "disabled" | "invalid"
 
@@ -74,7 +74,7 @@ export type SourceRunResult = {
   status: SourceRunStatus
   candidateCount: number
   matchedCount: number
-  diagnostics: unknown[]
+  diagnostics: StructuredDiagnostic[]
   error: string | null
 }
 
@@ -93,7 +93,7 @@ export type BackgroundTaskSnapshot = {
   progress: BackgroundTaskProgress | null
   result: unknown | null
   error: string | null
-  diagnostics: unknown[]
+  diagnostics: StructuredDiagnostic[]
 }
 
 export type CreateSearchRequestInput = {

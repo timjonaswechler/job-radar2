@@ -73,19 +73,34 @@ export function SourceDetectionPanel({
     );
   }
 
+  const outcomeCopy = sourceDetectionOutcomeCopy(result);
+
   return (
     <Alert variant="warning">
       <AlertCircleIcon aria-hidden="true" />
-      <AlertTitle>Kein vorhandenes Profil erkannt</AlertTitle>
+      <AlertTitle>{outcomeCopy.title}</AlertTitle>
       <AlertDescription>
-        <p>
-          Du kannst dieselben Felder manuell ausfüllen. Der eingegebene Link wurde, falls möglich,
-          als Konfigurationswert <code>startUrl</code> übernommen.
-        </p>
+        <p>{outcomeCopy.description}</p>
         <EvidenceList evidence={unsupportedEvidence(result)} diagnostics={result.diagnostics} />
       </AlertDescription>
     </Alert>
   );
+}
+
+export function sourceDetectionOutcomeCopy(result: SourceProposalDetectionResult) {
+  if (result.status === "failed") {
+    return {
+      title: "Profilerkennung fehlgeschlagen",
+      description:
+        "Die Prüfung konnte nicht abgeschlossen werden. Du kannst dieselben Felder manuell ausfüllen; es wurde kein Konfigurationswert automatisch übernommen.",
+    };
+  }
+
+  return {
+    title: "Kein ausführbares Profil verfügbar",
+    description:
+      "Job Radar hat ein bekanntes, aber derzeit nicht unterstütztes Profil erkannt. Du kannst dieselben Felder manuell ausfüllen; der eingegebene Link wurde, falls möglich, als Konfigurationswert startUrl übernommen.",
+  };
 }
 
 function DetectionBadges({ proposal }: { proposal: SourceProposal }) {

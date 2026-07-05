@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { sourceDetectionOutcomeCopy } from "@/features/sources/components/source-detection-panel";
 import {
   buildSourceDocument,
   detectedSourceFromProposal,
@@ -175,6 +176,34 @@ assert.equal(buildResult.document?.schemaVersion, 2);
 assert.equal(buildResult.document?.selectedAccessPath.type, "profile_access_path");
 assert.deepEqual(buildResult.document?.sourceConfig, { boardSlug: "acme" });
 assertNoV1SourceProfileFields(buildResult.document);
+
+const failedDetectionCopy = sourceDetectionOutcomeCopy({
+  status: "failed",
+  diagnostics: [],
+});
+assert.equal(failedDetectionCopy.title, "Profilerkennung fehlgeschlagen");
+assert.equal(failedDetectionCopy.description.includes("startUrl übernommen"), false);
+assert.equal(
+  failedDetectionCopy.description.includes("kein Konfigurationswert automatisch übernommen"),
+  true,
+);
+
+const unsupportedDetectionCopy = sourceDetectionOutcomeCopy({
+  status: "unsupported",
+  unsupportedProfiles: [
+    {
+      profileKey: "known_ats",
+      profileName: "Known ATS",
+      supportLevel: "unsupported",
+      captures: {},
+      evidence: [{ kind: "url", message: "Known ATS URL" }],
+    },
+  ],
+  diagnostics: [],
+});
+assert.equal(unsupportedDetectionCopy.title, "Kein ausführbares Profil verfügbar");
+assert.equal(unsupportedDetectionCopy.description.includes("nicht unterstütztes Profil"), true);
+assert.equal(unsupportedDetectionCopy.description.includes("startUrl übernommen"), true);
 
 function assertNoV1SourceProfileFields(value: JsonValue | SourceDocument | null | undefined) {
   if (value === null || value === undefined) return;
