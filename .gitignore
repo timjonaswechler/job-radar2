@@ -31,3 +31,8 @@ prompts/source-profile-fixture-workup.md
 *.sln
 *.sw?
 search-run-candidates.json
+
+# Generated/local data kept out of repository history
+/Cargo.lock
+/src-tauri/Cargo.lock
+/src-tauri/geo/*.txt
