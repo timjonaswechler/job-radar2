@@ -55,7 +55,10 @@ export function SourceDetailsDrawer({
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       {row ? (
-        <DrawerContent className="h-full sm:max-w-xl lg:max-w-2xl">
+        <DrawerContent
+          className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_115px),960px)]
+        data-[vaul-drawer-direction=right]:sm:max-w-none"
+        >
           <DrawerHeader className="border-b pr-12">
             <DrawerTitle>{row.name}</DrawerTitle>
             <DrawerDescription>
@@ -181,7 +184,9 @@ function SourceDetails({
         <DetailRow
           label="Support"
           value={
-            resolution.supportLevel ? supportLevelLabels[resolution.supportLevel] : "—"
+            resolution.supportLevel
+              ? supportLevelLabels[resolution.supportLevel]
+              : "—"
           }
         />
         <DetailRow label="Ursprung" value={originLabels[source.origin]} />

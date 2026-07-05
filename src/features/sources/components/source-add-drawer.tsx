@@ -89,8 +89,9 @@ export function SourceAddDrawer({
   );
   const availableAccessPaths = selectedProfile?.document.accessPaths ?? [];
   const selectedAccessPath =
-    availableAccessPaths.find((accessPath) => accessPath.key === form.pathKey) ??
-    null;
+    availableAccessPaths.find(
+      (accessPath) => accessPath.key === form.pathKey,
+    ) ?? null;
   const sourceConfigSchema = useMemo(
     () =>
       effectiveSourceConfigSchema(
@@ -173,7 +174,9 @@ export function SourceAddDrawer({
       profileKey,
       pathKey: nextPathKey,
     }));
-    setConfigEntries((current) => entriesWithSchemaHints(current, nextMetadata));
+    setConfigEntries((current) =>
+      entriesWithSchemaHints(current, nextMetadata),
+    );
   };
 
   const updateAccessPath = (pathKey: string) => {
@@ -187,13 +190,16 @@ export function SourceAddDrawer({
     const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
 
     setForm((current) => ({ ...current, pathKey }));
-    setConfigEntries((current) => entriesWithSchemaHints(current, nextMetadata));
+    setConfigEntries((current) =>
+      entriesWithSchemaHints(current, nextMetadata),
+    );
   };
 
   const applyDetectedSource = (detected: DetectedSourceLike) => {
     const nextProfile =
-      profiles.find((profile) => profile.document.key === detected.profileKey) ??
-      null;
+      profiles.find(
+        (profile) => profile.document.key === detected.profileKey,
+      ) ?? null;
     const nextPath =
       nextProfile?.document.accessPaths.find(
         (accessPath) => accessPath.key === detected.pathKey,
@@ -225,7 +231,9 @@ export function SourceAddDrawer({
   const handleDetect = async () => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
-      setDetectionError("Bitte zuerst einen Link zur Karriere- oder Jobseite eingeben.");
+      setDetectionError(
+        "Bitte zuerst einen Link zur Karriere- oder Jobseite eingeben.",
+      );
       return;
     }
 
@@ -284,9 +292,12 @@ export function SourceAddDrawer({
       try {
         await onCreated?.();
       } catch (refreshError) {
-        toast.warning("Quelle gespeichert, Registry konnte aber nicht neu geladen werden.", {
-          description: errorMessage(refreshError),
-        });
+        toast.warning(
+          "Quelle gespeichert, Registry konnte aber nicht neu geladen werden.",
+          {
+            description: errorMessage(refreshError),
+          },
+        );
       }
       toast.success("Quelle wurde als Custom-Registry-Dokument gespeichert.");
       handleOpenChange(false);
@@ -300,16 +311,23 @@ export function SourceAddDrawer({
   };
 
   return (
-    <Drawer open={open} onOpenChange={handleOpenChange} direction="right" handleOnly>
+    <Drawer
+      open={open}
+      onOpenChange={handleOpenChange}
+      direction="right"
+      handleOnly
+    >
       <DrawerContent
         ref={setDrawerContentElement}
-        className="h-full sm:max-w-xl lg:max-w-3xl"
+        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_115px),960px)]
+      data-[vaul-drawer-direction=right]:sm:max-w-none"
       >
         <DrawerHeader className="border-b pr-12">
           <DrawerTitle>Quelle hinzufügen</DrawerTitle>
           <DrawerDescription>
-            Ein Formular für beide Wege: Link prüfen füllt die Felder automatisch,
-            manuelle Eingabe füllt dieselben Felder. JSON entsteht erst daraus.
+            Ein Formular für beide Wege: Link prüfen füllt die Felder
+            automatisch, manuelle Eingabe füllt dieselben Felder. JSON entsteht
+            erst daraus.
           </DrawerDescription>
           <Button
             type="button"
@@ -375,7 +393,11 @@ export function SourceAddDrawer({
             />
 
             <div className="flex flex-col gap-2">
-              <Button type="button" variant="outline" onClick={handlePreviewToggle}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreviewToggle}
+              >
                 <Code2Icon data-icon="inline-start" aria-hidden="true" />
                 {jsonPreviewOpen ? "JSON ausblenden" : "JSON ansehen"}
               </Button>
