@@ -6,7 +6,19 @@ from pathlib import Path
 import pandas as pd
 
 INPUT_DIR = Path("src-tauri/geo")
-COUNTRY_CODES = ("DE", "FR")
+COUNTRY_SOURCE_NAMES = {
+    "DE": ("DE",),
+    "FR": ("FR",),
+    # GB_full contains full Royal Mail postcodes (~1.8M rows). Use it to derive
+    # place names and compact postcode-sector/outward-code lookup rows.
+    "GB": ("GB_full", "GB"),
+}
+COUNTRY_CODES = tuple(COUNTRY_SOURCE_NAMES)
+GB_POSTAL_CODE_COUNTRIES = {"GB"}
+REGULAR_POSTAL_CODE_PATTERNS = {
+    "DE": r"\d{5}",
+    "FR": r"\d{5}",
+}
 FR_METROPOLITAN_REGION_CODES = {
     "11",  # Île-de-France
     "24",  # Centre-Val de Loire
@@ -22,15 +34,22 @@ FR_METROPOLITAN_REGION_CODES = {
     "93",  # Provence-Alpes-Côte d'Azur
     "94",  # Corse
 }
+GB_UK_STATE_CODES = {
+    "ENG",  # England
+    "SCT",  # Scotland
+    "WLS",  # Wales
+    "NIR",  # Northern Ireland
+}
 OUTPUT_PATH = Path("src-tauri/resources/geo_loc.sqlite")
 
 
 def input_path_for(country_code: str) -> Path:
-    for suffix in (".txt", ".txt.gz"):
-        input_path = INPUT_DIR / f"{country_code}{suffix}"
-        if input_path.exists():
-            return input_path
-    return INPUT_DIR / f"{country_code}.txt"
+    for source_name in COUNTRY_SOURCE_NAMES[country_code]:
+        for suffix in (".txt", ".txt.gz"):
+            input_path = INPUT_DIR / f"{source_name}{suffix}"
+            if input_path.exists():
+                return input_path
+    return INPUT_DIR / f"{COUNTRY_SOURCE_NAMES[country_code][0]}.txt"
 
 
 INPUT_PATHS = [input_path_for(country_code) for country_code in COUNTRY_CODES]
@@ -146,11 +165,12 @@ def load_postal_code_rows() -> pd.DataFrame:
     has_current_german_state_code = df["state_code"].str.isalpha().fillna(True)
     df = df[(df["country_code"] != "DE") | has_current_german_state_code]
 
-    # For the current DE/FR seed, keep only regular numeric postal codes. French
-    # non-numeric entries such as CEDEX, SP, CITYSSIMO, or AIR are special-delivery
-    # / organization codes rather than city/town/village postal codes.
-    has_regular_postal_code = df["postal_code"].str.fullmatch(r"\d{5}").fillna(False)
-    df = df[(~df["country_code"].isin(COUNTRY_CODES)) | has_regular_postal_code]
+    # For countries with regular numeric postal codes, drop special-delivery /
+    # organization codes. French non-numeric entries such as CEDEX, SP,
+    # CITYSSIMO, or AIR are not city/town/village postal codes.
+    for country_code, pattern in REGULAR_POSTAL_CODE_PATTERNS.items():
+        has_regular_postal_code = df["postal_code"].str.fullmatch(pattern).fillna(False)
+        df = df[(df["country_code"] != country_code) | has_regular_postal_code]
 
     # Keep mainland France plus Corse. This drops special rows such as Clipperton
     # Island (FR 98799) and guards against future non-metropolitan FR rows in the
@@ -159,6 +179,11 @@ def load_postal_code_rows() -> pd.DataFrame:
         FR_METROPOLITAN_REGION_CODES
     )
     df = df[(df["country_code"] != "FR") | has_metropolitan_fr_region_code]
+
+    # Keep the UK countries from GB_full, but drop Crown Dependencies such as
+    # Guernsey/Jersey/Isle of Man that GeoNames also publishes under GB.
+    has_uk_state_code = df["state_code"].isin(GB_UK_STATE_CODES)
+    df = df[(df["country_code"] != "GB") | has_uk_state_code]
 
     return df
 
@@ -180,6 +205,42 @@ def build_places(postal_code_rows: pd.DataFrame) -> pd.DataFrame:
     return places
 
 
+def build_gb_postal_code_rows(rows_with_place_ids: pd.DataFrame) -> pd.DataFrame:
+    gb_rows = rows_with_place_ids[
+        rows_with_place_ids["country_code"].isin(GB_POSTAL_CODE_COUNTRIES)
+    ].copy()
+    if gb_rows.empty:
+        return pd.DataFrame(columns=["postal_code", "id", "latitude", "longitude"])
+
+    compact_postal_codes = gb_rows["postal_code"].str.upper().str.replace(
+        r"[^A-Z0-9]",
+        "",
+        regex=True,
+    )
+    outward_codes = compact_postal_codes.str[:-3]
+    inward_codes = compact_postal_codes.str[-3:]
+
+    has_full_uk_postcode = (
+        compact_postal_codes.str.len().between(5, 7)
+        & outward_codes.str.fullmatch(r"[A-Z][A-Z0-9]{1,3}")
+        & inward_codes.str.fullmatch(r"\d[A-Z]{2}")
+    ).fillna(False)
+
+    gb_rows = gb_rows[has_full_uk_postcode].copy()
+    outward_codes = outward_codes[has_full_uk_postcode]
+    inward_codes = inward_codes[has_full_uk_postcode]
+
+    sectors = gb_rows[["id", "latitude", "longitude"]].copy()
+    sectors["postal_code"] = (outward_codes + " " + inward_codes.str[0]).str.lower()
+
+    outwards = gb_rows[["id", "latitude", "longitude"]].copy()
+    outwards["postal_code"] = outward_codes.str.lower()
+
+    return pd.concat([sectors, outwards], ignore_index=True)[
+        ["postal_code", "id", "latitude", "longitude"]
+    ]
+
+
 def build_postal_codes(
     postal_code_rows: pd.DataFrame, places: pd.DataFrame
 ) -> pd.DataFrame:
@@ -190,7 +251,15 @@ def build_postal_codes(
         validate="many_to_one",
     )
 
-    return rows_with_place_ids.groupby(
+    regular_postal_code_rows = rows_with_place_ids[
+        ~rows_with_place_ids["country_code"].isin(GB_POSTAL_CODE_COUNTRIES)
+    ][["postal_code", "id", "latitude", "longitude"]]
+    gb_postal_code_rows = build_gb_postal_code_rows(rows_with_place_ids)
+
+    return pd.concat(
+        [regular_postal_code_rows, gb_postal_code_rows],
+        ignore_index=True,
+    ).groupby(
         ["postal_code", "id"],
         as_index=False,
         dropna=False,

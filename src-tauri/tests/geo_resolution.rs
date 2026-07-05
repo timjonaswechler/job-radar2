@@ -37,6 +37,21 @@ fn resolves_postal_code_55116_to_postal_code_coordinates() {
 }
 
 #[test]
+fn resolves_uk_full_postcode_through_sector_fallback() {
+    tauri::async_runtime::block_on(async {
+        let db_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");
+        let resolver = GeoDbResolver::connect(&db_path).await.unwrap();
+
+        let resolved = resolver.resolve("SW1A 1AA").await.unwrap();
+
+        assert!(
+            resolved.iter().any(|location| location.label == "London"),
+            "SW1A 1AA should resolve through the bundled GB postcode sector lookup"
+        );
+    });
+}
+
+#[test]
 fn resolves_german_umlaut_transliteration_variants() {
     tauri::async_runtime::block_on(async {
         let db_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");

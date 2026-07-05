@@ -2,7 +2,10 @@ use std::path::Path;
 
 use sqlx::{sqlite::SqliteConnectOptions, Row, SqlitePool};
 
-use super::{normalization::location_lookup_keys, GeoPoint, ResolvedLocation};
+use super::{
+    normalization::{location_lookup_keys, postal_lookup_keys},
+    GeoPoint, ResolvedLocation,
+};
 
 #[derive(Clone)]
 pub struct GeoDbResolver {
@@ -28,7 +31,7 @@ impl GeoDbResolver {
             return Ok(Vec::new());
         }
 
-        if key.chars().all(|character| character.is_ascii_digit()) {
+        for postal_key in postal_lookup_keys(&key) {
             let rows = sqlx::query(
                 "SELECT p.place_name, pc.latitude, pc.longitude
                  FROM geo_postal_codes pc
@@ -36,12 +39,17 @@ impl GeoDbResolver {
                  WHERE pc.postal_code = ?1
                  ORDER BY p.id",
             )
-            .bind(&key)
+            .bind(&postal_key)
             .fetch_all(&self.pool)
             .await
             .map_err(|error| format!("failed to resolve geo location {input:?}: {error}"))?;
 
-            return rows.into_iter().map(|row| resolved_location(input, row)).collect();
+            if !rows.is_empty() {
+                return rows
+                    .into_iter()
+                    .map(|row| resolved_location(input, row))
+                    .collect();
+            }
         }
 
         let mut resolved = Vec::new();
