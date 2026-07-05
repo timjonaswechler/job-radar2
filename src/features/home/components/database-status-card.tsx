@@ -1,91 +1,124 @@
-import { RefreshCw } from "lucide-react";
+import { AlertCircleIcon, RefreshCw } from "lucide-react";
 
 import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@/components/reui/frame";
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDatabaseInfo } from "@/hooks/use-database-info";
+import { cn } from "@/lib/utils";
 
 export function DatabaseStatusCard() {
   const { data, error, loading, refresh } = useDatabaseInfo();
 
   return (
-    <Frame>
-      <FramePanel>
-        <FrameHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="grid gap-1.5">
-            <FrameTitle>SQLite Datenbank</FrameTitle>
-            <FrameDescription>
-              Die lokale Datenbank ist Runtime-/Cache-Schicht. Quellen und
-              Quellenprofile kommen aus gebündelten Built-ins und lokalen
-              JSON-Dateien im App-Data-Ordner.
-            </FrameDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void refresh()}>
-            <RefreshCw className="size-4" aria-hidden="true" />
-            Aktualisieren
-          </Button>
-        </FrameHeader>
+    <section className="rounded-lg border bg-card p-4 text-card-foreground shadow-xs">
+      <header className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-1.5">
+          <h2 className="text-pretty text-sm font-semibold">SQLite Datenbank</h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            Die lokale Datenbank ist Runtime-/Cache-Schicht. Quellen und
+            Quellenprofile kommen aus gebündelten Built-ins und lokalen
+            JSON-Dateien im App-Data-Ordner.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => void refresh()}
+        >
+          <RefreshCw
+            data-icon="inline-start"
+            className={cn(loading && "motion-safe:animate-spin")}
+            aria-hidden="true"
+          />
+          Aktualisieren
+        </Button>
+      </header>
 
-        <div className="grid gap-4">
-          <div className="flex items-center gap-2">
-            <Badge variant={data ? "success" : "secondary"}>
-              {loading ? "Prüfe…" : data ? "Verbunden" : "Nicht verbunden"}
-            </Badge>
-            {data ? (
-              <span className="text-sm text-muted-foreground">
-                SQLite {data.sqliteVersion}
-              </span>
-            ) : null}
-          </div>
-
-          {error ? (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-
+      <div className="grid gap-4" aria-live="polite">
+        <div className="flex items-center gap-2">
+          <Badge variant={data ? "success" : "secondary"}>
+            {loading ? "Prüfe…" : data ? "Verbunden" : "Nicht verbunden"}
+          </Badge>
           {data ? (
-            <dl className="grid gap-3 text-sm md:grid-cols-2">
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="font-medium">Initialisiert</dt>
-                <dd className="mt-1 text-muted-foreground">
-                  {data.initializedAt ?? "gerade eben"}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="font-medium">App Data</dt>
-                <dd className="mt-1 break-all text-muted-foreground">
-                  {data.appDataDir}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-muted p-3 md:col-span-2">
-                <dt className="font-medium">Datenbankdatei</dt>
-                <dd className="mt-1 break-all text-muted-foreground">
-                  {data.databasePath}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="font-medium">Custom-Quellenprofile</dt>
-                <dd className="mt-1 break-all text-muted-foreground">
-                  {data.sourceProfilesDir}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="font-medium">Custom-Quellen</dt>
-                <dd className="mt-1 break-all text-muted-foreground">
-                  {data.sourcesDir}
-                </dd>
-              </div>
-            </dl>
+            <span className="text-sm text-muted-foreground">
+              SQLite <code translate="no">{data.sqliteVersion}</code>
+            </span>
           ) : null}
         </div>
-      </FramePanel>
-    </Frame>
+
+        {error ? (
+          <Alert variant="destructive">
+            <AlertCircleIcon aria-hidden="true" />
+            <AlertTitle>Datenbankstatus konnte nicht geladen werden</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {data ? (
+          <dl className="grid gap-3 text-sm md:grid-cols-2">
+            <DatabaseInfoItem
+              label="Initialisiert"
+              value={formatDatabaseTimestamp(data.initializedAt)}
+            />
+            <DatabaseInfoItem label="App Data" value={data.appDataDir} code />
+            <DatabaseInfoItem
+              label="Datenbankdatei"
+              value={data.databasePath}
+              code
+              wide
+            />
+            <DatabaseInfoItem
+              label="Custom-Quellenprofile"
+              value={data.sourceProfilesDir}
+              code
+            />
+            <DatabaseInfoItem
+              label="Custom-Quellen"
+              value={data.sourcesDir}
+              code
+            />
+          </dl>
+        ) : null}
+      </div>
+    </section>
   );
+}
+
+function DatabaseInfoItem({
+  label,
+  value,
+  code = false,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  code?: boolean;
+  wide?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-lg bg-muted p-3", wide && "md:col-span-2")}>
+      <dt className="font-medium">{label}</dt>
+      <dd className="mt-1 break-all text-muted-foreground">
+        {code ? <code translate="no">{value}</code> : value}
+      </dd>
+    </div>
+  );
+}
+
+function formatDatabaseTimestamp(value: string | null | undefined) {
+  if (!value) return "gerade eben";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("de", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

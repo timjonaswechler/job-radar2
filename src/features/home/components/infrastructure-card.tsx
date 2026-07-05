@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 type InfrastructureCardProps = {
   label: string;
@@ -14,16 +14,23 @@ export function InfrastructureCard({
   icon: Icon,
 }: InfrastructureCardProps) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {Icon ? <Icon className="size-4 text-primary" aria-hidden="true" /> : null}
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
+    <article className="rounded-lg border bg-background p-4 shadow-xs">
+      <div className="flex min-w-0 items-start gap-2">
+        {Icon ? (
+          <span
+            aria-hidden="true"
+            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+          >
+            <Icon aria-hidden="true" />
+          </span>
+        ) : null}
+        <div className={cn("min-w-0", Icon ? "pt-0.5" : null)}>
+          <h3 className="truncate text-sm font-medium">{label}</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }
