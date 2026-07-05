@@ -42,7 +42,7 @@ pub(super) fn build_source_proposal(
             |error| template_diagnostic(error, &format!("{base_path}/sourceConfig"), None),
         )?;
     validate_source_config_for_detection(&source_config, profile, access_path, base_path)?;
-    let key_candidates = render_candidate_templates(
+    let key_candidates = render_key_candidate_templates(
         detect.key_candidates.as_deref(),
         || default_key_candidates(&captures, &profile.key),
         input_url,
@@ -433,6 +433,31 @@ where
         }
     }
     Ok(candidates)
+}
+
+fn render_key_candidate_templates<F>(
+    templates: Option<&[String]>,
+    default: F,
+    input_url: &str,
+    captures: &BTreeMap<String, String>,
+    path: &str,
+) -> Result<Vec<String>, Diagnostic>
+where
+    F: FnOnce() -> Vec<String>,
+{
+    let rendered_candidates =
+        render_candidate_templates(templates, default, input_url, captures, path)?;
+    let mut key_candidates = Vec::new();
+    for candidate in rendered_candidates {
+        let key_candidate = to_technical_key(&candidate);
+        if !key_candidates
+            .iter()
+            .any(|candidate| candidate == &key_candidate)
+        {
+            key_candidates.push(key_candidate);
+        }
+    }
+    Ok(key_candidates)
 }
 
 fn default_key_candidates(captures: &BTreeMap<String, String>, profile_key: &str) -> Vec<String> {

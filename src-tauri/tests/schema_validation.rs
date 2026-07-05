@@ -105,6 +105,11 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
         &["timeoutMs", "required"],
     );
     harness.assert_invalid(
+        SchemaEntrypoint::SourceProfile,
+        "tests/fixtures/source-profile-dsl/invalid/template-pipe.json",
+        &["not"],
+    );
+    harness.assert_invalid(
         SchemaEntrypoint::Source,
         "tests/fixtures/source-profile-dsl/invalid/v1-source-specific.json",
         &["source_specific"],

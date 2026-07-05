@@ -781,7 +781,7 @@ mod tests {
                             "tenant": "{{capture:tenant}}",
                             "startUrl": "{{inputUrl}}"
                         },
-                        "keyCandidates": ["{{capture:tenant|technicalKey}}"],
+                        "keyCandidates": ["{{capture:tenant}}"],
                         "nameCandidates": ["{{capture:organizationName}}"]
                     },
                     "sourceConfigSchema": {

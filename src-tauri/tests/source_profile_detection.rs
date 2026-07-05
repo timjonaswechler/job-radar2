@@ -21,8 +21,8 @@ fn source_profile_detection_returns_source_proposal_from_named_url_captures() {
             "boardSlug": "{{capture:boardSlug}}",
             "startUrl": "{{inputUrl}}"
         },
-        "keyCandidates": ["{{capture:boardSlug|technicalKey}}"],
-        "nameCandidates": ["{{capture:boardSlug|slugToTitle}}"],
+        "keyCandidates": ["{{capture:boardSlug}}"],
+        "nameCandidates": ["{{capture:boardSlug}}"],
         "evidence": [{
             "kind": "url",
             "message": "Example job board URL exposes a board slug."
@@ -46,7 +46,7 @@ fn source_profile_detection_returns_source_proposal_from_named_url_captures() {
         "https://jobs.example.test/acme_corp"
     );
     assert_eq!(proposal.key_candidates, vec!["acme_corp"]);
-    assert_eq!(proposal.name_candidates, vec!["Acme Corp"]);
+    assert_eq!(proposal.name_candidates, vec!["acme_corp"]);
     assert_eq!(
         proposal.captures.get("boardSlug"),
         Some(&"acme_corp".to_string())
@@ -55,6 +55,69 @@ fn source_profile_detection_returns_source_proposal_from_named_url_captures() {
 
     let serialized = serde_json::to_value(proposal).unwrap();
     assert_no_adapter_key(&serialized);
+}
+
+#[test]
+fn source_profile_detection_rejects_template_transform_pipes_in_detection_candidates() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{
+            "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$"
+        }],
+        "sourceConfig": {
+            "boardSlug": "{{capture:boardSlug}}"
+        },
+        "keyCandidates": ["{{capture:boardSlug|technicalKey}}"]
+    }));
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/acme_corp",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.code == "invalid_detection_template"
+            && diagnostic.path == "/profiles/0/detect/keyCandidates/0"
+            && diagnostic
+                .message
+                .contains("template transform pipes are not supported")
+    }));
+}
+
+#[test]
+fn source_profile_detection_normalizes_rendered_key_candidates_to_source_key_pattern() {
+    let profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{
+            "pattern": "^https://jobs\\.example\\.test/(?<slug>[A-Za-z0-9_.-]+)$"
+        }],
+        "sourceConfig": {
+            "slug": "{{capture:slug}}"
+        },
+        "keyCandidates": ["{{capture:slug}}", "jobs.{{capture:slug}}"]
+    }));
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/Acme-Careers",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let proposal = result.proposal.expect("matched detection returns proposal");
+    assert_eq!(
+        proposal.key_candidates,
+        vec!["acme_careers".to_string(), "jobs_acme_careers".to_string()]
+    );
+    for key_candidate in &proposal.key_candidates {
+        assert_valid_source_key_candidate("fixture", key_candidate);
+    }
 }
 
 #[test]
@@ -415,8 +478,9 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
     let cases = [
         (
             "greenhouse.json",
-            "https://boards.greenhouse.io/acme",
-            json!({ "boardSlug": "acme" }),
+            "https://boards.greenhouse.io/acme-careers",
+            json!({ "boardSlug": "acme-careers" }),
+            "acme_careers",
         ),
         (
             "workday.json",
@@ -427,6 +491,7 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
                 "site": "External",
                 "startUrl": "https://acme.wd1.myworkdayjobs.com/External"
             }),
+            "workday_acme_external",
         ),
         (
             "successfactors.json",
@@ -435,11 +500,15 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
                 "baseUrl": "https://jobs.example.com",
                 "sitemapUrl": "https://jobs.example.com/sitemap.xml"
             }),
+            "successfactors_jobs_example_com",
         ),
     ];
 
-    for (profile_file, input_url, expected_config) in cases {
-        let profile = read_builtin_profile(profile_file);
+    for (profile_file, input_url, expected_config, expected_key_candidate) in cases {
+        let profile_text = read_builtin_profile_text(profile_file);
+        assert_no_template_transform_pipes(&profile_text);
+        let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
+            .unwrap_or_else(|error| panic!("failed to parse {profile_file}: {error}"));
         let client = if profile_file == "successfactors.json" {
             FakeHttpClient::with_response(
                 "https://jobs.example.com/sitemap.xml",
@@ -470,6 +539,13 @@ fn builtin_acceptance_profiles_produce_source_proposals_without_adapter_key() {
                 &proposal.source_config[key], expected_value,
                 "{profile_file} {key}"
             );
+        }
+        assert_eq!(
+            proposal.key_candidates,
+            vec![expected_key_candidate.to_string()]
+        );
+        for key_candidate in &proposal.key_candidates {
+            assert_valid_source_key_candidate(profile_file, key_candidate);
         }
         assert_no_adapter_key(&serde_json::to_value(proposal).unwrap());
     }
@@ -1060,13 +1136,17 @@ impl DetectionHttpClient for FakeHttpClient {
 }
 
 fn read_builtin_profile(file_name: &str) -> SourceProfileDocument {
+    let contents = read_builtin_profile_text(file_name);
+    serde_json::from_str(&contents)
+        .unwrap_or_else(|error| panic!("failed to parse {file_name}: {error}"))
+}
+
+fn read_builtin_profile_text(file_name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("resources/profiles")
         .join(file_name);
-    let contents = std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-    serde_json::from_str(&contents)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
 fn fixture_profile(detect: Value) -> SourceProfileDocument {
@@ -1139,6 +1219,39 @@ fn block_on<T>(future: impl Future<Output = T>) -> T {
         .build()
         .unwrap()
         .block_on(future)
+}
+
+fn assert_no_template_transform_pipes(profile_text: &str) {
+    let mut remainder = profile_text;
+    while let Some(start) = remainder.find("{{") {
+        let after_start = &remainder[start + 2..];
+        let Some(end) = after_start.find("}}") else {
+            break;
+        };
+        let reference = after_start[..end].trim();
+        assert!(
+            !reference.contains('|'),
+            "built-in profiles must not hide transforms in template pipes: {{{{{reference}}}}}"
+        );
+        remainder = &after_start[end + 2..];
+    }
+}
+
+fn assert_valid_source_key_candidate(context: &str, candidate: &str) {
+    let mut chars = candidate.chars();
+    let Some(first) = chars.next() else {
+        panic!("{context} produced an empty Source key candidate");
+    };
+    assert!(
+        first.is_ascii_lowercase() || first.is_ascii_digit(),
+        "{context} Source key candidate `{candidate}` must start with [a-z0-9]"
+    );
+    assert!(
+        chars.all(|character| character.is_ascii_lowercase()
+            || character.is_ascii_digit()
+            || character == '_'),
+        "{context} Source key candidate `{candidate}` must match ^[a-z0-9][a-z0-9_]*$"
+    );
 }
 
 fn assert_no_adapter_key(value: &Value) {

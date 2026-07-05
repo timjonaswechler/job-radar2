@@ -1,12 +1,13 @@
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_posting_detail_with_fetcher,
+    compile_source_execution_plan, detect_source_proposal, execute_posting_detail_with_fetcher,
     execute_posting_discovery_with_fetcher, HttpMethod, PostingDetailFetchError,
     PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
     PostingDetailPostingOccurrence, PostingDiscoveryCandidate, PostingDiscoveryFetchError,
     PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceProfileDocument, SupportLevel,
+    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceProfileDocument,
+    SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -145,6 +146,33 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
     );
     assert_eq!(requests[2].body, None);
+}
+
+#[test]
+fn workday_builtin_detection_proposes_source_config_and_recommended_profile_path() {
+    let profile_text = read_text("resources/profiles/workday.json");
+    let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
+        .expect("Workday built-in profile should be a Source Profile DSL document");
+
+    let input_url = "https://acme.wd3.myworkdayjobs.com/en-US/External?source=job-radar";
+    let result = block_on(detect_source_proposal(input_url, &[profile]));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let proposal = result.proposal.expect("Workday detection should match");
+    assert_eq!(proposal.profile_key, "workday");
+    assert_eq!(proposal.profile_name, "Workday Recruiting");
+    assert_eq!(proposal.recommended_access_path_key, "cxs_api");
+    assert_eq!(proposal.recommended_access_path_name, "Workday CXS API");
+    assert_eq!(
+        proposal.source_config,
+        json!({
+            "workdayHost": "acme.wd3.myworkdayjobs.com",
+            "tenant": "acme",
+            "site": "External",
+            "startUrl": input_url
+        })
+    );
 }
 
 fn assert_no_v1_profile_vocabulary(profile_text: &str) {

@@ -54,11 +54,11 @@
         "sourceConfig": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" },
         "keyCandidates": {
           "type": "array",
-          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" }
         },
         "nameCandidates": {
           "type": "array",
-          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" }
         },
         "httpChecks": {
           "type": "array",
@@ -102,7 +102,7 @@
       "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
-        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" },
         "timeoutMs": { "type": "integer", "minimum": 1 },
         "expectStatus": { "type": "integer", "minimum": 100, "maximum": 599 },
         "contains": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
@@ -116,7 +116,7 @@
       "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
-        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" },
         "timeoutMs": { "type": "integer", "minimum": 1 },
         "waits": {
           "type": "array",
