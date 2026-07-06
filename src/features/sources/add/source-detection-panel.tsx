@@ -14,11 +14,13 @@ import type {
 
 type SourceDetectionPanelProps = {
   result: SourceProposalDetectionResult | null;
+  applyDisabled?: boolean;
   onApplyProposal: (proposal: SourceProposal) => void;
 };
 
 export function SourceDetectionPanel({
   result,
+  applyDisabled = false,
   onApplyProposal,
 }: SourceDetectionPanelProps) {
   if (!result) return null;
@@ -56,7 +58,13 @@ export function SourceDetectionPanel({
                       <Badge variant="outline">{supportLevelLabels[proposal.supportLevel]}</Badge>
                     </div>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => onApplyProposal(proposal)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onApplyProposal(proposal)}
+                    disabled={applyDisabled}
+                  >
                     Übernehmen
                   </Button>
                 </CardHeader>

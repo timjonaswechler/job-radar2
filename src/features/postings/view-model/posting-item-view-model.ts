@@ -37,12 +37,22 @@ export type PostingPreviewDetailRowViewModel = {
   value: string;
 };
 
+export type PostingPreviewWorkflowViewModel = {
+  queueLabel: string;
+  applicationLabel: string;
+  preparationLabel: string;
+  primarySourceLabel: string;
+  lastSeenLabel: string;
+  processStep: number;
+};
+
 export type PostingPreviewViewModel = {
   id: number;
   title: string;
   subtitle: string;
   companyInitials: string;
   badges: StatusBadge[];
+  workflow: PostingPreviewWorkflowViewModel;
   detailRows: PostingPreviewDetailRowViewModel[];
 };
 
@@ -139,6 +149,21 @@ export function createPostingItemViewModel(
   const lastActivityLabel = formatRelativeDate(posting.lastSeenAt);
   const lastActivityTitle = formatAbsoluteDate(posting.lastSeenAt);
   const processSlotLabel = getProcessSlotLabel(posting);
+  const queueLabel = getPrimaryQueueLabel(posting);
+  const applicationLabel = applicationStateLabels[posting.applicationState];
+  const preparationLabel = preparationStateLabels[posting.preparationState];
+  const workflow: PostingPreviewWorkflowViewModel = {
+    queueLabel,
+    applicationLabel,
+    preparationLabel,
+    primarySourceLabel,
+    lastSeenLabel: lastActivityTitle,
+    processStep: getPreviewWorkflowProcessStep({
+      queueLabel,
+      applicationLabel,
+      preparationLabel,
+    }),
+  };
 
   return {
     id: posting.id,
@@ -165,18 +190,19 @@ export function createPostingItemViewModel(
         { label: "Nur Ansicht", variant: "secondary" },
         getWorkflowBadge(posting),
       ],
+      workflow,
       detailRows: [
-        { label: "Queue", value: getPrimaryQueueLabel(posting) },
+        { label: "Queue", value: workflow.queueLabel },
         {
           label: "Bewerbungsstand",
-          value: applicationStateLabels[posting.applicationState],
+          value: workflow.applicationLabel,
         },
         {
           label: "Vorbereitung",
-          value: preparationStateLabels[posting.preparationState],
+          value: workflow.preparationLabel,
         },
-        { label: "Primäre Quelle", value: primarySourceLabel },
-        { label: "Zuletzt gesehen", value: lastActivityTitle },
+        { label: "Primäre Quelle", value: workflow.primarySourceLabel },
+        { label: "Zuletzt gesehen", value: workflow.lastSeenLabel },
       ],
     },
   };
@@ -202,6 +228,21 @@ export function getInterestStateBadge(
   }
 
   return { label: interestStateLabels.undecided, variant: "secondary" };
+}
+
+export function getPreviewWorkflowProcessStep({
+  applicationLabel,
+  preparationLabel,
+  queueLabel,
+}: Pick<
+  PostingPreviewWorkflowViewModel,
+  "applicationLabel" | "preparationLabel" | "queueLabel"
+>) {
+  if (applicationLabel !== "Nicht beworben" && applicationLabel !== "—") return 4;
+  if (preparationLabel !== "Nicht gestartet" && preparationLabel !== "—") return 3;
+  if (queueLabel === "Interessant" || queueLabel === "Bewerbung vorbereiten") return 2;
+
+  return 2;
 }
 
 export function getProcessSlotLabel(posting: JobPosting) {

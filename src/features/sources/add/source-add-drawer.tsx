@@ -24,19 +24,20 @@ import { SourceConfigEditor } from "@/features/sources/add/source-config-editor"
 import { SourceDetectionPanel } from "@/features/sources/add/source-detection-panel";
 import {
   buildSourceDocument,
-  createEntryId,
   detectedSourceFromProposal,
-  detectedSourceFromResult,
   emptySourceForm,
   errorMessage,
-  technicalKeyFromText,
+  sourceAddDraftAfterAccessPathChange,
+  sourceAddDraftAfterDetectedSource,
+  sourceAddDraftAfterDetectionResult,
+  sourceAddDraftAfterProfileChange,
+  sourceFormAfterKeyChange,
+  sourceFormAfterNameChange,
   type DetectedSourceLike,
   type SourceFormState,
 } from "@/features/sources/add/source-add-model";
 import {
-  configEntriesFromJsonObject,
   effectiveSourceConfigSchema,
-  entriesWithSchemaHints,
   sourceConfigSchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/add/source-config-schema";
@@ -131,6 +132,8 @@ export function SourceAddDrawer({
     [buildResult.document, jsonPreviewOpen],
   );
 
+  const asyncActionPending = saving || detecting;
+
   const resetDrawer = () => {
     setUrl("");
     setDetectionResult(null);
@@ -143,7 +146,9 @@ export function SourceAddDrawer({
     setSaving(false);
   };
 
-  const handleOpenChange = (nextOpen: boolean) => {
+  const handleOpenChange = (nextOpen: boolean, force = false) => {
+    if (!nextOpen && asyncActionPending && !force) return;
+
     if (!nextOpen) {
       resetDrawer();
     }
@@ -151,88 +156,50 @@ export function SourceAddDrawer({
   };
 
   const updateName = (name: string) => {
-    setForm((current) => ({
-      ...current,
-      name,
-      key: keyTouched ? current.key : technicalKeyFromText(name),
-    }));
+    setForm((current) => sourceFormAfterNameChange(current, keyTouched, name));
   };
 
   const updateKey = (key: string) => {
     setKeyTouched(true);
-    setForm((current) => ({ ...current, key: technicalKeyFromText(key) }));
+    setForm((current) => sourceFormAfterKeyChange(current, key));
   };
 
   const updateProfile = (profileKey: string) => {
-    const nextProfile =
-      profiles.find((profile) => profile.document.key === profileKey) ?? null;
-    const nextPathKey = nextProfile?.document.accessPaths[0]?.key ?? "";
-    const nextSchema = effectiveSourceConfigSchema(
-      nextProfile?.document.sourceConfigSchema,
-      nextProfile?.document.accessPaths[0]?.sourceConfigSchema,
-    );
-    const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
-
-    setForm((current) => ({
-      ...current,
+    const nextDraft = sourceAddDraftAfterProfileChange({
+      profiles,
+      form,
+      configEntries,
       profileKey,
-      pathKey: nextPathKey,
-    }));
-    setConfigEntries((current) =>
-      entriesWithSchemaHints(current, nextMetadata),
-    );
+    });
+    setForm(nextDraft.form);
+    setConfigEntries(nextDraft.configEntries);
   };
 
   const updateAccessPath = (pathKey: string) => {
-    const nextPath = availableAccessPaths.find(
-      (accessPath) => accessPath.key === pathKey,
-    );
-    const nextSchema = effectiveSourceConfigSchema(
-      selectedProfile?.document.sourceConfigSchema,
-      nextPath?.sourceConfigSchema,
-    );
-    const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
-
-    setForm((current) => ({ ...current, pathKey }));
-    setConfigEntries((current) =>
-      entriesWithSchemaHints(current, nextMetadata),
-    );
+    const nextDraft = sourceAddDraftAfterAccessPathChange({
+      selectedProfile,
+      form,
+      configEntries,
+      pathKey,
+    });
+    setForm(nextDraft.form);
+    setConfigEntries(nextDraft.configEntries);
   };
 
   const applyDetectedSource = (detected: DetectedSourceLike) => {
-    const nextProfile =
-      profiles.find(
-        (profile) => profile.document.key === detected.profileKey,
-      ) ?? null;
-    const nextPath =
-      nextProfile?.document.accessPaths.find(
-        (accessPath) => accessPath.key === detected.pathKey,
-      ) ?? null;
-    const nextSchema = effectiveSourceConfigSchema(
-      nextProfile?.document.sourceConfigSchema,
-      nextPath?.sourceConfigSchema,
-    );
-    const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
+    if (saving || detecting) return;
 
-    setForm({
-      name: detected.name,
-      key: detected.key,
-      status: "draft",
-      profileKey: detected.profileKey,
-      pathKey: detected.pathKey,
-    });
-    setKeyTouched(false);
-    setConfigEntries(
-      entriesWithSchemaHints(
-        configEntriesFromJsonObject(detected.sourceConfig),
-        nextMetadata,
-      ),
-    );
-    setJsonPreviewOpen(false);
-    setSaveAttempted(false);
+    const nextDraft = sourceAddDraftAfterDetectedSource({ profiles, detected });
+    setForm(nextDraft.form);
+    setKeyTouched(nextDraft.keyTouched);
+    setConfigEntries(nextDraft.configEntries);
+    setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
+    setSaveAttempted(nextDraft.saveAttempted);
   };
 
   const handleDetect = async () => {
+    if (detecting || saving) return;
+
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
       setDetectionError(
@@ -248,23 +215,40 @@ export function SourceAddDrawer({
       setDetectionResult(result);
 
       if (result.status === "matched") {
-        const detected = detectedSourceFromResult(result);
-        if (detected) {
-          applyDetectedSource(detected);
+        const nextDraft = sourceAddDraftAfterDetectionResult({
+          draft: {
+            form,
+            keyTouched,
+            configEntries,
+            jsonPreviewOpen,
+            saveAttempted,
+          },
+          profiles,
+          result,
+          trimmedUrl,
+        });
+        if (nextDraft.appliedDetectedSource) {
+          setForm(nextDraft.form);
+          setKeyTouched(nextDraft.keyTouched);
+          setConfigEntries(nextDraft.configEntries);
+          setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
+          setSaveAttempted(nextDraft.saveAttempted);
           toast.success("Quelle erkannt und Formular vorausgefüllt.");
         }
       } else if (result.status === "unsupported") {
         setConfigEntries((current) =>
-          current.some((entry) => entry.key === "startUrl")
-            ? current
-            : [
-                ...current,
-                {
-                  id: createEntryId(),
-                  key: "startUrl",
-                  value: trimmedUrl,
-                },
-              ],
+          sourceAddDraftAfterDetectionResult({
+            draft: {
+              form,
+              keyTouched,
+              configEntries: current,
+              jsonPreviewOpen,
+              saveAttempted,
+            },
+            profiles,
+            result,
+            trimmedUrl,
+          }).configEntries,
         );
       }
     } catch (error) {
@@ -284,6 +268,8 @@ export function SourceAddDrawer({
   };
 
   const handleSave = async () => {
+    if (saving || detecting) return;
+
     setSaveAttempted(true);
     if (!buildResult.document) {
       setJsonPreviewOpen(false);
@@ -304,7 +290,7 @@ export function SourceAddDrawer({
         );
       }
       toast.success("Quelle wurde als Custom-Registry-Dokument gespeichert.");
-      handleOpenChange(false);
+      handleOpenChange(false, true);
     } catch (error) {
       toast.error("Quelle konnte nicht gespeichert werden.", {
         description: errorMessage(error),
@@ -339,6 +325,7 @@ export function SourceAddDrawer({
             size="icon-sm"
             className="absolute top-5 right-5"
             onClick={() => handleOpenChange(false)}
+            disabled={asyncActionPending}
           >
             <XIcon aria-hidden="true" />
             <span className="sr-only">Drawer schließen</span>
@@ -358,7 +345,10 @@ export function SourceAddDrawer({
 
             <SourceDetectionPanel
               result={detectionResult}
+              applyDisabled={asyncActionPending}
               onApplyProposal={(proposal) => {
+                if (saving || detecting) return;
+
                 const detected = detectedSourceFromProposal(proposal);
                 if (detected) applyDetectedSource(detected);
               }}
@@ -435,11 +425,15 @@ export function SourceAddDrawer({
               type="button"
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              disabled={saving}
+              disabled={asyncActionPending}
             >
               Abbrechen
             </Button>
-            <Button type="button" onClick={handleSave} disabled={saving}>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={asyncActionPending}
+            >
               {saving ? <Spinner data-icon="inline-start" /> : null}
               Quelle speichern
             </Button>

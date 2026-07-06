@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AlertCircleIcon,
@@ -73,15 +73,24 @@ export function BrowserRuntimeCard() {
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkMessage, setCheckMessage] = useState<string | null>(null);
+  const ctaActionInFlightRef = useRef(false);
+  const statusRequestIdRef = useRef(0);
 
   const loadStatus = useCallback(async () => {
+    const requestId = statusRequestIdRef.current + 1;
+    statusRequestIdRef.current = requestId;
+
     setBusyAction((currentAction) => currentAction ?? "refresh");
     setError(null);
     try {
-      setStatus(await getBrowserRuntimeStatus());
+      const nextStatus = await getBrowserRuntimeStatus();
+      if (statusRequestIdRef.current !== requestId) return;
+      setStatus(nextStatus);
     } catch (unknownError) {
+      if (statusRequestIdRef.current !== requestId) return;
       setError(String(unknownError));
     } finally {
+      if (statusRequestIdRef.current !== requestId) return;
       setBusyAction((currentAction) =>
         currentAction === "refresh" ? null : currentAction,
       );
@@ -95,14 +104,23 @@ export function BrowserRuntimeCard() {
   useEffect(() => {
     let disposed = false;
     let unsubscribe: (() => void) | null = null;
+    let reloadTimeoutId: number | null = null;
 
     void listenToBrowserRuntimeInstallProgress((nextProgress) => {
+      if (disposed) return;
+
       setProgress(nextProgress);
       if (
         nextProgress.phase === "completed" ||
         nextProgress.phase === "failed"
       ) {
-        window.setTimeout(() => void loadStatus(), 250);
+        if (reloadTimeoutId !== null) {
+          window.clearTimeout(reloadTimeoutId);
+        }
+        reloadTimeoutId = window.setTimeout(() => {
+          reloadTimeoutId = null;
+          if (!disposed) void loadStatus();
+        }, 250);
       }
     })
       .then((nextUnsubscribe) => {
@@ -112,10 +130,15 @@ export function BrowserRuntimeCard() {
           unsubscribe = nextUnsubscribe;
         }
       })
-      .catch((unknownError) => setError(String(unknownError)));
+      .catch((unknownError) => {
+        if (!disposed) setError(String(unknownError));
+      });
 
     return () => {
       disposed = true;
+      if (reloadTimeoutId !== null) {
+        window.clearTimeout(reloadTimeoutId);
+      }
       unsubscribe?.();
     };
   }, [loadStatus]);
@@ -135,6 +158,7 @@ export function BrowserRuntimeCard() {
       progress && progress.phase !== "completed" && progress.phase !== "failed",
     );
   const runtimeState = status?.status;
+  const canRefresh = !busyAction && !installActive;
   const canInstall =
     Boolean(status) &&
     runtimeState !== "unsupported" &&
@@ -160,11 +184,22 @@ export function BrowserRuntimeCard() {
     runtimeState === "updateRequired" ? "Aktualisieren" : "Installieren";
 
   const handleRefresh = async () => {
-    setCheckMessage(null);
-    await loadStatus();
+    if (!canRefresh || ctaActionInFlightRef.current) return;
+
+    ctaActionInFlightRef.current = true;
+    try {
+      setCheckMessage(null);
+      await loadStatus();
+    } finally {
+      ctaActionInFlightRef.current = false;
+    }
   };
 
   const handleInstall = async () => {
+    if (!canInstall || ctaActionInFlightRef.current) return;
+
+    ctaActionInFlightRef.current = true;
+    statusRequestIdRef.current += 1;
     try {
       setBusyAction("install");
       setError(null);
@@ -180,11 +215,16 @@ export function BrowserRuntimeCard() {
         description: message,
       });
     } finally {
+      ctaActionInFlightRef.current = false;
       setBusyAction(null);
     }
   };
 
   const handleCheck = async () => {
+    if (!canCheck || ctaActionInFlightRef.current) return;
+
+    ctaActionInFlightRef.current = true;
+    statusRequestIdRef.current += 1;
     try {
       setBusyAction("check");
       setError(null);
@@ -205,11 +245,16 @@ export function BrowserRuntimeCard() {
         description: message,
       });
     } finally {
+      ctaActionInFlightRef.current = false;
       setBusyAction(null);
     }
   };
 
   const handleUninstall = async () => {
+    if (!canUninstall || ctaActionInFlightRef.current) return;
+
+    ctaActionInFlightRef.current = true;
+    statusRequestIdRef.current += 1;
     try {
       setBusyAction("uninstall");
       setError(null);
@@ -225,6 +270,7 @@ export function BrowserRuntimeCard() {
         description: message,
       });
     } finally {
+      ctaActionInFlightRef.current = false;
       setBusyAction(null);
     }
   };
@@ -244,7 +290,7 @@ export function BrowserRuntimeCard() {
             variant="outline"
             size="sm"
             onClick={() => void handleRefresh()}
-            disabled={busyAction !== null}
+            disabled={!canRefresh}
           >
             <RefreshCwIcon className="size-4" aria-hidden="true" />
             Aktualisieren

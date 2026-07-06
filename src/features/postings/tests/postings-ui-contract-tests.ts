@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 
+import {
+  createQueueCounts,
+  getPrimaryQueueLabel,
+  isPostingInQueue,
+  type PostingQueueId,
+} from "@/features/postings/queues/posting-queues";
+import { createPostingItemViewModel } from "@/features/postings/view-model/posting-item-view-model";
 import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
 import type {
   JobPosting,
@@ -66,6 +73,133 @@ assert.equal(
   1,
   "marking an inbox posting as read via detail loading must refresh queue counts",
 );
+
+const queuePostings = {
+  unreadInbox: createPosting({ id: 101, readState: "unread" }),
+  readInbox: createPosting({ id: 102, readState: "read" }),
+  interested: createPosting({ id: 103, interestState: "interested" }),
+  preparationInProgress: createPosting({
+    id: 104,
+    interestState: "interested",
+    preparationState: "in_progress",
+  }),
+  preparationReady: createPosting({
+    id: 105,
+    interestState: "interested",
+    preparationState: "ready",
+  }),
+  appliedSubmitted: createPosting({ id: 106, applicationState: "submitted" }),
+  appliedInProcess: createPosting({ id: 107, applicationState: "in_process" }),
+  archiveDismissed: createPosting({ id: 108, interestState: "dismissed" }),
+  archiveRejected: createPosting({
+    id: 109,
+    applicationState: "rejected_by_company",
+  }),
+  archiveAcceptedWithPreparation: createPosting({
+    id: 110,
+    interestState: "interested",
+    preparationState: "ready",
+    applicationState: "accepted",
+  }),
+};
+
+assertQueues(queuePostings.unreadInbox, ["inbox", "all"]);
+assertQueues(queuePostings.readInbox, ["inbox", "all"]);
+assertQueues(queuePostings.interested, ["interested", "all"]);
+assertQueues(queuePostings.preparationInProgress, ["preparation", "all"]);
+assertQueues(queuePostings.preparationReady, ["preparation", "all"]);
+assertQueues(queuePostings.appliedSubmitted, ["applied", "all"]);
+assertQueues(queuePostings.appliedInProcess, ["applied", "all"]);
+assertQueues(queuePostings.archiveDismissed, ["archive", "all"]);
+assertQueues(queuePostings.archiveRejected, ["archive", "all"]);
+assertQueues(
+  queuePostings.archiveAcceptedWithPreparation,
+  ["archive", "all"],
+  "archive state must take precedence over preparation/applied queues",
+);
+
+assert.equal(getPrimaryQueueLabel(queuePostings.unreadInbox), "Inbox");
+assert.equal(getPrimaryQueueLabel(queuePostings.interested), "Interessant");
+assert.equal(
+  getPrimaryQueueLabel(queuePostings.preparationReady),
+  "Bewerbung vorbereiten",
+);
+assert.equal(
+  getPrimaryQueueLabel(queuePostings.appliedInProcess),
+  "Beworben / Warten",
+);
+assert.equal(getPrimaryQueueLabel(queuePostings.archiveDismissed), "Archiv");
+
+assert.deepEqual(createQueueCounts(Object.values(queuePostings)), {
+  inbox: 2,
+  interested: 1,
+  preparation: 2,
+  applied: 2,
+  archive: 3,
+  all: 10,
+  newInbox: 1,
+  reviewInbox: 1,
+});
+
+const preparationViewModel = createPostingItemViewModel(
+  queuePostings.preparationReady,
+);
+assert.deepEqual(preparationViewModel.preview.workflow, {
+  queueLabel: "Bewerbung vorbereiten",
+  applicationLabel: "Nicht beworben",
+  preparationLabel: "Vorbereitung bereit",
+  primarySourceLabel: "Acme Careers",
+  lastSeenLabel: preparationViewModel.preview.detailRows.find(
+    (row) => row.label === "Zuletzt gesehen",
+  )?.value,
+  processStep: 3,
+});
+assert.deepEqual(preparationViewModel.preview.detailRows.slice(0, 4), [
+  { label: "Queue", value: preparationViewModel.preview.workflow.queueLabel },
+  {
+    label: "Bewerbungsstand",
+    value: preparationViewModel.preview.workflow.applicationLabel,
+  },
+  {
+    label: "Vorbereitung",
+    value: preparationViewModel.preview.workflow.preparationLabel,
+  },
+  {
+    label: "Primäre Quelle",
+    value: preparationViewModel.preview.workflow.primarySourceLabel,
+  },
+]);
+
+assert.equal(
+  createPostingItemViewModel(queuePostings.interested).preview.workflow.processStep,
+  2,
+);
+assert.equal(
+  createPostingItemViewModel(queuePostings.appliedSubmitted).preview.workflow.processStep,
+  4,
+);
+assert.equal(
+  createPostingItemViewModel(queuePostings.archiveAcceptedWithPreparation).preview.workflow.queueLabel,
+  "Archiv",
+);
+
+function assertQueues(
+  posting: JobPosting,
+  expectedQueueIds: PostingQueueId[],
+  message = `posting ${posting.id} queue membership`,
+) {
+  const actualQueueIds = ([
+    "inbox",
+    "interested",
+    "preparation",
+    "applied",
+    "archive",
+    "all",
+  ] satisfies PostingQueueId[]).filter((queueId) =>
+    isPostingInQueue(posting, queueId),
+  );
+  assert.deepEqual(actualQueueIds, expectedQueueIds, message);
+}
 
 function createPosting(overrides: Partial<JobPosting> = {}): JobPosting {
   return {

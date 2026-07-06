@@ -1,4 +1,12 @@
-import { sourceConfigFromEntries, type SchemaMetadata, type SourceConfigEntry } from "@/features/sources/add/source-config-schema";
+import {
+  configEntriesFromJsonObject,
+  effectiveSourceConfigSchema,
+  entriesWithSchemaHints,
+  sourceConfigFromEntries,
+  sourceConfigSchemaMetadata,
+  type SchemaMetadata,
+  type SourceConfigEntry,
+} from "@/features/sources/add/source-config-schema";
 import type {
   JsonValue,
   ProfileAccessPathDefinition,
@@ -62,6 +70,193 @@ export function detectedSourceFromProposal(
     name,
     sourceConfig: proposal.sourceConfig,
   };
+}
+
+export type SourceAddDraftState = {
+  form: SourceFormState;
+  keyTouched: boolean;
+  configEntries: SourceConfigEntry[];
+  jsonPreviewOpen: boolean;
+  saveAttempted: boolean;
+};
+
+export type SourceAddDraftDetectionResult = SourceAddDraftState & {
+  appliedDetectedSource: boolean;
+};
+
+export function sourceFormAfterNameChange(
+  form: SourceFormState,
+  keyTouched: boolean,
+  name: string,
+): SourceFormState {
+  return {
+    ...form,
+    name,
+    key: keyTouched ? form.key : technicalKeyFromText(name),
+  };
+}
+
+export function sourceFormAfterKeyChange(
+  form: SourceFormState,
+  key: string,
+): SourceFormState {
+  return { ...form, key: technicalKeyFromText(key) };
+}
+
+export function sourceAddDraftAfterProfileChange({
+  profiles,
+  form,
+  configEntries,
+  profileKey,
+  createConfigEntryId = createEntryId,
+}: {
+  profiles: RegistrySourceProfile[];
+  form: SourceFormState;
+  configEntries: SourceConfigEntry[];
+  profileKey: string;
+  createConfigEntryId?: () => string;
+}): Pick<SourceAddDraftState, "form" | "configEntries"> {
+  const nextProfile =
+    profiles.find((profile) => profile.document.key === profileKey) ?? null;
+  const nextPath = nextProfile?.document.accessPaths[0];
+  const nextSchema = effectiveSourceConfigSchema(
+    nextProfile?.document.sourceConfigSchema,
+    nextPath?.sourceConfigSchema,
+  );
+  const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
+
+  return {
+    form: {
+      ...form,
+      profileKey,
+      pathKey: nextPath?.key ?? "",
+    },
+    configEntries: entriesWithSchemaHints(
+      configEntries,
+      nextMetadata,
+      createConfigEntryId,
+    ),
+  };
+}
+
+export function sourceAddDraftAfterAccessPathChange({
+  selectedProfile,
+  form,
+  configEntries,
+  pathKey,
+  createConfigEntryId = createEntryId,
+}: {
+  selectedProfile: RegistrySourceProfile | null;
+  form: SourceFormState;
+  configEntries: SourceConfigEntry[];
+  pathKey: string;
+  createConfigEntryId?: () => string;
+}): Pick<SourceAddDraftState, "form" | "configEntries"> {
+  const nextPath = selectedProfile?.document.accessPaths.find(
+    (accessPath) => accessPath.key === pathKey,
+  );
+  const nextSchema = effectiveSourceConfigSchema(
+    selectedProfile?.document.sourceConfigSchema,
+    nextPath?.sourceConfigSchema,
+  );
+  const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
+
+  return {
+    form: { ...form, pathKey },
+    configEntries: entriesWithSchemaHints(
+      configEntries,
+      nextMetadata,
+      createConfigEntryId,
+    ),
+  };
+}
+
+export function sourceAddDraftAfterDetectedSource({
+  profiles,
+  detected,
+  createConfigEntryId = createEntryId,
+}: {
+  profiles: RegistrySourceProfile[];
+  detected: DetectedSourceLike;
+  createConfigEntryId?: () => string;
+}): SourceAddDraftState {
+  const nextProfile =
+    profiles.find((profile) => profile.document.key === detected.profileKey) ??
+    null;
+  const nextPath =
+    nextProfile?.document.accessPaths.find(
+      (accessPath) => accessPath.key === detected.pathKey,
+    ) ?? null;
+  const nextSchema = effectiveSourceConfigSchema(
+    nextProfile?.document.sourceConfigSchema,
+    nextPath?.sourceConfigSchema,
+  );
+  const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
+
+  return {
+    form: {
+      name: detected.name,
+      key: detected.key,
+      status: "draft",
+      profileKey: detected.profileKey,
+      pathKey: detected.pathKey,
+    },
+    keyTouched: false,
+    configEntries: entriesWithSchemaHints(
+      configEntriesFromJsonObject(detected.sourceConfig, createConfigEntryId),
+      nextMetadata,
+      createConfigEntryId,
+    ),
+    jsonPreviewOpen: false,
+    saveAttempted: false,
+  };
+}
+
+export function sourceAddDraftAfterDetectionResult({
+  draft,
+  profiles,
+  result,
+  trimmedUrl,
+  createConfigEntryId = createEntryId,
+}: {
+  draft: SourceAddDraftState;
+  profiles: RegistrySourceProfile[];
+  result: SourceProposalDetectionResult;
+  trimmedUrl: string;
+  createConfigEntryId?: () => string;
+}): SourceAddDraftDetectionResult {
+  if (result.status === "matched") {
+    const detected = detectedSourceFromResult(result);
+    if (detected) {
+      return {
+        ...sourceAddDraftAfterDetectedSource({
+          profiles,
+          detected,
+          createConfigEntryId,
+        }),
+        appliedDetectedSource: true,
+      };
+    }
+  }
+
+  if (result.status === "unsupported") {
+    return {
+      ...draft,
+      configEntries: draft.configEntries.some((entry) => entry.key === "startUrl")
+        ? draft.configEntries
+        : [
+            ...draft.configEntries,
+            {
+              id: createConfigEntryId(),
+              key: "startUrl",
+              value: trimmedUrl,
+            },
+          ],
+      appliedDetectedSource: false,
+    };
+  }
+
+  return { ...draft, appliedDetectedSource: false };
 }
 
 export function buildSourceDocument({

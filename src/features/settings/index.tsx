@@ -66,7 +66,7 @@ export function SettingsFeature() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!preferences) return;
+    if (loading || saving || !preferences) return;
 
     const radiusKm = Number(radiusText);
     if (

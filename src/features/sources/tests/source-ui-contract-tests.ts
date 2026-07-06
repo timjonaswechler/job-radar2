@@ -4,8 +4,22 @@ import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source-detect
 import {
   buildSourceDocument,
   detectedSourceFromProposal,
+  emptySourceForm,
+  sourceAddDraftAfterAccessPathChange,
+  sourceAddDraftAfterDetectionResult,
+  sourceAddDraftAfterDetectedSource,
+  sourceAddDraftAfterProfileChange,
+  sourceFormAfterKeyChange,
+  sourceFormAfterNameChange,
+  type SourceAddDraftState,
 } from "@/features/sources/add/source-add-model";
-import { sourceConfigSchemaMetadata } from "@/features/sources/add/source-config-schema";
+import {
+  effectiveSourceConfigSchema,
+  entriesWithSchemaHints,
+  sourceConfigFromEntries,
+  sourceConfigSchemaMetadata,
+  type SourceConfigEntry,
+} from "@/features/sources/add/source-config-schema";
 import {
   createSourceGridRows,
   resolveSource,
@@ -68,6 +82,386 @@ const source: RegistrySource = {
 };
 
 const profilesByKey = new Map([[profile.document.key, profile]]);
+
+const pathSourceConfigSchema: JsonValue = {
+  type: "object",
+  required: ["tenant"],
+  properties: {
+    tenant: { type: "string", title: "Tenant" },
+    pageSize: { type: "integer", default: 50 },
+    includeArchived: { type: "boolean", default: false },
+    headers: { type: "object" },
+    locale: { type: "string", default: "de-DE" },
+    optionalNote: { type: "string" },
+  },
+};
+assert.equal(
+  effectiveSourceConfigSchema(profile.document.sourceConfigSchema, undefined),
+  profile.document.sourceConfigSchema,
+);
+assert.equal(
+  effectiveSourceConfigSchema(undefined, pathSourceConfigSchema),
+  pathSourceConfigSchema,
+);
+assert.deepEqual(effectiveSourceConfigSchema(undefined, undefined), { type: "object" });
+const combinedSourceConfigSchema = effectiveSourceConfigSchema(
+  profile.document.sourceConfigSchema,
+  pathSourceConfigSchema,
+);
+assert.deepEqual(combinedSourceConfigSchema, {
+  allOf: [profile.document.sourceConfigSchema, pathSourceConfigSchema],
+});
+
+const combinedSourceConfigMetadata = sourceConfigSchemaMetadata(combinedSourceConfigSchema);
+assert.deepEqual([...combinedSourceConfigMetadata.requiredKeys], ["boardSlug", "tenant"]);
+assert.deepEqual([...combinedSourceConfigMetadata.properties.keys()], [
+  "boardSlug",
+  "tenant",
+  "pageSize",
+  "includeArchived",
+  "headers",
+  "locale",
+  "optionalNote",
+]);
+assert.equal(combinedSourceConfigMetadata.properties.get("tenant")?.title, "Tenant");
+
+const hintedSourceConfigEntries = entriesWithSchemaHints(
+  [entry("existing-board", "boardSlug", "acme")],
+  combinedSourceConfigMetadata,
+  stableEntryIds("hint"),
+);
+assert.deepEqual(hintedSourceConfigEntries, [
+  entry("existing-board", "boardSlug", "acme"),
+  entry("00000000-0000-4000-8000-hint00000001", "tenant", ""),
+  entry("00000000-0000-4000-8000-hint00000002", "pageSize", "50"),
+  entry("00000000-0000-4000-8000-hint00000003", "includeArchived", "false"),
+  entry("00000000-0000-4000-8000-hint00000004", "locale", "de-DE"),
+]);
+
+const parsedSourceConfig = sourceConfigFromEntries(
+  [
+    entry("board", "boardSlug", "acme"),
+    entry("tenant", "tenant", "main"),
+    entry("page-size", "pageSize", "25"),
+    entry("include-archived", "includeArchived", "ja"),
+    entry("headers", "headers", '{"Accept":"application/json"}'),
+    entry("optional-empty", "optionalNote", ""),
+    entry("blank", "", ""),
+  ],
+  combinedSourceConfigMetadata,
+);
+assert.deepEqual(parsedSourceConfig, {
+  value: {
+    boardSlug: "acme",
+    tenant: "main",
+    pageSize: 25,
+    includeArchived: true,
+    headers: { Accept: "application/json" },
+  },
+  errors: [],
+});
+
+const duplicateConfigKeys = sourceConfigFromEntries(
+  [
+    entry("board", "boardSlug", "acme"),
+    entry("tenant", "tenant", "main"),
+    entry("duplicate", "boardSlug", "other"),
+  ],
+  combinedSourceConfigMetadata,
+);
+assert.deepEqual(duplicateConfigKeys.value, { boardSlug: "acme", tenant: "main" });
+assert.deepEqual(duplicateConfigKeys.errors, [
+  "Der Konfigurations-Key „boardSlug“ ist doppelt vorhanden.",
+]);
+
+const invalidJsonConfig = sourceConfigFromEntries(
+  [
+    entry("board", "boardSlug", "acme"),
+    entry("tenant", "tenant", "main"),
+    entry("headers", "headers", "{not-json}"),
+  ],
+  combinedSourceConfigMetadata,
+);
+assert.deepEqual(invalidJsonConfig.value, { boardSlug: "acme", tenant: "main" });
+assert.deepEqual(invalidJsonConfig.errors, ["„headers“ braucht einen gültigen JSON-Wert."]);
+
+const missingRequiredConfig = sourceConfigFromEntries(
+  [entry("tenant", "tenant", "main")],
+  combinedSourceConfigMetadata,
+);
+assert.deepEqual(missingRequiredConfig.errors, ["Pflichtwert „boardSlug“ fehlt."]);
+
+// Source Config helpers are frontend preflight/hint logic only. Backend Source/Profile
+// Compiler validation stays authoritative for full JSON Schema semantics such as enum,
+// pattern, and additionalProperties.
+const preflightOnlySchema = sourceConfigSchemaMetadata({
+  type: "object",
+  required: ["host"],
+  additionalProperties: false,
+  properties: {
+    host: { type: "string", pattern: "^example\\.com$" },
+    mode: { type: "string", enum: ["live"] },
+  },
+});
+assert.deepEqual(
+  sourceConfigFromEntries(
+    [
+      entry("host", "host", "not-example.test"),
+      entry("mode", "mode", "preview"),
+      entry("extra", "extra", "kept-for-compiler-validation"),
+    ],
+    preflightOnlySchema,
+  ),
+  {
+    value: {
+      host: "not-example.test",
+      mode: "preview",
+      extra: "kept-for-compiler-validation",
+    },
+    errors: [],
+  },
+);
+
+const sourceAddTransitionProfile: RegistrySourceProfile = {
+  origin: "built_in",
+  path: "resources/profiles/lever.json",
+  document: {
+    schemaVersion: 2,
+    key: "lever",
+    name: "Lever",
+    kind: "recruiting_system",
+    support: { level: "verified" },
+    sourceConfigSchema: {
+      type: "object",
+      required: ["host"],
+      properties: {
+        host: { type: "string" },
+        locale: { type: "string", default: "en-US" },
+      },
+    },
+    accessPaths: [
+      {
+        key: "posting_api",
+        name: "Posting API",
+        sourceConfigSchema: {
+          type: "object",
+          required: ["tenant"],
+          properties: { tenant: { type: "string" } },
+        },
+        postingDiscovery: { strategies: [{ key: "posting_api" }] },
+      },
+      {
+        key: "xml_feed",
+        name: "XML feed",
+        sourceConfigSchema: {
+          type: "object",
+          required: ["feedUrl"],
+          properties: { feedUrl: { type: "string" } },
+        },
+        postingDiscovery: { strategies: [{ key: "feed" }] },
+      },
+    ],
+  },
+};
+const transitionProfiles = [profile, sourceAddTransitionProfile];
+const sourceAddInitialDraft: SourceAddDraftState = {
+  form: emptySourceForm,
+  keyTouched: false,
+  configEntries: [entry("manual", "manualStableAccessKey", "manual-value")],
+  jsonPreviewOpen: true,
+  saveAttempted: true,
+};
+
+const profileSelectionDraft = sourceAddDraftAfterProfileChange({
+  profiles: transitionProfiles,
+  form: sourceAddInitialDraft.form,
+  configEntries: sourceAddInitialDraft.configEntries,
+  profileKey: "lever",
+  createConfigEntryId: stableEntryIds("profile"),
+});
+assert.equal(profileSelectionDraft.form.profileKey, "lever");
+assert.equal(profileSelectionDraft.form.pathKey, "posting_api");
+assert.deepEqual(entryValues(profileSelectionDraft.configEntries), [
+  ["manualStableAccessKey", "manual-value"],
+  ["host", ""],
+  ["tenant", ""],
+  ["locale", "en-US"],
+]);
+
+const accessPathSelectionDraft = sourceAddDraftAfterAccessPathChange({
+  selectedProfile: sourceAddTransitionProfile,
+  form: profileSelectionDraft.form,
+  configEntries: profileSelectionDraft.configEntries,
+  pathKey: "xml_feed",
+  createConfigEntryId: stableEntryIds("path"),
+});
+assert.equal(accessPathSelectionDraft.form.profileKey, "lever");
+assert.equal(accessPathSelectionDraft.form.pathKey, "xml_feed");
+assert.deepEqual(entryValues(accessPathSelectionDraft.configEntries), [
+  ["manualStableAccessKey", "manual-value"],
+  ["host", ""],
+  ["tenant", ""],
+  ["locale", "en-US"],
+  ["feedUrl", ""],
+]);
+
+const detectedTransitionProposal: SourceProposal = {
+  profileKey: "lever",
+  profileName: "Lever",
+  recommendedAccessPathKey: "xml_feed",
+  recommendedAccessPathName: "XML feed",
+  sourceConfig: {
+    host: "jobs.lever.co",
+    feedUrl: "https://jobs.lever.co/acme.xml",
+  },
+  keyCandidates: ["acme_jobs"],
+  nameCandidates: ["ACME Jobs"],
+  captures: { host: "jobs.lever.co" },
+  evidence: [{ kind: "url", message: "Matched Lever URL" }],
+  supportLevel: "verified",
+};
+const matchedDetectionDraft = sourceAddDraftAfterDetectionResult({
+  draft: sourceAddInitialDraft,
+  profiles: transitionProfiles,
+  result: {
+    status: "matched",
+    proposal: detectedTransitionProposal,
+    diagnostics: [],
+  },
+  trimmedUrl: "https://jobs.lever.co/acme",
+  createConfigEntryId: stableEntryIds("matched"),
+});
+assert.equal(matchedDetectionDraft.appliedDetectedSource, true);
+assert.deepEqual(matchedDetectionDraft.form, {
+  name: "ACME Jobs",
+  key: "acme_jobs",
+  status: "draft",
+  profileKey: "lever",
+  pathKey: "xml_feed",
+});
+assert.equal(matchedDetectionDraft.keyTouched, false);
+assert.equal(matchedDetectionDraft.jsonPreviewOpen, false);
+assert.equal(matchedDetectionDraft.saveAttempted, false);
+assert.deepEqual(entryValues(matchedDetectionDraft.configEntries), [
+  ["host", "jobs.lever.co"],
+  ["feedUrl", "https://jobs.lever.co/acme.xml"],
+  ["locale", "en-US"],
+]);
+
+const ambiguousDetectionDraft = sourceAddDraftAfterDetectionResult({
+  draft: sourceAddInitialDraft,
+  profiles: transitionProfiles,
+  result: {
+    status: "ambiguous",
+    proposals: [detectedTransitionProposal],
+    diagnostics: [],
+  },
+  trimmedUrl: "https://jobs.lever.co/acme",
+  createConfigEntryId: stableEntryIds("ambiguous"),
+});
+assert.deepEqual(ambiguousDetectionDraft, {
+  ...sourceAddInitialDraft,
+  appliedDetectedSource: false,
+});
+const explicitlyAppliedAmbiguousProposal = sourceAddDraftAfterDetectedSource({
+  profiles: transitionProfiles,
+  detected: detectedSourceFromProposal(detectedTransitionProposal)!,
+  createConfigEntryId: stableEntryIds("apply"),
+});
+assert.equal(explicitlyAppliedAmbiguousProposal.form.profileKey, "lever");
+assert.equal(explicitlyAppliedAmbiguousProposal.form.pathKey, "xml_feed");
+assert.deepEqual(entryValues(explicitlyAppliedAmbiguousProposal.configEntries), [
+  ["host", "jobs.lever.co"],
+  ["feedUrl", "https://jobs.lever.co/acme.xml"],
+  ["locale", "en-US"],
+]);
+
+const failedDetectionDraft = sourceAddDraftAfterDetectionResult({
+  draft: sourceAddInitialDraft,
+  profiles: transitionProfiles,
+  result: { status: "failed", diagnostics: [] },
+  trimmedUrl: "https://jobs.lever.co/acme",
+  createConfigEntryId: stableEntryIds("failed"),
+});
+assert.deepEqual(failedDetectionDraft, {
+  ...sourceAddInitialDraft,
+  appliedDetectedSource: false,
+});
+
+const unsupportedDetectionDraft = sourceAddDraftAfterDetectionResult({
+  draft: sourceAddInitialDraft,
+  profiles: transitionProfiles,
+  result: { status: "unsupported", unsupportedProfiles: [], diagnostics: [] },
+  trimmedUrl: "https://jobs.lever.co/acme",
+  createConfigEntryId: stableEntryIds("unsupported"),
+});
+assert.deepEqual(entryValues(unsupportedDetectionDraft.configEntries), [
+  ["manualStableAccessKey", "manual-value"],
+  ["startUrl", "https://jobs.lever.co/acme"],
+]);
+const unsupportedWithStartUrlDraft = sourceAddDraftAfterDetectionResult({
+  draft: {
+    ...sourceAddInitialDraft,
+    configEntries: [entry("start", "startUrl", "https://existing.test/jobs")],
+  },
+  profiles: transitionProfiles,
+  result: { status: "unsupported", unsupportedProfiles: [], diagnostics: [] },
+  trimmedUrl: "https://jobs.lever.co/acme",
+  createConfigEntryId: stableEntryIds("unsupported-existing"),
+});
+assert.deepEqual(entryValues(unsupportedWithStartUrlDraft.configEntries), [
+  ["startUrl", "https://existing.test/jobs"],
+]);
+
+const autoKeyForm = sourceFormAfterNameChange(
+  emptySourceForm,
+  false,
+  "ACME Jobs GmbH",
+);
+assert.equal(autoKeyForm.key, "acme_jobs_gmbh");
+const manualKeyForm = sourceFormAfterKeyChange(autoKeyForm, "Custom Key");
+assert.equal(manualKeyForm.key, "custom_key");
+assert.equal(
+  sourceFormAfterNameChange(manualKeyForm, true, "Different Company").key,
+  "custom_key",
+);
+
+const transitionBuildResult = buildSourceDocument({
+  form: matchedDetectionDraft.form,
+  configEntries: matchedDetectionDraft.configEntries,
+  existingSourceKeys: new Set(),
+  selectedProfile: sourceAddTransitionProfile,
+  selectedAccessPath: sourceAddTransitionProfile.document.accessPaths[1] ?? null,
+  schemaMetadata: sourceConfigSchemaMetadata(
+    effectiveSourceConfigSchema(
+      sourceAddTransitionProfile.document.sourceConfigSchema,
+      sourceAddTransitionProfile.document.accessPaths[1]?.sourceConfigSchema,
+    ),
+  ),
+});
+assert.deepEqual(transitionBuildResult.errors, []);
+assert.deepEqual(Object.keys(transitionBuildResult.document?.sourceConfig ?? {}), [
+  "host",
+  "feedUrl",
+  "locale",
+]);
+for (const searchRequestCriterion of [
+  "keywords",
+  "roles",
+  "locations",
+  "countries",
+  "radius",
+  "includeRules",
+  "excludeRules",
+]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      transitionBuildResult.document?.sourceConfig ?? {},
+      searchRequestCriterion,
+    ),
+    false,
+  );
+}
 
 const sourceRows = createSourceGridRows(
   [source],
@@ -221,6 +615,19 @@ function assertNoV1SourceProfileFields(value: JsonValue | SourceDocument | null 
       assertNoV1SourceProfileFields(childValue as JsonValue);
     }
   }
+}
+
+function entry(id: string, key: string, value: string): SourceConfigEntry {
+  return { id, key, value };
+}
+
+function entryValues(entries: SourceConfigEntry[]) {
+  return entries.map((entry) => [entry.key, entry.value]);
+}
+
+function stableEntryIds(prefix: string) {
+  let nextId = 0;
+  return () => `00000000-0000-4000-8000-${prefix}${String(++nextId).padStart(8, "0")}`;
 }
 
 function removedSourceProfileTerms() {

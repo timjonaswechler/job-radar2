@@ -98,7 +98,7 @@ export function sourceConfigFromEntries(
 export function entriesWithSchemaHints(
   entries: SourceConfigEntry[],
   schemaMetadata: SchemaMetadata,
-  createEntryId = createDefaultEntryId,
+  createEntryId: () => string = createDefaultEntryId,
 ): SourceConfigEntry[] {
   const nextEntries = [...entries];
   const existingKeys = new Set(
@@ -126,7 +126,7 @@ export function entriesWithSchemaHints(
 
 export function configEntriesFromJsonObject(
   value: JsonValue,
-  createEntryId = createDefaultEntryId,
+  createEntryId: () => string = createDefaultEntryId,
 ): SourceConfigEntry[] {
   if (!isJsonObject(value)) return [];
   return Object.entries(value).map(([key, entryValue]) => ({
