@@ -65,10 +65,10 @@ import {
 import type {
   PostingDetailLoadState,
   PostingPreviewViewModel,
-} from "@/features/postings/postings-view-model";
+} from "@/features/postings/view-model/posting-item-view-model";
 import { cn } from "@/lib/utils";
 
-type PostingsPreviewProps = {
+type PostingPreviewPanelProps = {
   detailState: PostingDetailLoadState;
   loading: boolean;
   posting: PostingPreviewViewModel | null;
@@ -117,12 +117,12 @@ const processSteps = [
   { step: 4, label: "Beworben" },
 ];
 
-export function PostingsPreview({
+export function PostingPreviewPanel({
   detailState,
   loading,
   posting,
   onRetryDetail,
-}: PostingsPreviewProps) {
+}: PostingPreviewPanelProps) {
   if (loading) return <PreviewSkeleton />;
 
   if (!posting) {

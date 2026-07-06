@@ -19,7 +19,7 @@ import {
   type JobPosting,
   type JobPostingDetail,
 } from "@/lib/api/job-postings";
-import { loadPostingDetailForWorkspace } from "@/features/postings/posting-detail-workspace";
+import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
 import {
   EMPTY_QUEUE_COUNTS,
   getPostingQueueIdFromPath,
@@ -27,7 +27,7 @@ import {
   type PostingQueue,
   type PostingQueueId,
   type QueueCounts,
-} from "@/features/postings/posting-workflow";
+} from "@/features/postings/queues/posting-queues";
 
 export type JobPostingsLoadError = {
   title: string;

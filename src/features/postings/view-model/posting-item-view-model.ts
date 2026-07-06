@@ -10,24 +10,7 @@ import type {
 import {
   getPrimaryQueueLabel,
   isArchivedPosting,
-} from "@/features/postings/posting-workflow";
-
-export {
-  createQueueCounts,
-  EMPTY_QUEUE_COUNTS,
-  getPostingQueueIdFromPath,
-  getPostingQueueUrl,
-  getPrimaryQueueLabel,
-  getQueueDefinition,
-  isArchivedPosting,
-  isPostingInQueue,
-  isPostingQueuePathActive,
-  POSTINGS_BASE_PATH,
-  QUEUE_DEFINITIONS,
-  type PostingQueue,
-  type PostingQueueId,
-  type QueueCounts,
-} from "@/features/postings/posting-workflow";
+} from "@/features/postings/queues/posting-queues";
 
 export type StatusBadge = {
   label: string;

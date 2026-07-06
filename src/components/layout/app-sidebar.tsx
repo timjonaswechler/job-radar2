@@ -20,7 +20,7 @@ import {
 
 import { NavMain } from "@/components/layout/nav-main";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PostingsSidebar } from "@/features/postings/components/postings-sidebar";
+import { PostingsSidebar } from "@/features/postings/queues/postings-sidebar";
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation();

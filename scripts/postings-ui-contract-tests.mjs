@@ -10,7 +10,7 @@ const outfile = join(tempDir, "postings-ui-contract-tests.mjs");
 
 try {
   await esbuild.build({
-    entryPoints: ["src/features/postings/postings-ui-contract-tests.ts"],
+    entryPoints: ["src/features/postings/tests/postings-ui-contract-tests.ts"],
     outfile,
     bundle: true,
     format: "esm",

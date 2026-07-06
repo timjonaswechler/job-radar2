@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { getAppRoute } from "@/app/navigation/app-routes";
 import { APP_ROUTE_CHANGE_EVENT } from "@/app/navigation/path";
 import { AppLayout } from "@/components/layout/app-layout";
-import { PostingsWorkspaceProvider } from "@/features/postings/postings-workspace-provider";
+import { PostingsWorkspaceProvider } from "@/features/postings/workspace/postings-workspace-provider";
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { loadPostingDetailForWorkspace } from "@/features/postings/posting-detail-workspace";
+import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
 import type {
   JobPosting,
   JobPostingDetail,

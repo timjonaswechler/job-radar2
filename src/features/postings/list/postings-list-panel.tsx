@@ -1,11 +1,4 @@
-import {
-  AlertCircleIcon,
-  ListFilter,
-  InboxIcon,
-  Search,
-  MapPin,
-  Building2,
-} from "lucide-react";
+import { AlertCircleIcon, ListFilter, InboxIcon, Search } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
 import {
@@ -30,14 +23,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import type {
-  PostingListItemViewModel,
-  PostingQueue,
-} from "@/features/postings/postings-view-model";
-import type { JobPostingsLoadError } from "@/features/postings/postings-workspace-provider";
+import type { PostingQueue } from "@/features/postings/queues/posting-queues";
+import type { PostingListItemViewModel } from "@/features/postings/view-model/posting-item-view-model";
+import type { JobPostingsLoadError } from "@/features/postings/workspace/postings-workspace-provider";
 import { cn } from "@/lib/utils";
 
-type PostingsListProps = {
+import { PostingListRow } from "./posting-list-row";
+
+type PostingsListPanelProps = {
   activeQueue: PostingQueue;
   error: JobPostingsLoadError | null;
   loading: boolean;
@@ -48,7 +41,7 @@ type PostingsListProps = {
   className?: string;
 };
 
-export function PostingsList({
+export function PostingsListPanel({
   activeQueue,
   error,
   loading,
@@ -57,7 +50,7 @@ export function PostingsList({
   onRetry,
   onSelectPosting,
   className,
-}: PostingsListProps) {
+}: PostingsListPanelProps) {
   return (
     <section className={cn("flex h-full min-h-0 min-w-0 flex-col", className)}>
       <div className="flex shrink-0 flex-col gap-3 p-4 pb-3">
@@ -193,92 +186,6 @@ function PostingsListEmpty({ queueLabel }: { queueLabel: string }) {
         </EmptyHeader>
       </Empty>
     </div>
-  );
-}
-
-function PostingListRow({
-  posting,
-  selected,
-  onSelect,
-}: {
-  posting: PostingListItemViewModel;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={selected ? "true" : undefined}
-      aria-label={`${posting.title}, ${posting.company}`}
-      className={cn(
-        "w-full overflow-hidden rounded-lg px-2.5 py-2.5 text-left ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-        selected ? "bg-muted ring-1 ring-border" : "hover:bg-muted/75",
-      )}
-      onClick={(event) => {
-        event.currentTarget.blur();
-        onSelect();
-      }}
-    >
-      <div className="flex min-w-0 items-start gap-2.5">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "mt-2 size-2 shrink-0 rounded-full",
-            posting.isUnread ? "bg-primary" : "bg-muted-foreground/30",
-          )}
-        />
-
-        <div className="w-0 flex-1 overflow-hidden">
-          <div className="flex w-full items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium leading-5">
-              <span className="truncate">{posting.title}</span>
-            </div>
-            <time
-              className="shrink-0 text-nowrap text-xs leading-5 text-muted-foreground"
-              dateTime={posting.lastActivityDateTime}
-              title={posting.lastActivityTitle}
-            >
-              {posting.lastActivityLabel}
-            </time>
-          </div>
-          <div className="mt-1 flex min-w-0 items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
-              <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="truncate text-muted-foreground">
-                {posting.company}
-              </span>
-            </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-1">
-              <Badge
-                variant={posting.readStateBadge.variant}
-                size="sm"
-                radius="full"
-              >
-                {posting.readStateBadge.label}
-              </Badge>
-              <Badge
-                variant={posting.interestStateBadge.variant}
-                size="sm"
-                radius="full"
-              >
-                {posting.interestStateBadge.label}
-              </Badge>
-            </div>
-          </div>
-          <div className="mt-1 flex min-w-0 items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
-              <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="truncate">{posting.locationLabel}</span>
-            </div>
-          </div>
-          {posting.processSlotLabel ? (
-            <div className="mt-2 flex h-6 min-w-0 items-center rounded-md border border-dashed bg-background/60 px-2 text-xs leading-none text-muted-foreground">
-              <span className="truncate">{posting.processSlotLabel}</span>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </button>
   );
 }
 

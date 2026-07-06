@@ -14,8 +14,8 @@ import {
   QUEUE_DEFINITIONS,
   type PostingQueueId,
   type QueueCounts,
-} from "@/features/postings/postings-view-model";
-import { usePostingsCounts } from "@/features/postings/postings-workspace-provider";
+} from "@/features/postings/queues/posting-queues";
+import { usePostingsCounts } from "@/features/postings/workspace/postings-workspace-provider";
 
 const primaryQueueIds = [
   "inbox",
@@ -90,7 +90,6 @@ function QueueMenu({
                 value={counts[queue.id]}
               />
             </SidebarMenuButton>
-
           </SidebarMenuItem>
         );
       })}

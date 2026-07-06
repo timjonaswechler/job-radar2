@@ -1,10 +1,10 @@
-import { Postings } from "@/features/postings/components/postings";
-import { PostingsLayout } from "@/features/postings/components/postings-layout";
+import { PostingsPageFrame } from "@/features/postings/workspace/postings-page-frame";
+import { PostingsWorkspaceView } from "@/features/postings/workspace/postings-workspace-view";
 
 export function PostingsFeature() {
   return (
-    <PostingsLayout>
-      <Postings />
-    </PostingsLayout>
+    <PostingsPageFrame>
+      <PostingsWorkspaceView />
+    </PostingsPageFrame>
   );
 }

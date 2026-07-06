@@ -8,13 +8,13 @@ import {
 import {
   createPostingItemViewModel,
   type PostingDetailLoadState,
-} from "@/features/postings/postings-view-model";
-import { usePostingsList } from "@/features/postings/postings-workspace-provider";
+} from "@/features/postings/view-model/posting-item-view-model";
+import { usePostingsList } from "@/features/postings/workspace/postings-workspace-provider";
 
-import { PostingsList } from "./postings-list";
-import { PostingsPreview } from "./postings-preview";
+import { PostingsListPanel } from "@/features/postings/list/postings-list-panel";
+import { PostingPreviewPanel } from "@/features/postings/preview/posting-preview-panel";
 
-export function Postings() {
+export function PostingsWorkspaceView() {
   const {
     activeQueue,
     listError,
@@ -105,7 +105,7 @@ export function Postings() {
         maxSize="55%"
         className="h-full min-w-0"
       >
-        <PostingsList
+        <PostingsListPanel
           activeQueue={activeQueue}
           error={listError}
           loading={listLoading}
@@ -124,7 +124,7 @@ export function Postings() {
         minSize="45%"
         className="h-full min-w-0"
       >
-        <PostingsPreview
+        <PostingPreviewPanel
           detailState={detailState}
           posting={selectedPosting?.preview ?? null}
           loading={listLoading}
