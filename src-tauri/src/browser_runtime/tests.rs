@@ -257,6 +257,78 @@ fn uninstall_is_idempotent_and_removes_managed_runtime_dir() {
     assert_eq!(second_status.status, BrowserRuntimeState::NotInstalled);
 }
 
+#[test]
+fn successful_smoke_result_survives_session_cleanup_failure() {
+    let cleanup_error = std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Directory not empty (os error 66)",
+    );
+
+    let result = super::control::smoke_result_after_session_cleanup(Ok(()), Err(cleanup_error));
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn successful_render_result_survives_session_cleanup_failure() {
+    let cleanup_error = std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Directory not empty (os error 66)",
+    );
+
+    let result = super::control::render_result_after_session_cleanup(
+        Ok("<html>rendered</html>".to_string()),
+        Err(cleanup_error),
+    );
+
+    assert_eq!(result.unwrap(), "<html>rendered</html>");
+}
+
+#[test]
+fn render_failure_is_preserved_after_session_cleanup() {
+    let render_error = BrowserRuntimeRenderError::new(
+        BrowserRuntimeRenderErrorKind::NavigationFailed,
+        "navigation failed",
+    );
+
+    let result =
+        super::control::render_result_after_session_cleanup(Err(render_error.clone()), Ok(()));
+
+    assert_eq!(result.unwrap_err(), render_error);
+}
+
+#[test]
+fn status_cleans_stale_session_dirs_without_marking_runtime_invalid() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let runtime_dir = temp_dir.path().join("browser-runtime");
+    let spec = BrowserRuntimeSpec::for_test("mac-arm64", "1.0.0", "abc123");
+    write_manifest_json(
+        &runtime_dir,
+        serde_json::json!({
+            "schemaVersion": 1,
+            "runtimeKind": "chrome-for-testing",
+            "platform": "mac-arm64",
+            "version": "1.0.0",
+            "downloadUrl": spec.download_url,
+            "archiveSha256": "abc123",
+            "installDir": "mac-arm64/1.0.0",
+            "executablePath": "chrome",
+            "installedAt": "2026-06-09T00:00:00Z"
+        }),
+    );
+    let executable_path = runtime_dir.join("mac-arm64/1.0.0/chrome");
+    std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
+    std::fs::write(&executable_path, "fake chrome").unwrap();
+    let stale_session_dir = runtime_dir.join(".tmp/session-stale");
+    std::fs::create_dir_all(&stale_session_dir).unwrap();
+    std::fs::write(stale_session_dir.join("lockfile"), "stale").unwrap();
+
+    let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
+
+    assert_eq!(status.status, BrowserRuntimeState::Installed);
+    assert!(!stale_session_dir.exists());
+}
+
 fn write_manifest_json(runtime_dir: &Path, manifest: serde_json::Value) {
     std::fs::create_dir_all(runtime_dir).unwrap();
     std::fs::write(

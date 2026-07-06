@@ -3,8 +3,11 @@ use chromiumoxide::{
     Page,
 };
 use futures_util::StreamExt;
-use std::{path::Path, time::Duration};
+use std::{io, path::Path, time::Duration};
 use uuid::Uuid;
+
+const SESSION_CLEANUP_ATTEMPTS: usize = 3;
+const SESSION_CLEANUP_RETRY_DELAY: Duration = Duration::from_millis(50);
 
 use super::{
     BrowserRuntimeInteraction, BrowserRuntimeRenderError, BrowserRuntimeRenderErrorKind,
@@ -18,15 +21,9 @@ pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<()
         .map_err(|error| error.to_string())?;
 
     let result = smoke_test_with_session(executable_path, &session_dir).await;
-    let cleanup_result = tokio::fs::remove_dir_all(&session_dir).await;
+    let cleanup_result = cleanup_session_dir_best_effort(&session_dir).await;
 
-    match (result, cleanup_result) {
-        (Err(error), _) => Err(error),
-        (Ok(()), Err(error)) if error.kind() != std::io::ErrorKind::NotFound => Err(format!(
-            "Managed browser runtime smoke test passed, but session cleanup failed: {error}"
-        )),
-        (Ok(()), _) => Ok(()),
-    }
+    smoke_result_after_session_cleanup(result, cleanup_result)
 }
 
 pub async fn render_page_html_with_actions(
@@ -45,26 +42,48 @@ pub async fn render_page_html_with_actions(
         })?;
 
     let result = render_page_html_with_session(executable_path, &session_dir, request).await;
-    let cleanup_result = tokio::fs::remove_dir_all(&session_dir).await;
+    let cleanup_result = cleanup_session_dir_best_effort(&session_dir).await;
 
-    match (result, cleanup_result) {
-        (Err(error), _) => Err(error),
-        (Ok(_), Err(error)) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(BrowserRuntimeRenderError::new(
-                BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
-                format!(
-                    "Managed browser runtime rendered page, but session cleanup failed: {error}"
-                ),
-            ))
-        }
-        (Ok(html), _) => Ok(html),
-    }
+    render_result_after_session_cleanup(result, cleanup_result)
 }
 
 fn runtime_session_dir(runtime_dir: &Path) -> std::path::PathBuf {
     runtime_dir
         .join(".tmp")
         .join(format!("session-{}", Uuid::new_v4()))
+}
+
+async fn cleanup_session_dir_best_effort(session_dir: &Path) -> Result<(), io::Error> {
+    let mut last_error = None;
+
+    for attempt in 0..SESSION_CLEANUP_ATTEMPTS {
+        match tokio::fs::remove_dir_all(session_dir).await {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => {
+                last_error = Some(error);
+                if attempt + 1 < SESSION_CLEANUP_ATTEMPTS {
+                    tokio::time::sleep(SESSION_CLEANUP_RETRY_DELAY).await;
+                }
+            }
+        }
+    }
+
+    Err(last_error.expect("session cleanup should have produced an error before retries ended"))
+}
+
+pub(super) fn smoke_result_after_session_cleanup(
+    result: Result<(), String>,
+    _cleanup_result: Result<(), io::Error>,
+) -> Result<(), String> {
+    result
+}
+
+pub(super) fn render_result_after_session_cleanup(
+    result: Result<String, BrowserRuntimeRenderError>,
+    _cleanup_result: Result<(), io::Error>,
+) -> Result<String, BrowserRuntimeRenderError> {
+    result
 }
 
 async fn apply_wait(
