@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 
-import { sourceDetectionOutcomeCopy } from "@/features/sources/components/source-detection-panel";
+import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source-detection-panel";
 import {
   buildSourceDocument,
   detectedSourceFromProposal,
-} from "@/features/sources/source-add-model";
-import { sourceConfigSchemaMetadata } from "@/features/sources/source-config-schema";
+} from "@/features/sources/add/source-add-model";
+import { sourceConfigSchemaMetadata } from "@/features/sources/add/source-config-schema";
 import {
   createSourceGridRows,
   resolveSource,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import type {
   JsonValue,
   RegistrySource,

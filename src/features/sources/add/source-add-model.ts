@@ -1,4 +1,4 @@
-import { sourceConfigFromEntries, type SchemaMetadata, type SourceConfigEntry } from "@/features/sources/source-config-schema";
+import { sourceConfigFromEntries, type SchemaMetadata, type SourceConfigEntry } from "@/features/sources/add/source-config-schema";
 import type {
   JsonValue,
   ProfileAccessPathDefinition,

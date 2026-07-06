@@ -12,13 +12,13 @@ import {
 import {
   AccessPathDetails,
   ProfileAccessPathRow,
-} from "@/features/sources/components/access-path-details";
-import { DetailRow } from "@/features/sources/components/detail-row";
+} from "@/features/sources/registry/access-path-details";
+import { DetailRow } from "@/features/sources/registry/detail-row";
 import {
   JsonPreview,
   OptionalJsonPreview,
-} from "@/features/sources/components/json-preview";
-import { InlineDiagnostics } from "@/features/sources/components/registry-diagnostics";
+} from "@/features/sources/shared/json-preview";
+import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import {
   originLabels,
   profileKindLabels,
@@ -29,7 +29,7 @@ import {
   resolveSource,
   type ProfileGridRow,
   type SourceGridRow,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
   RegistrySource,

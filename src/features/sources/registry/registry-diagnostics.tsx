@@ -29,7 +29,7 @@ import {
   diagnosticDocumentOrigin,
   diagnosticDocumentPath,
   diagnosticDocumentKey,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import type { StructuredDiagnostic } from "@/lib/api/sources";
 
 type InlineDiagnosticsProps = {

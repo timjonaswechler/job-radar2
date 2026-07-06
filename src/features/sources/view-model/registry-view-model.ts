@@ -1,5 +1,5 @@
 import { originLabels, profileKindLabels, supportLevelLabels, validationStateLabels } from "@/features/sources/labels";
-import { effectiveSourceConfigSchema } from "@/features/sources/source-config-schema";
+import { effectiveSourceConfigSchema } from "@/features/sources/add/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
   JsonValue,
@@ -19,15 +19,15 @@ import type {
 import {
   isSourceDependencyDiagnostic,
   uniqueDiagnostics,
-} from "@/features/sources/registry-view-model/diagnostics";
+} from "@/features/sources/view-model/diagnostics";
 export {
   buildDiagnosticIndex,
   diagnosticDocumentKey,
   diagnosticDocumentKind,
   diagnosticDocumentOrigin,
   diagnosticDocumentPath,
-} from "@/features/sources/registry-view-model/diagnostics";
-export type { DiagnosticIndex } from "@/features/sources/registry-view-model/diagnostics";
+} from "@/features/sources/view-model/diagnostics";
+export type { DiagnosticIndex } from "@/features/sources/view-model/diagnostics";
 
 export type SourceRegistryInventory = {
   profiles: RegistrySourceProfile[];

@@ -28,13 +28,13 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
-import { ProfileDetailsDrawer } from "@/features/sources/components/registry-details";
+import { ProfileDetailsDrawer } from "@/features/sources/registry/registry-details";
 import {
   ProfileFilterPopover,
   ProfileRegistryStateDot,
   RegistrySearchInput,
   registryRowHealthClassName,
-} from "@/features/sources/components/registry-toolbar";
+} from "@/features/sources/registry/registry-toolbar";
 import {
   countOrigins,
   countProfileKinds,
@@ -42,7 +42,7 @@ import {
   filterProfileGridRows,
   type DiagnosticIndex,
   type ProfileGridRow,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import type {
   RegistrySourceProfile,
   SourceProfileKind,

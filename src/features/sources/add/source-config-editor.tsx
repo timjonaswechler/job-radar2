@@ -13,14 +13,14 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { createEntryId } from "@/features/sources/source-add-model";
+import { createEntryId } from "@/features/sources/add/source-add-model";
 import {
   configEntryDescription,
   jsonValueToInputValue,
   schemaDefaultValue,
   type SchemaMetadata,
   type SourceConfigEntry,
-} from "@/features/sources/source-config-schema";
+} from "@/features/sources/add/source-config-schema";
 
 type SourceConfigEditorProps = {
   entries: SourceConfigEntry[];

@@ -28,13 +28,13 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
-import { SourceDetailsDrawer } from "@/features/sources/components/registry-details";
+import { SourceDetailsDrawer } from "@/features/sources/registry/registry-details";
 import {
   RegistrySearchInput,
   SourceFilterPopover,
   SourceRegistryStateDot,
   registryRowHealthClassName,
-} from "@/features/sources/components/registry-toolbar";
+} from "@/features/sources/registry/registry-toolbar";
 import {
   countOrigins,
   countSourceStatuses,
@@ -42,7 +42,7 @@ import {
   filterSourceGridRows,
   type DiagnosticIndex,
   type SourceGridRow,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import {
   sourceStatusBadgeVariants,
   validationStateBadgeVariants,

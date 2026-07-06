@@ -10,11 +10,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { DetailRow } from "@/features/sources/components/detail-row";
-import { OptionalJsonPreview } from "@/features/sources/components/json-preview";
-import { InlineDiagnostics } from "@/features/sources/components/registry-diagnostics";
+import { DetailRow } from "@/features/sources/registry/detail-row";
+import { OptionalJsonPreview } from "@/features/sources/shared/json-preview";
+import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import { supportLevelLabels } from "@/features/sources/labels";
-import type { SourceResolution } from "@/features/sources/registry-view-model";
+import type { SourceResolution } from "@/features/sources/view-model/registry-view-model";
 import type {
   ProfileAccessPathDefinition,
   SelectedAccessPath,

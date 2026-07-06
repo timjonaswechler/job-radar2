@@ -25,7 +25,7 @@ import {
   type ProfileGridRow,
   type RegistryRowHealth,
   type SourceGridRow,
-} from "@/features/sources/registry-view-model";
+} from "@/features/sources/view-model/registry-view-model";
 import type {
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
