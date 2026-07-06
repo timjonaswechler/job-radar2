@@ -84,6 +84,20 @@ export const preparationStateLabels = {
   ready: "Vorbereitung bereit",
 } satisfies Record<JobPostingPreparationState, string>;
 
+const relativeDateFormatter = new Intl.RelativeTimeFormat("de", {
+  numeric: "auto",
+});
+
+const shortDateFormatter = new Intl.DateTimeFormat("de", {
+  day: "2-digit",
+  month: "short",
+});
+
+const absoluteDateFormatter = new Intl.DateTimeFormat("de", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 export function getWorkflowBadge(posting: JobPosting): StatusBadge {
   if (isArchivedPosting(posting)) {
     return { label: "Archiv", variant: "outline" };
@@ -236,33 +250,37 @@ export function formatRelativeDate(value: string) {
 
   const diffInSeconds = Math.round((date.getTime() - Date.now()) / 1000);
   const absoluteDiff = Math.abs(diffInSeconds);
-  const formatter = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
 
-  if (absoluteDiff < 60) return formatter.format(diffInSeconds, "second");
+  if (absoluteDiff < 60) {
+    return relativeDateFormatter.format(diffInSeconds, "second");
+  }
   if (absoluteDiff < 60 * 60) {
-    return formatter.format(Math.round(diffInSeconds / 60), "minute");
+    return relativeDateFormatter.format(
+      Math.round(diffInSeconds / 60),
+      "minute",
+    );
   }
   if (absoluteDiff < 60 * 60 * 24) {
-    return formatter.format(Math.round(diffInSeconds / (60 * 60)), "hour");
+    return relativeDateFormatter.format(
+      Math.round(diffInSeconds / (60 * 60)),
+      "hour",
+    );
   }
   if (absoluteDiff < 60 * 60 * 24 * 7) {
-    return formatter.format(Math.round(diffInSeconds / (60 * 60 * 24)), "day");
+    return relativeDateFormatter.format(
+      Math.round(diffInSeconds / (60 * 60 * 24)),
+      "day",
+    );
   }
 
-  return new Intl.DateTimeFormat("de", {
-    day: "2-digit",
-    month: "short",
-  }).format(date);
+  return shortDateFormatter.format(date);
 }
 
 export function formatAbsoluteDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Zeit offen";
 
-  return new Intl.DateTimeFormat("de", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return absoluteDateFormatter.format(date);
 }
 
 function displayText(value: string | null | undefined, fallback: string) {

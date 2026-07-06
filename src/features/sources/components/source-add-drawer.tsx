@@ -123,9 +123,13 @@ export function SourceAddDrawer({
       selectedProfile,
     ],
   );
-  const previewJson = buildResult.document
-    ? JSON.stringify(buildResult.document, null, 2)
-    : "";
+  const previewJson = useMemo(
+    () =>
+      jsonPreviewOpen && buildResult.document
+        ? JSON.stringify(buildResult.document, null, 2)
+        : "",
+    [buildResult.document, jsonPreviewOpen],
+  );
 
   const resetDrawer = () => {
     setUrl("");

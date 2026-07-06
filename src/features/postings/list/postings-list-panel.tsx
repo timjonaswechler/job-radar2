@@ -134,7 +134,7 @@ function FlatPostingsList({
           key={posting.id}
           posting={posting}
           selected={posting.id === selectedPostingId}
-          onSelect={() => onSelectPosting(posting.id)}
+          onSelectPosting={onSelectPosting}
         />
       ))}
     </div>

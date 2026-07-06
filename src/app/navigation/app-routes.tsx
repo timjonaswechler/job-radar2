@@ -1,7 +1,12 @@
 import { lazy, type ComponentType } from "react";
 
 import { HomePage } from "@/pages/home-page";
-import { PostingsPage } from "@/pages/postings-page";
+
+const PostingsPage = lazy(() =>
+  import("@/pages/postings-page").then((module) => ({
+    default: module.PostingsPage,
+  })),
+);
 
 const SourcesPage = lazy(() =>
   import("@/pages/sources-page").then((module) => ({

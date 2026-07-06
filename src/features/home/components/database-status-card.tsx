@@ -10,6 +10,11 @@ import { Button } from "@/components/ui/button";
 import { useDatabaseInfo } from "@/hooks/use-database-info";
 import { cn } from "@/lib/utils";
 
+const databaseTimestampFormatter = new Intl.DateTimeFormat("de", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 export function DatabaseStatusCard() {
   const { data, error, loading, refresh } = useDatabaseInfo();
 
@@ -117,8 +122,5 @@ function formatDatabaseTimestamp(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("de", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return databaseTimestampFormatter.format(date);
 }

@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { Building2, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
@@ -7,13 +9,13 @@ import { cn } from "@/lib/utils";
 type PostingListRowProps = {
   posting: PostingListItemViewModel;
   selected: boolean;
-  onSelect: () => void;
+  onSelectPosting: (postingId: number) => void;
 };
 
-export function PostingListRow({
+export const PostingListRow = memo(function PostingListRow({
   posting,
   selected,
-  onSelect,
+  onSelectPosting,
 }: PostingListRowProps) {
   return (
     <button
@@ -21,12 +23,12 @@ export function PostingListRow({
       aria-current={selected ? "true" : undefined}
       aria-label={`${posting.title}, ${posting.company}`}
       className={cn(
-        "w-full overflow-hidden rounded-lg px-2.5 py-2.5 text-left ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+        "w-full overflow-hidden rounded-lg px-2.5 py-2.5 text-left ring-inset transition-colors [contain-intrinsic-size:7rem] [content-visibility:auto] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
         selected ? "bg-muted ring-1 ring-border" : "hover:bg-muted/75",
       )}
       onClick={(event) => {
         event.currentTarget.blur();
-        onSelect();
+        onSelectPosting(posting.id);
       }}
     >
       <div className="flex min-w-0 items-start gap-2.5">
@@ -90,4 +92,4 @@ export function PostingListRow({
       </div>
     </button>
   );
-}
+});

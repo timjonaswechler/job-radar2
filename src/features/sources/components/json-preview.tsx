@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 
@@ -23,6 +23,10 @@ export function JsonPreview({
   defaultOpen = false,
 }: JsonPreviewProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const formattedJson = useMemo(
+    () => (open ? JSON.stringify(value, null, 2) : ""),
+    [open, value],
+  );
 
   return (
     <Collapsible
@@ -55,11 +59,13 @@ export function JsonPreview({
           {open ? "Ausblenden" : "Anzeigen"}
         </CollapsibleTrigger>
       </div>
-      <CollapsibleContent className="mt-3">
-        <pre className="max-h-80 overflow-auto rounded-md bg-background p-3 font-mono text-xs">
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      </CollapsibleContent>
+      {open ? (
+        <CollapsibleContent className="mt-3">
+          <pre className="max-h-80 overflow-auto rounded-md bg-background p-3 font-mono text-xs">
+            {formattedJson}
+          </pre>
+        </CollapsibleContent>
+      ) : null}
     </Collapsible>
   );
 }

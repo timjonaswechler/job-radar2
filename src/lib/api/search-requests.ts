@@ -82,6 +82,7 @@ export type SearchRunResult = {
   searchRequestId: number
   status: SearchRunStatus
   generatedAt: string
+  diagnostics: StructuredDiagnostic[]
   sourceRuns: SourceRunResult[]
   postings: NormalizedPosting[]
 }

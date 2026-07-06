@@ -93,13 +93,22 @@ export function SettingsFeature() {
     try {
       setSaving(true);
       setError(null);
-      let nextPreferences = preferences;
-      if (nextPreferences.defaultSearchRadiusKm !== radiusKm) {
-        nextPreferences = await setDefaultSearchRadiusKm(radiusKm);
+      const saveOperations: Promise<AppPreferences>[] = [];
+
+      if (preferences.defaultSearchRadiusKm !== radiusKm) {
+        saveOperations.push(setDefaultSearchRadiusKm(radiusKm));
       }
-      if (nextPreferences.baseFontSizePx !== baseFontSizePx) {
-        nextPreferences = await setBaseFontSizePx(baseFontSizePx);
+      if (preferences.baseFontSizePx !== baseFontSizePx) {
+        saveOperations.push(setBaseFontSizePx(baseFontSizePx));
       }
+
+      if (saveOperations.length > 0) {
+        await Promise.all(saveOperations);
+      }
+
+      const nextPreferences =
+        saveOperations.length > 0 ? await getAppPreferences() : preferences;
+
       setPreferences(nextPreferences);
       setRadiusText(String(nextPreferences.defaultSearchRadiusKm));
       setBaseFontSizeText(String(nextPreferences.baseFontSizePx));

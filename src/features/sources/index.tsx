@@ -170,10 +170,12 @@ export function SourcesFeature() {
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 {diagnostics.map((diagnostic, index) => (
-                  <DiagnosticCard
+                  <div
                     key={`${diagnostic.path}-${diagnostic.code}-${index}`}
-                    diagnostic={diagnostic}
-                  />
+                    className="[contain-intrinsic-size:220px] [content-visibility:auto]"
+                  >
+                    <DiagnosticCard diagnostic={diagnostic} />
+                  </div>
                 ))}
               </div>
             </>
