@@ -21,7 +21,14 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import {
+  buildDiagnosticIndex,
+  countOrigins,
+  countProfileKinds,
+  countSourceStatuses,
+  createProfileGridRows,
   createSourceGridRows,
+  filterProfileGridRows,
+  filterSourceGridRows,
   resolveSource,
 } from "@/features/sources/view-model/registry-view-model";
 import type {
@@ -30,6 +37,7 @@ import type {
   RegistrySourceProfile,
   SourceDocument,
   SourceProposal,
+  StructuredDiagnostic,
 } from "@/lib/api/sources";
 
 const profile: RegistrySourceProfile = {
@@ -527,6 +535,226 @@ const sourceOwnedRows = createSourceGridRows(
 assert.equal(sourceOwnedRows[0]?.supportLabel, "Experimentell");
 assert.equal(sourceOwnedRows[0]?.accessPathLabel, "Source-owned · html_jobs");
 assert.equal(sourceOwnedRows[0]?.health, "invalid");
+const sourceOwnedResolution = resolveSource(sourceOwnedSource, profilesByKey);
+assert.equal(sourceOwnedResolution.profile, null);
+assert.equal(sourceOwnedResolution.sourceOwnedAccessPath?.key, "html_jobs");
+assert.deepEqual(sourceOwnedResolution.effectiveSourceConfigSchema, { type: "object" });
+assert.equal(sourceOwnedResolution.supportLevel, "experimental");
+assert.deepEqual(sourceOwnedResolution.capabilities, ["postingDiscovery"]);
+
+const missingProfileSource: RegistrySource = {
+  origin: "custom",
+  path: "sources/missing_profile.json",
+  document: {
+    ...source.document,
+    key: "missing_profile_source",
+    name: "Missing Profile Source",
+    selectedAccessPath: {
+      type: "profile_access_path",
+      profileKey: "missing_profile",
+      pathKey: "jobs",
+    },
+  },
+  validationState: {
+    sourceKey: "missing_profile_source",
+    state: "unknown",
+    canCompile: false,
+    canExecute: false,
+    diagnostics: [],
+  },
+};
+const missingAccessPathSource: RegistrySource = {
+  origin: "custom",
+  path: "sources/missing_path.json",
+  document: {
+    ...source.document,
+    key: "missing_path_source",
+    name: "Missing Access Path Source",
+    status: "disabled",
+    selectedAccessPath: {
+      type: "profile_access_path",
+      profileKey: "greenhouse",
+      pathKey: "missing_path",
+    },
+  },
+  validationState: {
+    sourceKey: "missing_path_source",
+    state: "unknown",
+    canCompile: false,
+    canExecute: false,
+    diagnostics: [],
+  },
+};
+const warningProfile: RegistrySourceProfile = {
+  origin: "built_in",
+  path: "resources/profiles/warning.json",
+  document: {
+    ...profile.document,
+    key: "warning_profile",
+    name: "Warning Profile",
+    kind: "generic",
+    support: { level: "best_effort" },
+    accessPaths: [],
+  },
+};
+const errorProfile: RegistrySourceProfile = {
+  origin: "custom",
+  path: "profiles/error.json",
+  document: {
+    ...profile.document,
+    key: "error_profile",
+    name: "Error Profile",
+    kind: "generic",
+    support: { level: "experimental" },
+    diagnostics: [
+      {
+        category: "schema",
+        code: "profile_schema_error",
+        message: "Profile schema is invalid",
+        severity: "error",
+        path: "/accessPaths/0",
+        details: { sourceProfileKey: "error_profile" },
+      },
+    ],
+    accessPaths: [],
+  },
+};
+const missingProfileDiagnostic: StructuredDiagnostic = {
+  category: "registry",
+  code: "missing_source_profile",
+  message: "Selected Source Profile is missing",
+  severity: "error",
+  path: "/selectedAccessPath/profileKey",
+  details: { sourceKey: "missing_profile_source" },
+};
+const missingAccessPathDiagnostic: StructuredDiagnostic = {
+  category: "registry",
+  code: "missing_access_path",
+  message: "Selected Access Path is missing",
+  severity: "error",
+  path: "/selectedAccessPath/pathKey",
+  details: { sourceKey: "missing_path_source" },
+};
+const profileWarningDiagnostic: StructuredDiagnostic = {
+  category: "registry",
+  code: "profile_known_issue",
+  message: "Profile has a known issue",
+  severity: "warning",
+  path: "/support/knownIssues/0",
+  details: { sourceProfileKey: "warning_profile" },
+};
+const unassignedDiagnostic: StructuredDiagnostic = {
+  category: "registry",
+  code: "unassigned_registry_warning",
+  message: "Unassigned registry warning",
+  severity: "warning",
+  path: "/registry",
+  details: { key: "unknown_document" },
+};
+const registrySources = [
+  source,
+  sourceOwnedSource,
+  missingProfileSource,
+  missingAccessPathSource,
+];
+const registryProfiles = [profile, warningProfile, errorProfile];
+const diagnosticIndex = buildDiagnosticIndex(registrySources, registryProfiles, [
+  missingProfileDiagnostic,
+  missingAccessPathDiagnostic,
+  profileWarningDiagnostic,
+  unassignedDiagnostic,
+]);
+assert.deepEqual(
+  diagnosticIndex.bySourceKey.get("missing_profile_source")?.map((diagnostic) => diagnostic.code),
+  ["missing_source_profile"],
+);
+assert.deepEqual(
+  diagnosticIndex.bySourceKey.get("missing_path_source")?.map((diagnostic) => diagnostic.code),
+  ["missing_access_path"],
+);
+assert.deepEqual(
+  diagnosticIndex.byProfileKey.get("warning_profile")?.map((diagnostic) => diagnostic.code),
+  ["profile_known_issue"],
+);
+assert.deepEqual(diagnosticIndex.unassigned.map((diagnostic) => diagnostic.code), [
+  "unassigned_registry_warning",
+]);
+
+const registrySourceRows = createSourceGridRows(
+  registrySources,
+  profilesByKey,
+  diagnosticIndex.bySourceKey,
+);
+assert.deepEqual(
+  registrySourceRows.map((row) => [
+    row.key,
+    row.health,
+    row.ownDiagnosticsCount,
+    row.dependencyDiagnosticsCount,
+  ]),
+  [
+    ["acme", "valid", 0, 0],
+    ["one_off", "invalid", 1, 0],
+    ["missing_profile_source", "dependency_warning", 0, 1],
+    ["missing_path_source", "dependency_warning", 0, 1],
+  ],
+);
+assert.equal(registrySourceRows.find((row) => row.key === "missing_profile_source")?.supportLabel, "—");
+assert.equal(
+  resolveSource(missingAccessPathSource, profilesByKey).profile?.document.key,
+  "greenhouse",
+);
+assert.equal(resolveSource(missingAccessPathSource, profilesByKey).profileAccessPath, null);
+assert.deepEqual(resolveSource(missingAccessPathSource, profilesByKey).capabilities, []);
+assert.deepEqual(countSourceStatuses(registrySourceRows), {
+  draft: 1,
+  active: 2,
+  disabled: 1,
+});
+assert.deepEqual(
+  filterSourceGridRows(registrySourceRows, {
+    searchQuery: "missing",
+    statuses: ["active"],
+    origins: [],
+    diagnosticsOnly: true,
+  }).map((row) => row.key),
+  ["missing_profile_source"],
+);
+
+const registryProfileRows = createProfileGridRows(
+  registryProfiles,
+  diagnosticIndex.byProfileKey,
+);
+assert.deepEqual(
+  registryProfileRows.map((row) => [
+    row.key,
+    row.health,
+    row.ownDiagnosticsCount,
+    row.dependencyDiagnosticsCount,
+  ]),
+  [
+    ["greenhouse", "valid", 0, 0],
+    ["warning_profile", "dependency_warning", 1, 0],
+    ["error_profile", "invalid", 1, 0],
+  ],
+);
+assert.deepEqual(countProfileKinds(registryProfileRows), {
+  recruiting_system: 1,
+  job_portal: 0,
+  website_family: 0,
+  career_site: 0,
+  generic: 2,
+});
+assert.deepEqual(countOrigins(registryProfileRows), { built_in: 2, custom: 1 });
+assert.deepEqual(
+  filterProfileGridRows(registryProfileRows, {
+    searchQuery: "warning",
+    kinds: ["generic"],
+    origins: ["built_in"],
+    diagnosticsOnly: true,
+  }).map((row) => row.key),
+  ["warning_profile"],
+);
 
 const proposal: SourceProposal = {
   profileKey: "greenhouse",

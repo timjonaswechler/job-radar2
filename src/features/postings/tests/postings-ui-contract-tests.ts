@@ -6,7 +6,10 @@ import {
   isPostingInQueue,
   type PostingQueueId,
 } from "@/features/postings/queues/posting-queues";
-import { createPostingItemViewModel } from "@/features/postings/view-model/posting-item-view-model";
+import {
+  createPostingItemViewModel,
+  getPreviewWorkflowProcessStep,
+} from "@/features/postings/view-model/posting-item-view-model";
 import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
 import type {
   JobPosting,
@@ -144,14 +147,14 @@ assert.deepEqual(createQueueCounts(Object.values(queuePostings)), {
 const preparationViewModel = createPostingItemViewModel(
   queuePostings.preparationReady,
 );
-assert.deepEqual(preparationViewModel.preview.workflow, {
+const { lastSeenLabel, ...preparationWorkflow } =
+  preparationViewModel.preview.workflow;
+assert.match(lastSeenLabel, /2026/);
+assert.deepEqual(preparationWorkflow, {
   queueLabel: "Bewerbung vorbereiten",
   applicationLabel: "Nicht beworben",
   preparationLabel: "Vorbereitung bereit",
   primarySourceLabel: "Acme Careers",
-  lastSeenLabel: preparationViewModel.preview.detailRows.find(
-    (row) => row.label === "Zuletzt gesehen",
-  )?.value,
   processStep: 3,
 });
 assert.deepEqual(preparationViewModel.preview.detailRows.slice(0, 4), [
@@ -171,15 +174,26 @@ assert.deepEqual(preparationViewModel.preview.detailRows.slice(0, 4), [
 ]);
 
 assert.equal(
-  createPostingItemViewModel(queuePostings.interested).preview.workflow.processStep,
+  createPostingItemViewModel(queuePostings.interested).preview.workflow
+    .processStep,
   2,
 );
 assert.equal(
-  createPostingItemViewModel(queuePostings.appliedSubmitted).preview.workflow.processStep,
+  getPreviewWorkflowProcessStep({
+    queueLabel: "Custom Queue Copy",
+    applicationLabel: "Eingereicht",
+    preparationLabel: "Nicht gestartet",
+  }),
   4,
 );
 assert.equal(
-  createPostingItemViewModel(queuePostings.archiveAcceptedWithPreparation).preview.workflow.queueLabel,
+  createPostingItemViewModel(queuePostings.appliedSubmitted).preview.workflow
+    .processStep,
+  4,
+);
+assert.equal(
+  createPostingItemViewModel(queuePostings.archiveAcceptedWithPreparation).preview
+    .workflow.queueLabel,
   "Archiv",
 );
 

@@ -1,28 +1,10 @@
-import { useState, type ReactNode } from "react";
-
 import {
-  ArchiveIcon,
   BriefcaseBusinessIcon,
   CalendarDaysIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   Clock3Icon,
-  EllipsisVerticalIcon,
   ExternalLinkIcon,
   FilePenLineIcon,
-  FileTextIcon,
   FolderOpenIcon,
-  ForwardIcon,
-  MailOpenIcon,
-  PanelRightIcon,
-  PaperclipIcon,
-  PinIcon,
-  ReplyAllIcon,
-  ReplyIcon,
-  TagIcon,
-  Trash2Icon,
-  XIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,33 +17,20 @@ import {
   StepperSeparator,
 } from "@/components/reui/stepper";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PreviewAttachments } from "@/features/postings/preview/posting-preview-attachments";
+import { PostingDescription } from "@/features/postings/preview/posting-preview-description";
+import { previewPanelClassName } from "@/features/postings/preview/posting-preview-layout";
+import {
+  PostingPreviewEmptyState,
+  PreviewSkeleton,
+} from "@/features/postings/preview/posting-preview-states";
+import { PreviewToolbar } from "@/features/postings/preview/posting-preview-toolbar";
 import type {
   PostingDetailLoadState,
   PostingPreviewViewModel,
@@ -83,33 +52,6 @@ type SummaryCard = {
   icon: LucideIcon;
 };
 
-type AttachmentPlaceholder = {
-  id: string;
-  name: string;
-  helper: string;
-};
-
-const previewPanelClassName =
-  "flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto px-2 py-3";
-
-const attachmentPlaceholders = [
-  {
-    id: "cv",
-    name: "Lebenslauf",
-    helper: "Platzhalter",
-  },
-  {
-    id: "certificates",
-    name: "Zeugnisse",
-    helper: "Noch nicht verknüpft",
-  },
-  {
-    id: "cover-letter",
-    name: "Anschreiben",
-    helper: "später pro Anzeige",
-  },
-] satisfies AttachmentPlaceholder[];
-
 const processSteps = [
   { step: 1, label: "Gefunden" },
   { step: 2, label: "Sichtung" },
@@ -125,25 +67,7 @@ export function PostingPreviewPanel({
 }: PostingPreviewPanelProps) {
   if (loading) return <PreviewSkeleton />;
 
-  if (!posting) {
-    return (
-      <aside className={previewPanelClassName}>
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <PanelRightIcon aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>Keine Anzeige ausgewählt</EmptyTitle>
-            <EmptyDescription>
-              Wähle links eine Queue und in der Mitte eine Anzeige aus. Bei
-              leeren Queues bleibt das Detailpanel als ruhiger Platzhalter
-              sichtbar.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </aside>
-    );
-  }
+  if (!posting) return <PostingPreviewEmptyState />;
 
   return (
     <aside className={previewPanelClassName}>
@@ -163,43 +87,9 @@ export function PostingPreviewPanel({
 
       <Separator />
 
-      <div className="flex flex-col gap-3 text-sm">
-        {posting.detailRows.map((row) => (
-          <PreviewDetailRow
-            key={row.label}
-            label={row.label}
-            value={row.value}
-          />
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
-          <Clock3Icon
-            aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          />
-          <div className="grid gap-1">
-            <div className="font-medium">Detaildaten folgen später</div>
-            <p className="text-muted-foreground">
-              Ausschreibungstext, echte Unterlagen-Verknüpfungen und ein
-              präziser Vorbereitungsschritt brauchen noch Backend-Daten. Dieses
-              Panel zeigt dafür schon die vorgesehene Struktur.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-auto flex flex-wrap gap-2">
-        <Button type="button" disabled>
-          <FilePenLineIcon data-icon="inline-start" aria-hidden="true" />
-          Entscheidung ändern folgt
-        </Button>
-        <Button type="button" variant="outline" disabled>
-          <ExternalLinkIcon data-icon="inline-start" aria-hidden="true" />
-          Anzeige öffnen folgt
-        </Button>
-      </div>
+      <PreviewMetadataRows posting={posting} />
+      <PreviewFutureDetailsNotice />
+      <PreviewFooterActions />
     </aside>
   );
 }
@@ -280,7 +170,7 @@ function PreviewProcessStepper({
 }: {
   posting: PostingPreviewViewModel;
 }) {
-  const activeStep = getPreviewProcessStep(posting);
+  const activeStep = posting.workflow.processStep;
 
   return (
     <section className="rounded-lg border bg-background p-3">
@@ -324,295 +214,13 @@ function PreviewProcessStepper({
   );
 }
 
-function PreviewAttachments() {
-  const [open, setOpen] = useState(true);
-
+function PreviewMetadataRows({ posting }: { posting: PostingPreviewViewModel }) {
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="rounded-lg border bg-background p-3"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Bewerbungsunterlagen
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Platzhalter für schnelle Links zu Lebenslauf, Zeugnissen und
-            Anschreiben.
-          </p>
-        </div>
-        <CollapsibleTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="group p-0 font-normal text-muted-foreground hover:bg-transparent"
-            />
-          }
-        >
-          <PaperclipIcon data-icon="inline-start" aria-hidden="true" />
-          {open ? "Ausblenden" : "Anzeigen"}
-          <ChevronDownIcon
-            data-icon="inline-end"
-            className="transition-transform group-data-[state=open]:rotate-180"
-            aria-hidden="true"
-          />
-        </CollapsibleTrigger>
-      </div>
-
-      <CollapsibleContent className="mt-3">
-        <div className="flex flex-wrap gap-2">
-          {attachmentPlaceholders.map((attachment) => (
-            <Button
-              key={attachment.id}
-              type="button"
-              size="xs"
-              variant="secondary"
-              disabled
-            >
-              <FileTextIcon data-icon="inline-start" aria-hidden="true" />
-              <span className="font-normal">{attachment.name}</span>
-              <span className="font-normal text-muted-foreground">
-                {attachment.helper}
-              </span>
-            </Button>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function PostingDescription({
-  detailState,
-  postingId,
-  onRetry,
-}: {
-  detailState: PostingDetailLoadState;
-  postingId: number;
-  onRetry?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const state =
-    detailState.status !== "idle" && detailState.postingId === postingId
-      ? detailState
-      : ({ status: "idle" } as const);
-
-  if (state.status === "loading") {
-    return (
-      <section className="rounded-lg border bg-background p-3">
-        <DescriptionHeader helper="Ausschreibung wird geladen…" />
-        <div className="mt-3 grid gap-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-11/12" />
-          <Skeleton className="h-4 w-4/5" />
-        </div>
-      </section>
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <section className="rounded-lg border bg-background p-3">
-        <DescriptionHeader helper="Laden fehlgeschlagen" />
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
-          <span className="min-w-0 flex-1">{state.message}</span>
-          {onRetry ? (
-            <Button type="button" variant="outline" size="xs" onClick={onRetry}>
-              Erneut laden
-            </Button>
-          ) : null}
-        </div>
-      </section>
-    );
-  }
-
-  if (state.status === "loaded") {
-    const descriptionState = state.detail.descriptionState;
-
-    if (descriptionState.status !== "loaded") {
-      return (
-        <section className="rounded-lg border bg-background p-3">
-          <DescriptionHeader helper="Nicht verfügbar" />
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
-            {descriptionState.message}
-          </div>
-        </section>
-      );
-    }
-
-    return (
-      <Collapsible
-        open={open}
-        onOpenChange={setOpen}
-        className="rounded-lg border bg-background p-3"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <DescriptionHeader helper="Aus der Source geladen" />
-          <CollapsibleTrigger
-            render={
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="group"
-              />
-            }
-          >
-            <ChevronDownIcon
-              data-icon="inline-start"
-              className="transition-transform group-data-[state=open]:rotate-180"
-              aria-hidden="true"
-            />
-            {open ? "Weniger" : "Mehr"}
-          </CollapsibleTrigger>
-        </div>
-        <p
-          className={cn(
-            "mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground",
-            open ? "hidden" : "line-clamp-4",
-          )}
-        >
-          {descriptionState.text}
-        </p>
-        <CollapsibleContent className="mt-3 whitespace-pre-wrap rounded-md border bg-muted/20 p-3 text-sm leading-6 text-foreground">
-          {descriptionState.text}
-        </CollapsibleContent>
-      </Collapsible>
-    );
-  }
-
-  return (
-    <section className="rounded-lg border bg-background p-3">
-      <DescriptionHeader helper="Noch nicht geladen" />
-      <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">
-        Klicke die Anzeige in der Liste an, um den Ausschreibungstext zu laden
-        und den Neu-Status als gelesen zu markieren.
-      </p>
-    </section>
-  );
-}
-
-function DescriptionHeader({ helper }: { helper: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Ausschreibungstext
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">{helper}</p>
+    <div className="flex flex-col gap-3 text-sm">
+      {posting.detailRows.map((row) => (
+        <PreviewDetailRow key={row.label} label={row.label} value={row.value} />
+      ))}
     </div>
-  );
-}
-
-function PreviewToolbar() {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-3">
-        <DisabledToolbarButton label="Detail schließen folgt">
-          <XIcon aria-hidden="true" />
-        </DisabledToolbarButton>
-        <Separator
-          className="h-4 data-vertical:self-center"
-          orientation="vertical"
-        />
-        <div className="flex items-center gap-0">
-          <DisabledToolbarButton label="Vorherige Anzeige folgt">
-            <ChevronLeftIcon aria-hidden="true" />
-          </DisabledToolbarButton>
-          <DisabledToolbarButton label="Nächste Anzeige folgt">
-            <ChevronRightIcon aria-hidden="true" />
-          </DisabledToolbarButton>
-        </div>
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <DisabledToolbarButton label="Anzeige anpinnen folgt">
-          <PinIcon aria-hidden="true" />
-        </DisabledToolbarButton>
-        <DisabledToolbarButton label="Archivieren folgt">
-          <ArchiveIcon aria-hidden="true" />
-        </DisabledToolbarButton>
-        <DisabledToolbarButton label="Notiz oder Antwort folgt">
-          <ReplyIcon aria-hidden="true" />
-        </DisabledToolbarButton>
-        <MoreActionsMenu />
-        <Separator
-          className="h-4 data-vertical:self-center"
-          orientation="vertical"
-        />
-        <DisabledToolbarButton label="Entfernen folgt">
-          <Trash2Icon aria-hidden="true" className="text-destructive" />
-        </DisabledToolbarButton>
-      </div>
-    </div>
-  );
-}
-
-function DisabledToolbarButton({
-  children,
-  label,
-}: {
-  children: ReactNode;
-  label: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span className="inline-flex size-7">
-            <Button type="button" variant="ghost" size="icon" disabled>
-              {children}
-              <span className="sr-only">{label}</span>
-            </Button>
-          </span>
-        }
-      />
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function MoreActionsMenu() {
-  return (
-    <Tooltip>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button type="button" variant="ghost" size="icon-sm">
-              <EllipsisVerticalIcon aria-hidden="true" />
-              <span className="sr-only">Weitere Aktionen</span>
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuItem disabled>
-              <ReplyAllIcon aria-hidden="true" />
-              Notiz hinzufügen folgt
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <ForwardIcon aria-hidden="true" />
-              Teilen folgt
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem disabled>
-              <MailOpenIcon aria-hidden="true" />
-              Als ungelesen markieren folgt
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <TagIcon aria-hidden="true" />
-              Label hinzufügen folgt
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <TooltipContent>Weitere Aktionen</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -625,50 +233,64 @@ function PreviewDetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PreviewSkeleton() {
+function PreviewFutureDetailsNotice() {
   return (
-    <aside className={previewPanelClassName}>
-      <div className="flex items-start gap-3">
-        <Skeleton className="size-10" />
-        <div className="grid min-w-0 flex-1 gap-2">
-          <Skeleton className="h-4 w-4/5" />
-          <Skeleton className="h-3 w-2/3" />
+    <div className="flex flex-col gap-3 text-sm">
+      <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
+        <Clock3Icon
+          aria-hidden="true"
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+        />
+        <div className="grid gap-1">
+          <div className="font-medium">Detaildaten folgen später</div>
+          <p className="text-muted-foreground">
+            Ausschreibungstext, echte Unterlagen-Verknüpfungen und ein präziser
+            Vorbereitungsschritt brauchen noch Backend-Daten. Dieses Panel zeigt
+            dafür schon die vorgesehene Struktur.
+          </p>
         </div>
       </div>
-      <div className="flex gap-2">
-        <Skeleton className="h-5 w-24 rounded-full" />
-        <Skeleton className="h-5 w-20 rounded-full" />
-      </div>
-      <Separator />
-      <div className="grid gap-3">
-        <Skeleton className="h-20 w-full rounded-lg" />
-        <Skeleton className="h-16 w-full rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-      </div>
-    </aside>
+    </div>
+  );
+}
+
+function PreviewFooterActions() {
+  return (
+    <div className="mt-auto flex flex-wrap gap-2">
+      <Button type="button" disabled>
+        <FilePenLineIcon data-icon="inline-start" aria-hidden="true" />
+        Entscheidung ändern folgt
+      </Button>
+      <Button type="button" variant="outline" disabled>
+        <ExternalLinkIcon data-icon="inline-start" aria-hidden="true" />
+        Anzeige öffnen folgt
+      </Button>
+    </div>
   );
 }
 
 function createSummaryCards(posting: PostingPreviewViewModel): SummaryCard[] {
+  const { workflow } = posting;
+
   return [
     {
       id: "source",
       label: "Quelle",
-      value: getPreviewDetailValue(posting, "Primäre Quelle"),
+      value: workflow.primarySourceLabel,
       helper: "Provenienz",
       icon: ExternalLinkIcon,
     },
     {
       id: "application",
       label: "Bewerbung",
-      value: getPreviewDetailValue(posting, "Bewerbungsstand"),
-      helper: getPreviewDetailValue(posting, "Vorbereitung"),
+      value: workflow.applicationLabel,
+      helper: workflow.preparationLabel,
       icon: BriefcaseBusinessIcon,
     },
     {
       id: "last-seen",
       label: "Zuletzt gesehen",
-      value: getPreviewDetailValue(posting, "Zuletzt gesehen"),
+      value: workflow.lastSeenLabel,
       helper: "letzte Sichtung",
       icon: CalendarDaysIcon,
     },
@@ -680,23 +302,4 @@ function createSummaryCards(posting: PostingPreviewViewModel): SummaryCard[] {
       icon: FolderOpenIcon,
     },
   ];
-}
-
-function getPreviewProcessStep(posting: PostingPreviewViewModel) {
-  const application = getPreviewDetailValue(posting, "Bewerbungsstand");
-  const preparation = getPreviewDetailValue(posting, "Vorbereitung");
-  const queue = getPreviewDetailValue(posting, "Queue");
-
-  if (application !== "Nicht beworben" && application !== "—") return 4;
-  if (preparation !== "Nicht gestartet" && preparation !== "—") return 3;
-  if (queue === "Interessant" || queue === "Bewerbung vorbereiten") return 2;
-
-  return 2;
-}
-
-function getPreviewDetailValue(
-  posting: PostingPreviewViewModel,
-  label: string,
-) {
-  return posting.detailRows.find((row) => row.label === label)?.value ?? "—";
 }

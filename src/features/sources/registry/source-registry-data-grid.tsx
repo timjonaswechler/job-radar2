@@ -1,16 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import type {
-  ColumnDef,
-  PaginationState,
-  SortingState,
-} from "@tanstack/react-table";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
@@ -28,6 +18,7 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
+import { useSourceRegistryGridState } from "@/features/sources/registry/registry-grid-state";
 import { SourceDetailsDrawer } from "@/features/sources/registry/registry-details";
 import {
   RegistrySearchInput,
@@ -36,10 +27,6 @@ import {
   registryRowHealthClassName,
 } from "@/features/sources/registry/registry-toolbar";
 import {
-  countOrigins,
-  countSourceStatuses,
-  createSourceGridRows,
-  filterSourceGridRows,
   type DiagnosticIndex,
   type SourceGridRow,
 } from "@/features/sources/view-model/registry-view-model";
@@ -50,8 +37,6 @@ import {
 import type {
   RegistrySource,
   RegistrySourceProfile,
-  SourceRegistryDocumentOrigin,
-  SourceStatus,
 } from "@/lib/api/sources";
 
 type SourceRegistryDataGridProps = {
@@ -69,56 +54,6 @@ export function SourceRegistryDataGrid({
   loading,
   onAdd,
 }: SourceRegistryDataGridProps) {
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "name", desc: false },
-  ]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatuses, setSelectedStatuses] = useState<SourceStatus[]>([]);
-  const [selectedOrigins, setSelectedOrigins] = useState<
-    SourceRegistryDocumentOrigin[]
-  >([]);
-  const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<SourceGridRow | null>(null);
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  const rows = useMemo(
-    () =>
-      createSourceGridRows(
-        sources,
-        profilesByKey,
-        diagnosticIndex.bySourceKey,
-      ),
-    [diagnosticIndex.bySourceKey, profilesByKey, sources],
-  );
-
-  const filteredRows = useMemo(
-    () =>
-      filterSourceGridRows(rows, {
-        searchQuery: deferredSearchQuery,
-        statuses: selectedStatuses,
-        origins: selectedOrigins,
-        diagnosticsOnly,
-      }),
-    [
-      deferredSearchQuery,
-      diagnosticsOnly,
-      rows,
-      selectedOrigins,
-      selectedStatuses,
-    ],
-  );
-
-  const statusCounts = useMemo(() => countSourceStatuses(rows), [rows]);
-  const originCounts = useMemo(() => countOrigins(rows), [rows]);
-  const activeFilterCount =
-    selectedStatuses.length +
-    selectedOrigins.length +
-    (diagnosticsOnly ? 1 : 0);
-
   const columns = useMemo<ColumnDef<SourceGridRow>[]>(
     () => [
       {
@@ -238,32 +173,30 @@ export function SourceRegistryDataGrid({
     [],
   );
 
-  const [columnOrder, setColumnOrder] = useState<string[]>(
-    columns.map((column) => column.id as string),
-  );
-
-  const table = useReactTable({
+  const gridState = useSourceRegistryGridState({
     columns,
-    data: filteredRows,
-    pageCount: Math.ceil((filteredRows.length || 0) / pagination.pageSize),
-    getRowId: (row) => row.key,
-    state: {
-      pagination,
-      sorting,
-      columnOrder,
-    },
-    columnResizeMode: "onChange",
-    onColumnOrderChange: setColumnOrder,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    diagnosticIndex,
+    profilesByKey,
+    sources,
   });
 
-  useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [deferredSearchQuery, diagnosticsOnly, selectedOrigins, selectedStatuses]);
+  const {
+    activeFilterCount,
+    diagnosticsOnly,
+    filteredRows,
+    originCounts,
+    searchQuery,
+    selectedOrigins,
+    selectedRow,
+    selectedStatuses,
+    setDiagnosticsOnly,
+    setSearchQuery,
+    setSelectedRow,
+    statusCounts,
+    table,
+    toggleOrigin,
+    toggleStatus,
+  } = gridState;
 
   return (
     <>
@@ -307,20 +240,8 @@ export function SourceRegistryDataGrid({
                 statusCounts={statusCounts}
                 originCounts={originCounts}
                 activeFilterCount={activeFilterCount}
-                onStatusChange={(status, checked) =>
-                  setSelectedStatuses((current) =>
-                    checked
-                      ? [...current, status]
-                      : current.filter((value) => value !== status),
-                  )
-                }
-                onOriginChange={(origin, checked) =>
-                  setSelectedOrigins((current) =>
-                    checked
-                      ? [...current, origin]
-                      : current.filter((value) => value !== origin),
-                  )
-                }
+                onStatusChange={toggleStatus}
+                onOriginChange={toggleOrigin}
                 onDiagnosticsOnlyChange={setDiagnosticsOnly}
               />
               <Button type="button" onClick={onAdd}>

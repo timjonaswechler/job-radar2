@@ -1,16 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import type {
-  ColumnDef,
-  PaginationState,
-  SortingState,
-} from "@tanstack/react-table";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
@@ -28,6 +18,7 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
+import { useProfileRegistryGridState } from "@/features/sources/registry/registry-grid-state";
 import { ProfileDetailsDrawer } from "@/features/sources/registry/registry-details";
 import {
   ProfileFilterPopover,
@@ -36,18 +27,10 @@ import {
   registryRowHealthClassName,
 } from "@/features/sources/registry/registry-toolbar";
 import {
-  countOrigins,
-  countProfileKinds,
-  createProfileGridRows,
-  filterProfileGridRows,
   type DiagnosticIndex,
   type ProfileGridRow,
 } from "@/features/sources/view-model/registry-view-model";
-import type {
-  RegistrySourceProfile,
-  SourceProfileKind,
-  SourceRegistryDocumentOrigin,
-} from "@/lib/api/sources";
+import type { RegistrySourceProfile } from "@/lib/api/sources";
 
 type ProfileRegistryDataGridProps = {
   profiles: RegistrySourceProfile[];
@@ -62,47 +45,6 @@ export function ProfileRegistryDataGrid({
   loading,
   onAdd,
 }: ProfileRegistryDataGridProps) {
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "name", desc: false },
-  ]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedKinds, setSelectedKinds] = useState<SourceProfileKind[]>([]);
-  const [selectedOrigins, setSelectedOrigins] = useState<
-    SourceRegistryDocumentOrigin[]
-  >([]);
-  const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<ProfileGridRow | null>(null);
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  const rows = useMemo(
-    () =>
-      createProfileGridRows(
-        profiles,
-        diagnosticIndex.byProfileKey,
-      ),
-    [diagnosticIndex.byProfileKey, profiles],
-  );
-
-  const filteredRows = useMemo(
-    () =>
-      filterProfileGridRows(rows, {
-        searchQuery: deferredSearchQuery,
-        kinds: selectedKinds,
-        origins: selectedOrigins,
-        diagnosticsOnly,
-      }),
-    [deferredSearchQuery, diagnosticsOnly, rows, selectedKinds, selectedOrigins],
-  );
-
-  const kindCounts = useMemo(() => countProfileKinds(rows), [rows]);
-  const originCounts = useMemo(() => countOrigins(rows), [rows]);
-  const activeFilterCount =
-    selectedKinds.length + selectedOrigins.length + (diagnosticsOnly ? 1 : 0);
-
   const columns = useMemo<ColumnDef<ProfileGridRow>[]>(
     () => [
       {
@@ -194,32 +136,29 @@ export function ProfileRegistryDataGrid({
     [],
   );
 
-  const [columnOrder, setColumnOrder] = useState<string[]>(
-    columns.map((column) => column.id as string),
-  );
-
-  const table = useReactTable({
+  const gridState = useProfileRegistryGridState({
     columns,
-    data: filteredRows,
-    pageCount: Math.ceil((filteredRows.length || 0) / pagination.pageSize),
-    getRowId: (row) => row.key,
-    state: {
-      pagination,
-      sorting,
-      columnOrder,
-    },
-    columnResizeMode: "onChange",
-    onColumnOrderChange: setColumnOrder,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    diagnosticIndex,
+    profiles,
   });
 
-  useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [deferredSearchQuery, diagnosticsOnly, selectedKinds, selectedOrigins]);
+  const {
+    activeFilterCount,
+    diagnosticsOnly,
+    filteredRows,
+    kindCounts,
+    originCounts,
+    searchQuery,
+    selectedKinds,
+    selectedOrigins,
+    selectedRow,
+    setDiagnosticsOnly,
+    setSearchQuery,
+    setSelectedRow,
+    table,
+    toggleKind,
+    toggleOrigin,
+  } = gridState;
 
   return (
     <>
@@ -263,20 +202,8 @@ export function ProfileRegistryDataGrid({
                 kindCounts={kindCounts}
                 originCounts={originCounts}
                 activeFilterCount={activeFilterCount}
-                onKindChange={(kind, checked) =>
-                  setSelectedKinds((current) =>
-                    checked
-                      ? [...current, kind]
-                      : current.filter((value) => value !== kind),
-                  )
-                }
-                onOriginChange={(origin, checked) =>
-                  setSelectedOrigins((current) =>
-                    checked
-                      ? [...current, origin]
-                      : current.filter((value) => value !== origin),
-                  )
-                }
+                onKindChange={toggleKind}
+                onOriginChange={toggleOrigin}
                 onDiagnosticsOnlyChange={setDiagnosticsOnly}
               />
               <Button type="button" onClick={onAdd}>

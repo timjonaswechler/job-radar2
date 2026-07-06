@@ -6,7 +6,7 @@ import {
   AlertAction,
   AlertDescription,
   AlertTitle,
-} from "@/components/ui/alert";
+} from "@/components/reui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
