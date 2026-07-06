@@ -5,7 +5,10 @@ mod normalization;
 
 pub use db::GeoDbResolver;
 pub use distance::distance_km;
-pub use matching::{matches_location_filter, LocationFilterNotAppliedReason, LocationMatchOutcome};
+pub use matching::{
+    matches_location_filter, prepare_location_filter, LocationFilterNotAppliedReason,
+    LocationMatchOutcome, PreparedLocationFilter,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeoPoint {

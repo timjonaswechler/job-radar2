@@ -10,8 +10,8 @@ mod source;
 mod source_profile;
 
 pub use geo::{
-    distance_km, matches_location_filter, GeoDbResolver, GeoPoint, LocationFilterNotAppliedReason,
-    LocationMatchOutcome, ResolvedLocation,
+    distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
+    LocationFilterNotAppliedReason, LocationMatchOutcome, PreparedLocationFilter, ResolvedLocation,
 };
 pub use profile_dsl::compiler::{
     compile_source_execution_plan, CompileSourceExecutionPlanResult, ProfileCompilerSnapshot,
@@ -94,11 +94,11 @@ pub fn run() {
                 ),
             )?;
             let database_path = app_state.paths.database_path.clone();
-            let geo_seed_path = app_state.resources.geo_seed_path.clone();
+            let geo_db_path = app_state.resources.geo_db_path.clone();
 
             app.manage(app_state);
             println!("SQLite database: {}", database_path.display());
-            println!("Geo seed database: {}", geo_seed_path.display());
+            println!("Geo database: {}", geo_db_path.display());
 
             Ok(())
         })

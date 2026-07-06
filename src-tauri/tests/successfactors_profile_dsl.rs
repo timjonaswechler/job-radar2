@@ -131,10 +131,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         expected_schott_style_detail["descriptionText"].as_str()
     );
     assert_eq!(schott_style_detail.diagnostics.len(), 1);
-    assert_eq!(
-        schott_style_detail.diagnostics[0].code,
-        "description_empty"
-    );
+    assert_eq!(schott_style_detail.diagnostics[0].code, "description_empty");
     assert_eq!(
         schott_style_detail.diagnostics[0].strategy_key.as_deref(),
         Some("primary_html_description")

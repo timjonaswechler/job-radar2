@@ -305,6 +305,7 @@ fn search_run_result(postings: Vec<NormalizedPosting>) -> SearchRunResult {
         search_request_id: 1,
         status: SearchRunStatus::Completed,
         generated_at: "2026-06-23T21:41:36.000Z".to_string(),
+        diagnostics: Vec::new(),
         source_runs: Vec::<SourceRunResult>::new(),
         postings,
     }

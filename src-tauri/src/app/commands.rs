@@ -418,6 +418,7 @@ fn schedule_search_request_run(
     let running_search_runs = state.running_search_runs.clone();
     let browser_runtime_dir = state.paths.browser_runtime_dir.clone();
     let app_data_dir = state.paths.app_data_dir.clone();
+    let geo_db_path = state.resources.geo_db_path.clone();
 
     state.background_tasks.schedule(
         crate::background_tasks::BackgroundTaskSpec::search_run(),
@@ -425,15 +426,21 @@ fn schedule_search_request_run(
             let _ = context.progress.report("running Search Run", None, None);
             let source_executor =
                 crate::search::run::DefaultSourceExecutor::new(browser_runtime_dir);
-            let result = crate::search::run::SearchRunService::new_with_result_artifact(
-                &pool,
-                running_search_runs.as_ref(),
-                &source_executor,
-                crate::search::run::default_search_run_result_artifact(),
-                app_data_dir,
-            )
-            .run_with_cancellation(id, Some(&context.cancellation_token))
-            .await;
+            let result = match crate::geo::GeoDbResolver::connect(&geo_db_path).await {
+                Ok(geo_resolver) => {
+                    crate::search::run::SearchRunService::new_with_result_artifact(
+                        &pool,
+                        running_search_runs.as_ref(),
+                        &source_executor,
+                        crate::search::run::default_search_run_result_artifact(),
+                        app_data_dir,
+                    )
+                    .with_geo_resolver(&geo_resolver)
+                    .run_with_cancellation(id, Some(&context.cancellation_token))
+                    .await
+                }
+                Err(error) => Err(error),
+            };
 
             match result {
                 Ok(result)
@@ -970,6 +977,55 @@ mod tests {
             );
             release_active.send(()).unwrap();
         });
+    }
+
+    #[test]
+    fn run_search_request_task_uses_geo_database_resource() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let paths =
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
+            let missing_geo_db = temp_dir.path().join("missing-geo.sqlite");
+            let state = AppState::new_with_resources_and_background_task_notifier(
+                paths,
+                crate::app::resources::AppResources::from_geo_db_path(missing_geo_db),
+                std::sync::Arc::new(crate::background_tasks::NoopBackgroundTaskNotifier),
+            )
+            .await
+            .unwrap();
+
+            let task = schedule_search_request_run(&state, 123).unwrap();
+            let finished = wait_for_background_task_state(
+                &state.background_tasks,
+                &task.task_id,
+                crate::background_tasks::BackgroundTaskState::Failed,
+            )
+            .await;
+
+            assert!(
+                finished
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("failed to open geo database")),
+                "expected geo database failure, got {finished:#?}"
+            );
+        });
+    }
+
+    async fn wait_for_background_task_state(
+        scheduler: &crate::background_tasks::BackgroundTaskScheduler,
+        task_id: &str,
+        state: crate::background_tasks::BackgroundTaskState,
+    ) -> crate::background_tasks::BackgroundTaskSnapshot {
+        for _ in 0..100 {
+            let snapshot = scheduler.get(task_id).unwrap();
+            if snapshot.state == state {
+                return snapshot;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("task {task_id} did not reach state {state:?}");
     }
 
     #[test]

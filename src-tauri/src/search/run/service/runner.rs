@@ -2,10 +2,17 @@ use std::{collections::HashMap, path::PathBuf};
 
 use sqlx::SqlitePool;
 
-use crate::search::{
-    normalization::normalize_source_candidate,
-    posting::import_search_run_result_in_transaction,
-    request::{RunningSearchRuns, SearchRequestService},
+use crate::{
+    geo::{
+        prepare_location_filter, GeoDbResolver, LocationFilterNotAppliedReason,
+        LocationMatchOutcome,
+    },
+    profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
+    search::{
+        normalization::normalize_source_candidate,
+        posting::import_search_run_result_in_transaction,
+        request::{RunningSearchRuns, SearchRequestService},
+    },
 };
 
 use super::super::{SearchRunResult, SearchRunStatus, SourceExecutionInput, SourceExecutor};
@@ -26,6 +33,7 @@ pub struct SearchRunService<'a> {
     result_artifact: SearchRunResultArtifact,
     source_registry_app_data_dir: PathBuf,
     selection_options: SourceSelectionOptions,
+    geo_resolver: Option<&'a GeoDbResolver>,
 }
 
 impl<'a> SearchRunService<'a> {
@@ -59,7 +67,13 @@ impl<'a> SearchRunService<'a> {
             result_artifact,
             source_registry_app_data_dir: source_registry_app_data_dir.into(),
             selection_options: SourceSelectionOptions::default(),
+            geo_resolver: None,
         }
+    }
+
+    pub fn with_geo_resolver(mut self, geo_resolver: &'a GeoDbResolver) -> Self {
+        self.geo_resolver = Some(geo_resolver);
+        self
     }
 
     pub fn allowing_draft_sources(mut self, allow_draft_sources: bool) -> Self {
@@ -165,10 +179,17 @@ impl<'a> SearchRunService<'a> {
             .into_iter()
             .filter(|candidate| matches_any_rule(&include_rules, &candidate.candidate))
             .collect::<Vec<_>>();
-        let treffers = positive_matches
+        let rule_matched_treffers = positive_matches
             .into_iter()
             .filter(|candidate| !matches_any_rule(&exclude_rules, &candidate.candidate))
             .collect::<Vec<_>>();
+        let (treffers, diagnostics) = self
+            .filter_treffers_by_location(
+                &search_request.locations,
+                search_request.radius_km,
+                rule_matched_treffers,
+            )
+            .await?;
 
         let mut matched_counts = HashMap::<String, usize>::new();
         for treffer in &treffers {
@@ -187,6 +208,7 @@ impl<'a> SearchRunService<'a> {
             search_request_id,
             status: overall_status(&source_runs),
             generated_at: generated_at_timestamp(self.pool).await?,
+            diagnostics,
             source_runs,
             postings: merge_postings(treffers),
         };
@@ -209,6 +231,55 @@ impl<'a> SearchRunService<'a> {
         }
 
         Ok(result)
+    }
+
+    async fn filter_treffers_by_location(
+        &self,
+        request_locations: &[String],
+        radius_km: Option<i64>,
+        treffers: Vec<Treffer>,
+    ) -> Result<(Vec<Treffer>, Diagnostics), String> {
+        let Some(geo_resolver) = self.geo_resolver else {
+            return Ok((treffers, Vec::new()));
+        };
+
+        let location_filter =
+            prepare_location_filter(geo_resolver, request_locations, radius_km).await?;
+        let mut diagnostics = Vec::new();
+        let mut filtered_treffers = Vec::new();
+        for treffer in treffers {
+            match location_filter
+                .matches_candidate(geo_resolver, &treffer.candidate.locations)
+                .await?
+            {
+                LocationMatchOutcome::Applied { matched: true } => filtered_treffers.push(treffer),
+                LocationMatchOutcome::NotApplied { reason } => {
+                    if reason == LocationFilterNotAppliedReason::MissingRadiusKm
+                        && !diagnostics.iter().any(|diagnostic: &Diagnostic| {
+                            diagnostic.code == "location_filter_not_applied_missing_radius_km"
+                        })
+                    {
+                        diagnostics.push(location_filter_missing_radius_diagnostic());
+                    }
+                    filtered_treffers.push(treffer);
+                }
+                LocationMatchOutcome::Applied { matched: false } => {}
+            }
+        }
+
+        Ok((filtered_treffers, diagnostics))
+    }
+}
+
+fn location_filter_missing_radius_diagnostic() -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "location_filter_not_applied_missing_radius_km".to_string(),
+        message: "Search Request locations were configured, but radiusKm is missing; location filtering was not applied.".to_string(),
+        severity: DiagnosticSeverity::Warning,
+        path: "/radiusKm".to_string(),
+        strategy_key: None,
+        details: None,
     }
 }
 

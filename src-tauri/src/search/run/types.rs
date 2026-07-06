@@ -76,6 +76,7 @@ pub struct SearchRunResult {
     pub search_request_id: i64,
     pub status: SearchRunStatus,
     pub generated_at: String,
+    pub diagnostics: Diagnostics,
     pub source_runs: Vec<SourceRunResult>,
     pub postings: Vec<NormalizedPosting>,
 }
