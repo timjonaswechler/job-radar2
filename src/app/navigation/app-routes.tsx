@@ -14,6 +14,12 @@ const SourcesPage = lazy(() =>
   })),
 );
 
+const SearchRequestsPage = lazy(() =>
+  import("@/pages/search-requests-page").then((module) => ({
+    default: module.SearchRequestsPage,
+  })),
+);
+
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((module) => ({
     default: module.SettingsPage,
@@ -52,6 +58,11 @@ export const appRoutes: AppRoute[] = [
     path: "/sources",
     title: "Quellen",
     Component: SourcesPage,
+  },
+  {
+    path: "/search-requests",
+    title: "Search Requests",
+    Component: SearchRequestsPage,
   },
   {
     path: "/settings",

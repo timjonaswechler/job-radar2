@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Radar,
+  SearchCheckIcon,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,11 @@ export const sidebarItems: NavGroup[] = [
         titleKey: "navigation.items.sources",
         url: "/sources",
         icon: Radar,
+      },
+      {
+        titleKey: "navigation.items.searchRequests",
+        url: "/search-requests",
+        icon: SearchCheckIcon,
       },
       {
         titleKey: "navigation.items.settings",

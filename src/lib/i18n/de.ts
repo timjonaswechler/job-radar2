@@ -31,6 +31,7 @@ export const de = {
       overview: "Übersicht",
       postings: "Stellenanzeigen",
       sources: "Quellen",
+      searchRequests: "Search Requests",
       settings: "Einstellungen",
       postingsInbox: "Stellenanzeigen-Inbox",
     },

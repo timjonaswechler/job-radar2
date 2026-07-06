@@ -32,6 +32,7 @@ export const en = {
       overview: "Overview",
       postings: "Postings",
       sources: "Sources",
+      searchRequests: "Search Requests",
       settings: "Settings",
       postingsInbox: "Postings Inbox",
     },
