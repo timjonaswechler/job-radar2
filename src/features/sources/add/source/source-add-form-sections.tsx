@@ -32,7 +32,7 @@ import {
   accessPathDisplayName,
   sourceKeyPattern,
   type SourceFormState,
-} from "@/features/sources/add/source-add-model";
+} from "@/features/sources/add/source/source-add-model";
 import { sourceStatusOptions } from "@/features/sources/status";
 import type {
   ProfileAccessPathDefinition,

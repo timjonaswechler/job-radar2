@@ -6,7 +6,7 @@ import {
   sourceConfigSchemaMetadata,
   type SchemaMetadata,
   type SourceConfigEntry,
-} from "@/features/sources/add/source-config-schema";
+} from "@/features/sources/shared/source-config-schema";
 import type {
   JsonValue,
   ProfileAccessPathDefinition,

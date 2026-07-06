@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source-detection-panel";
+import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source/source-detection-panel";
 import {
   buildSourceDocument,
   detectedSourceFromProposal,
@@ -12,14 +12,14 @@ import {
   sourceFormAfterKeyChange,
   sourceFormAfterNameChange,
   type SourceAddDraftState,
-} from "@/features/sources/add/source-add-model";
+} from "@/features/sources/add/source/source-add-model";
 import {
   effectiveSourceConfigSchema,
   entriesWithSchemaHints,
   sourceConfigFromEntries,
   sourceConfigSchemaMetadata,
   type SourceConfigEntry,
-} from "@/features/sources/add/source-config-schema";
+} from "@/features/sources/shared/source-config-schema";
 import {
   createSourceGridRows,
   resolveSource,

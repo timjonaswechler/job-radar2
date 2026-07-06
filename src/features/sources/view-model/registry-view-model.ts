@@ -1,5 +1,5 @@
 import { originLabels, profileKindLabels, supportLevelLabels, validationStateLabels } from "@/features/sources/labels";
-import { effectiveSourceConfigSchema } from "@/features/sources/add/source-config-schema";
+import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
   JsonValue,

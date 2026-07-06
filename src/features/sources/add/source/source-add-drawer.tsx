@@ -19,9 +19,9 @@ import {
   SourceAccessPathFields,
   SourceDetectionUrlField,
   SourceIdentityFields,
-} from "@/features/sources/add/source-add-form-sections";
-import { SourceConfigEditor } from "@/features/sources/add/source-config-editor";
-import { SourceDetectionPanel } from "@/features/sources/add/source-detection-panel";
+} from "@/features/sources/add/source/source-add-form-sections";
+import { SourceConfigEditor } from "@/features/sources/add/source/source-config-editor";
+import { SourceDetectionPanel } from "@/features/sources/add/source/source-detection-panel";
 import {
   buildSourceDocument,
   detectedSourceFromProposal,
@@ -35,12 +35,12 @@ import {
   sourceFormAfterNameChange,
   type DetectedSourceLike,
   type SourceFormState,
-} from "@/features/sources/add/source-add-model";
+} from "@/features/sources/add/source/source-add-model";
 import {
   effectiveSourceConfigSchema,
   sourceConfigSchemaMetadata,
   type SourceConfigEntry,
-} from "@/features/sources/add/source-config-schema";
+} from "@/features/sources/shared/source-config-schema";
 import {
   createSource,
   detectSourceProposalFromUrl,
