@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/collapsible";
 import { DetailRow } from "@/features/sources/registry/detail-row";
 import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
+import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import { supportLevelLabels } from "@/features/sources/labels";
 import type { SourceResolution } from "@/features/sources/view-model/registry-view-model";
@@ -222,11 +223,13 @@ function AccessPathJsonBlocks({ accessPath }: AccessPathJsonBlocksProps) {
         title="postingDiscovery"
         description="Deklarative source-weite Posting Discovery."
         value={accessPath.postingDiscovery}
+        schemaRef={profileDslSchemaRefs.postingDiscoveryStep}
       />
       <OptionalSchemaValuePreview
         title="postingDetail"
         description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
         value={accessPath.postingDetail}
+        schemaRef={profileDslSchemaRefs.postingDetailStep}
       />
     </div>
   );

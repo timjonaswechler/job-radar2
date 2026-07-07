@@ -57,6 +57,7 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
+import { schemaScalarOptions } from "@/features/sources/shared/schema-introspection";
 import { SchemaValueTable } from "@/features/sources/shared/schema-value-table";
 import type { JsonValue } from "@/lib/api/sources";
 
@@ -525,15 +526,10 @@ function schemaTitle(key: string, schema: JsonObject | undefined) {
 }
 
 function schemaEnumOptions(schema: JsonObject | undefined) {
-  const enumValues = schema?.enum;
-  if (!Array.isArray(enumValues)) return [];
-
-  return enumValues
-    .filter(isPrimitiveJsonValue)
-    .map((value) => ({
-      value: jsonValueToInputValue(value),
-      label: String(value),
-    }));
+  return schemaScalarOptions(schema).map((option) => ({
+    value: jsonValueToInputValue(option.value),
+    label: option.label,
+  }));
 }
 
 function schemaFieldTypeLabel(type: ReturnType<typeof schemaFieldType>) {
@@ -563,14 +559,4 @@ function parseJsonValue(
   } catch {
     return { ok: false };
   }
-}
-
-function isPrimitiveJsonValue(
-  value: JsonValue,
-): value is string | number | boolean {
-  return (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
 }

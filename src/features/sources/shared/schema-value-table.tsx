@@ -14,14 +14,27 @@ import {
 } from "@/components/ui/table";
 import {
   isJsonObject,
-  schemaFieldType,
+  schemaConstraints,
+  schemaFieldTypeFromSchema,
+  schemaForValue,
+  schemaScalarOptions,
+  schemaScalarRules,
   type JsonObject,
-} from "@/features/sources/shared/source-config-schema";
+  type SchemaCatalog,
+  type SchemaResolutionOptions,
+} from "@/features/sources/shared/schema-introspection";
+import { profileDslSchemaCatalog } from "@/features/sources/shared/profile-dsl-schema-catalog";
+import {
+  createSchemaValueRows,
+  type SchemaValueTreeRowModel,
+} from "@/features/sources/shared/schema-value-rows";
 import type { JsonValue } from "@/lib/api/sources";
 
 type SchemaValueTableProps = {
   value: JsonValue | undefined;
   schema?: JsonValue;
+  schemaRef?: string;
+  schemaCatalog?: SchemaCatalog;
   maxDepth?: number;
   className?: string;
 };
@@ -38,25 +51,13 @@ type OptionalSchemaValuePreviewProps = Omit<
   value: JsonValue | null | undefined;
 };
 
-type RowModel = {
-  key: string;
-  value: JsonValue;
-  schema: JsonObject | undefined;
-  required: boolean;
-};
-
-type TreeRowModel = RowModel & {
-  id: string;
-  depth: number;
-  ancestorIds: string[];
-  expandable: boolean;
-};
-
 export function SchemaValuePreview({
   title,
   description,
   value,
   schema,
+  schemaRef,
+  schemaCatalog,
   maxDepth,
   className,
 }: SchemaValuePreviewProps) {
@@ -71,6 +72,8 @@ export function SchemaValuePreview({
       <SchemaValueTable
         value={value}
         schema={schema}
+        schemaRef={schemaRef}
+        schemaCatalog={schemaCatalog}
         maxDepth={maxDepth}
         className={className}
       />
@@ -89,6 +92,8 @@ export function OptionalSchemaValuePreview({
 export function SchemaValueTable({
   value,
   schema,
+  schemaRef,
+  schemaCatalog = profileDslSchemaCatalog,
   maxDepth = 6,
   className,
 }: SchemaValueTableProps) {
@@ -96,10 +101,17 @@ export function SchemaValueTable({
     return <p className="text-xs text-muted-foreground">Nicht gesetzt.</p>;
   }
 
+  const schemaContext = schemaContextForPreview({
+    schema,
+    schemaRef,
+    schemaCatalog,
+  });
+
   return (
     <SchemaValueRowsTable
       value={value}
-      schema={asSchemaObject(schema)}
+      schema={schemaContext.schema}
+      schemaOptions={schemaContext.options}
       maxDepth={maxDepth}
       className={className}
     />
@@ -109,15 +121,22 @@ export function SchemaValueTable({
 function SchemaValueRowsTable({
   value,
   schema,
+  schemaOptions,
   maxDepth,
   className,
 }: {
   value: JsonValue;
   schema: JsonObject | undefined;
+  schemaOptions: SchemaResolutionOptions;
   maxDepth: number;
   className?: string;
 }) {
-  const rows = treeRowsForValue(value, schema, maxDepth);
+  const rows = createSchemaValueRows({
+    value,
+    schema: schemaForValue(schema, value, schemaOptions),
+    schemaOptions,
+    maxDepth,
+  });
   const [expandedRows, setExpandedRows] = useState<Set<string>>(
     () =>
       new Set(
@@ -128,7 +147,7 @@ function SchemaValueRowsTable({
   );
 
   if (!rows.length) {
-    return <ScalarValue value={value} schema={schema} />;
+    return <ScalarValue value={value} schema={schema} schemaOptions={schemaOptions} />;
   }
 
   const visibleRows = rows.filter((row) =>
@@ -163,6 +182,7 @@ function SchemaValueRowsTable({
             key={row.id}
             row={row}
             expanded={expandedRows.has(row.id)}
+            schemaOptions={schemaOptions}
             onToggle={() => toggleRow(row.id)}
           />
         ))}
@@ -174,14 +194,16 @@ function SchemaValueRowsTable({
 function SchemaValueRow({
   row,
   expanded,
+  schemaOptions,
   onToggle,
 }: {
-  row: TreeRowModel;
+  row: SchemaValueTreeRowModel;
   expanded: boolean;
+  schemaOptions: SchemaResolutionOptions;
   onToggle: () => void;
 }) {
   const nested = isNestedValue(row.value);
-  const typeLabel = valueTypeLabel(row.value, row.schema);
+  const typeLabel = valueTypeLabel(row.value, row.schema, schemaOptions);
   const schemaTitle =
     typeof row.schema?.title === "string" ? row.schema.title : null;
   const summary = nested ? nestedSummary(row.value) : null;
@@ -223,6 +245,11 @@ function SchemaValueRow({
                 {schemaTitle}
               </span>
             ) : null}
+            {row.variantLabel ? (
+              <Badge variant="secondary" className="w-fit font-sans">
+                {row.variantLabel}
+              </Badge>
+            ) : null}
           </span>
         </div>
       </TableCell>
@@ -230,14 +257,23 @@ function SchemaValueRow({
         {nested ? (
           <span className="text-muted-foreground">{summary}</span>
         ) : (
-          <ScalarValue value={row.value} schema={row.schema} />
+          <ScalarValue
+            value={row.value}
+            schema={row.schema}
+            schemaOptions={schemaOptions}
+          />
         )}
       </TableCell>
       <TableCell className="whitespace-normal px-2 py-1.5 align-top text-muted-foreground">
         {typeLabel}
       </TableCell>
       <TableCell className="whitespace-normal px-2 py-1.5 align-top">
-        <SchemaRule schema={row.schema} required={row.required} />
+        <SchemaRule
+          schema={row.schema}
+          required={row.required}
+          unknown={row.unknown}
+          schemaOptions={schemaOptions}
+        />
       </TableCell>
     </TableRow>
   );
@@ -246,23 +282,31 @@ function SchemaValueRow({
 function SchemaRule({
   schema,
   required,
+  unknown,
+  schemaOptions,
 }: {
   schema: JsonObject | undefined;
   required: boolean;
+  unknown: boolean;
+  schemaOptions: SchemaResolutionOptions;
 }) {
-  const options = schemaOptions(schema);
-  const constraints = schemaConstraints(schema);
+  const scalarRules = schemaScalarRules(schema, schemaOptions);
+  const constraints = schemaConstraints(schema, schemaOptions);
 
-  if (!required && !options.length && !constraints.length) {
+  if (!required && !unknown && !scalarRules.length && !constraints.length) {
     return <span className="text-muted-foreground">—</span>;
   }
 
   return (
     <div className="flex flex-wrap gap-1">
       {required ? <Badge variant="warning-light">Pflicht</Badge> : null}
-      {options.map((option) => (
-        <Badge key={option} variant="outline">
-          {option}
+      {unknown ? <Badge variant="warning-light">not in schema</Badge> : null}
+      {scalarRules.map((rule) => (
+        <Badge
+          key={`${rule.kind}:${rule.label}`}
+          variant={rule.kind === "const" ? "secondary" : "outline"}
+        >
+          {rule.kind}: {rule.label}
         </Badge>
       ))}
       {constraints.map((constraint) => (
@@ -277,9 +321,11 @@ function SchemaRule({
 function ScalarValue({
   value,
   schema,
+  schemaOptions,
 }: {
   value: JsonValue;
   schema: JsonObject | undefined;
+  schemaOptions: SchemaResolutionOptions;
 }) {
   if (value === null)
     return <span className="text-muted-foreground">null</span>;
@@ -295,7 +341,9 @@ function ScalarValue({
 
   const displayValue =
     typeof value === "string" ? value : JSON.stringify(value);
-  const options = schemaOptions(schema);
+  const options = schemaScalarOptions(schema, schemaOptions).map(
+    (option) => option.label,
+  );
   const knownOption = options.includes(displayValue);
 
   return (
@@ -308,132 +356,6 @@ function ScalarValue({
   );
 }
 
-function treeRowsForValue(
-  value: JsonValue,
-  schema: JsonObject | undefined,
-  maxDepth: number,
-  depth = 0,
-  parentId = "root",
-  ancestorIds: string[] = [],
-): TreeRowModel[] {
-  return rowsForValue(value, schema).flatMap((row, index) => {
-    const id = `${parentId}/${index}:${row.key}`;
-    const expandable =
-      isNestedValue(row.value) &&
-      depth < maxDepth &&
-      rowsForValue(row.value, row.schema).length > 0;
-    const treeRow: TreeRowModel = {
-      ...row,
-      id,
-      depth,
-      ancestorIds,
-      expandable,
-    };
-    const childRows = expandable
-      ? treeRowsForValue(row.value, row.schema, maxDepth, depth + 1, id, [
-          ...ancestorIds,
-          id,
-        ])
-      : [];
-
-    return [treeRow, ...childRows];
-  });
-}
-
-function rowsForValue(
-  value: JsonValue,
-  schema: JsonObject | undefined,
-): RowModel[] {
-  if (Array.isArray(value)) {
-    const itemSchema = asSchemaObject(schema?.items);
-    return value.map((item, index) => ({
-      key: `[${index}]`,
-      value: item,
-      schema: itemSchema,
-      required: false,
-    }));
-  }
-
-  if (isJsonObject(value)) {
-    const objectSchemas = flattenSchemaObjects(schema);
-    const requiredKeys = new Set(
-      objectSchemas.flatMap((objectSchema) =>
-        Array.isArray(objectSchema.required)
-          ? objectSchema.required.filter(
-              (key): key is string => typeof key === "string",
-            )
-          : [],
-      ),
-    );
-
-    return Object.entries(value).map(([key, item]) => ({
-      key,
-      value: item,
-      schema: schemaForProperty(key, objectSchemas),
-      required: requiredKeys.has(key),
-    }));
-  }
-
-  return [];
-}
-
-function schemaForProperty(
-  key: string,
-  schemas: JsonObject[],
-): JsonObject | undefined {
-  for (const schema of schemas) {
-    const properties = schema.properties;
-    if (!isJsonObject(properties)) continue;
-    const property = properties[key];
-    if (isJsonObject(property)) return property;
-  }
-  return undefined;
-}
-
-function flattenSchemaObjects(schema: JsonObject | undefined): JsonObject[] {
-  if (!schema) return [];
-  const schemas = [schema];
-  const allOf = schema.allOf;
-  if (Array.isArray(allOf)) {
-    for (const child of allOf) {
-      if (isJsonObject(child)) schemas.push(...flattenSchemaObjects(child));
-    }
-  }
-  return schemas;
-}
-
-function schemaOptions(schema: JsonObject | undefined) {
-  if (!schema) return [];
-
-  const values: string[] = [];
-  if ("const" in schema && isScalarSchemaValue(schema.const)) {
-    values.push(String(schema.const));
-  }
-
-  if (Array.isArray(schema.enum)) {
-    for (const value of schema.enum) {
-      if (isScalarSchemaValue(value)) values.push(String(value));
-    }
-  }
-
-  return [...new Set(values)];
-}
-
-function schemaConstraints(schema: JsonObject | undefined) {
-  if (!schema) return [];
-  const constraints: string[] = [];
-
-  if (typeof schema.format === "string") constraints.push(schema.format);
-  if (typeof schema.pattern === "string") constraints.push("pattern");
-  if (typeof schema.minimum === "number")
-    constraints.push(`min ${schema.minimum}`);
-  if (typeof schema.maximum === "number")
-    constraints.push(`max ${schema.maximum}`);
-  if (schema.additionalProperties === false) constraints.push("closed");
-
-  return constraints;
-}
-
 function isNestedValue(value: JsonValue) {
   return Array.isArray(value) || isJsonObject(value);
 }
@@ -444,8 +366,14 @@ function nestedSummary(value: JsonValue) {
   return "";
 }
 
-function valueTypeLabel(value: JsonValue, schema: JsonObject | undefined) {
-  const schemaType = schema ? schemaFieldType(schema) : null;
+function valueTypeLabel(
+  value: JsonValue,
+  schema: JsonObject | undefined,
+  schemaOptions: SchemaResolutionOptions,
+) {
+  const schemaType = schema
+    ? schemaFieldTypeFromSchema(schema, schemaOptions)
+    : null;
   if (schemaType === "json") return Array.isArray(value) ? "array" : "object";
   if (schemaType) return schemaType;
   if (Array.isArray(value)) return "array";
@@ -453,18 +381,42 @@ function valueTypeLabel(value: JsonValue, schema: JsonObject | undefined) {
   return typeof value;
 }
 
-function asSchemaObject(schema: JsonValue | undefined): JsonObject | undefined {
-  return isJsonObject(schema) ? schema : undefined;
+function schemaContextForPreview({
+  schema,
+  schemaRef,
+  schemaCatalog,
+}: {
+  schema: JsonValue | undefined;
+  schemaRef: string | undefined;
+  schemaCatalog: SchemaCatalog;
+}): { schema: JsonObject | undefined; options: SchemaResolutionOptions } {
+  if (schemaRef) {
+    const resolvedSchema = schemaCatalog.resolveRef(schemaRef);
+    if (resolvedSchema) {
+      return {
+        schema: resolvedSchema.schema,
+        options: {
+          catalog: schemaCatalog,
+          rootSchema: resolvedSchema.rootSchema,
+          baseUri: resolvedSchema.baseUri,
+        },
+      };
+    }
+  }
+
+  const schemaObject = asSchemaObject(schema);
+  return {
+    schema: schemaObject,
+    options: {
+      catalog: schemaCatalog,
+      rootSchema: schemaObject,
+      baseUri: typeof schemaObject?.$id === "string" ? schemaObject.$id : undefined,
+    },
+  };
 }
 
-function isScalarSchemaValue(
-  value: unknown,
-): value is string | number | boolean {
-  return (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
+function asSchemaObject(schema: JsonValue | undefined): JsonObject | undefined {
+  return isJsonObject(schema) ? schema : undefined;
 }
 
 function tableClassName(className: string | undefined) {

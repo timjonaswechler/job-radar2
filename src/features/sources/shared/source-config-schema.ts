@@ -1,6 +1,13 @@
 import type { JsonValue } from "@/lib/api/sources";
+import {
+  isJsonObject,
+  schemaDefaultValue as introspectedSchemaDefaultValue,
+  schemaFieldTypeFromSchema,
+  schemaMetadataForObject,
+  type JsonObject,
+} from "@/features/sources/shared/schema-introspection";
 
-export type JsonObject = { [key: string]: JsonValue };
+export type { JsonObject } from "@/features/sources/shared/schema-introspection";
 
 export type SourceConfigEntry = {
   id: string;
@@ -24,26 +31,7 @@ export function effectiveSourceConfigSchema(
 }
 
 export function sourceConfigSchemaMetadata(schema: JsonValue): SchemaMetadata {
-  const requiredKeys = new Set<string>();
-  const properties = new Map<string, JsonObject>();
-
-  for (const objectSchema of flattenObjectSchemas(schema)) {
-    const required = objectSchema.required;
-    if (Array.isArray(required)) {
-      for (const key of required) {
-        if (typeof key === "string") requiredKeys.add(key);
-      }
-    }
-
-    const schemaProperties = objectSchema.properties;
-    if (isJsonObject(schemaProperties)) {
-      for (const [key, value] of Object.entries(schemaProperties)) {
-        if (isJsonObject(value)) properties.set(key, value);
-      }
-    }
-  }
-
-  return { requiredKeys, properties };
+  return schemaMetadataForObject(schema);
 }
 
 export function sourceConfigFromEntries(
@@ -137,23 +125,13 @@ export function configEntriesFromJsonObject(
 }
 
 export function schemaFieldType(schema: JsonObject | undefined) {
-  const type = schema?.type;
-  const normalizedType = Array.isArray(type)
-    ? type.find((item) => item !== "null")
-    : type;
-
-  if (normalizedType === "number" || normalizedType === "integer") {
-    return "number";
-  }
-  if (normalizedType === "boolean") return "boolean";
-  if (normalizedType === "object" || normalizedType === "array") return "json";
-  return "string";
+  return schemaFieldTypeFromSchema(schema);
 }
 
 export function schemaDefaultValue(
   schema: JsonObject | undefined,
 ): JsonValue | undefined {
-  return schema && "default" in schema ? schema.default : undefined;
+  return introspectedSchemaDefaultValue(schema);
 }
 
 export function jsonValueToInputValue(value: JsonValue | undefined): string {
@@ -191,9 +169,7 @@ export function configEntryDescription(
     .join(" · ");
 }
 
-export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
+export { isJsonObject };
 
 function convertConfigValue(
   key: string,
@@ -230,18 +206,6 @@ function convertConfigValue(
   }
 
   return { ok: true, value: rawValue };
-}
-
-function flattenObjectSchemas(schema: JsonValue): JsonObject[] {
-  if (!isJsonObject(schema)) return [];
-  const schemas: JsonObject[] = [schema];
-  const allOf = schema.allOf;
-  if (Array.isArray(allOf)) {
-    for (const childSchema of allOf) {
-      schemas.push(...flattenObjectSchemas(childSchema));
-    }
-  }
-  return schemas;
 }
 
 function createDefaultEntryId() {

@@ -14,14 +14,12 @@ import {
   ProfileAccessPathRow,
 } from "@/features/sources/registry/access-path-details";
 import { DetailRow } from "@/features/sources/registry/detail-row";
-import {
-  JsonPreview,
-  OptionalJsonPreview,
-} from "@/features/sources/shared/json-preview";
+import { OptionalJsonPreview } from "@/features/sources/shared/json-preview";
 import {
   OptionalSchemaValuePreview,
   SchemaValuePreview,
 } from "@/features/sources/shared/schema-value-table";
+import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import {
   originLabels,
@@ -198,37 +196,36 @@ function SourceDetails({
         />
         <DetailRow label="Ursprung" value={originLabels[source.origin]} />
         <DetailRow label="Registry-Dokument" value={source.path} mono />
-        <div className="mt-1 sm:col-span-2">
-          <SchemaValuePreview
-            title="sourceConfig"
-            description="Stabile Zugriffskonfiguration der Source. Search Request Kriterien gehören nicht hierher."
-            value={source.document.sourceConfig}
-            schema={resolution.effectiveSourceConfigSchema}
-          />
-        </div>
-        <div className="mt-1 sm:col-span-2">
-          <SchemaValuePreview
-            title="Effektives sourceConfigSchema"
-            description="Profil- und Access-Path-Schema, wie die Registry sie für diese Source zusammenführt."
-            value={resolution.effectiveSourceConfigSchema}
-          />
-        </div>
       </dl>
+
+      <SchemaValuePreview
+        title="sourceConfig"
+        description="Stabile Zugriffskonfiguration der Source. Search Request Kriterien gehören nicht hierher."
+        value={source.document.sourceConfig}
+        schema={resolution.effectiveSourceConfigSchema}
+      />
+      <SchemaValuePreview
+        title="Effektives sourceConfigSchema"
+        description="Profil- und Access-Path-Schema, wie die Registry sie für diese Source zusammenführt."
+        value={resolution.effectiveSourceConfigSchema}
+      />
 
       <AccessPathDetails
         selectedAccessPath={selectedAccessPath}
         resolution={resolution}
       />
 
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="sourceOverrides"
         description="Kontrollierte Source-spezifische Verhaltensänderungen für den ausgewählten Profilpfad."
         value={source.document.sourceOverrides}
+        schemaRef={profileDslSchemaRefs.sourceOverrides}
       />
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="sourceSupport"
         description="Support-Metadaten für Source-owned Access Paths."
         value={source.document.sourceSupport}
+        schemaRef={profileDslSchemaRefs.supportMetadata}
       />
       <OptionalJsonPreview
         title="Source-Diagnosen im Dokument"
@@ -291,10 +288,11 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
         ))}
       </div>
 
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="support"
         description="Support Level, bekannte Einschränkungen und Evidenz des Source Profile."
         value={profile.document.support}
+        schemaRef={profileDslSchemaRefs.supportMetadata}
       />
       <OptionalSchemaValuePreview
         title="Profil sourceConfigSchema"
@@ -305,6 +303,7 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
         title="Detection-Regeln"
         description="Regeln, wie dieses Profil bei eingereichten URLs eine Source Proposal erzeugt."
         value={profile.document.detect}
+        schemaRef={profileDslSchemaRefs.detection}
       />
 
       <div className="grid gap-2">
