@@ -11,6 +11,9 @@ mod source;
 mod source_profile;
 
 pub use checks::{
+    check_and_activate_source, check_and_activate_source_with_clients,
+    check_and_activate_source_with_fetcher, check_and_reactivate_source,
+    check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
     check_source, check_source_with_clients, check_source_with_fetcher,
     derive_effective_verification_state_for_source_profile, evaluate_check_report_freshness,
     fixture_pack_root, latest_check_report_path, persist_latest_check_report,
@@ -144,6 +147,8 @@ pub fn run() {
             app::commands::list_source_diagnostics,
             app::commands::verify_source_profile,
             app::commands::check_source,
+            app::commands::check_and_activate_source,
+            app::commands::check_and_reactivate_source,
             app::commands::get_source_live_check_report_status,
             app::commands::get_source_profile_verification_report_status,
             app::commands::detect_source_proposal_from_url,

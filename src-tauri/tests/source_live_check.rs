@@ -1,13 +1,14 @@
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin, sync::Mutex};
 
 use job_radar_lib::{
-    check_source, check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
+    check_and_activate_source_with_fetcher, check_and_reactivate_source_with_fetcher, check_source,
+    check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
     source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
     CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
     DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
     PostingDetailFetchResponse, PostingDetailFetcher, PostingDiscoveryFetchError,
     PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    SourceLiveCheckReportState, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    SourceDocument, SourceLiveCheckReportState, SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -36,6 +37,15 @@ fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
         serde_json::to_string_pretty(source).unwrap(),
     )
     .unwrap();
+}
+
+fn read_source_status(app_data_dir: &Path, source_key: &str) -> SourceStatus {
+    let path = app_data_dir
+        .join("sources")
+        .join(format!("{source_key}.json"));
+    let document: SourceDocument =
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    document.status
 }
 
 fn simple_profile() -> serde_json::Value {
@@ -586,6 +596,211 @@ fn check_source_checks_detail_for_no_more_than_one_candidate() {
     assert_eq!(report.details["detailChecked"], json!(true));
     assert_eq!(report.details["detailPassed"], json!(true));
     assert_eq!(fetcher.detail_requested_urls(), vec!["job-1"]);
+}
+
+#[test]
+fn check_and_activate_source_changes_draft_to_active_after_passed_live_check() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let fetcher = passing_live_check_fetcher();
+
+    let report =
+        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+            .unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(
+        read_source_status(temp_dir.path(), "example_source"),
+        SourceStatus::Active
+    );
+    assert_eq!(
+        fetcher.discovery_requested_urls(),
+        vec!["https://example.test/jobs.json"]
+    );
+    let persisted = read_latest_check_report(&source_live_check_report_path(
+        temp_dir.path(),
+        "example_source",
+    ))
+    .unwrap();
+    assert_eq!(persisted.result, CheckReportResult::Passed);
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
+}
+
+#[test]
+fn check_and_activate_source_leaves_draft_unchanged_after_failed_live_check() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let fetcher = FakeLiveCheckFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({ "jobs": [] }).to_string(),
+    )]);
+
+    let report =
+        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+            .unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(
+        read_source_status(temp_dir.path(), "example_source"),
+        SourceStatus::Draft
+    );
+    assert_activation_blocked(
+        &report,
+        "example_source",
+        json!("draft"),
+        json!("active"),
+        json!("failed"),
+    );
+    let persisted = read_latest_check_report(&source_live_check_report_path(
+        temp_dir.path(),
+        "example_source",
+    ))
+    .unwrap();
+    assert_activation_blocked(
+        &persisted,
+        "example_source",
+        json!("draft"),
+        json!("active"),
+        json!("failed"),
+    );
+}
+
+#[test]
+fn check_and_reactivate_source_changes_disabled_to_active_after_passed_live_check() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("disabled"));
+    let fetcher = passing_live_check_fetcher();
+
+    let report =
+        check_and_reactivate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+            .unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(
+        read_source_status(temp_dir.path(), "example_source"),
+        SourceStatus::Active
+    );
+    assert_eq!(
+        fetcher.discovery_requested_urls(),
+        vec!["https://example.test/jobs.json"]
+    );
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
+}
+
+#[test]
+fn check_and_reactivate_source_leaves_disabled_unchanged_after_failed_live_check() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("disabled"));
+    let fetcher = FakeLiveCheckFetcher::new([(
+        "https://example.test/jobs.json",
+        json!({ "jobs": [] }).to_string(),
+    )]);
+
+    let report =
+        check_and_reactivate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+            .unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(
+        read_source_status(temp_dir.path(), "example_source"),
+        SourceStatus::Disabled
+    );
+    assert_activation_blocked(
+        &report,
+        "example_source",
+        json!("disabled"),
+        json!("active"),
+        json!("failed"),
+    );
+}
+
+#[test]
+fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
+    let activate_temp_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        activate_temp_dir.path(),
+        &simple_profile_without_pagination(),
+    );
+    write_source(
+        activate_temp_dir.path(),
+        &simple_source_with_status("active"),
+    );
+    let activate_report = check_and_activate_source_with_fetcher(
+        activate_temp_dir.path(),
+        "example_source",
+        &passing_live_check_fetcher(),
+    )
+    .unwrap();
+
+    assert_eq!(activate_report.result, CheckReportResult::Failed);
+    assert_eq!(
+        read_source_status(activate_temp_dir.path(), "example_source"),
+        SourceStatus::Active
+    );
+    assert_activation_blocked(
+        &activate_report,
+        "example_source",
+        json!("active"),
+        json!("active"),
+        json!("passed"),
+    );
+
+    let reactivate_temp_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        reactivate_temp_dir.path(),
+        &simple_profile_without_pagination(),
+    );
+    write_source(
+        reactivate_temp_dir.path(),
+        &simple_source_with_status("draft"),
+    );
+    let reactivate_report = check_and_reactivate_source_with_fetcher(
+        reactivate_temp_dir.path(),
+        "example_source",
+        &passing_live_check_fetcher(),
+    )
+    .unwrap();
+
+    assert_eq!(reactivate_report.result, CheckReportResult::Failed);
+    assert_eq!(
+        read_source_status(reactivate_temp_dir.path(), "example_source"),
+        SourceStatus::Draft
+    );
+    assert_activation_blocked(
+        &reactivate_report,
+        "example_source",
+        json!("draft"),
+        json!("active"),
+        json!("passed"),
+    );
+}
+
+fn assert_activation_blocked(
+    report: &job_radar_lib::CheckReport,
+    source_key: &str,
+    current_status: serde_json::Value,
+    requested_status: serde_json::Value,
+    live_check_result: serde_json::Value,
+) {
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.category == DiagnosticCategory::Runtime
+                && diagnostic.code == "source_live_check.activation_blocked"
+        })
+        .expect("missing source_live_check.activation_blocked diagnostic");
+    let details = diagnostic.details.as_ref().unwrap();
+    assert_eq!(details["sourceKey"], json!(source_key));
+    assert_eq!(details["currentStatus"], current_status);
+    assert_eq!(details["requestedStatus"], requested_status);
+    assert_eq!(details["liveCheckResult"], live_check_result);
 }
 
 struct FakeLiveCheckFetcher {

@@ -1,3 +1,5 @@
+mod activation;
+
 use std::io::ErrorKind;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,6 +29,12 @@ use super::{
     source_live_check_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
     CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
     CheckReportSubject,
+};
+
+pub use activation::{
+    check_and_activate_source, check_and_activate_source_with_clients,
+    check_and_activate_source_with_fetcher, check_and_reactivate_source,
+    check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v1";
