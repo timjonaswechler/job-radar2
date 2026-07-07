@@ -58,6 +58,14 @@ Use these terms exactly:
 - **postingDiscovery**: bulk discovery of posting candidates. It returns normalized candidates with at least `title`, `company`, and `url`.
 - **postingDetail**: lazy loading for one posting's `descriptionText`, using the posting URL, Source Config, and optional `postingMeta`.
 - **postingMeta**: hidden technical metadata captured during discovery for later detail loading, such as `jobId`, `externalPath`, or `requisitionId`.
+- **Fixture Pack**: deterministic evidence bundle for one Source Profile. It lives outside the profile document and proves behavior against captured fixture inputs.
+- **Fixture Manifest**: machine-readable file inside a Fixture Pack that names the profile/access path, fixture requests, response files, and expected outputs.
+- **Profile Verification Check**: deterministic, offline, fixture-based check for one Source Profile. It produces a **Verification Report** and never performs live network requests.
+- **Verification Report**: the Check Report produced by a Profile Verification Check. It is an overwriteable derived report, not the Source Profile document.
+- **Effective Verification State**: derived state (`verified`, `failed`, `not_applicable`, or `unknown`) computed from declared support, report freshness, fixture checks, and diagnostics. It is not the same as `support.level`.
+- **Source Live Check**: bounded live check for one concrete Source and its current Source Config/selected Access Path. It is separate from Profile Verification.
+- **Source Live Check Report**: the Check Report produced by a Source Live Check. It does not verify a Source Profile.
+- **Check Report**: derived JSON report with a shared envelope for Source Profile Verification and Source Live Checks.
 - **Structured Diagnostics**: machine-readable validation/runtime issues surfaced by Job Radar.
 
 Avoid legacy terms such as adapter, Systemprofil, Browserprofil, inventory, scraper plugin, or profile-specific runtime.
@@ -72,6 +80,8 @@ Avoid legacy terms such as adapter, Systemprofil, Browserprofil, inventory, scra
 - Do not implement a whole catalog.
 - Do not use arbitrary JavaScript. Browser fetch may use bounded waits/interactions only if the DSL and the app support them.
 - Do not claim a profile is `verified` unless `support.evidence` includes deterministic fixture evidence. Use `best_effort` for live-only validation.
+- Do not use `support.evidence.kind = "url"`; `url` is valid only for `detect.evidence.kind`.
+- Do not treat a live check or smoke result as fixture evidence. Use `support.evidence.kind = "smoke"` for live-only evidence.
 
 ## Evidence and classification workflow
 
@@ -137,6 +147,258 @@ Use one of:
 - `unsupported`: detection knowledge only; no executable Access Path should be relied on.
 
 For a production custom profile created from live evidence only, use `best_effort`.
+
+### 6. Choose support evidence kinds correctly
+
+`support.evidence` documents why the declared Support Level is plausible. The only supported values are:
+
+- `fixture`: a deterministic Fixture Manifest reference, usually `fixture.json`, under the profile's Fixture Pack. Use this when captured offline fixtures can prove discovery/detail behavior.
+- `smoke`: a bounded live/manual smoke result. Use this for live Source checks or one-off live validation; it is not deterministic fixture evidence.
+- `manual_review`: human/agent review of public docs, HTML, API responses, selectors, or platform markers.
+- `schema_check`: evidence that the profile shape was validated against schema/compiler checks, without runtime fixture proof.
+
+Examples:
+
+```json
+"support": {
+  "level": "best_effort",
+  "summary": "Manual review and a live smoke suggest the API path works, but no Fixture Manifest has been captured.",
+  "evidence": [
+    {
+      "kind": "manual_review",
+      "reference": "https://jobs.example.com/api/jobs",
+      "summary": "Public endpoint returned stable job fields."
+    },
+    {
+      "kind": "smoke",
+      "reference": "2026-07-08 live sample",
+      "summary": "One bounded live check returned at least one candidate."
+    },
+    {
+      "kind": "schema_check",
+      "reference": "Job Radar registry diagnostics",
+      "summary": "Profile JSON loaded without schema diagnostics."
+    }
+  ]
+}
+```
+
+For fixture-backed verified support, reference a Fixture Manifest instead of raw response files:
+
+```json
+"support": {
+  "level": "verified",
+  "summary": "Fixture replay proves discovery and detail extraction for the API Access Path.",
+  "evidence": [
+    {
+      "kind": "fixture",
+      "reference": "fixture.json",
+      "summary": "Offline Fixture Manifest covers postingDiscovery and postingDetail.descriptionText."
+    }
+  ]
+}
+```
+
+Never set `kind` to `url` inside `support.evidence`. `url` remains valid only as detection evidence, for example:
+
+```json
+"detect": {
+  "evidence": [
+    {
+      "kind": "url",
+      "message": "Career URLs expose the host needed for Source Config."
+    }
+  ]
+}
+```
+
+## Fixture Packs, Fixture Manifests, and Profile Verification
+
+A Profile Verification Check is deterministic and offline. It replays captured fixture responses through the Profile DSL runtime and writes a derived Verification Report. It must not fetch the live internet while verifying fixtures.
+
+### Fixture Pack directory convention
+
+For a custom Source Profile with key `<profile-key>`, put fixture evidence under:
+
+```text
+<app-data-dir>/source-profile-fixtures/<profile-key>/
+```
+
+This directory is the **Fixture Pack**. The Source Profile JSON remains in:
+
+```text
+<app-data-dir>/source-profiles/<profile-key>.json
+```
+
+`support.evidence.kind = "fixture"` references a Fixture Manifest inside the Fixture Pack, not arbitrary raw fixture files. The default manifest name is:
+
+```text
+fixture.json
+```
+
+A non-default manifest may be referenced by setting `support.evidence[].reference`, but the reference must still be Fixture-Pack-root-relative.
+
+### Fixture file path rules
+
+Fixture Manifest references and response `bodyFile` references are resolved relative to the Fixture Pack root. Subdirectories such as `responses/jobs.json` are allowed.
+
+Invalid references include:
+
+- absolute paths;
+- Windows absolute or UNC paths;
+- `..` path traversal;
+- `~` home-directory shortcuts;
+- empty references;
+- any normalized path that escapes the Fixture Pack root.
+
+### Fixture Manifest v1 practical shape
+
+A practical Fixture Manifest v1 contains:
+
+- `schemaVersion: 1`;
+- `profileKey`: must match the checked Source Profile key;
+- `accessPathKey`: explicit Access Path key to verify;
+- `sourceConfig`: config used to compile the selected Access Path during verification;
+- `requests[]`: offline request mappings by normalized HTTP method and absolute HTTP(S) URL;
+- `checks.postingDiscovery.expect`: discovery invariants;
+- optional `checks.postingDetail.cases[]`: concrete detail cases and description expectations.
+
+Example:
+
+```json
+{
+  "schemaVersion": 1,
+  "profileKey": "example_profile",
+  "accessPathKey": "api",
+  "sourceConfig": {
+    "apiBaseUrl": "https://jobs.example.com/api"
+  },
+  "requests": [
+    {
+      "key": "discovery_jobs",
+      "match": {
+        "method": "GET",
+        "url": "https://jobs.example.com/api/jobs"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/jobs.json"
+      }
+    },
+    {
+      "key": "detail_job_123",
+      "match": {
+        "method": "GET",
+        "url": "https://jobs.example.com/api/jobs/123"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/job-123.json"
+      }
+    }
+  ],
+  "checks": {
+    "postingDiscovery": {
+      "expect": {
+        "minCandidates": 1,
+        "requiredFields": ["title", "company", "url"],
+        "containsCandidates": [
+          {
+            "title": "Software Engineer",
+            "company": "Example",
+            "url": "https://jobs.example.com/jobs/123"
+          }
+        ]
+      }
+    },
+    "postingDetail": {
+      "cases": [
+        {
+          "key": "job_123_detail",
+          "posting": {
+            "title": "Software Engineer",
+            "company": "Example",
+            "url": "https://jobs.example.com/jobs/123",
+            "postingMeta": {
+              "jobId": "123"
+            }
+          },
+          "expect": {
+            "minDescriptionLength": 40,
+            "descriptionContains": ["responsibilities"]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Rules for agents:
+
+- Capture every request the runtime needs in `requests[]`; unmapped runtime fetches fail fixture verification.
+- Use method + absolute URL matching. Query parameter order is insignificant; free-form URL regex matching is not part of verified fixture matching.
+- Store fixture bodies under the Fixture Pack, for example `responses/jobs.json`.
+- Prefer fixture coverage that proves both `postingDiscovery` and `postingDetail.descriptionText` for full verified support.
+- Use `support.evidence.kind = "fixture"` only when the Fixture Manifest and referenced files exist.
+
+### Declared Support Level vs Effective Verification State
+
+`support.level` is authored metadata in the Source Profile. A Profile Verification Check must not mutate it.
+
+Effective Verification State is derived when Job Radar reads or runs verification:
+
+- `verified`: declared `support.level = "verified"`, fresh passed Verification Report, fixture evidence exists, and sufficient fixture coverage passed.
+- `failed`: declared `verified`, but verification failed or fixture evidence/coverage is missing or broken.
+- `not_applicable`: declared support is not `verified`; passing fixtures may be shown, but they do not automatically raise Support Level.
+- `unknown`: no report is available, the report is stale, or the report cannot be used.
+
+A button click or successful live Source check never grants verified support by itself.
+
+### Check Report expectations for agents
+
+Profile Verification and Source Live Check both write overwriteable derived **Check Reports**. A report is not an audit log and not an authored Source Profile or Source document.
+
+Latest derived report conventions:
+
+```text
+<app-data-dir>/source-profile-verifications/<profile-key>.json
+<app-data-dir>/source-live-checks/<source-key>.json
+```
+
+High-level Check Report envelope:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "source_profile_verification",
+  "subject": {
+    "type": "source_profile",
+    "key": "example_profile"
+  },
+  "checkedAt": "2026-07-08T12:00:00Z",
+  "logicVersion": "profile-verification/v1",
+  "result": "passed",
+  "fingerprints": [],
+  "diagnostics": [],
+  "details": {}
+}
+```
+
+Agent expectations:
+
+- `kind` is `source_profile_verification` for Verification Reports and `source_live_check` for Source Live Check Reports.
+- `subject.type` is `source_profile` for profile verification and `source` for source live checks.
+- `result` is only `passed` or `failed`; stale/unknown states are derived when reading a report.
+- `fingerprints` let Job Radar detect stale reports after profile, fixture, Source, Source Config, Source Overrides, or check-logic changes.
+- Error Structured Diagnostics make a check fail. Warnings and info may still allow `result = "passed"`.
+- Do not edit Check Reports manually to change profile support or Source status.
 
 ## Profile document shape
 
@@ -777,6 +1039,18 @@ Example:
 
 Allowed Source statuses are `draft`, `active`, and `disabled`. Use `draft` if the profile is uncertain or live validation was not possible.
 
+## Source Live Check is separate from Profile Verification
+
+A **Source Live Check** runs against one concrete Source and the real public source endpoint. It is useful after creating a Source, but it is not fixture evidence and does not verify the Source Profile.
+
+Use this separation:
+
+- Run or inspect a Profile Verification Check to evaluate deterministic Fixture Manifest evidence for a Source Profile.
+- Run or inspect a Source Live Check to see whether one concrete Source currently returns candidates and, when available, one detail page.
+- Record live-only evidence as `support.evidence.kind = "smoke"`, not `fixture`.
+- Do not call a Source `verified`. Use live-check language such as `passed`, `failed`, `unknown`, or `stale`.
+- Normal Source `Prüfen` is status-neutral. Explicit `Prüfen & Aktivieren` or `Prüfen & Reaktivieren` may change Source Status only after a complete passed Source Live Check.
+
 ## Validation after writing
 
 After writing the JSON file:
@@ -789,9 +1063,10 @@ After writing the JSON file:
 6. Ensure `postingDetail` uses only `descriptionText` unless the app explicitly supports more detail fields.
 7. Reload or refresh Job Radar's registry view if available.
 8. Check Structured Diagnostics. If any schema/compiler/source-validation diagnostic appears, fix the JSON before reporting success.
-9. If live validation is available, run one small test against a public sample and record only broad invariants, not exact live counts.
+9. If fixture evidence was created and a Profile Verification Check is available, run it for the Source Profile and inspect the Verification Report result, Effective Verification State, Fixture Check Results, freshness, and diagnostics.
+10. If live validation is available for a concrete Source, run one small Source Live Check against a public sample and record only broad invariants, not exact live counts.
 
-If the production app does not expose a validation command, report that JSON was written but app validation must be checked in Job Radar's Source Profile registry/diagnostics UI.
+If the production app does not expose validation or check commands, report that JSON was written but app validation must be checked in Job Radar's Source Profile registry/diagnostics UI.
 
 ## Reporting format
 
@@ -826,7 +1101,9 @@ Return this report after the work:
 
 - JSON valid: <yes/no>
 - Registry diagnostics checked: <yes/no/not available>
-- Live smoke: <not run / result>
+- Profile Verification Check: <not run / passed / failed / stale / unknown>
+- Effective Verification State: <verified / failed / not_applicable / unknown / not checked>
+- Source Live Check: <not run / passed / failed / stale / unknown>
 - Remaining diagnostics: <none/list>
 
 ## Residual risks
