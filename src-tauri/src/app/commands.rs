@@ -287,6 +287,14 @@ pub fn list_source_diagnostics(
 }
 
 #[tauri::command]
+pub fn verify_source_profile(
+    state: State<'_, AppState>,
+    profile_key: String,
+) -> Result<crate::checks::CheckReport, String> {
+    crate::checks::verify_source_profile(&state.paths.app_data_dir, profile_key)
+}
+
+#[tauri::command]
 pub async fn detect_source_proposal_from_url(
     state: State<'_, AppState>,
     url: String,
