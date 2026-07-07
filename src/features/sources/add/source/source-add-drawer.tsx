@@ -58,8 +58,8 @@ export function SourceAddDrawer({
     >
       <DrawerContent
         ref={setDrawerContentElement}
-        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_2rem),1040px)]
-      data-[vaul-drawer-direction=right]:sm:max-w-none"
+        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)]
+    data-[vaul-drawer-direction=right]:sm:max-w-none"
       >
         <DrawerHeader className="border-b pr-12">
           <DrawerTitle>Quelle hinzufügen</DrawerTitle>
