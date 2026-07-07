@@ -3,7 +3,8 @@ use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin, sync:
 use job_radar_lib::{
     check_source, check_source_with_fetcher, read_latest_check_report,
     source_live_check_report_path, CheckReportKind, CheckReportResult, CheckReportSubjectType,
-    DiagnosticCategory, DiagnosticSeverity, PostingDiscoveryFetchError,
+    DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
+    PostingDetailFetchResponse, PostingDetailFetcher, PostingDiscoveryFetchError,
     PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
     SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
@@ -61,20 +62,29 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     let source = simple_source_with_status("draft");
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
     write_source(temp_dir.path(), &source);
-    let fetcher = FakeDiscoveryFetcher::new([(
-        "https://example.test/jobs.json",
-        json!({
-            "jobs": [
-                {
-                    "id": "job-1",
-                    "title": " Senior Rust Engineer ",
-                    "url": "https://example.test/jobs/job-1",
-                    "locations": ["Remote"]
-                }
-            ]
-        })
-        .to_string(),
-    )]);
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": " Senior Rust Engineer ",
+                        "url": "https://example.test/jobs/job-1",
+                        "locations": ["Remote"]
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This is a sufficiently detailed job description for live checks.</p>"
+            })
+            .to_string(),
+        ),
+    ]);
 
     let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
 
@@ -88,8 +98,8 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     assert_eq!(report.details["liveCheckState"], json!("live_check_passed"));
     assert_eq!(report.details["accessPathKey"], json!("json_feed"));
     assert_eq!(report.details["candidateCount"], json!(1));
-    assert_eq!(report.details["detailChecked"], json!(false));
-    assert_eq!(report.details["detailPassed"], serde_json::Value::Null);
+    assert_eq!(report.details["detailChecked"], json!(true));
+    assert_eq!(report.details["detailPassed"], json!(true));
 
     for expected_kind in [
         "live_check_logic",
@@ -108,9 +118,10 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
         );
     }
     assert_eq!(
-        fetcher.requested_urls(),
+        fetcher.discovery_requested_urls(),
         vec!["https://example.test/jobs.json"]
     );
+    assert_eq!(fetcher.detail_requested_urls(), vec!["job-1"]);
 
     let persisted_path = source_live_check_report_path(temp_dir.path(), "example_source");
     let persisted = read_latest_check_report(&persisted_path).unwrap();
@@ -182,7 +193,7 @@ fn check_source_emits_no_candidates_diagnostic_for_empty_live_discovery() {
     let source = simple_source_with_status("active");
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
     write_source(temp_dir.path(), &source);
-    let fetcher = FakeDiscoveryFetcher::new([(
+    let fetcher = FakeLiveCheckFetcher::new([(
         "https://example.test/jobs.json",
         json!({ "jobs": [] }).to_string(),
     )]);
@@ -215,7 +226,7 @@ fn check_source_preserves_runtime_diagnostics_from_failed_live_discovery() {
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
     write_source(temp_dir.path(), &source);
     let fetcher =
-        FakeDiscoveryFetcher::new([("https://example.test/jobs.json", "not json".to_string())]);
+        FakeLiveCheckFetcher::new([("https://example.test/jobs.json", "not json".to_string())]);
 
     let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
 
@@ -233,13 +244,105 @@ fn check_source_does_not_need_search_request_or_match_rule_context() {
     let source = simple_source_with_status("active");
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
     write_source(temp_dir.path(), &source);
-    let fetcher = FakeDiscoveryFetcher::new([(
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Unrelated title that no Search Request criteria selected",
+                        "url": "https://example.test/jobs/job-1"
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This detail text is long enough to pass acceptance checks.</p>"
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(report.details["candidateCount"], json!(1));
+}
+
+#[test]
+fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = simple_source_with_status("active");
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &source);
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Senior Rust Engineer",
+                        "url": "https://example.test/jobs/job-1"
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({ "descriptionHtml": "too short" }).to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
+    assert_eq!(report.details["detailChecked"], json!(true));
+    assert_eq!(report.details["detailPassed"], json!(false));
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Runtime
+            && diagnostic.code == "description_too_short"
+            && diagnostic.severity == DiagnosticSeverity::Error
+    }));
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Runtime
+            && diagnostic.code == "source_live_check.detail_failed"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.details.as_ref()
+                == Some(&json!({
+                    "sourceKey": "example_source",
+                    "profileKey": "example_jobs",
+                    "accessPathKey": "json_feed",
+                    "candidateUrl": "https://example.test/jobs/job-1",
+                    "cause": "description_too_short"
+                }))
+    }));
+}
+
+#[test]
+fn check_source_leaves_detail_unchecked_when_access_path_has_no_posting_detail() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = simple_source_with_status("active");
+    let mut profile = simple_profile_without_pagination();
+    profile["accessPaths"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("postingDetail");
+    write_profile(temp_dir.path(), &profile);
+    write_source(temp_dir.path(), &source);
+    let fetcher = FakeLiveCheckFetcher::new([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
                 {
                     "id": "job-1",
-                    "title": "Unrelated title that no Search Request criteria selected",
+                    "title": "Senior Rust Engineer",
                     "url": "https://example.test/jobs/job-1"
                 }
             ]
@@ -250,27 +353,88 @@ fn check_source_does_not_need_search_request_or_match_rule_context() {
     let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
-    assert_eq!(report.details["candidateCount"], json!(1));
+    assert_eq!(report.details["detailChecked"], json!(false));
+    assert_eq!(report.details["detailPassed"], serde_json::Value::Null);
+    assert!(fetcher.detail_requested_urls().is_empty());
 }
 
-struct FakeDiscoveryFetcher {
+#[test]
+fn check_source_checks_detail_for_no_more_than_one_candidate() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = simple_source_with_status("active");
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &source);
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Senior Rust Engineer",
+                        "url": "https://example.test/jobs/job-1"
+                    },
+                    {
+                        "id": "job-2",
+                        "title": "Staff Rust Engineer",
+                        "url": "https://example.test/jobs/job-2"
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This detail text is long enough to pass acceptance checks.</p>"
+            })
+            .to_string(),
+        ),
+        (
+            "job-2",
+            json!({ "descriptionHtml": "<p>This second detail must not be fetched.</p>" })
+                .to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(report.details["candidateCount"], json!(2));
+    assert_eq!(report.details["detailChecked"], json!(true));
+    assert_eq!(report.details["detailPassed"], json!(true));
+    assert_eq!(fetcher.detail_requested_urls(), vec!["job-1"]);
+}
+
+struct FakeLiveCheckFetcher {
     responses: BTreeMap<String, String>,
-    requests: Mutex<Vec<PostingDiscoveryFetchRequest>>,
+    discovery_requests: Mutex<Vec<PostingDiscoveryFetchRequest>>,
+    detail_requests: Mutex<Vec<PostingDetailFetchRequest>>,
 }
 
-impl FakeDiscoveryFetcher {
+impl FakeLiveCheckFetcher {
     fn new<'a>(responses: impl IntoIterator<Item = (&'a str, String)>) -> Self {
         Self {
             responses: responses
                 .into_iter()
                 .map(|(url, body)| (url.to_string(), body))
                 .collect(),
-            requests: Mutex::new(Vec::new()),
+            discovery_requests: Mutex::new(Vec::new()),
+            detail_requests: Mutex::new(Vec::new()),
         }
     }
 
-    fn requested_urls(&self) -> Vec<String> {
-        self.requests
+    fn discovery_requested_urls(&self) -> Vec<String> {
+        self.discovery_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|request| request.url.clone())
+            .collect()
+    }
+
+    fn detail_requested_urls(&self) -> Vec<String> {
+        self.detail_requests
             .lock()
             .unwrap()
             .iter()
@@ -279,7 +443,7 @@ impl FakeDiscoveryFetcher {
     }
 }
 
-impl PostingDiscoveryFetcher for FakeDiscoveryFetcher {
+impl PostingDiscoveryFetcher for FakeLiveCheckFetcher {
     fn fetch<'a>(
         &'a self,
         request: PostingDiscoveryFetchRequest,
@@ -297,8 +461,29 @@ impl PostingDiscoveryFetcher for FakeDiscoveryFetcher {
                     request.url
                 ))
             })?;
-            self.requests.lock().unwrap().push(request);
+            self.discovery_requests.lock().unwrap().push(request);
             Ok(PostingDiscoveryFetchResponse { body })
+        })
+    }
+}
+
+impl PostingDetailFetcher for FakeLiveCheckFetcher {
+    fn fetch<'a>(
+        &'a self,
+        request: PostingDetailFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
+                PostingDetailFetchError::new(format!("missing fake response for {}", request.url))
+            })?;
+            self.detail_requests.lock().unwrap().push(request);
+            Ok(PostingDetailFetchResponse { body })
         })
     }
 }

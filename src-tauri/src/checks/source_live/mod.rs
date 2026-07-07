@@ -10,8 +10,10 @@ use crate::profile_dsl::diagnostics::{
 use crate::profile_dsl::documents::JsonObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
 use crate::profile_dsl::runtime::{
-    execute_posting_discovery_with_clients, PostingDiscoveryCandidate, PostingDiscoveryFetcher,
-    ProfileBrowserClient, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
+    execute_posting_detail_with_clients, execute_posting_discovery_with_clients,
+    PostingDetailExecutionResult, PostingDetailFetcher, PostingDetailPostingOccurrence,
+    PostingDiscoveryCandidate, PostingDiscoveryFetcher, ProfileBrowserClient,
+    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source::validation::derive_source_validation_state;
@@ -33,6 +35,7 @@ pub fn check_source(
         app_data_dir,
         source_key,
         &ReqwestPostingDiscoveryFetcher::new(),
+        &ReqwestPostingDetailFetcher::new(),
         &UnavailableProfileBrowserClient,
     )
 }
@@ -43,42 +46,53 @@ pub fn check_source_with_fetcher<F>(
     fetcher: &F,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    F: PostingDiscoveryFetcher + PostingDetailFetcher + Sync + ?Sized,
 {
     check_source_with_clients(
         app_data_dir,
         source_key,
         fetcher,
+        fetcher,
         &UnavailableProfileBrowserClient,
     )
 }
 
-pub fn check_source_with_clients<F, B>(
+pub fn check_source_with_clients<D, T, B>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
-    fetcher: &F,
+    discovery_fetcher: &D,
+    detail_fetcher: &T,
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    D: PostingDiscoveryFetcher + Sync + ?Sized,
+    T: PostingDetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
     let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-    let report = build_source_live_check_report(&snapshot, source_key, fetcher, browser)?;
+    let report = build_source_live_check_report(
+        &snapshot,
+        source_key,
+        discovery_fetcher,
+        detail_fetcher,
+        browser,
+    )?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
 }
 
-pub(crate) fn build_source_live_check_report<F, B>(
+pub(crate) fn build_source_live_check_report<D, T, B>(
     snapshot: &SourceProfileRegistrySnapshot,
     source_key: &str,
-    fetcher: &F,
+    discovery_fetcher: &D,
+    detail_fetcher: &T,
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    D: PostingDiscoveryFetcher + Sync + ?Sized,
+    T: PostingDetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let compiler_snapshot = compiler_snapshot_from_registry(snapshot);
@@ -129,9 +143,13 @@ where
             compile_live_check_execution_plan(&compiler_snapshot, source_key)
         {
             let discovery_result = tauri::async_runtime::block_on(
-                execute_posting_discovery_with_clients(&execution_plan, fetcher, browser),
+                execute_posting_discovery_with_clients(&execution_plan, discovery_fetcher, browser),
             );
             let candidate_count = discovery_result.candidates.len();
+            let first_acceptable_candidate = discovery_result
+                .candidates
+                .iter()
+                .find(|candidate| is_acceptable_live_candidate(candidate));
             let acceptable_candidate_count = discovery_result
                 .candidates
                 .iter()
@@ -149,6 +167,36 @@ where
                     candidate_count,
                     acceptable_candidate_count,
                 ));
+            } else if execution_plan.posting_detail.is_some() {
+                if let Some(candidate) = first_acceptable_candidate {
+                    details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
+                    let posting = posting_detail_occurrence_from_candidate(candidate);
+                    let detail_result =
+                        tauri::async_runtime::block_on(execute_posting_detail_with_clients(
+                            &execution_plan,
+                            &posting,
+                            detail_fetcher,
+                            browser,
+                        ));
+                    let detail_passed = is_acceptable_detail_result(&detail_result);
+                    details.insert(
+                        "detailPassed".to_string(),
+                        serde_json::Value::Bool(detail_passed),
+                    );
+                    let detail_failure_cause = if detail_passed {
+                        None
+                    } else {
+                        Some(detail_failure_cause(&detail_result))
+                    };
+                    diagnostics.extend(detail_result.diagnostics);
+                    if let Some(cause) = detail_failure_cause {
+                        diagnostics.push(detail_failed_diagnostic(
+                            live_check_subject.as_ref(),
+                            &candidate.url,
+                            &cause,
+                        ));
+                    }
+                }
             }
         }
     }
@@ -258,6 +306,36 @@ fn is_acceptable_live_candidate(candidate: &PostingDiscoveryCandidate) -> bool {
         && !candidate.url.trim().is_empty()
 }
 
+fn posting_detail_occurrence_from_candidate(
+    candidate: &PostingDiscoveryCandidate,
+) -> PostingDetailPostingOccurrence {
+    PostingDetailPostingOccurrence {
+        url: candidate.url.clone(),
+        title: Some(candidate.title.clone()),
+        company: Some(candidate.company.clone()),
+        locations: candidate.locations.clone(),
+        description_text: candidate.description_text.clone(),
+        posting_meta: candidate.posting_meta.clone(),
+    }
+}
+
+fn is_acceptable_detail_result(result: &PostingDetailExecutionResult) -> bool {
+    !has_error_diagnostics(&result.diagnostics)
+        && result
+            .description_text
+            .as_ref()
+            .is_some_and(|description_text| !description_text.trim().is_empty())
+}
+
+fn detail_failure_cause(result: &PostingDetailExecutionResult) -> String {
+    result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .map(|diagnostic| diagnostic.code.clone())
+        .unwrap_or_else(|| "posting_detail_description_text_missing".to_string())
+}
+
 fn no_candidates_diagnostic(
     subject: Option<&SourceLiveCheckSubject>,
     candidate_count: usize,
@@ -299,6 +377,49 @@ fn no_candidates_diagnostic(
             "candidateCount": candidate_count,
             "acceptableCandidateCount": acceptable_candidate_count,
             "requiredFields": ["title", "company", "url"]
+        })),
+    }
+}
+
+fn detail_failed_diagnostic(
+    subject: Option<&SourceLiveCheckSubject>,
+    candidate_url: &str,
+    cause: &str,
+) -> Diagnostic {
+    let (source_key, profile_key, access_path_key) = subject
+        .map(|subject| {
+            (
+                subject.source_key.clone(),
+                subject
+                    .profile_key
+                    .as_ref()
+                    .map_or(serde_json::Value::Null, |profile_key| {
+                        serde_json::Value::String(profile_key.clone())
+                    }),
+                serde_json::Value::String(subject.access_path_key.clone()),
+            )
+        })
+        .unwrap_or_else(|| {
+            (
+                String::new(),
+                serde_json::Value::Null,
+                serde_json::Value::Null,
+            )
+        });
+
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "source_live_check.detail_failed".to_string(),
+        message: "Source Live Check postingDetail failed for the selected candidate".to_string(),
+        severity: DiagnosticSeverity::Error,
+        path: "/postingDetail".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "sourceKey": source_key,
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "candidateUrl": candidate_url,
+            "cause": cause
         })),
     }
 }
