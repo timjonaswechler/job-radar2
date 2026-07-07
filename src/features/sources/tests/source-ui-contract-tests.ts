@@ -733,6 +733,33 @@ assert.equal(removedSchemaGuidedArrayItem.ok, true);
 if (removedSchemaGuidedArrayItem.ok) {
   assert.deepEqual(JSON.parse(removedSchemaGuidedArrayItem.rawText), ["POST"]);
 }
+assert.deepEqual(
+  applySchemaGuidedObjectEdit({
+    rawText: JSON.stringify({ timeoutMs: 10 }),
+    schema: {
+      type: "object",
+      properties: { timeoutMs: { type: "integer" } },
+    },
+    edit: { type: "set-property-value", key: "timeoutMs", rawValue: "not-a-number" },
+  }),
+  {
+    ok: false,
+    rawText: JSON.stringify({ timeoutMs: 10 }),
+    error: "„timeoutMs“ must be a number.",
+  },
+);
+assert.deepEqual(
+  applySchemaGuidedArrayEdit({
+    rawText: JSON.stringify(["GET"]),
+    schema: { type: "array", items: { type: "string" } },
+    edit: { type: "remove-item", index: 2 },
+  }),
+  {
+    ok: false,
+    rawText: JSON.stringify(["GET"]),
+    error: "Array index out of range.",
+  },
+);
 
 const sourceAddTransitionProfile: RegistrySourceProfile = {
   origin: "built_in",

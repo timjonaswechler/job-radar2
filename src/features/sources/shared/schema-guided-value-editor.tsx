@@ -405,6 +405,7 @@ function SchemaGuidedObjectRowsEditor({
   onChange: (value: string) => void;
 }) {
   const [newKey, setNewKey] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
 
   if (!model.parseState.ok || !isJsonObject(model.parseState.value)) return null;
 
@@ -420,13 +421,18 @@ function SchemaGuidedObjectRowsEditor({
       schemaOptions,
       edit,
     });
-    if (result.ok) onChange(result.rawText);
+    if (result.ok) {
+      setEditError(null);
+      onChange(result.rawText);
+      return true;
+    }
+    setEditError(result.error);
+    return false;
   };
   const addKey = () => {
     const key = newKey.trim();
     if (!key) return;
-    applyEdit({ type: "add-property", key });
-    setNewKey("");
+    if (applyEdit({ type: "add-property", key })) setNewKey("");
   };
 
   return (
@@ -581,6 +587,7 @@ function SchemaGuidedObjectRowsEditor({
           Key hinzufügen
         </Button>
       </div>
+      {editError ? <SchemaGuidedEditError message={editError} /> : null}
     </div>
   );
 }
@@ -598,6 +605,8 @@ function SchemaGuidedArrayRowsEditor({
   disabled: boolean | undefined;
   onChange: (value: string) => void;
 }) {
+  const [editError, setEditError] = useState<string | null>(null);
+
   if (!model.parseState.ok || !Array.isArray(model.parseState.value)) return null;
 
   const applyEdit = (edit: SchemaGuidedArrayEdit) => {
@@ -607,7 +616,12 @@ function SchemaGuidedArrayRowsEditor({
       schemaOptions,
       edit,
     });
-    if (result.ok) onChange(result.rawText);
+    if (result.ok) {
+      setEditError(null);
+      onChange(result.rawText);
+      return;
+    }
+    setEditError(result.error);
   };
 
   return (
@@ -677,7 +691,16 @@ function SchemaGuidedArrayRowsEditor({
         <PlusIcon data-icon="inline-start" aria-hidden="true" />
         Eintrag hinzufügen
       </Button>
+      {editError ? <SchemaGuidedEditError message={editError} /> : null}
     </div>
+  );
+}
+
+function SchemaGuidedEditError({ message }: { message: string }) {
+  return (
+    <p role="alert" className="text-xs text-destructive">
+      {message}
+    </p>
   );
 }
 
