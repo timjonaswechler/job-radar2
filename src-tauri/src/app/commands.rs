@@ -299,7 +299,16 @@ pub fn check_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    crate::checks::check_source(&state.paths.app_data_dir, source_key)
+    let fetcher = crate::profile_dsl::runtime::ReqwestPostingDiscoveryFetcher::new();
+    let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
+        state.paths.browser_runtime_dir.clone(),
+    );
+    crate::checks::check_source_with_clients(
+        &state.paths.app_data_dir,
+        source_key,
+        &fetcher,
+        &browser,
+    )
 }
 
 #[tauri::command]

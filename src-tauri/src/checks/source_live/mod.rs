@@ -3,9 +3,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use sha2::{Digest, Sha256};
 
-use crate::profile_dsl::compiler::ProfileCompilerSnapshot;
-use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
+use crate::profile_dsl::compiler::{compile_source_execution_plan, ProfileCompilerSnapshot};
+use crate::profile_dsl::diagnostics::{
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
+};
 use crate::profile_dsl::documents::JsonObject;
+use crate::profile_dsl::execution_plan::SourceExecutionPlan;
+use crate::profile_dsl::runtime::{
+    execute_posting_discovery_with_clients, PostingDiscoveryCandidate, PostingDiscoveryFetcher,
+    ProfileBrowserClient, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
+};
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source::validation::derive_source_validation_state;
 use crate::source_profile::documents::SourceProfileDocument;
@@ -22,23 +29,65 @@ pub fn check_source(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
 ) -> Result<CheckReport, String> {
+    check_source_with_clients(
+        app_data_dir,
+        source_key,
+        &ReqwestPostingDiscoveryFetcher::new(),
+        &UnavailableProfileBrowserClient,
+    )
+}
+
+pub fn check_source_with_fetcher<F>(
+    app_data_dir: impl AsRef<Path>,
+    source_key: impl AsRef<str>,
+    fetcher: &F,
+) -> Result<CheckReport, String>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+{
+    check_source_with_clients(
+        app_data_dir,
+        source_key,
+        fetcher,
+        &UnavailableProfileBrowserClient,
+    )
+}
+
+pub fn check_source_with_clients<F, B>(
+    app_data_dir: impl AsRef<Path>,
+    source_key: impl AsRef<str>,
+    fetcher: &F,
+    browser: &B,
+) -> Result<CheckReport, String>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
     let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-    let report = build_source_live_check_report(&snapshot, source_key)?;
+    let report = build_source_live_check_report(&snapshot, source_key, fetcher, browser)?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
 }
 
-pub(crate) fn build_source_live_check_report(
+pub(crate) fn build_source_live_check_report<F, B>(
     snapshot: &SourceProfileRegistrySnapshot,
     source_key: &str,
-) -> Result<CheckReport, String> {
+    fetcher: &F,
+    browser: &B,
+) -> Result<CheckReport, String>
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
     let compiler_snapshot = compiler_snapshot_from_registry(snapshot);
     let validation_state = derive_source_validation_state(&compiler_snapshot, source_key);
-    let diagnostics = validation_state.diagnostics;
+    let can_compile = validation_state.can_compile;
+    let mut diagnostics = validation_state.diagnostics;
     let mut fingerprints = vec![live_check_logic_fingerprint()];
     let mut details = source_live_check_details_placeholders();
+    let mut live_check_subject = None;
 
     if let Some(source) = snapshot.source(source_key) {
         let source_document = &source.document;
@@ -48,12 +97,15 @@ pub(crate) fn build_source_live_check_report(
                 format!("Source Status could not be serialized for Source Live Check: {error}")
             })?,
         );
+        let subject = SourceLiveCheckSubject::from_selected_access_path(
+            source_key,
+            &source_document.selected_access_path,
+        );
         details.insert(
             "accessPathKey".to_string(),
-            serde_json::Value::String(selected_access_path_key(
-                &source_document.selected_access_path,
-            )),
+            serde_json::Value::String(subject.access_path_key.clone()),
         );
+        live_check_subject = Some(subject);
 
         fingerprints.push(source_document_fingerprint(source_document)?);
         fingerprints.push(json_fingerprint(
@@ -68,6 +120,35 @@ pub(crate) fn build_source_live_check_report(
         {
             if let Some(profile) = snapshot.profile(profile_key) {
                 fingerprints.push(source_profile_document_fingerprint(&profile.document)?);
+            }
+        }
+    }
+
+    if can_compile {
+        if let Some(execution_plan) =
+            compile_live_check_execution_plan(&compiler_snapshot, source_key)
+        {
+            let discovery_result = tauri::async_runtime::block_on(
+                execute_posting_discovery_with_clients(&execution_plan, fetcher, browser),
+            );
+            let candidate_count = discovery_result.candidates.len();
+            let acceptable_candidate_count = discovery_result
+                .candidates
+                .iter()
+                .filter(|candidate| is_acceptable_live_candidate(candidate))
+                .count();
+            details.insert(
+                "candidateCount".to_string(),
+                serde_json::json!(candidate_count),
+            );
+            diagnostics.extend(discovery_result.diagnostics);
+
+            if acceptable_candidate_count == 0 {
+                diagnostics.push(no_candidates_diagnostic(
+                    live_check_subject.as_ref(),
+                    candidate_count,
+                    acceptable_candidate_count,
+                ));
             }
         }
     }
@@ -98,6 +179,36 @@ pub(crate) fn build_source_live_check_report(
     Ok(report)
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourceLiveCheckSubject {
+    source_key: String,
+    profile_key: Option<String>,
+    access_path_key: String,
+}
+
+impl SourceLiveCheckSubject {
+    fn from_selected_access_path(
+        source_key: &str,
+        selected_access_path: &SelectedAccessPath,
+    ) -> Self {
+        match selected_access_path {
+            SelectedAccessPath::ProfileAccessPath {
+                profile_key,
+                path_key,
+            } => Self {
+                source_key: source_key.to_string(),
+                profile_key: Some(profile_key.clone()),
+                access_path_key: path_key.clone(),
+            },
+            SelectedAccessPath::SourceOwnedAccessPath { key, .. } => Self {
+                source_key: source_key.to_string(),
+                profile_key: None,
+                access_path_key: key.clone(),
+            },
+        }
+    }
+}
+
 fn compiler_snapshot_from_registry(
     snapshot: &SourceProfileRegistrySnapshot,
 ) -> ProfileCompilerSnapshot {
@@ -126,10 +237,69 @@ fn source_live_check_details_placeholders() -> JsonObject {
     details
 }
 
-fn selected_access_path_key(selected_access_path: &SelectedAccessPath) -> String {
-    match selected_access_path {
-        SelectedAccessPath::ProfileAccessPath { path_key, .. } => path_key.clone(),
-        SelectedAccessPath::SourceOwnedAccessPath { key, .. } => key.clone(),
+fn compile_live_check_execution_plan(
+    snapshot: &ProfileCompilerSnapshot,
+    source_key: &str,
+) -> Option<SourceExecutionPlan> {
+    let mut live_check_snapshot = snapshot.clone();
+    if let Some(source) = live_check_snapshot
+        .sources
+        .iter_mut()
+        .find(|source| source.key == source_key)
+    {
+        source.status = crate::source::documents::SourceStatus::Active;
+    }
+    compile_source_execution_plan(&live_check_snapshot, source_key).execution_plan
+}
+
+fn is_acceptable_live_candidate(candidate: &PostingDiscoveryCandidate) -> bool {
+    !candidate.title.trim().is_empty()
+        && !candidate.company.trim().is_empty()
+        && !candidate.url.trim().is_empty()
+}
+
+fn no_candidates_diagnostic(
+    subject: Option<&SourceLiveCheckSubject>,
+    candidate_count: usize,
+    acceptable_candidate_count: usize,
+) -> Diagnostic {
+    let (source_key, profile_key, access_path_key) = subject
+        .map(|subject| {
+            (
+                subject.source_key.clone(),
+                subject
+                    .profile_key
+                    .as_ref()
+                    .map_or(serde_json::Value::Null, |profile_key| {
+                        serde_json::Value::String(profile_key.clone())
+                    }),
+                serde_json::Value::String(subject.access_path_key.clone()),
+            )
+        })
+        .unwrap_or_else(|| {
+            (
+                String::new(),
+                serde_json::Value::Null,
+                serde_json::Value::Null,
+            )
+        });
+
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "source_live_check.no_candidates".to_string(),
+        message: "Source Live Check discovery returned no acceptable posting candidates"
+            .to_string(),
+        severity: DiagnosticSeverity::Error,
+        path: "/postingDiscovery".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "sourceKey": source_key,
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "candidateCount": candidate_count,
+            "acceptableCandidateCount": acceptable_candidate_count,
+            "requiredFields": ["title", "company", "url"]
+        })),
     }
 }
 

@@ -33,4 +33,7 @@ pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
     CHECK_REPORT_SCHEMA_VERSION,
 };
-pub use source_live::{check_source, SOURCE_LIVE_CHECK_LOGIC_VERSION};
+pub use source_live::{
+    check_source, check_source_with_clients, check_source_with_fetcher,
+    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+};
