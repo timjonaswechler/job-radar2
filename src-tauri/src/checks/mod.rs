@@ -16,15 +16,17 @@ pub use persistence::{
 };
 pub use profile_verification::{
     derive_effective_verification_state_for_source_profile, fixture_pack_root,
-    resolve_fixture_file_reference, resolve_fixture_manifest_reference, verify_source_profile,
-    EffectiveVerificationState, FixtureManifest, FixtureManifestChecks,
-    FixtureManifestDiscoveryExpect, FixtureManifestExpectedCandidate,
-    FixtureManifestPostingDetailCase, FixtureManifestPostingDetailCheck,
-    FixtureManifestPostingDetailExpect, FixtureManifestPostingDiscoveryCheck,
-    FixtureManifestPostingField, FixtureManifestPostingInput, FixtureManifestRequestMapping,
-    FixtureManifestRequestMatch, FixtureManifestRequestMethod, FixtureManifestResponse,
-    FixturePathResolution, DEFAULT_FIXTURE_MANIFEST_REFERENCE, FIXTURE_MANIFEST_SCHEMA_VERSION,
-    PROFILE_VERIFICATION_LOGIC_VERSION, SOURCE_PROFILE_FIXTURES_DIR,
+    resolve_fixture_file_reference, resolve_fixture_manifest_reference,
+    source_profile_verification_report_status, verify_source_profile, EffectiveVerificationState,
+    FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
+    FixtureManifestExpectedCandidate, FixtureManifestPostingDetailCase,
+    FixtureManifestPostingDetailCheck, FixtureManifestPostingDetailExpect,
+    FixtureManifestPostingDiscoveryCheck, FixtureManifestPostingField, FixtureManifestPostingInput,
+    FixtureManifestRequestMapping, FixtureManifestRequestMatch, FixtureManifestRequestMethod,
+    FixtureManifestResponse, FixturePathResolution, SourceProfileVerificationReportState,
+    SourceProfileVerificationReportStatus, DEFAULT_FIXTURE_MANIFEST_REFERENCE,
+    FIXTURE_MANIFEST_SCHEMA_VERSION, PROFILE_VERIFICATION_LOGIC_VERSION,
+    SOURCE_PROFILE_FIXTURES_DIR,
 };
 pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,

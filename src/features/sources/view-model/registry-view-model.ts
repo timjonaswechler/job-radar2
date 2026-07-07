@@ -1,15 +1,23 @@
 import {
+  checkReportResultLabels,
   detectionEvidenceKindLabels,
+  effectiveVerificationStateLabels,
   originLabels,
   profileKindLabels,
+  profileVerificationDisplayStateLabels,
+  profileVerificationReportStateLabels,
   supportEvidenceKindLabels,
   supportLevelLabels,
   validationStateLabels,
+  type ProfileVerificationDisplayState,
 } from "@/features/sources/labels";
 import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
+  CheckReport,
   DetectionEvidenceKind,
+  EffectiveVerificationState,
+  FixtureCheckResult,
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySource,
@@ -18,6 +26,7 @@ import type {
   SourceOwnedSelectedAccessPath,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
+  SourceProfileVerificationReportStatus,
   SourceStatus,
   StructuredDiagnostic,
   SupportEvidenceKind,
@@ -126,6 +135,92 @@ export type ProfileGridFilters = {
   origins: SourceRegistryDocumentOrigin[];
   diagnosticsOnly: boolean;
 };
+
+export type ProfileVerificationDisplayModel = {
+  displayState: ProfileVerificationDisplayState;
+  displayLabel: string;
+  reportState: "fresh" | "stale" | "unknown";
+  reportStateLabel: string;
+  effectiveState: EffectiveVerificationState;
+  effectiveStateLabel: string;
+  reportResultLabel: string;
+  isFreshVerified: boolean;
+  diagnostics: StructuredDiagnostic[];
+  fixtureChecks: FixtureCheckResult[];
+};
+
+export function profileVerificationDisplayModel(
+  status: SourceProfileVerificationReportStatus | null | undefined,
+): ProfileVerificationDisplayModel {
+  const reportState = status?.state ?? "unknown";
+  const report = status?.report ?? null;
+  const effectiveState = status?.effectiveVerificationState ?? "unknown";
+  const displayState = profileVerificationDisplayState(reportState, effectiveState);
+
+  return {
+    displayState,
+    displayLabel: profileVerificationDisplayStateLabels[displayState],
+    reportState,
+    reportStateLabel: profileVerificationReportStateLabels[reportState],
+    effectiveState,
+    effectiveStateLabel: effectiveVerificationStateLabels[effectiveState],
+    reportResultLabel: report ? checkReportResultLabels[report.result] : "Kein Report",
+    isFreshVerified: reportState === "fresh" && effectiveState === "verified",
+    diagnostics: report?.diagnostics ?? [],
+    fixtureChecks: fixtureChecksFromVerificationReport(report),
+  };
+}
+
+function profileVerificationDisplayState(
+  reportState: "fresh" | "stale" | "unknown",
+  effectiveState: EffectiveVerificationState,
+): ProfileVerificationDisplayState {
+  if (reportState === "stale") return "stale";
+  if (reportState === "unknown") return "unknown";
+  if (effectiveState === "verified") return "verified";
+  if (effectiveState === "failed") return "failed";
+  if (effectiveState === "not_applicable") return "not_applicable";
+  return "unknown";
+}
+
+export function fixtureChecksFromVerificationReport(
+  report: CheckReport | null | undefined,
+): FixtureCheckResult[] {
+  const fixtureChecks = report?.details.fixtureChecks;
+  if (!Array.isArray(fixtureChecks)) return [];
+
+  return fixtureChecks.flatMap((value): FixtureCheckResult[] => {
+    if (!isJsonObject(value)) return [];
+    const reference = value.reference;
+    const result = value.result;
+    if (typeof reference !== "string" || !isCheckReportResult(result)) return [];
+
+    const accessPathKey =
+      typeof value.accessPathKey === "string" ? value.accessPathKey : undefined;
+    const coverage = isJsonObject(value.coverage)
+      ? {
+          postingDiscovery:
+            typeof value.coverage.postingDiscovery === "boolean"
+              ? value.coverage.postingDiscovery
+              : undefined,
+          postingDetailDescriptionText:
+            typeof value.coverage.postingDetailDescriptionText === "boolean"
+              ? value.coverage.postingDetailDescriptionText
+              : undefined,
+        }
+      : undefined;
+
+    return [{ reference, result, accessPathKey, coverage }];
+  });
+}
+
+function isCheckReportResult(value: JsonValue | undefined): value is "passed" | "failed" {
+  return value === "passed" || value === "failed";
+}
+
+function isJsonObject(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 export function createSourceGridRows(
   sources: RegistrySource[],

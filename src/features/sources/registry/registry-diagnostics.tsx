@@ -100,6 +100,9 @@ function DiagnosticSummary({ diagnostic }: DiagnosticSummaryProps) {
           {diagnosticCodeLabel(diagnostic.code)}
         </Badge>
         <Badge variant="outline">{diagnostic.category}</Badge>
+        <Badge variant={diagnostic.severity === "error" ? "destructive-light" : "outline"}>
+          {diagnostic.severity}
+        </Badge>
         {documentKind ? (
           <Badge variant="outline">{documentKindLabels[documentKind]}</Badge>
         ) : null}
@@ -114,6 +117,11 @@ function DiagnosticSummary({ diagnostic }: DiagnosticSummaryProps) {
       <p className="break-all font-mono text-muted-foreground">
         {documentPath ?? diagnostic.path}
       </p>
+      {diagnostic.details ? (
+        <pre className="max-h-32 overflow-auto rounded bg-muted p-2 font-mono text-[0.7rem] text-muted-foreground">
+          {JSON.stringify(diagnostic.details, null, 2)}
+        </pre>
+      ) : null}
     </div>
   );
 }
@@ -169,6 +177,11 @@ export function DiagnosticCard({ diagnostic }: DiagnosticCardProps) {
           </p>
         ) : null}
         <p>{diagnostic.message}</p>
+        {diagnostic.details ? (
+          <pre className="max-h-48 overflow-auto rounded bg-muted p-2 font-mono text-xs text-muted-foreground">
+            {JSON.stringify(diagnostic.details, null, 2)}
+          </pre>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -56,6 +56,8 @@ export type StructuredDiagnostic = {
     | "runtime"
     | "detection"
     | "source_validation"
+    | "fixture"
+    | "verification"
   code: string
   message: string
   severity: "info" | "warning" | "error"
@@ -211,6 +213,83 @@ export type RegistrySource = {
   validationState: SourceValidationState
 }
 
+export type CheckReportKind = "source_profile_verification" | "source_live_check"
+
+export type CheckReportSubjectType = "source_profile" | "source"
+
+export type CheckReportResult = "passed" | "failed"
+
+export type CheckReportSubject = {
+  type: CheckReportSubjectType
+  key: string
+}
+
+export type CheckFingerprint = {
+  kind: string
+  sha256: string
+  reference?: string
+}
+
+export type CheckReport = {
+  schemaVersion: 1
+  kind: CheckReportKind
+  subject: CheckReportSubject
+  checkedAt: string
+  logicVersion: string
+  result: CheckReportResult
+  fingerprints: CheckFingerprint[]
+  diagnostics: Diagnostics
+  details: JsonObject
+}
+
+export type CheckReportFreshnessState = "fresh" | "stale"
+
+export type CheckReportStaleReason =
+  | "logic_version_changed"
+  | "missing_report_fingerprint"
+  | "changed_fingerprint_sha256"
+  | "unexpected_report_fingerprint"
+
+export type CheckReportStaleDetail = {
+  kind: string
+  reference?: string
+  reason: CheckReportStaleReason
+  expectedSha256?: string
+  actualSha256?: string
+  expectedValue?: string
+  actualValue?: string
+}
+
+export type CheckReportFreshness = {
+  state: CheckReportFreshnessState
+  staleFingerprints: CheckReportStaleDetail[]
+}
+
+export type EffectiveVerificationState =
+  | "verified"
+  | "failed"
+  | "not_applicable"
+  | "unknown"
+
+export type SourceProfileVerificationReportStatus = {
+  state: "fresh" | "stale" | "unknown"
+  effectiveVerificationState: EffectiveVerificationState
+  report?: CheckReport | null
+  freshness?: CheckReportFreshness | null
+}
+
+export type FixtureCheckCoverage = {
+  postingDiscovery?: boolean
+  postingDetailDescriptionText?: boolean
+}
+
+export type FixtureCheckResult = {
+  reference: string
+  result: CheckReportResult
+  accessPathKey?: string
+  coverage?: FixtureCheckCoverage
+}
+
 export type SourceProfileRegistrySnapshot = {
   profiles: RegistrySourceProfile[]
   sources: RegistrySource[]
@@ -275,6 +354,17 @@ export function listSources() {
 
 export function listSourceDiagnostics() {
   return invoke<Diagnostics>("list_source_diagnostics")
+}
+
+export function verifySourceProfile(profileKey: string) {
+  return invoke<CheckReport>("verify_source_profile", { profileKey })
+}
+
+export function getSourceProfileVerificationReportStatus(profileKey: string) {
+  return invoke<SourceProfileVerificationReportStatus>(
+    "get_source_profile_verification_report_status",
+    { profileKey },
+  )
 }
 
 export function detectSourceProposalFromUrl(url: string) {

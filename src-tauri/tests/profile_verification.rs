@@ -2,10 +2,11 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     derive_effective_verification_state_for_source_profile, evaluate_check_report_freshness,
-    read_latest_check_report, source_profile_verification_report_path, verify_source_profile,
-    CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
-    DiagnosticCategory, DiagnosticSeverity, EffectiveVerificationState, SupportLevel,
-    PROFILE_VERIFICATION_LOGIC_VERSION,
+    read_latest_check_report, source_profile_verification_report_path,
+    source_profile_verification_report_status, verify_source_profile, CheckReport,
+    CheckReportFreshnessState, CheckReportKind, CheckReportResult, CheckReportSubject,
+    CheckReportSubjectType, DiagnosticCategory, DiagnosticSeverity, EffectiveVerificationState,
+    SourceProfileVerificationReportState, SupportLevel, PROFILE_VERIFICATION_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -529,6 +530,71 @@ fn derive_effective_verification_state_returns_unknown_for_stale_report() {
     );
 
     assert_eq!(state, EffectiveVerificationState::Unknown);
+}
+
+#[test]
+fn source_profile_verification_report_status_is_unknown_without_persisted_report() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
+    write_profile(temp_dir.path(), &profile);
+
+    let status =
+        source_profile_verification_report_status(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(status.state, SourceProfileVerificationReportState::Unknown);
+    assert_eq!(
+        status.effective_verification_state,
+        EffectiveVerificationState::Unknown
+    );
+    assert!(status.report.is_none());
+    assert!(status.freshness.is_none());
+}
+
+#[test]
+fn source_profile_verification_report_status_marks_persisted_report_fresh() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
+    write_profile(temp_dir.path(), &profile);
+    verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    let status =
+        source_profile_verification_report_status(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(status.state, SourceProfileVerificationReportState::Fresh);
+    assert_eq!(
+        status.effective_verification_state,
+        EffectiveVerificationState::NotApplicable
+    );
+    assert_eq!(status.report.as_ref().unwrap().subject.key, "example_jobs");
+    assert_eq!(
+        status.freshness.as_ref().unwrap().state,
+        CheckReportFreshnessState::Fresh
+    );
+}
+
+#[test]
+fn source_profile_verification_report_status_marks_changed_profile_stale() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mut profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
+    write_profile(temp_dir.path(), &profile);
+    verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    profile["name"] = json!("Example Jobs Changed");
+    write_profile(temp_dir.path(), &profile);
+    let status =
+        source_profile_verification_report_status(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(status.state, SourceProfileVerificationReportState::Stale);
+    assert_eq!(
+        status.effective_verification_state,
+        EffectiveVerificationState::Unknown
+    );
+    let freshness = status.freshness.as_ref().unwrap();
+    assert_eq!(freshness.state, CheckReportFreshnessState::Stale);
+    assert!(freshness
+        .stale_fingerprints
+        .iter()
+        .any(|stale| stale.kind == "source_profile_document"));
 }
 
 #[test]

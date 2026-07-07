@@ -1,5 +1,7 @@
 import type {
+  CheckReportResult,
   DetectionEvidenceKind,
+  EffectiveVerificationState,
   SourceProfileKind,
   SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
@@ -7,6 +9,13 @@ import type {
   SupportLevel,
   ValidationStateKind,
 } from "@/lib/api/sources";
+
+export type ProfileVerificationDisplayState =
+  | "verified"
+  | "failed"
+  | "stale"
+  | "unknown"
+  | "not_applicable";
 
 export const originLabels: Record<SourceRegistryDocumentOrigin, string> = {
   built_in: "Eingebaut",
@@ -56,6 +65,32 @@ export const validationStateLabels: Record<ValidationStateKind, string> = {
   unknown: "Unbekannt",
   valid: "Valide",
   invalid: "Ungültig",
+};
+
+export const checkReportResultLabels: Record<CheckReportResult, string> = {
+  passed: "Bestanden",
+  failed: "Fehlgeschlagen",
+};
+
+export const effectiveVerificationStateLabels: Record<EffectiveVerificationState, string> = {
+  verified: "Effektiv verifiziert",
+  failed: "Effektiv fehlgeschlagen",
+  unknown: "Unbekannt",
+  not_applicable: "Nicht anwendbar",
+};
+
+export const profileVerificationReportStateLabels: Record<"fresh" | "stale" | "unknown", string> = {
+  fresh: "Frisch",
+  stale: "Stale",
+  unknown: "Unbekannt",
+};
+
+export const profileVerificationDisplayStateLabels: Record<ProfileVerificationDisplayState, string> = {
+  verified: "Verifiziert",
+  failed: "Fehlgeschlagen",
+  stale: "Stale",
+  unknown: "Unbekannt",
+  not_applicable: "Nicht anwendbar",
 };
 
 export function diagnosticCodeLabel(code: string) {

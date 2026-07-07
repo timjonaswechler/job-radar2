@@ -1,7 +1,9 @@
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::profile_dsl::diagnostics::{
@@ -14,7 +16,9 @@ use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus}
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 use super::{
-    persist_latest_check_report, CheckFingerprint, CheckReport, CheckReportKind, CheckReportResult,
+    evaluate_check_report_freshness, persist_latest_check_report, read_latest_check_report,
+    source_profile_verification_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
+    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
     CheckReportSubject,
 };
 
@@ -31,6 +35,23 @@ struct FixtureCheckCoverage {
     posting_detail_description_text: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceProfileVerificationReportState {
+    Fresh,
+    Stale,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceProfileVerificationReportStatus {
+    pub state: SourceProfileVerificationReportState,
+    pub effective_verification_state: effective_state::EffectiveVerificationState,
+    pub report: Option<CheckReport>,
+    pub freshness: Option<CheckReportFreshness>,
+}
+
 pub fn verify_source_profile(
     app_data_dir: impl AsRef<Path>,
     profile_key: impl AsRef<str>,
@@ -41,6 +62,58 @@ pub fn verify_source_profile(
     let report = build_source_profile_verification_report(app_data_dir, &snapshot, profile_key)?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
+}
+
+pub fn source_profile_verification_report_status(
+    app_data_dir: impl AsRef<Path>,
+    profile_key: impl AsRef<str>,
+) -> Result<SourceProfileVerificationReportStatus, String> {
+    let app_data_dir = app_data_dir.as_ref();
+    let profile_key = profile_key.as_ref();
+    let report_path = source_profile_verification_report_path(app_data_dir, profile_key);
+    let report = match read_latest_check_report(&report_path) {
+        Ok(report) => report,
+        Err(CheckReportPersistenceError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+            return Ok(SourceProfileVerificationReportStatus {
+                state: SourceProfileVerificationReportState::Unknown,
+                effective_verification_state: effective_state::EffectiveVerificationState::Unknown,
+                report: None,
+                freshness: None,
+            });
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+
+    let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
+    let current_report =
+        build_source_profile_verification_report(app_data_dir, &snapshot, profile_key)?;
+    let freshness = evaluate_check_report_freshness(
+        &report,
+        PROFILE_VERIFICATION_LOGIC_VERSION,
+        &current_report.fingerprints,
+    );
+    let effective_verification_state = snapshot
+        .profile(profile_key)
+        .map(|profile| {
+            effective_state::derive_effective_verification_state_for_source_profile(
+                profile.document.support.level,
+                !fixture_support_evidence(&profile.document.support.evidence).is_empty(),
+                Some(&report),
+                Some(&freshness),
+            )
+        })
+        .unwrap_or(effective_state::EffectiveVerificationState::Unknown);
+    let state = match freshness.state {
+        CheckReportFreshnessState::Fresh => SourceProfileVerificationReportState::Fresh,
+        CheckReportFreshnessState::Stale => SourceProfileVerificationReportState::Stale,
+    };
+
+    Ok(SourceProfileVerificationReportStatus {
+        state,
+        effective_verification_state,
+        report: Some(report),
+        freshness: Some(freshness),
+    })
 }
 
 pub(crate) fn build_source_profile_verification_report(

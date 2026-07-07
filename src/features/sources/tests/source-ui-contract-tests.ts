@@ -57,14 +57,18 @@ import {
   createSourceGridRows,
   filterProfileGridRows,
   filterSourceGridRows,
+  fixtureChecksFromVerificationReport,
+  profileVerificationDisplayModel,
   resolveSource,
 } from "@/features/sources/view-model/registry-view-model";
 import type {
+  CheckReport,
   JsonValue,
   RegistrySource,
   RegistrySourceProfile,
   SourceDocument,
   SourceProposal,
+  SourceProfileVerificationReportStatus,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
@@ -1420,6 +1424,117 @@ assert.equal(
 assert.equal(
   (evidenceRow?.supportEvidenceKinds as string[] | undefined)?.includes("url"),
   false,
+);
+
+const verificationDiagnostic: StructuredDiagnostic = {
+  category: "verification",
+  code: "verification.verified_support_missing_fixture_evidence",
+  message: "Verified support requires fixture evidence.",
+  severity: "error",
+  path: "/support/evidence",
+  details: { profileKey: "evidence_profile" },
+};
+
+const verificationReport: CheckReport = {
+  schemaVersion: 1,
+  kind: "source_profile_verification",
+  subject: { type: "source_profile", key: "evidence_profile" },
+  checkedAt: "2026-07-07T12:00:00Z",
+  logicVersion: "profile-verification/v1",
+  result: "passed",
+  fingerprints: [],
+  diagnostics: [verificationDiagnostic],
+  details: {
+    declaredSupportLevel: "verified",
+    effectiveVerificationState: "verified",
+    fixtureChecks: [
+      {
+        reference: "fixture.json",
+        result: "passed",
+        accessPathKey: "api",
+        coverage: {
+          postingDiscovery: true,
+          postingDetailDescriptionText: true,
+        },
+      },
+    ],
+  },
+};
+
+function verificationStatus(
+  overrides: Partial<SourceProfileVerificationReportStatus>,
+): SourceProfileVerificationReportStatus {
+  return {
+    state: "fresh",
+    effectiveVerificationState: "verified",
+    report: verificationReport,
+    freshness: { state: "fresh", staleFingerprints: [] },
+    ...overrides,
+  };
+}
+
+const verifiedVerificationModel = profileVerificationDisplayModel(
+  verificationStatus({}),
+);
+assert.equal(verifiedVerificationModel.displayState, "verified");
+assert.equal(verifiedVerificationModel.isFreshVerified, true);
+assert.equal(verifiedVerificationModel.reportResultLabel, "Bestanden");
+assert.equal(verifiedVerificationModel.fixtureChecks[0]?.reference, "fixture.json");
+assert.equal(verifiedVerificationModel.fixtureChecks[0]?.accessPathKey, "api");
+assert.equal(
+  verifiedVerificationModel.fixtureChecks[0]?.coverage?.postingDetailDescriptionText,
+  true,
+);
+assert.equal(verifiedVerificationModel.diagnostics[0]?.severity, "error");
+
+assert.equal(
+  profileVerificationDisplayModel(
+    verificationStatus({
+      effectiveVerificationState: "failed",
+      report: { ...verificationReport, result: "failed" },
+    }),
+  ).displayState,
+  "failed",
+);
+assert.equal(profileVerificationDisplayModel(null).displayState, "unknown");
+assert.equal(
+  profileVerificationDisplayModel(
+    verificationStatus({
+      state: "stale",
+      effectiveVerificationState: "unknown",
+      freshness: {
+        state: "stale",
+        staleFingerprints: [
+          { kind: "source_profile_document", reason: "changed_fingerprint_sha256" },
+        ],
+      },
+    }),
+  ).displayState,
+  "stale",
+);
+assert.equal(
+  profileVerificationDisplayModel(
+    verificationStatus({ effectiveVerificationState: "not_applicable" }),
+  ).displayState,
+  "not_applicable",
+);
+
+const declarationOnlyReport: CheckReport = {
+  ...verificationReport,
+  details: {
+    declaredSupportLevel: "verified",
+    effectiveVerificationState: "unknown",
+  },
+};
+assert.deepEqual(fixtureChecksFromVerificationReport(declarationOnlyReport), []);
+assert.deepEqual(
+  profileVerificationDisplayModel(
+    verificationStatus({
+      effectiveVerificationState: "unknown",
+      report: declarationOnlyReport,
+    }),
+  ).fixtureChecks,
+  [],
 );
 
 const proposal: SourceProposal = {
