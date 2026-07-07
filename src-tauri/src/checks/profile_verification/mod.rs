@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6,7 +7,10 @@ use sha2::{Digest, Sha256};
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::profile_dsl::documents::JsonObject;
+use crate::profile_dsl::documents::{
+    JsonObject, SupportEvidence, SupportEvidenceKind, SupportLevel,
+};
+use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 use super::{
@@ -26,23 +30,28 @@ pub fn verify_source_profile(
     let app_data_dir = app_data_dir.as_ref();
     let profile_key = profile_key.as_ref();
     let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-    let report = build_source_profile_verification_report(&snapshot, profile_key)?;
+    let report = build_source_profile_verification_report(app_data_dir, &snapshot, profile_key)?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
 }
 
 pub(crate) fn build_source_profile_verification_report(
+    app_data_dir: &Path,
     snapshot: &SourceProfileRegistrySnapshot,
     profile_key: &str,
 ) -> Result<CheckReport, String> {
     let mut diagnostics = profile_registry_diagnostics(snapshot, profile_key);
+    diagnostics.extend(invalid_support_evidence_kind_diagnostics(
+        app_data_dir,
+        profile_key,
+    ));
     let mut fingerprints = vec![verification_logic_fingerprint()];
     let mut details = JsonObject::new();
+    let mut fixture_checks = Vec::new();
     details.insert(
         "effectiveVerificationState".to_string(),
         serde_json::json!("unknown"),
     );
-    details.insert("fixtureChecks".to_string(), serde_json::json!([]));
 
     if let Some(profile) = snapshot.profile(profile_key) {
         details.insert(
@@ -54,9 +63,32 @@ pub(crate) fn build_source_profile_verification_report(
         diagnostics.extend(
             crate::profile_dsl::compiler::validate_source_profile_document(&profile.document),
         );
+
+        let fixture_evidence = fixture_support_evidence(&profile.document.support.evidence);
+        if profile.document.support.level == SupportLevel::Verified && fixture_evidence.is_empty() {
+            diagnostics.push(verified_support_missing_fixture_evidence_diagnostic(
+                profile_key,
+            ));
+        }
+
+        for evidence in fixture_evidence {
+            let verification = verify_fixture_manifest_evidence(
+                app_data_dir,
+                &profile.document,
+                evidence,
+                &mut fingerprints,
+            )?;
+            diagnostics.extend(verification.diagnostics);
+            fixture_checks.push(verification.fixture_check);
+        }
     } else {
         diagnostics.push(unknown_source_profile_diagnostic(profile_key));
     }
+
+    details.insert(
+        "fixtureChecks".to_string(),
+        serde_json::json!(fixture_checks),
+    );
 
     let result = if has_error_diagnostics(&diagnostics) {
         CheckReportResult::Failed
@@ -75,6 +107,177 @@ pub(crate) fn build_source_profile_verification_report(
     report.diagnostics = diagnostics;
     report.details = details;
     Ok(report)
+}
+
+struct FixtureEvidenceVerification {
+    diagnostics: Diagnostics,
+    fixture_check: serde_json::Value,
+}
+
+fn fixture_support_evidence(evidence: &Option<Vec<SupportEvidence>>) -> Vec<&SupportEvidence> {
+    evidence
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .filter(|entry| entry.kind == SupportEvidenceKind::Fixture)
+        .collect()
+}
+
+fn verify_fixture_manifest_evidence(
+    app_data_dir: &Path,
+    profile: &crate::source_profile::documents::SourceProfileDocument,
+    evidence: &SupportEvidence,
+    fingerprints: &mut Vec<CheckFingerprint>,
+) -> Result<FixtureEvidenceVerification, String> {
+    let reference = evidence.reference.as_str();
+    let mut diagnostics = Vec::new();
+
+    let resolution = resolve_fixture_manifest_reference(app_data_dir, &profile.key, reference);
+    diagnostics.extend(resolution.diagnostics);
+    let Some(manifest_path) = resolution.resolved_path else {
+        return Ok(fixture_evidence_verification(reference, None, diagnostics));
+    };
+    if has_error_diagnostics(&diagnostics) {
+        return Ok(fixture_evidence_verification(reference, None, diagnostics));
+    }
+
+    let manifest_bytes = match fs::read(&manifest_path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            diagnostics.push(manifest_invalid_json_diagnostic(
+                &profile.key,
+                reference,
+                error.to_string(),
+            ));
+            return Ok(fixture_evidence_verification(reference, None, diagnostics));
+        }
+    };
+    fingerprints.push(CheckFingerprint::with_reference(
+        "fixture_manifest",
+        reference,
+        sha256_hex(&manifest_bytes),
+    ));
+
+    let manifest: FixtureManifest = match serde_json::from_slice(&manifest_bytes) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            diagnostics.push(manifest_invalid_json_diagnostic(
+                &profile.key,
+                reference,
+                error.to_string(),
+            ));
+            return Ok(fixture_evidence_verification(reference, None, diagnostics));
+        }
+    };
+    let access_path_key = manifest.access_path_key.as_str();
+
+    if manifest.profile_key != profile.key {
+        diagnostics.push(profile_key_mismatch_diagnostic(
+            &profile.key,
+            &manifest.profile_key,
+            reference,
+        ));
+    }
+
+    if !profile
+        .access_paths
+        .iter()
+        .any(|access_path| access_path.key == manifest.access_path_key)
+    {
+        diagnostics.push(access_path_missing_diagnostic(
+            &profile.key,
+            &manifest.access_path_key,
+            reference,
+        ));
+    } else if let Some(diagnostic) =
+        source_config_invalid_diagnostic(profile, &manifest, reference)?
+    {
+        diagnostics.push(diagnostic);
+    }
+
+    Ok(fixture_evidence_verification(
+        reference,
+        Some(access_path_key),
+        diagnostics,
+    ))
+}
+
+fn source_config_invalid_diagnostic(
+    profile: &crate::source_profile::documents::SourceProfileDocument,
+    manifest: &FixtureManifest,
+    reference: &str,
+) -> Result<Option<Diagnostic>, String> {
+    let source_key = format!("{}_fixture_verification", profile.key);
+    let source = SourceDocument {
+        schema_version: 2,
+        key: source_key.clone(),
+        name: format!("{} fixture verification", profile.name),
+        status: SourceStatus::Active,
+        source_config: manifest.source_config.clone(),
+        selected_access_path: SelectedAccessPath::ProfileAccessPath {
+            profile_key: profile.key.clone(),
+            path_key: manifest.access_path_key.clone(),
+        },
+        source_overrides: None,
+        source_support: None,
+        diagnostics: None,
+    };
+    let snapshot = crate::profile_dsl::compiler::ProfileCompilerSnapshot {
+        profiles: vec![profile.clone()],
+        sources: vec![source],
+    };
+    let result =
+        crate::profile_dsl::compiler::compile_source_execution_plan(&snapshot, &source_key);
+    let source_config_diagnostics = result
+        .diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic.path.starts_with("/sourceConfig"))
+        .collect::<Diagnostics>();
+
+    if source_config_diagnostics.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.source_config_invalid".to_string(),
+        message: format!(
+            "Fixture Manifest `{reference}` Source Config is invalid for Source Profile `{}` Access Path `{}`",
+            profile.key, manifest.access_path_key
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "/sourceConfig".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile.key,
+            "accessPathKey": manifest.access_path_key,
+            "reference": reference,
+            "diagnostics": source_config_diagnostics,
+        })),
+    }))
+}
+
+fn fixture_evidence_verification(
+    reference: &str,
+    access_path_key: Option<&str>,
+    diagnostics: Diagnostics,
+) -> FixtureEvidenceVerification {
+    let mut fixture_check = serde_json::json!({
+        "reference": reference,
+        "result": if has_error_diagnostics(&diagnostics) { "failed" } else { "passed" },
+        "coverage": {
+            "postingDiscovery": false,
+            "postingDetailDescriptionText": false,
+        }
+    });
+    if let Some(access_path_key) = access_path_key {
+        fixture_check["accessPathKey"] = serde_json::json!(access_path_key);
+    }
+
+    FixtureEvidenceVerification {
+        diagnostics,
+        fixture_check,
+    }
 }
 
 fn profile_registry_diagnostics(
@@ -108,6 +311,134 @@ fn diagnostic_details_match_profile_key(diagnostic: &Diagnostic, profile_key: &s
             .is_some_and(|path| {
                 Path::new(path).file_stem().and_then(|stem| stem.to_str()) == Some(profile_key)
             })
+}
+
+fn invalid_support_evidence_kind_diagnostics(
+    app_data_dir: &Path,
+    profile_key: &str,
+) -> Diagnostics {
+    let profile_path = app_data_dir
+        .join("source-profiles")
+        .join(format!("{profile_key}.json"));
+    let Ok(contents) = fs::read_to_string(profile_path) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return Vec::new();
+    };
+
+    value
+        .pointer("/support/evidence")
+        .and_then(|evidence| evidence.as_array())
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(index, evidence)| {
+            let kind = evidence.get("kind").and_then(|kind| kind.as_str())?;
+            if matches!(kind, "fixture" | "smoke" | "manual_review" | "schema_check") {
+                return None;
+            }
+            Some(Diagnostic {
+                category: DiagnosticCategory::Verification,
+                code: "verification.invalid_support_evidence_kind".to_string(),
+                message: format!(
+                    "Support evidence kind `{kind}` is not supported for Source Profile verification"
+                ),
+                severity: DiagnosticSeverity::Error,
+                path: format!("/support/evidence/{index}/kind"),
+                strategy_key: None,
+                details: Some(serde_json::json!({
+                    "profileKey": profile_key,
+                    "kind": kind,
+                    "allowedKinds": ["fixture", "smoke", "manual_review", "schema_check"],
+                    "hint": "`url` is valid only for detect.evidence.kind; use `manual_review` or `fixture` for support evidence."
+                })),
+            })
+        })
+        .collect()
+}
+
+fn manifest_invalid_json_diagnostic(
+    profile_key: &str,
+    reference: &str,
+    parse_error: String,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.manifest_invalid_json".to_string(),
+        message: format!(
+            "Fixture Manifest `{reference}` for Source Profile `{profile_key}` is invalid JSON or does not match the manifest type contract"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "reference": reference,
+            "parseError": parse_error,
+        })),
+    }
+}
+
+fn profile_key_mismatch_diagnostic(
+    expected_profile_key: &str,
+    actual_profile_key: &str,
+    reference: &str,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.profile_key_mismatch".to_string(),
+        message: format!(
+            "Fixture Manifest `{reference}` profileKey `{actual_profile_key}` does not match checked Source Profile `{expected_profile_key}`"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "/profileKey".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "expectedProfileKey": expected_profile_key,
+            "actualProfileKey": actual_profile_key,
+            "reference": reference,
+        })),
+    }
+}
+
+fn access_path_missing_diagnostic(
+    profile_key: &str,
+    access_path_key: &str,
+    reference: &str,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.access_path_missing".to_string(),
+        message: format!(
+            "Fixture Manifest `{reference}` references missing Access Path `{access_path_key}` on Source Profile `{profile_key}`"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "/accessPathKey".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "reference": reference,
+        })),
+    }
+}
+
+fn verified_support_missing_fixture_evidence_diagnostic(profile_key: &str) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Verification,
+        code: "verification.verified_support_missing_fixture_evidence".to_string(),
+        message: format!(
+            "Source Profile `{profile_key}` declares verified support but has no fixture evidence"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "/support/evidence".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "supportLevel": "verified",
+        })),
+    }
 }
 
 fn unknown_source_profile_diagnostic(profile_key: &str) -> Diagnostic {
