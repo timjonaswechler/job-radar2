@@ -18,6 +18,10 @@ import {
   JsonPreview,
   OptionalJsonPreview,
 } from "@/features/sources/shared/json-preview";
+import {
+  OptionalSchemaValuePreview,
+  SchemaValuePreview,
+} from "@/features/sources/shared/schema-value-table";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import {
   originLabels,
@@ -56,7 +60,7 @@ export function SourceDetailsDrawer({
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       {row ? (
         <DrawerContent
-          className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_115px),960px)]
+          className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)]
         data-[vaul-drawer-direction=right]:sm:max-w-none"
         >
           <DrawerHeader className="border-b pr-12">
@@ -105,7 +109,10 @@ export function ProfileDetailsDrawer({
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       {row ? (
-        <DrawerContent className="h-full sm:max-w-xl lg:max-w-2xl">
+        <DrawerContent
+          className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)]
+      data-[vaul-drawer-direction=right]:sm:max-w-none"
+        >
           <DrawerHeader className="border-b pr-12">
             <DrawerTitle>{row.name}</DrawerTitle>
             <DrawerDescription>
@@ -162,7 +169,7 @@ function SourceDetails({
         />
       ) : null}
 
-      <dl className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+      <dl className="grid gap-3 sm:grid-cols-2">
         <DetailRow label="Source Key" value={source.document.key} mono />
         <DetailRow label="Name" value={source.document.name} />
         <DetailRow
@@ -191,6 +198,21 @@ function SourceDetails({
         />
         <DetailRow label="Ursprung" value={originLabels[source.origin]} />
         <DetailRow label="Registry-Dokument" value={source.path} mono />
+        <div className="mt-1 sm:col-span-2">
+          <SchemaValuePreview
+            title="sourceConfig"
+            description="Stabile Zugriffskonfiguration der Source. Search Request Kriterien gehören nicht hierher."
+            value={source.document.sourceConfig}
+            schema={resolution.effectiveSourceConfigSchema}
+          />
+        </div>
+        <div className="mt-1 sm:col-span-2">
+          <SchemaValuePreview
+            title="Effektives sourceConfigSchema"
+            description="Profil- und Access-Path-Schema, wie die Registry sie für diese Source zusammenführt."
+            value={resolution.effectiveSourceConfigSchema}
+          />
+        </div>
       </dl>
 
       <AccessPathDetails
@@ -198,17 +220,6 @@ function SourceDetails({
         resolution={resolution}
       />
 
-      <JsonPreview
-        title="sourceConfig"
-        description="Stabile Zugriffskonfiguration der Source. Search Request Kriterien gehören nicht hierher."
-        value={source.document.sourceConfig}
-        defaultOpen
-      />
-      <JsonPreview
-        title="Effektives sourceConfigSchema"
-        description="Profil- und Access-Path-Schema, wie die Registry sie für diese Source zusammenführt."
-        value={resolution.effectiveSourceConfigSchema}
-      />
       <OptionalJsonPreview
         title="sourceOverrides"
         description="Kontrollierte Source-spezifische Verhaltensänderungen für den ausgewählten Profilpfad."
@@ -285,12 +296,12 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
         description="Support Level, bekannte Einschränkungen und Evidenz des Source Profile."
         value={profile.document.support}
       />
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="Profil sourceConfigSchema"
         description="Schema-Anteil, der für alle Access Paths dieses Profils gilt."
         value={profile.document.sourceConfigSchema}
       />
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="Detection-Regeln"
         description="Regeln, wie dieses Profil bei eingereichten URLs eine Source Proposal erzeugt."
         value={profile.document.detect}

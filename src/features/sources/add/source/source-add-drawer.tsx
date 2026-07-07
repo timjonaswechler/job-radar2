@@ -57,7 +57,7 @@ export function SourceAddDrawer({
     >
       <DrawerContent
         ref={setDrawerContentElement}
-        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_115px),960px)]
+        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw_-_2rem),1040px)]
       data-[vaul-drawer-direction=right]:sm:max-w-none"
       >
         <DrawerHeader className="border-b pr-12">

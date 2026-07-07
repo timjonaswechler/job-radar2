@@ -11,7 +11,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { DetailRow } from "@/features/sources/registry/detail-row";
-import { OptionalJsonPreview } from "@/features/sources/shared/json-preview";
+import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import { supportLevelLabels } from "@/features/sources/labels";
 import type { SourceResolution } from "@/features/sources/view-model/registry-view-model";
@@ -206,24 +206,24 @@ function AccessPathJsonBlocks({ accessPath }: AccessPathJsonBlocksProps) {
           diagnostics={accessPath.diagnostics}
         />
       ) : null}
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="sourceConfigSchema"
         description="Path-spezifisches Schema für Source Config. Search Request Kriterien gehören nicht hierher."
         value={accessPath.sourceConfigSchema}
       />
       {"knownIssues" in accessPath ? (
-        <OptionalJsonPreview
+        <OptionalSchemaValuePreview
           title="knownIssues"
           description="Bekannte Einschränkungen dieses Access Path."
           value={accessPath.knownIssues}
         />
       ) : null}
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="postingDiscovery"
         description="Deklarative source-weite Posting Discovery."
         value={accessPath.postingDiscovery}
       />
-      <OptionalJsonPreview
+      <OptionalSchemaValuePreview
         title="postingDetail"
         description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
         value={accessPath.postingDetail}

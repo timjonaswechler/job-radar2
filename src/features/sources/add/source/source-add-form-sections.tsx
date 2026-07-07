@@ -78,6 +78,7 @@ export function SourceDetectionUrlField({
             <InputGroupAddon align="inline-end">
               <InputGroupButton
                 type="button"
+                variant="default"
                 onClick={onDetect}
                 disabled={detecting || saving}
               >
