@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { MoreHorizontalIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -17,13 +18,17 @@ import {
 import type { SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
 
 type SearchRequestsTableActions = {
+  onRun: (row: SearchRequestTableRow) => void;
   onEdit: (row: SearchRequestTableRow) => void;
   onDelete: (row: SearchRequestTableRow) => void;
+  runningRequestId?: number | null;
 };
 
 export function searchRequestColumns({
+  onRun,
   onEdit,
   onDelete,
+  runningRequestId = null,
 }: SearchRequestsTableActions): ColumnDef<SearchRequestTableRow>[] {
   return [
     {
@@ -153,34 +158,78 @@ export function searchRequestColumns({
     {
       id: "actions",
       header: "Aktionen",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button type="button" variant="ghost" size="icon-sm">
-                <MoreHorizontalIcon aria-hidden="true" />
-                <span className="sr-only">Aktionen öffnen</span>
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end">
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => onEdit(row.original)}>
-                <PencilIcon aria-hidden="true" />
-                Bearbeiten
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => onDelete(row.original)}
-              >
-                <Trash2Icon aria-hidden="true" />
-                Löschen
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: ({ row }) => {
+        const runDisabledReason = getRunDisabledReason(
+          row.original,
+          runningRequestId,
+        );
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button type="button" variant="ghost" size="icon-sm">
+                  <MoreHorizontalIcon aria-hidden="true" />
+                  <span className="sr-only">Aktionen öffnen</span>
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  disabled={runDisabledReason !== null}
+                  title={runDisabledReason ?? "Search Request ausführen"}
+                  onClick={() => onRun(row.original)}
+                >
+                  <PlayIcon aria-hidden="true" />
+                  Ausführen
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                  <PencilIcon aria-hidden="true" />
+                  Bearbeiten
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => onDelete(row.original)}
+                >
+                  <Trash2Icon aria-hidden="true" />
+                  Löschen
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
       enableSorting: false,
     },
   ];
+}
+
+function getRunDisabledReason(
+  row: SearchRequestTableRow,
+  runningRequestId: number | null,
+) {
+  if (runningRequestId === row.id) {
+    return "Dieser Search Request läuft bereits.";
+  }
+  if (runningRequestId !== null) {
+    return "Es läuft bereits ein anderer Search Request.";
+  }
+  if (row.status !== "active") {
+    return "Nur aktive Search Requests können ausgeführt werden.";
+  }
+  if (row.validationError) {
+    return "Search Requests mit Validierungsfehlern können nicht ausgeführt werden.";
+  }
+  if (row.missingSourceKeys.length) {
+    return "Search Requests mit fehlenden Source Keys können nicht ausgeführt werden.";
+  }
+  if (!row.includeCount) {
+    return "Search Requests brauchen mindestens eine Include-Regel.";
+  }
+  if (!row.sourceCount) {
+    return "Search Requests brauchen mindestens eine Source.";
+  }
+  return null;
 }

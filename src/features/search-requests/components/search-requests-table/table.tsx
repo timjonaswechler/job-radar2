@@ -48,15 +48,19 @@ import type { SearchRequestStatus } from "@/lib/api/search-requests";
 type SearchRequestsTableProps = {
   rows: SearchRequestTableRow[];
   onCreate: () => void;
+  onRun: (row: SearchRequestTableRow) => void;
   onEdit: (row: SearchRequestTableRow) => void;
   onDelete: (row: SearchRequestTableRow) => void;
+  runningRequestId?: number | null;
 };
 
 export function SearchRequestsTable({
   rows,
   onCreate,
+  onRun,
   onEdit,
   onDelete,
+  runningRequestId = null,
 }: SearchRequestsTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<SearchRequestStatus[]>([]);
@@ -77,8 +81,8 @@ export function SearchRequestsTable({
     [attentionOnly, deferredSearchQuery, rows, selectedStatuses],
   );
   const columns = useMemo(
-    () => searchRequestColumns({ onEdit, onDelete }),
-    [onDelete, onEdit],
+    () => searchRequestColumns({ onRun, onEdit, onDelete, runningRequestId }),
+    [onRun, onDelete, onEdit, runningRequestId],
   );
   const table = useReactTable({
     columns,

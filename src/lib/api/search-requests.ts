@@ -108,6 +108,64 @@ export type CreateSearchRequestInput = {
 
 export type UpdateSearchRequestInput = CreateSearchRequestInput
 
+export function parseSearchRunResult(value: unknown): SearchRunResult | null {
+  if (!isRecord(value)) return null
+  if (typeof value.searchRequestId !== "number") return null
+  if (!isSearchRunStatus(value.status)) return null
+  if (typeof value.generatedAt !== "string") return null
+  if (!Array.isArray(value.diagnostics)) return null
+  if (!Array.isArray(value.sourceRuns)) return null
+
+  const sourceRuns = value.sourceRuns.filter(isSourceRunResult)
+  if (sourceRuns.length !== value.sourceRuns.length) return null
+
+  return {
+    searchRequestId: value.searchRequestId,
+    status: value.status,
+    generatedAt: value.generatedAt,
+    diagnostics: value.diagnostics as StructuredDiagnostic[],
+    sourceRuns,
+    postings: Array.isArray(value.postings)
+      ? (value.postings as NormalizedPosting[])
+      : [],
+  }
+}
+
+function isSourceRunResult(value: unknown): value is SourceRunResult {
+  return (
+    isRecord(value) &&
+    typeof value.sourceKey === "string" &&
+    typeof value.sourceName === "string" &&
+    isSourceRunStatus(value.status) &&
+    typeof value.candidateCount === "number" &&
+    typeof value.matchedCount === "number" &&
+    Array.isArray(value.diagnostics) &&
+    (typeof value.error === "string" || value.error === null)
+  )
+}
+
+function isSearchRunStatus(value: unknown): value is SearchRunStatus {
+  return (
+    value === "completed" ||
+    value === "completed_with_errors" ||
+    value === "failed" ||
+    value === "cancelled"
+  )
+}
+
+function isSourceRunStatus(value: unknown): value is SourceRunStatus {
+  return (
+    value === "completed" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "skipped"
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
 export function createSearchRequest(input: CreateSearchRequestInput) {
   return invoke<SearchRequest>("create_search_request", { input })
 }
