@@ -35,5 +35,6 @@ pub use report::{
 };
 pub use source_live::{
     check_source, check_source_with_clients, check_source_with_fetcher,
+    source_live_check_report_status, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
     SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };

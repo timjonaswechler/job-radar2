@@ -1,12 +1,13 @@
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin, sync::Mutex};
 
 use job_radar_lib::{
-    check_source, check_source_with_fetcher, read_latest_check_report,
-    source_live_check_report_path, CheckReportKind, CheckReportResult, CheckReportSubjectType,
+    check_source, check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
+    source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
+    CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
     DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
     PostingDetailFetchResponse, PostingDetailFetcher, PostingDiscoveryFetchError,
     PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    SourceLiveCheckReportState, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -54,6 +55,59 @@ fn simple_source_with_status(status: &str) -> serde_json::Value {
     let mut source: serde_json::Value = serde_json::from_str(SIMPLE_SOURCE).unwrap();
     source["status"] = json!(status);
     source
+}
+
+fn passing_live_check_fetcher() -> FakeLiveCheckFetcher {
+    FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Senior Rust Engineer",
+                        "url": "https://example.test/jobs/job-1",
+                        "locations": ["Remote"]
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This is a sufficiently detailed job description for live checks.</p>"
+            })
+            .to_string(),
+        ),
+    ])
+}
+
+fn create_passed_source_live_check(app_data_dir: &Path) -> job_radar_lib::CheckReport {
+    write_profile(app_data_dir, &simple_profile_without_pagination());
+    write_source(app_data_dir, &simple_source_with_status("draft"));
+    check_source_with_fetcher(
+        app_data_dir,
+        "example_source",
+        &passing_live_check_fetcher(),
+    )
+    .unwrap()
+}
+
+fn assert_stale_detail(
+    status: &job_radar_lib::SourceLiveCheckReportStatus,
+    kind: &str,
+    reason: CheckReportStaleReason,
+) {
+    let freshness = status.freshness.as_ref().unwrap();
+    assert!(
+        freshness
+            .stale_fingerprints
+            .iter()
+            .any(|detail| detail.kind == kind && detail.reason == reason),
+        "missing stale detail {kind}/{reason:?}: {:?}",
+        freshness.stale_fingerprints
+    );
 }
 
 #[test]
@@ -132,6 +186,134 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     )
     .unwrap();
     assert_eq!(stored_source["status"], json!("draft"));
+}
+
+#[test]
+fn source_live_check_report_status_is_unknown_without_persisted_report() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Unknown);
+    assert!(status.report.is_none());
+    assert!(status.freshness.is_none());
+}
+
+#[test]
+fn source_live_check_report_status_marks_persisted_report_fresh() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let report = create_passed_source_live_check(temp_dir.path());
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
+    assert_eq!(status.report.as_ref(), Some(&report));
+    let freshness = status.freshness.as_ref().unwrap();
+    assert_eq!(freshness.state, CheckReportFreshnessState::Fresh);
+    assert!(freshness.stale_fingerprints.is_empty());
+}
+
+#[test]
+fn source_live_check_report_status_marks_changed_source_document_stale() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    create_passed_source_live_check(temp_dir.path());
+    let mut source = simple_source_with_status("draft");
+    source["name"] = json!("Renamed Example Source");
+    write_source(temp_dir.path(), &source);
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Stale);
+    assert_eq!(
+        status.freshness.as_ref().unwrap().state,
+        CheckReportFreshnessState::Stale
+    );
+    assert_eq!(
+        status.report.as_ref().unwrap().result,
+        CheckReportResult::Passed
+    );
+    assert_stale_detail(
+        &status,
+        "source_document",
+        CheckReportStaleReason::ChangedFingerprintSha256,
+    );
+}
+
+#[test]
+fn source_live_check_report_status_marks_changed_profile_document_stale_without_mutating_source_status(
+) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    create_passed_source_live_check(temp_dir.path());
+    let mut profile = simple_profile_without_pagination();
+    profile["description"] = json!("Changed profile description");
+    write_profile(temp_dir.path(), &profile);
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Stale);
+    assert_eq!(
+        status.report.as_ref().unwrap().result,
+        CheckReportResult::Passed
+    );
+    assert_stale_detail(
+        &status,
+        "source_profile_document",
+        CheckReportStaleReason::ChangedFingerprintSha256,
+    );
+    let stored_source: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(temp_dir.path().join("sources/example_source.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(stored_source["status"], json!("draft"));
+}
+
+#[test]
+fn source_live_check_report_status_marks_changed_source_config_and_overrides_stale() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    create_passed_source_live_check(temp_dir.path());
+    let mut source = simple_source_with_status("draft");
+    source["sourceConfig"]["language"] = json!("de");
+    source["sourceOverrides"]["strategyOverrides"][0]["acceptWhen"]["minResults"] = json!(2);
+    write_source(temp_dir.path(), &source);
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Stale);
+    assert_stale_detail(
+        &status,
+        "source_config",
+        CheckReportStaleReason::ChangedFingerprintSha256,
+    );
+    assert_stale_detail(
+        &status,
+        "source_overrides",
+        CheckReportStaleReason::ChangedFingerprintSha256,
+    );
+    assert_eq!(
+        status.report.as_ref().unwrap().result,
+        CheckReportResult::Passed
+    );
+}
+
+#[test]
+fn source_live_check_report_status_marks_changed_logic_version_stale() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mut report = create_passed_source_live_check(temp_dir.path());
+    report.logic_version = "source-live-check/v0".to_string();
+    persist_latest_check_report(temp_dir.path(), &report).unwrap();
+
+    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+
+    assert_eq!(status.state, SourceLiveCheckReportState::Stale);
+    assert_eq!(
+        status.report.as_ref().unwrap().result,
+        CheckReportResult::Passed
+    );
+    assert_stale_detail(
+        &status,
+        "logic_version",
+        CheckReportStaleReason::LogicVersionChanged,
+    );
 }
 
 #[test]

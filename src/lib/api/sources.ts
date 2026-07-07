@@ -278,6 +278,12 @@ export type SourceProfileVerificationReportStatus = {
   freshness?: CheckReportFreshness | null
 }
 
+export type SourceLiveCheckReportStatus = {
+  state: "fresh" | "stale" | "unknown"
+  report?: CheckReport | null
+  freshness?: CheckReportFreshness | null
+}
+
 export type FixtureCheckCoverage = {
   postingDiscovery?: boolean
   postingDetailDescriptionText?: boolean
@@ -358,6 +364,17 @@ export function listSourceDiagnostics() {
 
 export function verifySourceProfile(profileKey: string) {
   return invoke<CheckReport>("verify_source_profile", { profileKey })
+}
+
+export function checkSource(sourceKey: string) {
+  return invoke<CheckReport>("check_source", { sourceKey })
+}
+
+export function getSourceLiveCheckReportStatus(sourceKey: string) {
+  return invoke<SourceLiveCheckReportStatus>(
+    "get_source_live_check_report_status",
+    { sourceKey },
+  )
 }
 
 export function getSourceProfileVerificationReportStatus(profileKey: string) {

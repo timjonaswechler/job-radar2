@@ -1,6 +1,8 @@
+use std::io::ErrorKind;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::profile_dsl::compiler::{compile_source_execution_plan, ProfileCompilerSnapshot};
@@ -21,11 +23,29 @@ use crate::source_profile::documents::SourceProfileDocument;
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 use super::{
-    persist_latest_check_report, CheckFingerprint, CheckReport, CheckReportKind, CheckReportResult,
+    evaluate_check_report_freshness, persist_latest_check_report, read_latest_check_report,
+    source_live_check_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
+    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
     CheckReportSubject,
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v1";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceLiveCheckReportState {
+    Fresh,
+    Stale,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceLiveCheckReportStatus {
+    pub state: SourceLiveCheckReportState,
+    pub report: Option<CheckReport>,
+    pub freshness: Option<CheckReportFreshness>,
+}
 
 pub fn check_source(
     app_data_dir: impl AsRef<Path>,
@@ -83,6 +103,44 @@ where
     Ok(report)
 }
 
+pub fn source_live_check_report_status(
+    app_data_dir: impl AsRef<Path>,
+    source_key: impl AsRef<str>,
+) -> Result<SourceLiveCheckReportStatus, String> {
+    let app_data_dir = app_data_dir.as_ref();
+    let source_key = source_key.as_ref();
+    let report_path = source_live_check_report_path(app_data_dir, source_key);
+    let report = match read_latest_check_report(&report_path) {
+        Ok(report) => report,
+        Err(CheckReportPersistenceError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+            return Ok(SourceLiveCheckReportStatus {
+                state: SourceLiveCheckReportState::Unknown,
+                report: None,
+                freshness: None,
+            });
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+
+    let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
+    let current_fingerprints = source_live_check_fingerprints(&snapshot, source_key)?;
+    let freshness = evaluate_check_report_freshness(
+        &report,
+        SOURCE_LIVE_CHECK_LOGIC_VERSION,
+        &current_fingerprints,
+    );
+    let state = match freshness.state {
+        CheckReportFreshnessState::Fresh => SourceLiveCheckReportState::Fresh,
+        CheckReportFreshnessState::Stale => SourceLiveCheckReportState::Stale,
+    };
+
+    Ok(SourceLiveCheckReportStatus {
+        state,
+        report: Some(report),
+        freshness: Some(freshness),
+    })
+}
+
 pub(crate) fn build_source_live_check_report<D, T, B>(
     snapshot: &SourceProfileRegistrySnapshot,
     source_key: &str,
@@ -99,7 +157,7 @@ where
     let validation_state = derive_source_validation_state(&compiler_snapshot, source_key);
     let can_compile = validation_state.can_compile;
     let mut diagnostics = validation_state.diagnostics;
-    let mut fingerprints = vec![live_check_logic_fingerprint()];
+    let fingerprints = source_live_check_fingerprints(snapshot, source_key)?;
     let mut details = source_live_check_details_placeholders();
     let mut live_check_subject = None;
 
@@ -120,22 +178,6 @@ where
             serde_json::Value::String(subject.access_path_key.clone()),
         );
         live_check_subject = Some(subject);
-
-        fingerprints.push(source_document_fingerprint(source_document)?);
-        fingerprints.push(json_fingerprint(
-            "source_config",
-            &source_document.source_config,
-        )?);
-        if let Some(source_overrides) = &source_document.source_overrides {
-            fingerprints.push(json_fingerprint("source_overrides", source_overrides)?);
-        }
-        if let SelectedAccessPath::ProfileAccessPath { profile_key, .. } =
-            &source_document.selected_access_path
-        {
-            if let Some(profile) = snapshot.profile(profile_key) {
-                fingerprints.push(source_profile_document_fingerprint(&profile.document)?);
-            }
-        }
     }
 
     if can_compile {
@@ -255,6 +297,34 @@ impl SourceLiveCheckSubject {
             },
         }
     }
+}
+
+fn source_live_check_fingerprints(
+    snapshot: &SourceProfileRegistrySnapshot,
+    source_key: &str,
+) -> Result<Vec<CheckFingerprint>, String> {
+    let mut fingerprints = vec![live_check_logic_fingerprint()];
+
+    if let Some(source) = snapshot.source(source_key) {
+        let source_document = &source.document;
+        fingerprints.push(source_document_fingerprint(source_document)?);
+        fingerprints.push(json_fingerprint(
+            "source_config",
+            &source_document.source_config,
+        )?);
+        if let Some(source_overrides) = &source_document.source_overrides {
+            fingerprints.push(json_fingerprint("source_overrides", source_overrides)?);
+        }
+        if let SelectedAccessPath::ProfileAccessPath { profile_key, .. } =
+            &source_document.selected_access_path
+        {
+            if let Some(profile) = snapshot.profile(profile_key) {
+                fingerprints.push(source_profile_document_fingerprint(&profile.document)?);
+            }
+        }
+    }
+
+    Ok(fingerprints)
 }
 
 fn compiler_snapshot_from_registry(

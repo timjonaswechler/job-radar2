@@ -314,6 +314,14 @@ pub fn check_source(
 }
 
 #[tauri::command]
+pub fn get_source_live_check_report_status(
+    state: State<'_, AppState>,
+    source_key: String,
+) -> Result<crate::checks::SourceLiveCheckReportStatus, String> {
+    crate::checks::source_live_check_report_status(&state.paths.app_data_dir, source_key)
+}
+
+#[tauri::command]
 pub fn get_source_profile_verification_report_status(
     state: State<'_, AppState>,
     profile_key: String,
