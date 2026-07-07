@@ -1,8 +1,10 @@
 use job_radar_lib::{
-    latest_check_report_path, persist_latest_check_report, read_latest_check_report,
-    source_live_check_report_path, source_profile_verification_report_path, CheckFingerprint,
-    CheckReport, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
-    CheckReportSubject, CheckReportSubjectType, CHECK_REPORT_SCHEMA_VERSION,
+    evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
+    read_latest_check_report, source_live_check_report_path,
+    source_profile_verification_report_path, CheckFingerprint, CheckReport,
+    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
+    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
+    CHECK_REPORT_SCHEMA_VERSION,
 };
 use serde_json::json;
 
@@ -138,6 +140,165 @@ fn check_report_deserialization_enforces_report_contract() {
             .contains("unsupported Check Report schemaVersion 2"),
         "unexpected error: {error}"
     );
+}
+
+#[test]
+fn freshness_is_fresh_when_logic_version_and_fingerprints_match() {
+    let mut report = CheckReport::new(
+        CheckReportKind::SourceProfileVerification,
+        CheckReportSubject::source_profile("greenhouse"),
+        "2026-07-07T12:00:00Z",
+        "profile-verification/v1",
+        CheckReportResult::Passed,
+    );
+    report.fingerprints = vec![
+        CheckFingerprint::new(
+            "source_profile_document",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+        CheckFingerprint::with_reference(
+            "fixture_file",
+            "responses/jobs.json",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ),
+    ];
+
+    let freshness = evaluate_check_report_freshness(
+        &report,
+        "profile-verification/v1",
+        &report.fingerprints.clone(),
+    );
+
+    assert_eq!(freshness.state, CheckReportFreshnessState::Fresh);
+    assert!(freshness.stale_fingerprints.is_empty());
+    assert!(freshness.is_fresh());
+}
+
+#[test]
+fn freshness_is_stale_when_expected_fingerprint_is_missing() {
+    let report = CheckReport::new(
+        CheckReportKind::SourceProfileVerification,
+        CheckReportSubject::source_profile("greenhouse"),
+        "2026-07-07T12:00:00Z",
+        "profile-verification/v1",
+        CheckReportResult::Passed,
+    );
+    let current_fingerprints = vec![CheckFingerprint::new(
+        "source_profile_document",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )];
+
+    let freshness =
+        evaluate_check_report_freshness(&report, "profile-verification/v1", &current_fingerprints);
+
+    assert_eq!(freshness.state, CheckReportFreshnessState::Stale);
+    assert_eq!(freshness.stale_fingerprints.len(), 1);
+    assert_eq!(
+        freshness.stale_fingerprints[0].reason,
+        CheckReportStaleReason::MissingReportFingerprint
+    );
+    assert_eq!(
+        freshness.stale_fingerprints[0].kind,
+        "source_profile_document"
+    );
+}
+
+#[test]
+fn freshness_is_stale_when_fingerprint_hash_changed() {
+    let mut report = CheckReport::new(
+        CheckReportKind::SourceProfileVerification,
+        CheckReportSubject::source_profile("greenhouse"),
+        "2026-07-07T12:00:00Z",
+        "profile-verification/v1",
+        CheckReportResult::Passed,
+    );
+    report.fingerprints = vec![CheckFingerprint::with_reference(
+        "fixture_file",
+        "responses/jobs.json",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )];
+    let current_fingerprints = vec![CheckFingerprint::with_reference(
+        "fixture_file",
+        "responses/jobs.json",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    )];
+
+    let freshness =
+        evaluate_check_report_freshness(&report, "profile-verification/v1", &current_fingerprints);
+
+    assert_eq!(freshness.state, CheckReportFreshnessState::Stale);
+    assert_eq!(freshness.stale_fingerprints.len(), 1);
+    assert_eq!(
+        freshness.stale_fingerprints[0].reason,
+        CheckReportStaleReason::ChangedFingerprintSha256
+    );
+    assert_eq!(
+        freshness.stale_fingerprints[0].reference.as_deref(),
+        Some("responses/jobs.json")
+    );
+}
+
+#[test]
+fn freshness_is_stale_when_check_logic_changed() {
+    let mut report = CheckReport::new(
+        CheckReportKind::SourceProfileVerification,
+        CheckReportSubject::source_profile("greenhouse"),
+        "2026-07-07T12:00:00Z",
+        "profile-verification/v1",
+        CheckReportResult::Passed,
+    );
+    report.fingerprints = vec![CheckFingerprint::new(
+        "verification_logic",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )];
+    let current_fingerprints = vec![CheckFingerprint::new(
+        "verification_logic",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    )];
+
+    let freshness =
+        evaluate_check_report_freshness(&report, "profile-verification/v2", &current_fingerprints);
+
+    assert_eq!(freshness.state, CheckReportFreshnessState::Stale);
+    assert_eq!(freshness.stale_fingerprints.len(), 2);
+    assert_eq!(
+        freshness.stale_fingerprints[0].reason,
+        CheckReportStaleReason::LogicVersionChanged
+    );
+    assert_eq!(freshness.stale_fingerprints[0].kind, "logic_version");
+    assert_eq!(
+        freshness.stale_fingerprints[1].reason,
+        CheckReportStaleReason::ChangedFingerprintSha256
+    );
+    assert_eq!(freshness.stale_fingerprints[1].kind, "verification_logic");
+}
+
+#[test]
+fn freshness_derives_stale_without_changing_persisted_result() {
+    let mut report = CheckReport::new(
+        CheckReportKind::SourceLiveCheck,
+        CheckReportSubject::source("acme_jobs"),
+        "2026-07-07T12:00:00Z",
+        "source-live-check/v1",
+        CheckReportResult::Failed,
+    );
+    report.fingerprints = vec![CheckFingerprint::new(
+        "source_document",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )];
+    let current_fingerprints = vec![CheckFingerprint::new(
+        "source_document",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    )];
+
+    let freshness =
+        evaluate_check_report_freshness(&report, "source-live-check/v1", &current_fingerprints);
+    let serialized = serde_json::to_value(&report).unwrap();
+
+    assert_eq!(freshness.state, CheckReportFreshnessState::Stale);
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(serialized["result"], "failed");
+    assert!(serialized.get("stale").is_none());
 }
 
 #[test]

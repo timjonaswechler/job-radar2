@@ -11,10 +11,12 @@ mod source;
 mod source_profile;
 
 pub use checks::{
-    latest_check_report_path, persist_latest_check_report, read_latest_check_report,
-    source_live_check_report_path, source_profile_verification_report_path, CheckFingerprint,
-    CheckReport, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
-    CheckReportSubject, CheckReportSubjectType, CHECK_REPORT_SCHEMA_VERSION,
+    evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
+    read_latest_check_report, source_live_check_report_path,
+    source_profile_verification_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
+    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
+    CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
+    CHECK_REPORT_SCHEMA_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
