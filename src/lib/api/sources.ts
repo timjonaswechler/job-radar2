@@ -284,3 +284,7 @@ export function detectSourceProposalFromUrl(url: string) {
 export function createSource(document: SourceDocument) {
   return invoke<RegistrySource>("create_source", { document })
 }
+
+export function updateSource(document: SourceDocument) {
+  return invoke<RegistrySource>("update_source", { document })
+}

@@ -121,6 +121,7 @@ pub fn run() {
             app::commands::list_source_diagnostics,
             app::commands::detect_source_proposal_from_url,
             app::commands::create_source,
+            app::commands::update_source,
             app::commands::create_search_request,
             app::commands::list_search_requests,
             app::commands::get_search_request,

@@ -120,6 +120,7 @@ export function SourcesWorkspaceView() {
             diagnosticIndex={diagnosticIndex}
             loading={loading}
             onAdd={() => setAddDrawerKind("source")}
+            onUpdated={refresh}
           />
         </TabsContent>
 

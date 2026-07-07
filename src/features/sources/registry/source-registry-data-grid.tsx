@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
@@ -19,6 +19,7 @@ import {
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
 import { useSourceRegistryGridState } from "@/features/sources/registry/registry-grid-state";
+import { SourceEditDrawer } from "@/features/sources/edit/source/source-edit-drawer";
 import { SourceDetailsDrawer } from "@/features/sources/registry/registry-details";
 import {
   RegistrySearchInput,
@@ -45,6 +46,7 @@ type SourceRegistryDataGridProps = {
   diagnosticIndex: DiagnosticIndex;
   loading: boolean;
   onAdd: () => void;
+  onUpdated?: () => Promise<unknown> | unknown;
 };
 
 export function SourceRegistryDataGrid({
@@ -53,7 +55,9 @@ export function SourceRegistryDataGrid({
   diagnosticIndex,
   loading,
   onAdd,
+  onUpdated,
 }: SourceRegistryDataGridProps) {
+  const [editingSource, setEditingSource] = useState<RegistrySource | null>(null);
   const columns = useMemo<ColumnDef<SourceGridRow>[]>(
     () => [
       {
@@ -276,8 +280,22 @@ export function SourceRegistryDataGrid({
             : []
         }
         open={selectedRow !== null}
+        onEdit={(source) => {
+          setEditingSource(source);
+          setSelectedRow(null);
+        }}
         onOpenChange={(open) => {
           if (!open) setSelectedRow(null);
+        }}
+      />
+
+      <SourceEditDrawer
+        source={editingSource}
+        profilesByKey={profilesByKey}
+        open={editingSource !== null}
+        onUpdated={onUpdated}
+        onOpenChange={(open) => {
+          if (!open) setEditingSource(null);
         }}
       />
     </>

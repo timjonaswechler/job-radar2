@@ -341,10 +341,7 @@ pub fn create_source(
         return Err(format!("Die Datei `{}` existiert bereits.", path.display()));
     }
 
-    let contents = serde_json::to_string_pretty(&document)
-        .map_err(|error| format!("Source konnte nicht serialisiert werden: {error}"))?;
-    fs::write(&path, format!("{contents}\n"))
-        .map_err(|error| format!("Source konnte nicht geschrieben werden: {error}"))?;
+    write_source_document(&path, &document)?;
 
     let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
     snapshot.source(&document.key).cloned().ok_or_else(|| {
@@ -353,6 +350,57 @@ pub fn create_source(
             document.key
         )
     })
+}
+
+#[tauri::command]
+pub fn update_source(
+    state: State<'_, AppState>,
+    document: crate::source::documents::SourceDocument,
+) -> Result<crate::source_profile::registry::RegistrySource, String> {
+    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    let existing = snapshot
+        .source(&document.key)
+        .ok_or_else(|| format!("Source `{}` wurde nicht gefunden.", document.key))?;
+
+    if existing.origin != "custom" {
+        return Err(format!(
+            "Source `{}` ist eingebaut und kann nicht überschrieben werden.",
+            document.key
+        ));
+    }
+
+    fs::create_dir_all(&state.paths.sources_dir)
+        .map_err(|error| format!("Sources-Ordner konnte nicht angelegt werden: {error}"))?;
+    let path = state
+        .paths
+        .sources_dir
+        .join(format!("{}.json", document.key));
+    if !path.exists() {
+        return Err(format!(
+            "Die Datei `{}` wurde nicht gefunden.",
+            path.display()
+        ));
+    }
+
+    write_source_document(&path, &document)?;
+
+    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    snapshot.source(&document.key).cloned().ok_or_else(|| {
+        format!(
+            "Source `{}` wurde nach dem Schreiben nicht gefunden.",
+            document.key
+        )
+    })
+}
+
+fn write_source_document(
+    path: &std::path::Path,
+    document: &crate::source::documents::SourceDocument,
+) -> Result<(), String> {
+    let contents = serde_json::to_string_pretty(document)
+        .map_err(|error| format!("Source konnte nicht serialisiert werden: {error}"))?;
+    fs::write(path, format!("{contents}\n"))
+        .map_err(|error| format!("Source konnte nicht geschrieben werden: {error}"))
 }
 
 #[tauri::command]

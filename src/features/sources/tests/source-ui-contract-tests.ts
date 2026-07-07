@@ -16,6 +16,10 @@ import {
   type SourceAddDraftState,
 } from "@/features/sources/add/source/source-add-model";
 import {
+  buildUpdatedSourceDocument,
+  sourceEditDraftFromSource,
+} from "@/features/sources/edit/source/source-edit-model";
+import {
   effectiveSourceConfigSchema,
   entriesWithSchemaHints,
   sourceConfigFromEntries,
@@ -1029,6 +1033,46 @@ assert.deepEqual(Object.keys(transitionBuildResult.document?.sourceConfig ?? {})
   "feedUrl",
   "locale",
 ]);
+
+const editableRegistrySource: RegistrySource = {
+  ...source,
+  document: {
+    ...source.document,
+    sourceOverrides: {
+      strategyOverrides: [{ step: "postingDiscovery", strategyKey: "jobs_api" }],
+    },
+  },
+};
+const editSchemaMetadata = sourceConfigSchemaMetadata(profile.document.sourceConfigSchema ?? {});
+const editDraft = sourceEditDraftFromSource({
+  source: editableRegistrySource,
+  schemaMetadata: editSchemaMetadata,
+  createConfigEntryId: stableEntryIds("edit"),
+});
+assert.equal(editDraft.name, "ACME");
+assert.equal(editDraft.status, "active");
+assert.deepEqual(entryValues(editDraft.configEntries), [["boardSlug", "acme"]]);
+assert.equal(
+  editDraft.sourceOverridesText,
+  JSON.stringify(editableRegistrySource.document.sourceOverrides, null, 2),
+);
+const updatedSourceDocument = buildUpdatedSourceDocument({
+  source: editableRegistrySource,
+  name: "ACME Updated",
+  status: "disabled",
+  configEntries: [entry("board", "boardSlug", "acme-updated")],
+  sourceOverridesText: "",
+  schemaMetadata: editSchemaMetadata,
+});
+assert.deepEqual(updatedSourceDocument.errors, []);
+assert.equal(updatedSourceDocument.document?.key, "acme");
+assert.equal(updatedSourceDocument.document?.name, "ACME Updated");
+assert.equal(updatedSourceDocument.document?.status, "disabled");
+assert.deepEqual(updatedSourceDocument.document?.sourceConfig, {
+  boardSlug: "acme-updated",
+});
+assert.equal(updatedSourceDocument.document?.sourceOverrides, undefined);
+
 for (const searchRequestCriterion of [
   "keywords",
   "roles",

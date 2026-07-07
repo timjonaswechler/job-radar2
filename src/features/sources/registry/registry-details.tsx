@@ -1,4 +1,4 @@
-import { XIcon } from "lucide-react";
+import { PencilIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ type SourceDetailsDrawerProps = {
   profilesByKey: Map<string, RegistrySourceProfile>;
   diagnostics: StructuredDiagnostic[];
   open: boolean;
+  onEdit?: (source: RegistrySource) => void;
   onOpenChange: (open: boolean) => void;
 };
 
@@ -52,6 +53,7 @@ export function SourceDetailsDrawer({
   profilesByKey,
   diagnostics,
   open,
+  onEdit,
   onOpenChange,
 }: SourceDetailsDrawerProps) {
   return (
@@ -67,6 +69,19 @@ export function SourceDetailsDrawer({
               Source Key <code>{row.key}</code> · {row.statusLabel} ·{" "}
               {row.validationStateLabel} · {row.originLabel}
             </DrawerDescription>
+            {row.source.origin === "custom" &&
+            row.source.document.selectedAccessPath.type === "profile_access_path" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="absolute top-5 right-16"
+                onClick={() => onEdit?.(row.source)}
+              >
+                <PencilIcon data-icon="inline-start" aria-hidden="true" />
+                Bearbeiten
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
