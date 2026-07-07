@@ -32,7 +32,10 @@ import {
   schemaScalarOptions,
   schemaScalarRules,
 } from "@/features/sources/shared/schema-introspection";
-import { createSchemaGuidedValueEditorModel } from "@/features/sources/shared/schema-guided-value-editor";
+import {
+  applySchemaGuidedObjectEdit,
+  createSchemaGuidedValueEditorModel,
+} from "@/features/sources/shared/schema-guided-value-editor";
 import { createSchemaValueRows } from "@/features/sources/shared/schema-value-rows";
 import {
   profileDslSchemaCatalog,
@@ -506,6 +509,120 @@ if (!invalidSchemaGuidedJson.parseState.ok) {
 }
 assert.deepEqual(invalidSchemaGuidedJson.unknownKeyWarnings, []);
 assert.equal(invalidSchemaGuidedJson.matchedVariantLabel, null);
+
+const schemaGuidedObjectSchema: JsonValue = {
+  type: "object",
+  required: ["mode"],
+  additionalProperties: false,
+  properties: {
+    mode: { const: "http" },
+    method: { type: "string", enum: ["GET", "POST"], default: "GET" },
+    timeoutMs: { type: "integer", default: 10 },
+    enabled: { type: "boolean", default: true },
+    url: { type: "string", format: "uri" },
+  },
+};
+const schemaGuidedEditableObject = createSchemaGuidedValueEditorModel({
+  rawText: JSON.stringify({ mode: "http", timeoutMs: 5, extra: "warn" }),
+  schema: schemaGuidedObjectSchema,
+});
+assert.deepEqual(
+  schemaGuidedEditableObject.editableObjectRows.map((row) => ({
+    key: row.key,
+    fieldType: row.fieldType,
+    required: row.required,
+    unknown: row.unknown,
+    scalarOptions: row.scalarOptions,
+  })),
+  [
+    {
+      key: "mode",
+      fieldType: "string",
+      required: true,
+      unknown: false,
+      scalarOptions: [{ value: "http", label: "http" }],
+    },
+    {
+      key: "timeoutMs",
+      fieldType: "number",
+      required: false,
+      unknown: false,
+      scalarOptions: [],
+    },
+    {
+      key: "extra",
+      fieldType: "string",
+      required: false,
+      unknown: true,
+      scalarOptions: [],
+    },
+  ],
+);
+assert.deepEqual(schemaGuidedEditableObject.availableObjectKeys, [
+  { key: "method", label: "method", required: false },
+  { key: "enabled", label: "enabled", required: false },
+  { key: "url", label: "url", required: false },
+]);
+
+const addedSchemaGuidedObjectKey = applySchemaGuidedObjectEdit({
+  rawText: JSON.stringify({ mode: "http" }),
+  schema: schemaGuidedObjectSchema,
+  edit: { type: "add-property", key: "method" },
+});
+assert.equal(addedSchemaGuidedObjectKey.ok, true);
+if (addedSchemaGuidedObjectKey.ok) {
+  assert.deepEqual(JSON.parse(addedSchemaGuidedObjectKey.rawText), {
+    mode: "http",
+    method: "GET",
+  });
+}
+
+const editedSchemaGuidedObjectValue = applySchemaGuidedObjectEdit({
+  rawText: JSON.stringify({ mode: "http", timeoutMs: 10, enabled: true }),
+  schema: schemaGuidedObjectSchema,
+  edit: { type: "set-property-value", key: "timeoutMs", rawValue: "25" },
+});
+assert.equal(editedSchemaGuidedObjectValue.ok, true);
+if (editedSchemaGuidedObjectValue.ok) {
+  assert.deepEqual(JSON.parse(editedSchemaGuidedObjectValue.rawText), {
+    mode: "http",
+    timeoutMs: 25,
+    enabled: true,
+  });
+}
+const toggledSchemaGuidedObjectValue = applySchemaGuidedObjectEdit({
+  rawText: editedSchemaGuidedObjectValue.ok
+    ? editedSchemaGuidedObjectValue.rawText
+    : "{}",
+  schema: schemaGuidedObjectSchema,
+  edit: { type: "set-property-value", key: "enabled", rawValue: "false" },
+});
+assert.equal(toggledSchemaGuidedObjectValue.ok, true);
+if (toggledSchemaGuidedObjectValue.ok) {
+  assert.deepEqual(JSON.parse(toggledSchemaGuidedObjectValue.rawText), {
+    mode: "http",
+    timeoutMs: 25,
+    enabled: false,
+  });
+}
+
+const removedSchemaGuidedObjectKey = applySchemaGuidedObjectEdit({
+  rawText: JSON.stringify({ mode: "http", method: "POST" }),
+  schema: schemaGuidedObjectSchema,
+  edit: { type: "remove-property", key: "method" },
+});
+assert.equal(removedSchemaGuidedObjectKey.ok, true);
+if (removedSchemaGuidedObjectKey.ok) {
+  assert.deepEqual(JSON.parse(removedSchemaGuidedObjectKey.rawText), { mode: "http" });
+}
+assert.deepEqual(
+  applySchemaGuidedObjectEdit({
+    rawText: JSON.stringify({ mode: "http" }),
+    schema: schemaGuidedObjectSchema,
+    edit: { type: "remove-property", key: "mode" },
+  }),
+  { ok: false, rawText: JSON.stringify({ mode: "http" }), error: "Required key cannot be removed." },
+);
 
 const sourceAddTransitionProfile: RegistrySourceProfile = {
   origin: "built_in",
