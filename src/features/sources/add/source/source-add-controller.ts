@@ -53,6 +53,7 @@ export function useSourceAddController({
   const [form, setForm] = useState<SourceFormState>(emptySourceForm);
   const [keyTouched, setKeyTouched] = useState(false);
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>([]);
+  const [sourceOverridesText, setSourceOverridesText] = useState("");
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,6 +90,7 @@ export function useSourceAddController({
       buildSourceDocument({
         form,
         configEntries,
+        sourceOverridesText,
         existingSourceKeys,
         selectedProfile,
         selectedAccessPath,
@@ -96,6 +98,7 @@ export function useSourceAddController({
       }),
     [
       configEntries,
+      sourceOverridesText,
       existingSourceKeys,
       form,
       schemaMetadata,
@@ -120,6 +123,7 @@ export function useSourceAddController({
     setForm(emptySourceForm);
     setKeyTouched(false);
     setConfigEntries([]);
+    setSourceOverridesText("");
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
@@ -156,6 +160,7 @@ export function useSourceAddController({
     });
     setForm(nextDraft.form);
     setConfigEntries(nextDraft.configEntries);
+    setSourceOverridesText("");
   };
 
   const updateAccessPath = (pathKey: string) => {
@@ -167,6 +172,7 @@ export function useSourceAddController({
     });
     setForm(nextDraft.form);
     setConfigEntries(nextDraft.configEntries);
+    setSourceOverridesText("");
   };
 
   const applyDetectedSource = (detected: DetectedSourceLike) => {
@@ -176,6 +182,7 @@ export function useSourceAddController({
     setForm(nextDraft.form);
     setKeyTouched(nextDraft.keyTouched);
     setConfigEntries(nextDraft.configEntries);
+    setSourceOverridesText(nextDraft.sourceOverridesText);
     setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
     setSaveAttempted(nextDraft.saveAttempted);
   };
@@ -210,6 +217,7 @@ export function useSourceAddController({
             form,
             keyTouched,
             configEntries,
+            sourceOverridesText,
             jsonPreviewOpen,
             saveAttempted,
           },
@@ -221,6 +229,7 @@ export function useSourceAddController({
           setForm(nextDraft.form);
           setKeyTouched(nextDraft.keyTouched);
           setConfigEntries(nextDraft.configEntries);
+          setSourceOverridesText(nextDraft.sourceOverridesText);
           setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
           setSaveAttempted(nextDraft.saveAttempted);
           toast.success("Quelle erkannt und Formular vorausgefüllt.");
@@ -232,6 +241,7 @@ export function useSourceAddController({
               form,
               keyTouched,
               configEntries: current,
+              sourceOverridesText,
               jsonPreviewOpen,
               saveAttempted,
             },
@@ -298,6 +308,7 @@ export function useSourceAddController({
       detectionError,
       form,
       configEntries,
+      sourceOverridesText,
       jsonPreviewOpen,
       saveAttempted,
       saving,
@@ -312,6 +323,7 @@ export function useSourceAddController({
     actions: {
       setUrl,
       setConfigEntries,
+      setSourceOverridesText,
       handleOpenChange,
       updateName,
       updateKey,

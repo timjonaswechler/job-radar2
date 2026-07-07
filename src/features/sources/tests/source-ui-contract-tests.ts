@@ -9,6 +9,7 @@ import {
   sourceAddDraftAfterDetectionResult,
   sourceAddDraftAfterDetectedSource,
   sourceAddDraftAfterProfileChange,
+  sourceOverridesFromText,
   sourceFormAfterKeyChange,
   sourceFormAfterNameChange,
   type SourceAddDraftState,
@@ -807,6 +808,7 @@ const sourceAddInitialDraft: SourceAddDraftState = {
   form: emptySourceForm,
   keyTouched: false,
   configEntries: [entry("manual", "manualStableAccessKey", "manual-value")],
+  sourceOverridesText: "",
   jsonPreviewOpen: true,
   saveAttempted: true,
 };
@@ -826,6 +828,26 @@ assert.deepEqual(entryValues(profileSelectionDraft.configEntries), [
   ["tenant", ""],
   ["locale", "en-US"],
 ]);
+
+const sourceOverridesParseResult = sourceOverridesFromText(
+  '{"strategyOverrides":[{"step":"postingDiscovery","strategyKey":"posting_api"}]}',
+);
+assert.deepEqual(sourceOverridesParseResult.errors, []);
+assert.deepEqual(sourceOverridesParseResult.value, {
+  strategyOverrides: [{ step: "postingDiscovery", strategyKey: "posting_api" }],
+});
+assert.deepEqual(sourceOverridesFromText("   "), { value: null, errors: [] });
+assert.deepEqual(sourceOverridesFromText("[]").errors, [
+  "Source Overrides müssen ein JSON-Objekt sein.",
+]);
+assert.deepEqual(sourceOverridesFromText("{not-json}").errors, [
+  "Source Overrides brauchen gültiges JSON.",
+]);
+const sourceOverridesSchema = profileDslSchemaCatalog.resolveRef(
+  profileDslSchemaRefs.sourceOverrides,
+);
+assert.equal(sourceOverridesSchema?.schema.type, "object");
+assert.ok(sourceOverridesSchema?.schema.properties);
 
 const accessPathSelectionDraft = sourceAddDraftAfterAccessPathChange({
   selectedProfile: sourceAddTransitionProfile,
@@ -1318,6 +1340,8 @@ const buildResult = buildSourceDocument({
     pathKey: detected?.pathKey ?? "",
   },
   configEntries: [{ id: "boardSlug", key: "boardSlug", value: "acme" }],
+  sourceOverridesText:
+    '{"strategyOverrides":[{"step":"postingDiscovery","strategyKey":"jobs_api"}]}',
   existingSourceKeys: new Set(),
   selectedProfile: profile,
   selectedAccessPath: profile.document.accessPaths[0] ?? null,
@@ -1328,6 +1352,9 @@ assert.deepEqual(buildResult.errors, []);
 assert.equal(buildResult.document?.schemaVersion, 2);
 assert.equal(buildResult.document?.selectedAccessPath.type, "profile_access_path");
 assert.deepEqual(buildResult.document?.sourceConfig, { boardSlug: "acme" });
+assert.deepEqual(buildResult.document?.sourceOverrides, {
+  strategyOverrides: [{ step: "postingDiscovery", strategyKey: "jobs_api" }],
+});
 assertNoV1SourceProfileFields(buildResult.document);
 
 const failedDetectionCopy = sourceDetectionOutcomeCopy({

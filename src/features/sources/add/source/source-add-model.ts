@@ -1,3 +1,4 @@
+import { isJsonObject } from "@/features/sources/shared/schema-introspection";
 import {
   configEntriesFromJsonObject,
   effectiveSourceConfigSchema,
@@ -39,6 +40,7 @@ export type SourceBuildResult = {
   document: SourceDocument | null;
   errors: string[];
   configErrors: string[];
+  overridesErrors: string[];
 };
 
 export type DetectedSourceLike = {
@@ -76,6 +78,7 @@ export type SourceAddDraftState = {
   form: SourceFormState;
   keyTouched: boolean;
   configEntries: SourceConfigEntry[];
+  sourceOverridesText: string;
   jsonPreviewOpen: boolean;
   saveAttempted: boolean;
 };
@@ -207,6 +210,7 @@ export function sourceAddDraftAfterDetectedSource({
       nextMetadata,
       createConfigEntryId,
     ),
+    sourceOverridesText: "",
     jsonPreviewOpen: false,
     saveAttempted: false,
   };
@@ -262,6 +266,7 @@ export function sourceAddDraftAfterDetectionResult({
 export function buildSourceDocument({
   form,
   configEntries,
+  sourceOverridesText = "",
   existingSourceKeys,
   selectedProfile,
   selectedAccessPath,
@@ -269,6 +274,7 @@ export function buildSourceDocument({
 }: {
   form: SourceFormState;
   configEntries: SourceConfigEntry[];
+  sourceOverridesText?: string;
   existingSourceKeys: Set<string>;
   selectedProfile: RegistrySourceProfile | null;
   selectedAccessPath: ProfileAccessPathDefinition | null;
@@ -288,28 +294,65 @@ export function buildSourceDocument({
   if (!selectedAccessPath) errors.push("Zugriffspfad fehlt.");
 
   const configResult = sourceConfigFromEntries(configEntries, schemaMetadata);
-  errors.push(...configResult.errors);
+  const overridesResult = sourceOverridesFromText(sourceOverridesText);
+  errors.push(...configResult.errors, ...overridesResult.errors);
 
   if (errors.length || !selectedProfile || !selectedAccessPath) {
-    return { document: null, errors, configErrors: configResult.errors };
+    return {
+      document: null,
+      errors,
+      configErrors: configResult.errors,
+      overridesErrors: overridesResult.errors,
+    };
+  }
+
+  const document: SourceDocument = {
+    schemaVersion: 2,
+    key: form.key,
+    name: form.name.trim(),
+    status: form.status,
+    sourceConfig: configResult.value,
+    selectedAccessPath: {
+      type: "profile_access_path",
+      profileKey: selectedProfile.document.key,
+      pathKey: selectedAccessPath.key,
+    },
+  };
+
+  if (overridesResult.value !== null) {
+    document.sourceOverrides = overridesResult.value;
   }
 
   return {
-    document: {
-      schemaVersion: 2,
-      key: form.key,
-      name: form.name.trim(),
-      status: form.status,
-      sourceConfig: configResult.value,
-      selectedAccessPath: {
-        type: "profile_access_path",
-        profileKey: selectedProfile.document.key,
-        pathKey: selectedAccessPath.key,
-      },
-    },
+    document,
     errors,
     configErrors: configResult.errors,
+    overridesErrors: overridesResult.errors,
   };
+}
+
+export function sourceOverridesFromText(rawText: string): {
+  value: JsonValue | null;
+  errors: string[];
+} {
+  const trimmed = rawText.trim();
+  if (!trimmed) return { value: null, errors: [] };
+
+  try {
+    const value = JSON.parse(trimmed) as JsonValue;
+    if (!isJsonObject(value)) {
+      return {
+        value: null,
+        errors: ["Source Overrides müssen ein JSON-Objekt sein."],
+      };
+    }
+    return { value, errors: [] };
+  } catch {
+    return {
+      value: null,
+      errors: ["Source Overrides brauchen gültiges JSON."],
+    };
+  }
 }
 
 export function technicalKeyFromText(value: string) {

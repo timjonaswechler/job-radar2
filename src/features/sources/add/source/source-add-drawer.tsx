@@ -21,6 +21,7 @@ import {
 } from "@/features/sources/add/source/source-add-form-sections";
 import { SourceConfigEditor } from "@/features/sources/add/source/source-config-editor";
 import { useSourceAddController } from "@/features/sources/add/source/source-add-controller";
+import { SourceOverridesEditor } from "@/features/sources/add/source/source-overrides-editor";
 import { SourceDetectionPanel } from "@/features/sources/add/source/source-detection-panel";
 import type { RegistrySource, RegistrySourceProfile } from "@/lib/api/sources";
 
@@ -125,6 +126,14 @@ export function SourceAddDrawer({
               configErrors={data.buildResult.configErrors}
               showErrors={state.saveAttempted}
               onChange={actions.setConfigEntries}
+            />
+
+            <SourceOverridesEditor
+              value={state.sourceOverridesText}
+              disabled={state.saving}
+              errors={data.buildResult.overridesErrors}
+              showErrors={state.saveAttempted}
+              onChange={actions.setSourceOverridesText}
             />
 
             <div className="flex flex-col gap-2">
