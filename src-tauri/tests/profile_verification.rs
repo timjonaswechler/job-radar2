@@ -31,6 +31,17 @@ fn profile_with_fixture_evidence() -> serde_json::Value {
     profile
 }
 
+fn profile_with_fixture_discovery_url(fetch_url: &str) -> serde_json::Value {
+    let mut profile = profile_with_fixture_evidence();
+    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]["url"] =
+        json!(fetch_url);
+    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("pagination");
+    profile
+}
+
 fn write_fixture_manifest(app_data_dir: &Path, profile_key: &str, manifest: serde_json::Value) {
     write_raw_fixture_manifest(
         app_data_dir,
@@ -47,10 +58,46 @@ fn write_raw_fixture_manifest(app_data_dir: &Path, profile_key: &str, contents: 
     fs::write(fixture_dir.join("fixture.json"), contents).unwrap();
 }
 
+fn write_fixture_file(app_data_dir: &Path, profile_key: &str, reference: &str, contents: &str) {
+    let path = app_data_dir
+        .join("source-profile-fixtures")
+        .join(profile_key)
+        .join(reference);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, contents).unwrap();
+}
+
+fn discovery_body() -> &'static str {
+    r#"{
+        "jobs": [
+            {
+                "id": "job-1",
+                "title": " Software Engineer ",
+                "url": "https://example.test/jobs/job-1",
+                "locations": ["Berlin"]
+            }
+        ]
+    }"#
+}
+
 fn representative_manifest(
     profile_key: &str,
     access_path_key: &str,
     source_config: serde_json::Value,
+) -> serde_json::Value {
+    representative_manifest_with_request_url(
+        profile_key,
+        access_path_key,
+        source_config,
+        "https://example.test/jobs.json",
+    )
+}
+
+fn representative_manifest_with_request_url(
+    profile_key: &str,
+    access_path_key: &str,
+    source_config: serde_json::Value,
+    request_url: &str,
 ) -> serde_json::Value {
     json!({
         "schemaVersion": 1,
@@ -61,7 +108,7 @@ fn representative_manifest(
             "key": "discovery_jobs",
             "match": {
                 "method": "GET",
-                "url": "https://example.test/jobs.json"
+                "url": request_url
             },
             "response": {
                 "status": 200,
@@ -132,12 +179,7 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
     let profile_dir = temp_dir.path().join("source-profiles");
     fs::create_dir_all(&profile_dir).unwrap();
 
-    let mut profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
-    profile["support"] = json!({
-        "level": "verified",
-        "summary": "Fixture backed.",
-        "evidence": [{ "kind": "fixture", "reference": "fixture.json" }]
-    });
+    let profile = profile_with_fixture_discovery_url("https://example.test/jobs.json");
     fs::write(
         profile_dir.join("example_jobs.json"),
         serde_json::to_string_pretty(&profile).unwrap(),
@@ -155,6 +197,12 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
             }),
         ),
     );
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        discovery_body(),
+    );
 
     let report = verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
 
@@ -163,6 +211,10 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
     assert!(report.fingerprints.iter().any(|fingerprint| {
         fingerprint.kind == "fixture_manifest"
             && fingerprint.reference.as_deref() == Some("fixture.json")
+    }));
+    assert!(report.fingerprints.iter().any(|fingerprint| {
+        fingerprint.kind == "fixture_file"
+            && fingerprint.reference.as_deref() == Some("responses/jobs.json")
     }));
     assert_eq!(
         report.details.get("fixtureChecks"),
@@ -176,6 +228,109 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
             }
         }]))
     );
+}
+
+#[test]
+fn verify_source_profile_serves_mapped_profile_fetch_from_fixture_file_without_live_network() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_discovery_url("https://127.0.0.1:9/jobs.json");
+    write_profile(temp_dir.path(), &profile);
+    write_fixture_manifest(
+        temp_dir.path(),
+        "example_jobs",
+        representative_manifest_with_request_url(
+            "example_jobs",
+            "json_feed",
+            json!({ "feedUrl": "https://unused.example.test/from-manifest-source-config" }),
+            "https://127.0.0.1:9/jobs.json",
+        ),
+    );
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        discovery_body(),
+    );
+
+    let report = verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(
+        report.diagnostics.is_empty(),
+        "expected offline fixture replay to avoid live fetch diagnostics, got {:?}",
+        report.diagnostics
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_unmapped_fixture_request_with_details() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_discovery_url("https://fixture.example.test/unmapped.json");
+    write_profile(temp_dir.path(), &profile);
+    write_fixture_manifest(
+        temp_dir.path(),
+        "example_jobs",
+        representative_manifest_with_request_url(
+            "example_jobs",
+            "json_feed",
+            json!({ "feedUrl": "https://unused.example.test/from-manifest-source-config" }),
+            "https://fixture.example.test/mapped.json",
+        ),
+    );
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        discovery_body(),
+    );
+
+    let report = verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.unmapped_request")
+        .expect("unmapped request diagnostic");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Fixture);
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "profileKey": "example_jobs",
+            "accessPathKey": "json_feed",
+            "method": "GET",
+            "url": "https://fixture.example.test/unmapped.json"
+        }))
+    );
+}
+
+#[test]
+fn verify_source_profile_matches_fixture_requests_independent_of_query_parameter_order() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_discovery_url("https://fixture.example.test/jobs?b=2&a=1");
+    write_profile(temp_dir.path(), &profile);
+    write_fixture_manifest(
+        temp_dir.path(),
+        "example_jobs",
+        representative_manifest_with_request_url(
+            "example_jobs",
+            "json_feed",
+            json!({ "feedUrl": "https://unused.example.test/from-manifest-source-config" }),
+            "https://fixture.example.test/jobs?a=1&b=2",
+        ),
+    );
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        discovery_body(),
+    );
+
+    let report = verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
 }
 
 #[test]

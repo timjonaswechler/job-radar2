@@ -20,6 +20,7 @@ use super::{
 
 pub(crate) mod fixture_manifest;
 pub(crate) mod fixture_pack;
+pub(crate) mod fixture_replay;
 
 pub const PROFILE_VERIFICATION_LOGIC_VERSION: &str = "profile-verification/v1";
 
@@ -189,10 +190,50 @@ fn verify_fixture_manifest_evidence(
             &manifest.access_path_key,
             reference,
         ));
-    } else if let Some(diagnostic) =
-        source_config_invalid_diagnostic(profile, &manifest, reference)?
-    {
-        diagnostics.push(diagnostic);
+    } else {
+        let compile_result = compile_fixture_source_execution_plan(profile, &manifest);
+        if let Some(diagnostic) = source_config_invalid_diagnostic(
+            profile,
+            &manifest,
+            reference,
+            &compile_result.diagnostics,
+        )? {
+            diagnostics.push(diagnostic);
+        }
+
+        if !has_error_diagnostics(&diagnostics) {
+            let replay_setup = fixture_replay::FixtureReplay::from_manifest(
+                app_data_dir,
+                &profile.key,
+                reference,
+                &manifest,
+                fingerprints,
+            )?;
+            diagnostics.extend(replay_setup.diagnostics);
+
+            if !has_error_diagnostics(&diagnostics) {
+                if let Some(execution_plan) = compile_result.execution_plan.as_ref() {
+                    diagnostics.extend(execute_fixture_replay(
+                        execution_plan,
+                        &manifest,
+                        &replay_setup.replay,
+                    ));
+                    diagnostics.extend(replay_setup.replay.take_unmapped_request_diagnostics(
+                        &profile.key,
+                        &manifest.access_path_key,
+                    ));
+                } else {
+                    diagnostics.extend(compile_result.diagnostics);
+                    diagnostics.push(fixture_execution_failed_diagnostic(
+                        &profile.key,
+                        &manifest.access_path_key,
+                        reference,
+                        "Fixture verification Source could not be compiled into an Execution Plan"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
     }
 
     Ok(fixture_evidence_verification(
@@ -206,32 +247,12 @@ fn source_config_invalid_diagnostic(
     profile: &crate::source_profile::documents::SourceProfileDocument,
     manifest: &FixtureManifest,
     reference: &str,
+    compile_diagnostics: &Diagnostics,
 ) -> Result<Option<Diagnostic>, String> {
-    let source_key = format!("{}_fixture_verification", profile.key);
-    let source = SourceDocument {
-        schema_version: 2,
-        key: source_key.clone(),
-        name: format!("{} fixture verification", profile.name),
-        status: SourceStatus::Active,
-        source_config: manifest.source_config.clone(),
-        selected_access_path: SelectedAccessPath::ProfileAccessPath {
-            profile_key: profile.key.clone(),
-            path_key: manifest.access_path_key.clone(),
-        },
-        source_overrides: None,
-        source_support: None,
-        diagnostics: None,
-    };
-    let snapshot = crate::profile_dsl::compiler::ProfileCompilerSnapshot {
-        profiles: vec![profile.clone()],
-        sources: vec![source],
-    };
-    let result =
-        crate::profile_dsl::compiler::compile_source_execution_plan(&snapshot, &source_key);
-    let source_config_diagnostics = result
-        .diagnostics
-        .into_iter()
+    let source_config_diagnostics = compile_diagnostics
+        .iter()
         .filter(|diagnostic| diagnostic.path.starts_with("/sourceConfig"))
+        .cloned()
         .collect::<Diagnostics>();
 
     if source_config_diagnostics.is_empty() {
@@ -255,6 +276,117 @@ fn source_config_invalid_diagnostic(
             "diagnostics": source_config_diagnostics,
         })),
     }))
+}
+
+fn compile_fixture_source_execution_plan(
+    profile: &crate::source_profile::documents::SourceProfileDocument,
+    manifest: &FixtureManifest,
+) -> crate::profile_dsl::compiler::CompileSourceExecutionPlanResult {
+    let source_key = format!("{}_fixture_verification", profile.key);
+    let source = SourceDocument {
+        schema_version: 2,
+        key: source_key.clone(),
+        name: format!("{} fixture verification", profile.name),
+        status: SourceStatus::Active,
+        source_config: manifest.source_config.clone(),
+        selected_access_path: SelectedAccessPath::ProfileAccessPath {
+            profile_key: profile.key.clone(),
+            path_key: manifest.access_path_key.clone(),
+        },
+        source_overrides: None,
+        source_support: None,
+        diagnostics: None,
+    };
+    let snapshot = crate::profile_dsl::compiler::ProfileCompilerSnapshot {
+        profiles: vec![profile.clone()],
+        sources: vec![source],
+    };
+    crate::profile_dsl::compiler::compile_source_execution_plan(&snapshot, &source_key)
+}
+
+fn execute_fixture_replay(
+    execution_plan: &crate::profile_dsl::execution_plan::SourceExecutionPlan,
+    manifest: &FixtureManifest,
+    replay: &fixture_replay::FixtureReplay,
+) -> Diagnostics {
+    tauri::async_runtime::block_on(async {
+        let mut diagnostics = Vec::new();
+
+        if manifest.checks.posting_discovery.is_some() {
+            let result = crate::profile_dsl::runtime::execute_posting_discovery_with_clients(
+                execution_plan,
+                replay,
+                replay,
+            )
+            .await;
+            diagnostics.extend(result.diagnostics);
+        }
+
+        if let Some(posting_detail) = &manifest.checks.posting_detail {
+            for case in &posting_detail.cases {
+                let posting = crate::profile_dsl::runtime::PostingDetailPostingOccurrence {
+                    url: case.posting.url.clone(),
+                    title: Some(case.posting.title.clone()),
+                    company: Some(case.posting.company.clone()),
+                    locations: Vec::new(),
+                    description_text: None,
+                    posting_meta: fixture_posting_meta(case.posting.posting_meta.as_ref()),
+                };
+                let result = crate::profile_dsl::runtime::execute_posting_detail_with_clients(
+                    execution_plan,
+                    &posting,
+                    replay,
+                    replay,
+                )
+                .await;
+                diagnostics.extend(result.diagnostics);
+            }
+        }
+
+        diagnostics
+    })
+}
+
+fn fixture_posting_meta(
+    posting_meta: Option<&JsonObject>,
+) -> std::collections::BTreeMap<String, String> {
+    posting_meta
+        .into_iter()
+        .flat_map(|metadata| metadata.iter())
+        .map(|(key, value)| {
+            (
+                key.clone(),
+                value
+                    .as_str()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| value.to_string()),
+            )
+        })
+        .collect()
+}
+
+fn fixture_execution_failed_diagnostic(
+    profile_key: &str,
+    access_path_key: &str,
+    reference: &str,
+    cause: String,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.execution_failed".to_string(),
+        message: format!(
+            "Fixture execution failed for Source Profile `{profile_key}` Access Path `{access_path_key}` Fixture Manifest `{reference}`"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: "".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "reference": reference,
+            "cause": cause,
+        })),
+    }
 }
 
 fn fixture_evidence_verification(
