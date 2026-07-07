@@ -42,6 +42,12 @@ fn profile_with_fixture_discovery_url(fetch_url: &str) -> serde_json::Value {
     profile
 }
 
+fn profile_with_fixture_detail_url(fetch_url: &str) -> serde_json::Value {
+    let mut profile = profile_with_fixture_evidence();
+    profile["accessPaths"][0]["postingDetail"]["strategies"][0]["fetch"]["url"] = json!(fetch_url);
+    profile
+}
+
 fn write_fixture_manifest(app_data_dir: &Path, profile_key: &str, manifest: serde_json::Value) {
     write_raw_fixture_manifest(
         app_data_dir,
@@ -116,6 +122,63 @@ fn verify_profile_with_discovery_expect(
         "responses/jobs.json",
         response_body,
     );
+
+    verify_source_profile(temp_dir.path(), "example_jobs").unwrap()
+}
+
+fn verify_profile_with_detail_cases(
+    profile_fetch_url: &str,
+    cases: serde_json::Value,
+    request_urls_and_bodies: &[(&str, &str)],
+) -> CheckReport {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_detail_url(profile_fetch_url);
+    write_profile(temp_dir.path(), &profile);
+
+    let requests = request_urls_and_bodies
+        .iter()
+        .enumerate()
+        .map(|(index, (url, _))| {
+            json!({
+                "key": format!("detail_{}", index + 1),
+                "match": {
+                    "method": "GET",
+                    "url": url
+                },
+                "response": {
+                    "status": 200,
+                    "headers": { "content-type": "application/json" },
+                    "bodyFile": format!("responses/detail-{}.json", index + 1)
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let manifest = json!({
+        "schemaVersion": 1,
+        "profileKey": "example_jobs",
+        "accessPathKey": "json_feed",
+        "sourceConfig": {
+            "feedUrl": "https://unused.example.test/jobs.json",
+            "language": "de"
+        },
+        "requests": requests,
+        "checks": {
+            "postingDetail": {
+                "cases": cases
+            }
+        }
+    });
+    write_fixture_manifest(temp_dir.path(), "example_jobs", manifest);
+
+    for (index, (_, body)) in request_urls_and_bodies.iter().enumerate() {
+        write_fixture_file(
+            temp_dir.path(),
+            "example_jobs",
+            &format!("responses/detail-{}.json", index + 1),
+            body,
+        );
+    }
 
     verify_source_profile(temp_dir.path(), "example_jobs").unwrap()
 }
@@ -511,6 +574,194 @@ fn verify_source_profile_reports_failing_discovery_contains_candidates_expectati
     assert_eq!(
         report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
         json!(false)
+    );
+}
+
+#[test]
+fn verify_source_profile_passes_detail_min_description_length_expectation_and_marks_coverage() {
+    let report = verify_profile_with_detail_cases(
+        "{{posting:url}}",
+        json!([{
+            "key": "job_1_detail",
+            "posting": {
+                "title": "Software Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/job-1.json"
+            },
+            "expect": { "minDescriptionLength": 40 }
+        }]),
+        &[(
+            "https://example.test/jobs/job-1.json",
+            r#"{ "descriptionHtml": "Responsibilities include building reliable systems for users every day." }"#,
+        )],
+    );
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"],
+        json!({
+            "postingDiscovery": false,
+            "postingDetailDescriptionText": true
+        })
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_failing_detail_min_description_length_expectation() {
+    let report = verify_profile_with_detail_cases(
+        "{{posting:url}}",
+        json!([{
+            "key": "job_1_detail",
+            "posting": {
+                "title": "Software Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/job-1.json"
+            },
+            "expect": { "minDescriptionLength": 40 }
+        }]),
+        &[(
+            "https://example.test/jobs/job-1.json",
+            r#"{ "descriptionHtml": "1234567890123456789012345" }"#,
+        )],
+    );
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDetailDescriptionText"],
+        json!(false)
+    );
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.detail_expectation_failed")
+        .expect("detail expectation diagnostic");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Fixture);
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "profileKey": "example_jobs",
+            "accessPathKey": "json_feed",
+            "caseKey": "job_1_detail",
+            "expectation": { "minDescriptionLength": 40 },
+            "actual": {
+                "descriptionLength": 25,
+                "descriptionText": "1234567890123456789012345"
+            }
+        }))
+    );
+}
+
+#[test]
+fn verify_source_profile_passes_detail_description_contains_expectation() {
+    let report = verify_profile_with_detail_cases(
+        "{{posting:url}}",
+        json!([{
+            "key": "job_1_detail",
+            "posting": {
+                "title": "Software Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/job-1.json"
+            },
+            "expect": { "descriptionContains": ["responsibilities", "systems"] }
+        }]),
+        &[(
+            "https://example.test/jobs/job-1.json",
+            r#"{ "descriptionHtml": "The responsibilities include building reliable systems for users." }"#,
+        )],
+    );
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDetailDescriptionText"],
+        json!(true)
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_failing_detail_description_contains_expectation() {
+    let report = verify_profile_with_detail_cases(
+        "{{posting:url}}",
+        json!([{
+            "key": "job_1_detail",
+            "posting": {
+                "title": "Software Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/job-1.json"
+            },
+            "expect": { "descriptionContains": ["responsibilities"] }
+        }]),
+        &[(
+            "https://example.test/jobs/job-1.json",
+            r#"{ "descriptionHtml": "We build reliable products every day for users." }"#,
+        )],
+    );
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.detail_expectation_failed")
+        .expect("detail expectation diagnostic");
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "profileKey": "example_jobs",
+            "accessPathKey": "json_feed",
+            "caseKey": "job_1_detail",
+            "expectation": { "descriptionContains": "responsibilities" },
+            "actual": {
+                "descriptionText": "We build reliable products every day for users."
+            }
+        }))
+    );
+}
+
+#[test]
+fn verify_source_profile_passes_multiple_detail_cases_using_posting_meta() {
+    let report = verify_profile_with_detail_cases(
+        "{{postingMeta:jobId}}",
+        json!([
+            {
+                "key": "job_1_detail",
+                "posting": {
+                    "title": "Software Engineer",
+                    "company": "Example GmbH",
+                    "url": "https://example.test/jobs/job-1",
+                    "postingMeta": { "jobId": "https://example.test/details/job-1.json" }
+                },
+                "expect": { "descriptionContains": ["first detail"] }
+            },
+            {
+                "key": "job_2_detail",
+                "posting": {
+                    "title": "Product Engineer",
+                    "company": "Example GmbH",
+                    "url": "https://example.test/jobs/job-2",
+                    "postingMeta": { "jobId": "https://example.test/details/job-2.json" }
+                },
+                "expect": { "minDescriptionLength": 30 }
+            }
+        ]),
+        &[
+            (
+                "https://example.test/details/job-1.json",
+                r#"{ "descriptionHtml": "This first detail contains first detail text for the fixture." }"#,
+            ),
+            (
+                "https://example.test/details/job-2.json",
+                r#"{ "descriptionHtml": "This second detail description is long enough for the fixture." }"#,
+            ),
+        ],
+    );
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDetailDescriptionText"],
+        json!(true)
     );
 }
 

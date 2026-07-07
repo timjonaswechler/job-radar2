@@ -373,7 +373,8 @@ fn execute_fixture_replay(
         }
 
         if let Some(posting_detail) = &manifest.checks.posting_detail {
-            for case in &posting_detail.cases {
+            let mut detail_expectations_passed = true;
+            for (case_index, case) in posting_detail.cases.iter().enumerate() {
                 let posting = crate::profile_dsl::runtime::PostingDetailPostingOccurrence {
                     url: case.posting.url.clone(),
                     title: Some(case.posting.title.clone()),
@@ -389,8 +390,25 @@ fn execute_fixture_replay(
                     replay,
                 )
                 .await;
+                let detail_execution_failed = has_error_diagnostics(&result.diagnostics);
                 diagnostics.extend(result.diagnostics);
+
+                if detail_execution_failed {
+                    detail_expectations_passed = false;
+                    continue;
+                }
+
+                let assertion_diagnostics = detail_expectation_diagnostics(
+                    profile_key,
+                    &manifest.access_path_key,
+                    case_index,
+                    case,
+                    result.description_text.as_deref(),
+                );
+                detail_expectations_passed &= assertion_diagnostics.is_empty();
+                diagnostics.extend(assertion_diagnostics);
             }
+            coverage.posting_detail_description_text = detail_expectations_passed;
         }
 
         FixtureReplayExecution {
@@ -398,6 +416,79 @@ fn execute_fixture_replay(
             coverage,
         }
     })
+}
+
+fn detail_expectation_diagnostics(
+    profile_key: &str,
+    access_path_key: &str,
+    case_index: usize,
+    case: &FixtureManifestPostingDetailCase,
+    description_text: Option<&str>,
+) -> Diagnostics {
+    let mut diagnostics = Vec::new();
+    let base_path = format!("/checks/postingDetail/cases/{case_index}/expect");
+
+    if let Some(min_description_length) = case.expect.min_description_length {
+        let description_length = description_text.map(|description| description.chars().count());
+        if description_length.unwrap_or_default() < min_description_length as usize {
+            diagnostics.push(detail_expectation_failed_diagnostic(
+                profile_key,
+                access_path_key,
+                &case.key,
+                &format!("{base_path}/minDescriptionLength"),
+                serde_json::json!({ "minDescriptionLength": min_description_length }),
+                serde_json::json!({
+                    "descriptionLength": description_length,
+                    "descriptionText": description_text,
+                }),
+            ));
+        }
+    }
+
+    if let Some(expected_fragments) = &case.expect.description_contains {
+        for expected_fragment in expected_fragments {
+            if !description_text.is_some_and(|description| description.contains(expected_fragment))
+            {
+                diagnostics.push(detail_expectation_failed_diagnostic(
+                    profile_key,
+                    access_path_key,
+                    &case.key,
+                    &format!("{base_path}/descriptionContains"),
+                    serde_json::json!({ "descriptionContains": expected_fragment }),
+                    serde_json::json!({ "descriptionText": description_text }),
+                ));
+            }
+        }
+    }
+
+    diagnostics
+}
+
+fn detail_expectation_failed_diagnostic(
+    profile_key: &str,
+    access_path_key: &str,
+    case_key: &str,
+    path: &str,
+    expectation: serde_json::Value,
+    actual: serde_json::Value,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.detail_expectation_failed".to_string(),
+        message: format!(
+            "Detail fixture expectation `{case_key}` failed for Source Profile `{profile_key}` Access Path `{access_path_key}`"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: path.to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "caseKey": case_key,
+            "expectation": expectation,
+            "actual": actual,
+        })),
+    }
 }
 
 fn discovery_expectation_diagnostics(
