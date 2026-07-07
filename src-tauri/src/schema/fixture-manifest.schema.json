@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/fixture-manifest.schema.json",
+  "title": "Job Radar Fixture Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profileKey",
+    "accessPathKey",
+    "sourceConfig",
+    "requests",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profileKey": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+    "accessPathKey": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+    "sourceConfig": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" },
+    "requests": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/requestMapping" }
+    },
+    "checks": { "$ref": "#/$defs/checks" }
+  },
+  "$defs": {
+    "requestMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "match", "response"],
+      "properties": {
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "match": { "$ref": "#/$defs/requestMatch" },
+        "response": { "$ref": "#/$defs/response" }
+      }
+    },
+    "requestMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "url"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "bodyFile"],
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "bodyFile": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "postingDiscovery": { "$ref": "#/$defs/postingDiscoveryCheck" },
+        "postingDetail": { "$ref": "#/$defs/postingDetailCheck" }
+      }
+    },
+    "postingDiscoveryCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expect"],
+      "properties": {
+        "expect": { "$ref": "#/$defs/postingDiscoveryExpect" }
+      }
+    },
+    "postingDiscoveryExpect": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "minCandidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requiredFields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/postingField" }
+        },
+        "containsCandidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expectedCandidate" }
+        }
+      }
+    },
+    "postingField": {
+      "type": "string",
+      "enum": ["title", "company", "url", "locations", "postingMeta", "descriptionText"]
+    },
+    "expectedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "title": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "company": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "locations": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+        },
+        "postingMeta": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" },
+        "descriptionText": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "postingDetailCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/postingDetailCase" }
+        }
+      }
+    },
+    "postingDetailCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "posting", "expect"],
+      "properties": {
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "posting": { "$ref": "#/$defs/postingInput" },
+        "expect": { "$ref": "#/$defs/postingDetailExpect" }
+      }
+    },
+    "postingInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "company", "url"],
+      "properties": {
+        "title": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "company": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "url": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "postingMeta": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" }
+      }
+    },
+    "postingDetailExpect": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "minDescriptionLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "descriptionContains": {
+          "type": "array",
+          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
+        }
+      }
+    }
+  }
+}

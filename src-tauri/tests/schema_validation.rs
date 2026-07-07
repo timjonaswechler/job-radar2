@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 
 const SCHEMA_FILES: &[&str] = &[
     "src/schema/check-report.schema.json",
+    "src/schema/fixture-manifest.schema.json",
     "src/schema/source-profile.schema.json",
     "src/schema/source.schema.json",
     "src/schema/profile-dsl/common.schema.json",
@@ -22,6 +23,7 @@ const SCHEMA_FILES: &[&str] = &[
 #[derive(Clone, Copy)]
 enum SchemaEntrypoint {
     CheckReport,
+    FixtureManifest,
     SourceProfile,
     Source,
 }
@@ -30,6 +32,7 @@ impl SchemaEntrypoint {
     fn path(self) -> &'static str {
         match self {
             Self::CheckReport => "src/schema/check-report.schema.json",
+            Self::FixtureManifest => "src/schema/fixture-manifest.schema.json",
             Self::SourceProfile => "src/schema/source-profile.schema.json",
             Self::Source => "src/schema/source.schema.json",
         }
@@ -269,6 +272,63 @@ fn check_report_schema_rejects_unsupported_result_and_mismatched_subject() {
 }
 
 #[test]
+fn fixture_manifest_schema_accepts_representative_manifest() {
+    let harness = SchemaHarness::new();
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::FixtureManifest,
+        representative_fixture_manifest(),
+        "representative Fixture Manifest",
+    );
+}
+
+#[test]
+fn fixture_manifest_schema_rejects_invalid_manifest_shapes() {
+    let harness = SchemaHarness::new();
+
+    let mut missing_profile_key = representative_fixture_manifest();
+    missing_profile_key
+        .as_object_mut()
+        .unwrap()
+        .remove("profileKey");
+    harness.assert_json_invalid(
+        SchemaEntrypoint::FixtureManifest,
+        missing_profile_key,
+        &["profileKey", "required"],
+    );
+
+    let mut missing_access_path_key = representative_fixture_manifest();
+    missing_access_path_key
+        .as_object_mut()
+        .unwrap()
+        .remove("accessPathKey");
+    harness.assert_json_invalid(
+        SchemaEntrypoint::FixtureManifest,
+        missing_access_path_key,
+        &["accessPathKey", "required"],
+    );
+
+    let mut invalid_schema_version = representative_fixture_manifest();
+    invalid_schema_version["schemaVersion"] = json!(2);
+    harness.assert_json_invalid(
+        SchemaEntrypoint::FixtureManifest,
+        invalid_schema_version,
+        &["schemaVersion", "1"],
+    );
+
+    let mut missing_body_file = representative_fixture_manifest();
+    missing_body_file["requests"][0]["response"]
+        .as_object_mut()
+        .unwrap()
+        .remove("bodyFile");
+    harness.assert_json_invalid(
+        SchemaEntrypoint::FixtureManifest,
+        missing_body_file,
+        &["bodyFile", "required"],
+    );
+}
+
+#[test]
 fn structured_diagnostics_schema_matches_shared_contract() {
     let harness = SchemaHarness::new();
 
@@ -457,6 +517,67 @@ impl SchemaHarness {
             })
             .collect()
     }
+}
+
+fn representative_fixture_manifest() -> Value {
+    json!({
+        "schemaVersion": 1,
+        "profileKey": "example_profile",
+        "accessPathKey": "api",
+        "sourceConfig": {
+            "apiBaseUrl": "https://jobs.example.com/api"
+        },
+        "requests": [
+            {
+                "key": "discovery_jobs",
+                "match": {
+                    "method": "GET",
+                    "url": "https://jobs.example.com/api/jobs"
+                },
+                "response": {
+                    "status": 200,
+                    "headers": {
+                        "content-type": "application/json"
+                    },
+                    "bodyFile": "responses/jobs.json"
+                }
+            }
+        ],
+        "checks": {
+            "postingDiscovery": {
+                "expect": {
+                    "minCandidates": 1,
+                    "requiredFields": ["title", "company", "url"],
+                    "containsCandidates": [
+                        {
+                            "title": "Software Engineer",
+                            "company": "Example",
+                            "url": "https://jobs.example.com/jobs/123"
+                        }
+                    ]
+                }
+            },
+            "postingDetail": {
+                "cases": [
+                    {
+                        "key": "job_123_detail",
+                        "posting": {
+                            "title": "Software Engineer",
+                            "company": "Example",
+                            "url": "https://jobs.example.com/jobs/123",
+                            "postingMeta": {
+                                "jobId": "123"
+                            }
+                        },
+                        "expect": {
+                            "minDescriptionLength": 40,
+                            "descriptionContains": ["responsibilities"]
+                        }
+                    }
+                ]
+            }
+        }
+    })
 }
 
 fn read_json(manifest_dir: &str, relative_path: &str) -> Value {

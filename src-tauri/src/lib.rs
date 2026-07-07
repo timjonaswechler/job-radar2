@@ -16,7 +16,12 @@ pub use checks::{
     source_profile_verification_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
     CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
     CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
-    CHECK_REPORT_SCHEMA_VERSION,
+    FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
+    FixtureManifestExpectedCandidate, FixtureManifestPostingDetailCase,
+    FixtureManifestPostingDetailCheck, FixtureManifestPostingDetailExpect,
+    FixtureManifestPostingDiscoveryCheck, FixtureManifestPostingField, FixtureManifestPostingInput,
+    FixtureManifestRequestMapping, FixtureManifestRequestMatch, FixtureManifestRequestMethod,
+    FixtureManifestResponse, CHECK_REPORT_SCHEMA_VERSION, FIXTURE_MANIFEST_SCHEMA_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
