@@ -15,12 +15,14 @@ pub use persistence::{
     CheckReportPersistenceError,
 };
 pub use profile_verification::{
+    fixture_pack_root, resolve_fixture_file_reference, resolve_fixture_manifest_reference,
     FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
     FixtureManifestExpectedCandidate, FixtureManifestPostingDetailCase,
     FixtureManifestPostingDetailCheck, FixtureManifestPostingDetailExpect,
     FixtureManifestPostingDiscoveryCheck, FixtureManifestPostingField, FixtureManifestPostingInput,
     FixtureManifestRequestMapping, FixtureManifestRequestMatch, FixtureManifestRequestMethod,
-    FixtureManifestResponse, FIXTURE_MANIFEST_SCHEMA_VERSION,
+    FixtureManifestResponse, FixturePathResolution, DEFAULT_FIXTURE_MANIFEST_REFERENCE,
+    FIXTURE_MANIFEST_SCHEMA_VERSION, SOURCE_PROFILE_FIXTURES_DIR,
 };
 pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,

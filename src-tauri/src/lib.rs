@@ -11,8 +11,9 @@ mod source;
 mod source_profile;
 
 pub use checks::{
-    evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
-    read_latest_check_report, source_live_check_report_path,
+    evaluate_check_report_freshness, fixture_pack_root, latest_check_report_path,
+    persist_latest_check_report, read_latest_check_report, resolve_fixture_file_reference,
+    resolve_fixture_manifest_reference, source_live_check_report_path,
     source_profile_verification_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
     CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
     CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
@@ -21,7 +22,9 @@ pub use checks::{
     FixtureManifestPostingDetailCheck, FixtureManifestPostingDetailExpect,
     FixtureManifestPostingDiscoveryCheck, FixtureManifestPostingField, FixtureManifestPostingInput,
     FixtureManifestRequestMapping, FixtureManifestRequestMatch, FixtureManifestRequestMethod,
-    FixtureManifestResponse, CHECK_REPORT_SCHEMA_VERSION, FIXTURE_MANIFEST_SCHEMA_VERSION,
+    FixtureManifestResponse, FixturePathResolution, CHECK_REPORT_SCHEMA_VERSION,
+    DEFAULT_FIXTURE_MANIFEST_REFERENCE, FIXTURE_MANIFEST_SCHEMA_VERSION,
+    SOURCE_PROFILE_FIXTURES_DIR,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
