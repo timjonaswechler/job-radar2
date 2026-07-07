@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   activeSchemaVariant,
   isJsonObject,
+  resolveSchema,
   schemaConstraints,
   schemaDefaultValue,
   schemaFieldTypeFromSchema,
@@ -56,6 +57,8 @@ export type SchemaGuidedValueEditorModel = {
   rows: SchemaValueTreeRowModel[];
   editableObjectRows: SchemaGuidedEditableObjectRow[];
   availableObjectKeys: SchemaGuidedObjectKeyOption[];
+  variantOptions: SchemaGuidedVariantOption[];
+  activeVariantIndex: number | null;
 };
 
 export type SchemaGuidedUnknownKeyWarning = {
@@ -80,10 +83,17 @@ export type SchemaGuidedObjectKeyOption = {
   required: boolean;
 };
 
+export type SchemaGuidedVariantOption = {
+  index: number;
+  label: string;
+  active: boolean;
+};
+
 export type SchemaGuidedObjectEdit =
   | { type: "add-property"; key: string }
   | { type: "remove-property"; key: string }
-  | { type: "set-property-value"; key: string; rawValue: string };
+  | { type: "set-property-value"; key: string; rawValue: string }
+  | { type: "select-variant"; variantIndex: number };
 
 export type SchemaGuidedObjectEditResult =
   | { ok: true; rawText: string }
@@ -185,11 +195,18 @@ export function createSchemaGuidedValueEditorModel({
       rows: [],
       editableObjectRows: [],
       availableObjectKeys: [],
+      variantOptions: [],
+      activeVariantIndex: null,
     };
   }
 
   const valueSchema = schemaForValue(schema, parseState.value, options);
   const activeVariant = activeSchemaVariant(schema, parseState.value, options);
+  const variantOptions = schemaGuidedVariantOptions({
+    schema,
+    value: parseState.value,
+    schemaOptions: options,
+  });
   const rows = createSchemaValueRows({
     value: parseState.value,
     schema: valueSchema,
@@ -217,6 +234,8 @@ export function createSchemaGuidedValueEditorModel({
       schema: valueSchema,
       schemaOptions: options,
     }),
+    variantOptions,
+    activeVariantIndex: activeVariant?.index ?? null,
   };
 }
 
@@ -241,6 +260,17 @@ export function applySchemaGuidedObjectEdit({
   const valueSchema = schemaForValue(schema, parseState.value, options);
   const metadata = schemaMetadataForObject(valueSchema, options);
   const nextValue: JsonObject = { ...parseState.value };
+
+  if (edit.type === "select-variant") {
+    const selectedVariant = schemaGuidedVariants(schema, options).find(
+      (variant) => variant.index === edit.variantIndex,
+    );
+    if (!selectedVariant) {
+      return { ok: false, rawText, error: "Schema variant not found." };
+    }
+    seedObjectForVariant(nextValue, selectedVariant.schema, options);
+    return { ok: true, rawText: stringifyJson(nextValue) };
+  }
 
   if (edit.type === "remove-property") {
     if (metadata.requiredKeys.has(edit.key)) {
@@ -317,6 +347,46 @@ function SchemaGuidedObjectRowsEditor({
 
   return (
     <div className="flex flex-col gap-2">
+      {model.variantOptions.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium">Variante</span>
+          <Select
+            items={model.variantOptions.map((option) => ({
+              value: String(option.index),
+              label: option.label,
+            }))}
+            modal={false}
+            value={
+              model.activeVariantIndex === null
+                ? null
+                : String(model.activeVariantIndex)
+            }
+            onValueChange={(value) => {
+              if (value !== null) {
+                applyEdit({ type: "select-variant", variantIndex: Number(value) });
+              }
+            }}
+          >
+            <SelectTrigger
+              className="h-8 min-w-44 text-xs"
+              aria-label="Schema-Variante auswählen"
+              disabled={disabled}
+            >
+              <SelectValue placeholder="Variante wählen" />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                {model.variantOptions.map((option) => (
+                  <SelectItem key={option.index} value={String(option.index)}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
       {model.editableObjectRows.length ? (
         <Table className={compactTableClassName()}>
           <TableHeader>
@@ -646,6 +716,98 @@ function availableObjectKeysForValue({
       label: schemaLabel(key, propertySchema),
       required: metadata.requiredKeys.has(key),
     }));
+}
+
+function schemaGuidedVariantOptions({
+  schema,
+  value,
+  schemaOptions,
+}: {
+  schema: JsonObject | undefined;
+  value: JsonValue;
+  schemaOptions: SchemaResolutionOptions;
+}): SchemaGuidedVariantOption[] {
+  const activeVariant = activeSchemaVariant(schema, value, schemaOptions);
+  return schemaGuidedVariants(schema, schemaOptions).map((variant) => ({
+    index: variant.index,
+    label: variant.label,
+    active: variant.index === activeVariant?.index,
+  }));
+}
+
+function schemaGuidedVariants(
+  schema: JsonObject | undefined,
+  schemaOptions: SchemaResolutionOptions,
+): Array<{ index: number; schema: JsonObject; label: string }> {
+  const resolvedSchema = resolveSchema(schema, schemaOptions);
+  const rawVariants = Array.isArray(resolvedSchema?.oneOf)
+    ? resolvedSchema.oneOf
+    : Array.isArray(resolvedSchema?.anyOf)
+      ? resolvedSchema.anyOf
+      : [];
+
+  return rawVariants.flatMap((variant, index) => {
+    const resolvedVariant = resolveSchema(variant, schemaOptions);
+    return resolvedVariant
+      ? [{ index, schema: resolvedVariant, label: schemaVariantLabel(resolvedVariant, index) }]
+      : [];
+  });
+}
+
+function seedObjectForVariant(
+  value: JsonObject,
+  variantSchema: JsonObject,
+  schemaOptions: SchemaResolutionOptions,
+) {
+  const metadata = schemaMetadataForObject(variantSchema, schemaOptions);
+  for (const [key, propertySchema] of metadata.properties) {
+    const constValue = schemaConstValue(propertySchema);
+    if (constValue !== undefined) {
+      value[key] = constValue;
+      continue;
+    }
+
+    if (
+      !Object.prototype.hasOwnProperty.call(value, key) &&
+      (metadata.requiredKeys.has(key) || schemaDefaultValue(propertySchema, schemaOptions) !== undefined)
+    ) {
+      value[key] = defaultValueForSchema(propertySchema, schemaOptions);
+    }
+  }
+}
+
+function schemaVariantLabel(schema: JsonObject, index: number) {
+  if (typeof schema.title === "string") return schema.title;
+
+  const properties = schema.properties;
+  if (isJsonObject(properties)) {
+    for (const [key, propertySchema] of Object.entries(properties)) {
+      const constValue = schemaConstValue(
+        isJsonObject(propertySchema) ? propertySchema : undefined,
+      );
+      if (constValue === undefined) continue;
+      if (key === "mode" && constValue === "http") return "HTTP fetch";
+      if (key === "mode" && constValue === "browser") return "Browser fetch";
+      return String(constValue);
+    }
+  }
+
+  return `Variante ${index + 1}`;
+}
+
+function schemaConstValue(
+  schema: JsonObject | undefined,
+): string | number | boolean | undefined {
+  if (!schema || !("const" in schema)) return undefined;
+  const value = schema.const;
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 function valueFromRawInput({

@@ -624,6 +624,59 @@ assert.deepEqual(
   { ok: false, rawText: JSON.stringify({ mode: "http" }), error: "Required key cannot be removed." },
 );
 
+const schemaGuidedVariantSchema: JsonValue = {
+  oneOf: [
+    {
+      title: "HTTP fetch",
+      type: "object",
+      required: ["mode", "url", "timeoutMs"],
+      additionalProperties: false,
+      properties: {
+        mode: { const: "http" },
+        method: { type: "string", enum: ["GET", "POST"], default: "GET" },
+        url: { type: "string" },
+        timeoutMs: { type: "integer", default: 10 },
+      },
+    },
+    {
+      title: "Browser fetch",
+      type: "object",
+      required: ["mode", "url", "timeoutMs"],
+      additionalProperties: false,
+      properties: {
+        mode: { const: "browser" },
+        url: { type: "string" },
+        timeoutMs: { type: "integer", default: 30 },
+        waitUntil: { type: "string", enum: ["networkidle", "domcontentloaded"], default: "networkidle" },
+      },
+    },
+  ],
+};
+const schemaGuidedVariants = createSchemaGuidedValueEditorModel({
+  rawText: JSON.stringify({ mode: "http", method: "POST" }),
+  schema: schemaGuidedVariantSchema,
+});
+assert.deepEqual(schemaGuidedVariants.variantOptions, [
+  { index: 0, label: "HTTP fetch", active: true },
+  { index: 1, label: "Browser fetch", active: false },
+]);
+assert.equal(schemaGuidedVariants.activeVariantIndex, 0);
+const selectedSchemaGuidedVariant = applySchemaGuidedObjectEdit({
+  rawText: JSON.stringify({ mode: "http", method: "POST" }),
+  schema: schemaGuidedVariantSchema,
+  edit: { type: "select-variant", variantIndex: 1 },
+});
+assert.equal(selectedSchemaGuidedVariant.ok, true);
+if (selectedSchemaGuidedVariant.ok) {
+  assert.deepEqual(JSON.parse(selectedSchemaGuidedVariant.rawText), {
+    mode: "browser",
+    method: "POST",
+    url: "",
+    timeoutMs: 30,
+    waitUntil: "networkidle",
+  });
+}
+
 const sourceAddTransitionProfile: RegistrySourceProfile = {
   origin: "built_in",
   path: "resources/profiles/lever.json",
