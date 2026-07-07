@@ -3,6 +3,7 @@ pub(crate) mod freshness;
 pub(crate) mod persistence;
 pub(crate) mod profile_verification;
 pub(crate) mod report;
+pub(crate) mod source_live;
 
 pub use fingerprints::CheckFingerprint;
 pub use freshness::{
@@ -32,3 +33,4 @@ pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
     CHECK_REPORT_SCHEMA_VERSION,
 };
+pub use source_live::{check_source, SOURCE_LIVE_CHECK_LOGIC_VERSION};

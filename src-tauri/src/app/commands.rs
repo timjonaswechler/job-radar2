@@ -295,6 +295,14 @@ pub fn verify_source_profile(
 }
 
 #[tauri::command]
+pub fn check_source(
+    state: State<'_, AppState>,
+    source_key: String,
+) -> Result<crate::checks::CheckReport, String> {
+    crate::checks::check_source(&state.paths.app_data_dir, source_key)
+}
+
+#[tauri::command]
 pub fn get_source_profile_verification_report_status(
     state: State<'_, AppState>,
     profile_key: String,
