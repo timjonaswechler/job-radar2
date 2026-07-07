@@ -56,6 +56,23 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
+fn production_agent_document_schema_examples_match_schema_entrypoints() {
+    let harness = SchemaHarness::new();
+    let document = read_repo_file("docs/source-profile-production-agent.md");
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        extract_marked_json_block(&document, "source-profile"),
+        "docs/source-profile-production-agent.md schema-test:source-profile",
+    );
+    harness.assert_json_valid(
+        SchemaEntrypoint::Source,
+        extract_marked_json_block(&document, "source"),
+        "docs/source-profile-production-agent.md schema-test:source",
+    );
+}
+
+#[test]
 fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
     let harness = SchemaHarness::new();
 
@@ -216,6 +233,18 @@ impl SchemaHarness {
         );
     }
 
+    fn assert_json_valid(&self, entrypoint: SchemaEntrypoint, instance: Value, label: &str) {
+        let schema_path = entrypoint.path();
+        let schema = read_json(self.manifest_dir, schema_path);
+        let errors = self.validate_instance(schema_path, schema, instance);
+        assert!(
+            errors.is_empty(),
+            "expected {label} to validate against {}, but got:\n{}",
+            entrypoint.path(),
+            errors.join("\n")
+        );
+    }
+
     fn assert_invalid(
         &self,
         entrypoint: SchemaEntrypoint,
@@ -329,4 +358,34 @@ fn read_json(manifest_dir: &str, relative_path: &str) -> Value {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
     serde_json::from_str(&contents)
         .unwrap_or_else(|error| panic!("failed to parse {} as JSON: {error}", path.display()))
+}
+
+fn read_repo_file(relative_path: &str) -> String {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = manifest_dir
+        .parent()
+        .expect("src-tauri manifest directory should have a repository parent");
+    let path = repo_root.join(relative_path);
+    fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+fn extract_marked_json_block(document: &str, marker: &str) -> Value {
+    let marker = format!("<!-- schema-test:{marker} -->");
+    let after_marker = document
+        .split_once(&marker)
+        .unwrap_or_else(|| panic!("missing marked JSON example {marker}"))
+        .1;
+    let after_fence = after_marker
+        .split_once("```json")
+        .unwrap_or_else(|| panic!("missing json fence after {marker}"))
+        .1;
+    let after_fence = after_fence.strip_prefix('\n').unwrap_or(after_fence);
+    let block = after_fence
+        .split_once("\n```")
+        .unwrap_or_else(|| panic!("missing closing json fence after {marker}"))
+        .0;
+
+    serde_json::from_str(block)
+        .unwrap_or_else(|error| panic!("failed to parse marked JSON example {marker}: {error}"))
 }
