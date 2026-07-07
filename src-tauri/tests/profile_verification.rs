@@ -1,9 +1,11 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
+    derive_effective_verification_state_for_source_profile, evaluate_check_report_freshness,
     read_latest_check_report, source_profile_verification_report_path, verify_source_profile,
-    CheckReport, CheckReportKind, CheckReportResult, CheckReportSubjectType, DiagnosticCategory,
-    DiagnosticSeverity, PROFILE_VERIFICATION_LOGIC_VERSION,
+    CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
+    DiagnosticCategory, DiagnosticSeverity, EffectiveVerificationState, SupportLevel,
+    PROFILE_VERIFICATION_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -96,6 +98,111 @@ fn discovery_body_without_locations() -> &'static str {
             }
         ]
     }"#
+}
+
+fn full_coverage_discovery_body() -> &'static str {
+    r#"{
+        "jobs": [
+            {
+                "id": "https://example.test/details/job-1.json",
+                "title": " Software Engineer ",
+                "url": "https://example.test/jobs/job-1",
+                "locations": ["Berlin"]
+            }
+        ]
+    }"#
+}
+
+fn full_coverage_detail_body() -> &'static str {
+    r#"{ "descriptionHtml": "The responsibilities include building reliable systems for users." }"#
+}
+
+fn verify_profile_with_full_fixture_coverage(support_level: &str) -> CheckReport {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mut profile = profile_with_fixture_discovery_url("{{sourceConfig:feedUrl}}");
+    profile["support"]["level"] = json!(support_level);
+    write_profile(temp_dir.path(), &profile);
+
+    let manifest = json!({
+        "schemaVersion": 1,
+        "profileKey": "example_jobs",
+        "accessPathKey": "json_feed",
+        "sourceConfig": {
+            "feedUrl": "https://example.test/jobs.json",
+            "language": "de"
+        },
+        "requests": [
+            {
+                "key": "discovery_jobs",
+                "match": {
+                    "method": "GET",
+                    "url": "https://example.test/jobs.json"
+                },
+                "response": {
+                    "status": 200,
+                    "headers": { "content-type": "application/json" },
+                    "bodyFile": "responses/jobs.json"
+                }
+            },
+            {
+                "key": "detail_job_1",
+                "match": {
+                    "method": "GET",
+                    "url": "https://example.test/details/job-1.json"
+                },
+                "response": {
+                    "status": 200,
+                    "headers": { "content-type": "application/json" },
+                    "bodyFile": "responses/detail-job-1.json"
+                }
+            }
+        ],
+        "checks": {
+            "postingDiscovery": {
+                "expect": {
+                    "minCandidates": 1,
+                    "requiredFields": ["title", "company", "url"],
+                    "containsCandidates": [{
+                        "title": "Software Engineer",
+                        "company": "Example GmbH",
+                        "url": "https://example.test/jobs/job-1"
+                    }]
+                }
+            },
+            "postingDetail": {
+                "cases": [{
+                    "key": "job_1_detail",
+                    "posting": {
+                        "title": "Software Engineer",
+                        "company": "Example GmbH",
+                        "url": "https://example.test/jobs/job-1",
+                        "postingMeta": {
+                            "jobId": "https://example.test/details/job-1.json"
+                        }
+                    },
+                    "expect": {
+                        "minDescriptionLength": 40,
+                        "descriptionContains": ["responsibilities", "systems"]
+                    }
+                }]
+            }
+        }
+    });
+    write_fixture_manifest(temp_dir.path(), "example_jobs", manifest);
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        full_coverage_discovery_body(),
+    );
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/detail-job-1.json",
+        full_coverage_detail_body(),
+    );
+
+    verify_source_profile(temp_dir.path(), "example_jobs").unwrap()
 }
 
 fn verify_profile_with_discovery_expect(
@@ -262,7 +369,7 @@ fn verify_source_profile_creates_and_persists_passed_report_for_valid_profile() 
     );
     assert_eq!(
         report.details.get("effectiveVerificationState"),
-        Some(&json!("unknown"))
+        Some(&json!("not_applicable"))
     );
     assert_eq!(report.details.get("fixtureChecks"), Some(&json!([])));
 
@@ -331,6 +438,97 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
             }
         }]))
     );
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("failed"))
+    );
+}
+
+#[test]
+fn verify_source_profile_derives_verified_state_for_declared_verified_with_full_fixture_coverage() {
+    let report = verify_profile_with_full_fixture_coverage("verified");
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details.get("declaredSupportLevel"),
+        Some(&json!("verified"))
+    );
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("verified"))
+    );
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"],
+        json!({
+            "postingDiscovery": true,
+            "postingDetailDescriptionText": true
+        })
+    );
+}
+
+#[test]
+fn verify_source_profile_keeps_best_effort_not_applicable_even_with_passing_fixture_checks() {
+    let report = verify_profile_with_full_fixture_coverage("best_effort");
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details.get("declaredSupportLevel"),
+        Some(&json!("best_effort"))
+    );
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("not_applicable"))
+    );
+    assert_eq!(
+        report.details["fixtureChecks"][0]["result"],
+        json!("passed")
+    );
+}
+
+#[test]
+fn derive_effective_verification_state_returns_unknown_for_missing_report() {
+    let state = derive_effective_verification_state_for_source_profile(
+        SupportLevel::Verified,
+        true,
+        None,
+        None,
+    );
+
+    assert_eq!(state, EffectiveVerificationState::Unknown);
+}
+
+#[test]
+fn derive_effective_verification_state_returns_unknown_for_stale_report() {
+    let mut report = CheckReport::new(
+        CheckReportKind::SourceProfileVerification,
+        CheckReportSubject::source_profile("example_jobs"),
+        "2026-07-07T12:00:00Z",
+        PROFILE_VERIFICATION_LOGIC_VERSION,
+        CheckReportResult::Passed,
+    );
+    report.details.insert(
+        "fixtureChecks".to_string(),
+        json!([{
+            "reference": "fixture.json",
+            "result": "passed",
+            "coverage": {
+                "postingDiscovery": true,
+                "postingDetailDescriptionText": true
+            }
+        }]),
+    );
+    let stale = evaluate_check_report_freshness(&report, "profile-verification/v2", &[]);
+
+    let state = derive_effective_verification_state_for_source_profile(
+        SupportLevel::Verified,
+        true,
+        Some(&report),
+        Some(&stale),
+    );
+
+    assert_eq!(state, EffectiveVerificationState::Unknown);
 }
 
 #[test]
@@ -627,6 +825,10 @@ fn verify_source_profile_reports_failing_detail_min_description_length_expectati
     );
 
     assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("failed"))
+    );
     assert_eq!(
         report.details["fixtureChecks"][0]["coverage"]["postingDetailDescriptionText"],
         json!(false)
@@ -973,6 +1175,31 @@ fn verify_source_profile_reports_verified_support_without_fixture_evidence() {
             "supportLevel": "verified"
         }))
     );
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("failed"))
+    );
+}
+
+#[test]
+fn verify_source_profile_does_not_mutate_authored_support_level() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_evidence();
+    write_profile(temp_dir.path(), &profile);
+
+    let report = verify_source_profile(temp_dir.path(), "example_jobs").unwrap();
+
+    assert_eq!(
+        report.details.get("effectiveVerificationState"),
+        Some(&json!("failed"))
+    );
+    let profile_path = temp_dir
+        .path()
+        .join("source-profiles")
+        .join("example_jobs.json");
+    let persisted_profile: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(profile_path).unwrap()).unwrap();
+    assert_eq!(persisted_profile["support"]["level"], json!("verified"));
 }
 
 #[test]

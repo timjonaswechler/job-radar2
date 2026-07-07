@@ -18,6 +18,7 @@ use super::{
     CheckReportSubject,
 };
 
+pub(crate) mod effective_state;
 pub(crate) mod fixture_manifest;
 pub(crate) mod fixture_pack;
 pub(crate) mod fixture_replay;
@@ -55,10 +56,7 @@ pub(crate) fn build_source_profile_verification_report(
     let mut fingerprints = vec![verification_logic_fingerprint()];
     let mut details = JsonObject::new();
     let mut fixture_checks = Vec::new();
-    details.insert(
-        "effectiveVerificationState".to_string(),
-        serde_json::json!("unknown"),
-    );
+    let mut effective_verification_state = effective_state::EffectiveVerificationState::Unknown;
 
     if let Some(profile) = snapshot.profile(profile_key) {
         details.insert(
@@ -72,7 +70,8 @@ pub(crate) fn build_source_profile_verification_report(
         );
 
         let fixture_evidence = fixture_support_evidence(&profile.document.support.evidence);
-        if profile.document.support.level == SupportLevel::Verified && fixture_evidence.is_empty() {
+        let has_fixture_evidence = !fixture_evidence.is_empty();
+        if profile.document.support.level == SupportLevel::Verified && !has_fixture_evidence {
             diagnostics.push(verified_support_missing_fixture_evidence_diagnostic(
                 profile_key,
             ));
@@ -110,6 +109,26 @@ pub(crate) fn build_source_profile_verification_report(
         PROFILE_VERIFICATION_LOGIC_VERSION,
         result,
     );
+    if let Some(profile) = snapshot.profile(profile_key) {
+        effective_verification_state =
+            effective_state::derive_effective_verification_state_from_fresh_report(
+                profile.document.support.level,
+                !fixture_support_evidence(&profile.document.support.evidence).is_empty(),
+                result,
+                details
+                    .get("fixtureChecks")
+                    .and_then(|fixture_checks| fixture_checks.as_array())
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+            );
+    }
+    details.insert(
+        "effectiveVerificationState".to_string(),
+        serde_json::to_value(effective_verification_state).map_err(|error| {
+            format!("Effective Verification State could not be serialized: {error}")
+        })?,
+    );
+
     report.fingerprints = fingerprints;
     report.diagnostics = diagnostics;
     report.details = details;
@@ -948,6 +967,9 @@ fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
     (year, month, day)
 }
 
+pub use effective_state::{
+    derive_effective_verification_state_for_source_profile, EffectiveVerificationState,
+};
 pub use fixture_manifest::{
     FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
     FixtureManifestExpectedCandidate, FixtureManifestPostingDetailCase,

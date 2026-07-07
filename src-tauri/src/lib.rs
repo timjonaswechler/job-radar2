@@ -11,13 +11,14 @@ mod source;
 mod source_profile;
 
 pub use checks::{
-    evaluate_check_report_freshness, fixture_pack_root, latest_check_report_path,
-    persist_latest_check_report, read_latest_check_report, resolve_fixture_file_reference,
-    resolve_fixture_manifest_reference, source_live_check_report_path,
-    source_profile_verification_report_path, verify_source_profile, CheckFingerprint, CheckReport,
-    CheckReportFreshness, CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError,
-    CheckReportResult, CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject,
-    CheckReportSubjectType, FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
+    derive_effective_verification_state_for_source_profile, evaluate_check_report_freshness,
+    fixture_pack_root, latest_check_report_path, persist_latest_check_report,
+    read_latest_check_report, resolve_fixture_file_reference, resolve_fixture_manifest_reference,
+    source_live_check_report_path, source_profile_verification_report_path, verify_source_profile,
+    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
+    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportStaleDetail,
+    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType, EffectiveVerificationState,
+    FixtureManifest, FixtureManifestChecks, FixtureManifestDiscoveryExpect,
     FixtureManifestExpectedCandidate, FixtureManifestPostingDetailCase,
     FixtureManifestPostingDetailCheck, FixtureManifestPostingDetailExpect,
     FixtureManifestPostingDiscoveryCheck, FixtureManifestPostingField, FixtureManifestPostingInput,
