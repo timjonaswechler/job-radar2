@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     read_latest_check_report, source_profile_verification_report_path, verify_source_profile,
-    CheckReportKind, CheckReportResult, CheckReportSubjectType, DiagnosticCategory,
+    CheckReport, CheckReportKind, CheckReportResult, CheckReportSubjectType, DiagnosticCategory,
     DiagnosticSeverity, PROFILE_VERIFICATION_LOGIC_VERSION,
 };
 use serde_json::json;
@@ -78,6 +78,46 @@ fn discovery_body() -> &'static str {
             }
         ]
     }"#
+}
+
+fn discovery_body_without_locations() -> &'static str {
+    r#"{
+        "jobs": [
+            {
+                "id": "job-1",
+                "title": " Software Engineer ",
+                "url": "https://example.test/jobs/job-1"
+            }
+        ]
+    }"#
+}
+
+fn verify_profile_with_discovery_expect(
+    expect: serde_json::Value,
+    response_body: &str,
+) -> CheckReport {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let profile = profile_with_fixture_discovery_url("https://example.test/jobs.json");
+    write_profile(temp_dir.path(), &profile);
+
+    let mut manifest = representative_manifest(
+        "example_jobs",
+        "json_feed",
+        json!({
+            "feedUrl": "https://example.test/jobs.json",
+            "language": "de"
+        }),
+    );
+    manifest["checks"]["postingDiscovery"]["expect"] = expect;
+    write_fixture_manifest(temp_dir.path(), "example_jobs", manifest);
+    write_fixture_file(
+        temp_dir.path(),
+        "example_jobs",
+        "responses/jobs.json",
+        response_body,
+    );
+
+    verify_source_profile(temp_dir.path(), "example_jobs").unwrap()
 }
 
 fn representative_manifest(
@@ -223,7 +263,7 @@ fn verify_source_profile_wires_valid_fixture_manifest_evidence_into_report_detai
             "result": "passed",
             "accessPathKey": "json_feed",
             "coverage": {
-                "postingDiscovery": false,
+                "postingDiscovery": true,
                 "postingDetailDescriptionText": false
             }
         }]))
@@ -331,6 +371,147 @@ fn verify_source_profile_matches_fixture_requests_independent_of_query_parameter
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert!(report.diagnostics.is_empty());
+}
+
+#[test]
+fn verify_source_profile_passes_discovery_min_candidates_expectation_and_marks_coverage() {
+    let report =
+        verify_profile_with_discovery_expect(json!({ "minCandidates": 1 }), discovery_body());
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
+        json!(true)
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_failing_discovery_min_candidates_expectation() {
+    let report =
+        verify_profile_with_discovery_expect(json!({ "minCandidates": 2 }), discovery_body());
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
+        json!(false)
+    );
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.discovery_expectation_failed")
+        .expect("discovery expectation diagnostic");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Fixture);
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "profileKey": "example_jobs",
+            "accessPathKey": "json_feed",
+            "expectation": { "minCandidates": 2 },
+            "actual": { "candidateCount": 1 }
+        }))
+    );
+}
+
+#[test]
+fn verify_source_profile_passes_discovery_required_fields_expectation() {
+    let report = verify_profile_with_discovery_expect(
+        json!({ "requiredFields": ["title", "company", "url", "locations", "postingMeta"] }),
+        discovery_body(),
+    );
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
+        json!(true)
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_failing_discovery_required_fields_expectation() {
+    let report = verify_profile_with_discovery_expect(
+        json!({ "requiredFields": ["locations"] }),
+        discovery_body_without_locations(),
+    );
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.discovery_expectation_failed")
+        .expect("discovery expectation diagnostic");
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "profileKey": "example_jobs",
+            "accessPathKey": "json_feed",
+            "expectation": { "requiredField": "locations" },
+            "actual": { "missingCandidateIndexes": [0] }
+        }))
+    );
+}
+
+#[test]
+fn verify_source_profile_passes_discovery_contains_candidates_expectation() {
+    let report = verify_profile_with_discovery_expect(
+        json!({
+            "containsCandidates": [{
+                "title": "Software Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/job-1"
+            }]
+        }),
+        discovery_body(),
+    );
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
+        json!(true)
+    );
+}
+
+#[test]
+fn verify_source_profile_reports_failing_discovery_contains_candidates_expectation() {
+    let report = verify_profile_with_discovery_expect(
+        json!({
+            "containsCandidates": [{
+                "title": "Software Engineer",
+                "company": "Other Company",
+                "url": "https://example.test/jobs/job-1"
+            }]
+        }),
+        discovery_body(),
+    );
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "fixture.discovery_expectation_failed")
+        .expect("discovery expectation diagnostic");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Fixture);
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+    let details = diagnostic.details.as_ref().expect("diagnostic details");
+    assert_eq!(details.get("profileKey"), Some(&json!("example_jobs")));
+    assert_eq!(details.get("accessPathKey"), Some(&json!("json_feed")));
+    assert_eq!(
+        details.get("expectation"),
+        Some(&json!({
+            "containsCandidate": {
+                "title": "Software Engineer",
+                "company": "Other Company",
+                "url": "https://example.test/jobs/job-1"
+            }
+        }))
+    );
+    assert_eq!(
+        report.details["fixtureChecks"][0]["coverage"]["postingDiscovery"],
+        json!(false)
+    );
 }
 
 #[test]

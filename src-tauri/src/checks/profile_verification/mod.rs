@@ -24,6 +24,12 @@ pub(crate) mod fixture_replay;
 
 pub const PROFILE_VERIFICATION_LOGIC_VERSION: &str = "profile-verification/v1";
 
+#[derive(Clone, Copy, Debug, Default)]
+struct FixtureCheckCoverage {
+    posting_discovery: bool,
+    posting_detail_description_text: bool,
+}
+
 pub fn verify_source_profile(
     app_data_dir: impl AsRef<Path>,
     profile_key: impl AsRef<str>,
@@ -136,10 +142,20 @@ fn verify_fixture_manifest_evidence(
     let resolution = resolve_fixture_manifest_reference(app_data_dir, &profile.key, reference);
     diagnostics.extend(resolution.diagnostics);
     let Some(manifest_path) = resolution.resolved_path else {
-        return Ok(fixture_evidence_verification(reference, None, diagnostics));
+        return Ok(fixture_evidence_verification(
+            reference,
+            None,
+            diagnostics,
+            FixtureCheckCoverage::default(),
+        ));
     };
     if has_error_diagnostics(&diagnostics) {
-        return Ok(fixture_evidence_verification(reference, None, diagnostics));
+        return Ok(fixture_evidence_verification(
+            reference,
+            None,
+            diagnostics,
+            FixtureCheckCoverage::default(),
+        ));
     }
 
     let manifest_bytes = match fs::read(&manifest_path) {
@@ -150,7 +166,12 @@ fn verify_fixture_manifest_evidence(
                 reference,
                 error.to_string(),
             ));
-            return Ok(fixture_evidence_verification(reference, None, diagnostics));
+            return Ok(fixture_evidence_verification(
+                reference,
+                None,
+                diagnostics,
+                FixtureCheckCoverage::default(),
+            ));
         }
     };
     fingerprints.push(CheckFingerprint::with_reference(
@@ -167,10 +188,16 @@ fn verify_fixture_manifest_evidence(
                 reference,
                 error.to_string(),
             ));
-            return Ok(fixture_evidence_verification(reference, None, diagnostics));
+            return Ok(fixture_evidence_verification(
+                reference,
+                None,
+                diagnostics,
+                FixtureCheckCoverage::default(),
+            ));
         }
     };
     let access_path_key = manifest.access_path_key.as_str();
+    let mut coverage = FixtureCheckCoverage::default();
 
     if manifest.profile_key != profile.key {
         diagnostics.push(profile_key_mismatch_diagnostic(
@@ -213,11 +240,14 @@ fn verify_fixture_manifest_evidence(
 
             if !has_error_diagnostics(&diagnostics) {
                 if let Some(execution_plan) = compile_result.execution_plan.as_ref() {
-                    diagnostics.extend(execute_fixture_replay(
+                    let execution = execute_fixture_replay(
+                        &profile.key,
                         execution_plan,
                         &manifest,
                         &replay_setup.replay,
-                    ));
+                    );
+                    coverage = execution.coverage;
+                    diagnostics.extend(execution.diagnostics);
                     diagnostics.extend(replay_setup.replay.take_unmapped_request_diagnostics(
                         &profile.key,
                         &manifest.access_path_key,
@@ -240,6 +270,7 @@ fn verify_fixture_manifest_evidence(
         reference,
         Some(access_path_key),
         diagnostics,
+        coverage,
     ))
 }
 
@@ -304,22 +335,41 @@ fn compile_fixture_source_execution_plan(
     crate::profile_dsl::compiler::compile_source_execution_plan(&snapshot, &source_key)
 }
 
+struct FixtureReplayExecution {
+    diagnostics: Diagnostics,
+    coverage: FixtureCheckCoverage,
+}
+
 fn execute_fixture_replay(
+    profile_key: &str,
     execution_plan: &crate::profile_dsl::execution_plan::SourceExecutionPlan,
     manifest: &FixtureManifest,
     replay: &fixture_replay::FixtureReplay,
-) -> Diagnostics {
+) -> FixtureReplayExecution {
     tauri::async_runtime::block_on(async {
         let mut diagnostics = Vec::new();
+        let mut coverage = FixtureCheckCoverage::default();
 
-        if manifest.checks.posting_discovery.is_some() {
+        if let Some(posting_discovery) = &manifest.checks.posting_discovery {
             let result = crate::profile_dsl::runtime::execute_posting_discovery_with_clients(
                 execution_plan,
                 replay,
                 replay,
             )
             .await;
+            let discovery_execution_failed = has_error_diagnostics(&result.diagnostics);
             diagnostics.extend(result.diagnostics);
+
+            if !discovery_execution_failed {
+                let assertion_diagnostics = discovery_expectation_diagnostics(
+                    profile_key,
+                    &manifest.access_path_key,
+                    &posting_discovery.expect,
+                    &result.candidates,
+                );
+                coverage.posting_discovery = assertion_diagnostics.is_empty();
+                diagnostics.extend(assertion_diagnostics);
+            }
         }
 
         if let Some(posting_detail) = &manifest.checks.posting_detail {
@@ -343,8 +393,165 @@ fn execute_fixture_replay(
             }
         }
 
-        diagnostics
+        FixtureReplayExecution {
+            diagnostics,
+            coverage,
+        }
     })
+}
+
+fn discovery_expectation_diagnostics(
+    profile_key: &str,
+    access_path_key: &str,
+    expect: &FixtureManifestDiscoveryExpect,
+    candidates: &[crate::profile_dsl::runtime::PostingDiscoveryCandidate],
+) -> Diagnostics {
+    let mut diagnostics = Vec::new();
+
+    if let Some(min_candidates) = expect.min_candidates {
+        if candidates.len() < min_candidates as usize {
+            diagnostics.push(discovery_expectation_failed_diagnostic(
+                profile_key,
+                access_path_key,
+                "/checks/postingDiscovery/expect/minCandidates",
+                serde_json::json!({ "minCandidates": min_candidates }),
+                serde_json::json!({ "candidateCount": candidates.len() }),
+            ));
+        }
+    }
+
+    if let Some(required_fields) = &expect.required_fields {
+        for field in required_fields {
+            let missing = candidates
+                .iter()
+                .enumerate()
+                .filter_map(|(index, candidate)| {
+                    (!fixture_posting_field_present(candidate, *field)).then_some(index)
+                })
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                diagnostics.push(discovery_expectation_failed_diagnostic(
+                    profile_key,
+                    access_path_key,
+                    "/checks/postingDiscovery/expect/requiredFields",
+                    serde_json::json!({ "requiredField": fixture_posting_field_label(*field) }),
+                    serde_json::json!({ "missingCandidateIndexes": missing }),
+                ));
+            }
+        }
+    }
+
+    if let Some(expected_candidates) = &expect.contains_candidates {
+        for expected in expected_candidates {
+            if !candidates
+                .iter()
+                .any(|candidate| fixture_candidate_matches_expected(candidate, expected))
+            {
+                diagnostics.push(discovery_expectation_failed_diagnostic(
+                    profile_key,
+                    access_path_key,
+                    "/checks/postingDiscovery/expect/containsCandidates",
+                    serde_json::json!({ "containsCandidate": expected }),
+                    serde_json::json!({ "candidates": candidates }),
+                ));
+            }
+        }
+    }
+
+    diagnostics
+}
+
+fn fixture_posting_field_present(
+    candidate: &crate::profile_dsl::runtime::PostingDiscoveryCandidate,
+    field: FixtureManifestPostingField,
+) -> bool {
+    match field {
+        FixtureManifestPostingField::Title => !candidate.title.trim().is_empty(),
+        FixtureManifestPostingField::Company => !candidate.company.trim().is_empty(),
+        FixtureManifestPostingField::Url => !candidate.url.trim().is_empty(),
+        FixtureManifestPostingField::Locations => !candidate.locations.is_empty(),
+        FixtureManifestPostingField::PostingMeta => !candidate.posting_meta.is_empty(),
+        FixtureManifestPostingField::DescriptionText => candidate
+            .description_text
+            .as_deref()
+            .is_some_and(|description| !description.trim().is_empty()),
+    }
+}
+
+fn fixture_posting_field_label(field: FixtureManifestPostingField) -> &'static str {
+    match field {
+        FixtureManifestPostingField::Title => "title",
+        FixtureManifestPostingField::Company => "company",
+        FixtureManifestPostingField::Url => "url",
+        FixtureManifestPostingField::Locations => "locations",
+        FixtureManifestPostingField::PostingMeta => "postingMeta",
+        FixtureManifestPostingField::DescriptionText => "descriptionText",
+    }
+}
+
+fn fixture_candidate_matches_expected(
+    candidate: &crate::profile_dsl::runtime::PostingDiscoveryCandidate,
+    expected: &FixtureManifestExpectedCandidate,
+) -> bool {
+    expected
+        .title
+        .as_ref()
+        .is_none_or(|title| candidate.title == *title)
+        && expected
+            .company
+            .as_ref()
+            .is_none_or(|company| candidate.company == *company)
+        && expected
+            .url
+            .as_ref()
+            .is_none_or(|url| candidate.url == *url)
+        && expected
+            .locations
+            .as_ref()
+            .is_none_or(|locations| candidate.locations == *locations)
+        && expected.posting_meta.as_ref().is_none_or(|posting_meta| {
+            posting_meta.iter().all(|(key, expected_value)| {
+                candidate.posting_meta.get(key).is_some_and(|actual_value| {
+                    fixture_json_string_value_matches(actual_value, expected_value)
+                })
+            })
+        })
+        && expected
+            .description_text
+            .as_ref()
+            .is_none_or(|description| candidate.description_text.as_ref() == Some(description))
+}
+
+fn fixture_json_string_value_matches(actual: &str, expected: &serde_json::Value) -> bool {
+    expected
+        .as_str()
+        .map(|expected| actual == expected)
+        .unwrap_or_else(|| actual == expected.to_string())
+}
+
+fn discovery_expectation_failed_diagnostic(
+    profile_key: &str,
+    access_path_key: &str,
+    path: &str,
+    expectation: serde_json::Value,
+    actual: serde_json::Value,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Fixture,
+        code: "fixture.discovery_expectation_failed".to_string(),
+        message: format!(
+            "Discovery fixture expectation failed for Source Profile `{profile_key}` Access Path `{access_path_key}`"
+        ),
+        severity: DiagnosticSeverity::Error,
+        path: path.to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "profileKey": profile_key,
+            "accessPathKey": access_path_key,
+            "expectation": expectation,
+            "actual": actual,
+        })),
+    }
 }
 
 fn fixture_posting_meta(
@@ -393,13 +600,14 @@ fn fixture_evidence_verification(
     reference: &str,
     access_path_key: Option<&str>,
     diagnostics: Diagnostics,
+    coverage: FixtureCheckCoverage,
 ) -> FixtureEvidenceVerification {
     let mut fixture_check = serde_json::json!({
         "reference": reference,
         "result": if has_error_diagnostics(&diagnostics) { "failed" } else { "passed" },
         "coverage": {
-            "postingDiscovery": false,
-            "postingDetailDescriptionText": false,
+            "postingDiscovery": coverage.posting_discovery,
+            "postingDetailDescriptionText": coverage.posting_detail_description_text,
         }
     });
     if let Some(access_path_key) = access_path_key {
