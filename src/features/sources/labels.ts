@@ -1,7 +1,9 @@
 import type {
+  DetectionEvidenceKind,
   SourceProfileKind,
   SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
+  SupportEvidenceKind,
   SupportLevel,
   ValidationStateKind,
 } from "@/lib/api/sources";
@@ -34,6 +36,20 @@ export const supportLevelLabels: Record<SupportLevel, string> = {
   best_effort: "Best Effort",
   experimental: "Experimentell",
   unsupported: "Nicht unterstützt",
+};
+
+export const supportEvidenceKindLabels: Record<SupportEvidenceKind, string> = {
+  fixture: "Fixture",
+  smoke: "Smoke",
+  manual_review: "Manual Review",
+  schema_check: "Schema Check",
+};
+
+export const detectionEvidenceKindLabels: Record<DetectionEvidenceKind, string> = {
+  url: "URL",
+  http: "HTTP",
+  html: "HTML",
+  browser: "Browser",
 };
 
 export const validationStateLabels: Record<ValidationStateKind, string> = {

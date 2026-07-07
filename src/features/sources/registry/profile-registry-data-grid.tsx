@@ -73,10 +73,33 @@ export function ProfileRegistryDataGrid({
         accessorKey: "supportLabel",
         id: "supportLabel",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Support" visibility column={column} />
+          <DataGridColumnHeader title="Deklarierter Support" visibility column={column} />
         ),
         cell: ({ row }) => <Badge variant="outline">{row.original.supportLabel}</Badge>,
-        size: 130,
+        size: 170,
+        enableSorting: true,
+        enableHiding: true,
+        enableResizing: true,
+      },
+      {
+        accessorKey: "supportEvidenceSummary",
+        id: "supportEvidenceSummary",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Support-Evidenz" visibility column={column} />
+        ),
+        cell: ({ row }) =>
+          row.original.supportEvidenceLabels.length ? (
+            <div className="flex min-w-0 flex-wrap gap-1">
+              {row.original.supportEvidenceLabels.map((label) => (
+                <Badge key={label} variant="secondary">
+                  {label}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+        size: 190,
         enableSorting: true,
         enableHiding: true,
         enableResizing: true,

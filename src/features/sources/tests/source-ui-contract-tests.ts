@@ -1376,6 +1376,52 @@ assert.deepEqual(
   ["warning_profile"],
 );
 
+const evidenceProfile: RegistrySourceProfile = {
+  origin: "custom",
+  path: "profiles/evidence.json",
+  document: {
+    ...profile.document,
+    key: "evidence_profile",
+    name: "Evidence Profile",
+    support: {
+      level: "verified",
+      evidence: [
+        { kind: "fixture", reference: "fixture.json" },
+        { kind: "smoke", reference: "https://jobs.example.test" },
+        { kind: "manual_review", reference: "review-2026-07" },
+        { kind: "schema_check", reference: "schema-validation" },
+      ],
+    },
+    detect: {
+      evidence: [
+        { kind: "url", message: "Matched board URL" },
+        { kind: "http", message: "HTTP marker matched" },
+      ],
+    },
+    accessPaths: [],
+  },
+};
+const [evidenceRow] = createProfileGridRows([evidenceProfile], new Map());
+assert.deepEqual(evidenceRow?.supportEvidenceLabels, [
+  "Fixture",
+  "Smoke",
+  "Manual Review",
+  "Schema Check",
+]);
+assert.equal(
+  evidenceRow?.supportEvidenceSummary,
+  "Fixture, Smoke, Manual Review +1",
+);
+assert.deepEqual(evidenceRow?.detectionEvidenceLabels, ["URL", "HTTP"]);
+assert.equal(
+  (evidenceRow?.detectionEvidenceKinds as string[] | undefined)?.includes("url"),
+  true,
+);
+assert.equal(
+  (evidenceRow?.supportEvidenceKinds as string[] | undefined)?.includes("url"),
+  false,
+);
+
 const proposal: SourceProposal = {
   profileKey: "greenhouse",
   profileName: "Greenhouse",

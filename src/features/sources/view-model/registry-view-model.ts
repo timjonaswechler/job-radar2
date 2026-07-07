@@ -1,7 +1,15 @@
-import { originLabels, profileKindLabels, supportLevelLabels, validationStateLabels } from "@/features/sources/labels";
+import {
+  detectionEvidenceKindLabels,
+  originLabels,
+  profileKindLabels,
+  supportEvidenceKindLabels,
+  supportLevelLabels,
+  validationStateLabels,
+} from "@/features/sources/labels";
 import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
 import type {
+  DetectionEvidenceKind,
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySource,
@@ -12,6 +20,7 @@ import type {
   SourceRegistryDocumentOrigin,
   SourceStatus,
   StructuredDiagnostic,
+  SupportEvidenceKind,
   SupportLevel,
   ValidationStateKind,
 } from "@/lib/api/sources";
@@ -84,6 +93,12 @@ export type ProfileGridRow = {
   kindLabel: string;
   supportLevel: SupportLevel;
   supportLabel: string;
+  supportEvidenceKinds: SupportEvidenceKind[];
+  supportEvidenceLabels: string[];
+  supportEvidenceSummary: string;
+  detectionEvidenceKinds: DetectionEvidenceKind[];
+  detectionEvidenceLabels: string[];
+  detectionEvidenceSummary: string;
   origin: SourceRegistryDocumentOrigin;
   originLabel: string;
   accessPathCount: number;
@@ -198,6 +213,22 @@ export function createProfileGridRows(
     const diagnosticSummary = classifyProfileRegistryRowHealth(diagnostics);
     const kindLabel = profileKindLabels[profile.document.kind];
     const supportLabel = supportLevelLabels[profile.document.support.level];
+    const supportEvidenceKinds = profileSupportEvidenceKinds(profile);
+    const supportEvidenceLabels = supportEvidenceKinds.map(
+      (kind) => supportEvidenceKindLabels[kind],
+    );
+    const supportEvidenceSummary = summarizeList(
+      supportEvidenceLabels,
+      "keine Support-Evidenz",
+    );
+    const detectionEvidenceKinds = profileDetectionEvidenceKinds(profile);
+    const detectionEvidenceLabels = detectionEvidenceKinds.map(
+      (kind) => detectionEvidenceKindLabels[kind],
+    );
+    const detectionEvidenceSummary = summarizeList(
+      detectionEvidenceLabels,
+      "keine Detection-Evidenz",
+    );
     const originLabel = originLabels[profile.origin];
     const schemaSummary = profileSchemaSummary(profile);
     const capabilitiesSummary = summarizeList(profileCapabilities(profile), "keine Fähigkeiten");
@@ -208,6 +239,10 @@ export function createProfileGridRows(
       profile.document.kind,
       supportLabel,
       profile.document.support.level,
+      supportEvidenceSummary,
+      supportEvidenceKinds.join(" "),
+      detectionEvidenceSummary,
+      detectionEvidenceKinds.join(" "),
       originLabel,
       profile.origin,
       capabilitiesSummary,
@@ -225,6 +260,12 @@ export function createProfileGridRows(
       kindLabel,
       supportLevel: profile.document.support.level,
       supportLabel,
+      supportEvidenceKinds,
+      supportEvidenceLabels,
+      supportEvidenceSummary,
+      detectionEvidenceKinds,
+      detectionEvidenceLabels,
+      detectionEvidenceSummary,
       origin: profile.origin,
       originLabel,
       accessPathCount: profile.document.accessPaths.length,
@@ -459,6 +500,14 @@ function profileCapabilities(profile: RegistrySourceProfile) {
   return unique(profile.document.accessPaths.flatMap(accessPathCapabilities));
 }
 
+function profileSupportEvidenceKinds(profile: RegistrySourceProfile) {
+  return unique(profile.document.support.evidence?.map((evidence) => evidence.kind) ?? []);
+}
+
+function profileDetectionEvidenceKinds(profile: RegistrySourceProfile) {
+  return unique(profile.document.detect?.evidence?.map((evidence) => evidence.kind) ?? []);
+}
+
 function accessPathCapabilities(
   accessPath: ProfileAccessPathDefinition | SourceOwnedSelectedAccessPath,
 ) {
@@ -474,7 +523,7 @@ function summarizeList(values: string[], emptyLabel: string) {
   return `${values.slice(0, 3).join(", ")} +${values.length - 3}`;
 }
 
-function unique(values: string[]) {
+function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
 }
 

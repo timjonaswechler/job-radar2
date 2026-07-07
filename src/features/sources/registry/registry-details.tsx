@@ -22,8 +22,10 @@ import {
 import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import {
+  detectionEvidenceKindLabels,
   originLabels,
   profileKindLabels,
+  supportEvidenceKindLabels,
   supportLevelLabels,
   validationStateLabels,
 } from "@/features/sources/labels";
@@ -130,7 +132,7 @@ export function ProfileDetailsDrawer({
             <DrawerTitle>{row.name}</DrawerTitle>
             <DrawerDescription>
               Profil-Key <code>{row.key}</code> · {row.kindLabel} ·{" "}
-              {row.supportLabel} · {row.originLabel}
+              deklarierter Support: {row.supportLabel} · {row.originLabel}
             </DrawerDescription>
             <Button
               type="button"
@@ -149,6 +151,53 @@ export function ProfileDetailsDrawer({
         </DrawerContent>
       ) : null}
     </Drawer>
+  );
+}
+
+type EvidenceBadgeSectionProps<TKind extends string> = {
+  title: string;
+  description: string;
+  emptyLabel: string;
+  evidence: Array<{
+    kind: TKind;
+    reference?: string;
+    message?: string;
+    summary?: string;
+  }>;
+  labelForKind: (kind: TKind) => string;
+};
+
+function EvidenceBadgeSection<TKind extends string>({
+  title,
+  description,
+  emptyLabel,
+  evidence,
+  labelForKind,
+}: EvidenceBadgeSectionProps<TKind>) {
+  return (
+    <section className="grid gap-2 rounded-lg border bg-muted/30 p-3">
+      <div className="grid gap-1">
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      {evidence.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {evidence.map((item, index) => (
+            <Badge
+              key={`${item.kind}-${item.reference ?? item.message ?? index}`}
+              variant="secondary"
+              title={item.summary ?? item.message ?? item.reference}
+            >
+              {labelForKind(item.kind)}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground">{emptyLabel}</span>
+      )}
+    </section>
   );
 }
 
@@ -202,7 +251,7 @@ function SourceDetails({
           value={source.validationState.canExecute ? "Ja" : "Nein"}
         />
         <DetailRow
-          label="Support"
+          label="Deklarierter Support"
           value={
             resolution.supportLevel
               ? supportLevelLabels[resolution.supportLevel]
@@ -284,7 +333,7 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
           value={profileKindLabels[profile.document.kind]}
         />
         <DetailRow
-          label="Support"
+          label="Deklarierter Support"
           value={supportLevelLabels[profile.document.support.level]}
         />
         <DetailRow label="Ursprung" value={originLabels[profile.origin]} />
@@ -302,6 +351,21 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
           </Badge>
         ))}
       </div>
+
+      <EvidenceBadgeSection
+        title="Support-Evidenz"
+        description="Deklarierte Support-Evidenz. Fixture bedeutet hier nur: Fixture Evidence ist angegeben, nicht dass sie bestanden hat."
+        emptyLabel="Keine Support-Evidenz deklariert."
+        evidence={profile.document.support.evidence ?? []}
+        labelForKind={(kind) => supportEvidenceKindLabels[kind]}
+      />
+      <EvidenceBadgeSection
+        title="Detection-Evidenz"
+        description="Detection-Evidenz gehört zu detect.evidence und ist getrennt von Support-Evidenz. URL bleibt hier gültige Detection-Evidenz."
+        emptyLabel="Keine Detection-Evidenz deklariert."
+        evidence={profile.document.detect?.evidence ?? []}
+        labelForKind={(kind) => detectionEvidenceKindLabels[kind]}
+      />
 
       <OptionalSchemaValuePreview
         title="support"
