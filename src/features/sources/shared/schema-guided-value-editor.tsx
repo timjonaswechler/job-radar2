@@ -29,6 +29,7 @@ import {
   schemaConstraints,
   schemaDefaultValue,
   schemaFieldTypeFromSchema,
+  schemaForArrayItem,
   schemaForProperty,
   schemaForValue,
   schemaMetadataForObject,
@@ -56,6 +57,7 @@ export type SchemaGuidedValueEditorModel = {
   unknownKeyWarnings: SchemaGuidedUnknownKeyWarning[];
   rows: SchemaValueTreeRowModel[];
   editableObjectRows: SchemaGuidedEditableObjectRow[];
+  editableArrayRows: SchemaGuidedEditableArrayRow[];
   availableObjectKeys: SchemaGuidedObjectKeyOption[];
   variantOptions: SchemaGuidedVariantOption[];
   activeVariantIndex: number | null;
@@ -77,6 +79,16 @@ export type SchemaGuidedEditableObjectRow = {
   scalarOptions: SchemaScalarOption[];
 };
 
+export type SchemaGuidedEditableArrayRow = {
+  index: number;
+  key: string;
+  value: JsonValue;
+  rawValue: string;
+  schema: JsonObject | undefined;
+  fieldType: SchemaFieldType;
+  scalarOptions: SchemaScalarOption[];
+};
+
 export type SchemaGuidedObjectKeyOption = {
   key: string;
   label: string;
@@ -95,9 +107,17 @@ export type SchemaGuidedObjectEdit =
   | { type: "set-property-value"; key: string; rawValue: string }
   | { type: "select-variant"; variantIndex: number };
 
-export type SchemaGuidedObjectEditResult =
+export type SchemaGuidedArrayEdit =
+  | { type: "add-item" }
+  | { type: "remove-item"; index: number }
+  | { type: "set-item-value"; index: number; rawValue: string };
+
+export type SchemaGuidedEditResult =
   | { ok: true; rawText: string }
   | { ok: false; rawText: string; error: string };
+
+export type SchemaGuidedObjectEditResult = SchemaGuidedEditResult;
+export type SchemaGuidedArrayEditResult = SchemaGuidedEditResult;
 
 type SchemaGuidedValueEditorProps = {
   value: string;
@@ -149,6 +169,13 @@ export function SchemaGuidedValueEditor({
               disabled={disabled}
               onChange={onChange}
             />
+            <SchemaGuidedArrayRowsEditor
+              model={model}
+              schema={schema}
+              schemaOptions={schemaOptions}
+              disabled={disabled}
+              onChange={onChange}
+            />
             <SchemaValueTable
               value={model.parseState.value}
               schema={schema}
@@ -194,6 +221,7 @@ export function createSchemaGuidedValueEditorModel({
       unknownKeyWarnings: [],
       rows: [],
       editableObjectRows: [],
+      editableArrayRows: [],
       availableObjectKeys: [],
       variantOptions: [],
       activeVariantIndex: null,
@@ -225,6 +253,11 @@ export function createSchemaGuidedValueEditorModel({
       .map((row) => ({ key: row.key, path: rowPath(row) })),
     rows,
     editableObjectRows: editableObjectRowsForValue({
+      value: parseState.value,
+      schema: valueSchema,
+      schemaOptions: options,
+    }),
+    editableArrayRows: editableArrayRowsForValue({
       value: parseState.value,
       schema: valueSchema,
       schemaOptions: options,
@@ -304,6 +337,57 @@ export function applySchemaGuidedObjectEdit({
   }
 
   nextValue[key] = convertedValue.value;
+  return { ok: true, rawText: stringifyJson(nextValue) };
+}
+
+export function applySchemaGuidedArrayEdit({
+  rawText,
+  schema,
+  schemaOptions,
+  edit,
+}: {
+  rawText: string;
+  schema?: JsonObject;
+  schemaOptions?: SchemaResolutionOptions;
+  edit: SchemaGuidedArrayEdit;
+}): SchemaGuidedArrayEditResult {
+  const options = editorSchemaOptions(schema, schemaOptions);
+  const parseState = parseJsonText(rawText);
+  if (!parseState.ok) return { ok: false, rawText, error: parseState.error };
+  if (!Array.isArray(parseState.value)) {
+    return { ok: false, rawText, error: "JSON value must be an array." };
+  }
+
+  const valueSchema = schemaForValue(schema, parseState.value, options);
+  const itemSchema = schemaForArrayItem(valueSchema, options);
+  const nextValue = [...parseState.value];
+
+  if (edit.type === "add-item") {
+    nextValue.push(defaultValueForSchema(itemSchema, options));
+    return { ok: true, rawText: stringifyJson(nextValue) };
+  }
+
+  if (edit.index < 0 || edit.index >= nextValue.length) {
+    return { ok: false, rawText, error: "Array index out of range." };
+  }
+
+  if (edit.type === "remove-item") {
+    nextValue.splice(edit.index, 1);
+    return { ok: true, rawText: stringifyJson(nextValue) };
+  }
+
+  const resolvedItemSchema = schemaForValue(itemSchema, nextValue[edit.index], options);
+  const convertedValue = valueFromRawInput({
+    key: `[${edit.index}]`,
+    rawValue: edit.rawValue,
+    schema: resolvedItemSchema,
+    schemaOptions: options,
+  });
+  if (!convertedValue.ok) {
+    return { ok: false, rawText, error: convertedValue.error };
+  }
+
+  nextValue[edit.index] = convertedValue.value;
   return { ok: true, rawText: stringifyJson(nextValue) };
 }
 
@@ -497,6 +581,140 @@ function SchemaGuidedObjectRowsEditor({
           Key hinzufügen
         </Button>
       </div>
+    </div>
+  );
+}
+
+function SchemaGuidedArrayRowsEditor({
+  model,
+  schema,
+  schemaOptions,
+  disabled,
+  onChange,
+}: {
+  model: SchemaGuidedValueEditorModel;
+  schema: JsonObject | undefined;
+  schemaOptions: SchemaResolutionOptions | undefined;
+  disabled: boolean | undefined;
+  onChange: (value: string) => void;
+}) {
+  if (!model.parseState.ok || !Array.isArray(model.parseState.value)) return null;
+
+  const applyEdit = (edit: SchemaGuidedArrayEdit) => {
+    const result = applySchemaGuidedArrayEdit({
+      rawText: model.rawText,
+      schema,
+      schemaOptions,
+      edit,
+    });
+    if (result.ok) onChange(result.rawText);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {model.editableArrayRows.length ? (
+        <Table className={compactTableClassName()}>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="h-8 w-[20%] bg-muted/40 px-2">Index</TableHead>
+              <TableHead className="h-8 bg-muted/40 px-2">Wert</TableHead>
+              <TableHead className="h-8 w-[22%] bg-muted/40 px-2">Regel</TableHead>
+              <TableHead className="h-8 w-10 bg-muted/40 px-1 text-right">
+                <span className="sr-only">Aktionen</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="[&_tr:last-child]:border-b-0">
+            {model.editableArrayRows.map((row) => (
+              <TableRow key={row.key} className="hover:bg-transparent">
+                <TableCell className="whitespace-normal px-2 py-1.5 align-top font-mono">
+                  {row.key}
+                </TableCell>
+                <TableCell className="p-0 align-top">
+                  <SchemaGuidedArrayValueCell
+                    row={row}
+                    disabled={disabled}
+                    onChange={(rawValue) =>
+                      applyEdit({
+                        type: "set-item-value",
+                        index: row.index,
+                        rawValue,
+                      })
+                    }
+                  />
+                </TableCell>
+                <TableCell className="whitespace-normal px-2 py-1.5 align-top">
+                  <SchemaGuidedArrayRowRule row={row} />
+                </TableCell>
+                <TableCell className="p-1 align-top text-right">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      applyEdit({ type: "remove-item", index: row.index })
+                    }
+                    disabled={disabled}
+                    title="Eintrag entfernen"
+                  >
+                    <Trash2Icon aria-hidden="true" />
+                    <span className="sr-only">Eintrag entfernen</span>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => applyEdit({ type: "add-item" })}
+        disabled={disabled}
+        className="w-fit"
+      >
+        <PlusIcon data-icon="inline-start" aria-hidden="true" />
+        Eintrag hinzufügen
+      </Button>
+    </div>
+  );
+}
+
+function SchemaGuidedArrayValueCell({
+  row,
+  disabled,
+  onChange,
+}: {
+  row: SchemaGuidedEditableArrayRow;
+  disabled: boolean | undefined;
+  onChange: (rawValue: string) => void;
+}) {
+  return (
+    <SchemaGuidedObjectValueCell
+      row={{ ...row, key: row.key, required: false, unknown: false }}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  );
+}
+
+function SchemaGuidedArrayRowRule({
+  row,
+}: {
+  row: SchemaGuidedEditableArrayRow;
+}) {
+  if (!row.scalarOptions.length) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {row.scalarOptions.map((option) => (
+        <Badge key={jsonValueToInputValue(option.value)} variant="outline">
+          {option.label}
+        </Badge>
+      ))}
     </div>
   );
 }
@@ -697,6 +915,32 @@ function editableObjectRowsForValue({
   });
 }
 
+function editableArrayRowsForValue({
+  value,
+  schema,
+  schemaOptions,
+}: {
+  value: JsonValue;
+  schema: JsonObject | undefined;
+  schemaOptions: SchemaResolutionOptions;
+}): SchemaGuidedEditableArrayRow[] {
+  if (!Array.isArray(value)) return [];
+
+  const itemSchema = schemaForArrayItem(schema, schemaOptions);
+  return value.map((item, index) => {
+    const resolvedItemSchema = schemaForValue(itemSchema, item, schemaOptions);
+    return {
+      index,
+      key: `[${index}]`,
+      value: item,
+      rawValue: jsonValueToInputValue(item),
+      schema: resolvedItemSchema,
+      fieldType: fieldTypeForValue(item, resolvedItemSchema, schemaOptions),
+      scalarOptions: schemaScalarOptions(resolvedItemSchema, schemaOptions),
+    };
+  });
+}
+
 function availableObjectKeysForValue({
   value,
   schema,
@@ -870,7 +1114,12 @@ function defaultValueForSchema(
   const fieldType = schemaFieldTypeFromSchema(schema, schemaOptions);
   if (fieldType === "number") return 0;
   if (fieldType === "boolean") return false;
-  if (fieldType === "json") return schema?.type === "array" ? [] : {};
+  if (fieldType === "json") {
+    if (schema?.type === "array") return [];
+    const value: JsonObject = {};
+    if (schema) seedObjectForVariant(value, schema, schemaOptions);
+    return value;
+  }
   return "";
 }
 

@@ -33,6 +33,7 @@ import {
   schemaScalarRules,
 } from "@/features/sources/shared/schema-introspection";
 import {
+  applySchemaGuidedArrayEdit,
   applySchemaGuidedObjectEdit,
   createSchemaGuidedValueEditorModel,
 } from "@/features/sources/shared/schema-guided-value-editor";
@@ -675,6 +676,62 @@ if (selectedSchemaGuidedVariant.ok) {
     timeoutMs: 30,
     waitUntil: "networkidle",
   });
+}
+
+const schemaGuidedArraySchema: JsonValue = {
+  type: "array",
+  items: {
+    type: "object",
+    required: ["type", "url"],
+    additionalProperties: false,
+    properties: {
+      type: { const: "link" },
+      url: { type: "string", default: "https://example.test/jobs" },
+      enabled: { type: "boolean", default: true },
+    },
+  },
+};
+const schemaGuidedArray = createSchemaGuidedValueEditorModel({
+  rawText: JSON.stringify([{ type: "link", url: "https://example.test" }]),
+  schema: schemaGuidedArraySchema,
+});
+assert.deepEqual(
+  schemaGuidedArray.editableArrayRows.map((row) => ({
+    index: row.index,
+    key: row.key,
+    fieldType: row.fieldType,
+    scalarOptions: row.scalarOptions,
+  })),
+  [{ index: 0, key: "[0]", fieldType: "json", scalarOptions: [] }],
+);
+const addedSchemaGuidedArrayItem = applySchemaGuidedArrayEdit({
+  rawText: "[]",
+  schema: schemaGuidedArraySchema,
+  edit: { type: "add-item" },
+});
+assert.equal(addedSchemaGuidedArrayItem.ok, true);
+if (addedSchemaGuidedArrayItem.ok) {
+  assert.deepEqual(JSON.parse(addedSchemaGuidedArrayItem.rawText), [
+    { type: "link", url: "https://example.test/jobs", enabled: true },
+  ]);
+}
+const editedSchemaGuidedArrayItem = applySchemaGuidedArrayEdit({
+  rawText: JSON.stringify(["GET"]),
+  schema: { type: "array", items: { type: "string", enum: ["GET", "POST"] } },
+  edit: { type: "set-item-value", index: 0, rawValue: "POST" },
+});
+assert.equal(editedSchemaGuidedArrayItem.ok, true);
+if (editedSchemaGuidedArrayItem.ok) {
+  assert.deepEqual(JSON.parse(editedSchemaGuidedArrayItem.rawText), ["POST"]);
+}
+const removedSchemaGuidedArrayItem = applySchemaGuidedArrayEdit({
+  rawText: JSON.stringify(["GET", "POST"]),
+  schema: { type: "array", items: { type: "string" } },
+  edit: { type: "remove-item", index: 0 },
+});
+assert.equal(removedSchemaGuidedArrayItem.ok, true);
+if (removedSchemaGuidedArrayItem.ok) {
+  assert.deepEqual(JSON.parse(removedSchemaGuidedArrayItem.rawText), ["POST"]);
 }
 
 const sourceAddTransitionProfile: RegistrySourceProfile = {
