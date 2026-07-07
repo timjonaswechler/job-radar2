@@ -46,7 +46,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { createEntryId } from "@/features/sources/add/source/source-add-model";
 import {
   configEntryDescription,
@@ -57,9 +56,8 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
+import { SchemaGuidedValueEditor } from "@/features/sources/shared/schema-guided-value-editor";
 import { schemaScalarOptions } from "@/features/sources/shared/schema-introspection";
-import { SchemaValueTable } from "@/features/sources/shared/schema-value-table";
-import type { JsonValue } from "@/lib/api/sources";
 
 type SourceConfigEditorProps = {
   entries: SourceConfigEntry[];
@@ -442,24 +440,15 @@ function ConfigValueCell({
   }
 
   if (fieldType === "json") {
-    const parsedValue = parseJsonValue(entry.value);
-
     return (
-      <div className="grid gap-2 p-0">
-        <Textarea
-          value={entry.value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="JSON-Wert"
-          aria-label={ariaLabel}
-          disabled={disabled}
-          className="min-h-16 rounded-none border-0 bg-transparent px-2 py-1.5 font-mono shadow-none ring-0 focus-visible:ring-0"
-        />
-        {parsedValue.ok ? (
-          <div className="px-2 pb-2">
-            <SchemaValueTable value={parsedValue.value} schema={propertySchema} />
-          </div>
-        ) : null}
-      </div>
+      <SchemaGuidedValueEditor
+        value={entry.value}
+        onChange={onChange}
+        ariaLabel={ariaLabel}
+        schema={propertySchema}
+        disabled={disabled}
+        textareaClassName="min-h-16 rounded-none border-0 bg-transparent px-2 py-1.5 font-mono shadow-none ring-0 focus-visible:ring-0"
+      />
     );
   }
 
@@ -549,14 +538,4 @@ function normalizedBooleanValue(value: string) {
   if (["true", "1", "ja", "yes"].includes(normalized)) return "true";
   if (["false", "0", "nein", "no"].includes(normalized)) return "false";
   return null;
-}
-
-function parseJsonValue(
-  value: string,
-): { ok: true; value: JsonValue } | { ok: false } {
-  try {
-    return { ok: true, value: JSON.parse(value) as JsonValue };
-  } catch {
-    return { ok: false };
-  }
 }

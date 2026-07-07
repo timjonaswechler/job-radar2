@@ -32,6 +32,7 @@ import {
   schemaScalarOptions,
   schemaScalarRules,
 } from "@/features/sources/shared/schema-introspection";
+import { createSchemaGuidedValueEditorModel } from "@/features/sources/shared/schema-guided-value-editor";
 import { createSchemaValueRows } from "@/features/sources/shared/schema-value-rows";
 import {
   profileDslSchemaCatalog,
@@ -472,6 +473,39 @@ assert.equal(
   true,
 );
 assert.equal(httpFetchRows.find((row) => row.key === "mode")?.unknown, false);
+
+const schemaGuidedUnknownKeys = createSchemaGuidedValueEditorModel({
+  rawText: JSON.stringify({ mode: "http", url: "/jobs", timeoutMs: 1, extra: true }),
+  schema: strategyFetchSchema,
+  schemaOptions: postingDiscoverySchemaOptions,
+  maxDepth: 1,
+});
+assert.equal(schemaGuidedUnknownKeys.parseState.ok, true);
+assert.equal(schemaGuidedUnknownKeys.matchedVariantLabel, "HTTP fetch");
+assert.deepEqual(schemaGuidedUnknownKeys.unknownKeyWarnings, [
+  { key: "extra", path: "extra" },
+]);
+
+const schemaGuidedVariant = createSchemaGuidedValueEditorModel({
+  rawText: JSON.stringify({ mode: "browser", url: "/jobs", timeoutMs: 1 }),
+  schema: strategyFetchSchema,
+  schemaOptions: postingDiscoverySchemaOptions,
+});
+assert.equal(schemaGuidedVariant.matchedVariantLabel, "Browser fetch");
+assert.equal(schemaGuidedVariant.unknownKeyWarnings.length, 0);
+
+const invalidSchemaGuidedJson = createSchemaGuidedValueEditorModel({
+  rawText: '{"mode":"http",',
+  schema: strategyFetchSchema,
+  schemaOptions: postingDiscoverySchemaOptions,
+});
+assert.equal(invalidSchemaGuidedJson.parseState.ok, false);
+if (!invalidSchemaGuidedJson.parseState.ok) {
+  assert.equal(invalidSchemaGuidedJson.parseState.rawText, '{"mode":"http",');
+  assert.ok(invalidSchemaGuidedJson.parseState.error.length > 0);
+}
+assert.deepEqual(invalidSchemaGuidedJson.unknownKeyWarnings, []);
+assert.equal(invalidSchemaGuidedJson.matchedVariantLabel, null);
 
 const sourceAddTransitionProfile: RegistrySourceProfile = {
   origin: "built_in",

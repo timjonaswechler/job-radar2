@@ -35,6 +35,7 @@ type SchemaValueTableProps = {
   schema?: JsonValue;
   schemaRef?: string;
   schemaCatalog?: SchemaCatalog;
+  schemaOptions?: SchemaResolutionOptions;
   maxDepth?: number;
   className?: string;
 };
@@ -94,6 +95,7 @@ export function SchemaValueTable({
   schema,
   schemaRef,
   schemaCatalog = profileDslSchemaCatalog,
+  schemaOptions,
   maxDepth = 6,
   className,
 }: SchemaValueTableProps) {
@@ -105,6 +107,7 @@ export function SchemaValueTable({
     schema,
     schemaRef,
     schemaCatalog,
+    schemaOptions,
   });
 
   return (
@@ -385,10 +388,12 @@ function schemaContextForPreview({
   schema,
   schemaRef,
   schemaCatalog,
+  schemaOptions,
 }: {
   schema: JsonValue | undefined;
   schemaRef: string | undefined;
   schemaCatalog: SchemaCatalog;
+  schemaOptions: SchemaResolutionOptions | undefined;
 }): { schema: JsonObject | undefined; options: SchemaResolutionOptions } {
   if (schemaRef) {
     const resolvedSchema = schemaCatalog.resolveRef(schemaRef);
@@ -396,9 +401,10 @@ function schemaContextForPreview({
       return {
         schema: resolvedSchema.schema,
         options: {
-          catalog: schemaCatalog,
-          rootSchema: resolvedSchema.rootSchema,
-          baseUri: resolvedSchema.baseUri,
+          ...schemaOptions,
+          catalog: schemaOptions?.catalog ?? schemaCatalog,
+          rootSchema: schemaOptions?.rootSchema ?? resolvedSchema.rootSchema,
+          baseUri: schemaOptions?.baseUri ?? resolvedSchema.baseUri,
         },
       };
     }
@@ -408,9 +414,12 @@ function schemaContextForPreview({
   return {
     schema: schemaObject,
     options: {
-      catalog: schemaCatalog,
-      rootSchema: schemaObject,
-      baseUri: typeof schemaObject?.$id === "string" ? schemaObject.$id : undefined,
+      ...schemaOptions,
+      catalog: schemaOptions?.catalog ?? schemaCatalog,
+      rootSchema: schemaOptions?.rootSchema ?? schemaObject,
+      baseUri:
+        schemaOptions?.baseUri ??
+        (typeof schemaObject?.$id === "string" ? schemaObject.$id : undefined),
     },
   };
 }
