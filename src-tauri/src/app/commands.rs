@@ -357,34 +357,31 @@ pub fn update_source(
     state: State<'_, AppState>,
     document: crate::source::documents::SourceDocument,
 ) -> Result<crate::source_profile::registry::RegistrySource, String> {
-    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    update_source_document(
+        &state.paths.app_data_dir,
+        &state.paths.sources_dir,
+        document,
+    )
+}
+
+fn update_source_document(
+    app_data_dir: &Path,
+    sources_dir: &Path,
+    document: crate::source::documents::SourceDocument,
+) -> Result<crate::source_profile::registry::RegistrySource, String> {
+    let snapshot = load_source_profile_registry_snapshot(app_data_dir);
     let existing = snapshot
         .source(&document.key)
         .ok_or_else(|| format!("Source `{}` wurde nicht gefunden.", document.key))?;
 
-    if existing.origin != "custom" {
-        return Err(format!(
-            "Source `{}` ist eingebaut und kann nicht überschrieben werden.",
-            document.key
-        ));
-    }
+    validate_source_update_target(existing)?;
 
-    fs::create_dir_all(&state.paths.sources_dir)
+    fs::create_dir_all(sources_dir)
         .map_err(|error| format!("Sources-Ordner konnte nicht angelegt werden: {error}"))?;
-    let path = state
-        .paths
-        .sources_dir
-        .join(format!("{}.json", document.key));
-    if !path.exists() {
-        return Err(format!(
-            "Die Datei `{}` wurde nicht gefunden.",
-            path.display()
-        ));
-    }
-
+    let path = source_update_path(sources_dir, &document)?;
     write_source_document(&path, &document)?;
 
-    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    let snapshot = load_source_profile_registry_snapshot(app_data_dir);
     snapshot.source(&document.key).cloned().ok_or_else(|| {
         format!(
             "Source `{}` wurde nach dem Schreiben nicht gefunden.",
@@ -393,8 +390,34 @@ pub fn update_source(
     })
 }
 
+fn validate_source_update_target(
+    existing: &crate::source_profile::registry::RegistrySource,
+) -> Result<(), String> {
+    if existing.origin != "custom" {
+        return Err(format!(
+            "Source `{}` ist eingebaut und kann nicht überschrieben werden.",
+            existing.document.key
+        ));
+    }
+    Ok(())
+}
+
+fn source_update_path(
+    sources_dir: &Path,
+    document: &crate::source::documents::SourceDocument,
+) -> Result<std::path::PathBuf, String> {
+    let path = sources_dir.join(format!("{}.json", document.key));
+    if !path.exists() {
+        return Err(format!(
+            "Die Datei `{}` wurde nicht gefunden.",
+            path.display()
+        ));
+    }
+    Ok(path)
+}
+
 fn write_source_document(
-    path: &std::path::Path,
+    path: &Path,
     document: &crate::source::documents::SourceDocument,
 ) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(document)
@@ -769,6 +792,99 @@ mod tests {
                 snapshot.diagnostics
             );
         });
+    }
+
+    #[test]
+    fn update_source_document_overwrites_custom_source_registry_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let paths =
+            crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf()).unwrap();
+        fs::create_dir_all(&paths.sources_dir).unwrap();
+
+        let initial_source = command_test_source_document(
+            "acme",
+            "ACME",
+            crate::source::documents::SourceStatus::Active,
+            "acme",
+        );
+        let source_path = paths.sources_dir.join("acme.json");
+        write_source_document(&source_path, &initial_source).unwrap();
+
+        let updated_source = command_test_source_document(
+            "acme",
+            "ACME Updated",
+            crate::source::documents::SourceStatus::Disabled,
+            "acme-updated",
+        );
+        let updated_registry_source =
+            update_source_document(&paths.app_data_dir, &paths.sources_dir, updated_source)
+                .unwrap();
+
+        assert_eq!(updated_registry_source.origin, "custom");
+        assert_eq!(updated_registry_source.document.name, "ACME Updated");
+        assert_eq!(
+            updated_registry_source.document.status,
+            crate::source::documents::SourceStatus::Disabled
+        );
+        assert_eq!(
+            updated_registry_source.document.source_config["boardSlug"],
+            serde_json::json!("acme-updated")
+        );
+
+        let persisted: crate::source::documents::SourceDocument =
+            serde_json::from_str(&fs::read_to_string(source_path).unwrap()).unwrap();
+        assert_eq!(persisted.name, "ACME Updated");
+        assert_eq!(persisted.source_config["boardSlug"], "acme-updated");
+    }
+
+    #[test]
+    fn update_source_document_rejects_builtin_source_target() {
+        let source = command_test_source_document(
+            "builtin_acme",
+            "Built-in ACME",
+            crate::source::documents::SourceStatus::Active,
+            "builtin-acme",
+        );
+        let registry_source = crate::source_profile::registry::RegistrySource {
+            origin: "built_in".to_string(),
+            path: "resources/sources/builtin_acme.json".to_string(),
+            document: source,
+            validation_state: crate::source::validation::SourceValidationState {
+                source_key: "builtin_acme".to_string(),
+                state: crate::source::validation::ValidationStateKind::Valid,
+                can_compile: true,
+                can_execute: true,
+                diagnostics: Vec::new(),
+            },
+        };
+
+        let error = validate_source_update_target(&registry_source).unwrap_err();
+        assert!(error.contains("ist eingebaut und kann nicht überschrieben werden"));
+    }
+
+    fn command_test_source_document(
+        key: &str,
+        name: &str,
+        status: crate::source::documents::SourceStatus,
+        board_slug: &str,
+    ) -> crate::source::documents::SourceDocument {
+        let mut source_config = serde_json::Map::new();
+        source_config.insert("boardSlug".to_string(), serde_json::json!(board_slug));
+
+        crate::source::documents::SourceDocument {
+            schema_version: 2,
+            key: key.to_string(),
+            name: name.to_string(),
+            status,
+            source_config,
+            selected_access_path: crate::source::documents::SelectedAccessPath::ProfileAccessPath {
+                profile_key: "greenhouse".to_string(),
+                path_key: "boards_api".to_string(),
+            },
+            source_overrides: None,
+            source_support: None,
+            diagnostics: None,
+        }
     }
 
     #[test]
