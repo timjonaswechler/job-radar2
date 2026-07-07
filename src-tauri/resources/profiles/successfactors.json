@@ -10,18 +10,8 @@
     "evidence": [
       {
         "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/successfactors/posting-discovery-sitemap.xml",
-        "summary": "postingDiscovery fixture executes bounded sitemap/XML discovery through the public Profile Compiler and shared Profile DSL runtime."
-      },
-      {
-        "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/successfactors/posting-detail-1001-primary.html",
-        "summary": "postingDetail fixture extracts normalized descriptionText from a primary SuccessFactors/RMK-compatible HTML detail selector."
-      },
-      {
-        "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/successfactors/posting-detail-2002-fallback.html",
-        "summary": "postingDetail fixture preserves failed primary-strategy diagnostics and succeeds through an ordered fallback HTML selector."
+        "reference": "fixture.json",
+        "summary": "Embedded built-in Fixture Manifest covers sitemap postingDiscovery and primary HTML postingDetail through the shared Profile Verification Check."
       }
     ]
   },

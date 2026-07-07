@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -13,7 +13,9 @@ use crate::profile_dsl::documents::{
     JsonObject, SupportEvidence, SupportEvidenceKind, SupportLevel,
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
-use crate::source_profile::registry::SourceProfileRegistrySnapshot;
+use crate::source_profile::registry::{
+    SourceProfileRegistrySnapshot, BUILTIN_SOURCE_PROFILE_FIXTURE_FILES, BUILT_IN_ORIGIN,
+};
 
 use super::{
     evaluate_check_report_freshness, persist_latest_check_report, read_latest_check_report,
@@ -26,6 +28,11 @@ pub(crate) mod effective_state;
 pub(crate) mod fixture_manifest;
 pub(crate) mod fixture_pack;
 pub(crate) mod fixture_replay;
+
+use fixture_pack::{
+    file_missing_diagnostic, manifest_missing_diagnostic, normalize_fixture_reference,
+    reference_path_traversal_diagnostic, BUILTIN_SOURCE_PROFILE_FIXTURES_DIR,
+};
 
 pub const PROFILE_VERIFICATION_LOGIC_VERSION: &str = "profile-verification/v1";
 
@@ -151,8 +158,10 @@ pub(crate) fn build_source_profile_verification_report(
         }
 
         for evidence in fixture_evidence {
+            let fixture_pack_source =
+                FixturePackSource::for_registry_origin(&profile.origin, app_data_dir);
             let verification = verify_fixture_manifest_evidence(
-                app_data_dir,
+                fixture_pack_source,
                 &profile.document,
                 evidence,
                 &mut fingerprints,
@@ -213,6 +222,189 @@ struct FixtureEvidenceVerification {
     fixture_check: serde_json::Value,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum FixturePackSource<'a> {
+    Custom { app_data_dir: &'a Path },
+    BuiltIn,
+}
+
+#[derive(Clone, Debug)]
+struct FixturePackContent {
+    bytes: Option<Vec<u8>>,
+    diagnostics: Diagnostics,
+}
+
+impl<'a> FixturePackSource<'a> {
+    fn for_registry_origin(origin: &str, app_data_dir: &'a Path) -> Self {
+        if origin == BUILT_IN_ORIGIN {
+            Self::BuiltIn
+        } else {
+            Self::Custom { app_data_dir }
+        }
+    }
+
+    fn read_manifest(self, profile_key: &str, reference: &str) -> FixturePackContent {
+        match self {
+            Self::Custom { app_data_dir } => {
+                let resolution =
+                    resolve_fixture_manifest_reference(app_data_dir, profile_key, reference);
+                let diagnostics = resolution.diagnostics;
+                let Some(manifest_path) = resolution.resolved_path else {
+                    return FixturePackContent {
+                        bytes: None,
+                        diagnostics,
+                    };
+                };
+                if has_error_diagnostics(&diagnostics) {
+                    return FixturePackContent {
+                        bytes: None,
+                        diagnostics,
+                    };
+                }
+                FixturePackContent {
+                    bytes: match fs::read(&manifest_path) {
+                        Ok(bytes) => Some(bytes),
+                        Err(error) => {
+                            return FixturePackContent {
+                                bytes: None,
+                                diagnostics: vec![manifest_invalid_json_diagnostic(
+                                    profile_key,
+                                    reference,
+                                    error.to_string(),
+                                )],
+                            }
+                        }
+                    },
+                    diagnostics,
+                }
+            }
+            Self::BuiltIn => read_builtin_fixture_pack_content(
+                profile_key,
+                reference,
+                BuiltinFixtureContentKind::Manifest,
+                None,
+            ),
+        }
+    }
+
+    fn read_fixture_file(
+        self,
+        profile_key: &str,
+        access_path_key: &str,
+        manifest_reference: &str,
+        reference: &str,
+    ) -> FixturePackContent {
+        match self {
+            Self::Custom { app_data_dir } => {
+                let resolution = resolve_fixture_file_reference(
+                    app_data_dir,
+                    profile_key,
+                    manifest_reference,
+                    reference,
+                );
+                let diagnostics = resolution.diagnostics;
+                let Some(body_path) = resolution.resolved_path else {
+                    return FixturePackContent {
+                        bytes: None,
+                        diagnostics,
+                    };
+                };
+                if diagnostics.iter().any(|diagnostic| {
+                    diagnostic.severity == DiagnosticSeverity::Error
+                        && diagnostic
+                            .details
+                            .as_ref()
+                            .and_then(|details| details.get("reference"))
+                            .and_then(|reference| reference.as_str())
+                            == Some(reference)
+                }) {
+                    return FixturePackContent {
+                        bytes: None,
+                        diagnostics,
+                    };
+                }
+                FixturePackContent {
+                    bytes: match fs::read(&body_path) {
+                        Ok(bytes) => Some(bytes),
+                        Err(error) => {
+                            return FixturePackContent {
+                                bytes: None,
+                                diagnostics: vec![fixture_execution_failed_diagnostic(
+                                    profile_key,
+                                    access_path_key,
+                                    manifest_reference,
+                                    format!(
+                                        "Fixture response bodyFile `{reference}` could not be read: {error}"
+                                    ),
+                                )],
+                            }
+                        }
+                    },
+                    diagnostics,
+                }
+            }
+            Self::BuiltIn => read_builtin_fixture_pack_content(
+                profile_key,
+                reference,
+                BuiltinFixtureContentKind::FixtureFile,
+                Some(manifest_reference),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum BuiltinFixtureContentKind {
+    Manifest,
+    FixtureFile,
+}
+
+fn read_builtin_fixture_pack_content(
+    profile_key: &str,
+    reference: &str,
+    kind: BuiltinFixtureContentKind,
+    manifest_reference: Option<&str>,
+) -> FixturePackContent {
+    let fixture_root = PathBuf::from(BUILTIN_SOURCE_PROFILE_FIXTURES_DIR).join(profile_key);
+    let Some(resolved_path) = normalize_fixture_reference(&fixture_root, reference) else {
+        return FixturePackContent {
+            bytes: None,
+            diagnostics: vec![reference_path_traversal_diagnostic(
+                profile_key,
+                reference,
+                &fixture_root,
+                manifest_reference,
+            )],
+        };
+    };
+    let resolved_label = resolved_path.to_string_lossy().replace('\\', "/");
+
+    let contents = BUILTIN_SOURCE_PROFILE_FIXTURE_FILES
+        .iter()
+        .find_map(|(path, contents)| (*path == resolved_label).then_some(*contents));
+
+    match contents {
+        Some(contents) => FixturePackContent {
+            bytes: Some(contents.as_bytes().to_vec()),
+            diagnostics: Vec::new(),
+        },
+        None => FixturePackContent {
+            bytes: None,
+            diagnostics: vec![match kind {
+                BuiltinFixtureContentKind::Manifest => {
+                    manifest_missing_diagnostic(profile_key, reference, &resolved_path)
+                }
+                BuiltinFixtureContentKind::FixtureFile => file_missing_diagnostic(
+                    profile_key,
+                    manifest_reference.unwrap_or_default(),
+                    reference,
+                    &resolved_path,
+                ),
+            }],
+        },
+    }
+}
+
 fn fixture_support_evidence(evidence: &Option<Vec<SupportEvidence>>) -> Vec<&SupportEvidence> {
     evidence
         .as_deref()
@@ -223,7 +415,7 @@ fn fixture_support_evidence(evidence: &Option<Vec<SupportEvidence>>) -> Vec<&Sup
 }
 
 fn verify_fixture_manifest_evidence(
-    app_data_dir: &Path,
+    fixture_pack_source: FixturePackSource<'_>,
     profile: &crate::source_profile::documents::SourceProfileDocument,
     evidence: &SupportEvidence,
     fingerprints: &mut Vec<CheckFingerprint>,
@@ -231,40 +423,15 @@ fn verify_fixture_manifest_evidence(
     let reference = evidence.reference.as_str();
     let mut diagnostics = Vec::new();
 
-    let resolution = resolve_fixture_manifest_reference(app_data_dir, &profile.key, reference);
-    diagnostics.extend(resolution.diagnostics);
-    let Some(manifest_path) = resolution.resolved_path else {
+    let manifest_content = fixture_pack_source.read_manifest(&profile.key, reference);
+    diagnostics.extend(manifest_content.diagnostics);
+    let Some(manifest_bytes) = manifest_content.bytes else {
         return Ok(fixture_evidence_verification(
             reference,
             None,
             diagnostics,
             FixtureCheckCoverage::default(),
         ));
-    };
-    if has_error_diagnostics(&diagnostics) {
-        return Ok(fixture_evidence_verification(
-            reference,
-            None,
-            diagnostics,
-            FixtureCheckCoverage::default(),
-        ));
-    }
-
-    let manifest_bytes = match fs::read(&manifest_path) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            diagnostics.push(manifest_invalid_json_diagnostic(
-                &profile.key,
-                reference,
-                error.to_string(),
-            ));
-            return Ok(fixture_evidence_verification(
-                reference,
-                None,
-                diagnostics,
-                FixtureCheckCoverage::default(),
-            ));
-        }
     };
     fingerprints.push(CheckFingerprint::with_reference(
         "fixture_manifest",
@@ -322,7 +489,7 @@ fn verify_fixture_manifest_evidence(
 
         if !has_error_diagnostics(&diagnostics) {
             let replay_setup = fixture_replay::FixtureReplay::from_manifest(
-                app_data_dir,
+                fixture_pack_source,
                 &profile.key,
                 reference,
                 &manifest,

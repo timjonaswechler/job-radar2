@@ -6,22 +6,12 @@
   "description": "Workday CXS public careers API profile for HTTP POST posting discovery and lazy posting detail extraction.",
   "support": {
     "level": "verified",
-    "summary": "Verified against deterministic offline Workday CXS-compatible discovery, offset/limit pagination, and detail fixtures.",
+    "summary": "Verified against deterministic offline Workday CXS-compatible discovery and detail fixtures; offset/limit pagination remains covered by the built-in profile DSL tests.",
     "evidence": [
       {
         "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/workday/posting-discovery-page-0-response.json",
-        "summary": "postingDiscovery fixture executes CXS POST discovery through the public Profile Compiler and shared Profile DSL runtime."
-      },
-      {
-        "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/workday/posting-discovery-page-2-response.json",
-        "summary": "postingDiscovery fixture exercises bounded offset/limit pagination through JSON request body parameters."
-      },
-      {
-        "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/workday/posting-detail-jr-1001-response.json",
-        "summary": "postingDetail fixture extracts normalized descriptionText from Workday CXS HTML-in-JSON content through the shared Profile DSL runtime."
+        "reference": "fixture.json",
+        "summary": "Embedded built-in Fixture Manifest covers CXS postingDiscovery and postingDetail through the shared Profile Verification Check."
       }
     ]
   },

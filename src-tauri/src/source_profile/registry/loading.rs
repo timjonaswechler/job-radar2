@@ -16,11 +16,9 @@ use crate::source_profile::documents::SourceProfileDocument;
 
 use super::builtins::{
     EmbeddedRegistryDocument, BUILTIN_SOURCE_JSON_FILES, BUILTIN_SOURCE_PROFILE_JSON_FILES,
+    BUILT_IN_ORIGIN, CUSTOM_ORIGIN,
 };
 use super::snapshot::{RegistrySource, RegistrySourceProfile, SourceProfileRegistrySnapshot};
-
-const BUILT_IN_ORIGIN: &str = "built_in";
-const CUSTOM_ORIGIN: &str = "custom";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RegistryDocumentKind {

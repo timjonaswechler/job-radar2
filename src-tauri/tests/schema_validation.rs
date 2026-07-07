@@ -62,6 +62,19 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
+fn builtin_fixture_manifests_match_schema_entrypoint() {
+    let harness = SchemaHarness::new();
+
+    for fixture_manifest in [
+        "resources/source-profile-fixtures/builtin/greenhouse/fixture.json",
+        "resources/source-profile-fixtures/builtin/successfactors/fixture.json",
+        "resources/source-profile-fixtures/builtin/workday/fixture.json",
+    ] {
+        harness.assert_valid(SchemaEntrypoint::FixtureManifest, fixture_manifest);
+    }
+}
+
+#[test]
 fn production_agent_document_schema_examples_match_schema_entrypoints() {
     let harness = SchemaHarness::new();
     let document = read_repo_file("docs/source-profile-production-agent.md");

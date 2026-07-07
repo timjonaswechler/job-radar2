@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "profileKey": "greenhouse",
+  "accessPathKey": "boards_api",
+  "sourceConfig": {
+    "boardSlug": "acmejobs"
+  },
+  "requests": [
+    {
+      "key": "discovery_jobs",
+      "match": {
+        "method": "GET",
+        "url": "https://boards-api.greenhouse.io/v1/boards/acmejobs/jobs"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/posting-discovery-response.json"
+      }
+    },
+    {
+      "key": "detail_job_9001",
+      "match": {
+        "method": "GET",
+        "url": "https://boards-api.greenhouse.io/v1/boards/acmejobs/jobs/9001"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/posting-detail-9001-response.json"
+      }
+    }
+  ],
+  "checks": {
+    "postingDiscovery": {
+      "expect": {
+        "minCandidates": 2,
+        "requiredFields": ["title", "company", "url", "postingMeta"],
+        "containsCandidates": [
+          {
+            "title": "Staff Platform Engineer",
+            "company": "Greenhouse fixture verification",
+            "url": "https://job-boards.greenhouse.io/acmejobs/jobs/9001",
+            "locations": ["Berlin, Germany"],
+            "postingMeta": {
+              "jobId": "9001"
+            }
+          }
+        ]
+      }
+    },
+    "postingDetail": {
+      "cases": [
+        {
+          "key": "job_9001_detail",
+          "posting": {
+            "title": "Staff Platform Engineer",
+            "company": "Greenhouse fixture verification",
+            "url": "https://job-boards.greenhouse.io/acmejobs/jobs/9001",
+            "postingMeta": {
+              "jobId": "9001"
+            }
+          },
+          "expect": {
+            "minDescriptionLength": 80,
+            "descriptionContains": ["reliable hiring infrastructure", "Rust services"]
+          }
+        }
+      ]
+    }
+  }
+}

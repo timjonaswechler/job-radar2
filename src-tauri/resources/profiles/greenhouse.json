@@ -10,13 +10,8 @@
     "evidence": [
       {
         "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/greenhouse/posting-discovery-response.json",
-        "summary": "postingDiscovery fixture executes through the public Profile Compiler and shared Profile DSL runtime."
-      },
-      {
-        "kind": "fixture",
-        "reference": "src-tauri/tests/fixtures/greenhouse/posting-detail-9001-response.json",
-        "summary": "postingDetail fixture extracts normalized descriptionText from HTML-in-JSON content through the shared Profile DSL runtime."
+        "reference": "fixture.json",
+        "summary": "Embedded built-in Fixture Manifest covers postingDiscovery and postingDetail through the shared Profile Verification Check."
       }
     ]
   },

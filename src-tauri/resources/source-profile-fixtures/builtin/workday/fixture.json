@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "profileKey": "workday",
+  "accessPathKey": "cxs_api",
+  "sourceConfig": {
+    "workdayHost": "acme.wd3.myworkdayjobs.com",
+    "tenant": "acme",
+    "site": "External",
+    "startUrl": "https://acme.wd3.myworkdayjobs.com/en-US/External"
+  },
+  "requests": [
+    {
+      "key": "discovery_jobs_page_0",
+      "match": {
+        "method": "POST",
+        "url": "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/posting-discovery-page-0-response.json"
+      }
+    },
+    {
+      "key": "detail_job_jr_1001",
+      "match": {
+        "method": "GET",
+        "url": "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "bodyFile": "responses/posting-detail-jr-1001-response.json"
+      }
+    }
+  ],
+  "checks": {
+    "postingDiscovery": {
+      "expect": {
+        "minCandidates": 2,
+        "requiredFields": [
+          "title",
+          "company",
+          "url",
+          "locations",
+          "postingMeta"
+        ],
+        "containsCandidates": [
+          {
+            "title": "Senior Platform Engineer",
+            "company": "Workday Recruiting fixture verification",
+            "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001",
+            "locations": [
+              "Berlin, Germany"
+            ],
+            "postingMeta": {
+              "externalPath": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+            }
+          }
+        ]
+      }
+    },
+    "postingDetail": {
+      "cases": [
+        {
+          "key": "job_jr_1001_detail",
+          "posting": {
+            "title": "Senior Platform Engineer",
+            "company": "Workday Recruiting fixture verification",
+            "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001",
+            "postingMeta": {
+              "externalPath": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+            }
+          },
+          "expect": {
+            "minDescriptionLength": 60,
+            "descriptionContains": [
+              "internal developer platforms",
+              "Rust services"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

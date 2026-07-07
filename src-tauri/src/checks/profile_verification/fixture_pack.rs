@@ -7,6 +7,7 @@ use crate::profile_dsl::diagnostics::{
 };
 
 pub const SOURCE_PROFILE_FIXTURES_DIR: &str = "source-profile-fixtures";
+pub const BUILTIN_SOURCE_PROFILE_FIXTURES_DIR: &str = "source-profile-fixtures/builtin";
 pub const DEFAULT_FIXTURE_MANIFEST_REFERENCE: &str = "fixture.json";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,7 +127,7 @@ pub fn resolve_fixture_file_reference(
     }
 }
 
-fn normalize_fixture_reference(fixture_root: &Path, reference: &str) -> Option<PathBuf> {
+pub(crate) fn normalize_fixture_reference(fixture_root: &Path, reference: &str) -> Option<PathBuf> {
     if reference.is_empty()
         || is_home_style_reference(reference)
         || is_windows_absolute_reference(reference)
@@ -170,7 +171,7 @@ fn is_windows_absolute_reference(reference: &str) -> bool {
         || reference.starts_with("\\\\")
 }
 
-fn directory_missing_diagnostic(profile_key: &str, fixture_root: &Path) -> Diagnostic {
+pub(crate) fn directory_missing_diagnostic(profile_key: &str, fixture_root: &Path) -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Fixture,
         code: "fixture.directory_missing".to_string(),
@@ -187,7 +188,7 @@ fn directory_missing_diagnostic(profile_key: &str, fixture_root: &Path) -> Diagn
     }
 }
 
-fn manifest_missing_diagnostic(
+pub(crate) fn manifest_missing_diagnostic(
     profile_key: &str,
     reference: &str,
     resolved_path: &Path,
@@ -209,7 +210,7 @@ fn manifest_missing_diagnostic(
     }
 }
 
-fn file_missing_diagnostic(
+pub(crate) fn file_missing_diagnostic(
     profile_key: &str,
     manifest_reference: &str,
     reference: &str,
@@ -233,7 +234,7 @@ fn file_missing_diagnostic(
     }
 }
 
-fn reference_path_traversal_diagnostic(
+pub(crate) fn reference_path_traversal_diagnostic(
     profile_key: &str,
     reference: &str,
     fixture_root: &Path,

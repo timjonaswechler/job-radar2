@@ -339,6 +339,60 @@ fn representative_manifest_with_request_url(
 }
 
 #[test]
+fn verify_source_profile_runs_embedded_builtin_fixture_packs_without_custom_fixture_directory() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    for profile_key in ["greenhouse", "successfactors", "workday"] {
+        let report = verify_source_profile(temp_dir.path(), profile_key).unwrap();
+
+        assert_eq!(
+            report.result,
+            CheckReportResult::Passed,
+            "{profile_key} built-in fixture verification should pass: {:#?}",
+            report.diagnostics
+        );
+        assert!(
+            report.diagnostics.is_empty(),
+            "{profile_key} built-in fixture verification should not emit diagnostics: {:#?}",
+            report.diagnostics
+        );
+        assert_eq!(
+            report.details.get("effectiveVerificationState"),
+            Some(&json!("verified")),
+            "{profile_key} should derive effective verified state from embedded fixtures"
+        );
+        assert!(report.fingerprints.iter().any(|fingerprint| {
+            fingerprint.kind == "fixture_manifest"
+                && fingerprint.reference.as_deref() == Some("fixture.json")
+        }));
+        assert!(report.fingerprints.iter().any(|fingerprint| {
+            fingerprint.kind == "fixture_file" && fingerprint.reference.is_some()
+        }));
+
+        let fixture_checks = report
+            .details
+            .get("fixtureChecks")
+            .and_then(|fixture_checks| fixture_checks.as_array())
+            .expect("fixtureChecks should be an array");
+        assert_eq!(fixture_checks.len(), 1);
+        assert_eq!(fixture_checks[0]["reference"], json!("fixture.json"));
+        assert_eq!(fixture_checks[0]["result"], json!("passed"));
+        assert_eq!(
+            fixture_checks[0]["coverage"],
+            json!({
+                "postingDiscovery": true,
+                "postingDetailDescriptionText": true
+            })
+        );
+    }
+
+    assert!(
+        !temp_dir.path().join("source-profile-fixtures").exists(),
+        "embedded built-in fixtures must not require app-data custom Fixture Packs"
+    );
+}
+
+#[test]
 fn verify_source_profile_creates_and_persists_passed_report_for_valid_profile() {
     let temp_dir = tempfile::tempdir().unwrap();
     let profile_dir = temp_dir.path().join("source-profiles");

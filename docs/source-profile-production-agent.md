@@ -238,6 +238,14 @@ fixture.json
 
 A non-default manifest may be referenced by setting `support.evidence[].reference`, but the reference must still be Fixture-Pack-root-relative.
 
+Built-in Source Profiles use the same Fixture Manifest v1 shape and `support.evidence.kind = "fixture"` semantics. Their Fixture Packs are versioned with the app under:
+
+```text
+src-tauri/resources/source-profile-fixtures/builtin/<profile-key>/
+```
+
+These built-in Fixture Packs are embedded into the Rust binary alongside the built-in Source Profile JSON documents. Profile Verification loads built-in fixture manifests from this embedded bundle, not from `<app-data-dir>/source-profile-fixtures/`, so built-in verification stays deterministic in CI and release workflows without requiring custom app-data fixture directories.
+
 ### Fixture file path rules
 
 Fixture Manifest references and response `bodyFile` references are resolved relative to the Fixture Pack root. Subdirectories such as `responses/jobs.json` are allowed.

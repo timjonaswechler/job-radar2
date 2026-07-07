@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future, path::Path, pin::Pin, sync::Mutex};
+use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Mutex};
 
 use serde_json::json;
 
@@ -15,8 +15,7 @@ use crate::profile_dsl::{
 };
 
 use super::{
-    resolve_fixture_file_reference, sha256_hex, CheckFingerprint, FixtureManifest,
-    FixtureManifestRequestMethod,
+    sha256_hex, CheckFingerprint, FixtureManifest, FixtureManifestRequestMethod, FixturePackSource,
 };
 
 #[derive(Debug)]
@@ -32,8 +31,8 @@ pub(super) struct FixtureReplay {
 }
 
 impl FixtureReplay {
-    pub fn from_manifest(
-        app_data_dir: &Path,
+    pub(super) fn from_manifest(
+        fixture_pack_source: FixturePackSource<'_>,
         profile_key: &str,
         manifest_reference: &str,
         manifest: &FixtureManifest,
@@ -43,42 +42,15 @@ impl FixtureReplay {
         let mut responses = BTreeMap::new();
 
         for mapping in &manifest.requests {
-            let resolution = resolve_fixture_file_reference(
-                app_data_dir,
+            let body_content = fixture_pack_source.read_fixture_file(
                 profile_key,
+                &manifest.access_path_key,
                 manifest_reference,
                 &mapping.response.body_file,
             );
-            diagnostics.extend(resolution.diagnostics);
-            let Some(body_path) = resolution.resolved_path else {
+            diagnostics.extend(body_content.diagnostics);
+            let Some(body_bytes) = body_content.bytes else {
                 continue;
-            };
-            if diagnostics.iter().any(|diagnostic| {
-                diagnostic.severity == DiagnosticSeverity::Error
-                    && diagnostic
-                        .details
-                        .as_ref()
-                        .and_then(|details| details.get("reference"))
-                        .and_then(|reference| reference.as_str())
-                        == Some(mapping.response.body_file.as_str())
-            }) {
-                continue;
-            }
-
-            let body_bytes = match std::fs::read(&body_path) {
-                Ok(bytes) => bytes,
-                Err(error) => {
-                    diagnostics.push(fixture_execution_failed_diagnostic(
-                        profile_key,
-                        &manifest.access_path_key,
-                        manifest_reference,
-                        format!(
-                            "Fixture response bodyFile `{}` could not be read: {error}",
-                            mapping.response.body_file
-                        ),
-                    ));
-                    continue;
-                }
             };
             fingerprints.push(CheckFingerprint::with_reference(
                 "fixture_file",
