@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/check-report.schema.json",
+  "title": "Job Radar Check Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "subject",
+    "checkedAt",
+    "logicVersion",
+    "result",
+    "fingerprints",
+    "diagnostics",
+    "details"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "$ref": "#/$defs/checkKind" },
+    "subject": { "$ref": "#/$defs/subject" },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "logicVersion": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+    "result": { "$ref": "#/$defs/result" },
+    "fingerprints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fingerprint" }
+    },
+    "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" },
+    "details": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "source_profile_verification" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "properties": { "type": { "const": "source_profile" } },
+            "required": ["type"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "source_live_check" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "properties": { "type": { "const": "source" } },
+            "required": ["type"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "checkKind": {
+      "type": "string",
+      "enum": ["source_profile_verification", "source_live_check"]
+    },
+    "subjectType": {
+      "type": "string",
+      "enum": ["source_profile", "source"]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "$ref": "#/$defs/subjectType" },
+        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" }
+      }
+    },
+    "result": {
+      "type": "string",
+      "enum": ["passed", "failed"]
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
+        "reference": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

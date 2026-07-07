@@ -4,6 +4,7 @@ use jsonschema::{Draft, Registry};
 use serde_json::{json, Value};
 
 const SCHEMA_FILES: &[&str] = &[
+    "src/schema/check-report.schema.json",
     "src/schema/source-profile.schema.json",
     "src/schema/source.schema.json",
     "src/schema/profile-dsl/common.schema.json",
@@ -20,6 +21,7 @@ const SCHEMA_FILES: &[&str] = &[
 
 #[derive(Clone, Copy)]
 enum SchemaEntrypoint {
+    CheckReport,
     SourceProfile,
     Source,
 }
@@ -27,6 +29,7 @@ enum SchemaEntrypoint {
 impl SchemaEntrypoint {
     fn path(self) -> &'static str {
         match self {
+            Self::CheckReport => "src/schema/check-report.schema.json",
             Self::SourceProfile => "src/schema/source-profile.schema.json",
             Self::Source => "src/schema/source.schema.json",
         }
@@ -158,6 +161,110 @@ fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnos
         SchemaEntrypoint::SourceProfile,
         profile,
         &["execute_script", "oneOf"],
+    );
+}
+
+#[test]
+fn check_report_schema_accepts_profile_and_source_reports() {
+    let harness = SchemaHarness::new();
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::CheckReport,
+        json!({
+            "schemaVersion": 1,
+            "kind": "source_profile_verification",
+            "subject": {
+                "type": "source_profile",
+                "key": "greenhouse"
+            },
+            "checkedAt": "2026-07-07T12:00:00Z",
+            "logicVersion": "profile-verification/v1",
+            "result": "passed",
+            "fingerprints": [
+                {
+                    "kind": "source_profile_document",
+                    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                }
+            ],
+            "diagnostics": [],
+            "details": {
+                "declaredSupportLevel": "verified"
+            }
+        }),
+        "representative Source Profile Verification Report",
+    );
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::CheckReport,
+        json!({
+            "schemaVersion": 1,
+            "kind": "source_live_check",
+            "subject": {
+                "type": "source",
+                "key": "acme_jobs"
+            },
+            "checkedAt": "2026-07-07T12:00:00Z",
+            "logicVersion": "source-live-check/v1",
+            "result": "failed",
+            "fingerprints": [],
+            "diagnostics": [
+                {
+                    "category": "runtime",
+                    "code": "request_failed",
+                    "message": "Discovery request failed",
+                    "severity": "error",
+                    "path": ""
+                }
+            ],
+            "details": {
+                "sourceStatusAtCheck": "draft",
+                "liveCheckState": "live_check_failed"
+            }
+        }),
+        "representative Source Live Check Report",
+    );
+}
+
+#[test]
+fn check_report_schema_rejects_unsupported_result_and_mismatched_subject() {
+    let harness = SchemaHarness::new();
+
+    harness.assert_json_invalid(
+        SchemaEntrypoint::CheckReport,
+        json!({
+            "schemaVersion": 1,
+            "kind": "source_profile_verification",
+            "subject": {
+                "type": "source_profile",
+                "key": "greenhouse"
+            },
+            "checkedAt": "2026-07-07T12:00:00Z",
+            "logicVersion": "profile-verification/v1",
+            "result": "stale",
+            "fingerprints": [],
+            "diagnostics": [],
+            "details": {}
+        }),
+        &["stale"],
+    );
+
+    harness.assert_json_invalid(
+        SchemaEntrypoint::CheckReport,
+        json!({
+            "schemaVersion": 1,
+            "kind": "source_live_check",
+            "subject": {
+                "type": "source_profile",
+                "key": "greenhouse"
+            },
+            "checkedAt": "2026-07-07T12:00:00Z",
+            "logicVersion": "source-live-check/v1",
+            "result": "passed",
+            "fingerprints": [],
+            "diagnostics": [],
+            "details": {}
+        }),
+        &["source"],
     );
 }
 

@@ -1,6 +1,7 @@
 mod app;
 mod background_tasks;
 mod browser_runtime;
+mod checks;
 mod db;
 mod geo;
 mod profile_dsl;
@@ -9,6 +10,12 @@ mod simple_json_path;
 mod source;
 mod source_profile;
 
+pub use checks::{
+    latest_check_report_path, persist_latest_check_report, read_latest_check_report,
+    source_live_check_report_path, source_profile_verification_report_path, CheckFingerprint,
+    CheckReport, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
+    CheckReportSubject, CheckReportSubjectType, CHECK_REPORT_SCHEMA_VERSION,
+};
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
     LocationFilterNotAppliedReason, LocationMatchOutcome, PreparedLocationFilter, ResolvedLocation,

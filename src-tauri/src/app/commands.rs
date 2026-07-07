@@ -36,6 +36,8 @@ pub struct DatabaseInfo {
     database_path: String,
     source_profiles_dir: String,
     sources_dir: String,
+    source_profile_verifications_dir: String,
+    source_live_checks_dir: String,
     initialized_at: Option<String>,
     sqlite_version: String,
 }
@@ -88,6 +90,16 @@ pub async fn get_database_info(state: State<'_, AppState>) -> Result<DatabaseInf
             .to_string_lossy()
             .to_string(),
         sources_dir: state.paths.sources_dir.to_string_lossy().to_string(),
+        source_profile_verifications_dir: state
+            .paths
+            .source_profile_verifications_dir
+            .to_string_lossy()
+            .to_string(),
+        source_live_checks_dir: state
+            .paths
+            .source_live_checks_dir
+            .to_string_lossy()
+            .to_string(),
         initialized_at,
         sqlite_version,
     })

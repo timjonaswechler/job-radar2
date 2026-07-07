@@ -23,6 +23,8 @@ pub enum DiagnosticCategory {
     Runtime,
     Detection,
     SourceValidation,
+    Fixture,
+    Verification,
 }
 
 /// Shared machine-readable diagnostic contract for schema validation,
