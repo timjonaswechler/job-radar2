@@ -10,6 +10,7 @@ import {
   sourceAddDraftAfterDetectedSource,
   sourceAddDraftAfterProfileChange,
   sourceOverridesFromText,
+  sourceOverridesStarterForAccessPath,
   sourceFormAfterKeyChange,
   sourceFormAfterNameChange,
   type SourceAddDraftState,
@@ -848,6 +849,28 @@ const sourceOverridesSchema = profileDslSchemaCatalog.resolveRef(
 );
 assert.equal(sourceOverridesSchema?.schema.type, "object");
 assert.ok(sourceOverridesSchema?.schema.properties);
+assert.equal(
+  sourceOverridesStarterForAccessPath(sourceAddTransitionProfile.document.accessPaths[0] ?? null),
+  JSON.stringify(
+    {
+      strategyOverrides: [
+        { step: "postingDiscovery", strategyKey: "posting_api" },
+      ],
+    },
+    null,
+    2,
+  ),
+);
+assert.equal(
+  sourceOverridesStarterForAccessPath(null),
+  JSON.stringify(
+    {
+      strategyOverrides: [{ step: "postingDiscovery", strategyKey: "" }],
+    },
+    null,
+    2,
+  ),
+);
 
 const accessPathSelectionDraft = sourceAddDraftAfterAccessPathChange({
   selectedProfile: sourceAddTransitionProfile,

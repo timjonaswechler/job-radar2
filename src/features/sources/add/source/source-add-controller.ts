@@ -26,6 +26,7 @@ import {
   sourceAddDraftAfterDetectedSource,
   sourceAddDraftAfterDetectionResult,
   sourceAddDraftAfterProfileChange,
+  sourceOverridesStarterForAccessPath,
   sourceFormAfterKeyChange,
   sourceFormAfterNameChange,
   type DetectedSourceLike,
@@ -112,6 +113,10 @@ export function useSourceAddController({
         ? JSON.stringify(buildResult.document, null, 2)
         : "",
     [buildResult.document, jsonPreviewOpen],
+  );
+  const sourceOverridesStarter = useMemo(
+    () => sourceOverridesStarterForAccessPath(selectedAccessPath),
+    [selectedAccessPath],
   );
 
   const asyncActionPending = saving || detecting;
@@ -319,6 +324,7 @@ export function useSourceAddController({
       schemaMetadata,
       buildResult,
       previewJson,
+      sourceOverridesStarter,
     },
     actions: {
       setUrl,

@@ -131,6 +131,7 @@ export function SourceAddDrawer({
             <SourceOverridesEditor
               value={state.sourceOverridesText}
               disabled={state.saving}
+              starterValue={data.sourceOverridesStarter}
               errors={data.buildResult.overridesErrors}
               showErrors={state.saveAttempted}
               onChange={actions.setSourceOverridesText}

@@ -29,6 +29,7 @@ const sourceOverridesSchemaOptions: SchemaResolutionOptions = {
 type SourceOverridesEditorProps = {
   value: string;
   disabled: boolean;
+  starterValue: string;
   errors: string[];
   showErrors: boolean;
   onChange: (value: string) => void;
@@ -37,6 +38,7 @@ type SourceOverridesEditorProps = {
 export function SourceOverridesEditor({
   value,
   disabled,
+  starterValue,
   errors,
   showErrors,
   onChange,
@@ -104,11 +106,11 @@ export function SourceOverridesEditor({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onChange("{}")}
+                  onClick={() => onChange(starterValue)}
                   disabled={disabled}
                 >
                   <Code2Icon data-icon="inline-start" aria-hidden="true" />
-                  Overrides bearbeiten
+                  Override-Vorlage einfügen
                 </Button>
               </div>
             </div>
