@@ -60,6 +60,8 @@ import {
   fixtureChecksFromVerificationReport,
   profileVerificationDisplayModel,
   resolveSource,
+  sourceLiveCheckActionsForSource,
+  sourceLiveCheckDisplayModel,
 } from "@/features/sources/view-model/registry-view-model";
 import type {
   CheckReport,
@@ -68,6 +70,7 @@ import type {
   RegistrySourceProfile,
   SourceDocument,
   SourceProposal,
+  SourceLiveCheckReportStatus,
   SourceProfileVerificationReportStatus,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
@@ -1535,6 +1538,110 @@ assert.deepEqual(
     }),
   ).fixtureChecks,
   [],
+);
+
+const liveCheckReport: CheckReport = {
+  schemaVersion: 1,
+  kind: "source_live_check",
+  subject: { type: "source", key: "acme" },
+  checkedAt: "2026-07-07T13:00:00Z",
+  logicVersion: "source-live-check/v1",
+  result: "passed",
+  fingerprints: [{ kind: "source_document", sha256: "source-sha" }],
+  diagnostics: [],
+  details: {
+    sourceStatusAtCheck: "draft",
+    liveCheckState: "live_check_passed",
+    accessPathKey: "boards_api",
+    candidateCount: 2,
+    detailChecked: true,
+    detailPassed: true,
+  },
+};
+
+function liveCheckStatus(
+  overrides: Partial<SourceLiveCheckReportStatus>,
+): SourceLiveCheckReportStatus {
+  return {
+    state: "fresh",
+    report: liveCheckReport,
+    freshness: { state: "fresh", staleFingerprints: [] },
+    ...overrides,
+  };
+}
+
+const passedLiveCheckModel = sourceLiveCheckDisplayModel(liveCheckStatus({}));
+assert.equal(passedLiveCheckModel.displayState, "passed");
+assert.equal(passedLiveCheckModel.displayLabel, "Live-Prüfung bestanden");
+assert.equal(passedLiveCheckModel.reportStateLabel, "Frisch");
+assert.equal(passedLiveCheckModel.reportResultLabel, "Bestanden");
+assert.equal(passedLiveCheckModel.diagnostics.length, 0);
+
+const failedLiveCheckModel = sourceLiveCheckDisplayModel(
+  liveCheckStatus({
+    report: {
+      ...liveCheckReport,
+      result: "failed",
+      details: { ...liveCheckReport.details, liveCheckState: "live_check_failed" },
+      diagnostics: [
+        {
+          category: "runtime",
+          code: "source_live_check.activation_blocked",
+          message: "Activation blocked",
+          severity: "error",
+          path: "/",
+          details: {
+            sourceKey: "acme",
+            currentStatus: "draft",
+            requestedStatus: "active",
+            liveCheckResult: "failed",
+          },
+        },
+      ],
+    },
+  }),
+);
+assert.equal(failedLiveCheckModel.displayState, "failed");
+assert.equal(failedLiveCheckModel.diagnostics[0]?.code, "source_live_check.activation_blocked");
+
+const staleLiveCheckModel = sourceLiveCheckDisplayModel(
+  liveCheckStatus({
+    state: "stale",
+    freshness: {
+      state: "stale",
+      staleFingerprints: [
+        { kind: "source_document", reason: "changed_fingerprint_sha256" },
+      ],
+    },
+  }),
+);
+assert.equal(staleLiveCheckModel.displayState, "stale");
+assert.equal(staleLiveCheckModel.staleFingerprints[0]?.kind, "source_document");
+assert.equal(sourceLiveCheckDisplayModel(null).displayState, "unknown");
+assert.equal(sourceLiveCheckDisplayModel({ state: "unknown" }).displayLabel, "Unbekannt");
+for (const label of [
+  passedLiveCheckModel.displayLabel,
+  failedLiveCheckModel.displayLabel,
+  staleLiveCheckModel.displayLabel,
+]) {
+  assert.equal(label.toLocaleLowerCase("de").includes("verifiziert"), false);
+}
+
+assert.deepEqual(sourceLiveCheckActionsForSource("active").map((action) => action.kind), [
+  "check",
+]);
+assert.deepEqual(sourceLiveCheckActionsForSource("draft").map((action) => action.kind), [
+  "check",
+  "check_and_activate",
+]);
+assert.deepEqual(sourceLiveCheckActionsForSource("disabled").map((action) => action.kind), [
+  "check",
+  "check_and_reactivate",
+]);
+assert.equal(sourceLiveCheckActionsForSource("draft")[1]?.label, "Prüfen & Aktivieren");
+assert.equal(
+  sourceLiveCheckActionsForSource("disabled")[1]?.label,
+  "Prüfen & Reaktivieren",
 );
 
 const proposal: SourceProposal = {

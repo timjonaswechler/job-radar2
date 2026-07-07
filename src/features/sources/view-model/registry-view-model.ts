@@ -6,10 +6,13 @@ import {
   profileKindLabels,
   profileVerificationDisplayStateLabels,
   profileVerificationReportStateLabels,
+  sourceLiveCheckDisplayStateLabels,
+  sourceLiveCheckReportStateLabels,
   supportEvidenceKindLabels,
   supportLevelLabels,
   validationStateLabels,
   type ProfileVerificationDisplayState,
+  type SourceLiveCheckDisplayState,
 } from "@/features/sources/labels";
 import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-config-schema";
 import { sourceStatusLabels } from "@/features/sources/status";
@@ -23,6 +26,7 @@ import type {
   RegistrySource,
   RegistrySourceProfile,
   SelectedAccessPath,
+  SourceLiveCheckReportStatus,
   SourceOwnedSelectedAccessPath,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
@@ -149,6 +153,27 @@ export type ProfileVerificationDisplayModel = {
   fixtureChecks: FixtureCheckResult[];
 };
 
+export type SourceLiveCheckDisplayModel = {
+  displayState: SourceLiveCheckDisplayState;
+  displayLabel: string;
+  reportState: "fresh" | "stale" | "unknown";
+  reportStateLabel: string;
+  reportResultLabel: string;
+  diagnostics: StructuredDiagnostic[];
+  staleFingerprints: NonNullable<SourceLiveCheckReportStatus["freshness"]>["staleFingerprints"];
+};
+
+export type SourceLiveCheckActionKind =
+  | "check"
+  | "check_and_activate"
+  | "check_and_reactivate";
+
+export type SourceLiveCheckAction = {
+  kind: SourceLiveCheckActionKind;
+  label: string;
+  description: string;
+};
+
 export function profileVerificationDisplayModel(
   status: SourceProfileVerificationReportStatus | null | undefined,
 ): ProfileVerificationDisplayModel {
@@ -181,6 +206,63 @@ function profileVerificationDisplayState(
   if (effectiveState === "failed") return "failed";
   if (effectiveState === "not_applicable") return "not_applicable";
   return "unknown";
+}
+
+export function sourceLiveCheckDisplayModel(
+  status: SourceLiveCheckReportStatus | null | undefined,
+): SourceLiveCheckDisplayModel {
+  const reportState = status?.state ?? "unknown";
+  const report = status?.report ?? null;
+  const displayState = sourceLiveCheckDisplayState(reportState, report);
+
+  return {
+    displayState,
+    displayLabel: sourceLiveCheckDisplayStateLabels[displayState],
+    reportState,
+    reportStateLabel: sourceLiveCheckReportStateLabels[reportState],
+    reportResultLabel: report ? checkReportResultLabels[report.result] : "Kein Report",
+    diagnostics: report?.diagnostics ?? [],
+    staleFingerprints: status?.freshness?.staleFingerprints ?? [],
+  };
+}
+
+function sourceLiveCheckDisplayState(
+  reportState: "fresh" | "stale" | "unknown",
+  report: CheckReport | null,
+): SourceLiveCheckDisplayState {
+  if (reportState === "stale") return "stale";
+  if (reportState === "unknown" || !report) return "unknown";
+  return report.result === "passed" ? "passed" : "failed";
+}
+
+export function sourceLiveCheckActionsForSource(
+  status: SourceStatus,
+): SourceLiveCheckAction[] {
+  const actions: SourceLiveCheckAction[] = [
+    {
+      kind: "check",
+      label: "Prüfen",
+      description: "Führt eine status-neutrale Source Live Check aus.",
+    },
+  ];
+
+  if (status === "draft") {
+    actions.push({
+      kind: "check_and_activate",
+      label: "Prüfen & Aktivieren",
+      description: "Aktiviert den Entwurf nur nach bestandener Live-Prüfung.",
+    });
+  }
+
+  if (status === "disabled") {
+    actions.push({
+      kind: "check_and_reactivate",
+      label: "Prüfen & Reaktivieren",
+      description: "Reaktiviert die deaktivierte Source nur nach bestandener Live-Prüfung.",
+    });
+  }
+
+  return actions;
 }
 
 export function fixtureChecksFromVerificationReport(

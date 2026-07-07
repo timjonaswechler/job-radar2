@@ -118,7 +118,7 @@ export function SourceRegistryDataGrid({
         accessorKey: "supportLabel",
         id: "supportLabel",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Support" visibility column={column} />
+          <DataGridColumnHeader title="Profil-Support" visibility column={column} />
         ),
         cell: ({ row }) => <Badge variant="outline">{row.original.supportLabel}</Badge>,
         size: 130,
@@ -284,6 +284,7 @@ export function SourceRegistryDataGrid({
           setEditingSource(source);
           setSelectedRow(null);
         }}
+        onUpdated={onUpdated}
         onOpenChange={(open) => {
           if (!open) setSelectedRow(null);
         }}

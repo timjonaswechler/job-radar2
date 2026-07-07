@@ -370,6 +370,14 @@ export function checkSource(sourceKey: string) {
   return invoke<CheckReport>("check_source", { sourceKey })
 }
 
+export function checkAndActivateSource(sourceKey: string) {
+  return invoke<CheckReport>("check_and_activate_source", { sourceKey })
+}
+
+export function checkAndReactivateSource(sourceKey: string) {
+  return invoke<CheckReport>("check_and_reactivate_source", { sourceKey })
+}
+
 export function getSourceLiveCheckReportStatus(sourceKey: string) {
   return invoke<SourceLiveCheckReportStatus>(
     "get_source_live_check_report_status",

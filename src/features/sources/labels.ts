@@ -17,6 +17,12 @@ export type ProfileVerificationDisplayState =
   | "unknown"
   | "not_applicable";
 
+export type SourceLiveCheckDisplayState =
+  | "passed"
+  | "failed"
+  | "stale"
+  | "unknown";
+
 export const originLabels: Record<SourceRegistryDocumentOrigin, string> = {
   built_in: "Eingebaut",
   custom: "Custom",
@@ -91,6 +97,19 @@ export const profileVerificationDisplayStateLabels: Record<ProfileVerificationDi
   stale: "Stale",
   unknown: "Unbekannt",
   not_applicable: "Nicht anwendbar",
+};
+
+export const sourceLiveCheckReportStateLabels: Record<"fresh" | "stale" | "unknown", string> = {
+  fresh: "Frisch",
+  stale: "Stale",
+  unknown: "Unbekannt",
+};
+
+export const sourceLiveCheckDisplayStateLabels: Record<SourceLiveCheckDisplayState, string> = {
+  passed: "Live-Prüfung bestanden",
+  failed: "Live-Prüfung fehlgeschlagen",
+  stale: "Stale",
+  unknown: "Unbekannt",
 };
 
 export function diagnosticCodeLabel(code: string) {
