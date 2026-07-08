@@ -5,13 +5,13 @@
   "kind": "recruiting_system",
   "description": "SAP SuccessFactors Recruiting Marketing sitemap profile for XML posting discovery and lazy HTML detail extraction with ordered fallback selectors.",
   "support": {
-    "level": "verified",
-    "summary": "Verified against deterministic offline SAP SuccessFactors/RMK-compatible sitemap discovery and HTML detail fixtures.",
+    "level": "stable",
+    "summary": "Maintained built-in SAP SuccessFactors/RMK-compatible sitemap and HTML detail profile. Use Source Live Check on concrete Sources for current operational confidence.",
     "evidence": [
       {
-        "kind": "fixture",
-        "reference": "fixture.json",
-        "summary": "Embedded built-in Fixture Manifest covers sitemap postingDiscovery and primary HTML postingDetail through the shared Profile Verification Check."
+        "kind": "manual_review",
+        "reference": "SAP SuccessFactors/RMK public career sitemap and job page patterns",
+        "summary": "Public sitemap discovery and HTML detail extraction patterns are modeled by the built-in profile."
       }
     ]
   },

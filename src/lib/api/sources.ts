@@ -19,13 +19,12 @@ export type SourceRegistryDocumentOrigin = "built_in" | "custom"
 export type SourceRegistryDocumentKind = "source_profile" | "source"
 
 export type SupportLevel =
-  | "verified"
+  | "stable"
   | "best_effort"
   | "experimental"
   | "unsupported"
 
 export type SupportEvidenceKind =
-  | "fixture"
   | "smoke"
   | "manual_review"
   | "schema_check"
@@ -56,8 +55,6 @@ export type StructuredDiagnostic = {
     | "runtime"
     | "detection"
     | "source_validation"
-    | "fixture"
-    | "verification"
   code: string
   message: string
   severity: "info" | "warning" | "error"
@@ -213,9 +210,9 @@ export type RegistrySource = {
   validationState: SourceValidationState
 }
 
-export type CheckReportKind = "source_profile_verification" | "source_live_check"
+export type CheckReportKind = "source_live_check"
 
-export type CheckReportSubjectType = "source_profile" | "source"
+export type CheckReportSubjectType = "source"
 
 export type CheckReportResult = "passed" | "failed"
 
@@ -265,35 +262,10 @@ export type CheckReportFreshness = {
   staleFingerprints: CheckReportStaleDetail[]
 }
 
-export type EffectiveVerificationState =
-  | "verified"
-  | "failed"
-  | "not_applicable"
-  | "unknown"
-
-export type SourceProfileVerificationReportStatus = {
-  state: "fresh" | "stale" | "unknown"
-  effectiveVerificationState: EffectiveVerificationState
-  report?: CheckReport | null
-  freshness?: CheckReportFreshness | null
-}
-
 export type SourceLiveCheckReportStatus = {
   state: "fresh" | "stale" | "unknown"
   report?: CheckReport | null
   freshness?: CheckReportFreshness | null
-}
-
-export type FixtureCheckCoverage = {
-  postingDiscovery?: boolean
-  postingDetailDescriptionText?: boolean
-}
-
-export type FixtureCheckResult = {
-  reference: string
-  result: CheckReportResult
-  accessPathKey?: string
-  coverage?: FixtureCheckCoverage
 }
 
 export type SourceProfileRegistrySnapshot = {
@@ -362,10 +334,6 @@ export function listSourceDiagnostics() {
   return invoke<Diagnostics>("list_source_diagnostics")
 }
 
-export function verifySourceProfile(profileKey: string) {
-  return invoke<CheckReport>("verify_source_profile", { profileKey })
-}
-
 export function checkSource(sourceKey: string) {
   return invoke<CheckReport>("check_source", { sourceKey })
 }
@@ -382,13 +350,6 @@ export function getSourceLiveCheckReportStatus(sourceKey: string) {
   return invoke<SourceLiveCheckReportStatus>(
     "get_source_live_check_report_status",
     { sourceKey },
-  )
-}
-
-export function getSourceProfileVerificationReportStatus(profileKey: string) {
-  return invoke<SourceProfileVerificationReportStatus>(
-    "get_source_profile_verification_report_status",
-    { profileKey },
   )
 }
 

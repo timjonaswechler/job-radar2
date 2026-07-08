@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source_execution_plan, Fetch, FieldExpression, ProfileCompilerSnapshot, Select,
-    SourceDocument, SourceProfileDocument, SourceStatus, SupportLevel,
+    SourceDocument, SourceProfileDocument, SourceStatus,
 };
 
 #[test]
@@ -243,28 +243,6 @@ fn compiler_validates_required_support_metadata() {
             && diagnostic.details.as_ref().unwrap()["sourceKey"] == "owned_source"
     }));
 
-    let mut profile: SourceProfileDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
-    profile.support.level = SupportLevel::Verified;
-    let source: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-
-    let verified_without_fixture = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
-
-    assert_eq!(verified_without_fixture.execution_plan, None);
-    assert!(verified_without_fixture
-        .diagnostics
-        .iter()
-        .any(|diagnostic| {
-            diagnostic.code == "verified_support_missing_fixture_evidence"
-                && diagnostic.path == "/support/evidence"
-        }));
 }
 
 #[test]

@@ -126,7 +126,7 @@ fn representative_documents_serialize_back_without_losing_modeled_fields() {
 #[test]
 fn support_level_values_deserialize_and_serialize() {
     for (raw, expected) in [
-        ("verified", SupportLevel::Verified),
+        ("stable", SupportLevel::Stable),
         ("best_effort", SupportLevel::BestEffort),
         ("experimental", SupportLevel::Experimental),
         ("unsupported", SupportLevel::Unsupported),

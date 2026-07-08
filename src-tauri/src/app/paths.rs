@@ -9,7 +9,6 @@ pub struct AppPaths {
     pub browser_runtime_dir: PathBuf,
     pub source_profiles_dir: PathBuf,
     pub sources_dir: PathBuf,
-    pub source_profile_verifications_dir: PathBuf,
     pub source_live_checks_dir: PathBuf,
 }
 
@@ -25,11 +24,9 @@ impl AppPaths {
         let browser_runtime_dir = app_data_dir.join("browser-runtime");
         let source_profiles_dir = app_data_dir.join("source-profiles");
         let sources_dir = app_data_dir.join("sources");
-        let source_profile_verifications_dir = app_data_dir.join("source-profile-verifications");
         let source_live_checks_dir = app_data_dir.join("source-live-checks");
         std::fs::create_dir_all(&source_profiles_dir)?;
         std::fs::create_dir_all(&sources_dir)?;
-        std::fs::create_dir_all(&source_profile_verifications_dir)?;
         std::fs::create_dir_all(&source_live_checks_dir)?;
 
         Ok(Self {
@@ -38,7 +35,6 @@ impl AppPaths {
             browser_runtime_dir,
             source_profiles_dir,
             sources_dir,
-            source_profile_verifications_dir,
             source_live_checks_dir,
         })
     }
@@ -70,10 +66,6 @@ mod tests {
         assert_eq!(
             paths.sources_dir,
             PathBuf::from("/tmp/job-radar-test-data/sources")
-        );
-        assert_eq!(
-            paths.source_profile_verifications_dir,
-            PathBuf::from("/tmp/job-radar-test-data/source-profile-verifications")
         );
         assert_eq!(
             paths.source_live_checks_dir,

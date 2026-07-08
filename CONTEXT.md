@@ -55,7 +55,7 @@ The typed, validated plan produced by the Profile Compiler and executed by the d
 _Avoid_: raw profile document, adapter config, unvalidated JSON
 
 **Structured Diagnostic**:
-A machine-readable issue emitted by schema validation, registry loading, the Profile Compiler, source validation, detection, fixture verification, or runtime execution. A Structured Diagnostic has a category, stable code, human-readable message, severity, JSON Pointer path, optional strategy key, and optional machine-readable details. Diagnostic categories include `schema`, `registry`, `compiler`, `runtime`, `source_validation`, `fixture`, and `verification`. The `compiler` category means diagnostics emitted while compiling a concrete Source and its selected Source Profile/Access Path/Source Config/Source Overrides into an Execution Plan; it does not refer to the Rust compiler. The `fixture` category covers resolving, reading, normalizing, mapping, and executing Fixture Packs and Fixture Manifests. The `verification` category covers deriving Verification Reports and Effective Verification State.
+A machine-readable issue emitted by schema validation, registry loading, the Profile Compiler, source validation, detection, live checks, or runtime execution. A Structured Diagnostic has a category, stable code, human-readable message, severity, JSON Pointer path, optional strategy key, and optional machine-readable details. Diagnostic categories include `schema`, `registry`, `compiler`, `runtime`, `detection`, and `source_validation`. The `compiler` category means diagnostics emitted while compiling a concrete Source and its selected Source Profile/Access Path/Source Config/Source Overrides into an Execution Plan; it does not refer to the Rust compiler.
 _Avoid_: free-form error string only, UI-only copy, Rust compiler diagnostic
 
 **Capability**:
@@ -87,44 +87,20 @@ Hidden technical metadata captured during postingDiscovery for one posting sourc
 _Avoid_: department, employment type, salary, remote mode, posted date, generic metadata
 
 **Support Level**:
-A declared robustness level for reusable profiles and source-owned access. Supported values are `verified`, `best_effort`, `experimental`, and `unsupported`. `verified` requires fixture evidence; `unsupported` may describe detection knowledge without executable Access Paths.
-_Avoid_: validity, status, confidence only
-
-**Fixture Pack**:
-A deterministic evidence bundle associated with one Source Profile that proves selected Access Paths and strategies against captured inputs and expected outputs. Fixture Packs are evidence for verification; they are not Source Profiles, Sources, runtime caches, or live smoke results.
-_Avoid_: live smoke, source profile, test cache, sample URL only
-
-**Fixture Manifest**:
-The machine-readable description inside a Fixture Pack that states which profile behavior the pack proves, which fixture inputs are used, and what outputs or invariants are expected. A fixture file without a manifest is only raw evidence, not enough by itself to prove verified support.
-_Avoid_: arbitrary fixture folder, undocumented sample file, support summary
-
-**Fixture Check Result**:
-The derived outcome of resolving and executing a Fixture Manifest against a Source Profile. A passing Fixture Check Result may make a profile eligible for verified support, but it does not automatically raise the authored Support Level.
-_Avoid_: support level, effective verification state, live smoke result
+A declared robustness/maintenance level for reusable profiles and source-owned access. Supported values are `stable`, `best_effort`, `experimental`, and `unsupported`. Support Level is not a live operational status; current operational confidence comes from the concrete Source's latest Source Live Check.
+_Avoid_: source status, live-check result, production guarantee, verified
 
 **Check Report**:
-A derived JSON report produced by a bounded check against one subject. Check Reports share a common envelope with schema version, check kind, subject, timestamp, logic version, fingerprints for staleness detection, result, Structured Diagnostics, and check-specific details. They are overwriteable derived reports, not audit history and not authored domain documents.
+A derived JSON report produced by a bounded check against one concrete Source. Check Reports include schema version, check kind, subject, timestamp, logic version, fingerprints for staleness detection, result, Structured Diagnostics, and check-specific details. They are overwriteable derived reports, not audit history and not authored domain documents.
 _Avoid_: source profile, source document, audit log, support metadata
 
-**Profile Verification Check**:
-The single user- and agent-facing check for a Source Profile. It produces one Verification Report by orchestrating schema validation, registry validation, Profile Compiler validation, fixture evidence resolution, Fixture Check Results, and Effective Verification State derivation. Other validation steps may exist internally, but profile verification is exposed as one coherent system. Profile Verification Checks are deterministic and fixture-based; they do not perform live network checks.
-_Avoid_: separate schema check button, separate compiler check button, separate fixture check workflow, live source smoke
-
 **Source Live Check**:
-A bounded live check for one concrete Source and its current Source Config, selected Access Path, and Source Overrides. It compiles the Source into an Execution Plan and executes a small live smoke against the real source to show whether that Source currently works. A Source Live Check is not fixture evidence, does not verify a Source Profile, and must not change Support Level or Effective Verification State.
-_Avoid_: profile verification, fixture evidence, support level, source status
-
-**Verification Report**:
-The Check Report produced by a Profile Verification Check. It contains result states, fingerprints for staleness detection, Fixture Check Results, and Structured Diagnostics. A Verification Report may be persisted as an overwriteable derived report for registry display, but it is not the Source Profile document and does not mutate Support Level.
-_Avoid_: audit history, support metadata, source profile edit
+A bounded live check for one concrete Source and its current Source Config, selected Access Path, and Source Overrides. It compiles the Source into an Execution Plan and executes a small live smoke against the real source to show whether that Source currently works. A Source Live Check is the user-facing operational check; it does not mutate profile support metadata.
+_Avoid_: profile verification, support level, source status, Search Run
 
 **Source Live Check Report**:
 The Check Report produced by a Source Live Check. It records the last bounded live result for one Source, including freshness fingerprints, runtime diagnostics, discovery summary, and optional one-candidate detail-check summary. It may support explicit activation flows, but it does not verify a Source Profile.
-_Avoid_: verification report, source status, support level, fixture evidence
-
-**Effective Verification State**:
-A derived state indicating whether a Source Profile's declared Support Level is currently backed by valid evidence and successful verification checks. Supported values are `verified`, `failed`, `not_applicable`, and `unknown`. Missing or unavailable check results are `unknown`, not `failed`, but `unknown` must not be presented as verified. The state is computed from schema, registry, compiler, fixture resolution, and fixture execution diagnostics; it is not the authored `support.level` itself, not the Fixture Check Result itself, and is not granted by a UI action alone.
-_Avoid_: support level, user status, button-set verified
+_Avoid_: source status, support level, profile verification
 
 **Validation State**:
 A derived state indicating whether a Source or profile can currently compile and execute. It is computed from schema, registry, compiler, and source validation diagnostics; it is not a persisted user status.

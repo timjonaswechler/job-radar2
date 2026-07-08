@@ -234,11 +234,12 @@ where
                         serde_json::Value::Bool(detail_passed),
                     );
                     let detail_failure_cause = if detail_passed {
+                        diagnostics.extend(non_error_diagnostics(detail_result.diagnostics));
                         None
                     } else {
+                        diagnostics.extend(detail_result.diagnostics.clone());
                         Some(detail_failure_cause(&detail_result))
                     };
-                    diagnostics.extend(detail_result.diagnostics);
                     if let Some(cause) = detail_failure_cause {
                         diagnostics.push(detail_failed_diagnostic(
                             live_check_subject.as_ref(),
@@ -398,11 +399,17 @@ fn posting_detail_occurrence_from_candidate(
 }
 
 fn is_acceptable_detail_result(result: &PostingDetailExecutionResult) -> bool {
-    !has_error_diagnostics(&result.diagnostics)
-        && result
-            .description_text
-            .as_ref()
-            .is_some_and(|description_text| !description_text.trim().is_empty())
+    result
+        .description_text
+        .as_ref()
+        .is_some_and(|description_text| !description_text.trim().is_empty())
+}
+
+fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
+    diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity != DiagnosticSeverity::Error)
+        .collect()
 }
 
 fn detail_failure_cause(result: &PostingDetailExecutionResult) -> String {

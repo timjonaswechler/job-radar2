@@ -9,14 +9,12 @@ pub const CHECK_REPORT_SCHEMA_VERSION: u64 = 1;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckReportKind {
-    SourceProfileVerification,
     SourceLiveCheck,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckReportSubjectType {
-    SourceProfile,
     Source,
 }
 
@@ -29,13 +27,6 @@ pub struct CheckReportSubject {
 }
 
 impl CheckReportSubject {
-    pub fn source_profile(key: impl Into<String>) -> Self {
-        Self {
-            subject_type: CheckReportSubjectType::SourceProfile,
-            key: key.into(),
-        }
-    }
-
     pub fn source(key: impl Into<String>) -> Self {
         Self {
             subject_type: CheckReportSubjectType::Source,
@@ -110,13 +101,8 @@ fn validate_report_contract(report: &CheckReport) -> Result<(), String> {
         ));
     }
 
-    match (report.kind, report.subject.subject_type) {
-        (CheckReportKind::SourceProfileVerification, CheckReportSubjectType::SourceProfile)
-        | (CheckReportKind::SourceLiveCheck, CheckReportSubjectType::Source) => Ok(()),
-        (kind, subject_type) => Err(format!(
-            "Check Report kind {kind:?} cannot use subject type {subject_type:?}"
-        )),
-    }
+    let _ = (report.kind, report.subject.subject_type);
+    Ok(())
 }
 
 impl CheckReport {

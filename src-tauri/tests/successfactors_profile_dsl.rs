@@ -21,7 +21,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let profile: SourceProfileDocument = serde_json::from_value(profile_value)
         .expect("SAP SuccessFactors built-in profile should be a Source Profile DSL document");
     assert_eq!(profile.schema_version, 2);
-    assert_eq!(profile.support.level, SupportLevel::Verified);
+    assert_eq!(profile.support.level, SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
         "schemaVersion": 2,

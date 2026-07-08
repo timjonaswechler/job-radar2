@@ -17,7 +17,7 @@ The DSL will be validated in layers:
 1. JSON Schema validation checks document shape.
 2. A Profile Compiler validates semantics and produces a typed Execution Plan.
 3. The declarative runtime executes the Execution Plan.
-4. Fixture and smoke-test tooling validate real extraction behavior.
+4. Developer regression tests and Source Live Checks validate real extraction behavior at different confidence levels.
 
 The runtime will have one declarative profile execution path. It will not route profiles through multiple declarative adapter keys. Capabilities inside each Access Path determine how execution works.
 
@@ -34,7 +34,7 @@ The Profile DSL is built from a small set of generic primitives. A new ATS shoul
 - **Source-owned Access Path** is the same Access Path shape stored inline on one Source when no reusable profile fits. It is not reusable and is not used during detection. Its robustness is described by Source-level support metadata, not by reusable profile support metadata.
 - **Source Config** provides stable source access values. It is validated by profile-level and Access Path-level Source Config schemas.
 - **Source Overrides** are controlled structured behavior changes applied to a selected profile Access Path before compilation. They patch allowed DSL behavior, not the Source Config contract.
-- **Support metadata** declares `verified`, `best_effort`, `experimental`, or `unsupported`, plus known issues and validation evidence where applicable. Reusable Source Profiles declare this as `support.level`; Sources with Source-owned Access Paths declare this as `sourceSupport.level`.
+- **Support metadata** declares `stable`, `best_effort`, `experimental`, or `unsupported`, plus known issues and validation evidence where applicable. Reusable Source Profiles declare this as `support.level`; Sources with Source-owned Access Paths declare this as `sourceSupport.level`.
 
 ### Execution primitives
 
@@ -75,7 +75,7 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 5. As a Job Radar user, I want invalid Sources to produce clear diagnostics, so that I know what must be fixed.
 6. As a Job Radar user, I want partial source failures to affect only the failing Source Run, so that other valid Sources still produce postings.
 7. As a Job Radar user, I want unsupported detected portals to be explained honestly, so that I know when Job Radar recognized a system but cannot extract it.
-8. As a Job Radar user, I want built-in profiles to declare their support level, so that I can understand whether a profile is verified, best-effort, experimental, or unsupported.
+8. As a Job Radar user, I want built-in profiles to declare their support level, so that I can understand whether a profile is stable, best-effort, experimental, or unsupported.
 9. As a Job Radar user, I want custom profiles to follow the same rules as built-ins, so that custom profiles behave predictably.
 10. As a Job Radar user, I want built-in profiles not to be silently overridden by custom profiles, so that app behavior remains reproducible.
 11. As a Job Radar user, I want source-specific one-off extraction to remain possible, so that individual career pages can still be handled when no reusable profile fits.
@@ -95,20 +95,20 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 25. As a profile author, I want locations to normalize into ordered de-duplicated strings, so that posting output is stable.
 26. As a profile author, I want pagination as a strategy capability, so that a single fetch describes one request and pagination describes repeated bounded requests.
 27. As a profile author, I want posting detail collection matching, so that XML or JSON feeds containing many jobs can be used to load details for one selected posting.
-28. As a profile author, I want stable Access Path and Strategy keys, so that diagnostics, overrides, fixtures, and source references remain stable.
+28. As a profile author, I want stable Access Path and Strategy keys, so that diagnostics, overrides, tests, and source references remain stable.
 29. As a profile author, I want profile-level and Access Path-level Source Config schemas, so that common configuration and path-specific configuration can be expressed separately.
 30. As a profile author, I want Source Overrides to be validated structurally, so that a Source can adapt profile behavior without changing the Source Config contract.
 31. As a profile author, I want the final profile-plus-source plan compiled before execution, so that semantic errors are found early.
 32. As an agent, I want compiler diagnostics in machine-readable form, so that I can iteratively repair generated profiles.
 33. As an agent, I want smoke-test diagnostics in machine-readable form, so that I can use real extraction failures as feedback.
-34. As an agent, I want newly generated profiles to default to experimental, so that unproven profiles are not presented as verified.
+34. As an agent, I want newly generated profiles to default to experimental, so that unproven profiles are not presented as stable.
 35. As an agent, I want generated profiles to become ready only after schema, compiler, and test validation, so that users are not given untested profile JSON as robust.
 36. As a developer, I want the v1 format removed rather than migrated, so that the codebase does not carry pre-production legacy compatibility.
 37. As a developer, I want the schema split into capability modules, so that each DSL area has a clear responsibility.
 38. As a developer, I want Workday to be expressible without profile-specific Rust code, so that the DSL proves it can model complex API-heavy ATS behavior.
 39. As a developer, I want SAP SuccessFactors to be expressible without profile-specific Rust code, so that the DSL proves it can model sitemap, XML, HTML, fallback, and browser-heavy ATS behavior.
 40. As a developer, I want Greenhouse or Personio to be expressible without profile-specific Rust code, so that simple API/XML profiles remain easy.
-41. As a developer, I want fixture tests for verified profiles, so that profile behavior is deterministic in CI.
+41. As a developer, I want developer regression tests for built-in profiles, so that profile behavior is deterministic in CI.
 42. As a developer, I want live smoke tests to be optional/manual or periodic, so that external site flakiness does not break normal CI.
 43. As a developer, I want runtime errors to have semantic codes, so that UI, logs, and agents can act on failures instead of parsing strings.
 44. As a developer, I want Source validation separate from Profile validation, so that a valid profile and invalid source config are reported correctly.
@@ -187,13 +187,12 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - Reusable Source Profiles require profile-level support metadata at `support.level`.
 - Access Paths may declare path-specific limitations or known issues, but they do not replace or override `support.level`.
 - Sources with Source-owned Access Paths require Source-level support metadata at `sourceSupport.level`.
-- Support levels are `verified`, `best_effort`, `experimental`, and `unsupported`.
+- Support levels are `stable`, `best_effort`, `experimental`, and `unsupported`.
 - `unsupported` is allowed for profiles that can detect a system but do not define an executable Access Path.
 - Any executable profile must have at least one Access Path with `postingDiscovery`.
-- A verified reusable ATS profile must support both `postingDiscovery` and lazy `postingDetail.descriptionText` and must have fixtures for both.
-- `verified` requires fixture evidence. Live smoke success alone is not enough.
-- `best_effort` may exist without full fixture coverage but must document known limitations and compile successfully.
-- Newly agent-authored profiles default to `experimental` unless validation evidence justifies a higher level.
+- `stable` means intentionally maintained support for a reusable profile family; it is not a live operational status.
+- `best_effort` may exist without live-check proof but must document known limitations and compile successfully.
+- Newly agent-authored profiles default to `experimental` unless validation/live evidence justifies `best_effort`.
 - Sources keep a user-controlled `status` with only `draft`, `active`, and `disabled`.
 - `invalid` is not a persisted Source status. Validity is a derived `validationState` from schema, registry, and compiler diagnostics.
 - Search Runs execute only active and valid Sources.
@@ -230,15 +229,15 @@ Reusable implementation pieces may be kept when they fit the new architecture, s
 - Posting detail tests cover direct detail documents, collection matching, missing posting metadata, no match, multiple matches, empty descriptions, and fallback strategy diagnostics.
 - Detection tests cover Source Proposal generation, named captures, evidence, access path recommendation, source config proposals, ambiguity, unsupported profiles, and browser-assisted bounded probes where available.
 - Search Run tests cover active/valid Sources, draft and disabled source skipping, invalid source failures, per-source outcomes, and completed-with-errors aggregation.
-- Verified profiles require deterministic fixture tests. Fixture tests include posting discovery input responses, expected posting candidates, posting detail input responses when supported, expected detail fields, and expected diagnostics.
-- Browser-related verified behavior should use deterministic saved rendered HTML where possible. Live browser smoke tests can exist separately but should not be required for normal CI.
-- Live smoke tests are optional/manual or periodic. They are useful for detecting external site changes but are not sufficient for `verified` support and should not make normal CI flaky.
+- Built-in profile behavior may be protected by ordinary developer regression tests, but those tests are not product support evidence and are not required for production custom profiles.
+- Browser-related regression behavior should use deterministic saved rendered HTML where possible. Live browser smoke tests can exist separately but should not be required for normal CI.
+- Live smoke tests are optional/manual or periodic. They are useful for detecting external site changes but should not make normal CI flaky.
 - Acceptance must include at least one simple profile, either Greenhouse or Personio, fully represented in the new DSL without profile-specific Rust code.
 - Acceptance must include Workday as a complex API-heavy ATS profile represented in the new DSL without profile-specific Rust code.
 - Acceptance must include SAP SuccessFactors as a complex sitemap/XML/HTML/fallback-oriented ATS profile represented in the new DSL without profile-specific Rust code.
 - The Workday acceptance profile must exercise named captures, HTTP POST discovery, JSON parsing, bounded offset/limit pagination, posting metadata, detail GET, HTML-in-JSON transform, and Source Config from detection.
 - The SAP SuccessFactors acceptance profile must exercise sitemap/XML or feed-based discovery, posting metadata, fallback detail strategies, XML or HTML detail extraction, and browser detail as a possible strategy where needed.
-- Agent-authored profiles must not be presented as ready unless schema validation, compiler validation, and fixture or smoke diagnostics support that state.
+- Agent-authored profiles must not be presented as ready unless schema validation, compiler validation, and live smoke diagnostics support that state.
 
 ## Out of Scope
 

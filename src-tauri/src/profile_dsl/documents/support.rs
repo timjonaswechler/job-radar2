@@ -11,7 +11,7 @@ pub type JsonSchemaObject = Map<String, Value>;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SupportLevel {
-    Verified,
+    Stable,
     BestEffort,
     Experimental,
     Unsupported,
@@ -40,7 +40,6 @@ pub struct SupportNote {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SupportEvidenceKind {
-    Fixture,
     Smoke,
     ManualReview,
     SchemaCheck,

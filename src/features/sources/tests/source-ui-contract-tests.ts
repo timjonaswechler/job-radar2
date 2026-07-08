@@ -57,8 +57,6 @@ import {
   createSourceGridRows,
   filterProfileGridRows,
   filterSourceGridRows,
-  fixtureChecksFromVerificationReport,
-  profileVerificationDisplayModel,
   resolveSource,
   sourceLiveCheckActionsForSource,
   sourceLiveCheckDisplayModel,
@@ -71,7 +69,6 @@ import type {
   SourceDocument,
   SourceProposal,
   SourceLiveCheckReportStatus,
-  SourceProfileVerificationReportStatus,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
@@ -83,7 +80,7 @@ const profile: RegistrySourceProfile = {
     key: "greenhouse",
     name: "Greenhouse",
     kind: "recruiting_system",
-    support: { level: "verified" },
+    support: { level: "stable" },
     sourceConfigSchema: {
       type: "object",
       required: ["boardSlug"],
@@ -782,7 +779,7 @@ const sourceAddTransitionProfile: RegistrySourceProfile = {
     key: "lever",
     name: "Lever",
     kind: "recruiting_system",
-    support: { level: "verified" },
+    support: { level: "stable" },
     sourceConfigSchema: {
       type: "object",
       required: ["host"],
@@ -913,7 +910,7 @@ const detectedTransitionProposal: SourceProposal = {
   nameCandidates: ["ACME Jobs"],
   captures: { host: "jobs.lever.co" },
   evidence: [{ kind: "url", message: "Matched Lever URL" }],
-  supportLevel: "verified",
+  supportLevel: "stable",
 };
 const matchedDetectionDraft = sourceAddDraftAfterDetectionResult({
   draft: sourceAddInitialDraft,
@@ -1104,7 +1101,7 @@ const sourceRows = createSourceGridRows(
   new Map(),
 );
 
-assert.equal(sourceRows[0]?.supportLabel, "Verifiziert");
+assert.equal(sourceRows[0]?.supportLabel, "Stabil");
 assert.equal(sourceRows[0]?.validationStateLabel, "Valide");
 assert.equal(sourceRows[0]?.capabilitiesSummary, "postingDiscovery, postingDetail");
 assert.equal(sourceRows[0]?.profileLabel, "greenhouse / boards_api");
@@ -1115,7 +1112,7 @@ for (const removedTerm of removedSourceProfileTerms()) {
 
 const resolution = resolveSource(source, profilesByKey);
 assert.equal(resolution.profileAccessPath?.key, "boards_api");
-assert.equal(resolution.supportLevel, "verified");
+assert.equal(resolution.supportLevel, "stable");
 assert.deepEqual(resolution.capabilities, ["postingDiscovery", "postingDetail"]);
 
 const sourceOwnedSource: RegistrySource = {
@@ -1391,9 +1388,8 @@ const evidenceProfile: RegistrySourceProfile = {
     key: "evidence_profile",
     name: "Evidence Profile",
     support: {
-      level: "verified",
+      level: "stable",
       evidence: [
-        { kind: "fixture", reference: "fixture.json" },
         { kind: "smoke", reference: "https://jobs.example.test" },
         { kind: "manual_review", reference: "review-2026-07" },
         { kind: "schema_check", reference: "schema-validation" },
@@ -1410,14 +1406,13 @@ const evidenceProfile: RegistrySourceProfile = {
 };
 const [evidenceRow] = createProfileGridRows([evidenceProfile], new Map());
 assert.deepEqual(evidenceRow?.supportEvidenceLabels, [
-  "Fixture",
   "Smoke",
   "Manual Review",
   "Schema Check",
 ]);
 assert.equal(
   evidenceRow?.supportEvidenceSummary,
-  "Fixture, Smoke, Manual Review +1",
+  "Smoke, Manual Review, Schema Check",
 );
 assert.deepEqual(evidenceRow?.detectionEvidenceLabels, ["URL", "HTTP"]);
 assert.equal(
@@ -1427,117 +1422,6 @@ assert.equal(
 assert.equal(
   (evidenceRow?.supportEvidenceKinds as string[] | undefined)?.includes("url"),
   false,
-);
-
-const verificationDiagnostic: StructuredDiagnostic = {
-  category: "verification",
-  code: "verification.verified_support_missing_fixture_evidence",
-  message: "Verified support requires fixture evidence.",
-  severity: "error",
-  path: "/support/evidence",
-  details: { profileKey: "evidence_profile" },
-};
-
-const verificationReport: CheckReport = {
-  schemaVersion: 1,
-  kind: "source_profile_verification",
-  subject: { type: "source_profile", key: "evidence_profile" },
-  checkedAt: "2026-07-07T12:00:00Z",
-  logicVersion: "profile-verification/v1",
-  result: "passed",
-  fingerprints: [],
-  diagnostics: [verificationDiagnostic],
-  details: {
-    declaredSupportLevel: "verified",
-    effectiveVerificationState: "verified",
-    fixtureChecks: [
-      {
-        reference: "fixture.json",
-        result: "passed",
-        accessPathKey: "api",
-        coverage: {
-          postingDiscovery: true,
-          postingDetailDescriptionText: true,
-        },
-      },
-    ],
-  },
-};
-
-function verificationStatus(
-  overrides: Partial<SourceProfileVerificationReportStatus>,
-): SourceProfileVerificationReportStatus {
-  return {
-    state: "fresh",
-    effectiveVerificationState: "verified",
-    report: verificationReport,
-    freshness: { state: "fresh", staleFingerprints: [] },
-    ...overrides,
-  };
-}
-
-const verifiedVerificationModel = profileVerificationDisplayModel(
-  verificationStatus({}),
-);
-assert.equal(verifiedVerificationModel.displayState, "verified");
-assert.equal(verifiedVerificationModel.isFreshVerified, true);
-assert.equal(verifiedVerificationModel.reportResultLabel, "Bestanden");
-assert.equal(verifiedVerificationModel.fixtureChecks[0]?.reference, "fixture.json");
-assert.equal(verifiedVerificationModel.fixtureChecks[0]?.accessPathKey, "api");
-assert.equal(
-  verifiedVerificationModel.fixtureChecks[0]?.coverage?.postingDetailDescriptionText,
-  true,
-);
-assert.equal(verifiedVerificationModel.diagnostics[0]?.severity, "error");
-
-assert.equal(
-  profileVerificationDisplayModel(
-    verificationStatus({
-      effectiveVerificationState: "failed",
-      report: { ...verificationReport, result: "failed" },
-    }),
-  ).displayState,
-  "failed",
-);
-assert.equal(profileVerificationDisplayModel(null).displayState, "unknown");
-assert.equal(
-  profileVerificationDisplayModel(
-    verificationStatus({
-      state: "stale",
-      effectiveVerificationState: "unknown",
-      freshness: {
-        state: "stale",
-        staleFingerprints: [
-          { kind: "source_profile_document", reason: "changed_fingerprint_sha256" },
-        ],
-      },
-    }),
-  ).displayState,
-  "stale",
-);
-assert.equal(
-  profileVerificationDisplayModel(
-    verificationStatus({ effectiveVerificationState: "not_applicable" }),
-  ).displayState,
-  "not_applicable",
-);
-
-const declarationOnlyReport: CheckReport = {
-  ...verificationReport,
-  details: {
-    declaredSupportLevel: "verified",
-    effectiveVerificationState: "unknown",
-  },
-};
-assert.deepEqual(fixtureChecksFromVerificationReport(declarationOnlyReport), []);
-assert.deepEqual(
-  profileVerificationDisplayModel(
-    verificationStatus({
-      effectiveVerificationState: "unknown",
-      report: declarationOnlyReport,
-    }),
-  ).fixtureChecks,
-  [],
 );
 
 const liveCheckReport: CheckReport = {
@@ -1654,7 +1538,7 @@ const proposal: SourceProposal = {
   nameCandidates: ["ACME GmbH"],
   captures: { boardSlug: "acme" },
   evidence: [{ kind: "url", message: "Matched board URL" }],
-  supportLevel: "verified",
+  supportLevel: "stable",
 };
 
 const detected = detectedSourceFromProposal(proposal);

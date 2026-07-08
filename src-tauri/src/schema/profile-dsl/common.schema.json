@@ -40,7 +40,7 @@
     },
     "supportLevel": {
       "type": "string",
-      "enum": ["verified", "best_effort", "experimental", "unsupported"]
+      "enum": ["stable", "best_effort", "experimental", "unsupported"]
     },
     "supportMetadata": {
       "type": "object",
@@ -75,7 +75,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["fixture", "smoke", "manual_review", "schema_check"]
+          "enum": ["smoke", "manual_review", "schema_check"]
         },
         "reference": { "$ref": "#/$defs/nonEmptyString" },
         "summary": { "$ref": "#/$defs/description" }

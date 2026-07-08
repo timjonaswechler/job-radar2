@@ -5,13 +5,13 @@
   "kind": "recruiting_system",
   "description": "Workday CXS public careers API profile for HTTP POST posting discovery and lazy posting detail extraction.",
   "support": {
-    "level": "verified",
-    "summary": "Verified against deterministic offline Workday CXS-compatible discovery and detail fixtures; offset/limit pagination remains covered by the built-in profile DSL tests.",
+    "level": "stable",
+    "summary": "Maintained built-in Workday CXS-compatible profile. Use Source Live Check on concrete Sources for current operational confidence.",
     "evidence": [
       {
-        "kind": "fixture",
-        "reference": "fixture.json",
-        "summary": "Embedded built-in Fixture Manifest covers CXS postingDiscovery and postingDetail through the shared Profile Verification Check."
+        "kind": "manual_review",
+        "reference": "Workday CXS public career site patterns",
+        "summary": "Public CXS discovery and detail extraction patterns are modeled by the built-in profile."
       }
     ]
   },

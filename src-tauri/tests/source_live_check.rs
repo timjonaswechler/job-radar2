@@ -518,6 +518,58 @@ fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
 }
 
 #[test]
+fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = simple_source_with_status("active");
+    let mut profile = simple_profile_without_pagination();
+    let mut failing_detail_strategy =
+        profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();
+    failing_detail_strategy["key"] = json!("missing_description");
+    failing_detail_strategy["extract"]["fields"]["descriptionText"]["jsonPath"] =
+        json!("$.missingDescriptionHtml");
+    let mut fallback_detail_strategy =
+        profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();
+    fallback_detail_strategy["key"] = json!("fallback_detail_api");
+    profile["accessPaths"][0]["postingDetail"]["strategies"] =
+        json!([failing_detail_strategy, fallback_detail_strategy]);
+    write_profile(temp_dir.path(), &profile);
+    write_source(temp_dir.path(), &source);
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Senior Rust Engineer",
+                        "url": "https://example.test/jobs/job-1"
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This fallback detail text is long enough to pass acceptance checks.</p>"
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(report.details["liveCheckState"], json!("live_check_passed"));
+    assert_eq!(report.details["detailChecked"], json!(true));
+    assert_eq!(report.details["detailPassed"], json!(true));
+    assert!(report.diagnostics.iter().all(|diagnostic| {
+        diagnostic.severity != DiagnosticSeverity::Error
+            && diagnostic.code != "source_live_check.detail_failed"
+    }));
+}
+
+#[test]
 fn check_source_leaves_detail_unchecked_when_access_path_has_no_posting_detail() {
     let temp_dir = tempfile::tempdir().unwrap();
     let source = simple_source_with_status("active");

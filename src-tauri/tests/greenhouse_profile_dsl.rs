@@ -18,7 +18,7 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
         .expect("Greenhouse built-in profile should be a Source Profile DSL document");
     assert_eq!(profile.schema_version, 2);
-    assert_eq!(profile.support.level, job_radar_lib::SupportLevel::Verified);
+    assert_eq!(profile.support.level, job_radar_lib::SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
         "schemaVersion": 2,

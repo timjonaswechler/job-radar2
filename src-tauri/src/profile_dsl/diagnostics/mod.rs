@@ -23,13 +23,11 @@ pub enum DiagnosticCategory {
     Runtime,
     Detection,
     SourceValidation,
-    Fixture,
-    Verification,
 }
 
 /// Shared machine-readable diagnostic contract for schema validation,
 /// registry loading, Profile Compiler validation, source validation,
-/// detection, and runtime execution.
+/// detection, live checks, and runtime execution.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Diagnostic {

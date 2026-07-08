@@ -5,13 +5,13 @@
   "kind": "recruiting_system",
   "description": "Greenhouse Job Board API profile for public board posting discovery and lazy posting detail extraction.",
   "support": {
-    "level": "verified",
-    "summary": "Verified against deterministic offline Greenhouse Job Board API-compatible discovery and detail fixtures.",
+    "level": "stable",
+    "summary": "Maintained built-in Greenhouse Job Board API profile. Use Source Live Check on concrete Sources for current operational confidence.",
     "evidence": [
       {
-        "kind": "fixture",
-        "reference": "fixture.json",
-        "summary": "Embedded built-in Fixture Manifest covers postingDiscovery and postingDetail through the shared Profile Verification Check."
+        "kind": "manual_review",
+        "reference": "https://developers.greenhouse.io/job-board.html",
+        "summary": "Greenhouse exposes a public Job Board API with reusable board slug semantics."
       }
     ]
   },

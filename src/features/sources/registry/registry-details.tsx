@@ -34,7 +34,6 @@ import {
 import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import {
-  checkReportResultLabels,
   detectionEvidenceKindLabels,
   originLabels,
   profileKindLabels,
@@ -43,7 +42,6 @@ import {
   validationStateLabels,
 } from "@/features/sources/labels";
 import {
-  profileVerificationDisplayModel,
   resolveSource,
   sourceLiveCheckActionsForSource,
   sourceLiveCheckDisplayModel,
@@ -57,16 +55,12 @@ import {
   checkAndReactivateSource,
   checkSource,
   getSourceLiveCheckReportStatus,
-  getSourceProfileVerificationReportStatus,
-  verifySourceProfile,
 } from "@/lib/api/sources";
 import type {
   CheckReport,
-  FixtureCheckResult,
   RegistrySource,
   RegistrySourceProfile,
   SourceLiveCheckReportStatus,
-  SourceProfileVerificationReportStatus,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
@@ -230,234 +224,6 @@ function EvidenceBadgeSection<TKind extends string>({
         <span className="text-xs text-muted-foreground">{emptyLabel}</span>
       )}
     </section>
-  );
-}
-
-type ProfileVerificationSectionProps = {
-  status: SourceProfileVerificationReportStatus | null;
-  loading: boolean;
-  running: boolean;
-  error: string | null;
-  canVerify: boolean;
-  onVerify: () => void;
-  onRefresh: () => void;
-};
-
-function ProfileVerificationSection({
-  status,
-  loading,
-  running,
-  error,
-  canVerify,
-  onVerify,
-  onRefresh,
-}: ProfileVerificationSectionProps) {
-  const model = profileVerificationDisplayModel(status);
-  const report = status?.report ?? null;
-  const alertVariant =
-    model.displayState === "verified"
-      ? "success"
-      : model.displayState === "failed"
-        ? "destructive"
-        : model.displayState === "stale"
-          ? "warning"
-          : "info";
-  const StatusIcon = model.displayState === "verified" ? CheckCircle2Icon : AlertCircleIcon;
-
-  return (
-    <section className="grid gap-3 rounded-lg border bg-muted/30 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-1">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Profile Verification Check
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Offline-/Fixture-basierter Verification Report. Dieser Abschnitt ist getrennt von Source Live Checks und mutiert den deklarierten Support nicht.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loading || running}
-            onClick={onRefresh}
-          >
-            <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-            Status laden
-          </Button>
-          {canVerify ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={loading || running}
-              onClick={onVerify}
-            >
-              {running ? (
-                <Loader2Icon
-                  data-icon="inline-start"
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <CheckCircle2Icon data-icon="inline-start" aria-hidden="true" />
-              )}
-              Prüfen
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {loading ? (
-        <Alert variant="info">
-          <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-          <AlertTitle>Verification Report wird geladen</AlertTitle>
-          <AlertDescription>Der neueste persistierte Report wird gelesen.</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {error ? (
-        <Alert variant="destructive">
-          <AlertCircleIcon className="size-4" aria-hidden="true" />
-          <AlertTitle>Verification Report konnte nicht geladen werden</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {!loading ? (
-        <Alert variant={alertVariant}>
-          <StatusIcon className="size-4" aria-hidden="true" />
-          <AlertTitle>{model.displayLabel}</AlertTitle>
-          <AlertDescription>
-            {model.isFreshVerified
-              ? "Nur dieser frische Report mit Effective Verification State verified wird als verifiziert dargestellt."
-              : "Unknown, stale, failed oder not-applicable werden nicht als verifiziert dargestellt."}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <dl className="grid gap-3 sm:grid-cols-2">
-        <DetailRow label="Report-Zustand" value={model.reportStateLabel} />
-        <DetailRow label="Report Result" value={model.reportResultLabel} />
-        <DetailRow label="Effective Verification State" value={model.effectiveStateLabel} />
-        <DetailRow
-          label="Checked At"
-          value={report?.checkedAt ? new Date(report.checkedAt).toLocaleString("de") : "—"}
-        />
-      </dl>
-
-      {status?.freshness?.staleFingerprints.length ? (
-        <div className="grid gap-2">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Stale-Fingerprints
-          </h4>
-          <div className="grid gap-2">
-            {status.freshness.staleFingerprints.map((stale, index) => (
-              <div
-                key={`${stale.kind}-${stale.reference ?? "none"}-${index}`}
-                className="grid gap-1 rounded-md border bg-background p-2 text-xs"
-              >
-                <div className="flex flex-wrap gap-1">
-                  <Badge variant="warning-light">{stale.reason}</Badge>
-                  <Badge variant="outline">{stale.kind}</Badge>
-                  {stale.reference ? <Badge variant="outline">{stale.reference}</Badge> : null}
-                </div>
-                {stale.expectedValue || stale.actualValue ? (
-                  <p className="break-all text-muted-foreground">
-                    Erwartet {stale.expectedValue ?? stale.expectedSha256 ?? "—"}, Report {stale.actualValue ?? stale.actualSha256 ?? "—"}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <FixtureCheckResults
-        fixtureChecks={model.fixtureChecks}
-        fresh={model.reportState === "fresh"}
-      />
-
-      {model.diagnostics.length ? (
-        <InlineDiagnostics
-          title="Verification-Report-Diagnosen"
-          diagnostics={model.diagnostics}
-        />
-      ) : null}
-    </section>
-  );
-}
-
-type FixtureCheckResultsProps = {
-  fixtureChecks: FixtureCheckResult[];
-  fresh: boolean;
-};
-
-function FixtureCheckResults({ fixtureChecks, fresh }: FixtureCheckResultsProps) {
-  return (
-    <div className="grid gap-2">
-      <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Fixture Check Results
-      </h4>
-      {fixtureChecks.length ? (
-        <div className="grid gap-2">
-          {fixtureChecks.map((fixtureCheck) => (
-            <div
-              key={`${fixtureCheck.reference}-${fixtureCheck.accessPathKey ?? "none"}`}
-              className="grid gap-2 rounded-md border bg-background p-2 text-xs"
-            >
-              <div className="flex flex-wrap gap-1">
-                <Badge
-                  variant={
-                    fixtureCheck.result === "passed" && fresh
-                      ? "success-light"
-                      : fixtureCheck.result === "failed"
-                        ? "destructive-light"
-                        : "outline"
-                  }
-                >
-                  {checkReportResultLabels[fixtureCheck.result]}
-                </Badge>
-                <Badge variant="outline">{fixtureCheck.reference}</Badge>
-                {fixtureCheck.accessPathKey ? (
-                  <Badge variant="outline">Access Path {fixtureCheck.accessPathKey}</Badge>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                <CoverageBadge
-                  label="Posting Discovery"
-                  covered={fixtureCheck.coverage?.postingDiscovery}
-                  fresh={fresh}
-                />
-                <CoverageBadge
-                  label="Detail Description Text"
-                  covered={fixtureCheck.coverage?.postingDetailDescriptionText}
-                  fresh={fresh}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Keine Fixture Check Results im Report. Eine deklarierte Fixture-Evidenz alleine wird hier nicht als bestanden gerendert.
-        </p>
-      )}
-    </div>
-  );
-}
-
-type CoverageBadgeProps = {
-  label: string;
-  covered?: boolean;
-  fresh: boolean;
-};
-
-function CoverageBadge({ label, covered, fresh }: CoverageBadgeProps) {
-  return (
-    <Badge variant={covered && fresh ? "success-light" : "outline"}>
-      {label}: {covered ? "abgedeckt" : "nicht abgedeckt"}
-    </Badge>
   );
 }
 
@@ -837,50 +603,6 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
   const accessPaths = [...profile.document.accessPaths].sort((left, right) =>
     left.key.localeCompare(right.key, "de"),
   );
-  const [verificationStatus, setVerificationStatus] =
-    useState<SourceProfileVerificationReportStatus | null>(null);
-  const [verificationLoading, setVerificationLoading] = useState(true);
-  const [verificationRunning, setVerificationRunning] = useState(false);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
-  const profileKey = profile.document.key;
-
-  const refreshVerificationStatus = useCallback(async () => {
-    setVerificationLoading(true);
-    setVerificationError(null);
-    try {
-      setVerificationStatus(await getSourceProfileVerificationReportStatus(profileKey));
-    } catch (unknownError) {
-      setVerificationStatus(null);
-      setVerificationError(errorMessage(unknownError));
-    } finally {
-      setVerificationLoading(false);
-    }
-  }, [profileKey]);
-
-  useEffect(() => {
-    void refreshVerificationStatus();
-  }, [refreshVerificationStatus]);
-
-  const handleVerify = useCallback(async () => {
-    setVerificationRunning(true);
-    setVerificationError(null);
-    try {
-      await verifySourceProfile(profileKey);
-      const nextStatus = await getSourceProfileVerificationReportStatus(profileKey);
-      setVerificationStatus(nextStatus);
-      toast.success("Source Profile geprüft", {
-        description: `Verification Report für ${profileKey} wurde aktualisiert.`,
-      });
-    } catch (unknownError) {
-      const message = errorMessage(unknownError);
-      setVerificationError(message);
-      toast.error("Source Profile konnte nicht geprüft werden", {
-        description: message,
-      });
-    } finally {
-      setVerificationRunning(false);
-    }
-  }, [profileKey]);
 
   return (
     <div className="grid gap-4 py-4 text-sm">
@@ -896,16 +618,6 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
           diagnostics={profile.document.diagnostics}
         />
       ) : null}
-
-      <ProfileVerificationSection
-        status={verificationStatus}
-        loading={verificationLoading}
-        running={verificationRunning}
-        error={verificationError}
-        canVerify={profile.origin === "custom"}
-        onVerify={handleVerify}
-        onRefresh={refreshVerificationStatus}
-      />
 
       <dl className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
         <DetailRow label="Profil-Key" value={profile.document.key} mono />
@@ -936,7 +648,7 @@ function ProfileDetails({ profile, diagnostics }: ProfileDetailsProps) {
 
       <EvidenceBadgeSection
         title="Support-Evidenz"
-        description="Deklarierte Support-Evidenz. Fixture bedeutet hier nur: Fixture Evidence ist angegeben, nicht dass sie bestanden hat."
+        description="Deklarierte Support-Evidenz beschreibt die Einschätzung zum Profil. Die konkrete Nutzbarkeit wird über Source Live Checks geprüft."
         emptyLabel="Keine Support-Evidenz deklariert."
         evidence={profile.document.support.evidence ?? []}
         labelForKind={(kind) => supportEvidenceKindLabels[kind]}

@@ -21,7 +21,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let profile: SourceProfileDocument = serde_json::from_value(profile_value)
         .expect("Workday built-in profile should be a Source Profile DSL document");
     assert_eq!(profile.schema_version, 2);
-    assert_eq!(profile.support.level, SupportLevel::Verified);
+    assert_eq!(profile.support.level, SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
         "schemaVersion": 2,

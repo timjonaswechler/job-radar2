@@ -32,20 +32,6 @@
   "allOf": [
     {
       "if": {
-        "properties": { "kind": { "const": "source_profile_verification" } },
-        "required": ["kind"]
-      },
-      "then": {
-        "properties": {
-          "subject": {
-            "properties": { "type": { "const": "source_profile" } },
-            "required": ["type"]
-          }
-        }
-      }
-    },
-    {
-      "if": {
         "properties": { "kind": { "const": "source_live_check" } },
         "required": ["kind"]
       },
@@ -62,11 +48,11 @@
   "$defs": {
     "checkKind": {
       "type": "string",
-      "enum": ["source_profile_verification", "source_live_check"]
+      "enum": ["source_live_check"]
     },
     "subjectType": {
       "type": "string",
-      "enum": ["source_profile", "source"]
+      "enum": ["source"]
     },
     "subject": {
       "type": "object",
