@@ -9,6 +9,7 @@ const SETTING_THEME: &str = "theme";
 const SETTING_LANGUAGE: &str = "language";
 const SETTING_DEFAULT_SEARCH_RADIUS_KM: &str = "default_search_radius_km";
 const SETTING_BASE_FONT_SIZE_PX: &str = "base_font_size_px";
+const SETTING_WINDOW_DRAG_REGION_ENABLED: &str = "window_drag_region_enabled";
 const DEFAULT_SEARCH_RADIUS_KM: u16 = 30;
 const MAX_SEARCH_RADIUS_KM: u16 = 500;
 const DEFAULT_BASE_FONT_SIZE_PX: u16 = 16;
@@ -64,6 +65,7 @@ pub struct AppPreferences {
     language: AppLanguage,
     default_search_radius_km: u16,
     base_font_size_px: u16,
+    window_drag_region_enabled: bool,
 }
 
 #[tauri::command]
@@ -125,6 +127,12 @@ pub async fn set_app_preferences(
         &preferences.base_font_size_px,
     )
     .await?;
+    write_setting(
+        &state.db,
+        SETTING_WINDOW_DRAG_REGION_ENABLED,
+        &preferences.window_drag_region_enabled,
+    )
+    .await?;
 
     read_app_preferences(&state.db).await
 }
@@ -164,6 +172,15 @@ pub async fn set_base_font_size_px(
 ) -> Result<AppPreferences, String> {
     validate_base_font_size(base_font_size_px)?;
     write_setting(&state.db, SETTING_BASE_FONT_SIZE_PX, &base_font_size_px).await?;
+    read_app_preferences(&state.db).await
+}
+
+#[tauri::command]
+pub async fn set_window_drag_region_enabled(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<AppPreferences, String> {
+    write_setting(&state.db, SETTING_WINDOW_DRAG_REGION_ENABLED, &enabled).await?;
     read_app_preferences(&state.db).await
 }
 
@@ -713,6 +730,12 @@ async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, Strin
             DEFAULT_BASE_FONT_SIZE_PX,
         )
         .await?,
+        window_drag_region_enabled: read_setting_or_default_value(
+            pool,
+            SETTING_WINDOW_DRAG_REGION_ENABLED,
+            true,
+        )
+        .await?,
     })
 }
 
@@ -1152,6 +1175,7 @@ mod tests {
                 DEFAULT_SEARCH_RADIUS_KM
             );
             assert_eq!(preferences.base_font_size_px, DEFAULT_BASE_FONT_SIZE_PX);
+            assert!(preferences.window_drag_region_enabled);
 
             write_setting(&state.db, SETTING_DEFAULT_SEARCH_RADIUS_KM, &50_u16)
                 .await
@@ -1159,9 +1183,13 @@ mod tests {
             write_setting(&state.db, SETTING_BASE_FONT_SIZE_PX, &18_u16)
                 .await
                 .unwrap();
+            write_setting(&state.db, SETTING_WINDOW_DRAG_REGION_ENABLED, &false)
+                .await
+                .unwrap();
             let preferences = read_app_preferences(&state.db).await.unwrap();
             assert_eq!(preferences.default_search_radius_km, 50);
             assert_eq!(preferences.base_font_size_px, 18);
+            assert!(!preferences.window_drag_region_enabled);
             assert!(validate_search_radius(MAX_SEARCH_RADIUS_KM + 1).is_err());
             assert!(validate_base_font_size(MIN_BASE_FONT_SIZE_PX - 1).is_err());
             assert!(validate_base_font_size(MAX_BASE_FONT_SIZE_PX + 1).is_err());

@@ -125,6 +125,7 @@ pub fn run() {
             app::commands::set_app_language,
             app::commands::set_default_search_radius_km,
             app::commands::set_base_font_size_px,
+            app::commands::set_window_drag_region_enabled,
             app::commands::get_browser_runtime_status,
             app::commands::install_browser_runtime,
             app::commands::uninstall_browser_runtime,

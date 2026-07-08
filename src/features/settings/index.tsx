@@ -11,11 +11,13 @@ import {
   FrameTitle,
 } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   getAppPreferences,
   setBaseFontSizePx,
   setDefaultSearchRadiusKm,
+  setWindowDragRegionEnabled as setWindowDragRegionEnabledPreference,
   type AppPreferences,
 } from "@/lib/api/app-preferences";
 import { APP_SETTINGS, isBaseFontSizePx } from "@/lib/app-settings";
@@ -23,6 +25,7 @@ import {
   applyBaseFontSizeToDocument,
   writeStoredBaseFontSizePx,
 } from "@/lib/font-size";
+import { applyStoredWindowDragRegionEnabled } from "@/lib/window-chrome";
 
 const maxSearchRadiusKm = 500;
 
@@ -31,6 +34,9 @@ export function SettingsFeature() {
   const [radiusText, setRadiusText] = useState("30");
   const [baseFontSizeText, setBaseFontSizeText] = useState(
     String(APP_SETTINGS.baseFontSizePx.default),
+  );
+  const [windowDragRegionEnabled, setWindowDragRegionEnabled] = useState(
+    APP_SETTINGS.windowDragRegionEnabled.default,
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,8 +52,12 @@ export function SettingsFeature() {
         setPreferences(nextPreferences);
         setRadiusText(String(nextPreferences.defaultSearchRadiusKm));
         setBaseFontSizeText(String(nextPreferences.baseFontSizePx));
+        setWindowDragRegionEnabled(nextPreferences.windowDragRegionEnabled);
         writeStoredBaseFontSizePx(nextPreferences.baseFontSizePx);
         applyBaseFontSizeToDocument(nextPreferences.baseFontSizePx);
+        applyStoredWindowDragRegionEnabled(
+          nextPreferences.windowDragRegionEnabled,
+        );
         setError(null);
       })
       .catch((unknownError) => {
@@ -101,6 +111,11 @@ export function SettingsFeature() {
       if (preferences.baseFontSizePx !== baseFontSizePx) {
         saveOperations.push(setBaseFontSizePx(baseFontSizePx));
       }
+      if (preferences.windowDragRegionEnabled !== windowDragRegionEnabled) {
+        saveOperations.push(
+          setWindowDragRegionEnabledPreference(windowDragRegionEnabled),
+        );
+      }
 
       if (saveOperations.length > 0) {
         await Promise.all(saveOperations);
@@ -112,8 +127,12 @@ export function SettingsFeature() {
       setPreferences(nextPreferences);
       setRadiusText(String(nextPreferences.defaultSearchRadiusKm));
       setBaseFontSizeText(String(nextPreferences.baseFontSizePx));
+      setWindowDragRegionEnabled(nextPreferences.windowDragRegionEnabled);
       writeStoredBaseFontSizePx(nextPreferences.baseFontSizePx);
       applyBaseFontSizeToDocument(nextPreferences.baseFontSizePx);
+      applyStoredWindowDragRegionEnabled(
+        nextPreferences.windowDragRegionEnabled,
+      );
       setSaved(true);
     } catch (unknownError) {
       setError(String(unknownError));
@@ -122,6 +141,11 @@ export function SettingsFeature() {
       setSaving(false);
     }
   };
+
+  const savedWindowDragRegionLabel =
+    (preferences?.windowDragRegionEnabled ?? windowDragRegionEnabled)
+      ? "an"
+      : "aus";
 
   return (
     <div className="grid gap-4 p-2">
@@ -161,7 +185,7 @@ export function SettingsFeature() {
             Neuer Standard-Suchradius:{" "}
             {preferences?.defaultSearchRadiusKm ?? radiusText} km.
             Basisschriftgröße: {preferences?.baseFontSizePx ?? baseFontSizeText}{" "}
-            px.
+            px. Drag-Bereich: {savedWindowDragRegionLabel}.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -232,6 +256,31 @@ export function SettingsFeature() {
                 disabled={loading || saving}
                 required
               />
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <Checkbox
+                id="window-drag-region-enabled"
+                checked={windowDragRegionEnabled}
+                onCheckedChange={(checked) => {
+                  setWindowDragRegionEnabled(checked === true);
+                  setSaved(false);
+                }}
+                disabled={loading || saving}
+              />
+              <div className="grid gap-1.5">
+                <label
+                  className="text-xs font-medium"
+                  htmlFor="window-drag-region-enabled"
+                >
+                  Fenster über den oberen App-Bereich ziehen
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Aktiviert die Tauri-Drag-Region im Header. Interaktive
+                  Elemente bleiben klickbar; auf macOS wird zusätzlich Platz für
+                  die native Ampel reserviert.
+                </p>
+              </div>
             </div>
 
             <div>

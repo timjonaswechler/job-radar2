@@ -6,12 +6,21 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 type AppHeaderProps = {
   title: string;
+  windowDragRegionEnabled: boolean;
 };
 
-export function AppHeader({ title }: AppHeaderProps) {
+type DragRegionProps = {
+  "data-tauri-drag-region"?: string;
+};
+
+export function AppHeader({ title, windowDragRegionEnabled }: AppHeaderProps) {
+  const dragRegionProps: DragRegionProps = windowDragRegionEnabled
+    ? { "data-tauri-drag-region": "" }
+    : {};
+
   return (
     <header className="sticky top-0 z-50 flex h-12 shrink-0 items-center gap-2 overflow-hidden rounded-t-[inherit] border-b bg-background/50 backdrop-blur-md transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-      <div className="flex w-full min-w-0 items-center justify-between px-4 lg:px-6">
+      <div className="app-header-content flex h-full w-full min-w-0 items-center">
         <div className="flex items-center gap-1 lg:gap-2">
           <SidebarTrigger className="-ml-1" />
           <Separator
@@ -20,8 +29,16 @@ export function AppHeader({ title }: AppHeaderProps) {
           />
           <CommandSearchDialog />
         </div>
+        <div
+          className="h-full min-w-4 flex-1 cursor-default select-none"
+          aria-hidden="true"
+          {...dragRegionProps}
+        />
         <div className="flex items-center gap-2">
-          <p className="hidden text-sm font-medium text-muted-foreground md:block">
+          <p
+            className="hidden cursor-default select-none text-sm font-medium text-muted-foreground md:block"
+            {...dragRegionProps}
+          >
             {title}
           </p>
           <LanguageSwitcher />

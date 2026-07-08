@@ -22,12 +22,32 @@ import { NavMain } from "@/components/layout/nav-main";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PostingsSidebar } from "@/features/postings/queues/postings-sidebar";
 
-export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = ComponentProps<typeof Sidebar> & {
+  windowDragRegionEnabled?: boolean;
+};
+
+type DragRegionProps = {
+  "data-tauri-drag-region"?: string;
+};
+
+export function AppSidebar({
+  windowDragRegionEnabled = false,
+  ...props
+}: AppSidebarProps) {
   const { t } = useTranslation();
+  const dragRegionProps: DragRegionProps = windowDragRegionEnabled
+    ? { "data-tauri-drag-region": "" }
+    : {};
+
   return (
     <Sidebar {...props}>
       <div className="sidebar-glow-shell flex h-full flex-col">
-        <SidebarHeader className="relative z-10 px-2 pt-12 pb-1">
+        <div
+          className="app-sidebar-window-drag-region absolute inset-x-0 top-0 z-0 cursor-default select-none"
+          aria-hidden="true"
+          {...dragRegionProps}
+        />
+        <SidebarHeader className="app-sidebar-header relative z-10">
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
               <SidebarMenuButton

@@ -8,6 +8,7 @@ export type AppPreferences = {
   language: SupportedLanguage
   defaultSearchRadiusKm: number
   baseFontSizePx: number
+  windowDragRegionEnabled: boolean
 }
 
 export function getAppPreferences() {
@@ -32,4 +33,8 @@ export function setDefaultSearchRadiusKm(radiusKm: number) {
 
 export function setBaseFontSizePx(baseFontSizePx: number) {
   return invoke<AppPreferences>("set_base_font_size_px", { baseFontSizePx })
+}
+
+export function setWindowDragRegionEnabled(enabled: boolean) {
+  return invoke<AppPreferences>("set_window_drag_region_enabled", { enabled })
 }

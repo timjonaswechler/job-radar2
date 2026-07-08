@@ -19,6 +19,10 @@ export type AppSettings = {
     min: number
     max: number
   }
+  windowDragRegionEnabled: {
+    storageKey: string
+    default: boolean
+  }
 }
 
 export const APP_SETTINGS: AppSettings = {
@@ -38,6 +42,10 @@ export const APP_SETTINGS: AppSettings = {
     min: 12,
     max: 24,
   },
+  windowDragRegionEnabled: {
+    storageKey: "job-radar-window-drag-region-enabled",
+    default: true,
+  },
 }
 
 export function isAppTheme(value: string | null): value is AppTheme {
@@ -55,5 +63,19 @@ export function isBaseFontSizePx(value: number): boolean {
     Number.isInteger(value) &&
     value >= APP_SETTINGS.baseFontSizePx.min &&
     value <= APP_SETTINGS.baseFontSizePx.max
+  )
+}
+
+export function readStoredWindowDragRegionEnabled(): boolean {
+  return (
+    window.localStorage.getItem(APP_SETTINGS.windowDragRegionEnabled.storageKey) !==
+    "false"
+  )
+}
+
+export function writeStoredWindowDragRegionEnabled(enabled: boolean) {
+  window.localStorage.setItem(
+    APP_SETTINGS.windowDragRegionEnabled.storageKey,
+    String(enabled)
   )
 }
