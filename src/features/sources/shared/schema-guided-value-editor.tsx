@@ -113,8 +113,7 @@ export type SchemaGuidedArrayEdit =
   | { type: "set-item-value"; index: number; rawValue: string };
 
 export type SchemaGuidedEditResult =
-  | { ok: true; rawText: string }
-  | { ok: false; rawText: string; error: string };
+  { ok: true; rawText: string } | { ok: false; rawText: string; error: string };
 
 export type SchemaGuidedObjectEditResult = SchemaGuidedEditResult;
 export type SchemaGuidedArrayEditResult = SchemaGuidedEditResult;
@@ -376,7 +375,11 @@ export function applySchemaGuidedArrayEdit({
     return { ok: true, rawText: stringifyJson(nextValue) };
   }
 
-  const resolvedItemSchema = schemaForValue(itemSchema, nextValue[edit.index], options);
+  const resolvedItemSchema = schemaForValue(
+    itemSchema,
+    nextValue[edit.index],
+    options,
+  );
   const convertedValue = valueFromRawInput({
     key: `[${edit.index}]`,
     rawValue: edit.rawValue,
@@ -407,7 +410,8 @@ function SchemaGuidedObjectRowsEditor({
   const [newKey, setNewKey] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
-  if (!model.parseState.ok || !isJsonObject(model.parseState.value)) return null;
+  if (!model.parseState.ok || !isJsonObject(model.parseState.value))
+    return null;
 
   const selectedKnownKey = model.availableObjectKeys.some(
     (option) => option.key === newKey,
@@ -453,7 +457,10 @@ function SchemaGuidedObjectRowsEditor({
             }
             onValueChange={(value) => {
               if (value !== null) {
-                applyEdit({ type: "select-variant", variantIndex: Number(value) });
+                applyEdit({
+                  type: "select-variant",
+                  variantIndex: Number(value),
+                });
               }
             }}
           >
@@ -481,9 +488,13 @@ function SchemaGuidedObjectRowsEditor({
         <Table className={compactTableClassName()}>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-8 w-[32%] bg-muted/40 px-2">Key</TableHead>
+              <TableHead className="h-8 w-[32%] bg-muted/40 px-2">
+                Key
+              </TableHead>
               <TableHead className="h-8 bg-muted/40 px-2">Wert</TableHead>
-              <TableHead className="h-8 w-[22%] bg-muted/40 px-2">Regel</TableHead>
+              <TableHead className="h-8 w-[22%] bg-muted/40 px-2">
+                Regel
+              </TableHead>
               <TableHead className="h-8 w-10 bg-muted/40 px-1 text-right">
                 <span className="sr-only">Aktionen</span>
               </TableHead>
@@ -607,7 +618,8 @@ function SchemaGuidedArrayRowsEditor({
 }) {
   const [editError, setEditError] = useState<string | null>(null);
 
-  if (!model.parseState.ok || !Array.isArray(model.parseState.value)) return null;
+  if (!model.parseState.ok || !Array.isArray(model.parseState.value))
+    return null;
 
   const applyEdit = (edit: SchemaGuidedArrayEdit) => {
     const result = applySchemaGuidedArrayEdit({
@@ -630,9 +642,13 @@ function SchemaGuidedArrayRowsEditor({
         <Table className={compactTableClassName()}>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-8 w-[20%] bg-muted/40 px-2">Index</TableHead>
+              <TableHead className="h-8 w-[20%] bg-muted/40 px-2">
+                Index
+              </TableHead>
               <TableHead className="h-8 bg-muted/40 px-2">Wert</TableHead>
-              <TableHead className="h-8 w-[22%] bg-muted/40 px-2">Regel</TableHead>
+              <TableHead className="h-8 w-[22%] bg-muted/40 px-2">
+                Regel
+              </TableHead>
               <TableHead className="h-8 w-10 bg-muted/40 px-1 text-right">
                 <span className="sr-only">Aktionen</span>
               </TableHead>
@@ -835,7 +851,11 @@ function SchemaGuidedObjectValueCell({
       onChange={(event) => onChange(event.target.value)}
       aria-label={`Wert für ${row.key}`}
       disabled={disabled}
-      type={row.fieldType === "number" ? "number" : inputTypeForSchema(row.key, row.schema)}
+      type={
+        row.fieldType === "number"
+          ? "number"
+          : inputTypeForSchema(row.key, row.schema)
+      }
       className="h-8 rounded-none border-0 bg-transparent text-xs shadow-none ring-0 focus-visible:ring-0"
     />
   );
@@ -853,7 +873,9 @@ function SchemaGuidedObjectRowRule({
   return (
     <div className="flex flex-wrap gap-1">
       {row.required ? <Badge variant="warning-light">Pflicht</Badge> : null}
-      {row.unknown ? <Badge variant="warning-light">not in schema</Badge> : null}
+      {row.unknown ? (
+        <Badge variant="warning-light">not in schema</Badge>
+      ) : null}
       {row.scalarOptions.map((option) => (
         <Badge key={jsonValueToInputValue(option.value)} variant="outline">
           {option.label}
@@ -881,7 +903,9 @@ function SchemaGuidanceSummary({
     <div className="flex flex-col gap-1 text-xs">
       {model.schemaTitle || model.schemaDescription ? (
         <div className="flex flex-col gap-0.5">
-          {model.schemaTitle ? <p className="font-medium">{model.schemaTitle}</p> : null}
+          {model.schemaTitle ? (
+            <p className="font-medium">{model.schemaTitle}</p>
+          ) : null}
           {model.schemaDescription ? (
             <p className="text-muted-foreground">{model.schemaDescription}</p>
           ) : null}
@@ -1016,7 +1040,13 @@ function schemaGuidedVariants(
   return rawVariants.flatMap((variant, index) => {
     const resolvedVariant = resolveSchema(variant, schemaOptions);
     return resolvedVariant
-      ? [{ index, schema: resolvedVariant, label: schemaVariantLabel(resolvedVariant, index) }]
+      ? [
+          {
+            index,
+            schema: resolvedVariant,
+            label: schemaVariantLabel(resolvedVariant, index),
+          },
+        ]
       : [];
   });
 }
@@ -1036,7 +1066,8 @@ function seedObjectForVariant(
 
     if (
       !Object.prototype.hasOwnProperty.call(value, key) &&
-      (metadata.requiredKeys.has(key) || schemaDefaultValue(propertySchema, schemaOptions) !== undefined)
+      (metadata.requiredKeys.has(key) ||
+        schemaDefaultValue(propertySchema, schemaOptions) !== undefined)
     ) {
       value[key] = defaultValueForSchema(propertySchema, schemaOptions);
     }
@@ -1161,7 +1192,8 @@ function fieldTypeForValue(
 function jsonValueToInputValue(value: JsonValue | undefined): string {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   return JSON.stringify(value);
 }
 

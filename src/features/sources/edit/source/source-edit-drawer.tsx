@@ -71,7 +71,8 @@ export function SourceEditDrawer({
     [profilesByKey, source],
   );
   const schemaMetadata = useMemo(
-    () => sourceConfigSchemaMetadata(resolution?.effectiveSourceConfigSchema ?? {}),
+    () =>
+      sourceConfigSchemaMetadata(resolution?.effectiveSourceConfigSchema ?? {}),
     [resolution?.effectiveSourceConfigSchema],
   );
   const initialDraft = useMemo(
@@ -87,7 +88,9 @@ export function SourceEditDrawer({
   );
 
   const [name, setName] = useState(initialDraft?.name ?? "");
-  const [status, setStatus] = useState<SourceStatus>(initialDraft?.status ?? "draft");
+  const [status, setStatus] = useState<SourceStatus>(
+    initialDraft?.status ?? "draft",
+  );
   const [configEntries, setConfigEntries] = useState(
     initialDraft?.configEntries ?? [],
   );
@@ -131,7 +134,10 @@ export function SourceEditDrawer({
     [buildResult.document, jsonPreviewOpen],
   );
   const sourceOverridesStarter = useMemo(
-    () => sourceOverridesStarterForAccessPath(resolution?.profileAccessPath ?? null),
+    () =>
+      sourceOverridesStarterForAccessPath(
+        resolution?.profileAccessPath ?? null,
+      ),
     [resolution?.profileAccessPath],
   );
   const editable = source?.origin === "custom";
@@ -193,7 +199,8 @@ export function SourceEditDrawer({
           <DrawerHeader className="border-b pr-12">
             <DrawerTitle>Quelle bearbeiten</DrawerTitle>
             <DrawerDescription>
-              Source Key <code>{source.document.key}</code> · gespeichert als Custom-Registry-Dokument
+              Source Key <code>{source.document.key}</code> · gespeichert als
+              Custom-Registry-Dokument
             </DrawerDescription>
             <Button
               type="button"
@@ -215,7 +222,8 @@ export function SourceEditDrawer({
                   <AlertCircleIcon aria-hidden="true" />
                   <AlertTitle>Eingebaute Source</AlertTitle>
                   <AlertDescription>
-                    Eingebaute Sources können in diesem Slice nicht überschrieben werden.
+                    Eingebaute Sources können in diesem Slice nicht
+                    überschrieben werden.
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -251,13 +259,17 @@ export function SourceEditDrawer({
               ) : null}
 
               <div className="flex flex-col gap-2">
-                <Button type="button" variant="outline" onClick={handlePreviewToggle}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePreviewToggle}
+                >
                   <Code2Icon data-icon="inline-start" aria-hidden="true" />
                   {jsonPreviewOpen ? "JSON ausblenden" : "JSON ansehen"}
                 </Button>
                 <Collapsible open={jsonPreviewOpen}>
                   <CollapsibleContent>
-                    <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+                    <pre className="max-h-96 overflow-auto rounded-md p-3 font-mono text-xs">
                       {previewJson}
                     </pre>
                   </CollapsibleContent>
@@ -342,7 +354,9 @@ function SourceEditIdentityFields({
             disabled={saving}
           />
           <FieldDescription>Sichtbarer Name der Quelle.</FieldDescription>
-          {saveAttempted && !name.trim() ? <FieldError>Name fehlt.</FieldError> : null}
+          {saveAttempted && !name.trim() ? (
+            <FieldError>Name fehlt.</FieldError>
+          ) : null}
         </Field>
 
         <Field data-disabled>

@@ -150,7 +150,13 @@ function SchemaValueRowsTable({
   );
 
   if (!rows.length) {
-    return <ScalarValue value={value} schema={schema} schemaOptions={schemaOptions} />;
+    return (
+      <ScalarValue
+        value={value}
+        schema={schema}
+        schemaOptions={schemaOptions}
+      />
+    );
   }
 
   const visibleRows = rows.filter((row) =>
@@ -213,8 +219,8 @@ function SchemaValueRow({
 
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell className="whitespace-normal px-2 py-1.5 align-top font-mono">
-        <div className="flex min-w-0 items-start gap-1">
+      <TableCell className="whitespace-normal px-2 py-1.5 align-center font-mono">
+        <div className="flex min-w-0 items-center gap-1 ">
           <span
             aria-hidden="true"
             className="shrink-0"
@@ -225,7 +231,7 @@ function SchemaValueRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="shrink-0 text-muted-foreground hover:bg-transparent"
+              className="shrink-0 text-muted-foreground hover:bg-background bg-muted"
               onClick={onToggle}
               aria-expanded={expanded}
               aria-label={
@@ -239,7 +245,7 @@ function SchemaValueRow({
               )}
             </Button>
           ) : (
-            <span aria-hidden="true" className="size-6 shrink-0" />
+            <span aria-hidden="true" className="size-6 shrink-0 " />
           )}
           <span className="flex min-w-0 flex-col gap-1">
             <span className="truncate">{row.key}</span>
@@ -256,7 +262,7 @@ function SchemaValueRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="whitespace-normal px-2 py-1.5 align-top">
+      <TableCell className="whitespace-normal px-2 py-1.5 align-top content-center">
         {nested ? (
           <span className="text-muted-foreground">{summary}</span>
         ) : (
@@ -267,10 +273,10 @@ function SchemaValueRow({
           />
         )}
       </TableCell>
-      <TableCell className="whitespace-normal px-2 py-1.5 align-top text-muted-foreground">
+      <TableCell className="whitespace-normal px-2 py-1.5 align-top text-muted-foreground content-center">
         {typeLabel}
       </TableCell>
-      <TableCell className="whitespace-normal px-2 py-1.5 align-top">
+      <TableCell className="whitespace-normal px-2 py-1.5 align-top content-center">
         <SchemaRule
           schema={row.schema}
           required={row.required}
@@ -301,7 +307,7 @@ function SchemaRule({
   }
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1 items-center">
       {required ? <Badge variant="warning-light">Pflicht</Badge> : null}
       {unknown ? <Badge variant="warning-light">not in schema</Badge> : null}
       {scalarRules.map((rule) => (
