@@ -88,7 +88,7 @@ _Avoid_: department, employment type, salary, remote mode, posted date, generic 
 
 **Support Level**:
 A declared robustness/maintenance level for reusable profiles and source-owned access. Supported values are `stable`, `best_effort`, `experimental`, and `unsupported`. Support Level is not a live operational status; current operational confidence comes from the concrete Source's latest Source Live Check.
-_Avoid_: source status, live-check result, production guarantee, verified
+_Avoid_: source status, live-check result, production guarantee
 
 **Check Report**:
 A derived JSON report produced by a bounded check against one concrete Source. Check Reports include schema version, check kind, subject, timestamp, logic version, fingerprints for staleness detection, result, Structured Diagnostics, and check-specific details. They are overwriteable derived reports, not audit history and not authored domain documents.
@@ -96,11 +96,11 @@ _Avoid_: source profile, source document, audit log, support metadata
 
 **Source Live Check**:
 A bounded live check for one concrete Source and its current Source Config, selected Access Path, and Source Overrides. It compiles the Source into an Execution Plan and executes a small live smoke against the real source to show whether that Source currently works. A Source Live Check is the user-facing operational check; it does not mutate profile support metadata.
-_Avoid_: profile verification, support level, source status, Search Run
+_Avoid_: support level, source status, Search Run
 
 **Source Live Check Report**:
 The Check Report produced by a Source Live Check. It records the last bounded live result for one Source, including freshness fingerprints, runtime diagnostics, discovery summary, and optional one-candidate detail-check summary. It may support explicit activation flows, but it does not verify a Source Profile.
-_Avoid_: source status, support level, profile verification
+_Avoid_: source status, support level
 
 **Validation State**:
 A derived state indicating whether a Source or profile can currently compile and execute. It is computed from schema, registry, compiler, and source validation diagnostics; it is not a persisted user status.

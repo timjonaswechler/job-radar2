@@ -199,6 +199,28 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
 }
 
 #[test]
+fn check_source_rejects_invalid_source_key_without_writing_outside_report_dir() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    let error =
+        check_source_with_fetcher(temp_dir.path(), "../outside", &passing_live_check_fetcher())
+            .unwrap_err();
+
+    assert!(error.contains("invalid Source key `../outside`"));
+    assert!(!temp_dir.path().join("outside.json").exists());
+}
+
+#[test]
+fn source_live_check_report_status_rejects_invalid_source_key_before_reading_path() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    fs::write(temp_dir.path().join("outside.json"), "{}").unwrap();
+
+    let error = source_live_check_report_status(temp_dir.path(), "../outside").unwrap_err();
+
+    assert!(error.contains("invalid Source key `../outside`"));
+}
+
+#[test]
 fn source_live_check_report_status_is_unknown_without_persisted_report() {
     let temp_dir = tempfile::tempdir().unwrap();
 

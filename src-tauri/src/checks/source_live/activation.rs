@@ -9,6 +9,7 @@ use crate::source::documents::{SourceDocument, SourceStatus};
 use crate::source_profile::registry::RegistrySource;
 
 use super::build_source_live_check_report;
+use crate::checks::persistence::validate_source_live_check_report_key;
 use crate::checks::{persist_latest_check_report, CheckReport, CheckReportResult};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -149,6 +150,7 @@ where
 {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
+    validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
     let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
     let source = snapshot.source(source_key).cloned();
     let current_status = source.as_ref().map(|source| source.document.status);

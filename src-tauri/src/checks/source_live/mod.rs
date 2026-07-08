@@ -24,6 +24,7 @@ use crate::source::validation::derive_source_validation_state;
 use crate::source_profile::documents::SourceProfileDocument;
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
+use super::persistence::validate_source_live_check_report_key;
 use super::{
     evaluate_check_report_freshness, persist_latest_check_report, read_latest_check_report,
     source_live_check_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
@@ -99,6 +100,7 @@ where
 {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
+    validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
     let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
     let report = build_source_live_check_report(
         &snapshot,
@@ -117,6 +119,7 @@ pub fn source_live_check_report_status(
 ) -> Result<SourceLiveCheckReportStatus, String> {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
+    validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
     let report_path = source_live_check_report_path(app_data_dir, source_key);
     let report = match read_latest_check_report(&report_path) {
         Ok(report) => report,

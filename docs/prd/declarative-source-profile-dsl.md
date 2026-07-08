@@ -222,7 +222,7 @@ Reusable implementation pieces may be kept when they fit the new architecture, s
 ## Testing Decisions
 
 - Tests should verify behavior at the highest useful seam: schema/registry load, Profile Compiler, Source validation, Execution Plan execution, and Search Run source outcomes.
-- Tests should prefer external behavior over implementation details. For example, a profile fixture test should assert normalized posting candidates and diagnostics, not private helper calls.
+- Tests should prefer external behavior over implementation details. For example, a profile regression test should assert normalized posting candidates and diagnostics, not private helper calls.
 - Profile validation tests cover schema validity, compiler validity, support metadata, forbidden capabilities, bounded execution requirements, forbidden secrets, source config schema merging, and override validation.
 - Source validation tests cover selected profile path existence, Source Config validation, Source Overrides, Source-owned Access Paths, derived validation state, and duplicate built-in/custom profile keys.
 - Execution tests cover `postingDiscovery` strategies, fallback behavior, semantic diagnostics, pagination limits, fetch modes, parse modes, extraction cardinality, transforms, combine behavior, and location normalization.

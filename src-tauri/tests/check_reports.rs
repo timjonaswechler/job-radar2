@@ -275,6 +275,24 @@ fn latest_report_paths_use_overwriteable_source_live_check_location() {
 }
 
 #[test]
+fn latest_report_path_rejects_invalid_source_key() {
+    let app_data_dir = std::path::PathBuf::from("/tmp/job-radar-check-report-test");
+    let report = CheckReport::new(
+        CheckReportKind::SourceLiveCheck,
+        CheckReportSubject::source("../outside"),
+        "2026-07-07T12:00:00Z",
+        "source-live-check/v1",
+        CheckReportResult::Failed,
+    );
+
+    let error = latest_check_report_path(&app_data_dir, &report).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("invalid Source key `../outside`"));
+}
+
+#[test]
 fn persistence_overwrites_latest_source_live_check_report() {
     let temp_dir = tempfile::tempdir().unwrap();
     let app_data_dir = temp_dir.path();

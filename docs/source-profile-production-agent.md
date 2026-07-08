@@ -13,7 +13,7 @@ A production agent should create configuration, not code. In the normal path, ad
 <app-data-dir>/sources/<source-key>.json
 ```
 
-Do not create Fixture Packs, Fixture Manifests, captured response bundles, Rust code, TypeScript code, plugins, or arbitrary scraping scripts.
+Do not create captured response bundles, Rust code, TypeScript code, plugins, or arbitrary scraping scripts.
 
 ## Required inputs
 
@@ -49,8 +49,6 @@ Use these terms exactly:
 - **Source Live Check Report**: the latest derived Check Report for a concrete Source. It is the user-facing operational signal.
 - **Structured Diagnostics**: machine-readable validation/runtime issues surfaced by Job Radar.
 
-Avoid legacy or misleading terms such as adapter, Systemprofil, Browserprofil, inventory, scraper plugin, profile verification, verified profile, Fixture Pack, or Fixture Manifest.
-
 ## Non-goals and hard rules
 
 - Do not add search keywords, roles, locations, radius, countries, include rules, or exclude rules to Source Config. Search criteria belong to Search Requests.
@@ -60,8 +58,8 @@ Avoid legacy or misleading terms such as adapter, Systemprofil, Browserprofil, i
 - Do not create multiple profiles in one pass unless the user explicitly asks.
 - Do not implement a whole catalog.
 - Do not use arbitrary JavaScript. Browser fetch may use bounded waits/interactions only if the DSL and app support them.
-- Do not claim a Source Profile or Source is “verified”. Production confidence comes from the concrete Source's latest Source Live Check.
-- Do not create `source-profile-fixtures/`, `fixture.json`, or response capture directories as part of the production custom profile workflow.
+- Do not describe Source Profile support metadata as operational confidence. Production confidence comes from the concrete Source's latest Source Live Check.
+- Do not create files outside `source-profiles/` and `sources/` as part of the production custom profile workflow.
 
 ## Evidence and classification workflow
 
@@ -124,7 +122,7 @@ Use the simplified support levels:
 - `experimental`: shape is plausible but evidence is limited.
 - `unsupported`: detection knowledge only; no executable Access Path should be relied on.
 
-Do not use `verified`; profile support is not a production guarantee.
+Profile support is not a production guarantee.
 
 ### 6. Choose support evidence kinds
 
@@ -133,8 +131,6 @@ Support evidence documents why the declared support level is plausible. Prefer:
 - `manual_review`: human/agent review of public docs, HTML, API responses, selectors, or platform markers.
 - `smoke`: a bounded live/manual smoke result.
 - `schema_check`: evidence that the profile shape loaded or validated through available Job Radar diagnostics.
-
-Do not use `fixture`; it is not part of the production custom profile workflow.
 
 Example:
 
