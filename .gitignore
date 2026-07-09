@@ -36,3 +36,4 @@ search-run-candidates.json
 /Cargo.lock
 /src-tauri/Cargo.lock
 /src-tauri/geo/*.txt
+.pi-subagents/
