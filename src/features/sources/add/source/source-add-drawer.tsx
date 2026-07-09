@@ -125,6 +125,7 @@ export function SourceAddDrawer({
               disabled={state.saving}
               configErrors={data.buildResult.configErrors}
               showErrors={state.saveAttempted}
+              portalContainer={drawerContentElement}
               onChange={actions.setConfigEntries}
             />
 

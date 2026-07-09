@@ -33,7 +33,13 @@ export function sourceEditDraftFromSource({
     name: source.document.name,
     status: source.document.status,
     configEntries: entriesWithSchemaHints(
-      configEntriesFromJsonObject(source.document.sourceConfig, createConfigEntryId),
+      configEntriesFromJsonObject(
+        source.document.sourceConfig,
+        createConfigEntryId,
+      ).map((entry) => ({
+        ...entry,
+        locked: schemaMetadata.requiredKeys.has(entry.key) || undefined,
+      })),
       schemaMetadata,
       createConfigEntryId,
     ),

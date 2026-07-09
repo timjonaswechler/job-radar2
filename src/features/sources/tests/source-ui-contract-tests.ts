@@ -1056,6 +1056,7 @@ const editDraft = sourceEditDraftFromSource({
 assert.equal(editDraft.name, "ACME");
 assert.equal(editDraft.status, "active");
 assert.deepEqual(entryValues(editDraft.configEntries), [["boardSlug", "acme"]]);
+assert.equal(editDraft.configEntries[0]?.locked, true);
 assert.equal(
   editDraft.sourceOverridesText,
   JSON.stringify(editableRegistrySource.document.sourceOverrides, null, 2),

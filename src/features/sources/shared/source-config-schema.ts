@@ -13,6 +13,7 @@ export type SourceConfigEntry = {
   id: string;
   key: string;
   value: string;
+  locked?: boolean;
 };
 
 export type SchemaMetadata = {

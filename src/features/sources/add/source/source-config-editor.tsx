@@ -1,17 +1,17 @@
-import { LockIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
+
+import { CheckIcon, ChevronDownIcon, LockIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxLabel,
-  ComboboxList,
-  ComboboxSeparator,
-} from "@/components/ui/combobox";
 import {
   Empty,
   EmptyContent,
@@ -65,6 +65,7 @@ type SourceConfigEditorProps = {
   disabled: boolean;
   configErrors: string[];
   showErrors: boolean;
+  portalContainer?: HTMLElement | null;
   onChange: (entries: SourceConfigEntry[]) => void;
 };
 
@@ -80,6 +81,7 @@ export function SourceConfigEditor({
   disabled,
   configErrors,
   showErrors,
+  portalContainer,
   onChange,
 }: SourceConfigEditorProps) {
   const knownKeys = [...schemaMetadata.properties.keys()];
@@ -137,13 +139,14 @@ export function SourceConfigEditor({
               keyOptions={keyOptions}
               schemaMetadata={schemaMetadata}
               disabled={disabled}
+              portalContainer={portalContainer}
               onUpdate={updateEntry}
               onRemove={removeEntry}
             />
             <FieldDescription>
-              Pflichtwerte stammen aus dem effektiven Profil-/Access-Path-Schema
-              und können nicht direkt entfernt werden. Zusätzliche Keys bleiben
-              als freie Konfiguration möglich.
+              Pflichtwerte stammen aus dem effektiven Profil-/Access-Path-Schema.
+              Bereits gespeicherte Pflichtwerte sind geschützt; neu hinzugefügte
+              Pflichtwerte bleiben bis zum Speichern entfernbar.
             </FieldDescription>
           </Field>
         ) : (
@@ -201,6 +204,7 @@ type SourceConfigTableProps = {
   keyOptions: ConfigKeyOption[];
   schemaMetadata: SchemaMetadata;
   disabled: boolean;
+  portalContainer?: HTMLElement | null;
   onUpdate: (id: string, patch: Partial<SourceConfigEntry>) => void;
   onRemove: (id: string) => void;
 };
@@ -210,6 +214,7 @@ function SourceConfigTable({
   keyOptions,
   schemaMetadata,
   disabled,
+  portalContainer,
   onUpdate,
   onRemove,
 }: SourceConfigTableProps) {
@@ -229,6 +234,7 @@ function SourceConfigTable({
         {entries.map((entry, index) => {
           const propertySchema = schemaMetadata.properties.get(entry.key);
           const required = schemaMetadata.requiredKeys.has(entry.key);
+          const locked = required && entry.locked === true;
           const fieldType = schemaFieldType(propertySchema);
           const description = entry.key
             ? configEntryDescription(entry.key, propertySchema, required)
@@ -245,8 +251,9 @@ function SourceConfigTable({
                   entry={entry}
                   index={index}
                   keyOptions={keyOptions}
-                  required={required}
+                  locked={locked}
                   disabled={disabled}
+                  portalContainer={portalContainer}
                   onChange={(key) => onUpdate(entry.id, { key })}
                 />
               </TableCell>
@@ -256,6 +263,7 @@ function SourceConfigTable({
                   index={index}
                   propertySchema={propertySchema}
                   disabled={disabled}
+                  portalContainer={portalContainer}
                   onChange={(value) => onUpdate(entry.id, { value })}
                 />
               </TableCell>
@@ -271,20 +279,20 @@ function SourceConfigTable({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => onRemove(entry.id)}
-                  disabled={disabled || required}
+                  disabled={disabled || locked}
                   title={
-                    required
-                      ? "Pflichtwert kann nicht entfernt werden"
+                    locked
+                      ? "Gespeicherter Pflichtwert kann nicht entfernt werden"
                       : "Wert entfernen"
                   }
                 >
-                  {required ? (
+                  {locked ? (
                     <LockIcon aria-hidden="true" />
                   ) : (
                     <Trash2Icon aria-hidden="true" />
                   )}
                   <span className="sr-only">
-                    {required ? "Pflichtwert geschützt" : "Wert entfernen"}
+                    {locked ? "Pflichtwert geschützt" : "Wert entfernen"}
                   </span>
                 </Button>
               </TableCell>
@@ -300,8 +308,9 @@ type ConfigKeyCellProps = {
   entry: SourceConfigEntry;
   index: number;
   keyOptions: ConfigKeyOption[];
-  required: boolean;
+  locked: boolean;
   disabled: boolean;
+  portalContainer?: HTMLElement | null;
   onChange: (key: string) => void;
 };
 
@@ -309,54 +318,158 @@ function ConfigKeyCell({
   entry,
   index,
   keyOptions,
-  required,
+  locked,
   disabled,
+  portalContainer,
   onChange,
 }: ConfigKeyCellProps) {
-  const selectedKnownKey = keyOptions.some((option) => option.key === entry.key)
-    ? entry.key
-    : null;
+  const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const inputLocked = disabled || locked;
+  const popoverRoot = portalContainer ?? document.body;
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!inputRef.current || !popoverRoot) return;
+
+    const inputRect = inputRef.current.getBoundingClientRect();
+    const rootRect =
+      popoverRoot === document.body
+        ? { top: 0, left: 0, right: window.innerWidth }
+        : popoverRoot.getBoundingClientRect();
+    const minWidth = 256;
+    const width = Math.max(inputRect.width, minWidth);
+    const left = Math.min(
+      Math.max(inputRect.left - rootRect.left, 8),
+      Math.max(rootRect.right - rootRect.left - width - 8, 8),
+    );
+
+    setPopoverStyle({
+      position: popoverRoot === document.body ? "fixed" : "absolute",
+      top: inputRect.bottom - rootRect.top + 4,
+      left,
+      width,
+    });
+  }, [popoverRoot]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePopoverPosition();
+  }, [open, updatePopoverPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("resize", updatePopoverPosition);
+    document.addEventListener("scroll", updatePopoverPosition, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("resize", updatePopoverPosition);
+      document.removeEventListener("scroll", updatePopoverPosition, true);
+    };
+  }, [open, updatePopoverPosition]);
+
+  const chooseKey = (key: string) => {
+    setOpen(false);
+    onChange(key);
+  };
 
   return (
-    <Combobox
-      items={keyOptions.map((option) => option.key)}
-      inputValue={entry.key}
-      value={selectedKnownKey}
-      onInputValueChange={(value) => onChange(value)}
-      onValueChange={(value) => {
-        if (value) onChange(value);
-      }}
-      disabled={disabled || required}
-      openOnInputClick
-    >
-      <ComboboxInput
+    <div ref={containerRef} className="relative" data-vaul-no-drag="">
+      <Input
+        ref={inputRef}
+        value={entry.key}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => {
+          if (!inputLocked) setOpen(true);
+        }}
+        onClick={() => {
+          if (!inputLocked) setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
         aria-label={`Key für Konfigurationswert ${index + 1}`}
         placeholder="Key"
-        showClear={false}
-        className="h-8 rounded-none border-0 bg-transparent shadow-none ring-0 focus-within:ring-0"
-        disabled={disabled || required}
+        className="h-8 rounded-none border-0 bg-transparent pr-8 shadow-none ring-0 focus-visible:ring-0"
+        disabled={inputLocked}
+        data-vaul-no-drag=""
       />
-      {keyOptions.length ? (
-        <ComboboxContent className="min-w-64">
-          <ComboboxLabel>Bekannte Schema-Keys</ComboboxLabel>
-          <ComboboxSeparator />
-          <ComboboxEmpty>Kein Schema-Key gefunden.</ComboboxEmpty>
-          <ComboboxList>
-            {keyOptions.map((option) => (
-              <ComboboxItem key={option.key} value={option.key}>
-                <div className="flex min-w-0 flex-col gap-0.5 pr-6">
-                  <span className="truncate font-medium">{option.key}</span>
-                  <span className="truncate text-muted-foreground">
-                    {option.label}
-                    {option.required ? " · Pflicht" : ""}
-                  </span>
-                </div>
-              </ComboboxItem>
-            ))}
-          </ComboboxList>
-        </ComboboxContent>
+      {keyOptions.length && !inputLocked ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-1/2 right-1 -translate-y-1/2"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpen((current) => !current)}
+          aria-label="Schema-Key-Auswahl öffnen"
+          aria-expanded={open}
+          data-vaul-no-drag=""
+        >
+          <ChevronDownIcon aria-hidden="true" />
+        </Button>
       ) : null}
-    </Combobox>
+      {open && keyOptions.length && popoverStyle
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              className="z-50 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10"
+              style={popoverStyle}
+              role="listbox"
+              data-vaul-no-drag=""
+            >
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                Bekannte Schema-Keys
+              </div>
+              <div className="h-px bg-border/50" />
+              <div className="max-h-72 overflow-y-auto p-1">
+                {keyOptions.map((option) => {
+                  const selected = option.key === entry.key;
+
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className="relative flex min-h-7 w-full cursor-default items-center rounded-md px-2 py-1 text-left text-xs/relaxed outline-hidden hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      role="option"
+                      aria-selected={selected}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => chooseKey(option.key)}
+                      data-vaul-no-drag=""
+                    >
+                      <div className="flex min-w-0 flex-col gap-0.5 pr-6">
+                        <span className="truncate font-medium">{option.key}</span>
+                        <span className="truncate text-muted-foreground">
+                          {option.label}
+                          {option.required ? " · Pflicht" : ""}
+                        </span>
+                      </div>
+                      {selected ? (
+                        <CheckIcon
+                          className="pointer-events-none absolute right-2 size-3.5"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            popoverRoot,
+          )
+        : null}
+    </div>
   );
 }
 
@@ -365,6 +478,7 @@ type ConfigValueCellProps = {
   index: number;
   propertySchema: JsonObject | undefined;
   disabled: boolean;
+  portalContainer?: HTMLElement | null;
   onChange: (value: string) => void;
 };
 
@@ -373,6 +487,7 @@ function ConfigValueCell({
   index,
   propertySchema,
   disabled,
+  portalContainer,
   onChange,
 }: ConfigValueCellProps) {
   const enumOptions = schemaEnumOptions(propertySchema);
@@ -393,10 +508,15 @@ function ConfigValueCell({
           className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none ring-0 focus:ring-0"
           aria-label={ariaLabel}
           disabled={disabled}
+          data-vaul-no-drag=""
         >
           <SelectValue placeholder="Wert wählen" />
         </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
+        <SelectContent
+          alignItemWithTrigger={false}
+          portalContainer={portalContainer}
+          data-vaul-no-drag=""
+        >
           <SelectGroup>
             {enumOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
@@ -423,10 +543,15 @@ function ConfigValueCell({
           className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none ring-0 focus:ring-0"
           aria-label={ariaLabel}
           disabled={disabled}
+          data-vaul-no-drag=""
         >
           <SelectValue placeholder="Boolean wählen" />
         </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
+        <SelectContent
+          alignItemWithTrigger={false}
+          portalContainer={portalContainer}
+          data-vaul-no-drag=""
+        >
           <SelectGroup>
             {booleanOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>

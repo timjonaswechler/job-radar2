@@ -100,6 +100,8 @@ export function SourceEditDrawer({
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drawerContentElement, setDrawerContentElement] =
+    useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open || !initialDraft) return;
@@ -195,7 +197,10 @@ export function SourceEditDrawer({
       handleOnly
     >
       {source ? (
-        <DrawerContent className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)] data-[vaul-drawer-direction=right]:sm:max-w-none">
+        <DrawerContent
+          ref={setDrawerContentElement}
+          className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)] data-[vaul-drawer-direction=right]:sm:max-w-none"
+        >
           <DrawerHeader className="border-b pr-12">
             <DrawerTitle>Quelle bearbeiten</DrawerTitle>
             <DrawerDescription>
@@ -234,6 +239,7 @@ export function SourceEditDrawer({
                 status={status}
                 saveAttempted={saveAttempted}
                 saving={saving || !editable}
+                selectPortalContainer={drawerContentElement}
                 onNameChange={setName}
                 onStatusChange={setStatus}
               />
@@ -244,6 +250,7 @@ export function SourceEditDrawer({
                 disabled={saving || !editable}
                 configErrors={buildResult.configErrors}
                 showErrors={saveAttempted}
+                portalContainer={drawerContentElement}
                 onChange={setConfigEntries}
               />
 
@@ -327,6 +334,7 @@ type SourceEditIdentityFieldsProps = {
   status: SourceStatus;
   saveAttempted: boolean;
   saving: boolean;
+  selectPortalContainer?: HTMLElement | null;
   onNameChange: (name: string) => void;
   onStatusChange: (status: SourceStatus) => void;
 };
@@ -337,6 +345,7 @@ function SourceEditIdentityFields({
   status,
   saveAttempted,
   saving,
+  selectPortalContainer,
   onNameChange,
   onStatusChange,
 }: SourceEditIdentityFieldsProps) {
@@ -385,7 +394,11 @@ function SourceEditIdentityFields({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} data-vaul-no-drag="">
+            <SelectContent
+              alignItemWithTrigger={false}
+              portalContainer={selectPortalContainer}
+              data-vaul-no-drag=""
+            >
               <SelectGroup>
                 {sourceStatusOptions.map(({ value, label }) => (
                   <SelectItem key={value} value={value}>
