@@ -162,6 +162,68 @@ fn imports_posting_meta_per_source_and_updates_existing_source_metadata() {
 }
 
 #[test]
+fn distinct_findings_with_same_listing_url_but_different_posting_meta_stay_separate() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let result = search_run_result(vec![
+            posting(
+                "Laser Engineer",
+                "ACME GmbH",
+                &["Mainz"],
+                vec![source_with_meta(
+                    "career_page",
+                    "ACME Careers",
+                    "https://example.test/jobs",
+                    [("jobId", "laser-42")],
+                )],
+            ),
+            posting(
+                "Data Engineer",
+                "ACME GmbH",
+                &["Berlin"],
+                vec![source_with_meta(
+                    "career_page",
+                    "ACME Careers",
+                    "https://example.test/jobs",
+                    [("jobId", "data-99")],
+                )],
+            ),
+        ]);
+
+        JobPostingImportService::new(&pool)
+            .import_search_run_result(&result)
+            .await
+            .unwrap();
+
+        assert_eq!(table_count(&pool, "job_postings").await, 2);
+        assert_eq!(table_count(&pool, "job_posting_sources").await, 2);
+
+        let rows = sqlx::query(
+            "SELECT p.title, s.url, s.posting_meta_json
+             FROM job_postings p
+             JOIN job_posting_sources s ON s.posting_id = p.id
+             ORDER BY p.title",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(rows[0].get::<String, _>("title"), "Data Engineer");
+        assert_eq!(rows[0].get::<String, _>("url"), "https://example.test/jobs");
+        assert_eq!(
+            rows[0].get::<String, _>("posting_meta_json"),
+            json!({ "jobId": "data-99" }).to_string()
+        );
+        assert_eq!(rows[1].get::<String, _>("title"), "Laser Engineer");
+        assert_eq!(rows[1].get::<String, _>("url"), "https://example.test/jobs");
+        assert_eq!(
+            rows[1].get::<String, _>("posting_meta_json"),
+            json!({ "jobId": "laser-42" }).to_string()
+        );
+    });
+}
+
+#[test]
 fn exact_url_match_reuses_existing_posting_and_preserves_manual_states() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

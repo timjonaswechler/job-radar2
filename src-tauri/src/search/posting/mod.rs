@@ -102,24 +102,42 @@ async fn find_posting_by_source_url(
     posting: &NormalizedPosting,
 ) -> Result<Option<i64>, String> {
     for source in &posting.sources {
-        let posting_id = sqlx::query_scalar::<_, i64>(
-            "SELECT posting_id
+        let rows = sqlx::query(
+            "SELECT posting_id, posting_meta_json
              FROM job_posting_sources
-             WHERE url = ?1
-             ORDER BY id
-             LIMIT 1",
+             WHERE source_key = ?1 AND url = ?2
+             ORDER BY id",
         )
+        .bind(&source.source_key)
         .bind(&source.url)
-        .fetch_optional(&mut **transaction)
+        .fetch_all(&mut **transaction)
         .await
         .map_err(db_error)?;
 
-        if posting_id.is_some() {
-            return Ok(posting_id);
+        for row in rows {
+            let existing_posting_meta_json = row
+                .try_get::<String, _>("posting_meta_json")
+                .map_err(db_error)?;
+            if posting_meta_identity_matches(&existing_posting_meta_json, source)? {
+                return row
+                    .try_get::<i64, _>("posting_id")
+                    .map(Some)
+                    .map_err(db_error);
+            }
         }
     }
 
     Ok(None)
+}
+
+fn posting_meta_identity_matches(
+    existing_posting_meta_json: &str,
+    source: &PostingSource,
+) -> Result<bool, String> {
+    let existing_posting_meta: crate::search::run::PostingMeta =
+        serde_json::from_str(existing_posting_meta_json).map_err(json_error)?;
+
+    Ok(existing_posting_meta == source.posting_meta)
 }
 
 async fn find_posting_by_dedupe(
