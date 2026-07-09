@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrowserRuntimeCard } from "@/features/sources/runtime/browser-runtime-card";
 import { DiagnosticCard } from "@/features/sources/registry/registry-diagnostics";
-import { ProfileRegistryDataGrid } from "@/features/sources/registry/profile-registry-data-grid";
+import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";
 import { AddRegistryDocumentDrawer } from "@/features/sources/add/add-registry-document-drawer";
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import {
@@ -125,7 +125,7 @@ export function SourcesWorkspaceView() {
         </TabsContent>
 
         <TabsContent value="profiles">
-          <ProfileRegistryDataGrid
+          <ProfileRegistryTab
             profiles={profiles}
             diagnosticIndex={diagnosticIndex}
             loading={loading}

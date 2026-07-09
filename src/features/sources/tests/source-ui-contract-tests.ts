@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { profileGridColumns } from "@/features/sources/registry/profile/profile-grid-columns";
+import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source/source-detection-panel";
 import {
@@ -60,12 +62,12 @@ import {
   sourceLiveCheckDisplayModel,
 } from "@/features/sources/view-model/source-live-check-model";
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
+import { buildDiagnosticIndex } from "@/features/sources/view-model/registry-view-model";
 import {
-  buildDiagnosticIndex,
   countProfileKinds,
   createProfileGridRows,
   filterProfileGridRows,
-} from "@/features/sources/view-model/registry-view-model";
+} from "@/features/sources/view-model/profile-grid-model";
 import type {
   CheckReport,
   JsonValue,
@@ -78,6 +80,15 @@ import type {
 } from "@/lib/api/sources";
 
 assert.equal(typeof SourceRegistryTab, "function");
+assert.equal(typeof ProfileRegistryTab, "function");
+assert.equal(
+  profileGridColumns.some((column) => column.id === "supportEvidenceSummary"),
+  true,
+);
+assert.equal(
+  profileGridColumns.some((column) => column.id === "detectionEvidenceSummary"),
+  true,
+);
 
 const profile: RegistrySourceProfile = {
   origin: "built_in",

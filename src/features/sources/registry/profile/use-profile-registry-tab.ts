@@ -1,10 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-import type {
-  ColumnDef,
-  PaginationState,
-  SortingState,
-} from "@tanstack/react-table";
+import type { PaginationState, SortingState } from "@tanstack/react-table";
 import {
   getCoreRowModel,
   getPaginationRowModel,
@@ -12,31 +8,30 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 
+import { profileGridColumns } from "@/features/sources/registry/profile/profile-grid-columns";
+import type { DiagnosticIndex } from "@/features/sources/view-model/diagnostics";
 import {
-  countOrigins,
   countProfileKinds,
+  countProfileOrigins,
   createProfileGridRows,
   filterProfileGridRows,
-  type DiagnosticIndex,
   type ProfileGridRow,
-} from "@/features/sources/view-model/registry-view-model";
+} from "@/features/sources/view-model/profile-grid-model";
 import type {
   RegistrySourceProfile,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
 } from "@/lib/api/sources";
 
-type UseProfileRegistryGridStateOptions = {
-  columns: ColumnDef<ProfileGridRow>[];
-  diagnosticIndex: DiagnosticIndex;
+type UseProfileRegistryTabOptions = {
   profiles: RegistrySourceProfile[];
+  diagnosticIndex: DiagnosticIndex;
 };
 
-export function useProfileRegistryGridState({
-  columns,
-  diagnosticIndex,
+export function useProfileRegistryTab({
   profiles,
-}: UseProfileRegistryGridStateOptions) {
+  diagnosticIndex,
+}: UseProfileRegistryTabOptions) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKinds, setSelectedKinds] = useState<SourceProfileKind[]>([]);
   const [selectedOrigins, setSelectedOrigins] = useState<
@@ -44,6 +39,16 @@ export function useProfileRegistryGridState({
   >([]);
   const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProfileGridRow | null>(null);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "name", desc: false },
+  ]);
+  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
+    profileGridColumns.map((column) => column.id as string),
+  );
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const rows = useMemo(
@@ -62,73 +67,10 @@ export function useProfileRegistryGridState({
     [deferredSearchQuery, diagnosticsOnly, rows, selectedKinds, selectedOrigins],
   );
 
-  const table = useRegistryTableState({
-    columns,
-    rows: filteredRows,
-    resetPageDependencies: [
-      deferredSearchQuery,
-      diagnosticsOnly,
-      selectedKinds,
-      selectedOrigins,
-    ],
-  });
-
-  const kindCounts = useMemo(() => countProfileKinds(rows), [rows]);
-  const originCounts = useMemo(() => countOrigins(rows), [rows]);
-  const activeFilterCount =
-    selectedKinds.length + selectedOrigins.length + (diagnosticsOnly ? 1 : 0);
-
-  return {
-    activeFilterCount,
-    diagnosticsOnly,
-    filteredRows,
-    kindCounts,
-    originCounts,
-    searchQuery,
-    selectedKinds,
-    selectedOrigins,
-    selectedRow,
-    setDiagnosticsOnly,
-    setSearchQuery,
-    setSelectedRow,
-    table,
-    toggleKind(kind: SourceProfileKind, checked: boolean) {
-      setSelectedKinds((current) => toggleSelectedValue(current, kind, checked));
-    },
-    toggleOrigin(origin: SourceRegistryDocumentOrigin, checked: boolean) {
-      setSelectedOrigins((current) => toggleSelectedValue(current, origin, checked));
-    },
-  };
-}
-
-type RegistryGridRow = { key: string };
-
-type UseRegistryTableStateOptions<TRow extends RegistryGridRow> = {
-  columns: ColumnDef<TRow>[];
-  rows: TRow[];
-  resetPageDependencies: unknown[];
-};
-
-function useRegistryTableState<TRow extends RegistryGridRow>({
-  columns,
-  rows,
-  resetPageDependencies,
-}: UseRegistryTableStateOptions<TRow>) {
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "name", desc: false },
-  ]);
-  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
-    columns.map((column) => column.id as string),
-  );
-
   const table = useReactTable({
-    columns,
-    data: rows,
-    pageCount: Math.ceil((rows.length || 0) / pagination.pageSize),
+    columns: profileGridColumns,
+    data: filteredRows,
+    pageCount: Math.ceil((filteredRows.length || 0) / pagination.pageSize),
     getRowId: (row) => row.key,
     state: {
       pagination,
@@ -146,13 +88,41 @@ function useRegistryTableState<TRow extends RegistryGridRow>({
 
   useEffect(() => {
     setPagination((current) => ({ ...current, pageIndex: 0 }));
-    // resetPageDependencies intentionally owns this effect's invalidation surface.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, resetPageDependencies);
+  }, [deferredSearchQuery, diagnosticsOnly, selectedKinds, selectedOrigins]);
 
-  return table;
+  const kindCounts = useMemo(() => countProfileKinds(rows), [rows]);
+  const originCounts = useMemo(() => countProfileOrigins(rows), [rows]);
+  const activeFilterCount =
+    selectedKinds.length + selectedOrigins.length + (diagnosticsOnly ? 1 : 0);
+
+  return {
+    activeFilterCount,
+    diagnosticsOnly,
+    filteredRows,
+    kindCounts,
+    originCounts,
+    searchQuery,
+    selectedKinds,
+    selectedOrigins,
+    selectedRow,
+    setDiagnosticsOnly,
+    setSearchQuery,
+    setSelectedRow,
+    table,
+    closeDetails() {
+      setSelectedRow(null);
+    },
+    toggleKind(kind: SourceProfileKind, checked: boolean) {
+      setSelectedKinds((current) => toggleSelectedValue(current, kind, checked));
+    },
+    toggleOrigin(origin: SourceRegistryDocumentOrigin, checked: boolean) {
+      setSelectedOrigins((current) => toggleSelectedValue(current, origin, checked));
+    },
+  };
 }
 
 function toggleSelectedValue<T>(values: T[], value: T, checked: boolean) {
   return checked ? [...values, value] : values.filter((current) => current !== value);
 }
+
+export type ProfileRegistryTabState = ReturnType<typeof useProfileRegistryTab>;

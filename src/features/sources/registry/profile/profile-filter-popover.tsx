@@ -12,9 +12,9 @@ import {
   RegistryFilterFields,
 } from "@/features/sources/registry/shared/registry-filter-fields";
 import {
-  originEntries,
   profileKindEntries,
-} from "@/features/sources/view-model/registry-view-model";
+  profileOriginEntries,
+} from "@/features/sources/view-model/profile-grid-model";
 import type {
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
@@ -73,7 +73,7 @@ export function ProfileFilterPopover({
             ))}
           </RegistryFilterFields>
           <RegistryFilterFields title="Origin">
-            {originEntries().map(([origin, label]) => (
+            {profileOriginEntries().map(([origin, label]) => (
               <RegistryCheckboxFilterRow
                 key={origin}
                 id={`profile-origin-${origin}`}
