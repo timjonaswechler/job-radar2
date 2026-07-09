@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { diagnosticSeverityBadgeVariants } from "@/features/search-requests/components/diagnostic-severity-badges";
 import { SourceRunSummary } from "@/features/search-requests/components/source-run-summary";
 import type { SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
 import { createSearchRunDiagnosticViewModels } from "@/features/search-requests/model/search-run-diagnostics";
@@ -207,7 +208,7 @@ function SearchRunDiagnostics({
               className="grid gap-1 rounded-md border bg-background p-2 text-xs"
             >
               <div className="flex flex-wrap gap-1">
-                <Badge variant={diagnosticSeverityBadgeVariant(diagnostic.severity)}>
+                <Badge variant={diagnosticSeverityBadgeVariants[diagnostic.severity]}>
                   {diagnostic.severity}
                 </Badge>
                 <Badge variant="outline">{diagnostic.category}</Badge>
@@ -227,14 +228,6 @@ function SearchRunDiagnostics({
       </AlertDescription>
     </Alert>
   );
-}
-
-function diagnosticSeverityBadgeVariant(
-  severity: SearchRunDiagnosticViewModel["severity"],
-): BadgeProps["variant"] {
-  if (severity === "error") return "destructive-light";
-  if (severity === "warning") return "warning-light";
-  return "info-light";
 }
 
 function getPanelStatusLabel(
