@@ -1,4 +1,4 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use super::*;
 
@@ -263,25 +263,28 @@ fn runtime_dir_has_non_temporary_entries(runtime_dir: &Path) -> bool {
 }
 
 fn safe_relative_path(value: &str) -> Result<PathBuf, String> {
-    let path = Path::new(value);
-    if value.is_empty() || path.is_absolute() {
+    if value.is_empty() || value.starts_with('/') || value.starts_with('\\') {
         return Err(format!(
             "browser runtime manifest path must be relative: {value}"
         ));
     }
 
-    for component in path.components() {
-        match component {
-            Component::Normal(_) | Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(format!(
-                    "browser runtime manifest path escapes runtime dir: {value}"
-                ));
-            }
+    let mut path = PathBuf::new();
+    for component in value.split('/') {
+        if component.is_empty() || component == "." {
+            return Err(format!(
+                "browser runtime manifest path must be relative: {value}"
+            ));
         }
+        if component == ".." || component.contains('\\') || component.contains(':') {
+            return Err(format!(
+                "browser runtime manifest path escapes runtime dir: {value}"
+            ));
+        }
+        path.push(component);
     }
 
-    Ok(path.to_path_buf())
+    Ok(path)
 }
 
 fn invalid_status(
@@ -319,5 +322,35 @@ fn status(
         install_dir: runtime_dir.to_string_lossy().to_string(),
         executable_path,
         error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_relative_path_converts_manifest_slashes_to_native_components() {
+        assert_eq!(
+            safe_relative_path("mac-arm64/1.0.0/chrome").unwrap(),
+            PathBuf::from("mac-arm64").join("1.0.0").join("chrome")
+        );
+    }
+
+    #[test]
+    fn safe_relative_path_rejects_absolute_and_escaping_paths() {
+        for value in [
+            "",
+            "/tmp/chrome",
+            "C:/chrome",
+            "C:chrome",
+            "mac-arm64/../chrome",
+            "mac-arm64\\chrome",
+        ] {
+            assert!(
+                safe_relative_path(value).is_err(),
+                "{value} should be rejected"
+            );
+        }
     }
 }
