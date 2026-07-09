@@ -15,7 +15,7 @@ import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-val
 import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
 import { supportLevelLabels } from "@/features/sources/labels";
-import type { SourceResolution } from "@/features/sources/view-model/registry-view-model";
+import type { SourceResolution } from "@/features/sources/view-model/registry-resolution";
 import type {
   ProfileAccessPathDefinition,
   SelectedAccessPath,

@@ -43,7 +43,7 @@ import {
 } from "@/features/sources/edit/source/source-edit-model";
 import { sourceStatusOptions } from "@/features/sources/status";
 import { sourceConfigSchemaMetadata } from "@/features/sources/shared/source-config-schema";
-import { resolveSource } from "@/features/sources/view-model/registry-view-model";
+import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import {
   updateSource,
   type RegistrySource,

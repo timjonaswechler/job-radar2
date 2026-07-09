@@ -11,7 +11,7 @@ import { BrowserRuntimeCard } from "@/features/sources/runtime/browser-runtime-c
 import { DiagnosticCard } from "@/features/sources/registry/registry-diagnostics";
 import { ProfileRegistryDataGrid } from "@/features/sources/registry/profile-registry-data-grid";
 import { AddRegistryDocumentDrawer } from "@/features/sources/add/add-registry-document-drawer";
-import { SourceRegistryDataGrid } from "@/features/sources/registry/source-registry-data-grid";
+import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import {
   buildDiagnosticIndex,
   diagnosticCountLabel,
@@ -114,7 +114,7 @@ export function SourcesWorkspaceView() {
         </TabsList>
 
         <TabsContent value="sources">
-          <SourceRegistryDataGrid
+          <SourceRegistryTab
             sources={sources}
             profilesByKey={profilesByKey}
             diagnosticIndex={diagnosticIndex}

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source/source-detection-panel";
 import {
   buildSourceDocument,
@@ -49,17 +50,21 @@ import {
   profileDslSchemaRefs,
 } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import {
-  buildDiagnosticIndex,
   countOrigins,
-  countProfileKinds,
   countSourceStatuses,
-  createProfileGridRows,
   createSourceGridRows,
-  filterProfileGridRows,
   filterSourceGridRows,
-  resolveSource,
+} from "@/features/sources/view-model/source-grid-model";
+import {
   sourceLiveCheckActionsForSource,
   sourceLiveCheckDisplayModel,
+} from "@/features/sources/view-model/source-live-check-model";
+import { resolveSource } from "@/features/sources/view-model/registry-resolution";
+import {
+  buildDiagnosticIndex,
+  countProfileKinds,
+  createProfileGridRows,
+  filterProfileGridRows,
 } from "@/features/sources/view-model/registry-view-model";
 import type {
   CheckReport,
@@ -71,6 +76,8 @@ import type {
   SourceLiveCheckReportStatus,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
+
+assert.equal(typeof SourceRegistryTab, "function");
 
 const profile: RegistrySourceProfile = {
   origin: "built_in",

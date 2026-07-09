@@ -1,40 +1,23 @@
 import {
-  checkReportResultLabels,
   detectionEvidenceKindLabels,
   originLabels,
   profileKindLabels,
-  sourceLiveCheckDisplayStateLabels,
-  sourceLiveCheckReportStateLabels,
   supportEvidenceKindLabels,
   supportLevelLabels,
-  validationStateLabels,
-  type SourceLiveCheckDisplayState,
 } from "@/features/sources/labels";
-import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-config-schema";
-import { sourceStatusLabels } from "@/features/sources/status";
+import { uniqueDiagnostics } from "@/features/sources/view-model/diagnostics";
 import type {
-  CheckReport,
   DetectionEvidenceKind,
-  JsonValue,
   ProfileAccessPathDefinition,
   RegistrySource,
   RegistrySourceProfile,
-  SelectedAccessPath,
-  SourceLiveCheckReportStatus,
-  SourceOwnedSelectedAccessPath,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
-  SourceStatus,
   StructuredDiagnostic,
   SupportEvidenceKind,
   SupportLevel,
-  ValidationStateKind,
 } from "@/lib/api/sources";
 
-import {
-  isSourceDependencyDiagnostic,
-  uniqueDiagnostics,
-} from "@/features/sources/view-model/diagnostics";
 export {
   buildDiagnosticIndex,
   diagnosticDocumentKey,
@@ -51,46 +34,6 @@ export type SourceRegistryInventory = {
 };
 
 export type RegistryRowHealth = "valid" | "dependency_warning" | "invalid";
-
-export type RegistryRowDiagnosticSummary = {
-  health: RegistryRowHealth;
-  diagnosticsCount: number;
-  ownDiagnosticsCount: number;
-  dependencyDiagnosticsCount: number;
-};
-
-export type SourceResolution = {
-  profile: RegistrySourceProfile | null;
-  profileAccessPath: ProfileAccessPathDefinition | null;
-  sourceOwnedAccessPath: SourceOwnedSelectedAccessPath | null;
-  effectiveSourceConfigSchema: JsonValue;
-  supportLevel: SupportLevel | null;
-  capabilities: string[];
-};
-
-export type SourceGridRow = {
-  key: string;
-  name: string;
-  status: SourceStatus;
-  statusLabel: string;
-  validationState: ValidationStateKind;
-  validationStateLabel: string;
-  supportLevel: SupportLevel | null;
-  supportLabel: string;
-  origin: SourceRegistryDocumentOrigin;
-  originLabel: string;
-  accessPathLabel: string;
-  profileLabel: string;
-  capabilitiesSummary: string;
-  configSummary: string;
-  health: RegistryRowHealth;
-  diagnosticsCount: number;
-  ownDiagnosticsCount: number;
-  dependencyDiagnosticsCount: number;
-  path: string;
-  searchText: string;
-  source: RegistrySource;
-};
 
 export type ProfileGridRow = {
   key: string;
@@ -119,170 +62,12 @@ export type ProfileGridRow = {
   profile: RegistrySourceProfile;
 };
 
-export type SourceGridFilters = {
-  searchQuery: string;
-  statuses: SourceStatus[];
-  origins: SourceRegistryDocumentOrigin[];
-  diagnosticsOnly: boolean;
-};
-
 export type ProfileGridFilters = {
   searchQuery: string;
   kinds: SourceProfileKind[];
   origins: SourceRegistryDocumentOrigin[];
   diagnosticsOnly: boolean;
 };
-
-export type SourceLiveCheckDisplayModel = {
-  displayState: SourceLiveCheckDisplayState;
-  displayLabel: string;
-  reportState: "fresh" | "stale" | "unknown";
-  reportStateLabel: string;
-  reportResultLabel: string;
-  diagnostics: StructuredDiagnostic[];
-  staleFingerprints: NonNullable<SourceLiveCheckReportStatus["freshness"]>["staleFingerprints"];
-};
-
-export type SourceLiveCheckActionKind =
-  | "check"
-  | "check_and_activate"
-  | "check_and_reactivate";
-
-export type SourceLiveCheckAction = {
-  kind: SourceLiveCheckActionKind;
-  label: string;
-  description: string;
-};
-
-export function sourceLiveCheckDisplayModel(
-  status: SourceLiveCheckReportStatus | null | undefined,
-): SourceLiveCheckDisplayModel {
-  const reportState = status?.state ?? "unknown";
-  const report = status?.report ?? null;
-  const displayState = sourceLiveCheckDisplayState(reportState, report);
-
-  return {
-    displayState,
-    displayLabel: sourceLiveCheckDisplayStateLabels[displayState],
-    reportState,
-    reportStateLabel: sourceLiveCheckReportStateLabels[reportState],
-    reportResultLabel: report ? checkReportResultLabels[report.result] : "Kein Report",
-    diagnostics: report?.diagnostics ?? [],
-    staleFingerprints: status?.freshness?.staleFingerprints ?? [],
-  };
-}
-
-function sourceLiveCheckDisplayState(
-  reportState: "fresh" | "stale" | "unknown",
-  report: CheckReport | null,
-): SourceLiveCheckDisplayState {
-  if (reportState === "stale") return "stale";
-  if (reportState === "unknown" || !report) return "unknown";
-  return report.result === "passed" ? "passed" : "failed";
-}
-
-export function sourceLiveCheckActionsForSource(
-  status: SourceStatus,
-): SourceLiveCheckAction[] {
-  const actions: SourceLiveCheckAction[] = [
-    {
-      kind: "check",
-      label: "Prüfen",
-      description: "Führt eine status-neutrale Source Live Check aus.",
-    },
-  ];
-
-  if (status === "draft") {
-    actions.push({
-      kind: "check_and_activate",
-      label: "Prüfen & Aktivieren",
-      description: "Aktiviert den Entwurf nur nach bestandener Live-Prüfung.",
-    });
-  }
-
-  if (status === "disabled") {
-    actions.push({
-      kind: "check_and_reactivate",
-      label: "Prüfen & Reaktivieren",
-      description: "Reaktiviert die deaktivierte Source nur nach bestandener Live-Prüfung.",
-    });
-  }
-
-  return actions;
-}
-
-export function createSourceGridRows(
-  sources: RegistrySource[],
-  profilesByKey: Map<string, RegistrySourceProfile>,
-  diagnosticsBySourceKey: Map<string, StructuredDiagnostic[]>,
-): SourceGridRow[] {
-  return sources.map((source) => {
-    const resolution = resolveSource(source, profilesByKey);
-    const selectedAccessPath = source.document.selectedAccessPath;
-    const diagnostics = uniqueDiagnostics([
-      ...(diagnosticsBySourceKey.get(source.document.key) ?? []),
-      ...(source.validationState.diagnostics ?? []),
-      ...(source.document.diagnostics ?? []),
-    ]);
-    const diagnosticSummary = classifySourceRegistryRowHealth(source, diagnostics);
-    const accessPathLabel = accessPathSummary(selectedAccessPath);
-    const profileLabel =
-      selectedAccessPath.type === "profile_access_path"
-        ? `${selectedAccessPath.profileKey} / ${selectedAccessPath.pathKey}`
-        : "Source-owned";
-    const configSummary = jsonObjectSummary(source.document.sourceConfig);
-    const statusLabel = sourceStatusLabels[source.document.status];
-    const validationStateLabel = validationStateLabels[source.validationState.state];
-    const originLabel = originLabels[source.origin];
-    const supportLabel = resolution.supportLevel
-      ? supportLevelLabels[resolution.supportLevel]
-      : "—";
-    const capabilitiesSummary = summarizeList(resolution.capabilities, "keine Fähigkeiten");
-    const searchText = [
-      source.document.key,
-      source.document.name,
-      statusLabel,
-      source.document.status,
-      validationStateLabel,
-      source.validationState.state,
-      originLabel,
-      source.origin,
-      accessPathLabel,
-      profileLabel,
-      resolution.profile?.document.name ?? "",
-      supportLabel,
-      capabilitiesSummary,
-      configSummary,
-      source.path,
-    ]
-      .join(" ")
-      .toLocaleLowerCase("de");
-
-    return {
-      key: source.document.key,
-      name: source.document.name,
-      status: source.document.status,
-      statusLabel,
-      validationState: source.validationState.state,
-      validationStateLabel,
-      supportLevel: resolution.supportLevel,
-      supportLabel,
-      origin: source.origin,
-      originLabel,
-      accessPathLabel,
-      profileLabel,
-      capabilitiesSummary,
-      configSummary,
-      health: diagnosticSummary.health,
-      diagnosticsCount: diagnosticSummary.diagnosticsCount,
-      ownDiagnosticsCount: diagnosticSummary.ownDiagnosticsCount,
-      dependencyDiagnosticsCount: diagnosticSummary.dependencyDiagnosticsCount,
-      path: source.path,
-      searchText,
-      source,
-    };
-  });
-}
 
 export function createProfileGridRows(
   profiles: RegistrySourceProfile[],
@@ -315,7 +100,10 @@ export function createProfileGridRows(
     );
     const originLabel = originLabels[profile.origin];
     const schemaSummary = profileSchemaSummary(profile);
-    const capabilitiesSummary = summarizeList(profileCapabilities(profile), "keine Fähigkeiten");
+    const capabilitiesSummary = summarizeList(
+      profileCapabilities(profile),
+      "keine Fähigkeiten",
+    );
     const searchText = [
       profile.document.key,
       profile.document.name,
@@ -366,122 +154,44 @@ export function createProfileGridRows(
   });
 }
 
-export function classifySourceRegistryRowHealth(
-  source: RegistrySource,
-  diagnostics: StructuredDiagnostic[],
-): RegistryRowDiagnosticSummary {
-  const dependencyDiagnosticsCount = diagnostics.filter(isSourceDependencyDiagnostic).length;
-  const ownDiagnosticsCount = diagnostics.length - dependencyDiagnosticsCount;
-  let health: RegistryRowHealth = "valid";
-
-  if (source.validationState.state === "invalid" || ownDiagnosticsCount > 0) {
-    health = "invalid";
-  } else if (dependencyDiagnosticsCount > 0 || source.validationState.state === "unknown") {
-    health = "dependency_warning";
-  }
-
-  return {
-    health,
-    diagnosticsCount: diagnostics.length,
-    ownDiagnosticsCount,
-    dependencyDiagnosticsCount,
-  };
-}
-
 export function classifyProfileRegistryRowHealth(
   diagnostics: StructuredDiagnostic[],
-): RegistryRowDiagnosticSummary {
+) {
   return {
-    health: diagnostics.some((diagnostic) => diagnostic.severity === "error")
+    health: (diagnostics.some((diagnostic) => diagnostic.severity === "error")
       ? "invalid"
       : diagnostics.length > 0
         ? "dependency_warning"
-        : "valid",
+        : "valid") as RegistryRowHealth,
     diagnosticsCount: diagnostics.length,
     ownDiagnosticsCount: diagnostics.length,
     dependencyDiagnosticsCount: 0,
   };
 }
 
-export function filterSourceGridRows(
-  rows: SourceGridRow[],
-  filters: SourceGridFilters,
-): SourceGridRow[] {
-  const normalizedSearch = normalizeRegistrySearchQuery(filters.searchQuery);
-
-  return rows.filter(
-    (row) =>
-      matchesRegistrySearch(row.searchText, normalizedSearch) &&
-      matchesSelectedValue(filters.statuses, row.status) &&
-      matchesSelectedValue(filters.origins, row.origin) &&
-      matchesDiagnosticsFilter(row.diagnosticsCount, filters.diagnosticsOnly),
-  );
-}
-
 export function filterProfileGridRows(
   rows: ProfileGridRow[],
   filters: ProfileGridFilters,
 ): ProfileGridRow[] {
-  const normalizedSearch = normalizeRegistrySearchQuery(filters.searchQuery);
+  const normalizedSearch = filters.searchQuery.trim().toLocaleLowerCase("de");
 
   return rows.filter(
     (row) =>
-      matchesRegistrySearch(row.searchText, normalizedSearch) &&
-      matchesSelectedValue(filters.kinds, row.kind) &&
-      matchesSelectedValue(filters.origins, row.origin) &&
-      matchesDiagnosticsFilter(row.diagnosticsCount, filters.diagnosticsOnly),
+      (!normalizedSearch || row.searchText.includes(normalizedSearch)) &&
+      (!filters.kinds.length || filters.kinds.includes(row.kind)) &&
+      (!filters.origins.length || filters.origins.includes(row.origin)) &&
+      (!filters.diagnosticsOnly || row.diagnosticsCount > 0),
   );
 }
 
-export function resolveSource(
-  source: RegistrySource,
-  profilesByKey: Map<string, RegistrySourceProfile>,
-): SourceResolution {
-  const selectedAccessPath = source.document.selectedAccessPath;
-
-  if (selectedAccessPath.type === "source_owned_access_path") {
-    return {
-      profile: null,
-      profileAccessPath: null,
-      sourceOwnedAccessPath: selectedAccessPath,
-      effectiveSourceConfigSchema: effectiveSourceConfigSchema(
-        undefined,
-        selectedAccessPath.sourceConfigSchema,
-      ),
-      supportLevel: source.document.sourceSupport?.level ?? null,
-      capabilities: accessPathCapabilities(selectedAccessPath),
-    };
-  }
-
-  const profile = profilesByKey.get(selectedAccessPath.profileKey) ?? null;
-  const profileAccessPath =
-    profile?.document.accessPaths.find(
-      (accessPath) => accessPath.key === selectedAccessPath.pathKey,
-    ) ?? null;
-
-  return {
-    profile,
-    profileAccessPath,
-    sourceOwnedAccessPath: null,
-    effectiveSourceConfigSchema: effectiveSourceConfigSchema(
-      profile?.document.sourceConfigSchema,
-      profileAccessPath?.sourceConfigSchema,
-    ),
-    supportLevel: profile?.document.support.level ?? null,
-    capabilities: profileAccessPath ? accessPathCapabilities(profileAccessPath) : [],
-  };
-}
-
-export function countSourceStatuses(rows: SourceGridRow[]) {
-  const counts = zeroSourceStatusCounts();
-  rows.forEach((row) => {
-    counts[row.status] += 1;
-  });
-  return counts;
-}
-
 export function countProfileKinds(rows: ProfileGridRow[]) {
-  const counts = zeroProfileKindCounts();
+  const counts: Record<SourceProfileKind, number> = {
+    recruiting_system: 0,
+    job_portal: 0,
+    website_family: 0,
+    career_site: 0,
+    generic: 0,
+  };
   rows.forEach((row) => {
     counts[row.kind] += 1;
   });
@@ -501,10 +211,6 @@ export function countOrigins(
   return counts;
 }
 
-export function sourceStatusEntries() {
-  return Object.entries(sourceStatusLabels) as Array<[SourceStatus, string]>;
-}
-
 export function profileKindEntries() {
   return Object.entries(profileKindLabels) as Array<[SourceProfileKind, string]>;
 }
@@ -521,44 +227,6 @@ export function diagnosticCountLabel(count: number) {
 
 export function formatBoolean(value: boolean) {
   return value ? "Ja" : "Nein";
-}
-
-function normalizeRegistrySearchQuery(searchQuery: string) {
-  return searchQuery.trim().toLocaleLowerCase("de");
-}
-
-function matchesRegistrySearch(searchText: string, normalizedSearch: string) {
-  return !normalizedSearch || searchText.includes(normalizedSearch);
-}
-
-function matchesSelectedValue<T>(selectedValues: T[], value: T) {
-  return !selectedValues.length || selectedValues.includes(value);
-}
-
-function matchesDiagnosticsFilter(
-  diagnosticsCount: number,
-  diagnosticsOnly: boolean,
-) {
-  return !diagnosticsOnly || diagnosticsCount > 0;
-}
-
-function accessPathSummary(selectedAccessPath: SelectedAccessPath) {
-  if (selectedAccessPath.type === "source_owned_access_path") {
-    return `Source-owned · ${selectedAccessPath.key}`;
-  }
-
-  return `Profil ${selectedAccessPath.profileKey} · Pfad ${selectedAccessPath.pathKey}`;
-}
-
-function jsonObjectSummary(value: JsonValue) {
-  const keys = jsonObjectKeys(value);
-  if (!keys.length) return "{}";
-  return summarizeList(keys, "{}");
-}
-
-function jsonObjectKeys(value: JsonValue | undefined) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-  return Object.keys(value);
 }
 
 function profileSchemaSummary(profile: RegistrySourceProfile) {
@@ -585,16 +253,18 @@ function profileCapabilities(profile: RegistrySourceProfile) {
 }
 
 function profileSupportEvidenceKinds(profile: RegistrySourceProfile) {
-  return unique(profile.document.support.evidence?.map((evidence) => evidence.kind) ?? []);
+  return unique(
+    profile.document.support.evidence?.map((evidence) => evidence.kind) ?? [],
+  );
 }
 
 function profileDetectionEvidenceKinds(profile: RegistrySourceProfile) {
-  return unique(profile.document.detect?.evidence?.map((evidence) => evidence.kind) ?? []);
+  return unique(
+    profile.document.detect?.evidence?.map((evidence) => evidence.kind) ?? [],
+  );
 }
 
-function accessPathCapabilities(
-  accessPath: ProfileAccessPathDefinition | SourceOwnedSelectedAccessPath,
-) {
+function accessPathCapabilities(accessPath: ProfileAccessPathDefinition) {
   return [
     accessPath.postingDiscovery ? "postingDiscovery" : null,
     accessPath.postingDetail ? "postingDetail" : null,
@@ -609,22 +279,4 @@ function summarizeList(values: string[], emptyLabel: string) {
 
 function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
-}
-
-function zeroSourceStatusCounts(): Record<SourceStatus, number> {
-  return {
-    draft: 0,
-    active: 0,
-    disabled: 0,
-  };
-}
-
-function zeroProfileKindCounts(): Record<SourceProfileKind, number> {
-  return {
-    recruiting_system: 0,
-    job_portal: 0,
-    website_family: 0,
-    career_site: 0,
-    generic: 0,
-  };
 }

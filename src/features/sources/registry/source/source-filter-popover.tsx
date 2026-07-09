@@ -12,37 +12,37 @@ import {
   RegistryFilterFields,
 } from "@/features/sources/registry/shared/registry-filter-fields";
 import {
-  originEntries,
-  profileKindEntries,
-} from "@/features/sources/view-model/registry-view-model";
+  sourceOriginEntries,
+  sourceStatusEntries,
+} from "@/features/sources/view-model/source-grid-model";
 import type {
-  SourceProfileKind,
   SourceRegistryDocumentOrigin,
+  SourceStatus,
 } from "@/lib/api/sources";
 
-type ProfileFilterPopoverProps = {
-  selectedKinds: SourceProfileKind[];
+type SourceFilterPopoverProps = {
+  selectedStatuses: SourceStatus[];
   selectedOrigins: SourceRegistryDocumentOrigin[];
   diagnosticsOnly: boolean;
-  kindCounts: Record<SourceProfileKind, number>;
+  statusCounts: Record<SourceStatus, number>;
   originCounts: Record<SourceRegistryDocumentOrigin, number>;
   activeFilterCount: number;
-  onKindChange: (kind: SourceProfileKind, checked: boolean) => void;
+  onStatusChange: (status: SourceStatus, checked: boolean) => void;
   onOriginChange: (origin: SourceRegistryDocumentOrigin, checked: boolean) => void;
   onDiagnosticsOnlyChange: (checked: boolean) => void;
 };
 
-export function ProfileFilterPopover({
-  selectedKinds,
+export function SourceFilterPopover({
+  selectedStatuses,
   selectedOrigins,
   diagnosticsOnly,
-  kindCounts,
+  statusCounts,
   originCounts,
   activeFilterCount,
-  onKindChange,
+  onStatusChange,
   onOriginChange,
   onDiagnosticsOnlyChange,
-}: ProfileFilterPopoverProps) {
+}: SourceFilterPopoverProps) {
   return (
     <Popover>
       <PopoverTrigger
@@ -60,23 +60,23 @@ export function ProfileFilterPopover({
       />
       <PopoverContent className="w-72" align="start">
         <div className="grid gap-4">
-          <RegistryFilterFields title="Kind">
-            {profileKindEntries().map(([kind, label]) => (
+          <RegistryFilterFields title="Status">
+            {sourceStatusEntries().map(([status, label]) => (
               <RegistryCheckboxFilterRow
-                key={kind}
-                id={`profile-kind-${kind}`}
+                key={status}
+                id={`source-status-${status}`}
                 label={label}
-                count={kindCounts[kind] ?? 0}
-                checked={selectedKinds.includes(kind)}
-                onCheckedChange={(checked) => onKindChange(kind, checked)}
+                count={statusCounts[status] ?? 0}
+                checked={selectedStatuses.includes(status)}
+                onCheckedChange={(checked) => onStatusChange(status, checked)}
               />
             ))}
           </RegistryFilterFields>
           <RegistryFilterFields title="Origin">
-            {originEntries().map(([origin, label]) => (
+            {sourceOriginEntries().map(([origin, label]) => (
               <RegistryCheckboxFilterRow
                 key={origin}
-                id={`profile-origin-${origin}`}
+                id={`source-origin-${origin}`}
                 label={label}
                 count={originCounts[origin] ?? 0}
                 checked={selectedOrigins.includes(origin)}
@@ -86,7 +86,7 @@ export function ProfileFilterPopover({
           </RegistryFilterFields>
           <RegistryFilterFields title="Diagnosen">
             <RegistryCheckboxFilterRow
-              id="profile-diagnostics-only"
+              id="source-diagnostics-only"
               label="Nur mit Diagnosen"
               checked={diagnosticsOnly}
               onCheckedChange={onDiagnosticsOnlyChange}
