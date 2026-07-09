@@ -62,7 +62,7 @@ fn valid_matching_manifest_and_executable_returns_installed() {
             "installedAt": "2026-06-09T00:00:00Z"
         }),
     );
-    let executable_path = runtime_dir.join("mac-arm64/1.0.0/chrome");
+    let executable_path = test_executable_path(&runtime_dir);
     std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
     std::fs::write(&executable_path, "fake chrome").unwrap();
 
@@ -96,7 +96,7 @@ fn manifest_version_mismatch_returns_update_required() {
             "installedAt": "2026-06-09T00:00:00Z"
         }),
     );
-    let executable_path = runtime_dir.join("mac-arm64/1.0.0/chrome");
+    let executable_path = test_executable_path(&runtime_dir);
     std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
     std::fs::write(executable_path, "fake chrome").unwrap();
 
@@ -181,7 +181,7 @@ fn install_downloads_verifies_extracts_and_writes_final_manifest() {
         .await
         .unwrap();
 
-        let executable_path = runtime_dir.join("mac-arm64/1.0.0/chrome");
+        let executable_path = test_executable_path(&runtime_dir);
         assert_eq!(status.status, BrowserRuntimeState::Installed);
         assert_eq!(
             status.executable_path,
@@ -316,7 +316,7 @@ fn status_cleans_stale_session_dirs_without_marking_runtime_invalid() {
             "installedAt": "2026-06-09T00:00:00Z"
         }),
     );
-    let executable_path = runtime_dir.join("mac-arm64/1.0.0/chrome");
+    let executable_path = test_executable_path(&runtime_dir);
     std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
     std::fs::write(&executable_path, "fake chrome").unwrap();
     let stale_session_dir = runtime_dir.join(".tmp/session-stale");
@@ -327,6 +327,10 @@ fn status_cleans_stale_session_dirs_without_marking_runtime_invalid() {
 
     assert_eq!(status.status, BrowserRuntimeState::Installed);
     assert!(!stale_session_dir.exists());
+}
+
+fn test_executable_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("mac-arm64").join("1.0.0").join("chrome")
 }
 
 fn write_manifest_json(runtime_dir: &Path, manifest: serde_json::Value) {
