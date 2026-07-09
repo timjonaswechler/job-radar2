@@ -4,7 +4,7 @@ use sqlx::{sqlite::SqliteConnectOptions, Row, SqlitePool};
 
 use super::{
     normalization::{location_lookup_keys, postal_lookup_keys},
-    GeoPoint, ResolvedLocation,
+    GeoPoint, GeoResolveFuture, GeoResolver, ResolvedLocation,
 };
 
 #[derive(Clone)]
@@ -75,6 +75,12 @@ impl GeoDbResolver {
         }
 
         Ok(resolved)
+    }
+}
+
+impl GeoResolver for GeoDbResolver {
+    fn resolve<'a>(&'a self, input: &'a str) -> GeoResolveFuture<'a> {
+        Box::pin(async move { GeoDbResolver::resolve(self, input).await })
     }
 }
 

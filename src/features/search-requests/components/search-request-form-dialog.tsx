@@ -34,7 +34,7 @@ import { SearchRuleEditor } from "@/features/search-requests/components/search-r
 import { SourceKeyPicker } from "@/features/search-requests/components/source-key-picker";
 import {
   buildSearchRequestInput,
-  emptySearchRequestForm,
+  createEmptySearchRequestForm,
   searchRequestFormFromRequest,
   type SearchRequestFormState,
 } from "@/features/search-requests/model/search-request-form-model";
@@ -51,6 +51,7 @@ type SearchRequestFormDialogProps = {
   open: boolean;
   request: SearchRequest | null;
   sources: RegistrySource[];
+  defaultSearchRadiusKm: number | null;
   onOpenChange: (open: boolean) => void;
   onSubmit: (
     input: CreateSearchRequestInput | UpdateSearchRequestInput,
@@ -62,20 +63,27 @@ export function SearchRequestFormDialog({
   open,
   request,
   sources,
+  defaultSearchRadiusKm,
   onOpenChange,
   onSubmit,
 }: SearchRequestFormDialogProps) {
-  const [form, setForm] = useState<SearchRequestFormState>(emptySearchRequestForm);
+  const [form, setForm] = useState<SearchRequestFormState>(() =>
+    createEmptySearchRequestForm(defaultSearchRadiusKm),
+  );
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setForm(request ? searchRequestFormFromRequest(request) : emptySearchRequestForm);
+    setForm(
+      request
+        ? searchRequestFormFromRequest(request, defaultSearchRadiusKm)
+        : createEmptySearchRequestForm(defaultSearchRadiusKm),
+    );
     setSaveAttempted(false);
     setSubmitError(null);
-  }, [open, request]);
+  }, [defaultSearchRadiusKm, open, request]);
 
   const buildResult = useMemo(() => buildSearchRequestInput(form), [form]);
   const title = request ? "Search Request bearbeiten" : "Search Request erstellen";

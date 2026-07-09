@@ -19,13 +19,13 @@ pub use checks::{
     read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
     CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
     CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportStaleDetail,
-    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
-    SourceLiveCheckReportState, SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType, SourceLiveCheckReportState,
+    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
-    LocationFilterNotAppliedReason, LocationMatchOutcome, PreparedLocationFilter, ResolvedLocation,
+    GeoResolveFuture, GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason,
+    LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use profile_dsl::compiler::{
     compile_source_execution_plan, CompileSourceExecutionPlanResult, ProfileCompilerSnapshot,

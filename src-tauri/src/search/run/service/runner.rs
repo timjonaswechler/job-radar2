@@ -1,11 +1,14 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 use sqlx::SqlitePool;
 
 use crate::{
     geo::{
-        prepare_location_filter, GeoDbResolver, LocationFilterNotAppliedReason,
-        LocationMatchOutcome,
+        prepare_location_filter, GeoResolver, LocationFilterMatchReport,
+        LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
     },
     profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
     search::{
@@ -33,7 +36,7 @@ pub struct SearchRunService<'a> {
     result_artifact: SearchRunResultArtifact,
     source_registry_app_data_dir: PathBuf,
     selection_options: SourceSelectionOptions,
-    geo_resolver: Option<&'a GeoDbResolver>,
+    geo_resolver: Option<&'a dyn GeoResolver>,
 }
 
 impl<'a> SearchRunService<'a> {
@@ -71,7 +74,7 @@ impl<'a> SearchRunService<'a> {
         }
     }
 
-    pub fn with_geo_resolver(mut self, geo_resolver: &'a GeoDbResolver) -> Self {
+    pub fn with_geo_resolver(mut self, geo_resolver: &'a dyn GeoResolver) -> Self {
         self.geo_resolver = Some(geo_resolver);
         self
     }
@@ -246,26 +249,31 @@ impl<'a> SearchRunService<'a> {
         let location_filter =
             prepare_location_filter(geo_resolver, request_locations, radius_km).await?;
         let mut diagnostics = Vec::new();
+        if location_filter.not_applied_reason()
+            == Some(LocationFilterNotAppliedReason::MissingRadiusKm)
+        {
+            diagnostics.push(location_filter_missing_radius_diagnostic());
+        }
+
+        let mut location_diagnostic_summary = LocationFilterDiagnosticSummary::default();
+        location_diagnostic_summary
+            .observe_request_ambiguities(location_filter.request_ambiguities());
+
         let mut filtered_treffers = Vec::new();
         for treffer in treffers {
-            match location_filter
-                .matches_candidate(geo_resolver, &treffer.candidate.locations)
-                .await?
-            {
+            let report = location_filter
+                .matches_candidate_with_report(geo_resolver, &treffer.candidate.locations)
+                .await?;
+            location_diagnostic_summary.observe_match_report(&report);
+
+            match report.outcome {
                 LocationMatchOutcome::Applied { matched: true } => filtered_treffers.push(treffer),
-                LocationMatchOutcome::NotApplied { reason } => {
-                    if reason == LocationFilterNotAppliedReason::MissingRadiusKm
-                        && !diagnostics.iter().any(|diagnostic: &Diagnostic| {
-                            diagnostic.code == "location_filter_not_applied_missing_radius_km"
-                        })
-                    {
-                        diagnostics.push(location_filter_missing_radius_diagnostic());
-                    }
-                    filtered_treffers.push(treffer);
-                }
+                LocationMatchOutcome::NotApplied { .. } => filtered_treffers.push(treffer),
                 LocationMatchOutcome::Applied { matched: false } => {}
             }
         }
+
+        diagnostics.extend(location_diagnostic_summary.into_diagnostics());
 
         Ok((filtered_treffers, diagnostics))
     }
@@ -281,6 +289,98 @@ fn location_filter_missing_radius_diagnostic() -> Diagnostic {
         strategy_key: None,
         details: None,
     }
+}
+
+#[derive(Default)]
+struct LocationFilterDiagnosticSummary {
+    unresolved_candidate_location_count: usize,
+    unresolved_candidate_affected_count: usize,
+    unresolved_candidate_samples: BTreeSet<String>,
+    request_ambiguities: Vec<LocationResolutionAmbiguity>,
+    candidate_ambiguity_count: usize,
+    candidate_ambiguity_samples: Vec<LocationResolutionAmbiguity>,
+}
+
+impl LocationFilterDiagnosticSummary {
+    fn observe_request_ambiguities(&mut self, ambiguities: &[LocationResolutionAmbiguity]) {
+        self.request_ambiguities.extend_from_slice(ambiguities);
+    }
+
+    fn observe_match_report(&mut self, report: &LocationFilterMatchReport) {
+        if !report.unresolved_candidate_locations.is_empty() {
+            self.unresolved_candidate_affected_count += 1;
+            self.unresolved_candidate_location_count += report.unresolved_candidate_locations.len();
+            for location in &report.unresolved_candidate_locations {
+                self.unresolved_candidate_samples.insert(location.clone());
+            }
+        }
+
+        self.candidate_ambiguity_count += report.candidate_ambiguities.len();
+        for ambiguity in &report.candidate_ambiguities {
+            if self.candidate_ambiguity_samples.len() < 5 {
+                self.candidate_ambiguity_samples.push(ambiguity.clone());
+            }
+        }
+    }
+
+    fn into_diagnostics(self) -> Diagnostics {
+        let mut diagnostics = Vec::new();
+        if self.unresolved_candidate_location_count > 0 {
+            diagnostics.push(unresolved_candidate_locations_diagnostic(&self));
+        }
+        if !self.request_ambiguities.is_empty() || self.candidate_ambiguity_count > 0 {
+            diagnostics.push(ambiguous_locations_diagnostic(&self));
+        }
+        diagnostics
+    }
+}
+
+fn unresolved_candidate_locations_diagnostic(
+    summary: &LocationFilterDiagnosticSummary,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "location_filter_candidate_locations_unresolved".to_string(),
+        message: "Some candidate location values could not be resolved and did not contribute to active location filter matches.".to_string(),
+        severity: DiagnosticSeverity::Warning,
+        path: "/postings/*/locations".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "unresolvedLocationCount": summary.unresolved_candidate_location_count,
+            "affectedCandidateCount": summary.unresolved_candidate_affected_count,
+            "samples": summary.unresolved_candidate_samples.iter().take(5).collect::<Vec<_>>()
+        })),
+    }
+}
+
+fn ambiguous_locations_diagnostic(summary: &LocationFilterDiagnosticSummary) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "location_filter_ambiguous_locations".to_string(),
+        message: "Some locations resolved to multiple geo points; location filtering considered all resolved locations.".to_string(),
+        severity: DiagnosticSeverity::Info,
+        path: "/locations".to_string(),
+        strategy_key: None,
+        details: Some(serde_json::json!({
+            "requestLocationAmbiguityCount": summary.request_ambiguities.len(),
+            "candidateLocationAmbiguityCount": summary.candidate_ambiguity_count,
+            "requestSamples": ambiguity_samples(&summary.request_ambiguities),
+            "candidateSamples": ambiguity_samples(&summary.candidate_ambiguity_samples)
+        })),
+    }
+}
+
+fn ambiguity_samples(ambiguities: &[LocationResolutionAmbiguity]) -> Vec<serde_json::Value> {
+    ambiguities
+        .iter()
+        .take(5)
+        .map(|ambiguity| {
+            serde_json::json!({
+                "input": &ambiguity.input,
+                "resolvedLabels": &ambiguity.resolved_labels
+            })
+        })
+        .collect()
 }
 
 fn cancelled_source_run_for_selected(

@@ -2,13 +2,16 @@ mod db;
 mod distance;
 mod matching;
 mod normalization;
+mod resolver;
 
 pub use db::GeoDbResolver;
 pub use distance::distance_km;
 pub use matching::{
-    matches_location_filter, prepare_location_filter, LocationFilterNotAppliedReason,
-    LocationMatchOutcome, PreparedLocationFilter,
+    matches_location_filter, prepare_location_filter, LocationFilterMatchReport,
+    LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
+    PreparedLocationFilter,
 };
+pub use resolver::{GeoResolveFuture, GeoResolver};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeoPoint {

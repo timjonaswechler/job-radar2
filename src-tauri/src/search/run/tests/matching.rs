@@ -365,6 +365,135 @@ fn leaves_matching_unchanged_without_request_locations() {
 }
 
 #[test]
+fn reports_unresolved_and_ambiguous_candidate_location_diagnostics() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let search_request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("Laser")],
+            vec![],
+        )
+        .await;
+        let executor = FixtureSourceExecutor::new([(
+            source_keys[0].clone(),
+            Ok(vec![
+                candidate(
+                    "Laser Engineer Wiesbaden",
+                    "ACME",
+                    "https://example.test/wiesbaden",
+                    &["Wiesbaden"],
+                ),
+                candidate(
+                    "Laser Engineer Atlantis",
+                    "ACME",
+                    "https://example.test/atlantis",
+                    &["Atlantis"],
+                ),
+                candidate(
+                    "Laser Engineer Twin City",
+                    "ACME",
+                    "https://example.test/twin-city",
+                    &["Twin City"],
+                ),
+            ]),
+        )]);
+        let running_search_runs = RunningSearchRuns::default();
+        let geo_resolver = FixtureGeoResolver::new([
+            (
+                "Mainz",
+                vec![
+                    resolved_location("Mainz", "Mainz", 49.99, 8.24),
+                    resolved_location("Mainz", "Mainz-Bretzenheim", 49.98, 8.23),
+                ],
+            ),
+            (
+                "Wiesbaden",
+                vec![resolved_location("Wiesbaden", "Wiesbaden", 50.08, 8.24)],
+            ),
+            ("Atlantis", vec![]),
+            (
+                "Twin City",
+                vec![
+                    resolved_location("Twin City", "Twin City North", 50.0, 8.25),
+                    resolved_location("Twin City", "Twin City South", 60.0, 9.25),
+                ],
+            ),
+        ]);
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .with_geo_resolver(&geo_resolver)
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        assert_eq!(result.source_runs[0].matched_count, 2);
+        assert_eq!(result.postings.len(), 2);
+        assert!(result
+            .postings
+            .iter()
+            .any(|posting| posting.title == "Laser Engineer Wiesbaden"));
+        assert!(result
+            .postings
+            .iter()
+            .any(|posting| posting.title == "Laser Engineer Twin City"));
+        assert!(!result
+            .postings
+            .iter()
+            .any(|posting| posting.title == "Laser Engineer Atlantis"));
+
+        let unresolved = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "location_filter_candidate_locations_unresolved")
+            .expect("unresolved candidate location diagnostic");
+        assert_eq!(
+            unresolved.severity,
+            crate::profile_dsl::diagnostics::DiagnosticSeverity::Warning
+        );
+        assert_eq!(
+            unresolved.details.as_ref().unwrap()["unresolvedLocationCount"],
+            json!(1)
+        );
+        assert_eq!(
+            unresolved.details.as_ref().unwrap()["affectedCandidateCount"],
+            json!(1)
+        );
+        assert_eq!(
+            unresolved.details.as_ref().unwrap()["samples"],
+            json!(["Atlantis"])
+        );
+
+        let ambiguous = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "location_filter_ambiguous_locations")
+            .expect("ambiguous location diagnostic");
+        assert_eq!(
+            ambiguous.severity,
+            crate::profile_dsl::diagnostics::DiagnosticSeverity::Info
+        );
+        assert_eq!(
+            ambiguous.details.as_ref().unwrap()["requestLocationAmbiguityCount"],
+            json!(1)
+        );
+        assert_eq!(
+            ambiguous.details.as_ref().unwrap()["candidateLocationAmbiguityCount"],
+            json!(1)
+        );
+    });
+}
+
+#[test]
 fn fails_search_run_when_request_location_cannot_be_resolved() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -414,4 +543,43 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
             "Search Request location could not be resolved: Gibtsnichtstadt"
         );
     });
+}
+
+struct FixtureGeoResolver {
+    locations: BTreeMap<String, Vec<crate::geo::ResolvedLocation>>,
+}
+
+impl FixtureGeoResolver {
+    fn new(
+        locations: impl IntoIterator<Item = (&'static str, Vec<crate::geo::ResolvedLocation>)>,
+    ) -> Self {
+        Self {
+            locations: locations
+                .into_iter()
+                .map(|(input, locations)| (input.to_string(), locations))
+                .collect(),
+        }
+    }
+}
+
+impl crate::geo::GeoResolver for FixtureGeoResolver {
+    fn resolve<'a>(&'a self, input: &'a str) -> crate::geo::GeoResolveFuture<'a> {
+        Box::pin(async move { Ok(self.locations.get(input).cloned().unwrap_or_default()) })
+    }
+}
+
+fn resolved_location(
+    input: &str,
+    label: &str,
+    latitude: f64,
+    longitude: f64,
+) -> crate::geo::ResolvedLocation {
+    crate::geo::ResolvedLocation {
+        input: input.to_string(),
+        label: label.to_string(),
+        point: crate::geo::GeoPoint {
+            latitude,
+            longitude,
+        },
+    }
 }

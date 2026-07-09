@@ -28,14 +28,20 @@ export type SearchRequestFormBuildResult = {
   errors: string[];
 };
 
-export const emptySearchRequestForm: SearchRequestFormState = {
-  status: "draft",
-  includeRules: [emptySearchRuleDraft()],
-  excludeRules: [],
-  locationsText: "",
-  radiusKmText: "",
-  sourceKeys: [],
-};
+export const emptySearchRequestForm: SearchRequestFormState = createEmptySearchRequestForm();
+
+export function createEmptySearchRequestForm(
+  defaultSearchRadiusKm: number | null = null,
+): SearchRequestFormState {
+  return {
+    status: "draft",
+    includeRules: [emptySearchRuleDraft()],
+    excludeRules: [],
+    locationsText: "",
+    radiusKmText: formatDefaultRadius(defaultSearchRadiusKm),
+    sourceKeys: [],
+  };
+}
 
 export function emptySearchRuleDraft(): SearchRuleDraft {
   return { target: "title", kind: "text", value: "" };
@@ -43,6 +49,7 @@ export function emptySearchRuleDraft(): SearchRuleDraft {
 
 export function searchRequestFormFromRequest(
   request: SearchRequest,
+  defaultSearchRadiusKm: number | null = null,
 ): SearchRequestFormState {
   return {
     status: request.status,
@@ -51,7 +58,10 @@ export function searchRequestFormFromRequest(
       : [emptySearchRuleDraft()],
     excludeRules: request.excludeRules.map(searchRuleDraftFromRule),
     locationsText: request.locations.join("\n"),
-    radiusKmText: request.radiusKm === null ? "" : String(request.radiusKm),
+    radiusKmText:
+      request.radiusKm === null
+        ? formatDefaultRadius(defaultSearchRadiusKm)
+        : String(request.radiusKm),
     sourceKeys: request.sourceKeys,
   };
 }
@@ -104,6 +114,10 @@ function normalizeRuleDrafts(drafts: SearchRuleDraft[]): SearchRule[] {
 
     return [{ target: "title", kind: draft.kind, value }];
   });
+}
+
+function formatDefaultRadius(defaultSearchRadiusKm: number | null) {
+  return defaultSearchRadiusKm === null ? "" : String(defaultSearchRadiusKm);
 }
 
 function parseRadiusKm(value: string, errors: string[]) {

@@ -27,6 +27,7 @@ import {
   type SearchRunResult,
   type UpdateSearchRequestInput,
 } from "@/lib/api/search-requests";
+import { getAppPreferences, type AppPreferences } from "@/lib/api/app-preferences";
 import {
   getSourceProfileRegistrySnapshot,
   type RegistrySource,
@@ -35,10 +36,15 @@ import {
 type SearchRequestsData = {
   requests: SearchRequest[];
   sources: RegistrySource[];
+  preferences: AppPreferences | null;
 };
 
 export function SearchRequests() {
-  const [data, setData] = useState<SearchRequestsData>({ requests: [], sources: [] });
+  const [data, setData] = useState<SearchRequestsData>({
+    requests: [],
+    sources: [],
+    preferences: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formRequest, setFormRequest] = useState<SearchRequest | null>(null);
@@ -55,11 +61,12 @@ export function SearchRequests() {
     try {
       setLoading(true);
       setError(null);
-      const [requests, registrySnapshot] = await Promise.all([
+      const [requests, registrySnapshot, preferences] = await Promise.all([
         listSearchRequests(),
         getSourceProfileRegistrySnapshot(),
+        getAppPreferences(),
       ]);
-      setData({ requests, sources: registrySnapshot.sources });
+      setData({ requests, sources: registrySnapshot.sources, preferences });
     } catch (unknownError) {
       const message = errorMessage(unknownError);
       setError(message);
@@ -307,6 +314,7 @@ export function SearchRequests() {
         open={formOpen}
         request={formRequest}
         sources={data.sources}
+        defaultSearchRadiusKm={data.preferences?.defaultSearchRadiusKm ?? null}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
       />

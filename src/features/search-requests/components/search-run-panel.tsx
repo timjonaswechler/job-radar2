@@ -1,5 +1,6 @@
-import { AlertCircleIcon, CheckCircle2Icon, RefreshCcwIcon, XCircleIcon } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, InfoIcon, RefreshCcwIcon, XCircleIcon } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge, type BadgeProps } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { SourceRunSummary } from "@/features/search-requests/components/source-run-summary";
 import type { SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
+import { createSearchRunDiagnosticViewModels } from "@/features/search-requests/model/search-run-diagnostics";
 import { searchRunStatusBadgeVariants, searchRunStatusLabels } from "@/features/search-requests/status";
 import type { BackgroundTaskSnapshot, SearchRunResult } from "@/lib/api/search-requests";
 
@@ -58,6 +60,9 @@ export function SearchRunPanel({
   const inFlight = starting || isInFlightBackgroundTask(task);
   const canCancel = task?.state === "queued" || task?.state === "running";
   const sourceRunCount = result?.sourceRuns.length ?? 0;
+  const runDiagnostics = result
+    ? createSearchRunDiagnosticViewModels(result.diagnostics)
+    : [];
 
   return (
     <Card className="border-info/20" size="sm">
@@ -158,6 +163,8 @@ export function SearchRunPanel({
           </p>
         ) : null}
 
+        {runDiagnostics.length ? <SearchRunDiagnostics diagnostics={runDiagnostics} /> : null}
+
         {result ? <SourceRunSummary sourceRuns={result.sourceRuns} /> : null}
       </CardContent>
     </Card>
@@ -171,6 +178,63 @@ function StatusLine({ label, value }: { label: string; value: string }) {
       <span className="font-medium break-all">{value}</span>
     </div>
   );
+}
+
+type SearchRunDiagnosticViewModel = ReturnType<
+  typeof createSearchRunDiagnosticViewModels
+>[number];
+
+function SearchRunDiagnostics({
+  diagnostics,
+}: {
+  diagnostics: SearchRunDiagnosticViewModel[];
+}) {
+  const variant = diagnostics.some((diagnostic) => diagnostic.severity === "error")
+    ? "destructive"
+    : diagnostics.some((diagnostic) => diagnostic.severity === "warning")
+      ? "warning"
+      : "info";
+
+  return (
+    <Alert variant={variant}>
+      <InfoIcon aria-hidden="true" />
+      <AlertTitle>Search-Run-Diagnostics ({diagnostics.length})</AlertTitle>
+      <AlertDescription>
+        <div className="grid gap-2">
+          {diagnostics.map((diagnostic, index) => (
+            <div
+              key={`${diagnostic.code}-${diagnostic.path}-${index}`}
+              className="grid gap-1 rounded-md border bg-background p-2 text-xs"
+            >
+              <div className="flex flex-wrap gap-1">
+                <Badge variant={diagnosticSeverityBadgeVariant(diagnostic.severity)}>
+                  {diagnostic.severity}
+                </Badge>
+                <Badge variant="outline">{diagnostic.category}</Badge>
+                <Badge variant="outline">{diagnostic.code}</Badge>
+              </div>
+              <p className="font-medium text-foreground">{diagnostic.title}</p>
+              <p>{diagnostic.message}</p>
+              <p className="break-all font-mono text-muted-foreground">{diagnostic.path}</p>
+              {diagnostic.details ? (
+                <pre className="max-h-32 overflow-auto rounded bg-muted p-2 font-mono text-[0.7rem] text-muted-foreground">
+                  {JSON.stringify(diagnostic.details, null, 2)}
+                </pre>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function diagnosticSeverityBadgeVariant(
+  severity: SearchRunDiagnosticViewModel["severity"],
+): BadgeProps["variant"] {
+  if (severity === "error") return "destructive-light";
+  if (severity === "warning") return "warning-light";
+  return "info-light";
 }
 
 function getPanelStatusLabel(
