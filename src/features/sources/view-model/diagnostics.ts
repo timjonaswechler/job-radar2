@@ -7,6 +7,10 @@ import type {
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
+export function diagnosticCountLabel(count: number) {
+  return `${count} Diagnose${count === 1 ? "" : "n"}`;
+}
+
 export type DiagnosticIndex = {
   bySourceKey: Map<string, StructuredDiagnostic[]>;
   byProfileKey: Map<string, StructuredDiagnostic[]>;

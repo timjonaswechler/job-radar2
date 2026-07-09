@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getSourceProfileRegistrySnapshot } from "@/lib/api/sources";
-import type { SourceRegistryInventory } from "@/features/sources/view-model/registry-view-model";
+import type { SourceProfileRegistrySnapshot } from "@/lib/api/sources";
 
 export function useSourceRegistryInventory() {
-  const [data, setData] = useState<SourceRegistryInventory | null>(null);
+  const [data, setData] = useState<SourceProfileRegistrySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 

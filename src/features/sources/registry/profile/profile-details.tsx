@@ -5,7 +5,7 @@ import {
   ProfileDetectionEvidenceSection,
   ProfileSupportEvidenceSection,
 } from "@/features/sources/registry/profile/profile-evidence-section";
-import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
+import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
 import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
 import {

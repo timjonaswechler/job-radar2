@@ -13,7 +13,7 @@ import { BrowserRuntimeCard } from "@/features/sources/runtime/browser-runtime-c
 import {
   buildDiagnosticIndex,
   diagnosticCountLabel,
-} from "@/features/sources/view-model/registry-view-model";
+} from "@/features/sources/view-model/diagnostics";
 import { SourcesDiagnosticsTab } from "@/features/sources/workspace/sources-diagnostics-tab";
 import {
   parseSourcesWorkspaceTab,

@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
 import { DetailRow } from "@/features/sources/registry/detail-row";
-import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
+import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
 import { sourceStatusLabels } from "@/features/sources/status";
 import {
   sourceLiveCheckActionsForSource,

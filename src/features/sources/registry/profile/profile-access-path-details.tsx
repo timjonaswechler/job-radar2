@@ -10,7 +10,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { DetailRow } from "@/features/sources/registry/detail-row";
-import { InlineDiagnostics } from "@/features/sources/registry/registry-diagnostics";
+import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
 import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
 import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
 import type { ProfileAccessPathDefinition } from "@/lib/api/sources";

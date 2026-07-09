@@ -3,8 +3,8 @@ import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DiagnosticCard } from "@/features/sources/registry/registry-diagnostics";
-import { diagnosticCountLabel } from "@/features/sources/view-model/registry-view-model";
+import { DiagnosticCard } from "@/features/sources/registry/diagnostics/diagnostic-card";
+import { diagnosticCountLabel } from "@/features/sources/view-model/diagnostics";
 import type { StructuredDiagnostic } from "@/lib/api/sources";
 
 type SourcesDiagnosticsTabProps = {
