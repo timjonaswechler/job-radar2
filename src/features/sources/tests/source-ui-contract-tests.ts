@@ -3,6 +3,12 @@ import assert from "node:assert/strict";
 import { profileGridColumns } from "@/features/sources/registry/profile/profile-grid-columns";
 import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
+import {
+  parseSourcesWorkspaceTab,
+  sourcesWorkspaceTabUrl,
+} from "@/features/sources/workspace/sources-workspace-tabs";
+import { SourcesDiagnosticsTab } from "@/features/sources/workspace/sources-diagnostics-tab";
+import { useSourceRegistryInventory } from "@/features/sources/workspace/use-source-registry-inventory";
 import { sourceDetectionOutcomeCopy } from "@/features/sources/add/source/source-detection-panel";
 import {
   buildSourceDocument,
@@ -81,6 +87,25 @@ import type {
 
 assert.equal(typeof SourceRegistryTab, "function");
 assert.equal(typeof ProfileRegistryTab, "function");
+assert.equal(typeof SourcesDiagnosticsTab, "function");
+assert.equal(typeof useSourceRegistryInventory, "function");
+assert.equal(parseSourcesWorkspaceTab(""), "sources");
+assert.equal(parseSourcesWorkspaceTab("?tab=sources"), "sources");
+assert.equal(parseSourcesWorkspaceTab("?tab=profiles"), "profiles");
+assert.equal(parseSourcesWorkspaceTab("?tab=diagnostics"), "diagnostics");
+assert.equal(parseSourcesWorkspaceTab("?tab=runtime"), "runtime");
+assert.equal(parseSourcesWorkspaceTab("?tab=unknown"), "sources");
+assert.equal(
+  sourcesWorkspaceTabUrl(
+    "runtime",
+    {
+      pathname: "/sources",
+      search: "?filter=active&tab=unknown",
+      hash: "#registry",
+    },
+  ),
+  "/sources?filter=active&tab=runtime#registry",
+);
 assert.equal(
   profileGridColumns.some((column) => column.id === "supportEvidenceSummary"),
   true,
