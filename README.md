@@ -92,12 +92,23 @@ Nützliche weitere Befehle:
 
 ```bash
 npm run build                  # Frontend type-checken und bauen
-npm run tauri:dev:reset-db      # Entwicklungsdatenbank zurücksetzen und App starten
 npm run smoke:search-run        # manueller, netzwerkabhängiger Suchlauf-Smoke
-npm run tauri -- build          # Desktop-App bauen
+npm run tauri -- build          # Desktop-App für das aktuelle System bauen
 ```
 
 Der Smoke-Test ist bewusst nicht Teil der normalen CI-Logik, weil er echte externe Jobquellen nutzt.
+
+## Plattform-Builds
+
+Die Desktop-Bundles werden pro Zielsystem gebaut. Die CI führt `npm run tauri -- build` deshalb auf macOS, Windows und Linux aus. Für lokale Linux-Builds müssen vorher die nativen Tauri-Abhängigkeiten installiert sein, zum Beispiel unter Ubuntu/Debian:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential curl wget file \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+  librsvg2-dev libssl-dev libxdo-dev patchelf rpm
+```
 
 ## Nicht-Ziele im Moment
 

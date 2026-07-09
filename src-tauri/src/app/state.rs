@@ -1,12 +1,10 @@
 use sqlx::SqlitePool;
 use std::sync::Arc;
-#[cfg(any(debug_assertions, test))]
+#[cfg(test)]
 use std::{fs, io, path::Path};
 use tokio::sync::Mutex;
 
 use crate::app::{paths::AppPaths, resources::AppResources};
-
-pub const RESET_DEV_DB_ENV: &str = "JOB_RADAR_RESET_DEV_DB";
 
 pub struct AppState {
     pub db: SqlitePool,
@@ -43,7 +41,6 @@ impl AppState {
         resources: AppResources,
         notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        maybe_reset_dev_database(&paths)?;
         let db = crate::db::connect_and_migrate(&paths.database_path).await?;
 
         Ok(Self {
@@ -60,31 +57,7 @@ impl AppState {
     }
 }
 
-fn maybe_reset_dev_database(paths: &AppPaths) -> Result<(), Box<dyn std::error::Error>> {
-    if std::env::var(RESET_DEV_DB_ENV).ok().as_deref() != Some("1") {
-        return Ok(());
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        reset_database_files(&paths.database_path)?;
-        println!(
-            "Reset development SQLite database: {}",
-            paths.database_path.display()
-        );
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        eprintln!(
-            "Ignoring {RESET_DEV_DB_ENV}=1 because database reset is only enabled in debug builds"
-        );
-    }
-
-    Ok(())
-}
-
-#[cfg(any(debug_assertions, test))]
+#[cfg(test)]
 fn reset_database_files(database_path: &Path) -> io::Result<()> {
     for path in sqlite_database_file_family(database_path) {
         match fs::remove_file(&path) {
@@ -97,7 +70,7 @@ fn reset_database_files(database_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(any(debug_assertions, test))]
+#[cfg(test)]
 fn sqlite_database_file_family(database_path: &Path) -> Vec<std::path::PathBuf> {
     ["", "-wal", "-shm", "-journal"]
         .into_iter()
