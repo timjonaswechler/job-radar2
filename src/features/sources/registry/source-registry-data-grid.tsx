@@ -4,29 +4,21 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
-import { DataGrid } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import {
-  Frame,
-  FrameDescription,
-  FrameFooter,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
 import { useSourceRegistryGridState } from "@/features/sources/registry/registry-grid-state";
 import { SourceEditDrawer } from "@/features/sources/edit/source/source-edit-drawer";
 import { SourceDetailsDrawer } from "@/features/sources/registry/registry-details";
+import { SourceFilterPopover } from "@/features/sources/registry/registry-toolbar";
+import { RegistryGridShell } from "@/features/sources/registry/shared/registry-grid-shell";
+import { RegistrySearchInput } from "@/features/sources/registry/shared/registry-search-input";
 import {
-  RegistrySearchInput,
-  SourceFilterPopover,
-  SourceRegistryStateDot,
+  RegistryStateIndicator,
   registryRowHealthClassName,
-} from "@/features/sources/registry/registry-toolbar";
+} from "@/features/sources/registry/shared/registry-state-indicator";
 import {
   type DiagnosticIndex,
   type SourceGridRow,
@@ -68,7 +60,10 @@ export function SourceRegistryDataGrid({
         ),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2">
-            <SourceRegistryStateDot row={row.original} />
+            <RegistryStateIndicator
+              health={row.original.health}
+              diagnosticsCount={row.original.diagnosticsCount}
+            />
             <div className="grid min-w-0 gap-0.5">
               <span className="truncate font-bold">{row.original.name}</span>
               <span className="truncate font-mono text-muted-foreground">
@@ -204,72 +199,64 @@ export function SourceRegistryDataGrid({
 
   return (
     <>
-      <DataGrid
+      <RegistryGridShell
         table={table}
         recordCount={filteredRows.length}
         isLoading={loading}
         loadingMessage="Quellen werden geladen…"
         emptyMessage="Keine Registry-Quellen gefunden."
-        onRowClick={(row) => setSelectedRow(row)}
-        tableClassNames={{
-          bodyRow: (row) => registryRowHealthClassName(row.health),
-        }}
-        tableLayout={{
-          columnsPinnable: true,
-          columnsResizable: false,
-          columnsMovable: true,
-          columnsVisibility: true,
-        }}
-      >
-        <Frame className="px-1 w-full" stacked dense>
-          <FrameHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="grid gap-1.5">
-              <FrameTitle>Registry-Quellen</FrameTitle>
-              <FrameDescription>
-                Der Punkt vor dem Namen zeigt den Registry-Zustand. Bei
-                Problemen Zeile anklicken, um Details im Drawer zu öffnen.
-              </FrameDescription>
-            </div>
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <RegistrySearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Quellen suchen…"
-                clearLabel="Quellensuche leeren"
-              />
-              <SourceFilterPopover
-                selectedStatuses={selectedStatuses}
-                selectedOrigins={selectedOrigins}
-                diagnosticsOnly={diagnosticsOnly}
-                statusCounts={statusCounts}
-                originCounts={originCounts}
-                activeFilterCount={activeFilterCount}
-                onStatusChange={toggleStatus}
-                onOriginChange={toggleOrigin}
-                onDiagnosticsOnlyChange={setDiagnosticsOnly}
-              />
-              <Button type="button" onClick={onAdd}>
-                <PlusIcon data-icon="inline-start" aria-hidden="true" />
-                Quelle hinzufügen
-              </Button>
-            </div>
-          </FrameHeader>
-          <FramePanel className="p-0 shadow-none">
-            <DataGridScrollArea>
-              <DataGridTable />
-            </DataGridScrollArea>
-          </FramePanel>
-          <FrameFooter className="py-1.5 pr-2 pl-2.5">
-            <DataGridPagination
-              sizes={[5, 10, 25, 50]}
-              rowsPerPageLabel="Zeilen pro Seite"
-              info="{from}–{to} von {count}"
-              previousPageLabel="Vorherige Quellen-Seite"
-              nextPageLabel="Nächste Quellen-Seite"
+        title="Registry-Quellen"
+        description={
+          <>
+            Der Punkt vor dem Namen zeigt den Registry-Zustand. Bei Problemen
+            Zeile anklicken, um Details im Drawer zu öffnen.
+          </>
+        }
+        actions={
+          <>
+            <RegistrySearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              label="Quellen suchen"
+              name="source-registry-search"
+              placeholder="Quellen suchen…"
+              clearLabel="Quellensuche leeren"
             />
-          </FrameFooter>
-        </Frame>
-      </DataGrid>
+            <SourceFilterPopover
+              selectedStatuses={selectedStatuses}
+              selectedOrigins={selectedOrigins}
+              diagnosticsOnly={diagnosticsOnly}
+              statusCounts={statusCounts}
+              originCounts={originCounts}
+              activeFilterCount={activeFilterCount}
+              onStatusChange={toggleStatus}
+              onOriginChange={toggleOrigin}
+              onDiagnosticsOnlyChange={setDiagnosticsOnly}
+            />
+            <Button type="button" onClick={onAdd}>
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              Quelle hinzufügen
+            </Button>
+          </>
+        }
+        pagination={
+          <DataGridPagination
+            sizes={[5, 10, 25, 50]}
+            rowsPerPageLabel="Zeilen pro Seite"
+            info="{from}–{to} von {count}"
+            previousPageLabel="Vorherige Quellen-Seite"
+            nextPageLabel="Nächste Quellen-Seite"
+          />
+        }
+        onRowClick={setSelectedRow}
+        rowClassName={(row) => registryRowHealthClassName(row.health)}
+        className="px-1"
+        actionsClassName="items-baseline"
+      >
+        <DataGridScrollArea>
+          <DataGridTable />
+        </DataGridScrollArea>
+      </RegistryGridShell>
 
       <SourceDetailsDrawer
         row={selectedRow}

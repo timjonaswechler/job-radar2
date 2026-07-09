@@ -4,28 +4,20 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
-import { DataGrid } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import {
-  Frame,
-  FrameDescription,
-  FrameFooter,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
 import { useProfileRegistryGridState } from "@/features/sources/registry/registry-grid-state";
 import { ProfileDetailsDrawer } from "@/features/sources/registry/registry-details";
+import { ProfileFilterPopover } from "@/features/sources/registry/registry-toolbar";
+import { RegistryGridShell } from "@/features/sources/registry/shared/registry-grid-shell";
+import { RegistrySearchInput } from "@/features/sources/registry/shared/registry-search-input";
 import {
-  ProfileFilterPopover,
-  ProfileRegistryStateDot,
-  RegistrySearchInput,
+  RegistryStateIndicator,
   registryRowHealthClassName,
-} from "@/features/sources/registry/registry-toolbar";
+} from "@/features/sources/registry/shared/registry-state-indicator";
 import {
   type DiagnosticIndex,
   type ProfileGridRow,
@@ -55,7 +47,10 @@ export function ProfileRegistryDataGrid({
         ),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2">
-            <ProfileRegistryStateDot row={row.original} />
+            <RegistryStateIndicator
+              health={row.original.health}
+              diagnosticsCount={row.original.diagnosticsCount}
+            />
             <div className="grid min-w-0 gap-0.5">
               <span className="truncate font-bold">{row.original.name}</span>
               <span className="truncate font-mono text-muted-foreground">
@@ -185,72 +180,63 @@ export function ProfileRegistryDataGrid({
 
   return (
     <>
-      <DataGrid
+      <RegistryGridShell
         table={table}
         recordCount={filteredRows.length}
         isLoading={loading}
         loadingMessage="Profile werden geladen…"
         emptyMessage="Keine Registry-Profile gefunden."
-        onRowClick={(row) => setSelectedRow(row)}
-        tableClassNames={{
-          bodyRow: (row) => registryRowHealthClassName(row.health),
-        }}
-        tableLayout={{
-          columnsPinnable: true,
-          columnsResizable: false,
-          columnsMovable: true,
-          columnsVisibility: true,
-        }}
-      >
-        <Frame className="w-full" stacked dense>
-          <FrameHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="grid gap-1.5">
-              <FrameTitle>Quellenprofile</FrameTitle>
-              <FrameDescription>
-                Der Punkt vor dem Namen zeigt den Registry-Zustand. Bei
-                Problemen Zeile anklicken, um Details im Drawer zu öffnen.
-              </FrameDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <RegistrySearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Profile suchen…"
-                clearLabel="Profilsuche leeren"
-              />
-              <ProfileFilterPopover
-                selectedKinds={selectedKinds}
-                selectedOrigins={selectedOrigins}
-                diagnosticsOnly={diagnosticsOnly}
-                kindCounts={kindCounts}
-                originCounts={originCounts}
-                activeFilterCount={activeFilterCount}
-                onKindChange={toggleKind}
-                onOriginChange={toggleOrigin}
-                onDiagnosticsOnlyChange={setDiagnosticsOnly}
-              />
-              <Button type="button" onClick={onAdd}>
-                <PlusIcon data-icon="inline-start" aria-hidden="true" />
-                Profil hinzufügen
-              </Button>
-            </div>
-          </FrameHeader>
-          <FramePanel className="p-0 shadow-none">
-            <DataGridScrollArea>
-              <DataGridTable />
-            </DataGridScrollArea>
-          </FramePanel>
-          <FrameFooter className="py-1.5 pr-2 pl-2.5">
-            <DataGridPagination
-              sizes={[5, 10, 25, 50]}
-              rowsPerPageLabel="Zeilen pro Seite"
-              info="{from}–{to} von {count}"
-              previousPageLabel="Vorherige Profil-Seite"
-              nextPageLabel="Nächste Profil-Seite"
+        title="Quellenprofile"
+        description={
+          <>
+            Der Punkt vor dem Namen zeigt den Registry-Zustand. Bei Problemen
+            Zeile anklicken, um Details im Drawer zu öffnen.
+          </>
+        }
+        actions={
+          <>
+            <RegistrySearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              label="Profile suchen"
+              name="profile-registry-search"
+              placeholder="Profile suchen…"
+              clearLabel="Profilsuche leeren"
             />
-          </FrameFooter>
-        </Frame>
-      </DataGrid>
+            <ProfileFilterPopover
+              selectedKinds={selectedKinds}
+              selectedOrigins={selectedOrigins}
+              diagnosticsOnly={diagnosticsOnly}
+              kindCounts={kindCounts}
+              originCounts={originCounts}
+              activeFilterCount={activeFilterCount}
+              onKindChange={toggleKind}
+              onOriginChange={toggleOrigin}
+              onDiagnosticsOnlyChange={setDiagnosticsOnly}
+            />
+            <Button type="button" onClick={onAdd}>
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              Profil hinzufügen
+            </Button>
+          </>
+        }
+        pagination={
+          <DataGridPagination
+            sizes={[5, 10, 25, 50]}
+            rowsPerPageLabel="Zeilen pro Seite"
+            info="{from}–{to} von {count}"
+            previousPageLabel="Vorherige Profil-Seite"
+            nextPageLabel="Nächste Profil-Seite"
+          />
+        }
+        onRowClick={setSelectedRow}
+        rowClassName={(row) => registryRowHealthClassName(row.health)}
+        actionsClassName="items-center"
+      >
+        <DataGridScrollArea>
+          <DataGridTable />
+        </DataGridScrollArea>
+      </RegistryGridShell>
 
       <ProfileDetailsDrawer
         row={selectedRow}
