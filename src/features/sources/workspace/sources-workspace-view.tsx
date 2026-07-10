@@ -14,6 +14,7 @@ import {
   buildDiagnosticIndex,
   diagnosticCountLabel,
 } from "@/features/sources/view-model/diagnostics";
+import { CustomRegistryFoldersCard } from "@/features/sources/workspace/custom-registry-folders-card";
 import { SourcesDiagnosticsTab } from "@/features/sources/workspace/sources-diagnostics-tab";
 import {
   parseSourcesWorkspaceTab,
@@ -21,10 +22,12 @@ import {
   updateSourcesWorkspaceTab,
 } from "@/features/sources/workspace/sources-workspace-tabs";
 import { useSourceRegistryInventory } from "@/features/sources/workspace/use-source-registry-inventory";
+import { useDatabaseInfo } from "@/hooks/use-database-info";
 import type { SourceRegistryDocumentKind } from "@/lib/api/sources";
 
 export function SourcesWorkspaceView() {
   const { data, error, loading, refresh } = useSourceRegistryInventory();
+  const databaseInfo = useDatabaseInfo();
   const [activeTab, setActiveTab] = useState<SourcesWorkspaceTab>(() =>
     parseSourcesWorkspaceTab(window.location.search),
   );
@@ -97,6 +100,13 @@ export function SourcesWorkspaceView() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+
+      <CustomRegistryFoldersCard
+        data={databaseInfo.data}
+        error={databaseInfo.error}
+        loading={databaseInfo.loading}
+        onRefresh={databaseInfo.refresh}
+      />
 
       <Tabs
         value={activeTab}
