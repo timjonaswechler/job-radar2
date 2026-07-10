@@ -26,7 +26,7 @@ A direct HTTP request is a public endpoint observation, not a Source Live Check.
 
 | Source Profile | Evidence page | Current state |
 |---|---|---|
-| `greenhouse` | [greenhouse.md](greenhouse.md) | Official documentation and synthetic fixture evidence recorded; concrete Source evidence missing |
+| `greenhouse` | [greenhouse.md](greenhouse.md) | Official docs, synthetic fixtures, five public endpoint observations, and three fresh passing temporary Source Live Checks recorded |
 | `workday` | not started | Audit pending |
 | `successfactors` | not started | Audit pending |
 

@@ -4,7 +4,7 @@ Source Profile: `greenhouse`
 
 Audit parent: GitHub issue #33
 
-Current evidence is sufficient to document the public API shape and deterministic parser behavior. It is not yet sufficient to claim current operability for a concrete Greenhouse Source or representative real-world location coverage.
+Current evidence covers the documented API shape, deterministic parser behavior, five dated public endpoint observations, and fresh passing Source Live Checks for three isolated temporary Sources. The observations do not make those Sources built-in or guarantee future operability.
 
 ## Official vendor documentation
 
@@ -59,25 +59,57 @@ cargo test --manifest-path src-tauri/Cargo.toml --test greenhouse_profile_dsl
 
 Last audit result on 2026-07-10: `1 passed; 0 failed`.
 
-## Concrete Source observations
+## Public endpoint observations
 
-None recorded yet.
+The following Boards API list endpoints were observed at `2026-07-10T11:52:24Z`. These are public endpoint observations, not Source Live Checks.
 
-No Built-in Source exists under `src-tauri/resources/sources/`, no temporary audit Source has been documented, and no Greenhouse Source Live Check Report is available. Current Source Live Check state is therefore `unknown`.
+| Board | `boardSlug` | Jobs | Representative raw `location.name` values | Assessment |
+|---|---|---:|---|---|
+| Greenhouse Software | `greenhouse` | 22 | `Anywhere in the United States`; `Argentina`; `British Columbia`; `London, United Kingdom`; `Ontario` | Vendor-owned control Source |
+| Karbon | `karbon` | 29 | `Remote, United States`; `Sydney, NSW, Australia`; long semicolon-separated city lists | Strong real multi-location evidence |
+| Prophecy | `prophecysimpledatalabs` | 6 | `San Francisco, CA (Remote)`; `Leeds/Sheffield/Manchester, UK (Hybrid)`; `Bengaluru, Karnataka, India` | Slash-delimited and Remote/Hybrid edge cases; small volatile board |
+| Example Corp Sandbox | `examplecorpsandbox` | 224 | missing/`null`; `Anywhere`; `Amsterdam Area (Hybrid) `; `Austin, TX, Reston, VA, Boston, MA` | Vendor sandbox, not a real employment Source |
+| Cloudflare | `cloudflare` | 245 | `Distributed`; `Distributed; Hybrid`; `Hybrid or Remote`; `Remote India`; `Tokyo, Japan` | `location.name` often represents work mode rather than a concrete place |
+
+Each list endpoint used the documented public shape:
+
+```text
+https://boards-api.greenhouse.io/v1/boards/<boardSlug>/jobs
+```
+
+The reported counts and values are dated observations and may change as postings open or close.
+
+## Isolated Source Live Checks
+
+Three temporary draft Sources were created under an isolated temporary app-data directory. No existing app data was read or modified, and the Sources were not added under `src-tauri/resources/sources/`.
+
+| Temporary Source | `boardSlug` | Checked at | Report result | Report state | Candidates | Detail |
+|---|---|---|---|---|---:|---|
+| `greenhouse_karbon` | `karbon` | `2026-07-10T12:00:06Z` | `passed` | `fresh` | 29 | checked and passed |
+| `greenhouse_prophecy` | `prophecysimpledatalabs` | `2026-07-10T12:00:08Z` | `passed` | `fresh` | 6 | checked and passed |
+| `greenhouse_vendor_careers` | `greenhouse` | `2026-07-10T12:00:09Z` | `passed` | `fresh` | 22 | checked and passed |
+
+All three reports had zero Structured Diagnostics. Freshness was evaluated immediately against the unchanged temporary Source documents, Source Config, built-in Greenhouse profile, and live-check logic.
+
+A separate immediate live discovery through the same compiled profile/runtime reproduced the candidate counts with zero diagnostics and exposed the current normalized location output. The profile currently preserves one raw `location.name` string as one array item; it does not split embedded delimiters:
+
+| Source | Raw endpoint value | Current normalized output | Location implication |
+|---|---|---|---|
+| Karbon | `Canberra, ACT, Australia; Melbourne, VIC, Australia; Sydney, NSW, Australia` | `["Canberra, ACT, Australia; Melbourne, VIC, Australia; Sydney, NSW, Australia"]` | Semicolon-separated places remain one location |
+| Prophecy | `Leeds/Sheffield/Manchester, UK (Hybrid)` | `["Leeds/Sheffield/Manchester, UK (Hybrid)"]` | Slash-separated places and work mode remain one location |
+| Greenhouse Software | `Anywhere in the United States` | `["Anywhere in the United States"]` | Remote/region semantics remain unstructured |
+
+These concrete observations are input for #57. They document current behavior but do not define the future normalized location model.
 
 ## Evidence still needed
 
-Find two or three stable public Greenhouse boards and record, without adding them as Built-in Sources by default:
+- non-Latin original location strings;
+- verified pipe- or newline-delimited multi-location values;
+- explicit timezone or commuting-distance formats;
+- repeated checks after Source/Profile changes to establish longer-term stability;
+- a decision on whether provider metadata such as Cloudflare's concrete-location fields should be modeled generically.
 
-- public board URL and `boardSlug`;
-- dated raw `location.name` observations from the public endpoint;
-- current normalized `locations` output;
-- city/country, region, remote, multi-location, and delimiter variants where available;
-- one bounded Source Live Check per selected concrete Source;
-- persisted Check Report result and derived freshness state;
-- whether lazy detail succeeded for the checked candidate.
-
-A direct Boards API request may provide raw endpoint evidence, but it must not be described as a Source Live Check.
+A direct Boards API request remains public endpoint evidence, not a Source Live Check.
 
 ## Related follow-up
 
