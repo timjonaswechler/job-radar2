@@ -10,6 +10,7 @@ import {
   useCommandSearch,
 } from "@/context/command-search-provider-context";
 import type { TranslationKey } from "@/lib/i18n/resources";
+import { AppLink } from "@/app/navigation/app-link";
 import { navigateTo } from "@/app/navigation/path";
 import {
   commandSearchItems,
@@ -28,11 +29,11 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 
-function getAvailableItems(items: CommandSearchItem[]) {
+function getAvailableItems(items: readonly CommandSearchItem[]) {
   return items.filter((item) => !item.disabled);
 }
 
-function groupBy(items: CommandSearchItem[]) {
+function groupBy(items: readonly CommandSearchItem[]) {
   const groups = [...new Set(items.map((item) => item.groupKey))];
   return groups.map((groupKey) => ({
     groupKey,
@@ -44,8 +45,7 @@ function getItemLabel(
   item: CommandSearchItem,
   t: (key: TranslationKey) => string,
 ) {
-  const label = t(item.titleKey);
-  return item.parentTitleKey ? `${t(item.parentTitleKey)} › ${label}` : label;
+  return t(item.titleKey);
 }
 
 export function CommandSearchDialog() {
@@ -58,6 +58,7 @@ export function CommandSearchDialog() {
     openCommandSearch,
     closeCommandSearch,
   } = useCommandSearch();
+  const linkClickSelectionRef = React.useRef<string | null>(null);
   const recommendations = React.useMemo(
     () => getAvailableItems(commandSearchItems),
     [],
@@ -67,17 +68,38 @@ export function CommandSearchDialog() {
   const handleSelect = (item: CommandSearchItem) => {
     if (item.disabled) return;
 
-    closeCommandSearch();
-
-    if (item.newTab) {
-      window.open(item.url, "_blank", "noopener,noreferrer");
+    if (linkClickSelectionRef.current === item.id) {
+      linkClickSelectionRef.current = null;
       return;
     }
 
+    closeCommandSearch();
     navigateTo(item.url);
   };
 
-  const renderGroups = (items: CommandSearchItem[]) =>
+  const handleLinkClick = (
+    item: CommandSearchItem,
+    event: React.MouseEvent<HTMLAnchorElement>,
+  ) => {
+    linkClickSelectionRef.current = item.id;
+    queueMicrotask(() => {
+      if (linkClickSelectionRef.current === item.id) {
+        linkClickSelectionRef.current = null;
+      }
+    });
+
+    if (
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      closeCommandSearch();
+    }
+  };
+
+  const renderGroups = (items: readonly CommandSearchItem[]) =>
     groupBy(items).map(({ groupKey, items: groupItems }, index) => (
       <React.Fragment key={groupKey}>
         {index > 0 && <CommandSeparator />}
@@ -85,21 +107,39 @@ export function CommandSearchDialog() {
           {groupItems.map((item) => {
             const label = getItemLabel(item, t);
 
+            const content = (
+              <>
+                <item.icon aria-hidden="true" />
+                <span>{label}</span>
+                {item.disabled ? (
+                  <Badge variant="outline" className="text-xs">
+                    {t("common.status.soon")}
+                  </Badge>
+                ) : null}
+              </>
+            );
+
+            if (item.disabled) {
+              return (
+                <CommandItem disabled key={item.id} value={label}>
+                  {content}
+                </CommandItem>
+              );
+            }
+
             return (
               <CommandItem
-                disabled={item.disabled}
+                asChild
                 key={item.id}
                 value={label}
                 onSelect={() => handleSelect(item)}
               >
-                {item.icon && <item.icon />}
-                <span>{label}</span>
-
-                {item.disabled && (
-                  <Badge variant="outline" className="text-xs">
-                    {t("common.status.soon")}
-                  </Badge>
-                )}
+                <AppLink
+                  href={item.url}
+                  onClick={(event) => handleLinkClick(item, event)}
+                >
+                  {content}
+                </AppLink>
               </CommandItem>
             );
           })}

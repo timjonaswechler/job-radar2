@@ -1,4 +1,4 @@
-import { navigateTo } from "@/app/navigation/path";
+import { AppLink } from "@/app/navigation/app-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   SidebarGroup,
@@ -26,9 +26,8 @@ const primaryQueueIds = [
 
 const viewQueueIds = ["archive", "all"] satisfies PostingQueueId[];
 
-export function PostingsSidebar() {
+export function PostingsSidebar({ pathname }: { pathname: string }) {
   const { counts, countsLoading, countsError } = usePostingsCounts();
-  const pathname = window.location.pathname;
 
   return (
     <SidebarGroup>
@@ -77,10 +76,14 @@ function QueueMenu({
         return (
           <SidebarMenuItem key={queue.id}>
             <SidebarMenuButton
-              type="button"
+              render={
+                <AppLink
+                  href={getPostingQueueUrl(queue.id)}
+                  aria-current={isActive ? "page" : undefined}
+                />
+              }
               tooltip={queue.label}
               isActive={isActive}
-              onClick={() => navigateTo(getPostingQueueUrl(queue.id))}
             >
               <Icon aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">{queue.label}</span>

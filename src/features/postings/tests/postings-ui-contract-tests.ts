@@ -4,6 +4,7 @@ import {
   createQueueCounts,
   getPrimaryQueueLabel,
   isPostingInQueue,
+  isPostingQueuePathActive,
   type PostingQueueId,
 } from "@/features/postings/queues/posting-queues";
 import {
@@ -76,6 +77,11 @@ assert.equal(
   1,
   "marking an inbox posting as read via detail loading must refresh queue counts",
 );
+
+assert.equal(isPostingQueuePathActive("/postings", "inbox"), true);
+assert.equal(isPostingQueuePathActive("/postings/inbox", "inbox"), true);
+assert.equal(isPostingQueuePathActive("/settings", "inbox"), false);
+assert.equal(isPostingQueuePathActive("/postings-extra", "inbox"), false);
 
 const queuePostings = {
   unreadInbox: createPosting({ id: 101, readState: "unread" }),

@@ -178,7 +178,11 @@ export function isPostingQueuePathActive(
   pathname: string,
   queueId: PostingQueueId,
 ) {
-  return getPostingQueueIdFromPath(pathname) === queueId;
+  const isPostingsPath =
+    pathname === POSTINGS_BASE_PATH ||
+    pathname.startsWith(`${POSTINGS_BASE_PATH}/`);
+
+  return isPostingsPath && getPostingQueueIdFromPath(pathname) === queueId;
 }
 
 export function getPrimaryQueueLabel(posting: JobPosting) {

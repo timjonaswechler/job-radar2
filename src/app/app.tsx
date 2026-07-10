@@ -1,4 +1,5 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { getAppRoute } from "@/app/navigation/app-routes";
 import { APP_ROUTE_CHANGE_EVENT } from "@/app/navigation/path";
@@ -16,7 +17,9 @@ import {
 import { writeStoredWindowDragRegionEnabled } from "@/lib/app-settings";
 
 export function App() {
+  const { t } = useTranslation();
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  const previousPathname = useRef(pathname);
   const [windowDragRegionEnabled, setWindowDragRegionEnabled] = useState(() =>
     readStoredWindowDragRegionEnabled(),
   );
@@ -88,12 +91,29 @@ export function App() {
   }, []);
 
   const route = getAppRoute(pathname);
+  const title = t(route.titleKey);
   const Page = route.Component;
+
+  useEffect(() => {
+    document.title = `${title} · Job Radar`;
+  }, [title]);
+
+  useEffect(() => {
+    if (previousPathname.current === pathname) return;
+    previousPathname.current = pathname;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [pathname]);
 
   return (
     <PostingsWorkspaceProvider pathname={pathname}>
       <AppLayout
-        title={route.title}
+        pathname={pathname}
+        title={title}
         windowDragRegionEnabled={windowDragRegionEnabled}
       >
         <Suspense

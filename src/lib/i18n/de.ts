@@ -24,6 +24,8 @@ export const de = {
     },
   },
   navigation: {
+    sidebarLabel: "Hauptnavigation",
+    skipToMain: "Zum Hauptinhalt",
     groups: {
       jobRadar: "Job Radar",
     },
@@ -34,6 +36,7 @@ export const de = {
       searchRequests: "Search Requests",
       settings: "Einstellungen",
       postingsInbox: "Stellenanzeigen-Inbox",
+      notFound: "Nicht gefunden",
     },
   },
   commandSearch: {

@@ -2,6 +2,13 @@
 
 import { useTranslation } from "react-i18next";
 
+import { AppLink } from "@/app/navigation/app-link";
+import type {
+  NavigationManifestItem,
+  SidebarNavigationGroup,
+} from "@/app/navigation/navigation-types";
+import { isAppPathActive } from "@/app/navigation/path";
+import { Badge } from "@/components/ui/badge";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -9,94 +16,74 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
-import { navigateTo } from "@/app/navigation/path";
-import type {
-  NavGroup,
-  NavMainItem,
-} from "@/app/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
-  readonly items: readonly NavGroup[];
+  readonly items: readonly SidebarNavigationGroup[];
+  readonly pathname: string;
 }
 
-const IsComingSoon = ({ label }: { label: string }) => (
-  <span className="ml-auto rounded-md bg-gray-200 px-2 py-1 text-xs dark:text-gray-800">
-    {label}
-  </span>
-);
+function NavigationItem({
+  item,
+  pathname,
+}: {
+  item: NavigationManifestItem;
+  pathname: string;
+}) {
+  const { t } = useTranslation();
+  const label = t(item.titleKey);
+  const isActive = isAppPathActive(pathname, item.path);
+  const content = (
+    <>
+      <item.icon aria-hidden="true" />
+      <span>{label}</span>
+      {item.comingSoon ? (
+        <Badge variant="secondary" className="ml-auto text-xs">
+          {t("common.status.soon")}
+        </Badge>
+      ) : null}
+    </>
+  );
 
-function goTo(item: NavMainItem) {
-  if (item.comingSoon) return;
-
-  if (item.newTab) {
-    window.open(item.url, "_blank", "noopener,noreferrer");
-    return;
+  if (item.comingSoon) {
+    return (
+      <SidebarMenuButton type="button" tooltip={label} disabled>
+        {content}
+      </SidebarMenuButton>
+    );
   }
 
-  navigateTo(item.url);
+  return (
+    <SidebarMenuButton
+      render={
+        <AppLink
+          href={item.path}
+          aria-current={isActive ? "page" : undefined}
+        />
+      }
+      tooltip={label}
+      isActive={isActive}
+    >
+      {content}
+    </SidebarMenuButton>
+  );
 }
 
-export function NavMain({ items }: NavMainProps) {
+export function NavMain({ items, pathname }: NavMainProps) {
   const { t } = useTranslation();
-  const path = window.location.pathname;
-
-  const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
-    if (subItems?.length) {
-      return subItems.some((sub) => path.startsWith(sub.url));
-    }
-    return path === url;
-  };
 
   return (
     <>
       {items.map((group) => (
         <SidebarGroup key={group.id}>
-          {group.labelKey && (
+          {group.labelKey ? (
             <SidebarGroupLabel>{t(group.labelKey)}</SidebarGroupLabel>
-          )}
+          ) : null}
           <SidebarGroupContent className="flex flex-col gap-2">
             <SidebarMenu>
               {group.items.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    type="button"
-                    aria-disabled={item.comingSoon}
-                    disabled={item.comingSoon}
-                    tooltip={t(item.titleKey)}
-                    isActive={isItemActive(item.url, item.subItems)}
-                    onClick={() => goTo(item)}
-                  >
-                    {item.icon && <item.icon />}
-                    <span>{t(item.titleKey)}</span>
-                    {item.comingSoon && (
-                      <IsComingSoon label={t("common.status.soon")} />
-                    )}
-                  </SidebarMenuButton>
-
-                  {item.subItems && (
-                    <SidebarMenuSub>
-                      {item.subItems.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.url}>
-                          <SidebarMenuSubButton
-                            href={subItem.url}
-                            target={subItem.newTab ? "_blank" : undefined}
-                            aria-disabled={subItem.comingSoon}
-                            isActive={path === subItem.url}
-                          >
-                            {subItem.icon && <subItem.icon />}
-                            <span>{t(subItem.titleKey)}</span>
-                            {subItem.comingSoon && (
-                              <IsComingSoon label={t("common.status.soon")} />
-                            )}
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  )}
+                <SidebarMenuItem key={item.id}>
+                  <NavigationItem item={item} pathname={pathname} />
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

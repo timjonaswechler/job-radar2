@@ -1,34 +1,19 @@
-import { lazy, type ComponentType } from "react";
+import type { ComponentType } from "react";
 
-import { HomePage } from "@/pages/home-page";
+import { navigationManifest } from "@/app/navigation/navigation-manifest";
+import type { NavigationManifestItem } from "@/app/navigation/navigation-types";
+import { isAppPathActive } from "@/app/navigation/path";
+import type { TranslationKey } from "@/lib/i18n/resources";
 
-const PostingsPage = lazy(() =>
-  import("@/pages/postings-page").then((module) => ({
-    default: module.PostingsPage,
-  })),
-);
+export type AppRoute = Pick<
+  NavigationManifestItem,
+  "id" | "path" | "titleKey" | "Component"
+>;
 
-const SourcesPage = lazy(() =>
-  import("@/pages/sources-page").then((module) => ({
-    default: module.SourcesPage,
-  })),
-);
-
-const SearchRequestsPage = lazy(() =>
-  import("@/pages/search-requests-page").then((module) => ({
-    default: module.SearchRequestsPage,
-  })),
-);
-
-const SettingsPage = lazy(() =>
-  import("@/pages/settings-page").then((module) => ({
-    default: module.SettingsPage,
-  })),
-);
-
-export type AppRoute = {
+type NotFoundRoute = {
+  id: "not-found";
   path: string;
-  title: string;
+  titleKey: TranslationKey;
   Component: ComponentType;
 };
 
@@ -43,43 +28,32 @@ function NotFoundPage() {
   );
 }
 
-export const appRoutes: AppRoute[] = [
-  {
-    path: "/",
-    title: "Übersicht",
-    Component: HomePage,
-  },
-  {
-    path: "/postings",
-    title: "Stellenanzeigen",
-    Component: PostingsPage,
-  },
-  {
-    path: "/sources",
-    title: "Quellen",
-    Component: SourcesPage,
-  },
-  {
-    path: "/search-requests",
-    title: "Search Requests",
-    Component: SearchRequestsPage,
-  },
-  {
-    path: "/settings",
-    title: "Einstellungen",
-    Component: SettingsPage,
-  },
-];
+export const appRoutes: readonly AppRoute[] = navigationManifest.map(
+  ({ id, path, titleKey, Component }) => ({
+    id,
+    path,
+    titleKey,
+    Component,
+  }),
+);
 
-export function getAppRoute(pathname: string): AppRoute {
+export function getAppRoute(pathname: string): AppRoute | NotFoundRoute {
+  let route: AppRoute | undefined;
+
+  for (const candidate of appRoutes) {
+    if (
+      isAppPathActive(pathname, candidate.path) &&
+      (!route || candidate.path.length > route.path.length)
+    ) {
+      route = candidate;
+    }
+  }
+
   return (
-    appRoutes.find(
-      (route) =>
-        route.path === pathname ||
-        (route.path !== "/" && pathname.startsWith(`${route.path}/`)),
-    ) ?? {
+    route ?? {
+      id: "not-found",
       path: pathname,
-      title: "Nicht gefunden",
+      titleKey: "navigation.items.notFound",
       Component: NotFoundPage,
     }
   );

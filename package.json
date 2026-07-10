@@ -9,6 +9,7 @@
     "test:source-ui": "node scripts/source-ui-contract-tests.mjs",
     "test:search-requests-ui": "node scripts/search-requests-ui-contract-tests.mjs",
     "test:postings-ui": "node scripts/postings-ui-contract-tests.mjs",
+    "test:navigation": "node scripts/navigation-contract-tests.mjs",
     "test:window-platform": "node --experimental-strip-types scripts/window-control-platform-tests.mjs",
     "preview": "vite preview",
     "tauri": "tauri",

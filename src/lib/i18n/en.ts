@@ -25,6 +25,8 @@ export const en = {
     },
   },
   navigation: {
+    sidebarLabel: "Main navigation",
+    skipToMain: "Skip to main content",
     groups: {
       jobRadar: "Job Radar",
     },
@@ -35,6 +37,7 @@ export const en = {
       searchRequests: "Search Requests",
       settings: "Settings",
       postingsInbox: "Postings Inbox",
+      notFound: "Not found",
     },
   },
   commandSearch: {

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
@@ -6,6 +7,7 @@ import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 
 type AppLayoutProps = {
+  pathname: string;
   title: string;
   windowDragRegionEnabled: boolean;
   children: ReactNode;
@@ -36,22 +38,36 @@ function WindowTopDragRegion({ enabled }: { enabled: boolean }) {
 }
 
 export function AppLayout({
+  pathname,
   title,
   windowDragRegionEnabled,
   children,
 }: AppLayoutProps) {
+  const { t } = useTranslation();
+
   return (
     <SidebarProvider
       className="h-svh overflow-hidden"
       style={sidebarProviderStyle}
     >
+      <a
+        href="#main-content"
+        className="fixed top-2 left-2 z-100 -translate-y-16 rounded-md bg-background px-3 py-2 text-sm font-medium shadow-md transition-transform hover:bg-muted focus:translate-y-0 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      >
+        {t("navigation.skipToMain")}
+      </a>
       <WindowTopDragRegion enabled={windowDragRegionEnabled} />
       <AppSidebar
+        pathname={pathname}
         variant="inset"
         collapsible="icon"
         windowDragRegionEnabled={windowDragRegionEnabled}
       />
-      <SidebarInset className="relative z-20 min-h-0 min-w-0 overflow-hidden peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]">
+      <SidebarInset
+        id="main-content"
+        tabIndex={-1}
+        className="relative z-20 min-h-0 min-w-0 overflow-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)]"
+      >
         <AppHeader
           title={title}
           windowDragRegionEnabled={windowDragRegionEnabled}
