@@ -1,12 +1,12 @@
 use std::{collections::HashMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    detect_source_proposal_with_clients, detect_source_proposal_with_http_client,
-    DetectionHttpClient, DetectionHttpError, DetectionHttpResponse, DiagnosticCategory,
-    DiagnosticSeverity, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, SourceProfileDocument,
-    SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, detect_source_proposal_with_clients,
+    detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
+    DetectionHttpResponse, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -471,6 +471,159 @@ fn source_profile_detection_identifies_known_unsupported_profile_without_source_
         result.unsupported_profiles[0].support_level,
         SupportLevel::Unsupported
     );
+}
+
+#[test]
+fn greenhouse_detection_accepts_every_declared_url_family_offline() {
+    let profile = read_builtin_profile("greenhouse.json");
+    let cases = [
+        (
+            "boards host",
+            "https://boards.greenhouse.io/acme-careers",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "boards host trailing path and query",
+            "https://boards.greenhouse.io/acme-careers/jobs/123?gh_jid=123",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "job-boards host with query and fragment",
+            "https://job-boards.greenhouse.io/acme-careers?gh_src=radar#opening",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "Boards API board",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "Boards API jobs suffix with trailing path and query",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/jobs/123?content=true",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "Boards API departments suffix",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/departments/42",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "Boards API offices suffix with fragment",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/offices#berlin",
+            "acme-careers",
+            "acme_careers",
+        ),
+        (
+            "Boards API sections suffix",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/sections/engineering",
+            "acme-careers",
+            "acme_careers",
+        ),
+    ];
+
+    for (case, input_url, expected_slug, expected_key_candidate) in cases {
+        let result = block_on(detect_source_proposal(
+            input_url,
+            std::slice::from_ref(&profile),
+        ));
+
+        assert_eq!(
+            result.status,
+            SourceProposalDetectionStatus::Matched,
+            "{case}: {:?}",
+            result.diagnostics
+        );
+        assert!(
+            result.diagnostics.is_empty(),
+            "{case}: unexpected diagnostics: {:?}",
+            result.diagnostics
+        );
+        let proposal = result
+            .proposal
+            .unwrap_or_else(|| panic!("{case}: matched detection must return a proposal"));
+        assert_eq!(proposal.profile_key, "greenhouse", "{case}");
+        assert_eq!(proposal.recommended_access_path_key, "boards_api", "{case}");
+        assert_eq!(proposal.source_config["boardSlug"], expected_slug, "{case}");
+        assert_eq!(
+            proposal.captures.get("boardSlug").map(String::as_str),
+            Some(expected_slug),
+            "{case}"
+        );
+        assert_eq!(
+            proposal.key_candidates,
+            vec![expected_key_candidate.to_string()],
+            "{case}"
+        );
+        assert_eq!(
+            proposal.name_candidates,
+            vec![expected_slug.to_string()],
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn greenhouse_detection_rejects_near_matching_invalid_urls_offline() {
+    let profile = read_builtin_profile("greenhouse.json");
+    let cases = [
+        (
+            "unsupported top-level domain",
+            "https://boards.greenhouse.com/acme-careers",
+        ),
+        (
+            "lookalike subdomain",
+            "https://boards-greenhouse.io/acme-careers",
+        ),
+        ("missing board slug", "https://boards.greenhouse.io/"),
+        (
+            "missing Boards API board slug",
+            "https://boards-api.greenhouse.io/v1/boards/",
+        ),
+        (
+            "invalid board slug character",
+            "https://job-boards.greenhouse.io/acme.careers",
+        ),
+        (
+            "unsupported Boards API resource",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/candidates",
+        ),
+        (
+            "unsupported Boards API singular jobs path",
+            "https://boards-api.greenhouse.io/v1/boards/acme-careers/job/123",
+        ),
+        (
+            "unsupported Boards API version",
+            "https://boards-api.greenhouse.io/v2/boards/acme-careers/jobs",
+        ),
+    ];
+
+    for (case, input_url) in cases {
+        let result = block_on(detect_source_proposal(
+            input_url,
+            std::slice::from_ref(&profile),
+        ));
+
+        assert_eq!(
+            result.status,
+            SourceProposalDetectionStatus::Unsupported,
+            "{case}: {:?}",
+            result.diagnostics
+        );
+        assert!(
+            result
+                .proposal
+                .iter()
+                .chain(result.proposals.iter())
+                .all(|proposal| proposal.profile_key != "greenhouse"),
+            "{case}: invalid URL produced a Greenhouse proposal"
+        );
+    }
 }
 
 #[test]
