@@ -1,5 +1,20 @@
 export const APP_ROUTE_CHANGE_EVENT = "job-radar-route-change";
 
+type AppNavigationCommit = () => void;
+type AppNavigationBlocker = (commit: AppNavigationCommit) => void;
+
+let activeNavigationBlocker: AppNavigationBlocker | null = null;
+
+export function registerAppNavigationBlocker(blocker: AppNavigationBlocker) {
+  activeNavigationBlocker = blocker;
+
+  return () => {
+    if (activeNavigationBlocker === blocker) {
+      activeNavigationBlocker = null;
+    }
+  };
+}
+
 export function isAppPathActive(pathname: string, basePath: string) {
   if (basePath === "/") return pathname === "/";
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
@@ -22,11 +37,23 @@ export function navigateTo(url: string) {
   if (currentUrl === nextUrl) return;
 
   const pathnameChanged = destination.pathname !== window.location.pathname;
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
 
-  window.history.pushState(null, "", nextUrl);
-  window.dispatchEvent(new Event(APP_ROUTE_CHANGE_EVENT));
+    window.history.pushState(null, "", nextUrl);
+    window.dispatchEvent(new Event(APP_ROUTE_CHANGE_EVENT));
 
-  if (pathnameChanged) {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    if (pathnameChanged) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  };
+
+  if (activeNavigationBlocker) {
+    activeNavigationBlocker(commit);
+    return;
   }
+
+  commit();
 }

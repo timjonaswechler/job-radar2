@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 
 import {
   buildUpdatedSourceDocument,
+  isSourceEditDraftDirty,
   sourceEditDraftFromSource,
+  sourceEditDraftSnapshot,
 } from "@/features/sources/edit/source/source-edit-model";
 import { sourceConfigSchemaMetadata } from "@/features/sources/shared/source-config-schema";
 import type { RegistrySource } from "@/lib/api/sources";
@@ -51,6 +53,74 @@ assert.deepEqual(
   [["boardSlug", "acme"]],
 );
 assert.equal(draft.configEntries[0]?.locked, true);
+assert.equal(isSourceEditDraftDirty(draft, draft), false);
+assert.equal(
+  isSourceEditDraftDirty({ ...draft, name: "ACME Updated" }, draft),
+  true,
+);
+assert.equal(
+  isSourceEditDraftDirty({ ...draft, status: "disabled" }, draft),
+  true,
+);
+assert.equal(
+  isSourceEditDraftDirty(
+    {
+      ...draft,
+      configEntries: [{ id: "changed", key: "boardSlug", value: "other" }],
+    },
+    draft,
+  ),
+  true,
+);
+assert.equal(
+  isSourceEditDraftDirty({ ...draft, sourceOverridesText: "{invalid" }, draft),
+  true,
+  "invalid raw Source Overrides must stay dirty",
+);
+assert.equal(
+  isSourceEditDraftDirty(
+    {
+      ...draft,
+      configEntries: [
+        { id: "a", key: "boardSlug", value: "acme" },
+        { id: "b", key: "boardSlug", value: "duplicate" },
+      ],
+    },
+    draft,
+  ),
+  true,
+  "duplicate raw Source Config rows must stay dirty",
+);
+assert.deepEqual(
+  sourceEditDraftSnapshot({
+    ...draft,
+    configEntries: [
+      { id: "new-id", key: "boardSlug", value: "acme", locked: false },
+    ],
+  }),
+  sourceEditDraftSnapshot(draft),
+  "Edit snapshot must ignore Source Config entry metadata",
+);
+const revertedDraft = {
+  ...draft,
+  name: "Changed and reverted",
+  configEntries: [{ id: "temporary", key: "boardSlug", value: "other" }],
+};
+assert.equal(isSourceEditDraftDirty(revertedDraft, draft), true);
+assert.equal(
+  isSourceEditDraftDirty(
+    {
+      ...revertedDraft,
+      name: draft.name,
+      configEntries: [
+        { id: "replacement", key: "boardSlug", value: "acme", locked: false },
+      ],
+    },
+    draft,
+  ),
+  false,
+  "fully reverting Edit values must restore a clean draft",
+);
 assert.equal(
   draft.sourceOverridesText,
   JSON.stringify(source.document.sourceOverrides, null, 2),

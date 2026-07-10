@@ -28,6 +28,7 @@ import {
   SourceStatusField,
 } from "@/features/sources/source-form/source-form-fields";
 import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
+import { DiscardSourceChangesDialog } from "@/features/sources/source-form/discard-source-changes-dialog";
 import { SourceOverridesEditor } from "@/features/sources/source-form/source-overrides-editor";
 import type {
   RegistrySource,
@@ -63,13 +64,16 @@ export function SourceEditDrawer({
   });
 
   return (
-    <Drawer
-      open={open}
-      onOpenChange={actions.handleOpenChange}
-      direction="right"
-      handleOnly
-    >
-      {source ? (
+    <>
+      <Drawer
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) actions.requestClose();
+        }}
+        direction="right"
+        handleOnly
+      >
+        {source ? (
         <DrawerContent
           ref={setDrawerContentElement}
           className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)] data-[vaul-drawer-direction=right]:sm:max-w-none"
@@ -85,7 +89,7 @@ export function SourceEditDrawer({
               variant="ghost"
               size="icon-sm"
               className="absolute top-5 right-5"
-              onClick={() => actions.handleOpenChange(false)}
+              onClick={actions.requestClose}
               disabled={state.saving}
             >
               <XIcon aria-hidden="true" />
@@ -176,7 +180,7 @@ export function SourceEditDrawer({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => actions.handleOpenChange(false)}
+                onClick={actions.requestClose}
                 disabled={state.saving}
               >
                 Abbrechen
@@ -196,8 +200,15 @@ export function SourceEditDrawer({
             </div>
           </DrawerFooter>
         </DrawerContent>
-      ) : null}
-    </Drawer>
+        ) : null}
+      </Drawer>
+      <DiscardSourceChangesDialog
+        open={state.discardDialogOpen}
+        portalContainer={drawerContentElement}
+        onCancel={actions.cancelDiscard}
+        onConfirm={actions.confirmDiscard}
+      />
+    </>
   );
 }
 

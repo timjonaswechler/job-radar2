@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import { sourceOverridesStarterForAccessPath } from "@/features/sources/source-form/source-overrides";
+import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsaved-source-changes";
 import {
   createSource,
   detectSourceProposalFromUrl,
@@ -21,6 +22,7 @@ import {
 import {
   buildCreatedSourceDocument,
   detectedSourceFromProposal,
+  isSourceCreateDraftDirty,
   emptySourceCreateForm,
   sourceCreateDraftAfterAccessPathChange,
   sourceCreateDraftAfterDetectedSource,
@@ -35,6 +37,7 @@ import {
 type UseSourceCreateProps = {
   profiles: RegistrySourceProfile[];
   sources: RegistrySource[];
+  open: boolean;
   onCreated?: () => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
 };
@@ -42,6 +45,7 @@ type UseSourceCreateProps = {
 export function useSourceCreate({
   profiles,
   sources,
+  open,
   onCreated,
   onOpenChange,
 }: UseSourceCreateProps) {
@@ -119,9 +123,20 @@ export function useSourceCreate({
   );
 
   const asyncActionPending = saving || detecting;
+  const isDirty = useMemo(
+    () =>
+      isSourceCreateDraftDirty({
+        url,
+        form,
+        configEntries,
+        sourceOverridesText,
+      }),
+    [configEntries, form, sourceOverridesText, url],
+  );
 
-  const resetDrawer = () => {
+  const resetDrawer = useCallback(() => {
     setUrl("");
+    setDetecting(false);
     setDetectionResult(null);
     setDetectionError(null);
     setForm(emptySourceCreateForm);
@@ -131,14 +146,16 @@ export function useSourceCreate({
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
-  };
+  }, []);
 
-  const handleOpenChange = (nextOpen: boolean, force = false) => {
-    if (!nextOpen && asyncActionPending && !force) return;
-
-    if (!nextOpen) resetDrawer();
-    onOpenChange(nextOpen);
-  };
+  const closeDrawer = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const unsavedChanges = useUnsavedSourceChanges({
+    open,
+    isDirty,
+    discardBlocked: asyncActionPending,
+    onReset: resetDrawer,
+    onClose: closeDrawer,
+  });
 
   const updateName = (name: string) => {
     setForm((current) =>
@@ -292,7 +309,7 @@ export function useSourceCreate({
         );
       }
       toast.success("Quelle wurde als Custom-Registry-Dokument gespeichert.");
-      handleOpenChange(false, true);
+      unsavedChanges.forceCloseAfterSave();
     } catch (error) {
       toast.error("Quelle konnte nicht gespeichert werden.", {
         description: errorMessage(error),
@@ -315,6 +332,8 @@ export function useSourceCreate({
       saveAttempted,
       saving,
       asyncActionPending,
+      isDirty: unsavedChanges.isDirty,
+      discardDialogOpen: unsavedChanges.discardDialogOpen,
     },
     data: {
       availableAccessPaths,
@@ -327,7 +346,9 @@ export function useSourceCreate({
       setUrl,
       setConfigEntries,
       setSourceOverridesText,
-      handleOpenChange,
+      requestClose: unsavedChanges.requestClose,
+      confirmDiscard: unsavedChanges.confirmDiscard,
+      cancelDiscard: unsavedChanges.cancelDiscard,
       updateName,
       updateKey,
       updateStatus,

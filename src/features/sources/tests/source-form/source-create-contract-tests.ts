@@ -8,9 +8,11 @@ import {
   sourceCreateDraftAfterDetectedSource,
   sourceCreateDraftAfterDetectionResult,
   sourceCreateDraftAfterProfileChange,
+  sourceCreateDraftSnapshot,
   sourceCreateFormAfterKeyChange,
   sourceCreateFormAfterNameChange,
   type SourceCreateDraftState,
+  isSourceCreateDraftDirty,
 } from "@/features/sources/create/source/source-create-model";
 import { sourceDetectionOutcomeCopy } from "@/features/sources/create/source/source-detection-panel";
 import {
@@ -331,6 +333,128 @@ for (const searchRequestCriterion of [
     false,
   );
 }
+
+const cleanCreateDraft = {
+  url: "",
+  form: emptySourceCreateForm,
+  configEntries: [] as SourceConfigEntry[],
+  sourceOverridesText: "",
+};
+assert.equal(isSourceCreateDraftDirty(cleanCreateDraft), false);
+
+for (const [field, changedDraft] of [
+  ["Detection URL", { ...cleanCreateDraft, url: "https://example.test/jobs" }],
+  [
+    "name",
+    { ...cleanCreateDraft, form: { ...emptySourceCreateForm, name: "ACME" } },
+  ],
+  ["key", { ...cleanCreateDraft, form: { ...emptySourceCreateForm, key: "acme" } }],
+  [
+    "status",
+    { ...cleanCreateDraft, form: { ...emptySourceCreateForm, status: "active" as const } },
+  ],
+  [
+    "Source Profile",
+    {
+      ...cleanCreateDraft,
+      form: { ...emptySourceCreateForm, profileKey: "greenhouse" },
+    },
+  ],
+  [
+    "Selected Access Path",
+    {
+      ...cleanCreateDraft,
+      form: { ...emptySourceCreateForm, pathKey: "boards_api" },
+    },
+  ],
+  [
+    "Source Config",
+    {
+      ...cleanCreateDraft,
+      configEntries: [entry("config", "boardSlug", "acme")],
+    },
+  ],
+  [
+    "Source Overrides",
+    { ...cleanCreateDraft, sourceOverridesText: "{\"strategyOverrides\":[]}" },
+  ],
+] as const) {
+  assert.equal(
+    isSourceCreateDraftDirty(changedDraft),
+    true,
+    `${field} must make a Create draft dirty`,
+  );
+}
+
+assert.equal(
+  isSourceCreateDraftDirty({
+    ...cleanCreateDraft,
+    form: explicitlyAppliedProposal.form,
+    configEntries: explicitlyAppliedProposal.configEntries,
+  }),
+  true,
+  "an applied Source Proposal must make the resulting Create draft dirty",
+);
+assert.equal(
+  isSourceCreateDraftDirty({
+    ...cleanCreateDraft,
+    configEntries: [
+      entry("duplicate-a", "boardSlug", "acme"),
+      entry("duplicate-b", "boardSlug", "other"),
+    ],
+  }),
+  true,
+  "duplicate raw Source Config rows must stay dirty",
+);
+assert.equal(
+  isSourceCreateDraftDirty({
+    ...cleanCreateDraft,
+    configEntries: [entry("invalid", "settings", "{invalid")],
+    sourceOverridesText: "{invalid",
+  }),
+  true,
+  "invalid raw values must stay dirty",
+);
+assert.deepEqual(
+  sourceCreateDraftSnapshot({
+    ...cleanCreateDraft,
+    configEntries: [
+      { id: "first", key: "boardSlug", value: "acme", locked: true },
+    ],
+  }),
+  sourceCreateDraftSnapshot({
+    ...cleanCreateDraft,
+    configEntries: [
+      { id: "second", key: "boardSlug", value: "acme", locked: false },
+    ],
+  }),
+  "Create snapshot must ignore Source Config entry metadata",
+);
+const createDraftWithUiState: SourceCreateDraftState = {
+  form: emptySourceCreateForm,
+  keyTouched: true,
+  configEntries: [],
+  sourceOverridesText: "",
+  jsonPreviewOpen: true,
+  saveAttempted: true,
+};
+assert.deepEqual(
+  sourceCreateDraftSnapshot({ url: "", ...createDraftWithUiState }),
+  sourceCreateDraftSnapshot(cleanCreateDraft),
+  "Create snapshot must ignore editor and validation UI state",
+);
+assert.equal(
+  isSourceCreateDraftDirty({
+    ...cleanCreateDraft,
+    url: "https://example.test/jobs",
+  }),
+  true,
+);
+assert.equal(
+  isSourceCreateDraftDirty(cleanCreateDraft),
+  false,
+  "fully reverting Create values must restore a clean draft",
+);
 
 const failedDetectionCopy = sourceDetectionOutcomeCopy({
   status: "failed",

@@ -2,6 +2,7 @@ import "@/features/sources/tests/schema-contract-tests";
 import "@/features/sources/tests/source-form/source-create-contract-tests";
 import "@/features/sources/tests/source-form/source-edit-contract-tests";
 import "@/features/sources/tests/source-form/source-config-contract-tests";
+import "@/features/sources/tests/source-form/unsaved-source-changes-contract-tests";
 import "@/features/sources/tests/source-workspace-contract-tests";
 import "@/features/sources/tests/registry/source-registry-contract-tests";
 import "@/features/sources/tests/registry/profile-registry-contract-tests";

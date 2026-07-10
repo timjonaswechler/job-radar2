@@ -22,6 +22,37 @@ export type SourceEditBuildResult = {
   overridesErrors: string[];
 };
 
+export type SourceEditDraftSnapshot = {
+  name: string;
+  status: SourceStatus;
+  configEntries: Array<{ key: string; value: string }>;
+  sourceOverridesText: string;
+};
+
+export function sourceEditDraftSnapshot({
+  name,
+  status,
+  configEntries,
+  sourceOverridesText,
+}: SourceEditDraftState): SourceEditDraftSnapshot {
+  return {
+    name,
+    status,
+    configEntries: configEntries.map(({ key, value }) => ({ key, value })),
+    sourceOverridesText,
+  };
+}
+
+export function isSourceEditDraftDirty(
+  draft: SourceEditDraftState,
+  baseline: SourceEditDraftState,
+) {
+  return (
+    JSON.stringify(sourceEditDraftSnapshot(draft)) !==
+    JSON.stringify(sourceEditDraftSnapshot(baseline))
+  );
+}
+
 export function sourceEditDraftFromSource({
   source,
   schemaMetadata,

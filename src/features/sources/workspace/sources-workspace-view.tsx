@@ -87,7 +87,6 @@ export function SourcesWorkspaceView() {
     const tab = parseSourcesWorkspaceTab(
       new URLSearchParams({ tab: value }).toString(),
     );
-    setActiveTab(tab);
     updateSourcesWorkspaceTab(tab);
   };
 

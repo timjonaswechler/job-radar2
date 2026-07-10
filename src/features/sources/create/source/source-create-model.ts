@@ -88,6 +88,60 @@ export type SourceCreateDraftDetectionResult = SourceCreateDraftState & {
   appliedDetectedSource: boolean;
 };
 
+export type SourceCreateDraftInput = {
+  url: string;
+  form: SourceCreateFormState;
+  configEntries: readonly SourceConfigEntry[];
+  sourceOverridesText: string;
+};
+
+export type SourceCreateDraftSnapshot = {
+  url: string;
+  name: string;
+  key: string;
+  status: SourceStatus;
+  profileKey: string;
+  pathKey: string;
+  configEntries: Array<{ key: string; value: string }>;
+  sourceOverridesText: string;
+};
+
+const emptySourceCreateDraftSnapshot: SourceCreateDraftSnapshot = {
+  url: "",
+  name: "",
+  key: "",
+  status: "draft",
+  profileKey: "",
+  pathKey: "",
+  configEntries: [],
+  sourceOverridesText: "",
+};
+
+export function sourceCreateDraftSnapshot({
+  url,
+  form,
+  configEntries,
+  sourceOverridesText,
+}: SourceCreateDraftInput): SourceCreateDraftSnapshot {
+  return {
+    url,
+    name: form.name,
+    key: form.key,
+    status: form.status,
+    profileKey: form.profileKey,
+    pathKey: form.pathKey,
+    configEntries: configEntries.map(({ key, value }) => ({ key, value })),
+    sourceOverridesText,
+  };
+}
+
+export function isSourceCreateDraftDirty(draft: SourceCreateDraftInput) {
+  return (
+    JSON.stringify(sourceCreateDraftSnapshot(draft)) !==
+    JSON.stringify(emptySourceCreateDraftSnapshot)
+  );
+}
+
 export function sourceCreateFormAfterNameChange(
   form: SourceCreateFormState,
   keyTouched: boolean,

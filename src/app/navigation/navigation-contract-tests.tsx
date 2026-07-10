@@ -8,7 +8,11 @@ import {
   navigationManifest,
   sidebarNavigationGroups,
 } from "@/app/navigation/navigation-manifest";
-import { isAppPathActive, navigateTo } from "@/app/navigation/path";
+import {
+  isAppPathActive,
+  navigateTo,
+  registerAppNavigationBlocker,
+} from "@/app/navigation/path";
 
 const manifestIds = navigationManifest.map((item) => item.id);
 const manifestPaths: readonly string[] = navigationManifest.map(
@@ -154,6 +158,51 @@ try {
     1,
     "query-only navigation must not reset page scroll",
   );
+
+  let firstBlockerCalls = 0;
+  let secondBlockerCalls = 0;
+  let continueBlockedNavigation: (() => void) | null = null;
+  const cleanupFirstBlocker = registerAppNavigationBlocker(() => {
+    firstBlockerCalls += 1;
+  });
+  const cleanupSecondBlocker = registerAppNavigationBlocker((commit) => {
+    secondBlockerCalls += 1;
+    continueBlockedNavigation = commit;
+  });
+
+  cleanupFirstBlocker();
+  navigateTo("/blocked");
+  assert.equal(firstBlockerCalls, 0);
+  assert.equal(secondBlockerCalls, 1);
+  assert.deepEqual(pushedUrls, ["/sources", "/?tab=profiles#registry"]);
+  assert.equal(routeEvents, 2);
+  assert.equal(scrollCalls, 1);
+
+  assert.ok(continueBlockedNavigation);
+  const commitBlockedNavigation = continueBlockedNavigation as () => void;
+  commitBlockedNavigation();
+  commitBlockedNavigation();
+  assert.deepEqual(pushedUrls, [
+    "/sources",
+    "/?tab=profiles#registry",
+    "/blocked",
+  ]);
+  assert.equal(routeEvents, 3);
+  assert.equal(scrollCalls, 2);
+
+  continueBlockedNavigation = null;
+  navigateTo("/cancelled");
+  assert.equal(secondBlockerCalls, 2);
+  assert.ok(continueBlockedNavigation);
+  assert.equal(pushedUrls.includes("/cancelled"), false);
+  assert.equal(routeEvents, 3);
+  assert.equal(scrollCalls, 2);
+
+  cleanupSecondBlocker();
+  navigateTo("/unblocked");
+  assert.equal(pushedUrls[pushedUrls.length - 1], "/unblocked");
+  assert.equal(routeEvents, 4);
+  assert.equal(scrollCalls, 3);
 
   Object.assign(locationState, {
     href: "tauri://localhost/",

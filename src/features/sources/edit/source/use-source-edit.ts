@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import { sourceOverridesStarterForAccessPath } from "@/features/sources/source-form/source-overrides";
+import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsaved-source-changes";
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import {
   updateSource,
@@ -18,7 +19,9 @@ import {
 
 import {
   buildUpdatedSourceDocument,
+  isSourceEditDraftDirty,
   sourceEditDraftFromSource,
+  type SourceEditDraftState,
 } from "./source-edit-model";
 
 type UseSourceEditProps = {
@@ -70,9 +73,23 @@ export function useSourceEdit({
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const sessionSourceKeyRef = useRef<string | null>(
+    open ? (source?.document.key ?? null) : null,
+  );
+  const baselineDraftRef = useRef<SourceEditDraftState | null>(
+    open ? initialDraft : null,
+  );
 
   useEffect(() => {
-    if (!open || !initialDraft) return;
+    if (!open) {
+      sessionSourceKeyRef.current = null;
+      return;
+    }
+    if (!source || !initialDraft) return;
+    if (sessionSourceKeyRef.current === source.document.key) return;
+
+    sessionSourceKeyRef.current = source.document.key;
+    baselineDraftRef.current = initialDraft;
     setName(initialDraft.name);
     setStatus(initialDraft.status);
     setConfigEntries(initialDraft.configEntries);
@@ -80,7 +97,7 @@ export function useSourceEdit({
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
-  }, [initialDraft, open]);
+  }, [initialDraft, open, source]);
 
   const buildResult = useMemo(
     () =>
@@ -110,11 +127,35 @@ export function useSourceEdit({
   const editable = source?.origin === "custom";
   const supportsProfileOverrides =
     source?.document.selectedAccessPath.type === "profile_access_path";
+  const currentDraft = useMemo<SourceEditDraftState>(
+    () => ({ name, status, configEntries, sourceOverridesText }),
+    [configEntries, name, sourceOverridesText, status],
+  );
+  const isDirty = baselineDraftRef.current
+    ? isSourceEditDraftDirty(currentDraft, baselineDraftRef.current)
+    : false;
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && saving) return;
-    onOpenChange(nextOpen);
-  };
+  const resetDrawer = useCallback(() => {
+    const baselineDraft = baselineDraftRef.current;
+    if (baselineDraft) {
+      setName(baselineDraft.name);
+      setStatus(baselineDraft.status);
+      setConfigEntries(baselineDraft.configEntries);
+      setSourceOverridesText(baselineDraft.sourceOverridesText);
+    }
+    setJsonPreviewOpen(false);
+    setSaveAttempted(false);
+    setSaving(false);
+  }, []);
+
+  const closeDrawer = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const unsavedChanges = useUnsavedSourceChanges({
+    open,
+    isDirty,
+    discardBlocked: saving,
+    onReset: resetDrawer,
+    onClose: closeDrawer,
+  });
 
   const handlePreviewToggle = () => {
     if (!buildResult.document) {
@@ -146,7 +187,7 @@ export function useSourceEdit({
         );
       }
       toast.success("Quelle wurde aktualisiert.");
-      onOpenChange(false);
+      unsavedChanges.forceCloseAfterSave();
     } catch (error) {
       toast.error("Quelle konnte nicht aktualisiert werden.", {
         description: errorMessage(error),
@@ -165,6 +206,8 @@ export function useSourceEdit({
       jsonPreviewOpen,
       saveAttempted,
       saving,
+      isDirty: unsavedChanges.isDirty,
+      discardDialogOpen: unsavedChanges.discardDialogOpen,
     },
     data: {
       schemaMetadata,
@@ -179,7 +222,9 @@ export function useSourceEdit({
       setStatus,
       setConfigEntries,
       setSourceOverridesText,
-      handleOpenChange,
+      requestClose: unsavedChanges.requestClose,
+      confirmDiscard: unsavedChanges.confirmDiscard,
+      cancelDiscard: unsavedChanges.cancelDiscard,
       handlePreviewToggle,
       handleSave,
     },
