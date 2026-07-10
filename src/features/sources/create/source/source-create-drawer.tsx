@@ -14,18 +14,19 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  SourceAccessPathFields,
-  SourceDetectionUrlField,
-  SourceIdentityFields,
-} from "@/features/sources/add/source/source-add-form-sections";
-import { SourceConfigEditor } from "@/features/sources/add/source/source-config-editor";
-import { useSourceAddController } from "@/features/sources/add/source/source-add-controller";
-import { SourceOverridesEditor } from "@/features/sources/add/source/source-overrides-editor";
-import { SourceDetectionPanel } from "@/features/sources/add/source/source-detection-panel";
+import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
+import { SourceOverridesEditor } from "@/features/sources/source-form/source-overrides-editor";
 import type { RegistrySource, RegistrySourceProfile } from "@/lib/api/sources";
 
-type SourceAddDrawerProps = {
+import {
+  SourceAccessPathFields,
+  SourceCreateIdentityFields,
+  SourceDetectionUrlField,
+} from "./source-create-fields";
+import { SourceDetectionPanel } from "./source-detection-panel";
+import { useSourceCreate } from "./use-source-create";
+
+type SourceCreateDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profiles: RegistrySourceProfile[];
@@ -33,16 +34,16 @@ type SourceAddDrawerProps = {
   onCreated?: () => Promise<unknown> | unknown;
 };
 
-export function SourceAddDrawer({
+export function SourceCreateDrawer({
   open,
   onOpenChange,
   profiles,
   sources,
   onCreated,
-}: SourceAddDrawerProps) {
+}: SourceCreateDrawerProps) {
   const [drawerContentElement, setDrawerContentElement] =
     useState<HTMLDivElement | null>(null);
-  const { state, data, actions } = useSourceAddController({
+  const { state, data, actions } = useSourceCreate({
     profiles,
     sources,
     onCreated,
@@ -58,8 +59,7 @@ export function SourceAddDrawer({
     >
       <DrawerContent
         ref={setDrawerContentElement}
-        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)]
-    data-[vaul-drawer-direction=right]:sm:max-w-none"
+        className="h-full data-[vaul-drawer-direction=right]:w-[min(calc(100vw-115px),960px)] data-[vaul-drawer-direction=right]:sm:max-w-none"
       >
         <DrawerHeader className="border-b pr-12">
           <DrawerTitle>Quelle hinzufügen</DrawerTitle>
@@ -98,7 +98,7 @@ export function SourceAddDrawer({
               onApplyProposal={actions.applyProposal}
             />
 
-            <SourceIdentityFields
+            <SourceCreateIdentityFields
               form={state.form}
               saveAttempted={state.saveAttempted}
               saving={state.saving}

@@ -5,10 +5,7 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
-import {
-  sourceOverridesFromText,
-  type SourceBuildResult,
-} from "@/features/sources/add/source/source-add-model";
+import { sourceOverridesFromText } from "@/features/sources/source-form/source-overrides";
 import type { RegistrySource, SourceDocument, SourceStatus } from "@/lib/api/sources";
 
 export type SourceEditDraftState = {
@@ -16,8 +13,13 @@ export type SourceEditDraftState = {
   status: SourceStatus;
   configEntries: SourceConfigEntry[];
   sourceOverridesText: string;
-  jsonPreviewOpen: boolean;
-  saveAttempted: boolean;
+};
+
+export type SourceEditBuildResult = {
+  document: SourceDocument | null;
+  errors: string[];
+  configErrors: string[];
+  overridesErrors: string[];
 };
 
 export function sourceEditDraftFromSource({
@@ -47,8 +49,6 @@ export function sourceEditDraftFromSource({
       source.document.sourceOverrides === undefined
         ? ""
         : JSON.stringify(source.document.sourceOverrides, null, 2),
-    jsonPreviewOpen: false,
-    saveAttempted: false,
   };
 }
 
@@ -66,7 +66,7 @@ export function buildUpdatedSourceDocument({
   configEntries: SourceConfigEntry[];
   sourceOverridesText: string;
   schemaMetadata: SchemaMetadata;
-}): SourceBuildResult {
+}): SourceEditBuildResult {
   const errors: string[] = [];
 
   if (!name.trim()) errors.push("Name fehlt.");

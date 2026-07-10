@@ -37,8 +37,8 @@ export function SourceProfileTemplateDrawer({
         <DrawerHeader className="border-b pr-12">
           <DrawerTitle>{title}</DrawerTitle>
           <DrawerDescription>
-            Add legt keinen DB-Datensatz an. Erstelle stattdessen ein
-            Registry-JSON-Dokument mit passendem Dateinamen im App-Data-Ordner.
+            Dieser Workflow legt keinen DB-Datensatz an. Erstelle stattdessen
+            ein Registry-JSON-Dokument mit passendem Dateinamen im App-Data-Ordner.
           </DrawerDescription>
           <Button
             type="button"

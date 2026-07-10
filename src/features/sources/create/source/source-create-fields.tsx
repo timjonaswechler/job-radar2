@@ -29,16 +29,20 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { profileKindLabels } from "@/features/sources/labels";
 import {
-  accessPathDisplayName,
-  sourceKeyPattern,
-  type SourceFormState,
-} from "@/features/sources/add/source/source-add-model";
-import { sourceStatusOptions } from "@/features/sources/status";
+  SourceNameField,
+  SourceStatusField,
+} from "@/features/sources/source-form/source-form-fields";
 import type {
   ProfileAccessPathDefinition,
   RegistrySourceProfile,
   SourceStatus,
 } from "@/lib/api/sources";
+
+import {
+  accessPathDisplayName,
+  sourceKeyPattern,
+  type SourceCreateFormState,
+} from "./source-create-model";
 
 type SourceDetectionUrlFieldProps = {
   url: string;
@@ -102,8 +106,8 @@ export function SourceDetectionUrlField({
   );
 }
 
-type SourceIdentityFieldsProps = {
-  form: SourceFormState;
+type SourceCreateIdentityFieldsProps = {
+  form: SourceCreateFormState;
   saveAttempted: boolean;
   saving: boolean;
   selectPortalContainer?: HTMLElement | null;
@@ -112,7 +116,7 @@ type SourceIdentityFieldsProps = {
   onStatusChange: (status: SourceStatus) => void;
 };
 
-export function SourceIdentityFields({
+export function SourceCreateIdentityFields({
   form,
   saveAttempted,
   saving,
@@ -120,44 +124,31 @@ export function SourceIdentityFields({
   onNameChange,
   onKeyChange,
   onStatusChange,
-}: SourceIdentityFieldsProps) {
+}: SourceCreateIdentityFieldsProps) {
+  const keyInvalid = saveAttempted && (!form.key || !sourceKeyPattern.test(form.key));
+
   return (
     <FieldSet>
       <FieldLegend>Quelle</FieldLegend>
       <FieldGroup>
-        <Field data-invalid={saveAttempted && !form.name.trim() ? true : undefined}>
-          <FieldLabel htmlFor="source-name">Name</FieldLabel>
-          <Input
-            id="source-name"
-            value={form.name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Example Company"
-            aria-invalid={saveAttempted && !form.name.trim() ? true : undefined}
-            disabled={saving}
-          />
-          <FieldDescription>
-            Sichtbarer Name der Quelle in Listen und Suchläufen.
-          </FieldDescription>
-        </Field>
+        <SourceNameField
+          id="source-create-name"
+          name={form.name}
+          description="Sichtbarer Name der Quelle in Listen und Suchläufen."
+          placeholder="Example Company"
+          invalid={saveAttempted && !form.name.trim()}
+          disabled={saving}
+          onChange={onNameChange}
+        />
 
-        <Field
-          data-invalid={
-            saveAttempted && (!form.key || !sourceKeyPattern.test(form.key))
-              ? true
-              : undefined
-          }
-        >
-          <FieldLabel htmlFor="source-key">Key</FieldLabel>
+        <Field data-invalid={keyInvalid || undefined} data-disabled={saving || undefined}>
+          <FieldLabel htmlFor="source-create-key">Key</FieldLabel>
           <Input
-            id="source-key"
+            id="source-create-key"
             value={form.key}
             onChange={(event) => onKeyChange(event.target.value)}
             placeholder="example_company"
-            aria-invalid={
-              saveAttempted && (!form.key || !sourceKeyPattern.test(form.key))
-                ? true
-                : undefined
-            }
+            aria-invalid={keyInvalid || undefined}
             disabled={saving}
           />
           <FieldDescription>
@@ -166,49 +157,20 @@ export function SourceIdentityFields({
           </FieldDescription>
         </Field>
 
-        <Field>
-          <FieldLabel>Status</FieldLabel>
-          <Select
-            items={sourceStatusOptions}
-            modal={false}
-            value={form.status}
-            onValueChange={(value) => {
-              if (!value) return;
-              onStatusChange(value as SourceStatus);
-            }}
-          >
-            <SelectTrigger
-              className="w-full"
-              aria-label="Status wählen"
-              data-vaul-no-drag=""
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent
-              alignItemWithTrigger={false}
-              portalContainer={selectPortalContainer}
-              data-vaul-no-drag=""
-            >
-              <SelectGroup>
-                {sourceStatusOptions.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Neue Quellen starten normalerweise als Entwurf, bis du sie geprüft hast.
-          </FieldDescription>
-        </Field>
+        <SourceStatusField
+          status={form.status}
+          description="Neue Quellen starten normalerweise als Entwurf, bis du sie geprüft hast."
+          disabled={saving}
+          selectPortalContainer={selectPortalContainer}
+          onChange={onStatusChange}
+        />
       </FieldGroup>
     </FieldSet>
   );
 }
 
 type SourceAccessPathFieldsProps = {
-  form: SourceFormState;
+  form: SourceCreateFormState;
   profiles: RegistrySourceProfile[];
   availableAccessPaths: ProfileAccessPathDefinition[];
   saveAttempted: boolean;

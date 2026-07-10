@@ -87,7 +87,7 @@ export function sourceConfigFromEntries(
 export function entriesWithSchemaHints(
   entries: SourceConfigEntry[],
   schemaMetadata: SchemaMetadata,
-  createEntryId: () => string = createDefaultEntryId,
+  createEntryId: () => string = createSourceConfigEntryId,
 ): SourceConfigEntry[] {
   const nextEntries = [...entries];
   const existingKeys = new Set(
@@ -115,7 +115,7 @@ export function entriesWithSchemaHints(
 
 export function configEntriesFromJsonObject(
   value: JsonValue,
-  createEntryId: () => string = createDefaultEntryId,
+  createEntryId: () => string = createSourceConfigEntryId,
 ): SourceConfigEntry[] {
   if (!isJsonObject(value)) return [];
   return Object.entries(value).map(([key, entryValue]) => ({
@@ -209,6 +209,6 @@ function convertConfigValue(
   return { ok: true, value: rawValue };
 }
 
-function createDefaultEntryId() {
+export function createSourceConfigEntryId() {
   return crypto.randomUUID();
 }

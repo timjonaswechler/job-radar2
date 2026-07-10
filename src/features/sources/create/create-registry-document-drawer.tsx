@@ -1,13 +1,13 @@
 import { Drawer } from "@/components/ui/drawer";
-import { SourceAddDrawer } from "@/features/sources/add/source/source-add-drawer";
-import { SourceProfileTemplateDrawer } from "@/features/sources/add/source-profile/source-profile-template-drawer";
+import { SourceProfileTemplateDrawer } from "@/features/sources/create/source-profile/source-profile-template-drawer";
+import { SourceCreateDrawer } from "@/features/sources/create/source/source-create-drawer";
 import type {
   RegistrySource,
   RegistrySourceProfile,
   SourceRegistryDocumentKind,
 } from "@/lib/api/sources";
 
-type AddRegistryDocumentDrawerProps = {
+type CreateRegistryDocumentDrawerProps = {
   kind: SourceRegistryDocumentKind | null;
   open: boolean;
   profiles: RegistrySourceProfile[];
@@ -16,21 +16,21 @@ type AddRegistryDocumentDrawerProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function AddRegistryDocumentDrawer({
+export function CreateRegistryDocumentDrawer({
   kind,
   open,
   profiles,
   sources,
   onCreated,
   onOpenChange,
-}: AddRegistryDocumentDrawerProps) {
+}: CreateRegistryDocumentDrawerProps) {
   if (!kind) {
     return <Drawer open={open} onOpenChange={onOpenChange} direction="right" />;
   }
 
   if (kind === "source") {
     return (
-      <SourceAddDrawer
+      <SourceCreateDrawer
         open={open}
         profiles={profiles}
         sources={sources}

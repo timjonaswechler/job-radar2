@@ -1,6 +1,6 @@
-import { isJsonObject } from "@/features/sources/shared/schema-introspection";
 import {
   configEntriesFromJsonObject,
+  createSourceConfigEntryId,
   effectiveSourceConfigSchema,
   entriesWithSchemaHints,
   sourceConfigFromEntries,
@@ -8,6 +8,7 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
+import { sourceOverridesFromText } from "@/features/sources/source-form/source-overrides";
 import type {
   JsonValue,
   ProfileAccessPathDefinition,
@@ -20,7 +21,7 @@ import type {
 
 export const sourceKeyPattern = /^[a-z0-9_]+$/;
 
-export const emptySourceForm: SourceFormState = {
+export const emptySourceCreateForm: SourceCreateFormState = {
   name: "",
   key: "",
   status: "draft",
@@ -28,7 +29,7 @@ export const emptySourceForm: SourceFormState = {
   pathKey: "",
 };
 
-export type SourceFormState = {
+export type SourceCreateFormState = {
   name: string;
   key: string;
   status: SourceStatus;
@@ -36,7 +37,7 @@ export type SourceFormState = {
   pathKey: string;
 };
 
-export type SourceBuildResult = {
+export type SourceCreateBuildResult = {
   document: SourceDocument | null;
   errors: string[];
   configErrors: string[];
@@ -74,8 +75,8 @@ export function detectedSourceFromProposal(
   };
 }
 
-export type SourceAddDraftState = {
-  form: SourceFormState;
+export type SourceCreateDraftState = {
+  form: SourceCreateFormState;
   keyTouched: boolean;
   configEntries: SourceConfigEntry[];
   sourceOverridesText: string;
@@ -83,15 +84,15 @@ export type SourceAddDraftState = {
   saveAttempted: boolean;
 };
 
-export type SourceAddDraftDetectionResult = SourceAddDraftState & {
+export type SourceCreateDraftDetectionResult = SourceCreateDraftState & {
   appliedDetectedSource: boolean;
 };
 
-export function sourceFormAfterNameChange(
-  form: SourceFormState,
+export function sourceCreateFormAfterNameChange(
+  form: SourceCreateFormState,
   keyTouched: boolean,
   name: string,
-): SourceFormState {
+): SourceCreateFormState {
   return {
     ...form,
     name,
@@ -99,26 +100,26 @@ export function sourceFormAfterNameChange(
   };
 }
 
-export function sourceFormAfterKeyChange(
-  form: SourceFormState,
+export function sourceCreateFormAfterKeyChange(
+  form: SourceCreateFormState,
   key: string,
-): SourceFormState {
+): SourceCreateFormState {
   return { ...form, key: technicalKeyFromText(key) };
 }
 
-export function sourceAddDraftAfterProfileChange({
+export function sourceCreateDraftAfterProfileChange({
   profiles,
   form,
   configEntries,
   profileKey,
-  createConfigEntryId = createEntryId,
+  createConfigEntryId = createSourceConfigEntryId,
 }: {
   profiles: RegistrySourceProfile[];
-  form: SourceFormState;
+  form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
   profileKey: string;
   createConfigEntryId?: () => string;
-}): Pick<SourceAddDraftState, "form" | "configEntries"> {
+}): Pick<SourceCreateDraftState, "form" | "configEntries"> {
   const nextProfile =
     profiles.find((profile) => profile.document.key === profileKey) ?? null;
   const nextPath = nextProfile?.document.accessPaths[0];
@@ -142,19 +143,19 @@ export function sourceAddDraftAfterProfileChange({
   };
 }
 
-export function sourceAddDraftAfterAccessPathChange({
+export function sourceCreateDraftAfterAccessPathChange({
   selectedProfile,
   form,
   configEntries,
   pathKey,
-  createConfigEntryId = createEntryId,
+  createConfigEntryId = createSourceConfigEntryId,
 }: {
   selectedProfile: RegistrySourceProfile | null;
-  form: SourceFormState;
+  form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
   pathKey: string;
   createConfigEntryId?: () => string;
-}): Pick<SourceAddDraftState, "form" | "configEntries"> {
+}): Pick<SourceCreateDraftState, "form" | "configEntries"> {
   const nextPath = selectedProfile?.document.accessPaths.find(
     (accessPath) => accessPath.key === pathKey,
   );
@@ -174,15 +175,15 @@ export function sourceAddDraftAfterAccessPathChange({
   };
 }
 
-export function sourceAddDraftAfterDetectedSource({
+export function sourceCreateDraftAfterDetectedSource({
   profiles,
   detected,
-  createConfigEntryId = createEntryId,
+  createConfigEntryId = createSourceConfigEntryId,
 }: {
   profiles: RegistrySourceProfile[];
   detected: DetectedSourceLike;
   createConfigEntryId?: () => string;
-}): SourceAddDraftState {
+}): SourceCreateDraftState {
   const nextProfile =
     profiles.find((profile) => profile.document.key === detected.profileKey) ??
     null;
@@ -216,24 +217,24 @@ export function sourceAddDraftAfterDetectedSource({
   };
 }
 
-export function sourceAddDraftAfterDetectionResult({
+export function sourceCreateDraftAfterDetectionResult({
   draft,
   profiles,
   result,
   trimmedUrl,
-  createConfigEntryId = createEntryId,
+  createConfigEntryId = createSourceConfigEntryId,
 }: {
-  draft: SourceAddDraftState;
+  draft: SourceCreateDraftState;
   profiles: RegistrySourceProfile[];
   result: SourceProposalDetectionResult;
   trimmedUrl: string;
   createConfigEntryId?: () => string;
-}): SourceAddDraftDetectionResult {
+}): SourceCreateDraftDetectionResult {
   if (result.status === "matched") {
     const detected = detectedSourceFromResult(result);
     if (detected) {
       return {
-        ...sourceAddDraftAfterDetectedSource({
+        ...sourceCreateDraftAfterDetectedSource({
           profiles,
           detected,
           createConfigEntryId,
@@ -263,7 +264,7 @@ export function sourceAddDraftAfterDetectionResult({
   return { ...draft, appliedDetectedSource: false };
 }
 
-export function buildSourceDocument({
+export function buildCreatedSourceDocument({
   form,
   configEntries,
   sourceOverridesText = "",
@@ -272,14 +273,14 @@ export function buildSourceDocument({
   selectedAccessPath,
   schemaMetadata,
 }: {
-  form: SourceFormState;
+  form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
   sourceOverridesText?: string;
   existingSourceKeys: Set<string>;
   selectedProfile: RegistrySourceProfile | null;
   selectedAccessPath: ProfileAccessPathDefinition | null;
   schemaMetadata: SchemaMetadata;
-}): SourceBuildResult {
+}): SourceCreateBuildResult {
   const errors: string[] = [];
 
   if (!form.name.trim()) errors.push("Name fehlt.");
@@ -331,77 +332,6 @@ export function buildSourceDocument({
   };
 }
 
-export function sourceOverridesStarterForAccessPath(
-  accessPath: ProfileAccessPathDefinition | null,
-): string {
-  const target = firstStrategyOverrideTarget(accessPath);
-  return JSON.stringify(
-    {
-      strategyOverrides: [
-        {
-          step: target?.step ?? "postingDiscovery",
-          strategyKey: target?.strategyKey ?? "",
-        },
-      ],
-    },
-    null,
-    2,
-  );
-}
-
-export function sourceOverridesFromText(rawText: string): {
-  value: JsonValue | null;
-  errors: string[];
-} {
-  const trimmed = rawText.trim();
-  if (!trimmed) return { value: null, errors: [] };
-
-  try {
-    const value = JSON.parse(trimmed) as JsonValue;
-    if (!isJsonObject(value)) {
-      return {
-        value: null,
-        errors: ["Source Overrides müssen ein JSON-Objekt sein."],
-      };
-    }
-    return { value, errors: [] };
-  } catch {
-    return {
-      value: null,
-      errors: ["Source Overrides brauchen gültiges JSON."],
-    };
-  }
-}
-
-function firstStrategyOverrideTarget(
-  accessPath: ProfileAccessPathDefinition | null,
-): { step: "postingDiscovery" | "postingDetail"; strategyKey: string } | null {
-  const postingDiscoveryKey = firstStrategyKey(accessPath?.postingDiscovery);
-  if (postingDiscoveryKey) {
-    return { step: "postingDiscovery", strategyKey: postingDiscoveryKey };
-  }
-
-  const postingDetailKey = firstStrategyKey(accessPath?.postingDetail);
-  if (postingDetailKey) {
-    return { step: "postingDetail", strategyKey: postingDetailKey };
-  }
-
-  return null;
-}
-
-function firstStrategyKey(step: JsonValue | undefined): string | null {
-  if (!isJsonObject(step)) return null;
-  const strategies = step.strategies;
-  if (!Array.isArray(strategies)) return null;
-
-  for (const strategy of strategies) {
-    if (!isJsonObject(strategy)) continue;
-    const key = strategy.key;
-    if (typeof key === "string" && key.trim()) return key;
-  }
-  return null;
-}
-
 export function technicalKeyFromText(value: string) {
   return value
     .trim()
@@ -419,12 +349,4 @@ export function technicalKeyFromText(value: string) {
 
 export function accessPathDisplayName(accessPath: ProfileAccessPathDefinition) {
   return accessPath.name ? `${accessPath.name} · ${accessPath.key}` : accessPath.key;
-}
-
-export function createEntryId() {
-  return crypto.randomUUID();
-}
-
-export function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

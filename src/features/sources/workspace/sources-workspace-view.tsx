@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { APP_ROUTE_CHANGE_EVENT } from "@/app/navigation/path";
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AddRegistryDocumentDrawer } from "@/features/sources/add/add-registry-document-drawer";
+import { CreateRegistryDocumentDrawer } from "@/features/sources/create/create-registry-document-drawer";
 import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import { BrowserRuntimeCard } from "@/features/sources/runtime/browser-runtime-card";
@@ -31,7 +31,7 @@ export function SourcesWorkspaceView() {
   const [activeTab, setActiveTab] = useState<SourcesWorkspaceTab>(() =>
     parseSourcesWorkspaceTab(window.location.search),
   );
-  const [addDrawerKind, setAddDrawerKind] =
+  const [createDrawerKind, setCreateDrawerKind] =
     useState<SourceRegistryDocumentKind | null>(null);
   const initialDiagnosticToastShown = useRef(false);
 
@@ -130,7 +130,7 @@ export function SourcesWorkspaceView() {
             profilesByKey={profilesByKey}
             diagnosticIndex={diagnosticIndex}
             loading={loading}
-            onAdd={() => setAddDrawerKind("source")}
+            onAdd={() => setCreateDrawerKind("source")}
             onUpdated={refresh}
           />
         </TabsContent>
@@ -140,7 +140,7 @@ export function SourcesWorkspaceView() {
             profiles={profiles}
             diagnosticIndex={diagnosticIndex}
             loading={loading}
-            onAdd={() => setAddDrawerKind("source_profile")}
+            onAdd={() => setCreateDrawerKind("source_profile")}
           />
         </TabsContent>
 
@@ -157,14 +157,14 @@ export function SourcesWorkspaceView() {
         </TabsContent>
       </Tabs>
 
-      <AddRegistryDocumentDrawer
-        kind={addDrawerKind}
-        open={addDrawerKind !== null}
+      <CreateRegistryDocumentDrawer
+        kind={createDrawerKind}
+        open={createDrawerKind !== null}
         profiles={profiles}
         sources={sources}
         onCreated={refresh}
         onOpenChange={(open) => {
-          if (!open) setAddDrawerKind(null);
+          if (!open) setCreateDrawerKind(null);
         }}
       />
     </div>

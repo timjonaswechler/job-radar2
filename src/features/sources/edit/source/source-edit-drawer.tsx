@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { AlertCircleIcon, Code2Icon, SaveIcon, XIcon } from "lucide-react";
-import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Button } from "@/components/ui/button";
@@ -17,39 +16,26 @@ import {
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { createEntryId } from "@/features/sources/add/source/source-add-model";
-import { SourceConfigEditor } from "@/features/sources/add/source/source-config-editor";
-import { SourceOverridesEditor } from "@/features/sources/add/source/source-overrides-editor";
-import { sourceOverridesStarterForAccessPath } from "@/features/sources/add/source/source-add-model";
 import {
-  buildUpdatedSourceDocument,
-  sourceEditDraftFromSource,
-} from "@/features/sources/edit/source/source-edit-model";
-import { sourceStatusOptions } from "@/features/sources/status";
-import { sourceConfigSchemaMetadata } from "@/features/sources/shared/source-config-schema";
-import { resolveSource } from "@/features/sources/view-model/registry-resolution";
-import {
-  updateSource,
-  type RegistrySource,
-  type RegistrySourceProfile,
-  type SourceStatus,
+  SourceNameField,
+  SourceStatusField,
+} from "@/features/sources/source-form/source-form-fields";
+import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
+import { SourceOverridesEditor } from "@/features/sources/source-form/source-overrides-editor";
+import type {
+  RegistrySource,
+  RegistrySourceProfile,
+  SourceStatus,
 } from "@/lib/api/sources";
+
+import { useSourceEdit } from "./use-source-edit";
 
 type SourceEditDrawerProps = {
   source: RegistrySource | null;
@@ -66,133 +52,20 @@ export function SourceEditDrawer({
   onOpenChange,
   onUpdated,
 }: SourceEditDrawerProps) {
-  const resolution = useMemo(
-    () => (source ? resolveSource(source, profilesByKey) : null),
-    [profilesByKey, source],
-  );
-  const schemaMetadata = useMemo(
-    () =>
-      sourceConfigSchemaMetadata(resolution?.effectiveSourceConfigSchema ?? {}),
-    [resolution?.effectiveSourceConfigSchema],
-  );
-  const initialDraft = useMemo(
-    () =>
-      source
-        ? sourceEditDraftFromSource({
-            source,
-            schemaMetadata,
-            createConfigEntryId: createEntryId,
-          })
-        : null,
-    [schemaMetadata, source],
-  );
-
-  const [name, setName] = useState(initialDraft?.name ?? "");
-  const [status, setStatus] = useState<SourceStatus>(
-    initialDraft?.status ?? "draft",
-  );
-  const [configEntries, setConfigEntries] = useState(
-    initialDraft?.configEntries ?? [],
-  );
-  const [sourceOverridesText, setSourceOverridesText] = useState(
-    initialDraft?.sourceOverridesText ?? "",
-  );
-  const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
-  const [saveAttempted, setSaveAttempted] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [drawerContentElement, setDrawerContentElement] =
     useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open || !initialDraft) return;
-    setName(initialDraft.name);
-    setStatus(initialDraft.status);
-    setConfigEntries(initialDraft.configEntries);
-    setSourceOverridesText(initialDraft.sourceOverridesText);
-    setJsonPreviewOpen(initialDraft.jsonPreviewOpen);
-    setSaveAttempted(initialDraft.saveAttempted);
-    setSaving(false);
-  }, [initialDraft, open]);
-
-  const buildResult = useMemo(
-    () =>
-      source
-        ? buildUpdatedSourceDocument({
-            source,
-            name,
-            status,
-            configEntries,
-            sourceOverridesText,
-            schemaMetadata,
-          })
-        : { document: null, errors: [], configErrors: [], overridesErrors: [] },
-    [configEntries, name, schemaMetadata, source, sourceOverridesText, status],
-  );
-  const previewJson = useMemo(
-    () =>
-      jsonPreviewOpen && buildResult.document
-        ? JSON.stringify(buildResult.document, null, 2)
-        : "",
-    [buildResult.document, jsonPreviewOpen],
-  );
-  const sourceOverridesStarter = useMemo(
-    () =>
-      sourceOverridesStarterForAccessPath(
-        resolution?.profileAccessPath ?? null,
-      ),
-    [resolution?.profileAccessPath],
-  );
-  const editable = source?.origin === "custom";
-  const supportsProfileOverrides =
-    source?.document.selectedAccessPath.type === "profile_access_path";
-
-  const handlePreviewToggle = () => {
-    if (!buildResult.document) {
-      setSaveAttempted(true);
-      setJsonPreviewOpen(false);
-      return;
-    }
-    setJsonPreviewOpen((current) => !current);
-  };
-
-  const handleSave = async () => {
-    if (!source || saving || !editable) return;
-
-    setSaveAttempted(true);
-    if (!buildResult.document) {
-      setJsonPreviewOpen(false);
-      return;
-    }
-
-    try {
-      setSaving(true);
-      await updateSource(buildResult.document);
-      try {
-        await onUpdated?.();
-      } catch (refreshError) {
-        toast.warning(
-          "Quelle gespeichert, Registry konnte aber nicht neu geladen werden.",
-          { description: errorMessage(refreshError) },
-        );
-      }
-      toast.success("Quelle wurde aktualisiert.");
-      onOpenChange(false);
-    } catch (error) {
-      toast.error("Quelle konnte nicht aktualisiert werden.", {
-        description: errorMessage(error),
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const { state, data, actions } = useSourceEdit({
+    source,
+    profilesByKey,
+    open,
+    onOpenChange,
+    onUpdated,
+  });
 
   return (
     <Drawer
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && saving) return;
-        onOpenChange(nextOpen);
-      }}
+      onOpenChange={actions.handleOpenChange}
       direction="right"
       handleOnly
     >
@@ -212,8 +85,8 @@ export function SourceEditDrawer({
               variant="ghost"
               size="icon-sm"
               className="absolute top-5 right-5"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
+              onClick={() => actions.handleOpenChange(false)}
+              disabled={state.saving}
             >
               <XIcon aria-hidden="true" />
               <span className="sr-only">Drawer schließen</span>
@@ -222,7 +95,7 @@ export function SourceEditDrawer({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="flex flex-col gap-5">
-              {!editable ? (
+              {!data.editable ? (
                 <Alert variant="warning">
                   <AlertCircleIcon aria-hidden="true" />
                   <AlertTitle>Eingebaute Source</AlertTitle>
@@ -235,33 +108,33 @@ export function SourceEditDrawer({
 
               <SourceEditIdentityFields
                 sourceKey={source.document.key}
-                name={name}
-                status={status}
-                saveAttempted={saveAttempted}
-                saving={saving || !editable}
+                name={state.name}
+                status={state.status}
+                saveAttempted={state.saveAttempted}
+                disabled={state.saving || !data.editable}
                 selectPortalContainer={drawerContentElement}
-                onNameChange={setName}
-                onStatusChange={setStatus}
+                onNameChange={actions.setName}
+                onStatusChange={actions.setStatus}
               />
 
               <SourceConfigEditor
-                entries={configEntries}
-                schemaMetadata={schemaMetadata}
-                disabled={saving || !editable}
-                configErrors={buildResult.configErrors}
-                showErrors={saveAttempted}
+                entries={state.configEntries}
+                schemaMetadata={data.schemaMetadata}
+                disabled={state.saving || !data.editable}
+                configErrors={data.buildResult.configErrors}
+                showErrors={state.saveAttempted}
                 portalContainer={drawerContentElement}
-                onChange={setConfigEntries}
+                onChange={actions.setConfigEntries}
               />
 
-              {supportsProfileOverrides ? (
+              {data.supportsProfileOverrides ? (
                 <SourceOverridesEditor
-                  value={sourceOverridesText}
-                  disabled={saving || !editable}
-                  starterValue={sourceOverridesStarter}
-                  errors={buildResult.overridesErrors}
-                  showErrors={saveAttempted}
-                  onChange={setSourceOverridesText}
+                  value={state.sourceOverridesText}
+                  disabled={state.saving || !data.editable}
+                  starterValue={data.sourceOverridesStarter}
+                  errors={data.buildResult.overridesErrors}
+                  showErrors={state.saveAttempted}
+                  onChange={actions.setSourceOverridesText}
                 />
               ) : null}
 
@@ -269,15 +142,15 @@ export function SourceEditDrawer({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handlePreviewToggle}
+                  onClick={actions.handlePreviewToggle}
                 >
                   <Code2Icon data-icon="inline-start" aria-hidden="true" />
-                  {jsonPreviewOpen ? "JSON ausblenden" : "JSON ansehen"}
+                  {state.jsonPreviewOpen ? "JSON ausblenden" : "JSON ansehen"}
                 </Button>
-                <Collapsible open={jsonPreviewOpen}>
+                <Collapsible open={state.jsonPreviewOpen}>
                   <CollapsibleContent>
                     <pre className="max-h-96 overflow-auto rounded-md p-3 font-mono text-xs">
-                      {previewJson}
+                      {data.previewJson}
                     </pre>
                   </CollapsibleContent>
                 </Collapsible>
@@ -286,13 +159,13 @@ export function SourceEditDrawer({
           </div>
 
           <DrawerFooter className="border-t">
-            {saveAttempted && buildResult.errors.length ? (
+            {state.saveAttempted && data.buildResult.errors.length ? (
               <Alert variant="destructive">
                 <AlertCircleIcon aria-hidden="true" />
                 <AlertTitle>Quelle noch nicht speicherbar</AlertTitle>
                 <AlertDescription>
                   <ul className="list-inside list-disc">
-                    {buildResult.errors.map((error) => (
+                    {data.buildResult.errors.map((error) => (
                       <li key={error}>{error}</li>
                     ))}
                   </ul>
@@ -303,17 +176,17 @@ export function SourceEditDrawer({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={saving}
+                onClick={() => actions.handleOpenChange(false)}
+                disabled={state.saving}
               >
                 Abbrechen
               </Button>
               <Button
                 type="button"
-                onClick={handleSave}
-                disabled={saving || !editable}
+                onClick={actions.handleSave}
+                disabled={state.saving || !data.editable}
               >
-                {saving ? (
+                {state.saving ? (
                   <Spinner data-icon="inline-start" />
                 ) : (
                   <SaveIcon data-icon="inline-start" aria-hidden="true" />
@@ -333,7 +206,7 @@ type SourceEditIdentityFieldsProps = {
   name: string;
   status: SourceStatus;
   saveAttempted: boolean;
-  saving: boolean;
+  disabled: boolean;
   selectPortalContainer?: HTMLElement | null;
   onNameChange: (name: string) => void;
   onStatusChange: (status: SourceStatus) => void;
@@ -344,7 +217,7 @@ function SourceEditIdentityFields({
   name,
   status,
   saveAttempted,
-  saving,
+  disabled,
   selectPortalContainer,
   onNameChange,
   onStatusChange,
@@ -353,20 +226,14 @@ function SourceEditIdentityFields({
     <FieldSet>
       <FieldLegend>Quelle</FieldLegend>
       <FieldGroup>
-        <Field data-invalid={saveAttempted && !name.trim() ? true : undefined}>
-          <FieldLabel htmlFor="source-edit-name">Name</FieldLabel>
-          <Input
-            id="source-edit-name"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            aria-invalid={saveAttempted && !name.trim() ? true : undefined}
-            disabled={saving}
-          />
-          <FieldDescription>Sichtbarer Name der Quelle.</FieldDescription>
-          {saveAttempted && !name.trim() ? (
-            <FieldError>Name fehlt.</FieldError>
-          ) : null}
-        </Field>
+        <SourceNameField
+          id="source-edit-name"
+          name={name}
+          description="Sichtbarer Name der Quelle."
+          invalid={saveAttempted && !name.trim()}
+          disabled={disabled}
+          onChange={onNameChange}
+        />
 
         <Field data-disabled>
           <FieldLabel htmlFor="source-edit-key">Key</FieldLabel>
@@ -376,47 +243,14 @@ function SourceEditIdentityFields({
           </FieldDescription>
         </Field>
 
-        <Field>
-          <FieldLabel>Status</FieldLabel>
-          <Select
-            items={sourceStatusOptions}
-            modal={false}
-            value={status}
-            onValueChange={(value) => {
-              if (value) onStatusChange(value as SourceStatus);
-            }}
-          >
-            <SelectTrigger
-              className="w-full"
-              aria-label="Status wählen"
-              disabled={saving}
-              data-vaul-no-drag=""
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent
-              alignItemWithTrigger={false}
-              portalContainer={selectPortalContainer}
-              data-vaul-no-drag=""
-            >
-              <SelectGroup>
-                {sourceStatusOptions.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Nur aktive und valide Sources werden in Search Runs ausgeführt.
-          </FieldDescription>
-        </Field>
+        <SourceStatusField
+          status={status}
+          description="Nur aktive und valide Sources werden in Search Runs ausgeführt."
+          disabled={disabled}
+          selectPortalContainer={selectPortalContainer}
+          onChange={onStatusChange}
+        />
       </FieldGroup>
     </FieldSet>
   );
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

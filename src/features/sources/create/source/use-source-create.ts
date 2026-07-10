@@ -3,6 +3,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
+  effectiveSourceConfigSchema,
+  sourceConfigSchemaMetadata,
+  type SourceConfigEntry,
+} from "@/features/sources/shared/source-config-schema";
+import { sourceOverridesStarterForAccessPath } from "@/features/sources/source-form/source-overrides";
+import {
   createSource,
   detectSourceProposalFromUrl,
   type RegistrySource,
@@ -11,47 +17,40 @@ import {
   type SourceProposalDetectionResult,
   type SourceStatus,
 } from "@/lib/api/sources";
-import {
-  effectiveSourceConfigSchema,
-  sourceConfigSchemaMetadata,
-  type SourceConfigEntry,
-} from "@/features/sources/shared/source-config-schema";
 
 import {
-  buildSourceDocument,
+  buildCreatedSourceDocument,
   detectedSourceFromProposal,
-  emptySourceForm,
-  errorMessage,
-  sourceAddDraftAfterAccessPathChange,
-  sourceAddDraftAfterDetectedSource,
-  sourceAddDraftAfterDetectionResult,
-  sourceAddDraftAfterProfileChange,
-  sourceOverridesStarterForAccessPath,
-  sourceFormAfterKeyChange,
-  sourceFormAfterNameChange,
+  emptySourceCreateForm,
+  sourceCreateDraftAfterAccessPathChange,
+  sourceCreateDraftAfterDetectedSource,
+  sourceCreateDraftAfterDetectionResult,
+  sourceCreateDraftAfterProfileChange,
+  sourceCreateFormAfterKeyChange,
+  sourceCreateFormAfterNameChange,
   type DetectedSourceLike,
-  type SourceFormState,
-} from "./source-add-model";
+  type SourceCreateFormState,
+} from "./source-create-model";
 
-type UseSourceAddControllerProps = {
+type UseSourceCreateProps = {
   profiles: RegistrySourceProfile[];
   sources: RegistrySource[];
   onCreated?: () => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
 };
 
-export function useSourceAddController({
+export function useSourceCreate({
   profiles,
   sources,
   onCreated,
   onOpenChange,
-}: UseSourceAddControllerProps) {
+}: UseSourceCreateProps) {
   const [url, setUrl] = useState("");
   const [detecting, setDetecting] = useState(false);
   const [detectionResult, setDetectionResult] =
     useState<SourceProposalDetectionResult | null>(null);
   const [detectionError, setDetectionError] = useState<string | null>(null);
-  const [form, setForm] = useState<SourceFormState>(emptySourceForm);
+  const [form, setForm] = useState<SourceCreateFormState>(emptySourceCreateForm);
   const [keyTouched, setKeyTouched] = useState(false);
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>([]);
   const [sourceOverridesText, setSourceOverridesText] = useState("");
@@ -88,7 +87,7 @@ export function useSourceAddController({
   );
   const buildResult = useMemo(
     () =>
-      buildSourceDocument({
+      buildCreatedSourceDocument({
         form,
         configEntries,
         sourceOverridesText,
@@ -125,7 +124,7 @@ export function useSourceAddController({
     setUrl("");
     setDetectionResult(null);
     setDetectionError(null);
-    setForm(emptySourceForm);
+    setForm(emptySourceCreateForm);
     setKeyTouched(false);
     setConfigEntries([]);
     setSourceOverridesText("");
@@ -137,19 +136,19 @@ export function useSourceAddController({
   const handleOpenChange = (nextOpen: boolean, force = false) => {
     if (!nextOpen && asyncActionPending && !force) return;
 
-    if (!nextOpen) {
-      resetDrawer();
-    }
+    if (!nextOpen) resetDrawer();
     onOpenChange(nextOpen);
   };
 
   const updateName = (name: string) => {
-    setForm((current) => sourceFormAfterNameChange(current, keyTouched, name));
+    setForm((current) =>
+      sourceCreateFormAfterNameChange(current, keyTouched, name),
+    );
   };
 
   const updateKey = (key: string) => {
     setKeyTouched(true);
-    setForm((current) => sourceFormAfterKeyChange(current, key));
+    setForm((current) => sourceCreateFormAfterKeyChange(current, key));
   };
 
   const updateStatus = (status: SourceStatus) => {
@@ -157,7 +156,7 @@ export function useSourceAddController({
   };
 
   const updateProfile = (profileKey: string) => {
-    const nextDraft = sourceAddDraftAfterProfileChange({
+    const nextDraft = sourceCreateDraftAfterProfileChange({
       profiles,
       form,
       configEntries,
@@ -169,7 +168,7 @@ export function useSourceAddController({
   };
 
   const updateAccessPath = (pathKey: string) => {
-    const nextDraft = sourceAddDraftAfterAccessPathChange({
+    const nextDraft = sourceCreateDraftAfterAccessPathChange({
       selectedProfile,
       form,
       configEntries,
@@ -183,7 +182,7 @@ export function useSourceAddController({
   const applyDetectedSource = (detected: DetectedSourceLike) => {
     if (saving || detecting) return;
 
-    const nextDraft = sourceAddDraftAfterDetectedSource({ profiles, detected });
+    const nextDraft = sourceCreateDraftAfterDetectedSource({ profiles, detected });
     setForm(nextDraft.form);
     setKeyTouched(nextDraft.keyTouched);
     setConfigEntries(nextDraft.configEntries);
@@ -217,7 +216,7 @@ export function useSourceAddController({
       setDetectionResult(result);
 
       if (result.status === "matched") {
-        const nextDraft = sourceAddDraftAfterDetectionResult({
+        const nextDraft = sourceCreateDraftAfterDetectionResult({
           draft: {
             form,
             keyTouched,
@@ -241,7 +240,7 @@ export function useSourceAddController({
         }
       } else if (result.status === "unsupported") {
         setConfigEntries((current) =>
-          sourceAddDraftAfterDetectionResult({
+          sourceCreateDraftAfterDetectionResult({
             draft: {
               form,
               keyTouched,
@@ -289,9 +288,7 @@ export function useSourceAddController({
       } catch (refreshError) {
         toast.warning(
           "Quelle gespeichert, Registry konnte aber nicht neu geladen werden.",
-          {
-            description: errorMessage(refreshError),
-          },
+          { description: errorMessage(refreshError) },
         );
       }
       toast.success("Quelle wurde als Custom-Registry-Dokument gespeichert.");
@@ -342,4 +339,8 @@ export function useSourceAddController({
       handleSave,
     },
   };
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
