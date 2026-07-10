@@ -60,16 +60,16 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
             (
                 FetchKey::post_json(
                     discovery_url,
-                    json!({ "appliedFacets": {}, "limit": 2, "offset": 0 }),
+                    json!({ "appliedFacets": {}, "limit": 20, "offset": 0 }),
                 ),
                 read_text("tests/fixtures/workday/posting-discovery-page-0-response.json"),
             ),
             (
                 FetchKey::post_json(
                     discovery_url,
-                    json!({ "appliedFacets": {}, "limit": 2, "offset": 2 }),
+                    json!({ "appliedFacets": {}, "limit": 20, "offset": 20 }),
                 ),
-                read_text("tests/fixtures/workday/posting-discovery-page-2-response.json"),
+                read_text("tests/fixtures/workday/posting-discovery-page-20-response.json"),
             ),
             (
                 FetchKey::get("https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"),
@@ -101,7 +101,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         Some(RequestBody::Json {
             value: serde_json::Map::from_iter([
                 ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(2)),
+                ("limit".to_string(), json!(20)),
                 ("offset".to_string(), json!(0)),
             ])
         })
@@ -111,8 +111,8 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         Some(RequestBody::Json {
             value: serde_json::Map::from_iter([
                 ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(2)),
-                ("offset".to_string(), json!(2)),
+                ("limit".to_string(), json!(20)),
+                ("offset".to_string(), json!(20)),
             ])
         })
     );
@@ -146,6 +146,91 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
     );
     assert_eq!(requests[2].body, None);
+}
+
+#[test]
+fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total_is_zero() {
+    let mut profile_value: Value =
+        serde_json::from_str(&read_text("resources/profiles/workday.json")).unwrap();
+    profile_value["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"]["limits"]
+        ["maxRequests"] = json!(2);
+    let profile: SourceProfileDocument = serde_json::from_value(profile_value).unwrap();
+    let source: SourceDocument = serde_json::from_value(json!({
+        "schemaVersion": 2,
+        "key": "acme_robotics_workday",
+        "name": "Acme Robotics",
+        "status": "active",
+        "sourceConfig": {
+            "workdayHost": "acme.wd3.myworkdayjobs.com",
+            "tenant": "acme",
+            "site": "External"
+        },
+        "selectedAccessPath": {
+            "type": "profile_access_path",
+            "profileKey": "workday",
+            "pathKey": "cxs_api"
+        }
+    }))
+    .unwrap();
+    let compile_result = compile_source_execution_plan(
+        &ProfileCompilerSnapshot {
+            profiles: vec![profile],
+            sources: vec![source],
+        },
+        "acme_robotics_workday",
+    );
+    assert!(compile_result.diagnostics.is_empty());
+    let plan = compile_result.execution_plan.unwrap();
+
+    let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
+    let fetcher = OfflineCxsFetcher::new([
+        (
+            FetchKey::post_json(
+                discovery_url,
+                json!({ "appliedFacets": {}, "limit": 20, "offset": 0 }),
+            ),
+            json!({
+                "total": 373,
+                "jobPostings": [
+                    { "title": "Job 1", "externalPath": "/job/1" },
+                    { "title": "Job 2", "externalPath": "/job/2" }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            FetchKey::post_json(
+                discovery_url,
+                json!({ "appliedFacets": {}, "limit": 20, "offset": 20 }),
+            ),
+            json!({
+                "total": 0,
+                "jobPostings": [
+                    { "title": "Job 3", "externalPath": "/job/3" },
+                    { "title": "Job 4", "externalPath": "/job/4" }
+                ]
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let discovery = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+
+    assert_eq!(discovery.candidates.len(), 4);
+    assert_eq!(fetcher.requests().len(), 2);
+    assert_eq!(discovery.diagnostics.len(), 1);
+    assert_eq!(
+        discovery.diagnostics[0].code,
+        "pagination_max_requests_reached"
+    );
+    assert_eq!(
+        discovery.diagnostics[0].path,
+        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+    );
+    assert_eq!(
+        discovery.diagnostics[0].strategy_key.as_deref(),
+        Some("cxs_jobs_api")
+    );
 }
 
 #[test]

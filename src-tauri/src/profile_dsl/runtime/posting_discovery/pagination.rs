@@ -25,7 +25,9 @@ where
             total_path,
             limits,
         } => {
-            let max_requests = limits.max_requests.unwrap_or(1);
+            let configured_max_requests = limits.max_requests.unwrap_or(1);
+            let (max_requests, constrained_by_execution_budget) =
+                context.posting_discovery_request_limit(configured_max_requests);
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
                 if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
@@ -86,13 +88,15 @@ where
                     break;
                 }
                 if request_index + 1 == max_requests {
-                    diagnostics.push(runtime_warning(
-                        "pagination_max_requests_reached",
-                        "Pagination stopped after reaching maxRequests",
-                        format!("{base_path}/pagination/limits/maxRequests"),
+                    push_request_limit_diagnostic(
+                        &mut diagnostics,
+                        base_path,
                         strategy_key,
-                        json!({ "maxRequests": max_requests, "paginationType": "page" }),
-                    ));
+                        "page",
+                        configured_max_requests,
+                        max_requests,
+                        constrained_by_execution_budget,
+                    );
                 }
             }
             PostingDiscoveryExecutionResult {
@@ -109,8 +113,11 @@ where
             total_path,
             limits,
         } => {
-            let max_requests = limits.max_requests.unwrap_or(1);
+            let configured_max_requests = limits.max_requests.unwrap_or(1);
+            let (max_requests, constrained_by_execution_budget) =
+                context.posting_discovery_request_limit(configured_max_requests);
             let mut candidates = Vec::new();
+            let mut highest_total_count = None;
             for request_index in 0..max_requests {
                 if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
                 {
@@ -161,20 +168,20 @@ where
                 ) {
                     break;
                 }
-                if page_output
-                    .total_count
-                    .is_some_and(|total| offset.saturating_add(*limit) >= total)
-                {
+                highest_total_count = highest_total_count.max(page_output.total_count);
+                if highest_total_count.is_some_and(|total| offset.saturating_add(*limit) >= total) {
                     break;
                 }
                 if request_index + 1 == max_requests {
-                    diagnostics.push(runtime_warning(
-                        "pagination_max_requests_reached",
-                        "Pagination stopped after reaching maxRequests",
-                        format!("{base_path}/pagination/limits/maxRequests"),
+                    push_request_limit_diagnostic(
+                        &mut diagnostics,
+                        base_path,
                         strategy_key,
-                        json!({ "maxRequests": max_requests, "paginationType": "offset_limit" }),
-                    ));
+                        "offset_limit",
+                        configured_max_requests,
+                        max_requests,
+                        constrained_by_execution_budget,
+                    );
                 }
             }
             PostingDiscoveryExecutionResult {
@@ -188,7 +195,9 @@ where
             next_cursor_path,
             limits,
         } => {
-            let max_requests = limits.max_requests.unwrap_or(1);
+            let configured_max_requests = limits.max_requests.unwrap_or(1);
+            let (max_requests, constrained_by_execution_budget) =
+                context.posting_discovery_request_limit(configured_max_requests);
             let mut candidates = Vec::new();
             let mut seen_cursors = HashSet::new();
             let mut cursor = None::<String>;
@@ -254,13 +263,15 @@ where
                     break;
                 }
                 if request_index + 1 == max_requests {
-                    diagnostics.push(runtime_warning(
-                        "pagination_max_requests_reached",
-                        "Pagination stopped after reaching maxRequests",
-                        format!("{base_path}/pagination/limits/maxRequests"),
+                    push_request_limit_diagnostic(
+                        &mut diagnostics,
+                        base_path,
                         strategy_key,
-                        json!({ "maxRequests": max_requests, "paginationType": "cursor" }),
-                    ));
+                        "cursor",
+                        configured_max_requests,
+                        max_requests,
+                        constrained_by_execution_budget,
+                    );
                     break;
                 }
                 cursor = Some(next_cursor);
@@ -279,7 +290,9 @@ where
             let mut candidates = Vec::new();
             let mut queue = VecDeque::from([(None::<String>, 0_u64)]);
             let mut request_count = 0_u64;
-            let max_requests = limits.max_requests.unwrap_or(1);
+            let configured_max_requests = limits.max_requests.unwrap_or(1);
+            let (max_requests, constrained_by_execution_budget) =
+                context.posting_discovery_request_limit(configured_max_requests);
             let max_depth = limits.max_depth.unwrap_or(0);
 
             while let Some((url_override, depth)) = queue.pop_front() {
@@ -288,13 +301,15 @@ where
                     break;
                 }
                 if request_count >= max_requests {
-                    diagnostics.push(runtime_warning(
-                        "pagination_max_requests_reached",
-                        "Sitemap pagination stopped after reaching maxRequests",
-                        format!("{base_path}/pagination/limits/maxRequests"),
+                    push_request_limit_diagnostic(
+                        &mut diagnostics,
+                        base_path,
                         strategy_key,
-                        json!({ "maxRequests": max_requests, "paginationType": "sitemap" }),
-                    ));
+                        "sitemap",
+                        configured_max_requests,
+                        max_requests,
+                        constrained_by_execution_budget,
+                    );
                     break;
                 }
 
@@ -414,6 +429,38 @@ where
                 diagnostics,
             }
         }
+    }
+}
+
+fn push_request_limit_diagnostic(
+    diagnostics: &mut Diagnostics,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    pagination_type: &str,
+    configured_max_requests: u64,
+    effective_max_requests: u64,
+    constrained_by_execution_budget: bool,
+) {
+    if constrained_by_execution_budget {
+        diagnostics.push(runtime_info(
+            "posting_discovery_request_budget_reached",
+            "Posting discovery stopped at the caller execution budget",
+            format!("{base_path}/executionBudget/maxRequestsPerStrategy"),
+            strategy_key,
+            json!({
+                "configuredMaxRequests": configured_max_requests,
+                "effectiveMaxRequests": effective_max_requests,
+                "paginationType": pagination_type
+            }),
+        ));
+    } else {
+        diagnostics.push(runtime_warning(
+            "pagination_max_requests_reached",
+            "Pagination stopped after reaching maxRequests",
+            format!("{base_path}/pagination/limits/maxRequests"),
+            strategy_key,
+            json!({ "maxRequests": effective_max_requests, "paginationType": pagination_type }),
+        ));
     }
 }
 

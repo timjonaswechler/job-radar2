@@ -8,7 +8,8 @@ use job_radar_lib::{
     DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
     PostingDetailFetchResponse, PostingDetailFetcher, PostingDiscoveryFetchError,
     PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    SourceDocument, SourceLiveCheckReportState, SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    RequestBody, SourceDocument, SourceLiveCheckReportState, SourceStatus,
+    SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -118,6 +119,128 @@ fn assert_stale_detail(
         "missing stale detail {kind}/{reason:?}: {:?}",
         freshness.stale_fingerprints
     );
+}
+
+#[test]
+fn source_live_check_applies_a_small_pagination_budget_without_changing_the_profile_plan() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            "https://example.test/jobs.json?page=1",
+            json!({
+                "jobs": [
+                    {
+                        "id": "job-1",
+                        "title": "Senior Rust Engineer",
+                        "url": "https://example.test/jobs/job-1",
+                        "locations": ["Remote"]
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This is a sufficiently detailed job description for live checks.</p>"
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(
+        fetcher.discovery_requested_urls(),
+        vec!["https://example.test/jobs.json?page=1"]
+    );
+    assert_eq!(report.details["discoveryMode"], json!("bounded_smoke"));
+    assert_eq!(report.details["maxPaginationRequestsPerStrategy"], json!(1));
+    let budget_diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")
+        .expect("bounded Source Live Check should report its execution budget");
+    assert_eq!(budget_diagnostic.severity, DiagnosticSeverity::Info);
+    assert_eq!(
+        budget_diagnostic.path,
+        "/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"
+    );
+}
+
+#[test]
+fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_source(
+        temp_dir.path(),
+        &json!({
+            "schemaVersion": 2,
+            "key": "workday_smoke",
+            "name": "Workday Smoke",
+            "status": "draft",
+            "sourceConfig": {
+                "workdayHost": "acme.wd3.myworkdayjobs.com",
+                "tenant": "acme",
+                "site": "External"
+            },
+            "selectedAccessPath": {
+                "type": "profile_access_path",
+                "profileKey": "workday",
+                "pathKey": "cxs_api"
+            }
+        }),
+    );
+    let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
+    let detail_url =
+        "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/job-1";
+    let fetcher = FakeLiveCheckFetcher::new([
+        (
+            discovery_url,
+            json!({
+                "total": 372,
+                "jobPostings": [{
+                    "title": "Senior Rust Engineer",
+                    "externalPath": "/job/Germany-Berlin/job-1",
+                    "locationsText": "Berlin, Germany"
+                }]
+            })
+            .to_string(),
+        ),
+        (
+            detail_url,
+            json!({
+                "jobPostingInfo": {
+                    "jobDescription": "<p>This is a sufficiently detailed Workday job description.</p>"
+                }
+            })
+            .to_string(),
+        ),
+    ]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "workday_smoke", &fetcher).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Passed);
+    let requests = fetcher.discovery_requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url, discovery_url);
+    assert_eq!(
+        requests[0].body,
+        Some(RequestBody::Json {
+            value: serde_json::Map::from_iter([
+                ("appliedFacets".to_string(), json!({})),
+                ("limit".to_string(), json!(20)),
+                ("offset".to_string(), json!(0)),
+            ])
+        })
+    );
+    assert_eq!(fetcher.detail_requested_urls(), vec![detail_url]);
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "posting_discovery_request_budget_reached"
+            && diagnostic.severity == DiagnosticSeverity::Info
+    }));
 }
 
 #[test]
@@ -895,12 +1018,14 @@ impl FakeLiveCheckFetcher {
         }
     }
 
+    fn discovery_requests(&self) -> Vec<PostingDiscoveryFetchRequest> {
+        self.discovery_requests.lock().unwrap().clone()
+    }
+
     fn discovery_requested_urls(&self) -> Vec<String> {
-        self.discovery_requests
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|request| request.url.clone())
+        self.discovery_requests()
+            .into_iter()
+            .map(|request| request.url)
             .collect()
     }
 

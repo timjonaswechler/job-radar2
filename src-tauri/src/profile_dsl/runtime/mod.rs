@@ -10,7 +10,8 @@ pub use browser::{
     UnavailableProfileBrowserClient,
 };
 pub use cancellation::{
-    RuntimeCancellation, RuntimeExecutionContext, RUNTIME_EXECUTION_CANCELLED_CODE,
+    PostingDiscoveryExecutionBudget, RuntimeCancellation, RuntimeExecutionContext,
+    RUNTIME_EXECUTION_CANCELLED_CODE,
 };
 pub use posting_detail::{
     execute_posting_detail, execute_posting_detail_with_clients,

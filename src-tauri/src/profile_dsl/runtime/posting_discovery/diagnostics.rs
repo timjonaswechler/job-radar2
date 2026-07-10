@@ -17,6 +17,23 @@ pub(super) fn runtime_error(
     )
 }
 
+pub(super) fn runtime_info(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    path: impl Into<String>,
+    strategy_key: Option<&str>,
+    details: Value,
+) -> Diagnostic {
+    runtime_diagnostic(
+        code,
+        message,
+        DiagnosticSeverity::Info,
+        path,
+        strategy_key,
+        details,
+    )
+}
+
 pub(super) fn runtime_warning(
     code: impl Into<String>,
     message: impl Into<String>,

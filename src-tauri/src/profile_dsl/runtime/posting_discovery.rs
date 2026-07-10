@@ -54,7 +54,7 @@ mod support;
 mod values;
 
 use acceptance::accept_posting_discovery_result;
-use diagnostics::{runtime_error, runtime_warning};
+use diagnostics::{runtime_error, runtime_info, runtime_warning};
 use document::{parse_response_document, select_items, select_sitemap_url_items};
 use extract::extract_candidate;
 use fetch::{fetch_strategy_document_at_url, fetch_strategy_document_with_query_params};

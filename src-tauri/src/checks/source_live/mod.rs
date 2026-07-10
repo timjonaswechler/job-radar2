@@ -14,10 +14,11 @@ use crate::profile_dsl::diagnostics::{
 use crate::profile_dsl::documents::JsonObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
 use crate::profile_dsl::runtime::{
-    execute_posting_detail_with_clients, execute_posting_discovery_with_clients,
+    execute_posting_detail_with_clients, execute_posting_discovery_with_clients_and_context,
     PostingDetailExecutionResult, PostingDetailFetcher, PostingDetailPostingOccurrence,
-    PostingDiscoveryCandidate, PostingDiscoveryFetcher, ProfileBrowserClient,
-    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
+    PostingDiscoveryCandidate, PostingDiscoveryExecutionBudget, PostingDiscoveryFetcher,
+    ProfileBrowserClient, ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher,
+    RuntimeExecutionContext, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source::validation::derive_source_validation_state;
@@ -38,7 +39,8 @@ pub use activation::{
     check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
 };
 
-pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v1";
+pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
+const SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY: u64 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -195,9 +197,17 @@ where
         if let Some(execution_plan) =
             compile_live_check_execution_plan(&compiler_snapshot, source_key)
         {
-            let discovery_result = tauri::async_runtime::block_on(
-                execute_posting_discovery_with_clients(&execution_plan, discovery_fetcher, browser),
-            );
+            let discovery_context = RuntimeExecutionContext::uncancellable()
+                .with_posting_discovery_budget(PostingDiscoveryExecutionBudget::new(
+                    SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY,
+                ));
+            let discovery_result =
+                tauri::async_runtime::block_on(execute_posting_discovery_with_clients_and_context(
+                    &execution_plan,
+                    discovery_fetcher,
+                    browser,
+                    discovery_context,
+                ));
             let candidate_count = discovery_result.candidates.len();
             let first_acceptable_candidate = discovery_result
                 .candidates
@@ -362,6 +372,14 @@ fn source_live_check_details_placeholders() -> JsonObject {
     details.insert("liveCheckState".to_string(), serde_json::Value::Null);
     details.insert("accessPathKey".to_string(), serde_json::Value::Null);
     details.insert("candidateCount".to_string(), serde_json::Value::Null);
+    details.insert(
+        "discoveryMode".to_string(),
+        serde_json::Value::String("bounded_smoke".to_string()),
+    );
+    details.insert(
+        "maxPaginationRequestsPerStrategy".to_string(),
+        serde_json::json!(SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY),
+    );
     details.insert("detailChecked".to_string(), serde_json::Value::Bool(false));
     details.insert("detailPassed".to_string(), serde_json::Value::Null);
     details

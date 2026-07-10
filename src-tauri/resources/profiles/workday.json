@@ -106,9 +106,9 @@
               "limitParam": "limit",
               "parameterLocation": "json_body",
               "startOffset": 0,
-              "limit": 2,
+              "limit": 20,
               "totalPath": "$.total",
-              "limits": { "maxRequests": 2 }
+              "limits": { "maxRequests": 100 }
             },
             "parse": { "type": "json" },
             "select": {
