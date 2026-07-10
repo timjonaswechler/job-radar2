@@ -70,7 +70,7 @@ export function SourceConfigTable({
               className="hover:bg-transparent"
               title={description}
             >
-              <TableCell className="whitespace-normal p-0 align-top">
+              <TableCell className="whitespace-normal p-0 align-top transition-colors focus-within:bg-accent/30">
                 <ConfigKeyControl
                   entry={entry}
                   index={index}
@@ -81,7 +81,7 @@ export function SourceConfigTable({
                   onChange={(key) => onUpdate(entry.id, { key })}
                 />
               </TableCell>
-              <TableCell className="whitespace-normal p-0 align-top">
+              <TableCell className="whitespace-normal p-0 align-top transition-colors focus-within:bg-accent/30">
                 <ConfigValueControl
                   entry={entry}
                   index={index}

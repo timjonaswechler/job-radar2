@@ -48,7 +48,7 @@ export function ConfigValueControl({
         }}
       >
         <SelectTrigger
-          className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none ring-0 focus:ring-0"
+          className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none"
           aria-label={ariaLabel}
           disabled={disabled}
           data-vaul-no-drag=""
@@ -83,7 +83,7 @@ export function ConfigValueControl({
         }}
       >
         <SelectTrigger
-          className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none ring-0 focus:ring-0"
+          className="h-8 w-full rounded-none border-0 bg-transparent px-2 shadow-none"
           aria-label={ariaLabel}
           disabled={disabled}
           data-vaul-no-drag=""
@@ -115,7 +115,7 @@ export function ConfigValueControl({
         ariaLabel={ariaLabel}
         schema={propertySchema}
         disabled={disabled}
-        textareaClassName="min-h-16 rounded-none border-0 bg-transparent px-2 py-1.5 font-mono shadow-none ring-0 focus-visible:ring-0"
+        textareaClassName="min-h-16 rounded-none border-0 bg-transparent px-2 py-1.5 font-mono shadow-none"
       />
     );
   }
@@ -132,7 +132,7 @@ export function ConfigValueControl({
           ? "number"
           : inputTypeForSchema(entry.key, propertySchema)
       }
-      className="h-8 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0"
+      className="h-8 rounded-none border-0 bg-transparent shadow-none"
     />
   );
 }

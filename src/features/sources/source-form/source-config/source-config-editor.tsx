@@ -56,6 +56,8 @@ export function SourceConfigEditor({
     return {
       key,
       label: schemaTitle(key, schema),
+      description:
+        typeof schema?.description === "string" ? schema.description : undefined,
       required: schemaMetadata.requiredKeys.has(key),
     };
   });
