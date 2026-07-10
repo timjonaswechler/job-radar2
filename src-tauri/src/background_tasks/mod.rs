@@ -105,6 +105,12 @@ pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
 }
 
+impl crate::profile_dsl::runtime::RuntimeCancellation for CancellationToken {
+    fn is_cancelled(&self) -> bool {
+        CancellationToken::is_cancelled(self)
+    }
+}
+
 impl CancellationToken {
     fn new() -> Self {
         Self {
@@ -120,6 +126,7 @@ impl CancellationToken {
         self.cancelled.load(Ordering::SeqCst)
     }
 
+    #[cfg(test)]
     pub async fn cancelled(&self) {
         while !self.is_cancelled() {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;

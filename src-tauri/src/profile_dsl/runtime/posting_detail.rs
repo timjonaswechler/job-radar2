@@ -29,6 +29,10 @@ use super::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
         ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
     },
+    cancellation::{
+        contains_runtime_execution_cancelled, push_runtime_execution_cancelled,
+        RuntimeExecutionContext,
+    },
     transform::{apply_transform_pipeline, normalize_whitespace},
 };
 
@@ -217,6 +221,31 @@ where
     F: PostingDetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
+    execute_posting_detail_with_clients_and_context(
+        plan,
+        posting,
+        fetcher,
+        browser,
+        RuntimeExecutionContext::uncancellable(),
+    )
+    .await
+}
+
+pub async fn execute_posting_detail_with_clients_and_context<F, B>(
+    plan: &SourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDetailExecutionResult
+where
+    F: PostingDetailFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    if context.is_cancelled() {
+        return cancelled_posting_detail_result("/postingDetail", None);
+    }
+
     let Some(posting_detail) = &plan.posting_detail else {
         return PostingDetailExecutionResult {
             description_text: None,
@@ -253,8 +282,23 @@ where
             strategy_index,
             strategy,
             posting_detail.accept_when.as_ref(),
+            context,
         )
         .await;
+        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
+            || context.is_cancelled()
+        {
+            diagnostics.extend(attempt.result.diagnostics);
+            push_runtime_execution_cancelled(
+                &mut diagnostics,
+                format!("/postingDetail/strategies/{strategy_index}"),
+                Some(&strategy.key),
+            );
+            return PostingDetailExecutionResult {
+                description_text: None,
+                diagnostics,
+            };
+        }
         if attempt.accepted {
             diagnostics.extend(attempt.result.diagnostics);
             return PostingDetailExecutionResult {
@@ -272,6 +316,18 @@ where
         None,
         json!({}),
     ));
+    PostingDetailExecutionResult {
+        description_text: None,
+        diagnostics,
+    }
+}
+
+fn cancelled_posting_detail_result(
+    path: &str,
+    strategy_key: Option<&str>,
+) -> PostingDetailExecutionResult {
+    let mut diagnostics = Vec::new();
+    push_runtime_execution_cancelled(&mut diagnostics, path, strategy_key);
     PostingDetailExecutionResult {
         description_text: None,
         diagnostics,

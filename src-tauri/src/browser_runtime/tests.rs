@@ -285,6 +285,41 @@ fn successful_render_result_survives_session_cleanup_failure() {
 }
 
 #[test]
+fn cancelled_render_does_not_create_browser_session_state() {
+    struct Cancelled;
+
+    impl crate::profile_dsl::runtime::RuntimeCancellation for Cancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let runtime_dir = temp_dir.path().join("browser-runtime");
+    let result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(super::control::render_page_html_with_actions_and_context(
+            &temp_dir.path().join("unused-browser"),
+            &runtime_dir,
+            BrowserRuntimeRenderRequest {
+                url: "https://example.test/jobs".to_string(),
+                timeout_ms: 1_000,
+                waits: Vec::new(),
+                interactions: Vec::new(),
+            },
+            crate::profile_dsl::runtime::RuntimeExecutionContext::with_cancellation(&Cancelled),
+        ));
+
+    assert_eq!(
+        result.unwrap_err().kind,
+        BrowserRuntimeRenderErrorKind::Cancelled
+    );
+    assert!(!runtime_dir.exists());
+}
+
+#[test]
 fn render_failure_is_preserved_after_session_cleanup() {
     let render_error = BrowserRuntimeRenderError::new(
         BrowserRuntimeRenderErrorKind::NavigationFailed,
@@ -298,7 +333,7 @@ fn render_failure_is_preserved_after_session_cleanup() {
 }
 
 #[test]
-fn status_cleans_stale_session_dirs_without_marking_runtime_invalid() {
+fn status_cleans_stale_session_dirs_without_removing_active_sessions() {
     let temp_dir = tempfile::tempdir().unwrap();
     let runtime_dir = temp_dir.path().join("browser-runtime");
     let spec = BrowserRuntimeSpec::for_test("mac-arm64", "1.0.0", "abc123");
@@ -322,11 +357,20 @@ fn status_cleans_stale_session_dirs_without_marking_runtime_invalid() {
     let stale_session_dir = runtime_dir.join(".tmp/session-stale");
     std::fs::create_dir_all(&stale_session_dir).unwrap();
     std::fs::write(stale_session_dir.join("lockfile"), "stale").unwrap();
+    let active_session_dir = runtime_dir.join(".tmp/session-active");
+    std::fs::create_dir_all(&active_session_dir).unwrap();
+    let active_session = super::begin_active_browser_session(&active_session_dir);
 
     let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
 
     assert_eq!(status.status, BrowserRuntimeState::Installed);
     assert!(!stale_session_dir.exists());
+    assert!(active_session_dir.exists());
+
+    drop(active_session);
+    let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
+    assert_eq!(status.status, BrowserRuntimeState::Installed);
+    assert!(!active_session_dir.exists());
 }
 
 fn test_executable_path(runtime_dir: &Path) -> PathBuf {

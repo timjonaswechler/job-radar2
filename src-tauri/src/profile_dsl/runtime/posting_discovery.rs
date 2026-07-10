@@ -36,6 +36,10 @@ use super::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
         ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
     },
+    cancellation::{
+        contains_runtime_execution_cancelled, push_runtime_execution_cancelled,
+        RuntimeExecutionContext,
+    },
     transform::{apply_transform_pipeline, normalize_whitespace},
 };
 
@@ -219,6 +223,29 @@ where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
+    execute_posting_discovery_with_clients_and_context(
+        plan,
+        fetcher,
+        browser,
+        RuntimeExecutionContext::uncancellable(),
+    )
+    .await
+}
+
+pub async fn execute_posting_discovery_with_clients_and_context<F, B>(
+    plan: &SourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDiscoveryExecutionResult
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    if context.is_cancelled() {
+        return cancelled_posting_discovery_result("/postingDiscovery", None);
+    }
+
     if plan.posting_discovery.strategies.is_empty() {
         return PostingDiscoveryExecutionResult {
             candidates: Vec::new(),
@@ -241,8 +268,23 @@ where
             strategy_index,
             strategy,
             plan.posting_discovery.accept_when.as_ref(),
+            context,
         )
         .await;
+        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
+            || context.is_cancelled()
+        {
+            diagnostics.extend(attempt.result.diagnostics);
+            push_runtime_execution_cancelled(
+                &mut diagnostics,
+                format!("/postingDiscovery/strategies/{strategy_index}"),
+                Some(&strategy.key),
+            );
+            return PostingDiscoveryExecutionResult {
+                candidates: Vec::new(),
+                diagnostics,
+            };
+        }
         if attempt.accepted {
             diagnostics.extend(attempt.result.diagnostics);
             return PostingDiscoveryExecutionResult {
@@ -260,6 +302,18 @@ where
         None,
         json!({}),
     ));
+    PostingDiscoveryExecutionResult {
+        candidates: Vec::new(),
+        diagnostics,
+    }
+}
+
+fn cancelled_posting_discovery_result(
+    path: &str,
+    strategy_key: Option<&str>,
+) -> PostingDiscoveryExecutionResult {
+    let mut diagnostics = Vec::new();
+    push_runtime_execution_cancelled(&mut diagnostics, path, strategy_key);
     PostingDiscoveryExecutionResult {
         candidates: Vec::new(),
         diagnostics,

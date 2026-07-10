@@ -232,6 +232,9 @@ fn cleanup_temporary_runtime_dirs(runtime_dir: &Path) -> Result<(), String> {
         let file_name = file_name.to_string_lossy();
         if file_name.starts_with("install-") || file_name.starts_with("session-") {
             let path = entry.path();
+            if file_name.starts_with("session-") && super::is_active_browser_session(&path) {
+                continue;
+            }
             if path.is_dir() {
                 std::fs::remove_dir_all(path).map_err(|error| error.to_string())?;
             } else {

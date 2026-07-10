@@ -2,12 +2,13 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
     compile_source_execution_plan, execute_posting_detail_with_clients,
-    execute_posting_detail_with_fetcher, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PostingDetailFetchError,
-    PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
-    PostingDetailPostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceExecutionPlan,
+    execute_posting_detail_with_clients_and_context, execute_posting_detail_with_fetcher,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, HttpMethod, PostingDetailFetchError, PostingDetailFetchRequest,
+    PostingDetailFetchResponse, PostingDetailFetcher, PostingDetailPostingOccurrence,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileCompilerSnapshot, RequestBody,
+    RuntimeCancellation, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
     SourceProfileDocument,
 };
 use serde_json::{json, Value};
@@ -901,6 +902,49 @@ fn compiled_posting_detail_runtime_reports_fetch_parse_extract_and_missing_conte
         &missing_context.diagnostics[0],
         "runtime_template_context_missing",
     );
+}
+
+#[test]
+fn posting_detail_accepts_the_shared_runtime_cancellation_context() {
+    let plan = compiled_json_posting_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = FakeDetailFetcher::default();
+    let browser = FakeBrowser::new([]);
+    let cancellation = AlwaysCancelled;
+
+    let result = block_on(execute_posting_detail_with_clients_and_context(
+        &plan,
+        &posting,
+        &fetcher,
+        &browser,
+        RuntimeExecutionContext::with_cancellation(&cancellation),
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert!(fetcher.requests().is_empty());
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
+}
+
+struct AlwaysCancelled;
+
+impl RuntimeCancellation for AlwaysCancelled {
+    fn is_cancelled(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Default)]

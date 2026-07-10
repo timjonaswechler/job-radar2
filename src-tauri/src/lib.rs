@@ -45,15 +45,17 @@ pub use profile_dsl::execution_plan::{
 };
 pub use profile_dsl::runtime::{
     execute_posting_detail, execute_posting_detail_with_clients,
-    execute_posting_detail_with_fetcher, execute_posting_discovery,
-    execute_posting_discovery_with_clients, execute_posting_discovery_with_fetcher,
+    execute_posting_detail_with_clients_and_context, execute_posting_detail_with_fetcher,
+    execute_posting_discovery, execute_posting_discovery_with_clients,
+    execute_posting_discovery_with_clients_and_context, execute_posting_discovery_with_fetcher,
     ManagedProfileBrowserClient, PostingDetailExecutionResult, PostingDetailFetchError,
     PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
     PostingDetailPostingOccurrence, PostingDiscoveryCandidate, PostingDiscoveryExecutionResult,
     PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
     PostingDiscoveryFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
     ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
+    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, RuntimeCancellation,
+    RuntimeExecutionContext, UnavailableProfileBrowserClient, RUNTIME_EXECUTION_CANCELLED_CODE,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};

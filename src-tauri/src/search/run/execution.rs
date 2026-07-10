@@ -6,11 +6,9 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_posting_discovery_with_clients, ManagedProfileBrowserClient,
-            PostingDiscoveryCandidate, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
-            PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ProfileBrowserClient,
-            ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-            ProfileBrowserFetchResponse, ReqwestPostingDiscoveryFetcher,
+            execute_posting_discovery_with_clients_and_context, ManagedProfileBrowserClient,
+            PostingDiscoveryCandidate, PostingDiscoveryFetcher, ProfileBrowserClient,
+            ReqwestPostingDiscoveryFetcher, RuntimeExecutionContext,
         },
     },
 };
@@ -121,17 +119,17 @@ where
         return Err(source_execution_cancelled_error(Vec::new()));
     }
 
-    let fetcher = CancellablePostingDiscoveryFetcher {
-        inner: fetcher,
-        cancellation_token: input.cancellation_token,
-    };
-    let browser = CancellableProfileBrowserClient {
-        inner: browser,
-        cancellation_token: input.cancellation_token,
-    };
-    let result =
-        execute_posting_discovery_with_clients(&input.source.execution_plan, &fetcher, &browser)
-            .await;
+    let context = input
+        .cancellation_token
+        .map(|token| RuntimeExecutionContext::with_cancellation(token))
+        .unwrap_or_else(RuntimeExecutionContext::uncancellable);
+    let result = execute_posting_discovery_with_clients_and_context(
+        &input.source.execution_plan,
+        fetcher,
+        browser,
+        context,
+    )
+    .await;
 
     if input
         .cancellation_token
@@ -167,88 +165,6 @@ where
             .collect(),
         diagnostics: result.diagnostics,
     })
-}
-
-struct CancellablePostingDiscoveryFetcher<'a, F: ?Sized> {
-    inner: &'a F,
-    cancellation_token: Option<&'a CancellationToken>,
-}
-
-impl<F> PostingDiscoveryFetcher for CancellablePostingDiscoveryFetcher<'_, F>
-where
-    F: PostingDiscoveryFetcher + Sync + ?Sized,
-{
-    fn fetch<'a>(
-        &'a self,
-        request: PostingDiscoveryFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            let Some(cancellation_token) = self.cancellation_token else {
-                return self.inner.fetch(request).await;
-            };
-            if cancellation_token.is_cancelled() {
-                return Err(posting_discovery_cancelled_fetch_error());
-            }
-
-            tokio::select! {
-                result = self.inner.fetch(request) => result,
-                _ = cancellation_token.cancelled() => Err(posting_discovery_cancelled_fetch_error()),
-            }
-        })
-    }
-}
-
-struct CancellableProfileBrowserClient<'a, B: ?Sized> {
-    inner: &'a B,
-    cancellation_token: Option<&'a CancellationToken>,
-}
-
-impl<B> ProfileBrowserClient for CancellableProfileBrowserClient<'_, B>
-where
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    fn render<'a>(
-        &'a self,
-        request: ProfileBrowserFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            let Some(cancellation_token) = self.cancellation_token else {
-                return self.inner.render(request).await;
-            };
-            if cancellation_token.is_cancelled() {
-                return Err(profile_browser_cancelled_fetch_error());
-            }
-
-            let result = self.inner.render(request).await;
-            if cancellation_token.is_cancelled() {
-                return Err(profile_browser_cancelled_fetch_error());
-            }
-            result
-        })
-    }
-}
-
-fn posting_discovery_cancelled_fetch_error() -> PostingDiscoveryFetchError {
-    PostingDiscoveryFetchError::new("postingDiscovery cancelled")
-}
-
-fn profile_browser_cancelled_fetch_error() -> ProfileBrowserFetchError {
-    ProfileBrowserFetchError::new(
-        ProfileBrowserFetchErrorKind::RuntimeUnavailable,
-        "postingDiscovery cancelled",
-    )
 }
 
 fn source_execution_cancelled_error(mut diagnostics: Diagnostics) -> SourceExecutionError {

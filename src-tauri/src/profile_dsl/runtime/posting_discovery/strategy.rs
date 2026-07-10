@@ -12,6 +12,7 @@ pub(super) async fn execute_strategy<F, B>(
     strategy_index: usize,
     strategy: &ExecutionPlanPostingDiscoveryStrategy,
     step_acceptance: Option<&Acceptance>,
+    context: RuntimeExecutionContext<'_>,
 ) -> PostingDiscoveryStrategyAttempt
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -31,6 +32,7 @@ where
             &base_path,
             strategy_key.as_deref(),
             diagnostics,
+            context,
         )
         .await;
         let execution_failed = posting_discovery_execution_failed(&result);
@@ -58,6 +60,7 @@ where
         &base_path,
         strategy_key.as_deref(),
         &mut diagnostics,
+        context,
     )
     .await;
 
@@ -134,6 +137,7 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> StrategyFetchOutput
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -150,6 +154,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
+        context,
     )
     .await
     {

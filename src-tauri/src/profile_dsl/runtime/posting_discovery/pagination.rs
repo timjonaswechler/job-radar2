@@ -9,6 +9,7 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     mut diagnostics: Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> PostingDiscoveryExecutionResult
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -27,6 +28,10 @@ where
             let max_requests = limits.max_requests.unwrap_or(1);
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
+                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
+                {
+                    break;
+                }
                 let page = first_page.unwrap_or(1) + request_index;
                 let mut pagination_params = vec![(page_param.as_str(), page.to_string())];
                 if let (Some(page_size_param), Some(page_size)) = (page_size_param, page_size) {
@@ -44,8 +49,19 @@ where
                     base_path,
                     strategy_key,
                     &mut diagnostics,
+                    context,
                 )
                 .await;
+                if contains_runtime_execution_cancelled(&diagnostics)
+                    || stop_pagination_if_cancelled(
+                        context,
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    )
+                {
+                    break;
+                }
                 let page_candidates = page_output.candidates;
                 if page_candidates.is_empty() {
                     break;
@@ -96,6 +112,10 @@ where
             let max_requests = limits.max_requests.unwrap_or(1);
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
+                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
+                {
+                    break;
+                }
                 let offset = start_offset.unwrap_or(0) + request_index * limit;
                 let pagination_params = [
                     (offset_param.as_str(), offset.to_string()),
@@ -113,8 +133,19 @@ where
                     base_path,
                     strategy_key,
                     &mut diagnostics,
+                    context,
                 )
                 .await;
+                if contains_runtime_execution_cancelled(&diagnostics)
+                    || stop_pagination_if_cancelled(
+                        context,
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    )
+                {
+                    break;
+                }
                 let page_candidates = page_output.candidates;
                 if page_candidates.is_empty() {
                     break;
@@ -163,6 +194,10 @@ where
             let mut cursor = None::<String>;
 
             for request_index in 0..max_requests {
+                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
+                {
+                    break;
+                }
                 let pagination_params = cursor
                     .as_ref()
                     .map(|cursor| vec![(cursor_param.as_str(), cursor.clone())])
@@ -179,8 +214,19 @@ where
                     base_path,
                     strategy_key,
                     &mut diagnostics,
+                    context,
                 )
                 .await;
+                if contains_runtime_execution_cancelled(&diagnostics)
+                    || stop_pagination_if_cancelled(
+                        context,
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    )
+                {
+                    break;
+                }
 
                 if append_page_candidates(
                     &mut candidates,
@@ -237,6 +283,10 @@ where
             let max_depth = limits.max_depth.unwrap_or(0);
 
             while let Some((url_override, depth)) = queue.pop_front() {
+                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
+                {
+                    break;
+                }
                 if request_count >= max_requests {
                     diagnostics.push(runtime_warning(
                         "pagination_max_requests_reached",
@@ -260,6 +310,7 @@ where
                             base_path,
                             strategy_key,
                             &mut diagnostics,
+                            context,
                         )
                         .await
                     }
@@ -275,10 +326,21 @@ where
                             base_path,
                             strategy_key,
                             &mut diagnostics,
+                            context,
                         )
                         .await
                     }
                 };
+                if contains_runtime_execution_cancelled(&diagnostics)
+                    || stop_pagination_if_cancelled(
+                        context,
+                        base_path,
+                        strategy_key,
+                        &mut diagnostics,
+                    )
+                {
+                    break;
+                }
                 let Some(response) = response else { break };
                 request_count += 1;
 
@@ -353,6 +415,19 @@ where
             }
         }
     }
+}
+
+fn stop_pagination_if_cancelled(
+    context: RuntimeExecutionContext<'_>,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> bool {
+    if !context.is_cancelled() {
+        return false;
+    }
+    push_runtime_execution_cancelled(diagnostics, format!("{base_path}/pagination"), strategy_key);
+    true
 }
 
 fn append_page_candidates(

@@ -132,6 +132,7 @@ pub enum BrowserRuntimeRenderErrorKind {
     NavigationFailed,
     WaitTimeout { wait_index: Option<usize> },
     InteractionFailed { interaction_index: Option<usize> },
+    Cancelled,
     RenderTimeout,
     ContentReadFailed,
 }

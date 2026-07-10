@@ -307,6 +307,9 @@ fn browser_probe_error_diagnostic(
                 .map(|index| format!("{probe_path}/interactions/{index}"))
                 .unwrap_or_else(|| format!("{probe_path}/interactions")),
         ),
+        ProfileBrowserFetchErrorKind::Cancelled => {
+            ("browser_probe_cancelled", probe_path.to_string())
+        }
         ProfileBrowserFetchErrorKind::RenderTimeout => {
             ("browser_render_timeout", format!("{probe_path}/timeoutMs"))
         }

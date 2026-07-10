@@ -13,9 +13,11 @@ use super::{
     BrowserRuntimeInteraction, BrowserRuntimeRenderError, BrowserRuntimeRenderErrorKind,
     BrowserRuntimeRenderRequest, BrowserRuntimeWait,
 };
+use crate::profile_dsl::runtime::RuntimeExecutionContext;
 
 pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<(), String> {
     let session_dir = runtime_session_dir(runtime_dir);
+    let _active_session = super::begin_active_browser_session(&session_dir);
     tokio::fs::create_dir_all(&session_dir)
         .await
         .map_err(|error| error.to_string())?;
@@ -26,12 +28,15 @@ pub async fn smoke_test(executable_path: &Path, runtime_dir: &Path) -> Result<()
     smoke_result_after_session_cleanup(result, cleanup_result)
 }
 
-pub async fn render_page_html_with_actions(
+pub(crate) async fn render_page_html_with_actions_and_context(
     executable_path: &Path,
     runtime_dir: &Path,
     request: BrowserRuntimeRenderRequest,
+    context: RuntimeExecutionContext<'_>,
 ) -> Result<String, BrowserRuntimeRenderError> {
+    ensure_not_cancelled(context)?;
     let session_dir = runtime_session_dir(runtime_dir);
+    let _active_session = super::begin_active_browser_session(&session_dir);
     tokio::fs::create_dir_all(&session_dir)
         .await
         .map_err(|error| {
@@ -41,7 +46,8 @@ pub async fn render_page_html_with_actions(
             )
         })?;
 
-    let result = render_page_html_with_session(executable_path, &session_dir, request).await;
+    let result =
+        render_page_html_with_session(executable_path, &session_dir, request, context).await;
     let cleanup_result = cleanup_session_dir_best_effort(&session_dir).await;
 
     render_result_after_session_cleanup(result, cleanup_result)
@@ -86,11 +92,36 @@ pub(super) fn render_result_after_session_cleanup(
     result
 }
 
+fn ensure_not_cancelled(
+    context: RuntimeExecutionContext<'_>,
+) -> Result<(), BrowserRuntimeRenderError> {
+    if context.is_cancelled() {
+        Err(BrowserRuntimeRenderError::new(
+            BrowserRuntimeRenderErrorKind::Cancelled,
+            "Managed browser runtime execution cancelled",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+async fn cancellable_sleep(
+    duration: Duration,
+    context: RuntimeExecutionContext<'_>,
+) -> Result<(), BrowserRuntimeRenderError> {
+    ensure_not_cancelled(context)?;
+    tokio::select! {
+        _ = tokio::time::sleep(duration) => Ok(()),
+        _ = context.cancelled() => ensure_not_cancelled(context),
+    }
+}
+
 async fn apply_wait(
     page: &Page,
     url: &str,
     wait: &BrowserRuntimeWait,
     wait_index: usize,
+    context: RuntimeExecutionContext<'_>,
 ) -> Result<(), BrowserRuntimeRenderError> {
     match wait {
         BrowserRuntimeWait::Selector {
@@ -105,17 +136,16 @@ async fn apply_wait(
                     "Managed browser runtime selector wait is missing a selector",
                 )
             })?;
-            wait_for_selector(page, url, selector, *timeout_ms, wait_index).await
+            wait_for_selector(page, url, selector, *timeout_ms, wait_index, context).await
         }
         BrowserRuntimeWait::NetworkIdle {
             selector,
             timeout_ms,
         } => {
             if let Some(selector) = selector {
-                wait_for_selector(page, url, selector, *timeout_ms, wait_index).await?;
+                wait_for_selector(page, url, selector, *timeout_ms, wait_index, context).await?;
             }
-            tokio::time::sleep(Duration::from_millis(*timeout_ms)).await;
-            Ok(())
+            cancellable_sleep(Duration::from_millis(*timeout_ms), context).await
         }
     }
 }
@@ -126,12 +156,16 @@ async fn wait_for_selector(
     selector: &str,
     timeout_ms: u64,
     wait_index: usize,
+    context: RuntimeExecutionContext<'_>,
 ) -> Result<(), BrowserRuntimeRenderError> {
     let timeout = Duration::from_millis(timeout_ms);
     let started_at = tokio::time::Instant::now();
 
     loop {
-        let error = match page.find_element(selector.to_string()).await {
+        ensure_not_cancelled(context)?;
+        let element_result = page.find_element(selector.to_string()).await;
+        ensure_not_cancelled(context)?;
+        let error = match element_result {
             Ok(_) => return Ok(()),
             Err(error) => error.to_string(),
         };
@@ -147,7 +181,7 @@ async fn wait_for_selector(
             ));
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        cancellable_sleep(Duration::from_millis(100), context).await?;
     }
 }
 
@@ -155,6 +189,7 @@ async fn apply_interaction(
     page: &Page,
     interaction: &BrowserRuntimeInteraction,
     interaction_index: usize,
+    context: RuntimeExecutionContext<'_>,
 ) -> Result<(), BrowserRuntimeRenderError> {
     match interaction {
         BrowserRuntimeInteraction::ClickIfVisible {
@@ -163,9 +198,11 @@ async fn apply_interaction(
             wait_after_ms,
         } => {
             for _ in 0..*max_count {
+                ensure_not_cancelled(context)?;
                 let Ok(element) = page.find_element(selector.clone()).await else {
                     return Ok(());
                 };
+                ensure_not_cancelled(context)?;
                 element.click().await.map_err(|error| {
                     BrowserRuntimeRenderError::new(
                         BrowserRuntimeRenderErrorKind::InteractionFailed {
@@ -176,7 +213,8 @@ async fn apply_interaction(
                         ),
                     )
                 })?;
-                sleep_after_interaction(*wait_after_ms).await;
+                ensure_not_cancelled(context)?;
+                sleep_after_interaction(*wait_after_ms, context).await?;
             }
             Ok(())
         }
@@ -186,9 +224,11 @@ async fn apply_interaction(
             wait_after_ms,
         } => {
             for _ in 0..*max_count {
+                ensure_not_cancelled(context)?;
                 let Ok(element) = page.find_element(selector.clone()).await else {
                     return Ok(());
                 };
+                ensure_not_cancelled(context)?;
                 element.click().await.map_err(|error| {
                     BrowserRuntimeRenderError::new(
                         BrowserRuntimeRenderErrorKind::InteractionFailed {
@@ -199,9 +239,11 @@ async fn apply_interaction(
                         ),
                     )
                 })?;
-                sleep_after_interaction(*wait_after_ms).await;
+                ensure_not_cancelled(context)?;
+                sleep_after_interaction(*wait_after_ms, context).await?;
             }
 
+            ensure_not_cancelled(context)?;
             if page.find_element(selector.clone()).await.is_ok() {
                 return Err(BrowserRuntimeRenderError::new(
                     BrowserRuntimeRenderErrorKind::InteractionFailed {
@@ -217,10 +259,14 @@ async fn apply_interaction(
     }
 }
 
-async fn sleep_after_interaction(wait_after_ms: Option<u64>) {
+async fn sleep_after_interaction(
+    wait_after_ms: Option<u64>,
+    context: RuntimeExecutionContext<'_>,
+) -> Result<(), BrowserRuntimeRenderError> {
     if let Some(wait_after_ms) = wait_after_ms {
-        tokio::time::sleep(Duration::from_millis(wait_after_ms)).await;
+        cancellable_sleep(Duration::from_millis(wait_after_ms), context).await?;
     }
+    Ok(())
 }
 
 async fn smoke_test_with_session(executable_path: &Path, session_dir: &Path) -> Result<(), String> {
@@ -246,7 +292,9 @@ async fn render_page_html_with_session(
     executable_path: &Path,
     session_dir: &Path,
     request: BrowserRuntimeRenderRequest,
+    context: RuntimeExecutionContext<'_>,
 ) -> Result<String, BrowserRuntimeRenderError> {
+    ensure_not_cancelled(context)?;
     let (mut browser, handler_task) =
         launch_browser(executable_path, session_dir)
             .await
@@ -260,12 +308,14 @@ async fn render_page_html_with_session(
     let url = request.url.clone();
     let timeout = Duration::from_millis(request.timeout_ms);
     let page_result = match tokio::time::timeout(timeout, async {
+        ensure_not_cancelled(context)?;
         let page = browser.new_page("about:blank").await.map_err(|error| {
             BrowserRuntimeRenderError::new(
                 BrowserRuntimeRenderErrorKind::RuntimeUnavailable,
                 format!("Managed browser runtime page failed: {error}"),
             )
         })?;
+        ensure_not_cancelled(context)?;
         page.goto(&request.url).await.map_err(|error| {
             BrowserRuntimeRenderError::new(
                 BrowserRuntimeRenderErrorKind::NavigationFailed,
@@ -275,16 +325,18 @@ async fn render_page_html_with_session(
                 ),
             )
         })?;
+        ensure_not_cancelled(context)?;
         if request.waits.is_empty() && request.interactions.is_empty() {
-            tokio::time::sleep(Duration::from_millis(1_500)).await;
+            cancellable_sleep(Duration::from_millis(1_500), context).await?;
         }
         for (wait_index, wait) in request.waits.iter().enumerate() {
-            apply_wait(&page, &request.url, wait, wait_index).await?;
+            apply_wait(&page, &request.url, wait, wait_index, context).await?;
         }
         for (interaction_index, interaction) in request.interactions.iter().enumerate() {
-            apply_interaction(&page, interaction, interaction_index).await?;
+            apply_interaction(&page, interaction, interaction_index, context).await?;
         }
-        page.content().await.map_err(|error| {
+        ensure_not_cancelled(context)?;
+        let html = page.content().await.map_err(|error| {
             BrowserRuntimeRenderError::new(
                 BrowserRuntimeRenderErrorKind::ContentReadFailed,
                 format!(
@@ -292,7 +344,9 @@ async fn render_page_html_with_session(
                     request.url
                 ),
             )
-        })
+        })?;
+        ensure_not_cancelled(context)?;
+        Ok(html)
     })
     .await
     {
@@ -303,6 +357,8 @@ async fn render_page_html_with_session(
         )),
     };
 
+    // Cancellation only exits the page operation above. Browser shutdown and session cleanup
+    // remain outside that cancellable operation and always run before returning.
     let close_result = browser.close().await.map(|_| ()).map_err(|error| {
         BrowserRuntimeRenderError::new(
             BrowserRuntimeRenderErrorKind::RuntimeUnavailable,

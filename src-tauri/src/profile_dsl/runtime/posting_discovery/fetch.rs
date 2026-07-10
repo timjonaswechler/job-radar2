@@ -10,6 +10,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -26,6 +27,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
+        context,
     )
     .await
 }
@@ -41,6 +43,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -58,6 +61,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
+        context,
     )
     .await
 }
@@ -72,6 +76,7 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -89,6 +94,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
+        context,
     )
     .await
 }
@@ -105,6 +111,7 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -134,6 +141,7 @@ where
                 base_path,
                 strategy_key,
                 diagnostics,
+                context,
             )
             .await
         }
@@ -156,6 +164,7 @@ where
                 base_path,
                 strategy_key,
                 diagnostics,
+                context,
             )
             .await
         }
@@ -177,6 +186,7 @@ async fn fetch_http_strategy_document<F>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     F: PostingDiscoveryFetcher + Sync + ?Sized,
@@ -245,7 +255,21 @@ where
         timeout_ms,
     };
 
-    match fetcher.fetch(request).await {
+    if context.is_cancelled() {
+        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
+        return None;
+    }
+
+    let result = tokio::select! {
+        result = fetcher.fetch(request) => Some(result),
+        _ = context.cancelled() => None,
+    };
+    let Some(result) = result else {
+        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
+        return None;
+    };
+
+    match result {
         Ok(response) => Some(response),
         Err(error) => {
             diagnostics.push(runtime_error(
@@ -277,6 +301,7 @@ async fn fetch_browser_strategy_document<B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDiscoveryFetchResponse>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -303,7 +328,7 @@ where
         interactions: interactions.to_vec(),
     };
 
-    match browser.render(request).await {
+    match browser.render_with_context(request, context).await {
         Ok(ProfileBrowserFetchResponse { body }) => Some(PostingDiscoveryFetchResponse { body }),
         Err(error) => {
             push_browser_fetch_diagnostic(

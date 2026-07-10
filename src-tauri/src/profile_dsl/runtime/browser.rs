@@ -4,6 +4,8 @@ use crate::profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
 };
 
+use super::cancellation::RuntimeExecutionContext;
+
 pub type BoxedProfileBrowserFuture<'a> = Pin<
     Box<
         dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
@@ -46,12 +48,33 @@ pub enum ProfileBrowserFetchErrorKind {
     NavigationFailed,
     WaitTimeout { wait_index: Option<usize> },
     InteractionFailed { interaction_index: Option<usize> },
+    Cancelled,
     RenderTimeout,
     ContentReadFailed,
 }
 
 pub trait ProfileBrowserClient {
     fn render<'a>(&'a self, request: ProfileBrowserFetchRequest) -> BoxedProfileBrowserFuture<'a>;
+
+    fn render_with_context<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+        context: RuntimeExecutionContext<'a>,
+    ) -> BoxedProfileBrowserFuture<'a>
+    where
+        Self: Sync,
+    {
+        Box::pin(async move {
+            if context.is_cancelled() {
+                return Err(profile_browser_cancelled_error());
+            }
+            let result = self.render(request).await;
+            if context.is_cancelled() {
+                return Err(profile_browser_cancelled_error());
+            }
+            result
+        })
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -83,7 +106,18 @@ impl ManagedProfileBrowserClient {
 
 impl ProfileBrowserClient for ManagedProfileBrowserClient {
     fn render<'a>(&'a self, request: ProfileBrowserFetchRequest) -> BoxedProfileBrowserFuture<'a> {
+        self.render_with_context(request, RuntimeExecutionContext::uncancellable())
+    }
+
+    fn render_with_context<'a>(
+        &'a self,
+        request: ProfileBrowserFetchRequest,
+        context: RuntimeExecutionContext<'a>,
+    ) -> BoxedProfileBrowserFuture<'a> {
         Box::pin(async move {
+            if context.is_cancelled() {
+                return Err(profile_browser_cancelled_error());
+            }
             let spec = crate::browser_runtime::current_runtime_spec();
             let status = crate::browser_runtime::status_for_runtime_dir(
                 &self.runtime_dir,
@@ -111,6 +145,9 @@ impl ProfileBrowserClient for ManagedProfileBrowserClient {
                 )
             })?;
             let executable_path = PathBuf::from(executable_path);
+            if context.is_cancelled() {
+                return Err(profile_browser_cancelled_error());
+            }
             let runtime_request = crate::browser_runtime::BrowserRuntimeRenderRequest {
                 url: request.url,
                 timeout_ms: request.timeout_ms,
@@ -160,16 +197,24 @@ impl ProfileBrowserClient for ManagedProfileBrowserClient {
                     .collect(),
             };
 
-            crate::browser_runtime::render_page_html_with_actions(
+            crate::browser_runtime::render_page_html_with_actions_and_context(
                 &executable_path,
                 &self.runtime_dir,
                 runtime_request,
+                context,
             )
             .await
             .map(|body| ProfileBrowserFetchResponse { body })
             .map_err(map_browser_runtime_error)
         })
     }
+}
+
+fn profile_browser_cancelled_error() -> ProfileBrowserFetchError {
+    ProfileBrowserFetchError::new(
+        ProfileBrowserFetchErrorKind::Cancelled,
+        "Profile DSL browser execution cancelled",
+    )
 }
 
 fn map_browser_runtime_error(
@@ -188,6 +233,9 @@ fn map_browser_runtime_error(
         crate::browser_runtime::BrowserRuntimeRenderErrorKind::InteractionFailed {
             interaction_index,
         } => ProfileBrowserFetchErrorKind::InteractionFailed { interaction_index },
+        crate::browser_runtime::BrowserRuntimeRenderErrorKind::Cancelled => {
+            ProfileBrowserFetchErrorKind::Cancelled
+        }
         crate::browser_runtime::BrowserRuntimeRenderErrorKind::RenderTimeout => {
             ProfileBrowserFetchErrorKind::RenderTimeout
         }

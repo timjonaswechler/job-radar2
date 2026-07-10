@@ -13,6 +13,7 @@ pub(super) async fn execute_strategy<F, B>(
     strategy_index: usize,
     strategy: &ExecutionPlanPostingDetailStrategy,
     step_acceptance: Option<&Acceptance>,
+    context: RuntimeExecutionContext<'_>,
 ) -> PostingDetailStrategyAttempt
 where
     F: PostingDetailFetcher + Sync + ?Sized,
@@ -46,6 +47,7 @@ where
         &base_path,
         strategy_key.as_deref(),
         &mut diagnostics,
+        context,
     )
     .await
     {

@@ -12,6 +12,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDetailFetchResponse>
 where
     F: PostingDetailFetcher + Sync + ?Sized,
@@ -45,6 +46,7 @@ where
                 base_path,
                 strategy_key,
                 diagnostics,
+                execution_context,
             )
             .await
         }
@@ -64,6 +66,7 @@ where
                 base_path,
                 strategy_key,
                 diagnostics,
+                execution_context,
             )
             .await
         }
@@ -81,6 +84,7 @@ async fn fetch_http_strategy_document<F>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDetailFetchResponse>
 where
     F: PostingDetailFetcher + Sync + ?Sized,
@@ -147,7 +151,21 @@ where
         timeout_ms,
     };
 
-    match fetcher.fetch(request).await {
+    if execution_context.is_cancelled() {
+        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
+        return None;
+    }
+
+    let result = tokio::select! {
+        result = fetcher.fetch(request) => Some(result),
+        _ = execution_context.cancelled() => None,
+    };
+    let Some(result) = result else {
+        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
+        return None;
+    };
+
+    match result {
         Ok(response) => Some(response),
         Err(error) => {
             diagnostics.push(runtime_error(
@@ -176,6 +194,7 @@ async fn fetch_browser_strategy_document<B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_context: RuntimeExecutionContext<'_>,
 ) -> Option<PostingDetailFetchResponse>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -201,7 +220,10 @@ where
         interactions: interactions.to_vec(),
     };
 
-    match browser.render(request).await {
+    match browser
+        .render_with_context(request, execution_context)
+        .await
+    {
         Ok(ProfileBrowserFetchResponse { body }) => Some(PostingDetailFetchResponse { body }),
         Err(error) => {
             push_browser_fetch_diagnostic(

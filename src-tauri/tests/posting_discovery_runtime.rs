@@ -2,16 +2,18 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
     compile_source_execution_plan, execute_posting_discovery_with_clients,
-    execute_posting_discovery_with_fetcher, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod,
-    PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
-    PostingDiscoveryFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument,
+    execute_posting_discovery_with_clients_and_context, execute_posting_discovery_with_fetcher,
+    DiagnosticCategory, DiagnosticSeverity, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, HttpMethod, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
+    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, ProfileCompilerSnapshot, RequestBody, RuntimeCancellation,
+    RuntimeExecutionContext, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
+#[path = "posting_discovery_runtime/cancellation.rs"]
+mod cancellation;
 #[path = "posting_discovery_runtime/core.rs"]
 mod core;
 #[path = "posting_discovery_runtime/document_types_and_browser.rs"]
