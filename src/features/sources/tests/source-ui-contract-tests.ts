@@ -1,4 +1,6 @@
 import "@/features/sources/tests/schema-contract-tests";
+import "@/features/sources/tests/schema-editor/schema-editor-model-contract-tests";
+import "@/features/sources/tests/schema-editor/schema-editor-edits-contract-tests";
 import "@/features/sources/tests/source-form/source-create-contract-tests";
 import "@/features/sources/tests/source-form/source-edit-contract-tests";
 import "@/features/sources/tests/source-form/source-config-contract-tests";

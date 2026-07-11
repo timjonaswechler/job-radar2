@@ -14,7 +14,7 @@ import {
   profileDslSchemaCatalog,
   profileDslSchemaRefs,
 } from "@/features/sources/shared/profile-dsl-schema-catalog";
-import { SchemaGuidedValueEditor } from "@/features/sources/shared/schema-guided-value-editor";
+import { SchemaGuidedValueEditor } from "@/features/sources/schema-editor/schema-editor";
 import type { SchemaResolutionOptions } from "@/features/sources/shared/schema-introspection";
 
 const sourceOverridesSchemaContext = profileDslSchemaCatalog.resolveRef(

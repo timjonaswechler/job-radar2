@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SchemaGuidedValueEditor } from "@/features/sources/shared/schema-guided-value-editor";
+import { SchemaGuidedValueEditor } from "@/features/sources/schema-editor/schema-editor";
 import { schemaScalarOptions } from "@/features/sources/shared/schema-introspection";
 import {
   jsonValueToInputValue,
