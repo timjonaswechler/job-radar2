@@ -1,0 +1,266 @@
+# Declarative Profile Strategy Algebra and Source Specialization
+
+## Problem Statement
+
+Job Radar must integrate recruiting systems and career-site families whose detection signals, public endpoints, data formats, pagination models, and posting pages differ substantially. Greenhouse, Workday, and SAP SuccessFactors already demonstrate that this variance cannot be handled reliably by treating URL structure as the primary integration contract or by adding provider-specific backend branches.
+
+For users, adding a Source should require as little integration knowledge as possible. A user should be able to submit an entry point, receive an evidence-backed Source Proposal with an automatically completed Source Config and selected Access Path, and validate the concrete Source with a Source Live Check.
+
+For profile authors, reusable behavior should be assembled from a common declarative vocabulary rather than implemented as ATS-specific Rust. A Source must also be able to specialize any execution-relevant part of its selected Source Profile directly in the same nested document shape. This is necessary because two Sources belonging to the same recruiting-system family can expose different feeds, selectors, bounds, or extraction behavior.
+
+The current Profile DSL already has useful generic capabilities, but Detection, `postingDiscovery`, and `postingDetail` do not yet share one consistent Strategy Set contract. Current Source Overrides are narrower than the intended source-specific specialization model. Discovery also assumes that normalized title and company data are immediately available, although some Sources initially expose only URLs or other inexpensive hints. This can cause guessed URL-derived values to be treated as canonical posting data.
+
+Without a clearer algebra and compilation model, further catalog work risks becoming a collection of increasingly specific URL patterns, selectors, and backend exceptions rather than a reusable integration system.
+
+## Solution
+
+Introduce schema version 3 of the declarative Source Profile and Source model around three consistently named phases:
+
+- `detection` identifies a reusable Source Profile and produces an actionable Source Proposal;
+- `discovery` discovers posting references, provider values, or inexpensive search hints;
+- `detail` loads fields for one posting occurrence lazily when a caller requires them.
+
+Each phase owns a Strategy Set. A Strategy Set contains a Strategy Policy, bounded Strategies, phase-level acceptance, and a typed phase output contract. Strategies continue to compose reusable acquisition and interpretation primitives such as fetch, pagination, parse, select, predicates, captures, extraction, transforms, acceptance, and diagnostics. The Profile Compiler verifies that every primitive has the required phase context, that all network and browser behavior is bounded, and that accepted outputs satisfy the phase contract.
+
+Sources remain separate concrete documents. When a Source selects a Profile Access Path, it may place partial Source Profile fragments directly on its root using the same nested field names as the Source Profile. These fragments use dedicated typed Rust documents and a matching JSON Schema `$def`; only execution-relevant fields are representable. Profile identity, `detection`, Search Request fields, and persistence fields are impossible to author through this model. No `overrides` or `overlay` wrapper and no operation/path/value patch language is exposed to authors. The compiler structurally merges the referenced base profile with the direct Source fragments, validates the resulting Effective Source Profile, validates Source Config against its effective schema, resolves the selected Access Path, and compiles one immutable Execution Plan.
+
+The direct Source specialization supports both partial changes to existing keyed Access Paths and Strategies and complete additions of new Access Paths or Strategies. Profile Detection, profile identity, Search Request criteria, and persistence policy do not become source-specializable profile fragments.
+
+The runtime executes only compiled plans and does not know whether behavior originated in a Built-in Source Profile, Custom Source Profile, Source specialization, or Source-owned Access Path. Detail receives one posting occurrence plus an explicit typed set of required canonical fields; one bounded Strategy response may satisfy several requested fields and returns only requested available values.
+
+Search Runs resolve candidates through a data-driven, bounded state machine rather than one fixed Discovery-to-Detail sequence. They evaluate available provider values and explicitly authorized `search_prefilter` hints, reject or finalize when possible, request only missing required fields, and re-evaluate after enrichment. Discovery is consumed in deterministic bounded batches. Search Runs remain responsible for normalization, final Match Rules and Exclusion Rules, cross-Source deduplication, budget-/ceiling-based partial completion, and persistence of finalized Matches only. Cancellation retains the existing Search Run cancellation behavior and is not represented as persistable Resolution Partial Completion.
+
+## User Stories
+
+1. As a user, I want to add a Source by submitting one entry point, so that I do not need to understand the recruiting system's internal endpoints.
+2. As a user, I want Profile Detection to use URL structure only as one possible hint, so that branded or unusual hosts can still be recognized correctly.
+3. As a user, I want Detection to gather bounded HTTP, API, HTML, feed, or browser evidence, so that the selected Source Profile is explainable and reliable.
+4. As a user, I want Detection to choose an Access Path automatically, so that I do not have to select between API, feed, sitemap, HTML, or browser behavior manually.
+5. As a user, I want Source Config to be filled from Detection captures wherever possible, so that provider-specific host, tenant, site, board, feed, or sitemap knowledge is not required.
+6. As a user, I want every proposed Source Config value to have provenance, so that I can understand how Job Radar derived it.
+7. As a user, I want conflicting Detection evidence to produce clear diagnostics, so that Job Radar does not silently guess.
+8. As a user, I want a concrete Source to be checked after setup, so that current operability is separated from reusable profile support metadata.
+9. As a user, I want a Source to specialize its selected Source Profile without copying the whole profile, so that tenant differences remain compact.
+10. As a user, I want Source specialization to use the same nested vocabulary as the Source Profile, so that I do not need to learn a second patch language.
+11. As a user, I want to change a single nested value such as a timeout or selector, so that the remaining profile behavior is inherited.
+12. As a user, I want to add a new Strategy for one Source, so that an exceptional tenant can work without a provider-specific backend change.
+13. As a user, I want to add a new Access Path for one Source, so that a source-specific access variant can coexist with the reusable base profile.
+14. As a user, I want invalid Source specializations to be rejected before execution, so that runtime behavior remains predictable.
+15. As a user, I want Source Profile changes to make prior Source Live Check evidence stale, so that old operational evidence is not presented as current.
+16. As a user, I want Source specialization changes to make prior Source Live Check evidence stale, so that changed behavior is checked again.
+17. As a user, I want the Effective Source Profile to be inspectable, so that inherited and source-specific behavior can be understood.
+18. As a user, I want source-specific values to show their origin, so that troubleshooting does not require manually reconstructing a merge.
+19. As a user, I want repeated source-specific specializations to be allowed, so that Job Radar does not force catalog maintenance decisions on me.
+20. As a user, I want repeated specializations to optionally produce a non-blocking promotion hint, so that reusable behavior can be recognized without automatic rewriting.
+21. As a profile author, I want Detection, Discovery, and Detail to use a common Strategy Set vocabulary, so that capabilities transfer between phases.
+22. As a profile author, I want phase inputs and outputs to remain typed, so that a shared primitive catalog does not become an unstructured scripting language.
+23. As a profile author, I want ordered fallback behavior to be explicit, so that the first accepted Strategy is deterministic.
+24. As a profile author, I want to require all Strategies when evidence or output is complementary, so that partial success is not mistaken for complete success.
+25. As a profile author, I want to require at least a configured number of Strategies, so that Detection can combine independent evidence.
+26. As a profile author, I want to collect accepted results from multiple Strategies, so that several feeds or catalogs can contribute candidates.
+27. As a profile author, I want Strategy success to depend on acceptance rather than HTTP success alone, so that syntactically reachable but unusable responses do not pass.
+28. As a profile author, I want failed fallback attempts to remain visible without making a later accepted Strategy look failed, so that diagnostics distinguish recovery from final failure.
+29. As a profile author, I want Access Paths and Strategies to merge by stable key, so that Source specialization does not depend on array indices.
+30. As a profile author, I want new Strategies to have deterministic placement, so that fallback order is predictable.
+31. As a profile author, I want arrays without stable element identities to use explicit replacement semantics, so that merges are not ambiguous.
+32. As a profile author, I want removal or disabling to require explicit semantics, so that `null` does not silently delete behavior.
+33. As a profile author, I want common scalar, list, and object expressions, so that JSON, XML, HTML, URL, and response metadata can be projected consistently.
+34. As a profile author, I want reusable predicate composition, so that evidence and acceptance can express all, any, none, negation, and cardinality requirements.
+35. As a profile author, I want response status, headers, content type, final URL, and bytes available as typed values, so that Detection and parsing can use transport evidence.
+36. As a profile author, I want byte-preserving fetch and explicit decoding, so that XML and feed encoding does not depend on premature UTF-8 conversion.
+37. As a profile author, I want URL components to be selectable without regex, so that host, path, and query extraction is less fragile.
+38. As a profile author, I want JSON, XML, HTML, plain text, JSON-LD, microdata, sitemap, and feed shapes to reuse shared parsing and selection behavior, so that provider formats do not require separate runtimes.
+39. As a profile author, I want a first-non-empty expression, so that markup variants can be handled without refetching the same page.
+40. As a profile author, I want field conflicts to produce diagnostics instead of last-write-wins behavior, so that merged output remains trustworthy.
+41. As a profile author, I want every request, page, item, browser action, retry, response size, duration, and fan-out to be bounded, so that declarative profiles remain safe.
+42. As a profile author, I want cancellation to stop the current operation and prevent later Strategies, so that Search Runs remain controllable.
+43. As a profile author, I want Source Config to contain stable access configuration only, so that Search Request criteria remain reusable and independent.
+44. As a profile author, I want Source specializations to be fully recompiled after merging, so that they cannot bypass profile validation.
+45. As a profile author, I want a Source-owned Access Path to use the same Strategy and primitive vocabulary, so that one-off Sources do not require a separate runtime.
+46. As a developer, I want one shared implementation of phase-neutral primitives, so that Fetch, Parse, Select, Extract, Transform, Budget, and Provenance behavior does not drift between Discovery and Detail.
+47. As a developer, I want thin phase modules to preserve different input and output contracts, so that sharing primitives does not erase domain semantics.
+48. As a developer, I want the Profile Compiler to reject unavailable context references, so that Detection cannot read posting metadata and Detail cannot assume missing captures.
+49. As a developer, I want the Profile Compiler to validate Strategy Policy cardinality, so that impossible acceptance requirements never reach runtime.
+50. As a developer, I want cumulative Strategy Set budgets, so that running several bounded Strategies cannot exceed the phase ceiling collectively.
+51. As a developer, I want global runtime and security ceilings to remain outside Source control, so that Source specialization cannot weaken safety.
+52. As a developer, I want the runtime to receive one immutable Execution Plan, so that raw JSON is not interpreted during execution.
+53. As a developer, I want the Effective Source Profile and its provenance included in fingerprints, so that live-check freshness is deterministic.
+54. As a developer, I want deterministic external regression tests for Strategy Policies and merge behavior, so that future primitive additions do not change existing semantics accidentally.
+55. As a developer, I want Greenhouse, Workday, and SuccessFactors to serve as distinct acceptance profiles, so that simple API, paginated API, sitemap/feed, and HTML behavior are all exercised.
+56. As a developer, I want no recruiting-system-specific Rust branch, so that new systems are integrated through reusable profile documents and generic capabilities.
+57. As a Search Run caller, I want Discovery to distinguish inexpensive hints from explicit provider values, so that guessed URL text is not persisted as canonical data.
+58. As a Search Run caller, I want to shortlist candidates conservatively using Search Request rules, so that expensive Detail work is limited.
+59. As a Search Run caller, I want Detail to remain lazy and candidate-scoped, so that it is not executed for every discovered posting automatically.
+60. As a Search Run caller, I want Detail to receive an explicit typed set of required canonical fields and return only requested available values, so that one bounded response can satisfy several caller needs without unnecessary loading.
+61. As a Search Run caller, I want final Match Rules and Exclusion Rules applied to normalized provider values, so that hints do not determine persisted Matches.
+62. As a Search Run caller, I want location filtering applied after required provider locations are loaded and normalized, so that URL-derived guesses do not cause false decisions.
+63. As a Search Run caller, I want bounded Detail failure to remain source- and candidate-scoped, so that one bad posting does not hide other valid Matches.
+64. As a Search Run caller, I want only final checked Matches persisted, so that the database contains one consistent posting model across recruiting systems.
+65. As a UI caller, I want descriptions to continue loading lazily when they were not already obtained, so that opening a posting remains efficient.
+66. As a UI caller, I want already obtained canonical fields and descriptions to be reused, so that the same provider page is not fetched unnecessarily.
+67. As a Search Run caller, I want two Discovery Strategies for one Source to identify the same posting occurrence by Source plus stable provider ID, or by Source plus normalized absolute URL when no provider ID exists, so that collection reducers remain deterministic.
+68. As a Search Run caller, I want only hints explicitly marked for `search_prefilter` use to reject candidates early, so that other hints cannot influence matching.
+69. As a Search Run caller, I want complete Discovery values to finalize without Detail and incomplete values to request only missing fields, so that Candidate Resolution is data-driven.
+70. As a Search Run caller, I want candidates processed in deterministic bounded batches, so that a large Source cannot create unbounded memory or Detail fan-out.
+71. As a user, I want finalized Matches to remain usable when a ceiling is reached while unresolved candidates remain unpersisted and visible in diagnostics, so that partial completion is honest and useful.
+
+## Implementation Decisions
+
+1. Schema version 3 uses the phase names `detection`, `discovery`, and `detail` consistently across authored documents, compiled plans, diagnostics, and domain-facing interfaces.
+2. A phase exposes a Strategy Set consisting of a Strategy Policy, bounded Strategies, phase-level acceptance, and a typed output contract.
+3. Initial Strategy Policies are `first_accepted`, `all_required`, `collect_all`, and `at_least`. Additional policies require evidence and precise cardinality semantics.
+4. Strategy Policies operate on accepted Strategy attempts. Transport success alone does not mean Strategy acceptance.
+5. Predicate composition such as all, any, none, negation, equality, containment, regex, and count requirements is distinct from Strategy Policy composition.
+6. Strategies retain a constrained declarative data-acquisition shape rather than becoming arbitrary chains or scripts. Their available operations include acquisition, pagination, parsing, selection, predicates, captures, extraction, transforms, acceptance, and diagnostics.
+7. Every phase uses the shared primitive catalog only when the required typed context is available and the output contributes to that phase contract.
+8. Detection receives an entry point and bounded probe responses and produces evidence, captures, Source Config contributions, and an Access Path recommendation for one Source Proposal.
+9. Discovery receives a concrete Source and compiled Access Path and produces posting occurrences containing stable references, explicit provider values, or clearly marked hints.
+10. Detail receives one posting occurrence and an explicit typed `requiredFields` set. It returns a non-conflicting partial field patch containing only requested available values. A single bounded Strategy response may satisfy several requested fields. It remains lazy and is invoked only when a caller needs fields that are not already available.
+11. Search Request criteria, final matching, exclusion semantics, location filtering, cross-Source deduplication, persistence, and Source lifecycle transitions remain backend-owned product behavior rather than Profile DSL primitives.
+12. A Source that selects a Profile Access Path may place partial execution-relevant Source Profile fragments directly on its root. No `overrides` or `overlay` wrapper is introduced.
+13. Direct Source specialization uses a dedicated typed partial-fragment document model plus a matching JSON Schema `$def`. It may cover Source Config Schema, Access Paths, Policies, Acceptance, existing and new Strategies, and all safe Strategy primitives. Only execution-relevant fields are admitted; `detection`, profile identity, Search Request fields, and persistence fields are unrepresentable.
+14. Profile Detection is not source-specializable because it runs before a concrete Source and its specialization exist.
+15. Profile document identity is not source-specializable. Source identity remains the meaning of the Source document's schema version, key, name, and status.
+16. Access Paths and Strategies are merged by stable key. Existing keyed entries are recursively merged; new keyed entries must become complete valid definitions.
+17. Existing keyed entries preserve their base-profile order. New keyed entries append by default until explicit placement or reordering semantics are accepted.
+18. Arrays without stable keyed identities are replaced as whole values rather than merged by index.
+19. `null` does not implicitly delete inherited behavior. Removal or disabling requires a future explicit typed contract.
+20. After structural specialization, the complete Effective Source Profile is validated before Source Config validation and Access Path resolution.
+21. The compilation sequence is: load base profile, merge direct Source fragments, validate the Effective Source Profile, validate Source Config, resolve the selected Access Path, and compile the Execution Plan.
+22. The runtime executes only an immutable typed Execution Plan and does not inspect raw Source Profile or Source JSON.
+23. The runtime does not branch on ATS, profile key, host, company, or Source key.
+24. Phase reducers are backend-owned and deterministic: Detection merges evidence and equal captures, Discovery unions occurrences by Source-local occurrence identity, and Detail merges non-conflicting field patches. Source-local occurrence identity is concrete Source key plus an explicit stable provider posting ID, or concrete Source key plus normalized absolute posting URL when no provider ID exists. Title, company, and location do not participate in this identity.
+25. Conflicting non-empty captures, Source Config contributions, or canonical field values produce Structured Diagnostics. Implicit last-write-wins behavior is prohibited.
+26. Recovered failed attempts remain observable but do not make a later accepted `first_accepted` result fail solely because fallback was exercised.
+27. Strategy Set budgets are cumulative across all Strategies the policy may execute.
+28. Global security and runtime ceilings cannot be raised or disabled by a Source specialization.
+29. HTTP fetch preserves response bytes and exposes final URL, status, headers, content type, and explicit text decoding to generic parsing capabilities.
+30. JSON, XML, HTML, text, URL, JSON-LD, microdata, sitemap, and feed support reuse shared parse and selection implementations where their data models permit it.
+31. Provider location strings are preserved losslessly as inputs to central normalization. Profiles do not implement ATS-specific geolocation semantics.
+32. Discovery output distinguishes at least `hint` from `provider_value`. Only a hint explicitly declaring `hintUse: search_prefilter` may apply Include or Exclusion keywords early. Such a hint may reject a candidate but may never become a canonical title, company, or location or create a final Match. Other hints cannot reject candidates. Normalized values are produced by backend normalization, not claimed by profile extraction.
+33. Source Live Check fingerprints are defined only over the canonical schema-v3 representation. They include the base profile, direct Source specialization, Source Config, selected Access Path, compiler/runtime logic, and relevant global behavior versions. No pre-v3 fingerprint format or subsequent fingerprint migration is introduced.
+34. Repeated equivalent Source specializations are permitted. The product may emit a non-blocking promotion suggestion but does not block or automatically rewrite user documents.
+35. A Source-owned Access Path continues to use the same phase, Strategy Policy, primitive, compiler, and runtime contracts when no reusable base profile is selected.
+36. Delivery is compiler-first: compile the Effective Source Profile while initially producing today's Execution Plan shape, prove runtime parity, make `first_accepted` explicit, move internal phase modules directly to their final names, and then perform one schema-v3 authored hard cut. Shared Primitives, additional policies, Detection convergence, and Search Run finalization follow in vertical slices.
+37. Schema version 3 is a pre-production hard cut. No permanent or between-ticket compatibility runtime interprets both old and new authored models. A moved slice updates all callers and deletes replaced files, aliases, forwarding functions, superseded implementation-detail tests, and migration-history names in the same ticket.
+38. Existing Strategies retain base order and complete new Strategies append. Authored placement/reordering is deferred. `null`, deletion, and disabling remain invalid. Automatic promotion of repeated specializations, parallel Strategy execution, and resumable batches are deferred.
+39. Every authored DSL Primitive has exactly one canonical Rust implementation file under `profile_dsl/primitives/<family>/<dsl_type>.rs`. The file owns its primitive-specific authored configuration, compilation, context/capability validation, bounds/security checks, execution semantics, and narrow edge-case tests as applicable. Shared infrastructure must not hide primitive-specific dispatch.
+40. `primitives/mod.rs` is registry/dispatch only. A registry completeness test compares schema/document variants with compiled registrations and rejects missing or duplicate Primitive implementations.
+41. Candidate Resolution is backend-owned and data-driven. Evaluation returns rejected, finalizable, needs-fields, unresolved, failed, or budget-skipped. Detail enrichment and evaluation may repeat only within explicit per-candidate and cumulative bounds.
+42. Discovery candidates are processed in deterministic bounded batches until exhaustion, cancellation, or a backend-owned ceiling. Budgets cover at least discovered items, batch size, Detail candidates, requests, bytes, retries, pages, duration, and enrichment rounds. Profiles and Sources may tighten but never raise ceilings.
+43. Candidate Resolution completion is typed independently of Source Status:
+
+    ```rust
+    enum ResolutionCompletion {
+        Complete,
+        Partial { reason: PartialReason },
+    }
+    ```
+
+    `Complete` means the Source's Discovery stream was exhausted; individual `unresolved` or `failed` outcomes may still be non-zero. `PartialReason` identifies budget/ceiling exhaustion or another explicitly bounded non-cancellation Source execution stop. Cancellation is not a `PartialReason`: it follows the existing Search Run cancellation path, does not produce persistable Resolution Partial Completion, and does not automatically release already finalized candidates for downstream persistence. Completion carries exact aggregate counts for `discovered`, `processed`, `finalized`, `rejected`, `unresolved`, `failed`, and `budgetSkipped`, plus optional `remaining` only when the provider makes that value known. The invariants are `processed = finalized + rejected + unresolved + failed` and `discovered = processed + budgetSkipped`. Resolution completion is not a new `SourceStatus`, `SourceRunStatus`, or `SearchRunStatus`.
+44. On budget-/ceiling-based Partial Completion, already finalized Matches remain usable; unfinalized candidates are not persisted. Candidate-scoped diagnostics, including all Candidate errors, are sampled in deterministic provider order under an immutable backend-owned per-Source-resolution limit. A diagnostic summary retains complete Candidate `countsByCode`, `sampleLimit`, and `candidateDiagnosticsOmitted` values after samples are truncated. Outcome counts and per-code Candidate diagnostic counts are never sampled. Source-level terminal diagnostics needed to explain `PartialReason` are stored separately and are not charged against the Candidate sample limit.
+45. `ResolutionCompletion` and `ResolutionCounts` are visible on the corresponding `SourceRunResult` when Candidate Resolution ran. `SearchRunResult` exposes a derived Resolution summary aggregating complete/partial Source Run resolutions and their counts. Cancelled, skipped, or pre-resolution-failed Source Runs may have no Resolution completion. No new `SourceStatus`, `SourceRunStatus`, or `SearchRunStatus` variant is introduced.
+46. Cross-Source Job Posting deduplication remains a separate backend rule after provider values are loaded and normalized. Its tolerance is not a Profile Primitive and is not part of `PostingOccurrenceIdentity`.
+47. Effective Source Config validation remains limited to the schema subset already supported by the Profile Compiler: optional root `type: "object"`; `properties` as an object; each property schema using only one recognized `type` from `string`, `number`, `integer`, `boolean`, `object`, `array`, or `null`; `required` as an array of string property names; and boolean `additionalProperties`. Unsupported keywords, shapes, or type values produce explicit Compiler Diagnostics rather than being ignored. A general JSON Schema validator expansion requires concrete evidence and a separate ticket.
+48. Browser Detection migration requires explicit immutable backend ceilings for navigations, actions, waits, total duration, response/rendered bytes, and cancellation behavior. Until concrete values for every dimension are accepted, the browser migration ticket remains blocked and is not ready for agent execution.
+49. T16 is not ready for publication or agent execution until one concrete immutable backend-owned Candidate Diagnostic Sample Limit is proposed and accepted. #57 remains responsible for later structured Location semantics and does not block T16, which uses the current Location model.
+
+The decision-rich prototype model is:
+
+```text
+Base Source Profile
+  + direct Source profile fragments
+  = Effective Source Profile
+  → validated Source Config
+  → selected Access Path
+  → immutable Execution Plan
+```
+
+### Module and interface decisions
+
+The Effective Profile Compiler, Strategy Set Runtime, and Candidate Resolution are **Deepening Candidates** until implementation evidence satisfies the deep-module acceptance criteria. Design It Twice compared a minimum interface, maximum justified flexibility, and simplest common-caller interface for each candidate. The selected directions are:
+
+1. **Effective Profile Compiler:** one in-process interface accepts a concrete authoritative Source and immutable `SourceProfileRegistrySnapshot` and returns either one `CompiledSource` or Structured Diagnostics. The compiler may resolve profiles from the snapshot but must never select a second Source from `snapshot.sources`; the directly supplied Source is authoritative. The snapshot is immutable input data, not a port or adapter. For a profile-based Access Path, `CompiledSource` contains the immutable Execution Plan and inspectable `EffectiveSourceProfile` plus later provenance/fingerprint material. The module owns merge and validation order; Source lifecycle admission and persistence remain outside. No registry, merge, or validator adapter is introduced.
+2. **Strategy Set Runtime:** public callers use typed phase operations for Detection, Discovery, and Detail. A crate-private typed kernel owns policy execution, attempt history, cumulative budgets, cancellation, provenance, and deterministic stop behavior. Phase adapters own typed inputs, outputs, acceptance, and reducers. HTTP/browser execution has production and deterministic test adapters; pure policy, reducer, parser, selector, and field logic remains in-process.
+3. **Candidate Resolution:** Search Run calls one Source-scoped resolution operation, not a public per-candidate loop. The module owns deterministic Discovery batches, candidate states, minimal requested-field Detail rounds, cumulative budgets, cancellation, progress, and visible partial completion. A production Source execution implementation plus deterministic fake establish the execution seam. Cross-Source deduplication and persistence remain downstream; UI-only lazy description loading continues to call candidate-scoped Detail directly.
+
+For each candidate, the implementation ticket must confirm caller knowledge, hidden complexity, error modes, test surface, and the deletion test. If deleting the proposed module would make complexity disappear rather than spread into several callers, it must not be introduced. Pure in-process logic receives no speculative trait or port. Tests move to the selected interface and replace superseded implementation-detail tests.
+
+### Delivery dependency graph
+
+```text
+T1 → T2 → T3 → T5 → T6 → T7 → T8 → T9 → T10 → T11a → T11b → T11c
+             └→ T4a
+T7 + T4a → T4b
+
+T11c → T12a → T12b → T15 → T16 → T17
+T9 + T12b → T13a / T13b / T13c
+T10 + T11c + relevant T13 policies → T14a → T14b → T14c → T14d
+```
+
+T4b is always after T7 and fingerprints only canonical schema-v3 values. T13a and T13b are independent after their prerequisites; T13c also relies on T12a Source-local occurrence identity. T14c additionally remains blocked and not ready for agent execution until concrete immutable browser ceilings are accepted for every required dimension.
+
+### GitHub tracker dependency policy
+
+- Every published implementation ticket links #166 as its parent.
+- Real `blocked by` and `blocking` relationships are maintained directly in the GitHub tracker and match the blockers named in the ticket body.
+- A blocked ticket never receives `ready-for-agent`.
+- After a blocker completes, dependency links and readiness are reviewed again before assignment.
+- A dependent ticket is not published merely to manufacture a link. It remains local until its real blocker exists as a fully drafted GitHub issue that can be linked.
+- If native GitHub dependencies are unavailable, #166 uses linked task lists and each dependent ticket states `Blocked by #…` with real issue links.
+- Placeholder issues created only to establish dependency links are prohibited.
+- T1 may be published directly after explicit user approval. T11a remains local until a fully drafted T10 GitHub issue exists. T16 remains local until a fully drafted T15 GitHub issue exists and one concrete immutable backend-owned Candidate Diagnostic Sample Limit has been proposed and accepted. #57 owns later structured Location semantics but does not block T16.
+
+## Testing Decisions
+
+1. The primary test seam is the public Profile Compiler interface: one authoritative concrete Source plus an immutable registry snapshot containing its base Source Profile produces either one `EffectiveSourceProfile`/Execution Plan or Structured Diagnostics. A conflicting same-key Source inside the snapshot cannot change compilation. The snapshot is input data, not a port.
+2. Compiler integration tests verify recursive object merge, scalar replacement, keyed Access Path merge, keyed Strategy merge, new keyed entries, whole-array replacement, and rejection of unsupported deletion semantics.
+3. Compiler tests verify that source-specialized Source Config Schema is applied before compilation and that invalid Source Config produces source-validation diagnostics.
+4. Compiler tests verify that new source-specific Access Paths can be selected only after the Effective Source Profile has been validated.
+5. Compiler tests verify typed phase context: unavailable references fail compilation through public diagnostics rather than private helper assertions.
+6. Compiler tests verify cumulative bounds and immutable global ceilings for every Strategy Policy.
+7. Strategy Policy tests use deterministic fake Strategies through public execution interfaces and cover accepted counts, stop behavior, cancellation, recovered attempts, policy failure, and stable diagnostics.
+8. Detection tests use the public Profile Detection interface with deterministic HTTP and browser clients and assert complete Source Proposals, captures, provenance, conflicts, and selected Access Paths.
+9. Discovery tests compile complete Sources and execute plans with deterministic fetchers for JSON, XML, HTML, sitemap, feed, pagination, fallback, and collection merge behavior.
+10. Detail tests compile complete Sources and execute candidate-scoped plans with deterministic fetchers, asserting typed requested field sets, one response satisfying several fields, requested-only partial patches, field conflicts, reuse, fallback behavior, and laziness.
+11. Candidate Resolution tests use the Source-scoped interface with deterministic Source execution dependencies. They verify deterministic batches, conservative authorized-hint prefiltering, minimal requested-field Detail, cumulative bounds, normalization, repeated final Match/Exclusion/location evaluation, and propagation of Cancellation into the existing Search Run cancellation path rather than Resolution Partial Completion.
+12. Downstream Search Run integration tests use a real temporary database. They verify cross-Source deduplication and persistence after finalization, prove that unfinalized, failed, unresolved, and budget-skipped candidates create neither Job Postings nor Matches, show that finalized Matches remain usable when later candidates exhaust a budget/ceiling, and prove that Cancellation does not automatically persist already finalized candidates.
+13. Source Live Check tests verify schema-v3 Effective Source Profile, direct Source specialization, and Source Config fingerprints and the resulting fresh/stale transitions; no pre-v3 fingerprint fixture exists.
+14. Registry tests verify that Built-in and Custom Source Profiles remain reusable while direct Source specializations remain scoped to one Source.
+15. Regression fixtures cover Greenhouse as a simple public API profile, Workday as a paginated POST/JSON profile, and SuccessFactors as a feed/sitemap/HTML profile.
+16. Tests assert behavior and diagnostics through public crate interfaces wherever possible. Private helper tests are reserved for narrow parser or merge edge cases that cannot be observed through the public seam.
+17. No network-dependent check is added to default CI. Current public behavior remains documented separately through Source Live Check evidence.
+18. Migration tests and repository searches prove that schema-v3 documents contain no active schema-v2 phase names, old operation-list Source Override model, compatibility dispatch, migration aliases, forwarding wrappers, or duplicate phase implementations.
+19. Schema/Serde parity fixtures prove that the typed direct Source-fragment documents and their JSON Schema definition admit the same fields and reject forbidden identity, `detection`, Search Request, persistence, `null`, deletion, and disabling shapes.
+20. Registry completeness tests prove that each authored Primitive has exactly one canonical Rust implementation registration and that `primitives/mod.rs` contains no Primitive behavior.
+21. Candidate Resolution tests assert exact Discovery batches, Detail calls, requested field sets, typed complete/partial completion, both count invariants, SourceRunResult visibility, derived Search Run Resolution summary, bounded diagnostic samples with `candidateDiagnosticsOmitted`, Cancellation outside Partial Completion, no-progress termination, and deterministic diagnostic order through the Source-scoped interface.
+
+## Out of Scope
+
+- Implementing every candidate primitive listed in the exploratory design catalog.
+- Arbitrary scripts, plugins, shell commands, JavaScript evaluation, or unrestricted browser automation in profile documents.
+- CAPTCHA bypass, automated login flows, or inline credential storage.
+- Moving Search Request include rules, exclusion rules, locations, radius, or other criteria into Source Config or Source Profiles.
+- Profile-authored database writes, transaction behavior, Job Posting lifecycle, or Source Status transitions.
+- ATS-specific Rust adapters or branches.
+- Automatic promotion of repeated Source specializations into Source Profiles or Access Paths.
+- Blocking users from repeating the same Source specialization.
+- Treating Profile Support Level as current operational confidence.
+- Treating deterministic fixtures as proof that a concrete Source currently works.
+- Final structured location semantics and exact cross-Source deduplication tolerances; those remain backend-owned and part of focused normalization/location work.
+- Any schema-v2 compatibility runtime or committed migration wrapper between tickets.
+- Authored Strategy placement/reordering, deletion, disabling, or `null` semantics.
+- Unbounded recursive crawling or unrestricted Strategy nesting.
+- Parallel Strategy or candidate execution until deterministic merge, cancellation, rate-limit, and cumulative-budget behavior are accepted.
+- Resumable Discovery cursors/checkpoints in the first Candidate Resolution release.
+- Rich profile-authoring UI beyond what is required to represent and diagnose the accepted document model.
+
+## Further Notes
+
+This specification was synthesized from the working architecture note `docs/profil source algebra refactor.md`, which remains unchanged as a design reference from this point forward.
+
+Issue #33 remains an evidence and catalog audit. Findings from Greenhouse, Workday, and SuccessFactors are acceptance evidence for this specification, not justification for provider-specific runtime behavior.
+
+Issue #57 remains responsible for structured location semantics. This specification requires only that explicit provider values be preserved and distinguished from hints before central normalization.
+
+The decisions needed for implementation ticket decomposition are settled: direct Source fragments use dedicated typed documents plus a matching schema definition; delivery is compiler-first with one clean schema-v3 hard cut; Source-local posting occurrence identity is distinct from cross-Source Job Posting deduplication; Detail receives typed requested field sets; Candidate Resolution is data-driven and batch-bounded; and every authored Primitive has one canonical Rust implementation file. Strategy placement/reordering, deletion/disabling, automatic specialization promotion, parallel execution, and resumable batches are explicit deferrals rather than blockers.
