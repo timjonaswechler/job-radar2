@@ -110,6 +110,180 @@ impl From<job_radar_lib::agent::AgentError> for HarnessFailure {
 
 type HarnessResult<T> = Result<T, HarnessFailure>;
 
+const OAUTH_CALLBACK_ADDRESS: &str = "127.0.0.1:1455";
+const OAUTH_CALLBACK_PATH: &str = "/auth/callback";
+const OAUTH_CALLBACK_MAX_REQUEST_BYTES: usize = 8 * 1024;
+const OAUTH_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+const OAUTH_CALLBACK_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+fn capture_loopback_callback(
+    address: std::net::SocketAddr,
+    overall_timeout: std::time::Duration,
+    read_timeout: std::time::Duration,
+    launch_browser: impl FnOnce(std::net::SocketAddr) -> bool,
+) -> Option<job_radar_lib::agent::openai_codex::SecretAuthorizationInput> {
+    use std::io::Write;
+
+    if !address.ip().is_loopback() {
+        return None;
+    }
+    let listener = std::net::TcpListener::bind(address).ok()?;
+    let bound_address = listener.local_addr().ok()?;
+    if !bound_address.ip().is_loopback() || listener.set_nonblocking(true).is_err() {
+        return None;
+    }
+    if !launch_browser(bound_address) {
+        return None;
+    }
+
+    let deadline = std::time::Instant::now() + overall_timeout;
+    loop {
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        match listener.accept() {
+            Ok((mut stream, peer)) => {
+                if !peer.ip().is_loopback() {
+                    continue;
+                }
+                let Some(request) =
+                    read_bounded_callback_request(&mut stream, deadline, read_timeout)
+                else {
+                    let _ = stream.write_all(neutral_browser_response(false));
+                    continue;
+                };
+                let Some(callback) = parse_callback_request(&request) else {
+                    let _ = stream.write_all(neutral_browser_response(false));
+                    continue;
+                };
+                if stream.write_all(neutral_browser_response(true)).is_err() {
+                    return None;
+                }
+                return Some(
+                    job_radar_lib::agent::openai_codex::SecretAuthorizationInput::new(callback),
+                );
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+fn read_bounded_callback_request(
+    stream: &mut std::net::TcpStream,
+    deadline: std::time::Instant,
+    read_timeout: std::time::Duration,
+) -> Option<Vec<u8>> {
+    use std::io::Read;
+
+    stream.set_nonblocking(true).ok()?;
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 512];
+    let mut last_progress = std::time::Instant::now();
+    loop {
+        let now = std::time::Instant::now();
+        if now >= deadline || now.saturating_duration_since(last_progress) >= read_timeout {
+            return None;
+        }
+        match stream.read(&mut buffer) {
+            Ok(0) => return None,
+            Ok(read) => {
+                last_progress = std::time::Instant::now();
+                request.extend_from_slice(&buffer[..read]);
+                if request.len() > OAUTH_CALLBACK_MAX_REQUEST_BYTES {
+                    return None;
+                }
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    return Some(request);
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+}
+
+fn parse_callback_request(request: &[u8]) -> Option<String> {
+    let request = std::str::from_utf8(request).ok()?;
+    let request_line = request.split("\r\n").next()?;
+    let mut parts = request_line.split(' ');
+    let method = parts.next()?;
+    let target = parts.next()?;
+    let version = parts.next()?;
+    if parts.next().is_some()
+        || method != "GET"
+        || !matches!(version, "HTTP/1.0" | "HTTP/1.1")
+        || !target.starts_with(OAUTH_CALLBACK_PATH)
+    {
+        return None;
+    }
+    let (path, query) = target.split_once('?')?;
+    if path != OAUTH_CALLBACK_PATH || query.is_empty() || target.contains('#') {
+        return None;
+    }
+    let parameters: std::collections::HashMap<_, _> =
+        url::form_urlencoded::parse(query.as_bytes()).collect();
+    if parameters.get("code").is_none_or(|value| value.is_empty())
+        || parameters.get("state").is_none_or(|value| value.is_empty())
+    {
+        return None;
+    }
+    Some(format!("http://localhost:1455{target}"))
+}
+
+fn neutral_browser_response(success: bool) -> &'static [u8] {
+    if success {
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 48\r\nConnection: close\r\nCache-Control: no-store\r\n\r\nAuthorization received. Return to Job Radar now."
+    } else {
+        b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 47\r\nConnection: close\r\nCache-Control: no-store\r\n\r\nCallback was not accepted. Return to Job Radar."
+    }
+}
+
+fn open_system_browser(url: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = url;
+        false
+    }
+}
+
+fn authorize_browser_with_capture(
+    reader: &mut impl std::io::BufRead,
+    writer: &mut impl std::io::Write,
+    instructions: &str,
+    authorization_url: &str,
+    capture: impl FnOnce(&str) -> Option<job_radar_lib::agent::openai_codex::SecretAuthorizationInput>,
+) -> std::io::Result<job_radar_lib::agent::openai_codex::SecretAuthorizationInput> {
+    writeln!(writer, "{instructions}")?;
+    writeln!(writer, "Waiting for the browser callback...")?;
+    writer.flush()?;
+    if let Some(input) = capture(authorization_url) {
+        return Ok(input);
+    }
+    writeln!(
+        writer,
+        "Automatic callback unavailable; use the manual fallback."
+    )?;
+    writeln!(writer, "Open: {authorization_url}")?;
+    read_secret_authorization_input(reader, writer)
+}
+
 fn read_secret_authorization_input(
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
@@ -164,11 +338,21 @@ where
         '_,
         job_radar_lib::agent::openai_codex::SecretAuthorizationInput,
     > {
-        let result = (|| {
-            writeln!(self.writer, "{}", authorization.instructions())?;
-            writeln!(self.writer, "Open: {}", authorization.url())?;
-            read_secret_authorization_input(self.reader, self.writer)
-        })()
+        let result = authorize_browser_with_capture(
+            self.reader,
+            self.writer,
+            authorization.instructions(),
+            authorization.url(),
+            |authorization_url| {
+                let address = OAUTH_CALLBACK_ADDRESS.parse().ok()?;
+                capture_loopback_callback(
+                    address,
+                    OAUTH_CALLBACK_TIMEOUT,
+                    OAUTH_CALLBACK_READ_TIMEOUT,
+                    |_| open_system_browser(authorization_url),
+                )
+            },
+        )
         .map_err(|_| harness_auth_error());
         Box::pin(async move { result })
     }
@@ -386,6 +570,8 @@ fn main() {
 mod tests {
     use super::*;
 
+    static LOOPBACK_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn conversation_with_two_models() -> job_radar_lib::agent::AgentConversation {
         use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
         use job_radar_lib::agent::testing::ScriptedProvider;
@@ -590,6 +776,218 @@ mod tests {
             numbered_selection(&mut input, &mut output, "Choose", &["Only".to_owned()],).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn browser_authorization_uses_automatic_capture_and_redacted_manual_fallback() {
+        use job_radar_lib::agent::openai_codex::SecretAuthorizationInput;
+
+        let mut automatic_input = std::io::Cursor::new(Vec::<u8>::new());
+        let mut automatic_output = Vec::new();
+        let automatic = authorize_browser_with_capture(
+            &mut automatic_input,
+            &mut automatic_output,
+            "Complete authentication in the browser.",
+            "https://example.invalid/authorize?state=synthetic-state",
+            |_| Some(SecretAuthorizationInput::new("synthetic-callback")),
+        );
+        assert!(automatic.is_ok());
+        let automatic_output = String::from_utf8(automatic_output).unwrap();
+        assert!(automatic_output.contains("Waiting for the browser callback"));
+        assert!(!automatic_output.contains("synthetic-state"));
+        assert!(!automatic_output.contains("synthetic-callback"));
+
+        let mut fallback_input = std::io::Cursor::new(b"synthetic-manual-callback\n");
+        let mut fallback_output = Vec::new();
+        let fallback = authorize_browser_with_capture(
+            &mut fallback_input,
+            &mut fallback_output,
+            "Complete authentication in the browser.",
+            "https://example.invalid/authorize?state=synthetic-state",
+            |_| None,
+        );
+        assert!(fallback.is_ok());
+        let fallback_output = String::from_utf8(fallback_output).unwrap();
+        assert!(fallback_output.contains("Automatic callback unavailable"));
+        assert!(fallback_output.contains("Open: https://example.invalid/authorize"));
+        assert!(fallback_output.contains("Paste the authorization result"));
+        assert!(!fallback_output.contains("synthetic-manual-callback"));
+    }
+
+    #[test]
+    fn loopback_capture_binds_loopback_before_launch_and_returns_neutral_response() {
+        let _guard = LOOPBACK_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use std::io::{Read, Write};
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (response_sender, response_receiver) = mpsc::channel();
+        let captured = capture_loopback_callback(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            Duration::from_secs(1),
+            Duration::from_millis(200),
+            move |bound_address: SocketAddr| {
+                assert_eq!(bound_address.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+                std::thread::spawn(move || {
+                    let mut browser = TcpStream::connect(bound_address).unwrap();
+                    browser
+                        .write_all(b"GET /auth/callback?code=synthetic-code&state=synthetic-state HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                        .unwrap();
+                    let mut response = Vec::new();
+                    browser.read_to_end(&mut response).unwrap();
+                    response_sender.send(response).unwrap();
+                });
+                true
+            },
+        );
+
+        assert!(captured.is_some());
+        let browser_response = String::from_utf8(
+            response_receiver
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(browser_response.starts_with("HTTP/1.1 200 OK\r\n"));
+        assert!(browser_response.contains("Content-Length: 48\r\n"));
+        assert!(browser_response.contains("Return to Job Radar"));
+        assert!(!browser_response.contains("synthetic-code"));
+        assert!(!browser_response.contains("synthetic-state"));
+    }
+
+    #[test]
+    fn loopback_capture_rejects_wrong_method_path_malformed_and_oversized_requests() {
+        let _guard = LOOPBACK_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use std::io::{Read, Write};
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        fn request(address: SocketAddr, bytes: &[u8]) -> String {
+            let mut browser = TcpStream::connect(address).unwrap();
+            browser.write_all(bytes).unwrap();
+            let mut response = String::new();
+            browser.read_to_string(&mut response).unwrap();
+            response
+        }
+
+        let (responses_sender, responses_receiver) = mpsc::channel();
+        let captured = capture_loopback_callback(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            Duration::from_secs(2),
+            Duration::from_millis(200),
+            move |bound_address: SocketAddr| {
+                std::thread::spawn(move || {
+                    let mut responses = Vec::new();
+                    responses.push(request(
+                        bound_address,
+                        b"POST /auth/callback?code=synthetic-code&state=synthetic-state HTTP/1.1\r\n\r\n",
+                    ));
+                    responses.push(request(
+                        bound_address,
+                        b"GET /wrong?code=synthetic-code&state=synthetic-state HTTP/1.1\r\n\r\n",
+                    ));
+                    responses.push(request(bound_address, b"malformed\r\n\r\n"));
+                    let mut oversized = vec![b'x'; OAUTH_CALLBACK_MAX_REQUEST_BYTES + 1];
+                    oversized.extend_from_slice(b"\r\n\r\n");
+                    responses.push(request(bound_address, &oversized));
+                    responses.push(request(
+                        bound_address,
+                        b"GET /auth/callback?code=synthetic-code&state=synthetic-state HTTP/1.1\r\n\r\n",
+                    ));
+                    responses_sender.send(responses).unwrap();
+                });
+                true
+            },
+        );
+
+        assert!(captured.is_some());
+        let responses = responses_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(responses.len(), 5);
+        assert!(responses[..4]
+            .iter()
+            .all(|response| response.starts_with("HTTP/1.1 400 Bad Request\r\n")));
+        assert!(responses[4].starts_with("HTTP/1.1 200 OK\r\n"));
+        assert!(responses
+            .iter()
+            .all(|response| !response.contains("synthetic-code")
+                && !response.contains("synthetic-state")));
+    }
+
+    #[test]
+    fn loopback_capture_rejects_non_loopback_and_fails_before_launch_when_port_is_busy() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let launched = Arc::new(AtomicBool::new(false));
+        let launched_for_non_loopback = Arc::clone(&launched);
+        assert!(capture_loopback_callback(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+            Duration::from_millis(20),
+            Duration::from_millis(10),
+            move |_| {
+                launched_for_non_loopback.store(true, Ordering::SeqCst);
+                true
+            },
+        )
+        .is_none());
+        assert!(!launched.load(Ordering::SeqCst));
+
+        let held_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let occupied_address = held_listener.local_addr().unwrap();
+        let launched_for_busy_port = Arc::clone(&launched);
+        assert!(capture_loopback_callback(
+            occupied_address,
+            Duration::from_millis(20),
+            Duration::from_millis(10),
+            move |_| {
+                launched_for_busy_port.store(true, Ordering::SeqCst);
+                true
+            },
+        )
+        .is_none());
+        assert!(!launched.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn loopback_capture_enforces_overall_timeout_against_slow_requests() {
+        let _guard = LOOPBACK_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use std::io::Write;
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+        use std::time::{Duration, Instant};
+
+        let started = Instant::now();
+        let captured = capture_loopback_callback(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            Duration::from_millis(50),
+            Duration::from_millis(200),
+            move |bound_address: SocketAddr| {
+                std::thread::spawn(move || {
+                    let mut browser = TcpStream::connect(bound_address).unwrap();
+                    for byte in b"GET " {
+                        if browser.write_all(&[*byte]).is_err() {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                });
+                true
+            },
+        );
+
+        assert!(captured.is_none());
+        assert!(started.elapsed() < Duration::from_millis(300));
     }
 
     #[test]
