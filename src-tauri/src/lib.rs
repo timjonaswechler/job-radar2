@@ -1,3 +1,4 @@
+mod agent;
 mod app;
 mod background_tasks;
 mod browser_runtime;

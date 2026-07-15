@@ -27,6 +27,8 @@ sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls", "migra
 chromiumoxide = "0.9.1"
 dom_query = "0.27"
 futures-util = "0.3"
+fs2 = "0.4"
+libc = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 regex = "1"
 roxmltree = "0.20"
