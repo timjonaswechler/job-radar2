@@ -114,6 +114,22 @@ _Avoid_: enabled flag, validation state, support level
 The locally managed browser installation that Job Radar uses for browser fetch and bounded browser probes.
 _Avoid_: system browser, profile type, browser profile
 
+**Agent Conversation**:
+An ephemeral multi-turn exchange between a caller and an AI Provider. It owns the conversation history and turn lifecycle but does not represent a persisted or application-specific workflow session. Domain workflows such as future Source Profile authoring may use an Agent Conversation without becoming part of it.
+_Avoid_: agent session, persisted conversation, autonomous workflow, Source Profile authoring session
+
+**AI Provider**:
+An external model service that can execute Agent Conversation turns. Provider identity is extensible, while support for any concrete provider is explicit.
+_Avoid_: model, Agent Conversation, runtime adapter registry
+
+**Agent Model**:
+A selectable model offered through an AI Provider, identified independently from its display name and accompanied by its supported Reasoning Levels.
+_Avoid_: AI Provider, model name only, live model discovery
+
+**Reasoning Level**:
+The provider-neutral amount of model reasoning requested for future Agent Conversation turns. The effective level is constrained by the selected Agent Model.
+_Avoid_: provider-specific reasoning effort, hidden prompt instruction
+
 **Search Request**:
 A user-created, saved job-search intent containing search terms, optional location criteria, and selected Sources. Search criteria belong here, not in Source Config.
 _Avoid_: Source, profile, Search Run
