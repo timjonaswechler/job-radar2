@@ -11,6 +11,8 @@
     "test:postings-ui": "node scripts/postings-ui-contract-tests.mjs",
     "test:navigation": "node scripts/navigation-contract-tests.mjs",
     "test:window-platform": "node --experimental-strip-types scripts/window-control-platform-tests.mjs",
+    "test:agent-credential-safety": "node scripts/agent-credential-safety-tests.mjs",
+    "check:agent-credentials": "node scripts/agent-credential-safety.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "agent:debug": "cargo run --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug",

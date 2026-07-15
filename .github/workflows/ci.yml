@@ -43,6 +43,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Agent credential safeguard self-tests
+        run: npm run test:agent-credential-safety
+
+      - name: Scan tracked snapshot for agent credentials
+        run: npm run check:agent-credentials
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
