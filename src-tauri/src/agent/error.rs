@@ -50,6 +50,32 @@ impl AgentError {
         )
     }
 
+    pub(crate) fn provider_transport() -> Self {
+        Self::fixed(
+            AgentErrorCategory::Transport,
+            "provider transport is unavailable",
+        )
+    }
+
+    pub(crate) fn provider() -> Self {
+        Self::fixed(AgentErrorCategory::Provider, "provider request failed")
+    }
+
+    pub(crate) fn invalid_provider_configuration() -> Self {
+        Self::fixed(
+            AgentErrorCategory::InvalidConfiguration,
+            "provider configuration is invalid",
+        )
+    }
+
+    pub(crate) fn rate_limited(retry_after: Option<Duration>) -> Self {
+        Self {
+            category: AgentErrorCategory::RateLimited,
+            message: "provider rate limit reached".to_owned(),
+            retry_after,
+        }
+    }
+
     pub(crate) fn fixed(category: AgentErrorCategory, message: &'static str) -> Self {
         Self {
             category,

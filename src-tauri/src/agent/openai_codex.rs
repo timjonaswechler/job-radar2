@@ -1,3 +1,6 @@
+mod streaming;
+
+pub use self::streaming::OpenAiCodexProvider;
 pub use crate::agent::auth::AuthStatus;
 use crate::agent::auth::{AuthStorage, AuthStorageError, OAuthCredential};
 use crate::agent::{AgentError, AgentErrorCategory};
@@ -235,6 +238,7 @@ impl AgentAuthentication {
         })
     }
 
+    #[cfg(test)]
     fn with_adapters(
         storage: AuthStorage,
         http: Arc<dyn OAuthHttpClient>,
