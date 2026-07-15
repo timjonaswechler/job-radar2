@@ -13,6 +13,7 @@
     "test:window-platform": "node --experimental-strip-types scripts/window-control-platform-tests.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
+    "agent:debug": "cargo run --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug",
     "smoke:search-run": "cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke"
   },
   "dependencies": {

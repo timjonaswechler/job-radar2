@@ -14,6 +14,14 @@ edition = "2021"
 name = "job_radar_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "agent-debug"
+path = "src/bin/agent_debug.rs"
+required-features = ["agent-debug"]
+
+[features]
+agent-debug = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
