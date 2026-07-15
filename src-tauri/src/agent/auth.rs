@@ -39,7 +39,7 @@ pub struct AuthStorageError {
 }
 
 impl AuthStorageError {
-    fn invalid_configuration() -> Self {
+    pub(super) fn invalid_configuration() -> Self {
         Self {
             category: AuthStorageErrorCategory::InvalidConfiguration,
             message: "authentication storage is not securely configured",
@@ -53,7 +53,7 @@ impl AuthStorageError {
         }
     }
 
-    fn refresh_failed() -> Self {
+    pub(super) fn refresh_failed() -> Self {
         Self {
             category: AuthStorageErrorCategory::RefreshFailed,
             message: "authentication refresh failed",
@@ -123,7 +123,7 @@ impl AuthStorage {
     }
 
     #[cfg(test)]
-    fn for_test_app_data(app_data_dir: &Path) -> Result<Self, AuthStorageError> {
+    pub(super) fn for_test_app_data(app_data_dir: &Path) -> Result<Self, AuthStorageError> {
         Self::in_app_data_dir(app_data_dir)
     }
 
@@ -218,17 +218,22 @@ impl AuthStorage {
         F: FnOnce(OAuthCredential) -> Fut,
         Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
     {
-        let now_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| AuthStorageError::invalid_configuration())?
-            .as_millis()
-            .try_into()
-            .map_err(|_| AuthStorageError::invalid_configuration())?;
-        self.resolve_with_refresh_at(provider, now_ms, refresh)
-            .await
+        self.resolve_with_refresh_using_clock(
+            provider,
+            || {
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| AuthStorageError::invalid_configuration())?
+                    .as_millis()
+                    .try_into()
+                    .map_err(|_| AuthStorageError::invalid_configuration())
+            },
+            refresh,
+        )
+        .await
     }
 
-    async fn resolve_with_refresh_at<F, Fut>(
+    pub(super) async fn resolve_with_refresh_at<F, Fut>(
         &self,
         provider: &str,
         now_ms: u64,
@@ -238,9 +243,25 @@ impl AuthStorage {
         F: FnOnce(OAuthCredential) -> Fut,
         Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
     {
+        self.resolve_with_refresh_using_clock(provider, || Ok(now_ms), refresh)
+            .await
+    }
+
+    pub(super) async fn resolve_with_refresh_using_clock<C, F, Fut>(
+        &self,
+        provider: &str,
+        current_time_ms: C,
+        refresh: F,
+    ) -> Result<Option<OAuthCredential>, AuthStorageError>
+    where
+        C: FnOnce() -> Result<u64, AuthStorageError>,
+        F: FnOnce(OAuthCredential) -> Fut,
+        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
+    {
         validate_provider(provider)?;
         let lock = self.lock_exclusive_async().await?;
         let mut document = self.read_document()?;
+        let now_ms = current_time_ms()?;
         let Some(stored) = document.0.get(provider).cloned() else {
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Ok(None);
@@ -597,6 +618,51 @@ mod tests {
 
         assert_eq!(refresh_count.load(Ordering::SeqCst), 1);
         assert!(storage.load(PROVIDER).unwrap().as_ref() == Some(&credential("rotated", 1_000)));
+    }
+
+    #[test]
+    fn expiry_clock_is_evaluated_after_waiting_for_the_storage_lock() {
+        use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+        use std::sync::{mpsc, Arc};
+
+        let app_data = tempfile::tempdir().unwrap();
+        let holder = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        let waiter = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        holder.save(PROVIDER, &credential("expiring", 100)).unwrap();
+        let held_lock = holder.open_lock().unwrap();
+        held_lock.lock_exclusive().unwrap();
+
+        let clock = Arc::new(AtomicU64::new(99));
+        let refresh_count = Arc::new(AtomicUsize::new(0));
+        let (clock_called, clock_observed) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let current_time = Arc::clone(&clock);
+            let waiter_refresh_count = Arc::clone(&refresh_count);
+            let handle = scope.spawn(move || {
+                tauri::async_runtime::block_on(waiter.resolve_with_refresh_using_clock(
+                    PROVIDER,
+                    move || {
+                        clock_called.send(()).unwrap();
+                        Ok(current_time.load(Ordering::SeqCst))
+                    },
+                    move |_| async move {
+                        waiter_refresh_count.fetch_add(1, Ordering::SeqCst);
+                        Ok(credential("rotated-after-wait", 1_000))
+                    },
+                ))
+                .unwrap()
+                .unwrap()
+            });
+
+            assert!(clock_observed
+                .recv_timeout(Duration::from_millis(25))
+                .is_err());
+            clock.store(100, Ordering::SeqCst);
+            FileExt::unlock(&held_lock).unwrap();
+            assert!(handle.join().unwrap() == credential("rotated-after-wait", 1_000));
+        });
+
+        assert_eq!(refresh_count.load(Ordering::SeqCst), 1);
     }
 
     #[test]
