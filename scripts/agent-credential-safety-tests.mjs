@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,9 @@ import {
   formatFindings,
   scanBlob,
   scanIndex,
+  scanRepository,
   scanText,
+  scanWorkingTree,
 } from "./agent-credential-safety.mjs";
 
 function specimen(...parts) {
@@ -85,22 +87,45 @@ writeFileSync(
   specimen("Bearer ", "working-tree-only-", "q".repeat(24)),
 );
 assert.deepEqual(scanIndex(repository), []);
+const workingTreeFindings = scanWorkingTree(repository);
+assert.ok(workingTreeFindings.some(({ rule }) => rule === "bearer-token"));
+assert.doesNotMatch(formatFindings(workingTreeFindings), /working-tree-only/);
+assert.ok(scanRepository(repository).some(({ rule }) => rule === "bearer-token"));
 
 git("add", "tracked.txt");
-const stagedFindings = scanIndex(repository);
+writeFileSync(join(repository, "tracked.txt"), "safe working tree content\n");
+const stagedFindings = scanRepository(repository);
 assert.ok(stagedFindings.some(({ rule }) => rule === "bearer-token"));
 assert.doesNotMatch(formatFindings(stagedFindings), /working-tree-only/);
 
 writeFileSync(
-  join(repository, "new-staged.txt"),
+  join(repository, "new-untracked.txt"),
   specimen("sk", "-", "n".repeat(32)),
 );
-git("add", "new-staged.txt");
 assert.ok(
-  scanIndex(repository).some(
-    ({ path, rule }) => path === "new-staged.txt" && rule === "api-token",
+  scanWorkingTree(repository).some(
+    ({ path, rule }) => path === "new-untracked.txt" && rule === "api-token",
   ),
 );
+
+git("add", "new-untracked.txt");
+assert.ok(
+  scanIndex(repository).some(
+    ({ path, rule }) => path === "new-untracked.txt" && rule === "api-token",
+  ),
+);
+
+if (process.platform !== "win32") {
+  const symlink = join(repository, "untracked-link.txt");
+  const target = join(repository, "outside.txt");
+  writeFileSync(target, "ordinary external text\n");
+  symlinkSync(target, symlink);
+  assert.ok(
+    scanWorkingTree(repository).some(
+      ({ path, rule }) => path === "untracked-link.txt" && rule === "unscannable-symlink",
+    ),
+  );
+}
 rmSync(repository, { recursive: true, force: true });
 
 console.log("agent credential safety self-tests passed");

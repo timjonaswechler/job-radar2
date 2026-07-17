@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { lstatSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -190,6 +191,51 @@ export function scanIndex(repository = process.cwd()) {
   return findings;
 }
 
+export function scanWorkingTree(repository = process.cwd()) {
+  const output = runGit(repository, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
+  const findings = [];
+  for (const path of output.toString("utf8").split("\0")) {
+    if (!path) continue;
+    const absolutePath = resolve(repository, path);
+    let metadata;
+    try {
+      metadata = lstatSync(absolutePath);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw new Error("credential safeguard could not read the working tree");
+    }
+    if (metadata.isSymbolicLink()) {
+      findings.push({ path, rule: "unscannable-symlink" });
+      continue;
+    }
+    if (!metadata.isFile()) continue;
+    if (metadata.size > MAX_TEXT_BYTES && !binaryExtensions.has(extension(path))) {
+      findings.push({ path, rule: "unscannable-large-text" });
+      continue;
+    }
+    try {
+      findings.push(...scanBlob(path, readFileSync(absolutePath)));
+    } catch {
+      throw new Error("credential safeguard could not read the working tree");
+    }
+  }
+  return findings;
+}
+
+function uniqueFindings(findings) {
+  const seen = new Set();
+  return findings.filter(({ path, rule }) => {
+    const key = `${path}\0${rule}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function scanRepository(repository = process.cwd()) {
+  return uniqueFindings([...scanIndex(repository), ...scanWorkingTree(repository)]);
+}
+
 export function formatFindings(findings) {
   return findings.map(({ path, rule }) => `${path.replace(/[\r\n\t]/g, "?")}: ${rule}`).join("\n");
 }
@@ -197,20 +243,20 @@ export function formatFindings(findings) {
 function main() {
   let findings;
   try {
-    findings = scanIndex();
+    findings = scanRepository();
   } catch {
-    console.error("agent credential safeguard failed closed: Git index unavailable");
+    console.error("agent credential safeguard failed closed: repository snapshot unavailable");
     process.exitCode = 2;
     return;
   }
   if (findings.length > 0) {
-    console.error("agent credential safeguard rejected the Git index:");
+    console.error("agent credential safeguard rejected the repository snapshot:");
     console.error(formatFindings(findings));
     console.error("matched values are intentionally redacted");
     process.exitCode = 1;
     return;
   }
-  console.log("agent credential safeguard passed: Git index contains no high-confidence credential findings");
+  console.log("agent credential safeguard passed: Git index and working tree contain no high-confidence credential findings");
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {

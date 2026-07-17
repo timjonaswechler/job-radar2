@@ -68,6 +68,7 @@ jobs:
           npm run test:source-ui
           npm run test:postings-ui
           npm run test:window-platform
+          npm run test:agent-settings-ui
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
