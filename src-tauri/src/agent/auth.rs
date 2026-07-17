@@ -3,10 +3,11 @@
 
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::future::Future;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -98,25 +99,6 @@ impl OAuthCredential {
         };
         credential.validate()?;
         Ok(credential)
-    }
-
-    // Compatibility constructor for the existing OpenAI Codex adapter.
-    pub(crate) fn new(
-        access: String,
-        refresh: String,
-        expires_at_ms: u64,
-        account_id: String,
-    ) -> Self {
-        Self {
-            credential_type: OAuthCredentialType::OAuth,
-            access,
-            refresh,
-            expires_at_ms,
-            metadata: BTreeMap::from([(
-                "accountId".to_owned(),
-                serde_json::Value::String(account_id),
-            )]),
-        }
     }
 
     pub(crate) fn metadata(&self) -> &BTreeMap<String, serde_json::Value> {
@@ -307,10 +289,12 @@ impl AuthStorage {
             directory: agents_data_root.to_owned(),
             published: RwLock::new(PublishedAuth::Unavailable),
         };
-        let lock = storage.open_lock()?;
+        let mut lock = storage.open_lock()?;
         lock.lock_exclusive()
             .map_err(|_| AuthStorageError::unavailable())?;
         storage.initialize_or_migrate(app_data_dir)?;
+        let document = storage.read_document()?;
+        write_document_fingerprint(&mut lock, &document)?;
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
         storage.reload()?;
         Ok(storage)
@@ -364,19 +348,24 @@ impl AuthStorage {
     }
 
     pub(crate) fn reload(&self) -> Result<(), AuthStorageError> {
-        let lock = match self.open_lock() {
+        let mut lock = match self.open_lock() {
             Ok(lock) => lock,
             Err(error) => {
                 self.publish(PublishedAuth::Unavailable);
                 return Err(error);
             }
         };
-        if lock.lock_shared().is_err() {
+        if lock.lock_exclusive().is_err() {
             self.publish(PublishedAuth::Unavailable);
             return Err(AuthStorageError::unavailable());
         }
         match self.read_document() {
             Ok(document) => {
+                if let Err(error) = write_document_fingerprint(&mut lock, &document) {
+                    self.publish(PublishedAuth::Unavailable);
+                    FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                    return Err(error);
+                }
                 self.publish(PublishedAuth::Available(document));
                 if FileExt::unlock(&lock).is_err() {
                     self.publish(PublishedAuth::Unavailable);
@@ -436,41 +425,6 @@ impl AuthStorage {
         })
     }
 
-    // Compatibility surface for the provider-specific migration ticket.
-    pub(crate) fn load(&self, provider: &str) -> Result<Option<OAuthCredential>, AuthStorageError> {
-        validate_provider(provider)?;
-        let lock = self.open_lock()?;
-        lock.lock_shared()
-            .map_err(|_| AuthStorageError::unavailable())?;
-        let document = match self.read_document() {
-            Ok(document) => document,
-            Err(error) => {
-                self.publish(PublishedAuth::Unavailable);
-                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-                return Err(error);
-            }
-        };
-        let credential = match document.0.get(provider) {
-            Some(StoredCredential::OAuth(credential)) => Some(credential.clone()),
-            Some(StoredCredential::ApiKey(_)) | None => None,
-        };
-        self.publish(PublishedAuth::Available(document));
-        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-        Ok(credential)
-    }
-
-    pub(crate) fn save(
-        &self,
-        provider: &str,
-        credential: &OAuthCredential,
-    ) -> Result<(), AuthStorageError> {
-        self.set_oauth(provider, credential.clone())
-    }
-
-    pub(crate) fn remove(&self, provider: &str) -> Result<(), AuthStorageError> {
-        self.logout(provider)
-    }
-
     pub(crate) async fn resolve<E, F, Fut>(
         &self,
         provider: &str,
@@ -480,6 +434,30 @@ impl AuthStorage {
     ) -> Result<Option<ResolvedCredential>, AuthStorageError>
     where
         E: Fn(&str) -> Option<String> + ?Sized,
+        F: FnOnce(OAuthCredential) -> Fut,
+        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
+    {
+        self.resolve_using_clock(
+            provider,
+            runtime_override,
+            environment,
+            system_time_ms,
+            refresh,
+        )
+        .await
+    }
+
+    pub(crate) async fn resolve_using_clock<E, C, F, Fut>(
+        &self,
+        provider: &str,
+        runtime_override: Option<&str>,
+        environment: &E,
+        current_time_ms: C,
+        refresh: F,
+    ) -> Result<Option<ResolvedCredential>, AuthStorageError>
+    where
+        E: Fn(&str) -> Option<String> + ?Sized,
+        C: Fn() -> Result<u64, AuthStorageError>,
         F: FnOnce(OAuthCredential) -> Fut,
         Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
     {
@@ -497,13 +475,13 @@ impl AuthStorage {
                 Ok(Some(ResolvedCredential::ApiKey(key)))
             }
             Some(StoredCredential::OAuth(credential)) => {
-                if system_time_ms()? < credential.expires_at_ms {
+                if current_time_ms()? < credential.expires_at_ms {
                     return Ok(Some(ResolvedCredential::OAuth {
-                        access: credential.access.clone(),
-                        metadata: credential.metadata().clone(),
+                        access: credential.access,
+                        metadata: credential.metadata,
                     }));
                 }
-                self.refresh_published_oauth(provider, credential, refresh)
+                self.resolve_published_oauth(provider, credential, current_time_ms, refresh)
                     .await
                     .map(|credential| ResolvedCredential::OAuth {
                         access: credential.access.clone(),
@@ -514,31 +492,34 @@ impl AuthStorage {
         }
     }
 
-    async fn refresh_published_oauth<F, Fut>(
+    async fn resolve_published_oauth<C, F, Fut>(
         &self,
         provider: &str,
         expected: OAuthCredential,
+        current_time_ms: C,
         refresh: F,
     ) -> Result<OAuthCredential, AuthStorageError>
     where
+        C: Fn() -> Result<u64, AuthStorageError>,
         F: FnOnce(OAuthCredential) -> Fut,
         Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
     {
-        let lock = self.lock_exclusive_async().await?;
+        let mut lock = self.lock_exclusive_async().await?;
         let mut document = match self.read_document() {
             Ok(document) => document,
             Err(error) => {
-                self.publish(PublishedAuth::Unavailable);
                 FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
                 return Err(error);
             }
         };
+        let now_ms = current_time_ms()?;
         let Some(StoredCredential::OAuth(current)) = document.0.get(provider).cloned() else {
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Err(AuthStorageError::unavailable());
         };
         if current != expected {
-            if system_time_ms()? < current.expires_at_ms {
+            let trusted_persisted_rotation = document_fingerprint_matches(&mut lock, &document)?;
+            if trusted_persisted_rotation && now_ms < current.expires_at_ms {
                 self.publish(PublishedAuth::Available(document));
                 FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
                 return Ok(current);
@@ -546,7 +527,7 @@ impl AuthStorage {
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Err(AuthStorageError::unavailable());
         }
-        if system_time_ms()? < current.expires_at_ms {
+        if now_ms < current.expires_at_ms {
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Ok(current);
         }
@@ -559,118 +540,34 @@ impl AuthStorage {
             StoredCredential::OAuth(refreshed.clone()),
         );
         self.write_document(&document)?;
+        write_document_fingerprint(&mut lock, &document)?;
         self.publish(PublishedAuth::Available(document));
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
         Ok(refreshed)
-    }
-
-    pub(crate) async fn resolve_with_refresh<F, Fut>(
-        &self,
-        provider: &str,
-        refresh: F,
-    ) -> Result<Option<OAuthCredential>, AuthStorageError>
-    where
-        F: FnOnce(OAuthCredential) -> Fut,
-        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
-    {
-        self.resolve_with_refresh_using_clock(
-            provider,
-            || {
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_err(|_| AuthStorageError::invalid_configuration())?
-                    .as_millis()
-                    .try_into()
-                    .map_err(|_| AuthStorageError::invalid_configuration())
-            },
-            refresh,
-        )
-        .await
-    }
-
-    pub(super) async fn resolve_with_refresh_at<F, Fut>(
-        &self,
-        provider: &str,
-        now_ms: u64,
-        refresh: F,
-    ) -> Result<Option<OAuthCredential>, AuthStorageError>
-    where
-        F: FnOnce(OAuthCredential) -> Fut,
-        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
-    {
-        self.resolve_with_refresh_using_clock(provider, || Ok(now_ms), refresh)
-            .await
-    }
-
-    pub(super) async fn resolve_with_refresh_using_clock<C, F, Fut>(
-        &self,
-        provider: &str,
-        current_time_ms: C,
-        refresh: F,
-    ) -> Result<Option<OAuthCredential>, AuthStorageError>
-    where
-        C: FnOnce() -> Result<u64, AuthStorageError>,
-        F: FnOnce(OAuthCredential) -> Fut,
-        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
-    {
-        validate_provider(provider)?;
-        let lock = self.lock_exclusive_async().await?;
-        let mut document = match self.read_document() {
-            Ok(document) => document,
-            Err(error) => {
-                self.publish(PublishedAuth::Unavailable);
-                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-                return Err(error);
-            }
-        };
-        let now_ms = current_time_ms()?;
-        let Some(StoredCredential::OAuth(stored)) = document.0.get(provider).cloned() else {
-            self.publish(PublishedAuth::Available(document));
-            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-            return Ok(None);
-        };
-        if now_ms < stored.expires_at_ms {
-            self.publish(PublishedAuth::Available(document));
-            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-            return Ok(Some(stored));
-        }
-
-        let refreshed = match refresh(stored).await {
-            Ok(refreshed) => refreshed,
-            Err(_) => {
-                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-                return Err(AuthStorageError::refresh_failed());
-            }
-        };
-        refreshed.validate()?;
-        document.0.insert(
-            provider.to_owned(),
-            StoredCredential::OAuth(refreshed.clone()),
-        );
-        self.write_document(&document)?;
-        self.publish(PublishedAuth::Available(document));
-        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-        Ok(Some(refreshed))
     }
 
     fn mutate_document(
         &self,
         mutate: impl FnOnce(&mut AuthDocument),
     ) -> Result<(), AuthStorageError> {
-        let lock = self.open_lock()?;
+        let mut lock = self.open_lock()?;
         lock.lock_exclusive()
             .map_err(|_| AuthStorageError::unavailable())?;
         let mut document = match self.read_document() {
             Ok(document) => document,
             Err(error) => {
-                self.publish(PublishedAuth::Unavailable);
                 FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
                 return Err(error);
             }
         };
+        if !document_fingerprint_matches(&mut lock, &document)? {
+            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+            return Err(AuthStorageError::unavailable());
+        }
         mutate(&mut document);
         document.validate()?;
         self.write_document(&document)?;
+        write_document_fingerprint(&mut lock, &document)?;
         self.publish(PublishedAuth::Available(document));
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
         Ok(())
@@ -741,6 +638,34 @@ impl AuthStorage {
             .and_then(|directory| directory.sync_all())
             .map_err(|_| AuthStorageError::unavailable())
     }
+}
+
+fn write_document_fingerprint(
+    lock: &mut File,
+    document: &AuthDocument,
+) -> Result<(), AuthStorageError> {
+    let bytes =
+        serde_json::to_vec(document).map_err(|_| AuthStorageError::invalid_configuration())?;
+    let fingerprint = Sha256::digest(bytes);
+    lock.seek(SeekFrom::Start(0))
+        .and_then(|_| lock.set_len(0))
+        .and_then(|_| lock.write_all(&fingerprint))
+        .and_then(|_| lock.sync_all())
+        .map_err(|_| AuthStorageError::unavailable())
+}
+
+fn document_fingerprint_matches(
+    lock: &mut File,
+    document: &AuthDocument,
+) -> Result<bool, AuthStorageError> {
+    let bytes =
+        serde_json::to_vec(document).map_err(|_| AuthStorageError::invalid_configuration())?;
+    let expected = Sha256::digest(bytes);
+    let mut actual = Vec::new();
+    lock.seek(SeekFrom::Start(0))
+        .and_then(|_| lock.read_to_end(&mut actual))
+        .map_err(|_| AuthStorageError::unavailable())?;
+    Ok(actual.as_slice() == expected.as_slice())
 }
 
 fn system_time_ms() -> Result<u64, AuthStorageError> {
@@ -988,18 +913,30 @@ mod tests {
     const PROVIDER: &str = "synthetic-provider";
 
     fn credential(suffix: &str, expires_at_ms: u64) -> OAuthCredential {
-        OAuthCredential::new(
+        OAuthCredential::with_metadata(
             format!("synthetic-access-{suffix}"),
             format!("synthetic-refresh-{suffix}"),
             expires_at_ms,
-            format!("synthetic-account-{suffix}"),
+            BTreeMap::from([(
+                "syntheticMetadata".to_owned(),
+                serde_json::Value::String(format!("synthetic-value-{suffix}")),
+            )]),
         )
+        .unwrap()
     }
 
     fn api_key_value(resolved: Option<ResolvedCredential>) -> String {
         match resolved {
             Some(ResolvedCredential::ApiKey(value)) => value,
             Some(ResolvedCredential::OAuth { .. }) => panic!("expected an API key credential"),
+            None => panic!("expected a configured credential"),
+        }
+    }
+
+    fn oauth_access(resolved: Option<ResolvedCredential>) -> String {
+        match resolved {
+            Some(ResolvedCredential::OAuth { access, .. }) => access,
+            Some(ResolvedCredential::ApiKey(_)) => panic!("expected an OAuth credential"),
             None => panic!("expected a configured credential"),
         }
     }
@@ -1131,6 +1068,75 @@ mod tests {
     }
 
     #[test]
+    fn expired_resolution_does_not_publish_manual_disk_edits_without_reload() {
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        storage
+            .set_oauth(PROVIDER, credential("published", 100))
+            .unwrap();
+        let auth_path = app_data.path().join("agents/auth.json");
+
+        fs::write(
+            &auth_path,
+            br#"{"synthetic-provider":{"type":"oauth","access":"synthetic-manual-access","refresh":"synthetic-manual-refresh","expires":1000}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            storage.logout(PROVIDER).unwrap_err().category,
+            AuthStorageErrorCategory::Unavailable
+        );
+        let valid_edit = match tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(100),
+            |_| async { panic!("a manual credential must not be refreshed or published") },
+        )) {
+            Ok(_) => panic!("manual credential unexpectedly became visible"),
+            Err(error) => error,
+        };
+        assert_eq!(valid_edit.category, AuthStorageErrorCategory::Unavailable);
+        let still_published = tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(99),
+            |_| async { panic!("the published credential is still unexpired") },
+        ))
+        .unwrap();
+        assert_eq!(oauth_access(still_published), "synthetic-access-published");
+
+        fs::write(&auth_path, b"synthetic malformed credential document").unwrap();
+        assert_eq!(
+            storage.logout(PROVIDER).unwrap_err().category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        let malformed_edit = match tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(100),
+            |_| async { panic!("a malformed document must not reach refresh") },
+        )) {
+            Ok(_) => panic!("malformed credential document unexpectedly became visible"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            malformed_edit.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        let still_published = tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(99),
+            |_| async { panic!("the published credential is still unexpired") },
+        ))
+        .unwrap();
+        assert_eq!(oauth_access(still_published), "synthetic-access-published");
+    }
+
+    #[test]
     fn missing_environment_references_do_not_fall_through_and_commands_are_rejected() {
         let app_data = tempfile::tempdir().unwrap();
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
@@ -1206,13 +1212,13 @@ mod tests {
     }
 
     #[test]
-    fn save_load_status_and_remove_use_private_repository_external_storage() {
+    fn set_resolve_status_and_logout_use_private_repository_external_storage() {
         let app_data = tempfile::tempdir().unwrap();
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         let expected = credential("alpha", u64::MAX);
 
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::NotConfigured);
-        storage.save(PROVIDER, &expected).unwrap();
+        storage.set_oauth(PROVIDER, expected.clone()).unwrap();
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::Configured);
         let stored_json: serde_json::Value =
             serde_json::from_slice(&fs::read(app_data.path().join("agents/auth.json")).unwrap())
@@ -1220,7 +1226,15 @@ mod tests {
         assert_eq!(stored_json[PROVIDER]["type"], "oauth");
         assert_eq!(stored_json[PROVIDER]["expires"], u64::MAX);
         assert!(stored_json[PROVIDER].get("expiresAtMs").is_none());
-        assert!(storage.load(PROVIDER).unwrap().as_ref() == Some(&expected));
+        let resolved =
+            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                panic!("unexpired OAuth credential must not refresh")
+            }))
+            .unwrap();
+        assert!(matches!(
+            resolved,
+            Some(ResolvedCredential::OAuth { access, .. }) if access == expected.access
+        ));
 
         let storage_dir = app_data.path().join("agents");
         let auth_file = storage_dir.join("auth.json");
@@ -1238,9 +1252,14 @@ mod tests {
             0o600
         );
 
-        storage.remove(PROVIDER).unwrap();
+        storage.logout(PROVIDER).unwrap();
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::NotConfigured);
-        assert!(storage.load(PROVIDER).unwrap().is_none());
+        let resolved =
+            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                panic!("missing OAuth credential must not refresh")
+            }))
+            .unwrap();
+        assert!(resolved.is_none());
     }
 
     #[test]
@@ -1292,7 +1311,7 @@ mod tests {
         let app_data = tempfile::tempdir().unwrap();
         let canonical = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         canonical
-            .save(PROVIDER, &credential("canonical", u64::MAX))
+            .set_oauth(PROVIDER, credential("canonical", u64::MAX))
             .unwrap();
         let legacy_dir = app_data.path().join("agent");
         fs::create_dir(&legacy_dir).unwrap();
@@ -1408,7 +1427,7 @@ mod tests {
                     let storage = AuthStorage::for_test_app_data(&app_data_path).unwrap();
                     barrier.wait();
                     storage
-                        .save(provider, &credential(suffix, u64::MAX))
+                        .set_oauth(provider, credential(suffix, u64::MAX))
                         .unwrap();
                 });
             }
@@ -1416,8 +1435,16 @@ mod tests {
         });
 
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        assert!(storage.load("synthetic-provider-a").unwrap().is_some());
-        assert!(storage.load("synthetic-provider-b").unwrap().is_some());
+        for provider in ["synthetic-provider-a", "synthetic-provider-b"] {
+            let resolved = tauri::async_runtime::block_on(storage.resolve(
+                provider,
+                None,
+                &|_| None,
+                |_| async { panic!("unexpired OAuth credential must not refresh") },
+            ))
+            .unwrap();
+            assert!(matches!(resolved, Some(ResolvedCredential::OAuth { .. })));
+        }
     }
 
     #[test]
@@ -1466,7 +1493,9 @@ mod tests {
 
         let app_data = tempfile::tempdir().unwrap();
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        storage.save(PROVIDER, &credential("expired", 100)).unwrap();
+        storage
+            .set_oauth(PROVIDER, credential("expired", 100))
+            .unwrap();
         let refresh_count = Arc::new(AtomicUsize::new(0));
         let barrier = Arc::new(Barrier::new(3));
 
@@ -1478,24 +1507,33 @@ mod tests {
                 scope.spawn(move || {
                     let storage = AuthStorage::for_test_app_data(&app_data_path).unwrap();
                     barrier.wait();
-                    let resolved = tauri::async_runtime::block_on(storage.resolve_with_refresh_at(
+                    let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
                         PROVIDER,
-                        100,
+                        None,
+                        &|_| None,
+                        || Ok(100),
                         move |_| async move {
                             refresh_count.fetch_add(1, Ordering::SeqCst);
                             Ok(credential("rotated", 1_000))
                         },
                     ))
-                    .unwrap()
                     .unwrap();
-                    assert!(resolved == credential("rotated", 1_000));
+                    assert_eq!(oauth_access(resolved), "synthetic-access-rotated");
                 });
             }
             barrier.wait();
         });
 
         assert_eq!(refresh_count.load(Ordering::SeqCst), 1);
-        assert!(storage.load(PROVIDER).unwrap().as_ref() == Some(&credential("rotated", 1_000)));
+        let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(999),
+            |_| async { panic!("persisted credential must remain unexpired") },
+        ))
+        .unwrap();
+        assert_eq!(oauth_access(resolved), "synthetic-access-rotated");
     }
 
     #[test]
@@ -1505,20 +1543,24 @@ mod tests {
 
         let app_data = tempfile::tempdir().unwrap();
         let holder = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        holder
+            .set_oauth(PROVIDER, credential("expiring", 100))
+            .unwrap();
         let waiter = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        holder.save(PROVIDER, &credential("expiring", 100)).unwrap();
         let held_lock = holder.open_lock().unwrap();
         held_lock.lock_exclusive().unwrap();
 
-        let clock = Arc::new(AtomicU64::new(99));
+        let clock = Arc::new(AtomicU64::new(100));
         let refresh_count = Arc::new(AtomicUsize::new(0));
         let (clock_called, clock_observed) = mpsc::channel();
         std::thread::scope(|scope| {
             let current_time = Arc::clone(&clock);
             let waiter_refresh_count = Arc::clone(&refresh_count);
             let handle = scope.spawn(move || {
-                tauri::async_runtime::block_on(waiter.resolve_with_refresh_using_clock(
+                tauri::async_runtime::block_on(waiter.resolve_using_clock(
                     PROVIDER,
+                    None,
+                    &|_| None,
                     move || {
                         clock_called.send(()).unwrap();
                         Ok(current_time.load(Ordering::SeqCst))
@@ -1529,15 +1571,20 @@ mod tests {
                     },
                 ))
                 .unwrap()
-                .unwrap()
             });
 
-            assert!(clock_observed
-                .recv_timeout(Duration::from_millis(25))
-                .is_err());
-            clock.store(100, Ordering::SeqCst);
+            clock_observed
+                .recv_timeout(Duration::from_secs(1))
+                .expect("expiry must be checked before waiting for the lock");
+            clock.store(101, Ordering::SeqCst);
             FileExt::unlock(&held_lock).unwrap();
-            assert!(handle.join().unwrap() == credential("rotated-after-wait", 1_000));
+            assert_eq!(
+                oauth_access(handle.join().unwrap()),
+                "synthetic-access-rotated-after-wait"
+            );
+            clock_observed
+                .recv_timeout(Duration::from_secs(1))
+                .expect("expiry must be checked again after acquiring the lock");
         });
 
         assert_eq!(refresh_count.load(Ordering::SeqCst), 1);
@@ -1546,18 +1593,29 @@ mod tests {
     #[test]
     fn refresh_lock_wait_does_not_block_other_async_work() {
         let app_data = tempfile::tempdir().unwrap();
-        let first = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        let second = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        first.save(PROVIDER, &credential("expired", 100)).unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        storage
+            .set_oauth(PROVIDER, credential("expired", 100))
+            .unwrap();
 
         tauri::async_runtime::block_on(async {
-            let first_resolution = first.resolve_with_refresh_at(PROVIDER, 100, |_| async {
-                tokio::time::sleep(Duration::from_millis(25)).await;
-                Ok(credential("rotated", 1_000))
-            });
-            let second_resolution = second.resolve_with_refresh_at(PROVIDER, 100, |_| async {
-                panic!("second waiter must observe the persisted rotated credential")
-            });
+            let first_resolution = storage.resolve_using_clock(
+                PROVIDER,
+                None,
+                &|_| None,
+                || Ok(100),
+                |_| async {
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                    Ok(credential("rotated", 1_000))
+                },
+            );
+            let second_resolution = storage.resolve_using_clock(
+                PROVIDER,
+                None,
+                &|_| None,
+                || Ok(100),
+                |_| async { panic!("second waiter must observe the persisted rotated credential") },
+            );
             let (first_result, second_result) = tokio::time::timeout(
                 Duration::from_secs(1),
                 futures_util::future::join(first_resolution, second_resolution),
@@ -1565,8 +1623,14 @@ mod tests {
             .await
             .expect("async refresh coordination timed out");
 
-            assert!(first_result.unwrap().unwrap() == credential("rotated", 1_000));
-            assert!(second_result.unwrap().unwrap() == credential("rotated", 1_000));
+            assert_eq!(
+                oauth_access(first_result.unwrap()),
+                "synthetic-access-rotated"
+            );
+            assert_eq!(
+                oauth_access(second_result.unwrap()),
+                "synthetic-access-rotated"
+            );
         });
     }
 
@@ -1575,11 +1639,13 @@ mod tests {
         let app_data = tempfile::tempdir().unwrap();
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         let expired = credential("expired", 100);
-        storage.save(PROVIDER, &expired).unwrap();
+        storage.set_oauth(PROVIDER, expired.clone()).unwrap();
 
-        let error = match tauri::async_runtime::block_on(storage.resolve_with_refresh_at(
+        let error = match tauri::async_runtime::block_on(storage.resolve_using_clock(
             PROVIDER,
-            100,
+            None,
+            &|_| None,
+            || Ok(100),
             |_| async { Err(AuthStorageError::unavailable()) },
         )) {
             Ok(_) => panic!("expired credential unexpectedly resolved"),
@@ -1589,7 +1655,15 @@ mod tests {
         assert_eq!(error.category, AuthStorageErrorCategory::RefreshFailed);
         assert_eq!(error.message, "authentication refresh failed");
         assert!(!format!("{error:?}").contains("synthetic-"));
-        assert!(storage.load(PROVIDER).unwrap().as_ref() == Some(&expired));
+        let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
+            PROVIDER,
+            None,
+            &|_| None,
+            || Ok(99),
+            |_| async { panic!("stored credential must remain unchanged") },
+        ))
+        .unwrap();
+        assert_eq!(oauth_access(resolved), expired.access);
     }
 
     #[test]
@@ -1671,10 +1745,9 @@ mod tests {
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         let auth_path = app_data.path().join("agents/auth.json");
         fs::write(&auth_path, b"synthetic malformed credential document").unwrap();
-        let error = match storage.load(PROVIDER) {
-            Ok(_) => panic!("malformed credential document unexpectedly loaded"),
-            Err(error) => error,
-        };
+        let error = storage
+            .reload()
+            .expect_err("malformed credential document unexpectedly loaded");
         let diagnostic = format!("{error:?}");
         assert_eq!(
             error.category,

@@ -478,10 +478,12 @@ where
     use job_radar_lib::agent::openai_codex::{
         AgentAuthentication, AuthStatus, OpenAiCodexProvider,
     };
-    use job_radar_lib::agent::AgentConversation;
+    use job_radar_lib::agent::{AgentConversation, ModelRegistry};
+    use std::sync::Arc;
 
-    let authentication = AgentAuthentication::for_current_user()?;
-    let provider = OpenAiCodexProvider::for_current_user()?;
+    let authentication = Arc::new(AgentAuthentication::for_current_user()?);
+    let registry = Arc::new(ModelRegistry::for_current_user()?);
+    let provider = OpenAiCodexProvider::new(Arc::clone(&authentication), registry)?;
     let mut conversation = AgentConversation::new(
         "You are a concise, helpful assistant.".to_owned(),
         provider,

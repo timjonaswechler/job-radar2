@@ -1,5 +1,6 @@
 use super::{AgentAuthentication, ProviderCredential};
-use crate::agent::models::{codex_reasoning_effort, openai_codex_models, Model};
+use crate::agent::models::{Model, ProviderId, ReasoningLevel};
+use crate::agent::registry::{ModelRegistry, ResolvedModelRequest};
 use crate::agent::{
     AgentError, AssistantContent, ContentKind, ConversationProvider, ConversationRequest,
     FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,
@@ -12,7 +13,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-const CODEX_RESPONSES_URL: &str = "https://chatgpt.com/backend-api/codex/responses";
 const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
 const MAX_SSE_EVENT_BYTES: usize = 1024 * 1024;
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(60 * 60);
@@ -22,21 +22,32 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, AgentError>> + Send + 'static>>;
 
 trait CredentialResolver: Send + Sync {
-    fn resolve(&self) -> BoxFuture<Result<ProviderCredential, AgentError>>;
+    fn resolve(
+        &self,
+        runtime_override: Option<String>,
+    ) -> BoxFuture<Result<ProviderCredential, AgentError>>;
 }
 
 struct AuthenticationResolver(Arc<AgentAuthentication>);
 
 impl CredentialResolver for AuthenticationResolver {
-    fn resolve(&self) -> BoxFuture<Result<ProviderCredential, AgentError>> {
+    fn resolve(
+        &self,
+        runtime_override: Option<String>,
+    ) -> BoxFuture<Result<ProviderCredential, AgentError>> {
         let authentication = Arc::clone(&self.0);
-        Box::pin(async move { authentication.resolve_for_request().await })
+        Box::pin(async move {
+            authentication
+                .resolve_for_request(runtime_override.as_deref())
+                .await
+        })
     }
 }
 
 struct CodexHttpRequest {
-    url: &'static str,
+    url: String,
     body: Vec<u8>,
+    headers: reqwest::header::HeaderMap,
     access: String,
     account_id: String,
     originator: &'static str,
@@ -79,6 +90,7 @@ impl CodexHttpClient for ReqwestCodexHttpClient {
         Box::pin(async move {
             let response = client
                 .post(request.url)
+                .headers(request.headers)
                 .header(
                     reqwest::header::AUTHORIZATION,
                     format!("Bearer {}", request.access),
@@ -113,19 +125,35 @@ impl CodexHttpClient for ReqwestCodexHttpClient {
 
 pub struct OpenAiCodexProvider {
     authentication: Arc<dyn CredentialResolver>,
+    registry: Arc<ModelRegistry>,
+    models: Vec<Model>,
     http: Arc<dyn CodexHttpClient>,
 }
 
 impl OpenAiCodexProvider {
-    pub fn new(authentication: AgentAuthentication) -> Result<Self, AgentError> {
+    pub fn new(
+        authentication: Arc<AgentAuthentication>,
+        registry: Arc<ModelRegistry>,
+    ) -> Result<Self, AgentError> {
+        let provider_id = ProviderId::new(super::PROVIDER_ID)?;
+        let models = registry
+            .snapshot()
+            .provider(&provider_id)
+            .ok_or_else(AgentError::model_unavailable)?
+            .models()
+            .to_vec();
         Ok(Self {
-            authentication: Arc::new(AuthenticationResolver(Arc::new(authentication))),
+            authentication: Arc::new(AuthenticationResolver(authentication)),
+            registry,
+            models,
             http: Arc::new(ReqwestCodexHttpClient::new()?),
         })
     }
 
     pub fn for_current_user() -> Result<Self, AgentError> {
-        Self::new(AgentAuthentication::for_current_user()?)
+        let authentication = Arc::new(AgentAuthentication::for_current_user()?);
+        let registry = Arc::new(ModelRegistry::for_current_user()?);
+        Self::new(authentication, registry)
     }
 
     #[cfg(test)]
@@ -133,8 +161,29 @@ impl OpenAiCodexProvider {
         authentication: Arc<dyn CredentialResolver>,
         http: Arc<dyn CodexHttpClient>,
     ) -> Self {
+        let app_data = tempfile::tempdir().unwrap();
+        let registry =
+            Arc::new(ModelRegistry::from_agents_data_root(app_data.path().join("agents")).unwrap());
+        Self::with_foundations(authentication, registry, http)
+    }
+
+    #[cfg(test)]
+    fn with_foundations(
+        authentication: Arc<dyn CredentialResolver>,
+        registry: Arc<ModelRegistry>,
+        http: Arc<dyn CodexHttpClient>,
+    ) -> Self {
+        let provider_id = ProviderId::new(super::PROVIDER_ID).unwrap();
+        let models = registry
+            .snapshot()
+            .provider(&provider_id)
+            .unwrap()
+            .models()
+            .to_vec();
         Self {
             authentication,
+            registry,
+            models,
             http,
         }
     }
@@ -142,18 +191,28 @@ impl OpenAiCodexProvider {
 
 impl ConversationProvider for OpenAiCodexProvider {
     fn models(&self) -> &[Model] {
-        openai_codex_models()
+        &self.models
     }
 
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream {
         let authentication = Arc::clone(&self.authentication);
         let http = Arc::clone(&self.http);
+        let resolved = self
+            .registry
+            .resolve_request(request.model().provider(), request.model().id());
         let (sender, receiver) = tokio::sync::mpsc::channel(16);
         tauri::async_runtime::spawn(async move {
             if sender.send(ProviderEvent::Started).await.is_err() {
                 return;
             }
-            let result = run_stream(authentication.as_ref(), http.as_ref(), request, &sender).await;
+            let result = run_stream(
+                authentication.as_ref(),
+                http.as_ref(),
+                resolved,
+                request,
+                &sender,
+            )
+            .await;
             if let Err(error) = result {
                 let _ = sender.send(ProviderEvent::Failed(error)).await;
             }
@@ -168,23 +227,26 @@ impl ConversationProvider for OpenAiCodexProvider {
 async fn run_stream(
     authentication: &dyn CredentialResolver,
     http: &dyn CodexHttpClient,
+    resolved: Result<ResolvedModelRequest, AgentError>,
     request: ConversationRequest,
     sender: &tokio::sync::mpsc::Sender<ProviderEvent>,
 ) -> Result<(), AgentError> {
-    if request.model().provider().as_str() != super::PROVIDER_ID
-        || !openai_codex_models()
-            .iter()
-            .any(|model| model.id() == request.model().id())
-    {
+    let resolved = resolved?;
+    if resolved.model().provider().as_str() != super::PROVIDER_ID {
         return Err(AgentError::model_unavailable());
     }
-    let body = build_request_body(&request)?;
-    let credential = authentication.resolve().await?;
+    let url = codex_responses_url(resolved.model().base_url())?;
+    let body = build_request_body(&request, resolved.model())?;
+    let headers = configured_headers(resolved.headers())?;
+    let credential = authentication
+        .resolve(resolved.api_key_override().map(str::to_owned))
+        .await?;
     let session_id = clamp_identifier(request.conversation_id());
     let response = http
         .send(CodexHttpRequest {
-            url: CODEX_RESPONSES_URL,
+            url,
             body,
+            headers,
             access: credential.access,
             account_id: credential.account_id,
             originator: "pi",
@@ -202,7 +264,7 @@ async fn run_stream(
     translate_sse(response.body, sender).await
 }
 
-fn build_request_body(request: &ConversationRequest) -> Result<Vec<u8>, AgentError> {
+fn build_request_body(request: &ConversationRequest, model: &Model) -> Result<Vec<u8>, AgentError> {
     let mut input = Vec::new();
     for message in request.messages() {
         match message {
@@ -235,9 +297,9 @@ fn build_request_body(request: &ConversationRequest) -> Result<Vec<u8>, AgentErr
             }
         }
     }
-    let effort = codex_reasoning_effort(request.model(), request.reasoning_level())?;
+    let effort = reasoning_effort(model, request.reasoning_level());
     let mut body = json!({
-        "model": request.model().id().as_str(),
+        "model": model.id().as_str(),
         "store": false,
         "stream": true,
         "instructions": if request.system_prompt().is_empty() { FALLBACK_INSTRUCTIONS } else { request.system_prompt() },
@@ -252,6 +314,76 @@ fn build_request_body(request: &ConversationRequest) -> Result<Vec<u8>, AgentErr
         body["reasoning"] = json!({"effort": effort, "summary": "auto"});
     }
     serde_json::to_vec(&body).map_err(|_| AgentError::invalid_provider_configuration())
+}
+
+fn reasoning_effort(model: &Model, requested: ReasoningLevel) -> Option<String> {
+    let normalized = model.normalize_reasoning(requested);
+    if let Some(mapped) = model.thinking_level_map().get(&normalized) {
+        return mapped.clone();
+    }
+    match normalized {
+        ReasoningLevel::Off => None,
+        ReasoningLevel::Minimal | ReasoningLevel::Low => Some("low".to_owned()),
+        ReasoningLevel::Medium => Some("medium".to_owned()),
+        ReasoningLevel::High => Some("high".to_owned()),
+        ReasoningLevel::XHigh => Some("xhigh".to_owned()),
+        ReasoningLevel::Max => Some("max".to_owned()),
+    }
+}
+
+fn codex_responses_url(base_url: &str) -> Result<String, AgentError> {
+    let mut url =
+        url::Url::parse(base_url).map_err(|_| AgentError::invalid_provider_configuration())?;
+    if url.scheme() != "https"
+        || url.host_str() != Some("chatgpt.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(AgentError::invalid_provider_configuration());
+    }
+    let path = url.path().trim_end_matches('/');
+    let path = if path.ends_with("/codex/responses") {
+        path.to_owned()
+    } else {
+        format!("{path}/codex/responses")
+    };
+    url.set_path(&path);
+    Ok(url.into())
+}
+
+fn configured_headers(
+    headers: &BTreeMap<String, String>,
+) -> Result<reqwest::header::HeaderMap, AgentError> {
+    const RESERVED: [&str; 10] = [
+        "authorization",
+        "chatgpt-account-id",
+        "originator",
+        "user-agent",
+        "openai-beta",
+        "accept",
+        "content-type",
+        "session-id",
+        "x-client-request-id",
+        "host",
+    ];
+    let mut result = reqwest::header::HeaderMap::new();
+    for (name, value) in headers {
+        if RESERVED
+            .iter()
+            .any(|reserved| name.eq_ignore_ascii_case(reserved))
+        {
+            return Err(AgentError::invalid_provider_configuration());
+        }
+        let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+            .map_err(|_| AgentError::invalid_provider_configuration())?;
+        let value = reqwest::header::HeaderValue::from_str(value)
+            .map_err(|_| AgentError::invalid_provider_configuration())?;
+        result.insert(name, value);
+    }
+    Ok(result)
 }
 
 fn clamp_identifier(value: &str) -> String {
@@ -799,7 +931,10 @@ mod tests {
     struct FixedCredential;
 
     impl CredentialResolver for FixedCredential {
-        fn resolve(&self) -> BoxFuture<Result<ProviderCredential, AgentError>> {
+        fn resolve(
+            &self,
+            _runtime_override: Option<String>,
+        ) -> BoxFuture<Result<ProviderCredential, AgentError>> {
             Box::pin(async {
                 Ok(ProviderCredential {
                     access: "synthetic-access-value".to_owned(),
@@ -812,9 +947,12 @@ mod tests {
     struct CountingCredential(Arc<AtomicUsize>);
 
     impl CredentialResolver for CountingCredential {
-        fn resolve(&self) -> BoxFuture<Result<ProviderCredential, AgentError>> {
+        fn resolve(
+            &self,
+            runtime_override: Option<String>,
+        ) -> BoxFuture<Result<ProviderCredential, AgentError>> {
             self.0.fetch_add(1, Ordering::SeqCst);
-            FixedCredential.resolve()
+            FixedCredential.resolve(runtime_override)
         }
     }
 
@@ -825,6 +963,7 @@ mod tests {
         session_id_len: usize,
         session_ids_match: bool,
         compatibility_headers_match: bool,
+        configured_headers_match: bool,
         cache_key_matches_session: bool,
         body: Value,
     }
@@ -862,6 +1001,12 @@ mod tests {
                         && request.beta == "responses=experimental"
                         && request.accept == "text/event-stream"
                         && request.content_type == "application/json",
+                    configured_headers_match: request
+                        .headers
+                        .get("x-synthetic-generation")
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or_default()
+                        == request.url.split('/').nth(3).unwrap_or_default(),
                     cache_key_matches_session: serde_json::from_slice::<Value>(&request.body)
                         .ok()
                         .and_then(|body| body["prompt_cache_key"].as_str().map(str::to_owned))
@@ -927,6 +1072,159 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
+    fn write_models(root: &std::path::Path, generation: &str, effort: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let document = json!({
+            "providers": {
+                "openai-codex": {
+                    "baseUrl": format!("https://chatgpt.com/{generation}"),
+                    "headers": {"x-synthetic-generation": generation},
+                    "modelOverrides": {
+                        "gpt-5.4": {
+                            "reasoning": true,
+                            "thinkingLevelMap": {"medium": effort}
+                        }
+                    }
+                }
+            }
+        });
+        let path = root.join("models.json");
+        std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn reserved_configured_headers_are_rejected_before_credentials_or_http_adapters() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let app_data = tempfile::tempdir().unwrap();
+        let root = app_data.path().join("agents");
+        let registry = Arc::new(ModelRegistry::from_agents_data_root(&root).unwrap());
+        let models_path = root.join("models.json");
+        std::fs::write(
+            &models_path,
+            br#"{"providers":{"openai-codex":{"headers":{"AuThOrIzAtIoN":"synthetic-forbidden-value"}}}}"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&models_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        registry.reload().unwrap();
+        let resolution_count = Arc::new(AtomicUsize::new(0));
+        let http = Arc::new(SyntheticHttp::new(Vec::new()));
+        let provider = OpenAiCodexProvider::with_foundations(
+            Arc::new(CountingCredential(Arc::clone(&resolution_count))),
+            registry,
+            http.clone(),
+        );
+        let mut conversation = AgentConversation::new(
+            "System".to_owned(),
+            provider,
+            ModelId::new("gpt-5.4").unwrap(),
+            ReasoningLevel::Medium,
+        )
+        .unwrap();
+
+        let events = collect_turn(&mut conversation, "Synthetic prompt");
+
+        assert!(matches!(
+            events.last(),
+            Some(ConversationEvent::Failed { error })
+                if error.category == crate::agent::AgentErrorCategory::InvalidConfiguration
+        ));
+        assert_eq!(resolution_count.load(Ordering::SeqCst), 0);
+        assert!(http.inspections.lock().unwrap().is_empty());
+        assert!(!format!("{events:?}").contains("synthetic-forbidden-value"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn foreign_codex_origin_is_rejected_before_credentials_or_http_adapters() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let app_data = tempfile::tempdir().unwrap();
+        let root = app_data.path().join("agents");
+        let registry = Arc::new(ModelRegistry::from_agents_data_root(&root).unwrap());
+        let models_path = root.join("models.json");
+        std::fs::write(
+            &models_path,
+            br#"{"providers":{"openai-codex":{"baseUrl":"https://synthetic.invalid/backend-api"}}}"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&models_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        registry.reload().unwrap();
+        let resolution_count = Arc::new(AtomicUsize::new(0));
+        let http = Arc::new(SyntheticHttp::new(Vec::new()));
+        let provider = OpenAiCodexProvider::with_foundations(
+            Arc::new(CountingCredential(Arc::clone(&resolution_count))),
+            registry,
+            http.clone(),
+        );
+        let mut conversation = AgentConversation::new(
+            "System".to_owned(),
+            provider,
+            ModelId::new("gpt-5.4").unwrap(),
+            ReasoningLevel::Medium,
+        )
+        .unwrap();
+
+        let events = collect_turn(&mut conversation, "Synthetic prompt");
+
+        assert!(matches!(
+            events.last(),
+            Some(ConversationEvent::Failed { error })
+                if error.category == crate::agent::AgentErrorCategory::InvalidConfiguration
+        ));
+        assert_eq!(resolution_count.load(Ordering::SeqCst), 0);
+        assert!(http.inspections.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn request_generation_is_pinned_in_flight_and_reloaded_for_the_next_turn() {
+        let app_data = tempfile::tempdir().unwrap();
+        let root = app_data.path().join("agents");
+        let registry = Arc::new(ModelRegistry::from_agents_data_root(&root).unwrap());
+        write_models(&root, "first", "first-effort");
+        registry.reload().unwrap();
+        let http = Arc::new(SyntheticHttp::new(vec![
+            completed_text_response("First reply", "synthetic-first-item"),
+            completed_text_response("Second reply", "synthetic-second-item"),
+        ]));
+        let provider = OpenAiCodexProvider::with_foundations(
+            Arc::new(FixedCredential),
+            Arc::clone(&registry),
+            http.clone(),
+        );
+        let mut conversation = AgentConversation::new(
+            "System".to_owned(),
+            provider,
+            ModelId::new("gpt-5.4").unwrap(),
+            ReasoningLevel::Medium,
+        )
+        .unwrap();
+
+        let first_stream = conversation.send("First".to_owned()).unwrap();
+        write_models(&root, "second", "second-effort");
+        registry.reload().unwrap();
+        tauri::async_runtime::block_on(first_stream.collect::<Vec<_>>());
+        collect_turn(&mut conversation, "Second");
+
+        let inspections = http.inspections.lock().unwrap();
+        assert_eq!(
+            inspections[0].url,
+            "https://chatgpt.com/first/codex/responses"
+        );
+        assert_eq!(inspections[0].body["reasoning"]["effort"], "first-effort");
+        assert!(inspections[0].configured_headers_match);
+        assert_eq!(
+            inspections[1].url,
+            "https://chatgpt.com/second/codex/responses"
+        );
+        assert_eq!(inspections[1].body["reasoning"]["effort"], "second-effort");
+        assert!(inspections[1].configured_headers_match);
+    }
+
     #[test]
     fn public_conversation_streams_codex_text_and_builds_pinned_safe_request() {
         let terminal = event(json!({
@@ -974,7 +1272,10 @@ mod tests {
             Some(ConversationEvent::Completed { .. })
         ));
         let inspection = http.inspections.lock().unwrap()[0].clone();
-        assert_eq!(inspection.url, CODEX_RESPONSES_URL);
+        assert_eq!(
+            inspection.url,
+            "https://chatgpt.com/backend-api/codex/responses"
+        );
         assert!(inspection.credential_headers_match);
         assert!(inspection.session_ids_match);
         assert!(inspection.compatibility_headers_match);

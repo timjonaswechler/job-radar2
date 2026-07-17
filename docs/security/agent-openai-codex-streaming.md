@@ -4,8 +4,8 @@ Issue [#187](https://github.com/timjonaswechler/job-radar2/issues/187) implement
 
 ## Implemented slice
 
-- `OpenAiCodexProvider` resolves the protected OAuth credential immediately before every turn through `AgentAuthentication`; credentials never cross `ConversationProvider`.
-- Requests target the pinned `/codex/responses` SSE endpoint with `store:false`, streaming input, low text verbosity, encrypted-reasoning inclusion, bounded session/request identifiers, selected reasoning effort, and Pi-compatible request headers.
+- `OpenAiCodexProvider` captures one immutable `ModelRegistry` request generation per turn, then resolves the protected OAuth credential through generic authentication immediately before transport; credentials never cross `ConversationProvider`. A registry reload affects later turns while an in-flight turn keeps its captured generation.
+- Requests derive the `/codex/responses` path, model, configured non-reserved headers, and reasoning effort from that generation while preserving `store:false`, streaming input, low text verbosity, encrypted-reasoning inclusion, bounded session/request identifiers, and Pi-compatible headers. The Codex adapter restricts credential-bearing requests to the pinned `https://chatgpt.com` origin; registry overrides may change only the path beneath that origin.
 - Completed User and Assistant history is converted to Responses input. Opaque terminal output metadata is kept private and replayed on later turns so encrypted reasoning and provider item identifiers remain available without exposing them to callers.
 - The bounded incremental SSE decoder supports arbitrary transport chunk sizes, LF and CRLF framing, multiline `data` fields, and the final `[DONE]` marker. Bounds apply to each current SSE line/event rather than the aggregate transport chunk. It translates output text, refusal text in wire order, and provider-approved reasoning into app-owned indexed lifecycle events.
 - Completed and incomplete responses map to the accepted finish reasons and token-usage shape. HTTP, stream, authentication, model, rate-limit, configuration, and transport failures map to fixed redacted `AgentError` values.

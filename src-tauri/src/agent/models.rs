@@ -405,32 +405,3 @@ pub(crate) struct ModelPartsMut<'a> {
     pub compat: &'a mut Value,
     pub thinking_level_map: &'a mut BTreeMap<ReasoningLevel, Option<String>>,
 }
-
-pub fn openai_codex_models() -> &'static [Model] {
-    crate::agent::providers::openai_codex::models::builtin_models()
-}
-
-pub fn find_openai_codex_model(id: &str) -> Result<&'static Model, AgentError> {
-    openai_codex_models()
-        .iter()
-        .find(|model| model.id().as_str() == id)
-        .ok_or_else(AgentError::model_unavailable)
-}
-
-pub(crate) fn codex_reasoning_effort(
-    model: &Model,
-    level: ReasoningLevel,
-) -> Result<Option<&'static str>, AgentError> {
-    if model.provider().as_str() != "openai-codex" {
-        return Err(AgentError::invalid_model_configuration());
-    }
-    let normalized = model.normalize_reasoning(level);
-    Ok(match normalized {
-        ReasoningLevel::Off => None,
-        ReasoningLevel::Minimal | ReasoningLevel::Low => Some("low"),
-        ReasoningLevel::Medium => Some("medium"),
-        ReasoningLevel::High => Some("high"),
-        ReasoningLevel::XHigh => Some("xhigh"),
-        ReasoningLevel::Max => Some("max"),
-    })
-}

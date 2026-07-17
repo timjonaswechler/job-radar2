@@ -22,10 +22,10 @@ The internal Rust agent authentication module ports the credential contract pinn
 - Construction fails closed for relative paths, paths below a Git repository, non-regular files, and symlinks. There is no repository-relative or alternate-path fallback.
 - The credential directory is enforced as `0700`; credential, lock, and temporary files are enforced as `0600` and opened without following symlinks.
 - Set, logout, and refresh acquire the inter-process lock, re-read and validate the latest complete document, change only one Provider entry, write a private temporary file, sync it, rename it atomically, verify protection, and sync the directory.
-- OAuth is valid only while `now < expires`; equality is expired. Refresh is serialized across processes, double-checks the latest protected document after taking the lock, persists rotation before returning it, and preserves the prior credential on failure.
+- OAuth is valid only while `now < expires`; equality is expired. Refresh is serialized across processes, double-checks the latest protected document after taking the lock, persists rotation before returning it, and preserves the prior credential on failure. A protected fingerprint in the lock file distinguishes storage-owned rotations from unsupported manual edits during resolution; explicit reload updates that fingerprint after validating a manual edit.
 - Storage, reload, resolution, and refresh failures map to fixed diagnostics with no source error, path, serialized document, Provider metadata, environment value, or credential value.
 
-The existing OpenAI Codex authentication module temporarily uses compatibility methods on this storage module. Moving that Provider onto the generic authentication and model-registry contracts is tracked separately.
+The OpenAI Codex authentication module uses these provider-neutral mutation and resolution operations directly. Its OAuth exchange and refresh callback remain Provider-specific, while credential ownership, precedence, locking, persistence, and publication stay inside `AuthStorage`.
 
 ## Verification seam
 

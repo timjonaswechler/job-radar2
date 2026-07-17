@@ -7,6 +7,7 @@ use crate::agent::{AgentError, AgentErrorCategory};
 use base64::Engine;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -228,7 +229,7 @@ pub(crate) struct ProviderCredential {
 }
 
 pub struct AgentAuthentication {
-    storage: AuthStorage,
+    storage: Arc<AuthStorage>,
     http: Arc<dyn OAuthHttpClient>,
     runtime: Arc<dyn OAuthRuntime>,
 }
@@ -244,7 +245,7 @@ impl AgentAuthentication {
 
     fn with_storage(storage: AuthStorage) -> Result<Self, AgentError> {
         Ok(Self {
-            storage,
+            storage: Arc::new(storage),
             http: Arc::new(ReqwestOAuthHttpClient::new()?),
             runtime: Arc::new(SystemOAuthRuntime::new()),
         })
@@ -257,7 +258,7 @@ impl AgentAuthentication {
         runtime: Arc<dyn OAuthRuntime>,
     ) -> Self {
         Self {
-            storage,
+            storage: Arc::new(storage),
             http,
             runtime,
         }
@@ -272,15 +273,18 @@ impl AgentAuthentication {
             LoginMethod::Browser => self.login_browser(interaction).await,
             LoginMethod::DeviceCode => self.login_device(interaction).await,
         }?;
-        self.storage.save(PROVIDER_ID, &credential)?;
+        self.storage.set_oauth(PROVIDER_ID, credential)?;
         Ok(())
     }
 
     pub fn logout(&self) -> Result<(), AgentError> {
-        self.storage.remove(PROVIDER_ID).map_err(Into::into)
+        self.storage.logout(PROVIDER_ID).map_err(Into::into)
     }
 
-    pub(crate) async fn resolve_for_request(&self) -> Result<ProviderCredential, AgentError> {
+    pub(crate) async fn resolve_for_request(
+        &self,
+        runtime_override: Option<&str>,
+    ) -> Result<ProviderCredential, AgentError> {
         let http = Arc::clone(&self.http);
         let runtime = Arc::clone(&self.runtime);
         let clock_runtime = Arc::clone(&self.runtime);
@@ -288,8 +292,10 @@ impl AgentAuthentication {
         let captured_error = Arc::clone(&refresh_error);
         let resolution = self
             .storage
-            .resolve_with_refresh_using_clock(
+            .resolve_using_clock(
                 PROVIDER_ID,
+                runtime_override,
+                &|name| std::env::var(name).ok(),
                 move || {
                     clock_runtime
                         .now_ms()
@@ -321,17 +327,16 @@ impl AgentAuthentication {
             }
         }
         .ok_or_else(AgentError::authentication)?;
-        let account_id = credential
-            .metadata()
+        let crate::agent::auth::ResolvedCredential::OAuth { access, metadata } = credential else {
+            return Err(AgentError::authentication());
+        };
+        let account_id = metadata
             .get("accountId")
             .and_then(serde_json::Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(AgentError::authentication)?
             .to_owned();
-        Ok(ProviderCredential {
-            access: credential.access,
-            account_id,
-        })
+        Ok(ProviderCredential { access, account_id })
     }
 
     async fn login_browser(
@@ -556,12 +561,16 @@ fn read_token_response(
                 .ok_or_else(AgentError::authentication)?,
         )
         .ok_or_else(AgentError::authentication)?;
-    Ok(OAuthCredential::new(
+    OAuthCredential::with_metadata(
         token.access_token,
         token.refresh_token,
         expires_at_ms,
-        account_id,
-    ))
+        BTreeMap::from([(
+            "accountId".to_owned(),
+            serde_json::Value::String(account_id),
+        )]),
+    )
+    .map_err(Into::into)
 }
 
 fn account_id_from_jwt(access: &str) -> Result<String, AgentError> {
@@ -904,10 +913,30 @@ mod tests {
     }
 
     #[test]
+    fn subscription_transport_rejects_a_generic_api_key_credential() {
+        let (auth, _http, _runtime, _app_data) = authentication(Vec::new(), 5_000);
+        auth.storage
+            .set_api_key(
+                PROVIDER_ID,
+                "synthetic-api-key-value".to_owned(),
+                Default::default(),
+            )
+            .unwrap();
+
+        let error = match tauri::async_runtime::block_on(auth.resolve_for_request(None)) {
+            Ok(_) => panic!("API-key credential unexpectedly accepted"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.category, AgentErrorCategory::Authentication);
+        assert!(!format!("{error:?}").contains("synthetic-api-key-value"));
+    }
+
+    #[test]
     fn exact_expiry_refresh_rotates_and_persists_before_returning() {
         let initial_access = synthetic_jwt("initial");
         let rotated_access = synthetic_jwt("rotated");
-        let (auth, http, runtime, _app_data) = authentication(
+        let (auth, http, runtime, app_data) = authentication(
             vec![
                 token_response(&initial_access, "synthetic-refresh-initial", 1),
                 token_response(&rotated_access, "synthetic-refresh-rotated", 60),
@@ -918,12 +947,15 @@ mod tests {
         tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
         runtime.now_ms.store(6_000, Ordering::SeqCst);
 
-        let resolved = tauri::async_runtime::block_on(auth.resolve_for_request()).unwrap();
+        let resolved = tauri::async_runtime::block_on(auth.resolve_for_request(None)).unwrap();
         assert!(resolved.access == rotated_access);
         assert!(resolved.account_id == "synthetic-account-rotated");
-        let stored = auth.storage.load(PROVIDER_ID).unwrap().unwrap();
-        assert!(stored.refresh == "synthetic-refresh-rotated");
-        assert!(stored.access == rotated_access);
+        let stored: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(app_data.path().join("agents/auth.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(stored[PROVIDER_ID]["refresh"], "synthetic-refresh-rotated");
+        assert_eq!(stored[PROVIDER_ID]["access"], rotated_access);
 
         let requests = http.requests.lock().unwrap();
         assert_eq!(requests.len(), 2);
@@ -1096,7 +1128,7 @@ mod tests {
         tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
         runtime.now_ms.store(6_000, Ordering::SeqCst);
 
-        let error = match tauri::async_runtime::block_on(auth.resolve_for_request()) {
+        let error = match tauri::async_runtime::block_on(auth.resolve_for_request(None)) {
             Ok(_) => panic!("expired credential unexpectedly resolved"),
             Err(error) => error,
         };

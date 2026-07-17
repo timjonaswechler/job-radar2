@@ -100,7 +100,6 @@ impl EnvironmentAvailability {
     }
 }
 
-#[allow(dead_code)] // Retained for request resolution by issue 214; never exposed by snapshots.
 #[derive(Clone)]
 struct RequestConfig {
     api_key: Option<SecretConfigValue>,
@@ -116,8 +115,37 @@ struct RequestConfigs {
 
 struct PublishedRegistry {
     snapshot: Arc<ModelRegistrySnapshot>,
-    _request_configs: Arc<RequestConfigs>,
+    request_configs: Arc<RequestConfigs>,
     reload_failed: bool,
+}
+
+/// An immutable, secret-bearing request generation. It is intentionally crate-private and
+/// implements neither `Debug` nor serialization.
+pub(crate) struct ResolvedModelRequest {
+    model: Model,
+    api_key_override: Option<String>,
+    headers: BTreeMap<String, String>,
+    #[allow(dead_code)] // Preserved for adapters that consume models.json authHeader.
+    auth_header: bool,
+}
+
+impl ResolvedModelRequest {
+    pub(crate) fn model(&self) -> &Model {
+        &self.model
+    }
+
+    pub(crate) fn api_key_override(&self) -> Option<&str> {
+        self.api_key_override.as_deref()
+    }
+
+    pub(crate) fn headers(&self) -> &BTreeMap<String, String> {
+        &self.headers
+    }
+
+    #[allow(dead_code)] // Preserved for adapters that consume models.json authHeader.
+    pub(crate) fn auth_header(&self) -> bool {
+        self.auth_header
+    }
 }
 
 pub struct ModelRegistry {
@@ -128,6 +156,18 @@ pub struct ModelRegistry {
 }
 
 impl ModelRegistry {
+    pub fn for_current_user() -> Result<Self, AgentError> {
+        #[cfg(target_os = "macos")]
+        {
+            let location = crate::app::paths::current_user_app_data_location()
+                .map_err(|_| AgentError::invalid_model_configuration())?;
+            return Self::from_agents_data_root(location.root.join("agents"));
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        Err(AgentError::invalid_model_configuration())
+    }
+
     pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
         Self::with_environment(agents_data_root.as_ref(), EnvironmentAvailability::Process)
     }
@@ -151,7 +191,7 @@ impl ModelRegistry {
         validate_agents_root(agents_data_root)?;
         let initial = PublishedRegistry {
             snapshot: Arc::new(ModelRegistrySnapshot::builtins()),
-            _request_configs: Arc::new(RequestConfigs::default()),
+            request_configs: Arc::new(RequestConfigs::default()),
             reload_failed: false,
         };
         let registry = Self {
@@ -185,6 +225,40 @@ impl ModelRegistry {
         )
     }
 
+    pub(crate) fn resolve_request(
+        &self,
+        provider: &ProviderId,
+        model: &ModelId,
+    ) -> Result<ResolvedModelRequest, AgentError> {
+        let published = self.published.read().expect("registry lock poisoned");
+        let model = published
+            .snapshot
+            .model(provider, model)
+            .cloned()
+            .ok_or_else(AgentError::model_unavailable)?;
+        let provider_config = published.request_configs.providers.get(provider);
+        let api_key_override = provider_config
+            .and_then(|config| config.api_key.as_ref())
+            .map(SecretConfigValue::resolve)
+            .transpose()?;
+        let mut headers = provider_config
+            .map(|config| config.headers.clone())
+            .unwrap_or_default();
+        if let Some(model_headers) = published
+            .request_configs
+            .models
+            .get(&(provider.clone(), model.id().clone()))
+        {
+            headers.extend(model_headers.clone());
+        }
+        Ok(ResolvedModelRequest {
+            model,
+            api_key_override,
+            headers,
+            auth_header: provider_config.is_some_and(|config| config.auth_header),
+        })
+    }
+
     pub fn last_reload_failed(&self) -> bool {
         self.published
             .read()
@@ -209,7 +283,7 @@ impl ModelRegistry {
         let snapshot = Arc::new(candidate.snapshot);
         *self.published.write().expect("registry lock poisoned") = PublishedRegistry {
             snapshot: Arc::clone(&snapshot),
-            _request_configs: Arc::new(candidate.request_configs),
+            request_configs: Arc::new(candidate.request_configs),
             reload_failed,
         };
         snapshot
@@ -303,6 +377,16 @@ impl SecretConfigValue {
         match self {
             Self::Direct(_) => true,
             Self::Environment(name) => environment.configured(name),
+        }
+    }
+
+    fn resolve(&self) -> Result<String, AgentError> {
+        match self {
+            Self::Direct(value) => Ok(value.clone()),
+            Self::Environment(name) => std::env::var(name)
+                .ok()
+                .filter(|value| !value.is_empty())
+                .ok_or_else(AgentError::authentication),
         }
     }
 }
@@ -733,6 +817,7 @@ fn apply_provider(
     let is_builtin = registry.contains_key(&provider_id);
     let has_override = config.base_url.is_some()
         || !config.headers.is_empty()
+        || config.auth_header
         || config.compat.is_some()
         || !config.model_overrides.is_empty();
     if config.models.is_empty() && config.oauth.is_none() && !has_override {
@@ -1172,5 +1257,31 @@ mod tests {
         );
 
         assert!(!candidate.request_configs.models.contains_key(&request_key));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn request_generation_preserves_provider_auth_header_configuration() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let app_data = tempfile::tempdir().unwrap();
+        let agents_root = app_data.path().join("agents");
+        let registry = ModelRegistry::from_agents_data_root(&agents_root).unwrap();
+        let models_path = agents_root.join("models.json");
+        std::fs::write(
+            &models_path,
+            r#"{"providers":{"openai-codex":{"authHeader":true}}}"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&models_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        registry.reload().unwrap();
+
+        let resolved = registry
+            .resolve_request(
+                &ProviderId::new("openai-codex").unwrap(),
+                &ModelId::new("gpt-5.4").unwrap(),
+            )
+            .unwrap();
+        assert!(resolved.auth_header());
     }
 }
