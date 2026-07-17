@@ -4,7 +4,6 @@
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::ffi::CStr;
 use std::fs::{self, File, OpenOptions};
 use std::future::Future;
 use std::io::{Read, Write};
@@ -12,8 +11,8 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const APP_IDENTIFIER: &str = "de.timjonaswechler.jobradar";
-const STORAGE_DIRECTORY: &str = "agent";
+const STORAGE_DIRECTORY: &str = "agents";
+const LEGACY_STORAGE_DIRECTORY: &str = "agent";
 const AUTH_FILE: &str = "auth.json";
 const LOCK_FILE: &str = "auth.lock";
 const TEMP_FILE: &str = "auth.json.tmp";
@@ -28,6 +27,7 @@ pub enum AuthStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthStorageErrorCategory {
     InvalidConfiguration,
+    MigrationConflict,
     Unavailable,
     RefreshFailed,
 }
@@ -50,6 +50,13 @@ impl AuthStorageError {
         Self {
             category: AuthStorageErrorCategory::Unavailable,
             message: "authentication storage is unavailable",
+        }
+    }
+
+    fn migration_conflict() -> Self {
+        Self {
+            category: AuthStorageErrorCategory::MigrationConflict,
+            message: "conflicting authentication storage locations require review",
         }
     }
 
@@ -96,7 +103,7 @@ enum OAuthCredentialType {
     OAuth,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 struct AuthDocument(BTreeMap<String, OAuthCredential>);
 
@@ -110,12 +117,12 @@ impl AuthStorage {
     pub(crate) fn for_current_user() -> Result<Self, AuthStorageError> {
         #[cfg(target_os = "macos")]
         {
-            let home = current_user_home_without_environment()?;
-            let app_data = home
-                .join("Library")
-                .join("Application Support")
-                .join(APP_IDENTIFIER);
-            Self::in_app_data_dir_from(&home, &app_data)
+            let location = crate::app::paths::current_user_app_data_location()
+                .map_err(|_| AuthStorageError::invalid_configuration())?;
+            Self::in_agents_data_root_from(
+                &location.trusted_ancestor,
+                &location.root.join(STORAGE_DIRECTORY),
+            )
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -138,7 +145,29 @@ impl AuthStorage {
         trusted_ancestor: &Path,
         app_data_dir: &Path,
     ) -> Result<Self, AuthStorageError> {
-        if !trusted_ancestor.is_absolute()
+        Self::in_agents_data_root_from(trusted_ancestor, &app_data_dir.join(STORAGE_DIRECTORY))
+    }
+
+    pub(crate) fn in_agents_data_root(agents_data_root: &Path) -> Result<Self, AuthStorageError> {
+        let app_data_dir = agents_data_root
+            .parent()
+            .ok_or_else(AuthStorageError::invalid_configuration)?;
+        let trusted_ancestor = app_data_dir
+            .parent()
+            .ok_or_else(AuthStorageError::invalid_configuration)?;
+        Self::in_agents_data_root_from(trusted_ancestor, agents_data_root)
+    }
+
+    fn in_agents_data_root_from(
+        trusted_ancestor: &Path,
+        agents_data_root: &Path,
+    ) -> Result<Self, AuthStorageError> {
+        let app_data_dir = agents_data_root
+            .parent()
+            .ok_or_else(AuthStorageError::invalid_configuration)?;
+        if agents_data_root.file_name() != Some(std::ffi::OsStr::new(STORAGE_DIRECTORY))
+            || !trusted_ancestor.is_absolute()
+            || !trusted_directory_is_real(trusted_ancestor)?
             || !app_data_dir.is_absolute()
             || !app_data_dir.starts_with(trusted_ancestor)
             || path_is_inside_repository(app_data_dir)
@@ -148,24 +177,66 @@ impl AuthStorage {
             return Err(AuthStorageError::invalid_configuration());
         }
 
-        let directory = app_data_dir.join(STORAGE_DIRECTORY);
-        create_private_directory(&directory)?;
+        create_private_directory(agents_data_root)?;
 
         let storage = Self {
-            auth_path: directory.join(AUTH_FILE),
-            lock_path: directory.join(LOCK_FILE),
-            directory,
+            auth_path: agents_data_root.join(AUTH_FILE),
+            lock_path: agents_data_root.join(LOCK_FILE),
+            directory: agents_data_root.to_owned(),
         };
         let lock = storage.open_lock()?;
         lock.lock_exclusive()
             .map_err(|_| AuthStorageError::unavailable())?;
-        if !storage.auth_path.exists() {
-            storage.write_document(&AuthDocument::default())?;
-        } else {
-            ensure_private_regular_file(&storage.auth_path)?;
-        }
+        storage.initialize_or_migrate(app_data_dir)?;
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
         Ok(storage)
+    }
+
+    fn initialize_or_migrate(&self, app_data_dir: &Path) -> Result<(), AuthStorageError> {
+        let legacy_directory = app_data_dir.join(LEGACY_STORAGE_DIRECTORY);
+        let legacy_auth_path = legacy_directory.join(AUTH_FILE);
+        let canonical_exists = private_regular_file_exists(&self.auth_path)?;
+        let legacy_directory_exists = private_directory_exists(&legacy_directory)?;
+        let legacy_exists =
+            legacy_directory_exists && private_regular_file_exists(&legacy_auth_path)?;
+
+        if canonical_exists && legacy_exists {
+            ensure_private_regular_file(&self.auth_path)?;
+            validate_private_directory(&legacy_directory)?;
+            validate_private_regular_file(&legacy_auth_path)?;
+            return Err(AuthStorageError::migration_conflict());
+        }
+        if canonical_exists {
+            return ensure_private_regular_file(&self.auth_path);
+        }
+        if !legacy_exists {
+            return self.write_document(&AuthDocument::default());
+        }
+
+        validate_private_directory(&legacy_directory)?;
+        validate_private_regular_file(&legacy_auth_path)?;
+        let legacy_lock_path = legacy_directory.join(LOCK_FILE);
+        let legacy_lock = open_private_file(&legacy_lock_path, false)?;
+        legacy_lock
+            .lock_exclusive()
+            .map_err(|_| AuthStorageError::unavailable())?;
+
+        if private_regular_file_exists(&self.auth_path)? {
+            return Err(AuthStorageError::migration_conflict());
+        }
+        validate_private_regular_file(&legacy_auth_path)?;
+        let document = read_document_at(&legacy_auth_path)?;
+        self.write_document(&document)?;
+        let migrated = self.read_document()?;
+        if migrated != document {
+            return Err(AuthStorageError::unavailable());
+        }
+        ensure_private_regular_file(&self.auth_path)?;
+        fs::remove_file(&legacy_auth_path).map_err(|_| AuthStorageError::unavailable())?;
+        File::open(&legacy_directory)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| AuthStorageError::unavailable())?;
+        FileExt::unlock(&legacy_lock).map_err(|_| AuthStorageError::unavailable())
     }
 
     pub(crate) fn status(&self, provider: &str) -> Result<AuthStatus, AuthStorageError> {
@@ -319,12 +390,7 @@ impl AuthStorage {
     }
 
     fn read_document(&self) -> Result<AuthDocument, AuthStorageError> {
-        ensure_private_regular_file(&self.auth_path)?;
-        let mut file = open_private_file(&self.auth_path, false)?;
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)
-            .map_err(|_| AuthStorageError::unavailable())?;
-        serde_json::from_slice(&bytes).map_err(|_| AuthStorageError::invalid_configuration())
+        read_document_at(&self.auth_path)
     }
 
     fn write_document(&self, document: &AuthDocument) -> Result<(), AuthStorageError> {
@@ -350,43 +416,6 @@ impl AuthStorage {
             .and_then(|directory| directory.sync_all())
             .map_err(|_| AuthStorageError::unavailable())
     }
-}
-
-#[cfg(target_os = "macos")]
-fn current_user_home_without_environment() -> Result<PathBuf, AuthStorageError> {
-    let buffer_size = unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) };
-    let buffer_size = if buffer_size > 0 {
-        usize::try_from(buffer_size).map_err(|_| AuthStorageError::invalid_configuration())?
-    } else {
-        16_384
-    };
-    let mut buffer = vec![0_u8; buffer_size];
-    let mut password_entry = std::mem::MaybeUninit::<libc::passwd>::uninit();
-    let mut result = std::ptr::null_mut();
-    let status = unsafe {
-        libc::getpwuid_r(
-            libc::geteuid(),
-            password_entry.as_mut_ptr(),
-            buffer.as_mut_ptr().cast(),
-            buffer.len(),
-            &mut result,
-        )
-    };
-    if status != 0 || result.is_null() {
-        return Err(AuthStorageError::invalid_configuration());
-    }
-    let password_entry = unsafe { password_entry.assume_init() };
-    if password_entry.pw_dir.is_null() {
-        return Err(AuthStorageError::invalid_configuration());
-    }
-    let home = unsafe { CStr::from_ptr(password_entry.pw_dir) };
-    let home = std::str::from_utf8(home.to_bytes())
-        .map_err(|_| AuthStorageError::invalid_configuration())?;
-    let home = PathBuf::from(home);
-    if !home.is_absolute() {
-        return Err(AuthStorageError::invalid_configuration());
-    }
-    Ok(home)
 }
 
 fn validate_provider(provider: &str) -> Result<(), AuthStorageError> {
@@ -448,6 +477,66 @@ fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
         .mode()
         & 0o777;
     if mode != 0o700 {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    Ok(())
+}
+
+fn trusted_directory_is_real(path: &Path) -> Result<bool, AuthStorageError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(!metadata.file_type().is_symlink() && metadata.is_dir()),
+        Err(_) => Err(AuthStorageError::invalid_configuration()),
+    }
+}
+
+fn private_directory_exists(path: &Path) -> Result<bool, AuthStorageError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            Err(AuthStorageError::invalid_configuration())
+        }
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err(AuthStorageError::unavailable()),
+    }
+}
+
+fn private_regular_file_exists(path: &Path) -> Result<bool, AuthStorageError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(AuthStorageError::invalid_configuration())
+        }
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err(AuthStorageError::unavailable()),
+    }
+}
+
+fn read_document_at(path: &Path) -> Result<AuthDocument, AuthStorageError> {
+    ensure_private_regular_file(path)?;
+    let mut file = open_private_file(path, false)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    serde_json::from_slice(&bytes).map_err(|_| AuthStorageError::invalid_configuration())
+}
+
+fn validate_private_directory(path: &Path) -> Result<(), AuthStorageError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if metadata.file_type().is_symlink()
+        || !metadata.is_dir()
+        || metadata.permissions().mode() & 0o777 != 0o700
+    {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    Ok(())
+}
+
+fn validate_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if metadata.file_type().is_symlink()
+        || !metadata.is_file()
+        || metadata.permissions().mode() & 0o777 != 0o600
+    {
         return Err(AuthStorageError::invalid_configuration());
     }
     Ok(())
@@ -524,14 +613,14 @@ mod tests {
         storage.save(PROVIDER, &expected).unwrap();
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::Configured);
         let stored_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(app_data.path().join("agent/auth.json")).unwrap())
+            serde_json::from_slice(&fs::read(app_data.path().join("agents/auth.json")).unwrap())
                 .unwrap();
         assert_eq!(stored_json[PROVIDER]["type"], "oauth");
         assert_eq!(stored_json[PROVIDER]["expires"], u64::MAX);
         assert!(stored_json[PROVIDER].get("expiresAtMs").is_none());
         assert!(storage.load(PROVIDER).unwrap().as_ref() == Some(&expected));
 
-        let storage_dir = app_data.path().join("agent");
+        let storage_dir = app_data.path().join("agents");
         let auth_file = storage_dir.join("auth.json");
         assert!(auth_file.starts_with(app_data.path()));
         assert_eq!(
@@ -550,6 +639,154 @@ mod tests {
         storage.remove(PROVIDER).unwrap();
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::NotConfigured);
         assert!(storage.load(PROVIDER).unwrap().is_none());
+    }
+
+    #[test]
+    fn migrates_legacy_auth_to_the_agents_root_before_removing_the_original() {
+        let app_data = tempfile::tempdir().unwrap();
+        let legacy_dir = app_data.path().join("agent");
+        fs::create_dir(&legacy_dir).unwrap();
+        fs::set_permissions(&legacy_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        let legacy_auth = legacy_dir.join("auth.json");
+        let mut document = AuthDocument::default();
+        document
+            .0
+            .insert(PROVIDER.to_owned(), credential("legacy", u64::MAX));
+        let bytes = serde_json::to_vec_pretty(&document).unwrap();
+        let mut legacy_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&legacy_auth)
+            .unwrap();
+        legacy_file.write_all(&bytes).unwrap();
+        legacy_file.sync_all().unwrap();
+
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+
+        assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::Configured);
+        assert!(!legacy_auth.exists());
+        let canonical_auth = app_data.path().join("agents/auth.json");
+        assert!(canonical_auth.is_file());
+        assert_eq!(
+            canonical_auth.metadata().unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            canonical_auth
+                .parent()
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn existing_legacy_and_canonical_auth_fail_with_a_redacted_conflict() {
+        let app_data = tempfile::tempdir().unwrap();
+        let canonical = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        canonical
+            .save(PROVIDER, &credential("canonical", u64::MAX))
+            .unwrap();
+        let legacy_dir = app_data.path().join("agent");
+        fs::create_dir(&legacy_dir).unwrap();
+        fs::set_permissions(&legacy_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        let legacy_auth = legacy_dir.join("auth.json");
+        let mut legacy = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&legacy_auth)
+            .unwrap();
+        legacy.write_all(b"{}\n").unwrap();
+        legacy.sync_all().unwrap();
+
+        let error = match AuthStorage::for_test_app_data(app_data.path()) {
+            Ok(_) => panic!("conflicting credential files unexpectedly merged"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.category, AuthStorageErrorCategory::MigrationConflict);
+        assert_eq!(
+            error.message,
+            "conflicting authentication storage locations require review"
+        );
+        assert!(legacy_auth.exists());
+        assert_eq!(canonical.status(PROVIDER).unwrap(), AuthStatus::Configured);
+        let diagnostic = format!("{error:?}");
+        assert!(!diagnostic.contains("canonical"));
+        assert!(!diagnostic.contains(app_data.path().to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn insecure_legacy_permissions_fail_closed_without_modifying_the_original() {
+        let app_data = tempfile::tempdir().unwrap();
+        let legacy_dir = app_data.path().join("agent");
+        fs::create_dir(&legacy_dir).unwrap();
+        fs::set_permissions(&legacy_dir, fs::Permissions::from_mode(0o755)).unwrap();
+        let legacy_auth = legacy_dir.join("auth.json");
+        let mut legacy = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o644)
+            .open(&legacy_auth)
+            .unwrap();
+        legacy.write_all(b"{}\n").unwrap();
+        legacy.sync_all().unwrap();
+
+        let error = match AuthStorage::for_test_app_data(app_data.path()) {
+            Ok(_) => panic!("insecure legacy credentials unexpectedly migrated"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        assert!(legacy_auth.exists());
+        assert!(!app_data.path().join("agents/auth.json").exists());
+        assert_eq!(
+            legacy_dir.metadata().unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+        assert_eq!(
+            legacy_auth.metadata().unwrap().permissions().mode() & 0o777,
+            0o644
+        );
+    }
+
+    #[test]
+    fn malformed_legacy_auth_fails_closed_and_keeps_the_original() {
+        let app_data = tempfile::tempdir().unwrap();
+        let legacy_dir = app_data.path().join("agent");
+        fs::create_dir(&legacy_dir).unwrap();
+        fs::set_permissions(&legacy_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        let legacy_auth = legacy_dir.join("auth.json");
+        let mut legacy = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&legacy_auth)
+            .unwrap();
+        legacy.write_all(b"synthetic malformed document").unwrap();
+        legacy.sync_all().unwrap();
+
+        let error = match AuthStorage::for_test_app_data(app_data.path()) {
+            Ok(_) => panic!("malformed legacy credentials unexpectedly migrated"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        assert!(legacy_auth.exists());
+        assert!(!app_data.path().join("agents/auth.json").exists());
+        assert!(!format!("{error:?}").contains("synthetic"));
     }
 
     #[test]
@@ -771,7 +1008,7 @@ mod tests {
     #[test]
     fn non_regular_lock_file_is_rejected() {
         let app_data = tempfile::tempdir().unwrap();
-        let storage_dir = app_data.path().join("agent");
+        let storage_dir = app_data.path().join("agents");
         fs::create_dir(&storage_dir).unwrap();
         let lock_path = storage_dir.join("auth.lock");
         let lock_path = std::ffi::CString::new(lock_path.as_os_str().as_encoded_bytes()).unwrap();
@@ -791,7 +1028,7 @@ mod tests {
     fn malformed_storage_and_symlinks_fail_closed_without_leaking_paths_or_contents() {
         let app_data = tempfile::tempdir().unwrap();
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
-        let auth_path = app_data.path().join("agent/auth.json");
+        let auth_path = app_data.path().join("agents/auth.json");
         fs::write(&auth_path, b"synthetic malformed credential document").unwrap();
         let error = match storage.load(PROVIDER) {
             Ok(_) => panic!("malformed credential document unexpectedly loaded"),

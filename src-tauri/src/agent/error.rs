@@ -50,6 +50,13 @@ impl AgentError {
         )
     }
 
+    pub(crate) fn authentication_storage_conflict() -> Self {
+        Self::fixed(
+            AgentErrorCategory::InvalidConfiguration,
+            "conflicting authentication storage locations require review",
+        )
+    }
+
     pub(crate) fn provider_transport() -> Self {
         Self::fixed(
             AgentErrorCategory::Transport,

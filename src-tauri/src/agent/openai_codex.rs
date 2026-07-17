@@ -8,6 +8,7 @@ use base64::Engine;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -34,6 +35,9 @@ impl From<AuthStorageError> for AgentError {
         match error.category {
             AuthStorageErrorCategory::InvalidConfiguration => {
                 AgentError::invalid_authentication_configuration()
+            }
+            AuthStorageErrorCategory::MigrationConflict => {
+                AgentError::authentication_storage_conflict()
             }
             AuthStorageErrorCategory::Unavailable => AgentError::fixed(
                 AgentErrorCategory::Authentication,
@@ -231,8 +235,16 @@ pub struct AgentAuthentication {
 
 impl AgentAuthentication {
     pub fn for_current_user() -> Result<Self, AgentError> {
+        Self::with_storage(AuthStorage::for_current_user()?)
+    }
+
+    pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
+        Self::with_storage(AuthStorage::in_agents_data_root(agents_data_root.as_ref())?)
+    }
+
+    fn with_storage(storage: AuthStorage) -> Result<Self, AgentError> {
         Ok(Self {
-            storage: AuthStorage::for_current_user()?,
+            storage,
             http: Arc::new(ReqwestOAuthHttpClient::new()?),
             runtime: Arc::new(SystemOAuthRuntime::new()),
         })
