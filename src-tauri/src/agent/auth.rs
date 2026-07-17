@@ -803,19 +803,19 @@ fn validate_provider(provider: &str) -> Result<(), AuthStorageError> {
     }
 }
 
-fn path_is_inside_repository(path: &Path) -> bool {
+pub(crate) fn path_is_inside_repository(path: &Path) -> bool {
     path.ancestors()
         .any(|ancestor| ancestor.join(".git").exists())
 }
 
-fn canonical_existing_prefix_is_inside_repository(path: &Path) -> bool {
+pub(crate) fn canonical_existing_prefix_is_inside_repository(path: &Path) -> bool {
     path.ancestors()
         .find(|ancestor| ancestor.exists())
         .and_then(|ancestor| fs::canonicalize(ancestor).ok())
         .is_some_and(|canonical| path_is_inside_repository(&canonical))
 }
 
-fn path_below_ancestor_contains_symlink(
+pub(crate) fn path_below_ancestor_contains_symlink(
     trusted_ancestor: &Path,
     path: &Path,
 ) -> Result<bool, AuthStorageError> {
@@ -835,7 +835,7 @@ fn path_below_ancestor_contains_symlink(
     Ok(false)
 }
 
-fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
+pub(crate) fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
     fs::create_dir_all(path).map_err(|_| AuthStorageError::unavailable())?;
     let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -854,7 +854,7 @@ fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
     Ok(())
 }
 
-fn trusted_directory_is_real(path: &Path) -> Result<bool, AuthStorageError> {
+pub(crate) fn trusted_directory_is_real(path: &Path) -> Result<bool, AuthStorageError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(!metadata.file_type().is_symlink() && metadata.is_dir()),
         Err(_) => Err(AuthStorageError::invalid_configuration()),
@@ -933,6 +933,24 @@ fn ensure_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
         return Err(AuthStorageError::invalid_configuration());
     }
     Ok(())
+}
+
+pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthStorageError> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| AuthStorageError::unavailable())?;
+    if !metadata.is_file() || metadata.permissions().mode() & 0o777 != 0o600 {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    Ok(bytes)
 }
 
 fn open_private_file(path: &Path, create_new: bool) -> Result<File, AuthStorageError> {

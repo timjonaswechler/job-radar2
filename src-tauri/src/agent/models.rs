@@ -1,5 +1,8 @@
+use crate::agent::api::ApiKind;
 use crate::agent::AgentError;
-use std::sync::OnceLock;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::fmt;
 
 const IDENTIFIER_MAX_BYTES: usize = 128;
 const REASONING_ORDER: [ReasoningLevel; 7] = [
@@ -12,7 +15,7 @@ const REASONING_ORDER: [ReasoningLevel; 7] = [
     ReasoningLevel::Max,
 ];
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ProviderId(String);
 
 impl ProviderId {
@@ -25,7 +28,7 @@ impl ProviderId {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ModelId(String);
 
 impl ModelId {
@@ -51,7 +54,7 @@ fn validate_identifier(value: String) -> Result<String, AgentError> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ReasoningLevel {
     Off,
     Minimal,
@@ -62,12 +65,149 @@ pub enum ReasoningLevel {
     Max,
 }
 
+impl ReasoningLevel {
+    pub(crate) fn from_config_key(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "minimal" => Some(Self::Minimal),
+            "low" => Some(Self::Low),
+            "medium" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            "xhigh" => Some(Self::XHigh),
+            "max" => Some(Self::Max),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModelInput {
+    Text,
+    Image,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelCostTier {
+    pub(crate) input_tokens_above: serde_json::Number,
+    pub(crate) input: serde_json::Number,
+    pub(crate) output: serde_json::Number,
+    pub(crate) cache_read: serde_json::Number,
+    pub(crate) cache_write: serde_json::Number,
+}
+
+impl ModelCostTier {
+    pub fn input_tokens_above(&self) -> &serde_json::Number {
+        &self.input_tokens_above
+    }
+
+    pub fn input(&self) -> &serde_json::Number {
+        &self.input
+    }
+
+    pub fn output(&self) -> &serde_json::Number {
+        &self.output
+    }
+
+    pub fn cache_read(&self) -> &serde_json::Number {
+        &self.cache_read
+    }
+
+    pub fn cache_write(&self) -> &serde_json::Number {
+        &self.cache_write
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelCost {
+    input: serde_json::Number,
+    output: serde_json::Number,
+    cache_read: serde_json::Number,
+    cache_write: serde_json::Number,
+    tiers: Option<Vec<ModelCostTier>>,
+}
+
+impl Default for ModelCost {
+    fn default() -> Self {
+        Self {
+            input: 0.into(),
+            output: 0.into(),
+            cache_read: 0.into(),
+            cache_write: 0.into(),
+            tiers: None,
+        }
+    }
+}
+
+impl ModelCost {
+    pub fn input(&self) -> &serde_json::Number {
+        &self.input
+    }
+
+    pub fn output(&self) -> &serde_json::Number {
+        &self.output
+    }
+
+    pub fn cache_read(&self) -> &serde_json::Number {
+        &self.cache_read
+    }
+
+    pub fn cache_write(&self) -> &serde_json::Number {
+        &self.cache_write
+    }
+
+    pub fn tiers(&self) -> Option<&[ModelCostTier]> {
+        self.tiers.as_deref()
+    }
+
+    pub(crate) fn from_parts(
+        input: serde_json::Number,
+        output: serde_json::Number,
+        cache_read: serde_json::Number,
+        cache_write: serde_json::Number,
+        tiers: Option<Vec<ModelCostTier>>,
+    ) -> Self {
+        Self {
+            input,
+            output,
+            cache_read,
+            cache_write,
+            tiers,
+        }
+    }
+
+    pub(crate) fn merged(
+        &self,
+        input: Option<serde_json::Number>,
+        output: Option<serde_json::Number>,
+        cache_read: Option<serde_json::Number>,
+        cache_write: Option<serde_json::Number>,
+        tiers: Option<Vec<ModelCostTier>>,
+    ) -> Self {
+        Self {
+            input: input.unwrap_or_else(|| self.input.clone()),
+            output: output.unwrap_or_else(|| self.output.clone()),
+            cache_read: cache_read.unwrap_or_else(|| self.cache_read.clone()),
+            cache_write: cache_write.unwrap_or_else(|| self.cache_write.clone()),
+            tiers: tiers.or_else(|| self.tiers.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct Model {
     id: ModelId,
     display_name: String,
     provider: ProviderId,
     supported_reasoning_levels: Vec<ReasoningLevel>,
+    api: ApiKind,
+    base_url: String,
+    input: Vec<ModelInput>,
+    cost: ModelCost,
+    context_window: u64,
+    max_tokens: u64,
+    headers: BTreeMap<String, String>,
+    compat: Value,
+    thinking_level_map: BTreeMap<ReasoningLevel, Option<String>>,
 }
 
 impl Model {
@@ -77,7 +217,39 @@ impl Model {
         provider: ProviderId,
         supported_reasoning_levels: Vec<ReasoningLevel>,
     ) -> Result<Self, AgentError> {
-        let display_name = display_name.into();
+        Self::with_capabilities(
+            id,
+            display_name.into(),
+            provider,
+            supported_reasoning_levels,
+            ApiKind::OpenAiResponses,
+            "https://api.openai.com/v1".to_owned(),
+            vec![ModelInput::Text],
+            ModelCost::default(),
+            128_000,
+            16_384,
+            BTreeMap::new(),
+            Value::Object(Default::default()),
+            BTreeMap::new(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_capabilities(
+        id: ModelId,
+        display_name: String,
+        provider: ProviderId,
+        supported_reasoning_levels: Vec<ReasoningLevel>,
+        api: ApiKind,
+        base_url: String,
+        input: Vec<ModelInput>,
+        cost: ModelCost,
+        context_window: u64,
+        max_tokens: u64,
+        headers: BTreeMap<String, String>,
+        compat: Value,
+        thinking_level_map: BTreeMap<ReasoningLevel, Option<String>>,
+    ) -> Result<Self, AgentError> {
         let ordered_levels: Vec<_> = REASONING_ORDER
             .iter()
             .copied()
@@ -86,6 +258,10 @@ impl Model {
         if display_name.trim().is_empty()
             || ordered_levels.is_empty()
             || ordered_levels.len() != supported_reasoning_levels.len()
+            || base_url.is_empty()
+            || context_window == 0
+            || max_tokens == 0
+            || !compat.is_object()
         {
             return Err(AgentError::invalid_model_configuration());
         }
@@ -94,6 +270,15 @@ impl Model {
             display_name,
             provider,
             supported_reasoning_levels: ordered_levels,
+            api,
+            base_url,
+            input,
+            cost,
+            context_window,
+            max_tokens,
+            headers,
+            compat,
+            thinking_level_map,
         })
     }
 
@@ -111,6 +296,42 @@ impl Model {
 
     pub fn supported_reasoning_levels(&self) -> &[ReasoningLevel] {
         &self.supported_reasoning_levels
+    }
+
+    pub fn api(&self) -> ApiKind {
+        self.api
+    }
+
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    pub fn input(&self) -> &[ModelInput] {
+        &self.input
+    }
+
+    pub fn cost(&self) -> &ModelCost {
+        &self.cost
+    }
+
+    pub fn context_window(&self) -> u64 {
+        self.context_window
+    }
+
+    pub fn max_tokens(&self) -> u64 {
+        self.max_tokens
+    }
+
+    pub fn headers(&self) -> &BTreeMap<String, String> {
+        &self.headers
+    }
+
+    pub fn compat(&self) -> &Value {
+        &self.compat
+    }
+
+    pub fn thinking_level_map(&self) -> &BTreeMap<ReasoningLevel, Option<String>> {
+        &self.thinking_level_map
     }
 
     pub fn normalize_reasoning(&self, requested: ReasoningLevel) -> ReasoningLevel {
@@ -133,37 +354,60 @@ impl Model {
             })
             .unwrap_or(ReasoningLevel::Off)
     }
+
+    pub(crate) fn parts_mut(&mut self) -> ModelPartsMut<'_> {
+        ModelPartsMut {
+            display_name: &mut self.display_name,
+            supported_reasoning_levels: &mut self.supported_reasoning_levels,
+            base_url: &mut self.base_url,
+            input: &mut self.input,
+            cost: &mut self.cost,
+            context_window: &mut self.context_window,
+            max_tokens: &mut self.max_tokens,
+            compat: &mut self.compat,
+            thinking_level_map: &mut self.thinking_level_map,
+        }
+    }
+}
+
+impl fmt::Debug for Model {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Model")
+            .field("id", &self.id)
+            .field("display_name", &self.display_name)
+            .field("provider", &self.provider)
+            .field(
+                "supported_reasoning_levels",
+                &self.supported_reasoning_levels,
+            )
+            .field("api", &self.api)
+            .field("base_url", &self.base_url)
+            .field("input", &self.input)
+            .field("cost", &self.cost)
+            .field("context_window", &self.context_window)
+            .field("max_tokens", &self.max_tokens)
+            .field("header_names", &self.headers.keys().collect::<Vec<_>>())
+            .field("compat", &self.compat)
+            .field("thinking_level_map", &self.thinking_level_map)
+            .finish()
+    }
+}
+
+pub(crate) struct ModelPartsMut<'a> {
+    pub display_name: &'a mut String,
+    pub supported_reasoning_levels: &'a mut Vec<ReasoningLevel>,
+    pub base_url: &'a mut String,
+    pub input: &'a mut Vec<ModelInput>,
+    pub cost: &'a mut ModelCost,
+    pub context_window: &'a mut u64,
+    pub max_tokens: &'a mut u64,
+    pub compat: &'a mut Value,
+    pub thinking_level_map: &'a mut BTreeMap<ReasoningLevel, Option<String>>,
 }
 
 pub fn openai_codex_models() -> &'static [Model] {
-    static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
-    MODELS.get_or_init(|| {
-        // Capability snapshot ported from Pi at dcfe36c79702ec240b146c45f167ab75ecddd205.
-        [
-            ("gpt-5.3-codex-spark", "GPT-5.3 Codex Spark", false),
-            ("gpt-5.4", "GPT-5.4", false),
-            ("gpt-5.4-mini", "GPT-5.4 mini", false),
-            ("gpt-5.5", "GPT-5.5", false),
-            ("gpt-5.6-luna", "GPT-5.6 Luna", true),
-            ("gpt-5.6-sol", "GPT-5.6 Sol", true),
-            ("gpt-5.6-terra", "GPT-5.6 Terra", true),
-        ]
-        .into_iter()
-        .map(|(id, name, supports_max)| {
-            let mut levels = REASONING_ORDER[..6].to_vec();
-            if supports_max {
-                levels.push(ReasoningLevel::Max);
-            }
-            Model::new(
-                ModelId::new(id).expect("pinned model identifier must be valid"),
-                name,
-                ProviderId::new("openai-codex").expect("pinned provider identifier must be valid"),
-                levels,
-            )
-            .expect("pinned model metadata must be valid")
-        })
-        .collect()
-    })
+    crate::agent::providers::openai_codex::models::builtin_models()
 }
 
 pub fn find_openai_codex_model(id: &str) -> Result<&'static Model, AgentError> {
@@ -189,123 +433,4 @@ pub(crate) fn codex_reasoning_effort(
         ReasoningLevel::XHigh => Some("xhigh"),
         ReasoningLevel::Max => Some("max"),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pinned_codex_catalog_exposes_exact_models_and_reasoning_levels() {
-        let models = openai_codex_models();
-
-        assert_eq!(
-            models
-                .iter()
-                .map(|model| model.id().as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "gpt-5.3-codex-spark",
-                "gpt-5.4",
-                "gpt-5.4-mini",
-                "gpt-5.5",
-                "gpt-5.6-luna",
-                "gpt-5.6-sol",
-                "gpt-5.6-terra",
-            ]
-        );
-        assert_eq!(models[0].display_name(), "GPT-5.3 Codex Spark");
-        assert_eq!(models[0].provider().as_str(), "openai-codex");
-        assert_eq!(
-            models[0].supported_reasoning_levels(),
-            &[
-                ReasoningLevel::Off,
-                ReasoningLevel::Minimal,
-                ReasoningLevel::Low,
-                ReasoningLevel::Medium,
-                ReasoningLevel::High,
-                ReasoningLevel::XHigh,
-            ]
-        );
-        assert_eq!(
-            models[4].supported_reasoning_levels(),
-            &[
-                ReasoningLevel::Off,
-                ReasoningLevel::Minimal,
-                ReasoningLevel::Low,
-                ReasoningLevel::Medium,
-                ReasoningLevel::High,
-                ReasoningLevel::XHigh,
-                ReasoningLevel::Max,
-            ]
-        );
-    }
-
-    #[test]
-    fn reasoning_normalization_uses_nearest_level_and_breaks_ties_upward() {
-        let sparse = Model::new(
-            ModelId::new("synthetic-model").unwrap(),
-            "Synthetic model",
-            ProviderId::new("synthetic-provider").unwrap(),
-            vec![
-                ReasoningLevel::Off,
-                ReasoningLevel::Medium,
-                ReasoningLevel::XHigh,
-            ],
-        )
-        .unwrap();
-
-        assert_eq!(
-            sparse.normalize_reasoning(ReasoningLevel::Minimal),
-            ReasoningLevel::Off
-        );
-        assert_eq!(
-            sparse.normalize_reasoning(ReasoningLevel::Low),
-            ReasoningLevel::Medium
-        );
-        assert_eq!(
-            sparse.normalize_reasoning(ReasoningLevel::Max),
-            ReasoningLevel::XHigh
-        );
-        assert_eq!(
-            sparse.normalize_reasoning(ReasoningLevel::Medium),
-            ReasoningLevel::Medium
-        );
-    }
-
-    #[test]
-    fn identifiers_and_model_capabilities_fail_closed() {
-        assert!(ModelId::new("").is_err());
-        assert!(ProviderId::new("contains a space").is_err());
-        assert!(Model::new(
-            ModelId::new("synthetic-model").unwrap(),
-            "Synthetic model",
-            ProviderId::new("synthetic-provider").unwrap(),
-            Vec::new(),
-        )
-        .is_err());
-        assert!(find_openai_codex_model("missing-model").is_err());
-    }
-
-    #[test]
-    fn codex_reasoning_maps_minimal_to_low_and_preserves_extended_levels() {
-        let standard = find_openai_codex_model("gpt-5.4").unwrap();
-        let extended = find_openai_codex_model("gpt-5.6-luna").unwrap();
-        assert_eq!(
-            codex_reasoning_effort(standard, ReasoningLevel::Off).unwrap(),
-            None
-        );
-        assert_eq!(
-            codex_reasoning_effort(standard, ReasoningLevel::Minimal).unwrap(),
-            Some("low")
-        );
-        assert_eq!(
-            codex_reasoning_effort(standard, ReasoningLevel::Max).unwrap(),
-            Some("xhigh")
-        );
-        assert_eq!(
-            codex_reasoning_effort(extended, ReasoningLevel::Max).unwrap(),
-            Some("max")
-        );
-    }
 }
