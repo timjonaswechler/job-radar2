@@ -13,6 +13,7 @@ pub struct AppState {
     pub browser_runtime_install_lock: Mutex<()>,
     pub running_search_runs: Arc<crate::search::request::RunningSearchRuns>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
+    pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
 }
 
 impl AppState {
@@ -42,6 +43,11 @@ impl AppState {
         notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let db = crate::db::connect_and_migrate(&paths.database_path).await?;
+        let agent_configuration = Arc::new(
+            crate::agent::configuration::AgentConfiguration::from_agents_data_root(
+                &paths.agents_data_dir,
+            )?,
+        );
 
         Ok(Self {
             db,
@@ -53,6 +59,7 @@ impl AppState {
                 crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
                 notifier,
             ),
+            agent_configuration,
         })
     }
 }

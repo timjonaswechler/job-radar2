@@ -228,6 +228,7 @@ pub(crate) struct ProviderCredential {
     pub(crate) account_id: String,
 }
 
+#[derive(Clone)]
 pub struct AgentAuthentication {
     storage: Arc<AuthStorage>,
     http: Arc<dyn OAuthHttpClient>,
@@ -268,12 +269,38 @@ impl AgentAuthentication {
         self.storage.status(PROVIDER_ID).map_err(Into::into)
     }
 
+    pub(crate) fn authentication_kind(
+        &self,
+        provider: &str,
+    ) -> Result<Option<crate::agent::auth::StoredAuthenticationKind>, AgentError> {
+        self.storage
+            .authentication_kind(provider)
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn set_api_key(&self, provider: &str, key: String) -> Result<(), AgentError> {
+        self.storage
+            .set_api_key(provider, key, BTreeMap::new())
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn remove(&self, provider: &str) -> Result<(), AgentError> {
+        self.storage.logout(provider).map_err(Into::into)
+    }
+
+    pub(crate) fn reload(&self) -> Result<(), AgentError> {
+        self.storage.reload().map_err(Into::into)
+    }
+
     pub async fn login(&self, interaction: &mut impl AuthInteraction) -> Result<(), AgentError> {
         let credential = match interaction.select_login_method().await? {
             LoginMethod::Browser => self.login_browser(interaction).await,
             LoginMethod::DeviceCode => self.login_device(interaction).await,
         }?;
-        self.storage.set_oauth(PROVIDER_ID, credential)?;
+        let storage = Arc::clone(&self.storage);
+        tokio::task::spawn_blocking(move || storage.set_oauth(PROVIDER_ID, credential))
+            .await
+            .map_err(|_| AgentError::authentication())??;
         Ok(())
     }
 

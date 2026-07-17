@@ -27,6 +27,12 @@ pub enum AuthStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum StoredAuthenticationKind {
+    ApiKey,
+    OAuth,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthStorageErrorCategory {
     InvalidConfiguration,
     MigrationConflict,
@@ -382,13 +388,23 @@ impl AuthStorage {
     }
 
     pub(crate) fn status(&self, provider: &str) -> Result<AuthStatus, AuthStorageError> {
-        validate_provider(provider)?;
-        let document = self.published_document()?;
-        Ok(if document.0.contains_key(provider) {
+        Ok(if self.authentication_kind(provider)?.is_some() {
             AuthStatus::Configured
         } else {
             AuthStatus::NotConfigured
         })
+    }
+
+    pub(crate) fn authentication_kind(
+        &self,
+        provider: &str,
+    ) -> Result<Option<StoredAuthenticationKind>, AuthStorageError> {
+        validate_provider(provider)?;
+        let document = self.published_document()?;
+        Ok(document.0.get(provider).map(|credential| match credential {
+            StoredCredential::ApiKey(_) => StoredAuthenticationKind::ApiKey,
+            StoredCredential::OAuth(_) => StoredAuthenticationKind::OAuth,
+        }))
     }
 
     pub(crate) fn set_api_key(

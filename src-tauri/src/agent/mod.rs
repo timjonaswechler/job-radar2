@@ -1,5 +1,6 @@
 pub mod api;
 pub(crate) mod auth;
+pub mod configuration;
 mod conversation;
 pub mod error;
 pub mod models;
