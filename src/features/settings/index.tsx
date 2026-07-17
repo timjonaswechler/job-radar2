@@ -26,6 +26,7 @@ import {
   writeStoredBaseFontSizePx,
 } from "@/lib/font-size";
 import { applyStoredWindowDragRegionEnabled } from "@/lib/window-chrome";
+import { AgentProviderSettings } from "@/features/settings/agent-provider-settings";
 
 const maxSearchRadiusKm = 500;
 
@@ -189,6 +190,12 @@ export function SettingsFeature() {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <Frame>
+        <FramePanel>
+          <AgentProviderSettings />
+        </FramePanel>
+      </Frame>
 
       <Frame>
         <FramePanel>

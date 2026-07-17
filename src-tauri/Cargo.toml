@@ -1,5 +1,6 @@
 [package]
 name = "job-radar"
+default-run = "job-radar"
 version = "0.1.0"
 description = "Job Radar desktop app"
 authors = ["Tim Jonas Wechler"]

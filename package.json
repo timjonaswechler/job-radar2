@@ -12,6 +12,7 @@
     "test:navigation": "node scripts/navigation-contract-tests.mjs",
     "test:window-platform": "node --experimental-strip-types scripts/window-control-platform-tests.mjs",
     "test:agent-credential-safety": "node scripts/agent-credential-safety-tests.mjs",
+    "test:agent-settings-ui": "node scripts/agent-settings-ui-contract-tests.mjs",
     "check:agent-credentials": "node scripts/agent-credential-safety.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
