@@ -9,6 +9,7 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const STORAGE_DIRECTORY: &str = "agents";
@@ -77,10 +78,29 @@ pub(crate) struct OAuthCredential {
     pub(crate) refresh: String,
     #[serde(rename = "expires")]
     pub(crate) expires_at_ms: u64,
-    pub(crate) account_id: String,
+    #[serde(flatten)]
+    metadata: BTreeMap<String, serde_json::Value>,
 }
 
 impl OAuthCredential {
+    pub(crate) fn with_metadata(
+        access: String,
+        refresh: String,
+        expires_at_ms: u64,
+        metadata: BTreeMap<String, serde_json::Value>,
+    ) -> Result<Self, AuthStorageError> {
+        let credential = Self {
+            credential_type: OAuthCredentialType::OAuth,
+            access,
+            refresh,
+            expires_at_ms,
+            metadata,
+        };
+        credential.validate()?;
+        Ok(credential)
+    }
+
+    // Compatibility constructor for the existing OpenAI Codex adapter.
     pub(crate) fn new(
         access: String,
         refresh: String,
@@ -92,8 +112,28 @@ impl OAuthCredential {
             access,
             refresh,
             expires_at_ms,
-            account_id,
+            metadata: BTreeMap::from([(
+                "accountId".to_owned(),
+                serde_json::Value::String(account_id),
+            )]),
         }
+    }
+
+    pub(crate) fn metadata(&self) -> &BTreeMap<String, serde_json::Value> {
+        &self.metadata
+    }
+
+    fn validate(&self) -> Result<(), AuthStorageError> {
+        if self.access.is_empty()
+            || self.refresh.is_empty()
+            || self
+                .metadata
+                .keys()
+                .any(|key| matches!(key.as_str(), "type" | "access" | "refresh" | "expires"))
+        {
+            return Err(AuthStorageError::invalid_configuration());
+        }
+        Ok(())
     }
 }
 
@@ -103,14 +143,96 @@ enum OAuthCredentialType {
     OAuth,
 }
 
-#[derive(Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ApiKeyCredential {
+    #[serde(rename = "type")]
+    credential_type: ApiKeyCredentialType,
+    key: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    env: BTreeMap<String, String>,
+}
+
+impl ApiKeyCredential {
+    fn new(key: String, env: BTreeMap<String, String>) -> Result<Self, AuthStorageError> {
+        let credential = Self {
+            credential_type: ApiKeyCredentialType::ApiKey,
+            key,
+            env,
+        };
+        credential.validate()?;
+        Ok(credential)
+    }
+
+    fn validate(&self) -> Result<(), AuthStorageError> {
+        validate_config_value(&self.key)?;
+        if self.env.keys().any(|name| !valid_environment_name(name)) {
+            return Err(AuthStorageError::invalid_configuration());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ApiKeyCredentialType {
+    ApiKey,
+}
+
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+enum StoredCredential {
+    ApiKey(ApiKeyCredential),
+    OAuth(OAuthCredential),
+}
+
+impl StoredCredential {
+    fn validate(&self) -> Result<(), AuthStorageError> {
+        match self {
+            Self::ApiKey(credential) => credential.validate(),
+            Self::OAuth(credential) => credential.validate(),
+        }
+    }
+}
+
+impl From<OAuthCredential> for StoredCredential {
+    fn from(value: OAuthCredential) -> Self {
+        Self::OAuth(value)
+    }
+}
+
+#[derive(Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
-struct AuthDocument(BTreeMap<String, OAuthCredential>);
+struct AuthDocument(BTreeMap<String, StoredCredential>);
+
+impl AuthDocument {
+    fn validate(&self) -> Result<(), AuthStorageError> {
+        for (provider, credential) in &self.0 {
+            validate_provider(provider)?;
+            credential.validate()?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+enum PublishedAuth {
+    Available(AuthDocument),
+    Unavailable,
+}
+
+pub(crate) enum ResolvedCredential {
+    ApiKey(String),
+    OAuth {
+        access: String,
+        metadata: BTreeMap<String, serde_json::Value>,
+    },
+}
 
 pub(crate) struct AuthStorage {
     directory: PathBuf,
     auth_path: PathBuf,
     lock_path: PathBuf,
+    published: RwLock<PublishedAuth>,
 }
 
 impl AuthStorage {
@@ -183,12 +305,14 @@ impl AuthStorage {
             auth_path: agents_data_root.join(AUTH_FILE),
             lock_path: agents_data_root.join(LOCK_FILE),
             directory: agents_data_root.to_owned(),
+            published: RwLock::new(PublishedAuth::Unavailable),
         };
         let lock = storage.open_lock()?;
         lock.lock_exclusive()
             .map_err(|_| AuthStorageError::unavailable())?;
         storage.initialize_or_migrate(app_data_dir)?;
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+        storage.reload()?;
         Ok(storage)
     }
 
@@ -239,9 +363,38 @@ impl AuthStorage {
         FileExt::unlock(&legacy_lock).map_err(|_| AuthStorageError::unavailable())
     }
 
+    pub(crate) fn reload(&self) -> Result<(), AuthStorageError> {
+        let lock = match self.open_lock() {
+            Ok(lock) => lock,
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                return Err(error);
+            }
+        };
+        if lock.lock_shared().is_err() {
+            self.publish(PublishedAuth::Unavailable);
+            return Err(AuthStorageError::unavailable());
+        }
+        match self.read_document() {
+            Ok(document) => {
+                self.publish(PublishedAuth::Available(document));
+                if FileExt::unlock(&lock).is_err() {
+                    self.publish(PublishedAuth::Unavailable);
+                    return Err(AuthStorageError::unavailable());
+                }
+                Ok(())
+            }
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                Err(error)
+            }
+        }
+    }
+
     pub(crate) fn status(&self, provider: &str) -> Result<AuthStatus, AuthStorageError> {
         validate_provider(provider)?;
-        let document = self.read_locked()?;
+        let document = self.published_document()?;
         Ok(if document.0.contains_key(provider) {
             AuthStatus::Configured
         } else {
@@ -249,9 +402,61 @@ impl AuthStorage {
         })
     }
 
+    pub(crate) fn set_api_key(
+        &self,
+        provider: &str,
+        key: String,
+        env: BTreeMap<String, String>,
+    ) -> Result<(), AuthStorageError> {
+        let credential = ApiKeyCredential::new(key, env)?;
+        self.set(provider, StoredCredential::ApiKey(credential))
+    }
+
+    pub(crate) fn set_oauth(
+        &self,
+        provider: &str,
+        credential: OAuthCredential,
+    ) -> Result<(), AuthStorageError> {
+        credential.validate()?;
+        self.set(provider, StoredCredential::OAuth(credential))
+    }
+
+    fn set(&self, provider: &str, credential: StoredCredential) -> Result<(), AuthStorageError> {
+        validate_provider(provider)?;
+        credential.validate()?;
+        self.mutate_document(|document| {
+            document.0.insert(provider.to_owned(), credential);
+        })
+    }
+
+    pub(crate) fn logout(&self, provider: &str) -> Result<(), AuthStorageError> {
+        validate_provider(provider)?;
+        self.mutate_document(|document| {
+            document.0.remove(provider);
+        })
+    }
+
+    // Compatibility surface for the provider-specific migration ticket.
     pub(crate) fn load(&self, provider: &str) -> Result<Option<OAuthCredential>, AuthStorageError> {
         validate_provider(provider)?;
-        Ok(self.read_locked()?.0.get(provider).cloned())
+        let lock = self.open_lock()?;
+        lock.lock_shared()
+            .map_err(|_| AuthStorageError::unavailable())?;
+        let document = match self.read_document() {
+            Ok(document) => document,
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                return Err(error);
+            }
+        };
+        let credential = match document.0.get(provider) {
+            Some(StoredCredential::OAuth(credential)) => Some(credential.clone()),
+            Some(StoredCredential::ApiKey(_)) | None => None,
+        };
+        self.publish(PublishedAuth::Available(document));
+        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+        Ok(credential)
     }
 
     pub(crate) fn save(
@@ -259,25 +464,104 @@ impl AuthStorage {
         provider: &str,
         credential: &OAuthCredential,
     ) -> Result<(), AuthStorageError> {
-        validate_provider(provider)?;
-        let lock = self.open_lock()?;
-        lock.lock_exclusive()
-            .map_err(|_| AuthStorageError::unavailable())?;
-        let mut document = self.read_document()?;
-        document.0.insert(provider.to_owned(), credential.clone());
-        self.write_document(&document)?;
-        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())
+        self.set_oauth(provider, credential.clone())
     }
 
     pub(crate) fn remove(&self, provider: &str) -> Result<(), AuthStorageError> {
+        self.logout(provider)
+    }
+
+    pub(crate) async fn resolve<E, F, Fut>(
+        &self,
+        provider: &str,
+        runtime_override: Option<&str>,
+        environment: &E,
+        refresh: F,
+    ) -> Result<Option<ResolvedCredential>, AuthStorageError>
+    where
+        E: Fn(&str) -> Option<String> + ?Sized,
+        F: FnOnce(OAuthCredential) -> Fut,
+        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
+    {
         validate_provider(provider)?;
-        let lock = self.open_lock()?;
-        lock.lock_exclusive()
-            .map_err(|_| AuthStorageError::unavailable())?;
-        let mut document = self.read_document()?;
-        document.0.remove(provider);
+        if let Some(value) = runtime_override {
+            let key = resolve_config_value(value, &BTreeMap::new(), environment)?;
+            return Ok(Some(ResolvedCredential::ApiKey(key)));
+        }
+
+        let stored = self.published_document()?.0.get(provider).cloned();
+        match stored {
+            None => Ok(None),
+            Some(StoredCredential::ApiKey(credential)) => {
+                let key = resolve_config_value(&credential.key, &credential.env, environment)?;
+                Ok(Some(ResolvedCredential::ApiKey(key)))
+            }
+            Some(StoredCredential::OAuth(credential)) => {
+                if system_time_ms()? < credential.expires_at_ms {
+                    return Ok(Some(ResolvedCredential::OAuth {
+                        access: credential.access.clone(),
+                        metadata: credential.metadata().clone(),
+                    }));
+                }
+                self.refresh_published_oauth(provider, credential, refresh)
+                    .await
+                    .map(|credential| ResolvedCredential::OAuth {
+                        access: credential.access.clone(),
+                        metadata: credential.metadata().clone(),
+                    })
+                    .map(Some)
+            }
+        }
+    }
+
+    async fn refresh_published_oauth<F, Fut>(
+        &self,
+        provider: &str,
+        expected: OAuthCredential,
+        refresh: F,
+    ) -> Result<OAuthCredential, AuthStorageError>
+    where
+        F: FnOnce(OAuthCredential) -> Fut,
+        Fut: Future<Output = Result<OAuthCredential, AuthStorageError>>,
+    {
+        let lock = self.lock_exclusive_async().await?;
+        let mut document = match self.read_document() {
+            Ok(document) => document,
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                return Err(error);
+            }
+        };
+        let Some(StoredCredential::OAuth(current)) = document.0.get(provider).cloned() else {
+            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+            return Err(AuthStorageError::unavailable());
+        };
+        if current != expected {
+            if system_time_ms()? < current.expires_at_ms {
+                self.publish(PublishedAuth::Available(document));
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                return Ok(current);
+            }
+            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+            return Err(AuthStorageError::unavailable());
+        }
+        if system_time_ms()? < current.expires_at_ms {
+            FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+            return Ok(current);
+        }
+        let refreshed = refresh(current)
+            .await
+            .map_err(|_| AuthStorageError::refresh_failed())?;
+        refreshed.validate()?;
+        document.0.insert(
+            provider.to_owned(),
+            StoredCredential::OAuth(refreshed.clone()),
+        );
         self.write_document(&document)?;
-        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())
+        self.publish(PublishedAuth::Available(document));
+        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+        Ok(refreshed)
     }
 
     pub(crate) async fn resolve_with_refresh<F, Fut>(
@@ -331,13 +615,22 @@ impl AuthStorage {
     {
         validate_provider(provider)?;
         let lock = self.lock_exclusive_async().await?;
-        let mut document = self.read_document()?;
+        let mut document = match self.read_document() {
+            Ok(document) => document,
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                return Err(error);
+            }
+        };
         let now_ms = current_time_ms()?;
-        let Some(stored) = document.0.get(provider).cloned() else {
+        let Some(StoredCredential::OAuth(stored)) = document.0.get(provider).cloned() else {
+            self.publish(PublishedAuth::Available(document));
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Ok(None);
         };
         if now_ms < stored.expires_at_ms {
+            self.publish(PublishedAuth::Available(document));
             FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
             return Ok(Some(stored));
         }
@@ -346,17 +639,58 @@ impl AuthStorage {
             Ok(refreshed) => refreshed,
             Err(_) => {
                 FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-                let latest = self.load(provider)?;
-                return match latest {
-                    Some(credential) if now_ms < credential.expires_at_ms => Ok(Some(credential)),
-                    _ => Err(AuthStorageError::refresh_failed()),
-                };
+                return Err(AuthStorageError::refresh_failed());
             }
         };
-        document.0.insert(provider.to_owned(), refreshed.clone());
+        refreshed.validate()?;
+        document.0.insert(
+            provider.to_owned(),
+            StoredCredential::OAuth(refreshed.clone()),
+        );
         self.write_document(&document)?;
+        self.publish(PublishedAuth::Available(document));
         FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
         Ok(Some(refreshed))
+    }
+
+    fn mutate_document(
+        &self,
+        mutate: impl FnOnce(&mut AuthDocument),
+    ) -> Result<(), AuthStorageError> {
+        let lock = self.open_lock()?;
+        lock.lock_exclusive()
+            .map_err(|_| AuthStorageError::unavailable())?;
+        let mut document = match self.read_document() {
+            Ok(document) => document,
+            Err(error) => {
+                self.publish(PublishedAuth::Unavailable);
+                FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+                return Err(error);
+            }
+        };
+        mutate(&mut document);
+        document.validate()?;
+        self.write_document(&document)?;
+        self.publish(PublishedAuth::Available(document));
+        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
+        Ok(())
+    }
+
+    fn published_document(&self) -> Result<AuthDocument, AuthStorageError> {
+        match &*self
+            .published
+            .read()
+            .map_err(|_| AuthStorageError::unavailable())?
+        {
+            PublishedAuth::Available(document) => Ok(document.clone()),
+            PublishedAuth::Unavailable => Err(AuthStorageError::unavailable()),
+        }
+    }
+
+    fn publish(&self, state: PublishedAuth) {
+        if let Ok(mut published) = self.published.write() {
+            *published = state;
+        }
     }
 
     async fn lock_exclusive_async(&self) -> Result<File, AuthStorageError> {
@@ -374,15 +708,6 @@ impl AuthStorage {
                 Err(_) => return Err(AuthStorageError::unavailable()),
             }
         }
-    }
-
-    fn read_locked(&self) -> Result<AuthDocument, AuthStorageError> {
-        let lock = self.open_lock()?;
-        lock.lock_shared()
-            .map_err(|_| AuthStorageError::unavailable())?;
-        let document = self.read_document()?;
-        FileExt::unlock(&lock).map_err(|_| AuthStorageError::unavailable())?;
-        Ok(document)
     }
 
     fn open_lock(&self) -> Result<File, AuthStorageError> {
@@ -416,6 +741,53 @@ impl AuthStorage {
             .and_then(|directory| directory.sync_all())
             .map_err(|_| AuthStorageError::unavailable())
     }
+}
+
+fn system_time_ms() -> Result<u64, AuthStorageError> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| AuthStorageError::invalid_configuration())?
+        .as_millis()
+        .try_into()
+        .map_err(|_| AuthStorageError::invalid_configuration())
+}
+
+fn validate_config_value(value: &str) -> Result<(), AuthStorageError> {
+    if value.is_empty() || value.starts_with('!') {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    if let Some(name) = value.strip_prefix('$') {
+        if !valid_environment_name(name) {
+            return Err(AuthStorageError::invalid_configuration());
+        }
+    }
+    Ok(())
+}
+
+fn valid_environment_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    matches!(bytes.next(), Some(b'A'..=b'Z' | b'a'..=b'z' | b'_'))
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+fn resolve_config_value<E>(
+    value: &str,
+    provider_environment: &BTreeMap<String, String>,
+    environment: &E,
+) -> Result<String, AuthStorageError>
+where
+    E: Fn(&str) -> Option<String> + ?Sized,
+{
+    validate_config_value(value)?;
+    let Some(name) = value.strip_prefix('$') else {
+        return Ok(value.to_owned());
+    };
+    provider_environment
+        .get(name)
+        .filter(|value| !value.is_empty())
+        .cloned()
+        .or_else(|| environment(name).filter(|value| !value.is_empty()))
+        .ok_or_else(AuthStorageError::unavailable)
 }
 
 fn validate_provider(provider: &str) -> Result<(), AuthStorageError> {
@@ -517,7 +889,10 @@ fn read_document_at(path: &Path) -> Result<AuthDocument, AuthStorageError> {
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)
         .map_err(|_| AuthStorageError::unavailable())?;
-    serde_json::from_slice(&bytes).map_err(|_| AuthStorageError::invalid_configuration())
+    let document: AuthDocument =
+        serde_json::from_slice(&bytes).map_err(|_| AuthStorageError::invalid_configuration())?;
+    document.validate()?;
+    Ok(document)
 }
 
 fn validate_private_directory(path: &Path) -> Result<(), AuthStorageError> {
@@ -603,6 +978,215 @@ mod tests {
         )
     }
 
+    fn api_key_value(resolved: Option<ResolvedCredential>) -> String {
+        match resolved {
+            Some(ResolvedCredential::ApiKey(value)) => value,
+            Some(ResolvedCredential::OAuth { .. }) => panic!("expected an API key credential"),
+            None => panic!("expected a configured credential"),
+        }
+    }
+
+    #[test]
+    fn api_keys_resolve_direct_values_and_exact_environment_references_deterministically() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        storage
+            .set_api_key(
+                PROVIDER,
+                "$SYNTHETIC_TOKEN".to_owned(),
+                BTreeMap::from([(
+                    "SYNTHETIC_TOKEN".to_owned(),
+                    "synthetic-scoped-value".to_owned(),
+                )]),
+            )
+            .unwrap();
+        let refreshes = AtomicUsize::new(0);
+        let resolved = tauri::async_runtime::block_on(storage.resolve(
+            PROVIDER,
+            None,
+            &|_| Some("synthetic-ambient-value".to_owned()),
+            |_| {
+                refreshes.fetch_add(1, Ordering::SeqCst);
+                async { Err(AuthStorageError::refresh_failed()) }
+            },
+        ))
+        .unwrap();
+
+        assert_eq!(api_key_value(resolved), "synthetic-scoped-value");
+        assert_eq!(refreshes.load(Ordering::SeqCst), 0);
+
+        let overridden = tauri::async_runtime::block_on(storage.resolve(
+            PROVIDER,
+            Some("synthetic-runtime-value"),
+            &|_| None,
+            |_| async { Err(AuthStorageError::refresh_failed()) },
+        ))
+        .unwrap();
+        assert_eq!(api_key_value(overridden), "synthetic-runtime-value");
+
+        let stored_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(app_data.path().join("agents/auth.json")).unwrap())
+                .unwrap();
+        assert_eq!(stored_json[PROVIDER]["type"], "api_key");
+        assert_eq!(stored_json[PROVIDER]["key"], "$SYNTHETIC_TOKEN");
+    }
+
+    #[test]
+    fn oauth_entries_preserve_provider_metadata_and_require_reload_for_manual_edits() {
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        let auth_path = app_data.path().join("agents/auth.json");
+        let oauth = OAuthCredential::with_metadata(
+            "synthetic-access".to_owned(),
+            "synthetic-refresh".to_owned(),
+            u64::MAX,
+            BTreeMap::from([
+                (
+                    "syntheticMetadata".to_owned(),
+                    serde_json::Value::String("synthetic-metadata".to_owned()),
+                ),
+                ("accountId".to_owned(), serde_json::Value::Bool(true)),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(oauth.metadata()["syntheticMetadata"], "synthetic-metadata");
+        storage.set_oauth(PROVIDER, oauth).unwrap();
+
+        let resolved =
+            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                panic!("unexpired OAuth credential must not refresh")
+            }))
+            .unwrap();
+        match resolved {
+            Some(ResolvedCredential::OAuth { access, metadata }) => {
+                assert_eq!(access, "synthetic-access");
+                assert_eq!(metadata["syntheticMetadata"], "synthetic-metadata");
+                assert_eq!(metadata["accountId"], true);
+            }
+            Some(ResolvedCredential::ApiKey(_)) => panic!("expected an OAuth credential"),
+            None => panic!("expected a configured OAuth credential"),
+        }
+
+        fs::write(
+            &auth_path,
+            br#"{"synthetic-provider":{"type":"oauth","access":"synthetic-manual-access","refresh":"synthetic-manual-refresh","expires":18446744073709551615}}"#,
+        )
+        .unwrap();
+        let before_reload =
+            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                panic!("unexpired OAuth credential must not refresh")
+            }))
+            .unwrap();
+        match before_reload {
+            Some(ResolvedCredential::OAuth { access, .. }) => {
+                assert_eq!(access, "synthetic-access")
+            }
+            _ => panic!("expected the published OAuth snapshot"),
+        }
+
+        storage.reload().unwrap();
+        let after_reload =
+            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                panic!("unexpired OAuth credential must not refresh")
+            }))
+            .unwrap();
+        match after_reload {
+            Some(ResolvedCredential::OAuth { access, .. }) => {
+                assert_eq!(access, "synthetic-manual-access")
+            }
+            _ => panic!("expected the reloaded OAuth snapshot"),
+        }
+
+        storage
+            .set_api_key(
+                "synthetic-other",
+                "synthetic-key".to_owned(),
+                BTreeMap::new(),
+            )
+            .unwrap();
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(auth_path).unwrap()).unwrap();
+        assert_eq!(persisted[PROVIDER]["access"], "synthetic-manual-access");
+        assert!(persisted[PROVIDER].get("accountId").is_none());
+    }
+
+    #[test]
+    fn missing_environment_references_do_not_fall_through_and_commands_are_rejected() {
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        storage
+            .set_api_key(PROVIDER, "$SYNTHETIC_MISSING".to_owned(), BTreeMap::new())
+            .unwrap();
+
+        let missing = match tauri::async_runtime::block_on(storage.resolve(
+            PROVIDER,
+            None,
+            &|_| None,
+            |_| async { Err(AuthStorageError::refresh_failed()) },
+        )) {
+            Ok(_) => panic!("missing environment reference unexpectedly resolved"),
+            Err(error) => error,
+        };
+        assert_eq!(missing.category, AuthStorageErrorCategory::Unavailable);
+
+        let command = storage
+            .set_api_key(PROVIDER, "!synthetic-command".to_owned(), BTreeMap::new())
+            .unwrap_err();
+        assert_eq!(
+            command.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        assert!(!format!("{command:?}").contains("synthetic-command"));
+
+        let malformed_reference = storage
+            .set_api_key(PROVIDER, "${SYNTHETIC}".to_owned(), BTreeMap::new())
+            .unwrap_err();
+        assert_eq!(
+            malformed_reference.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+    }
+
+    #[test]
+    fn explicit_reload_publishes_valid_edits_and_fails_closed_as_one_snapshot() {
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        storage
+            .set_api_key(
+                PROVIDER,
+                "synthetic-initial-value".to_owned(),
+                BTreeMap::new(),
+            )
+            .unwrap();
+        let auth_path = app_data.path().join("agents/auth.json");
+
+        fs::write(&auth_path, b"synthetic malformed document").unwrap();
+        assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::Configured);
+        let reload_error = storage.reload().unwrap_err();
+        assert_eq!(
+            reload_error.category,
+            AuthStorageErrorCategory::InvalidConfiguration
+        );
+        assert_eq!(
+            storage.status(PROVIDER).unwrap_err().category,
+            AuthStorageErrorCategory::Unavailable
+        );
+
+        fs::write(
+            &auth_path,
+            br#"{"synthetic-other":{"type":"api_key","key":"synthetic-reloaded-value"}}"#,
+        )
+        .unwrap();
+        storage.reload().unwrap();
+        assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::NotConfigured);
+        assert_eq!(
+            storage.status("synthetic-other").unwrap(),
+            AuthStatus::Configured
+        );
+    }
+
     #[test]
     fn save_load_status_and_remove_use_private_repository_external_storage() {
         let app_data = tempfile::tempdir().unwrap();
@@ -651,7 +1235,7 @@ mod tests {
         let mut document = AuthDocument::default();
         document
             .0
-            .insert(PROVIDER.to_owned(), credential("legacy", u64::MAX));
+            .insert(PROVIDER.to_owned(), credential("legacy", u64::MAX).into());
         let bytes = serde_json::to_vec_pretty(&document).unwrap();
         let mut legacy_file = OpenOptions::new()
             .write(true)
@@ -816,6 +1400,45 @@ mod tests {
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         assert!(storage.load("synthetic-provider-a").unwrap().is_some());
         assert!(storage.load("synthetic-provider-b").unwrap().is_some());
+    }
+
+    #[test]
+    fn same_instance_concurrent_mutations_publish_the_latest_complete_document() {
+        use std::sync::{Arc, Barrier};
+
+        let app_data = tempfile::tempdir().unwrap();
+        let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
+        let barrier = Arc::new(Barrier::new(3));
+        std::thread::scope(|scope| {
+            for (provider, value) in [
+                ("synthetic-provider-a", "synthetic-key-a"),
+                ("synthetic-provider-b", "synthetic-key-b"),
+            ] {
+                let barrier = Arc::clone(&barrier);
+                let storage = &storage;
+                scope.spawn(move || {
+                    barrier.wait();
+                    storage
+                        .set_api_key(provider, value.to_owned(), BTreeMap::new())
+                        .unwrap();
+                });
+            }
+            barrier.wait();
+        });
+
+        for (provider, expected) in [
+            ("synthetic-provider-a", "synthetic-key-a"),
+            ("synthetic-provider-b", "synthetic-key-b"),
+        ] {
+            let resolved = tauri::async_runtime::block_on(storage.resolve(
+                provider,
+                None,
+                &|_| None,
+                |_| async { panic!("API keys must not refresh") },
+            ))
+            .unwrap();
+            assert_eq!(api_key_value(resolved), expected);
+        }
     }
 
     #[test]

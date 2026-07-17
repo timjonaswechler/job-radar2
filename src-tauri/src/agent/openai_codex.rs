@@ -321,9 +321,16 @@ impl AgentAuthentication {
             }
         }
         .ok_or_else(AgentError::authentication)?;
+        let account_id = credential
+            .metadata()
+            .get("accountId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(AgentError::authentication)?
+            .to_owned();
         Ok(ProviderCredential {
             access: credential.access,
-            account_id: credential.account_id,
+            account_id,
         })
     }
 
