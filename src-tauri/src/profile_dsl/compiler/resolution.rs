@@ -1,4 +1,4 @@
-use crate::profile_dsl::diagnostics::Diagnostics;
+use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
 use crate::profile_dsl::documents::{PostingDetailStep, PostingDiscoveryStep};
 use crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBuildError;
 use crate::profile_dsl::execution_plan::posting_detail::compile_posting_detail_step;
@@ -24,6 +24,7 @@ use super::source_config::{
     source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
     validate_source_config_against_validated_contract, validate_source_config_contract,
 };
+use super::specialization::specialize_profile;
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
 use super::{CompiledSource, CompiledSourceAccess, EffectiveSourceProfile, SourceOwnedAccessPath};
@@ -41,6 +42,7 @@ pub(super) fn validate_source_profile_document(
     validate_reusable_access_path_keys(profile, diagnostics);
 
     for (path_index, access_path) in profile.access_paths.iter().enumerate() {
+        let path_diagnostic_start = diagnostics.len();
         validate_source_config_contract(
             profile.source_config_schema.as_ref(),
             access_path.source_config_schema.as_ref(),
@@ -90,7 +92,10 @@ pub(super) fn validate_source_profile_document(
             diagnostics,
         );
 
-        if !has_error_diagnostics(diagnostics) {
+        let path_has_error = diagnostics[path_diagnostic_start..]
+            .iter()
+            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
+        if !path_has_error {
             let _ = compile_posting_discovery_step(
                 &access_path.posting_discovery,
                 &access_path_step_path(Some(path_index), "postingDiscovery"),
@@ -140,24 +145,45 @@ fn compile_profile_access_path(
     diagnostics: &mut Diagnostics,
 ) -> Option<CompiledSource> {
     let base_profile = resolve_profile(registry, source, profile_key, diagnostics)?;
-    let mut effective_profile = base_profile.clone();
+    if source.access_paths.is_some() && source.source_overrides.is_some() {
+        diagnostics.push(compiler_error(
+            "conflicting_source_specialization_models",
+            format!(
+                "Source `{}` cannot combine direct Access Path fragments with legacy sourceOverrides",
+                source.key
+            ),
+            "/accessPaths",
+            serde_json::json!({ "sourceKey": source.key }),
+        ));
+        return None;
+    }
 
-    if let Some(access_path) = effective_profile
-        .access_paths
-        .iter_mut()
-        .find(|access_path| access_path.key == path_key)
-    {
-        let effective_steps = apply_source_overrides(
-            source.source_overrides.as_ref(),
-            &access_path.posting_discovery,
-            access_path.posting_detail.as_ref(),
-            diagnostics,
-        );
-        access_path.posting_discovery = effective_steps.posting_discovery;
-        access_path.posting_detail = effective_steps.posting_detail;
+    let mut effective_profile =
+        specialize_profile(base_profile, source.access_paths.as_deref(), diagnostics)?;
+
+    // A01 owns migration and deletion of the productive schema-v2 Source
+    // Overrides route. It remains isolated from the final keyed merger.
+    if source.access_paths.is_none() {
+        if let Some(access_path) = effective_profile
+            .access_paths
+            .iter_mut()
+            .find(|access_path| access_path.key == path_key)
+        {
+            let effective_steps = apply_source_overrides(
+                source.source_overrides.as_ref(),
+                &access_path.posting_discovery,
+                access_path.posting_detail.as_ref(),
+                diagnostics,
+            );
+            access_path.posting_discovery = effective_steps.posting_discovery;
+            access_path.posting_detail = effective_steps.posting_detail;
+        }
     }
 
     validate_source_profile_document(&effective_profile, diagnostics);
+    if has_error_diagnostics(diagnostics) {
+        return None;
+    }
 
     let path_index = access_path_index(&effective_profile, path_key);
     let selected_source_config_schema = path_index
@@ -381,6 +407,17 @@ fn validate_source_owned_access_path(
             "/sourceSupport",
             serde_json::json!({ "sourceKey": source.key }),
         )),
+    }
+    if source.access_paths.is_some() {
+        diagnostics.push(compiler_error(
+            "profile_fragments_not_supported_for_source_owned_access_path",
+            format!(
+                "Source `{}` uses a Source-owned Access Path, so direct Access Path fragments cannot be applied",
+                source.key
+            ),
+            "/accessPaths",
+            serde_json::json!({ "sourceKey": source.key }),
+        ));
     }
     if source.source_overrides.is_some() {
         diagnostics.push(compiler_error(

@@ -142,6 +142,23 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
 }
 
 #[test]
+fn source_schema_keeps_direct_profile_fragments_dormant_until_a01() {
+    let harness = SchemaHarness::new();
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    source["accessPaths"] = json!([{
+        "key": "json_feed",
+        "postingDiscovery": {
+            "strategies": [{ "key": "json_api", "acceptWhen": { "minResults": 0 } }]
+        }
+    }]);
+
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["accessPaths"]);
+}
+
+#[test]
 fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnostics() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(

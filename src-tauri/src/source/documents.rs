@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    JsonObject, JsonSchemaObject, PostingDetailStep, PostingDiscoveryStep, SourceOverrides,
-    SupportMetadata,
+    AccessPathFragment, JsonObject, JsonSchemaObject, PostingDetailStep, PostingDiscoveryStep,
+    SourceOverrides, SupportMetadata,
 };
 
 pub type SourceConfig = JsonObject;
@@ -17,6 +17,10 @@ pub struct SourceDocument {
     pub status: SourceStatus,
     pub source_config: SourceConfig,
     pub selected_access_path: SelectedAccessPath,
+    /// Dormant direct Source Profile fragments. A01 will activate their persisted
+    /// JSON representation; until then they can only be supplied in-process.
+    #[serde(skip, default)]
+    pub access_paths: Option<Vec<AccessPathFragment>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_overrides: Option<SourceOverrides>,
     #[serde(skip_serializing_if = "Option::is_none")]

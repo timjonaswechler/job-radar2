@@ -1098,6 +1098,7 @@ mod tests {
                 profile_key: "greenhouse".to_string(),
                 path_key: "boards_api".to_string(),
             },
+            access_paths: None,
             source_overrides: None,
             source_support: None,
             diagnostics: None,

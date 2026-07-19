@@ -37,7 +37,9 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    Fetch, FieldExpression, HttpMethod, RequestBody, Select, SupportLevel,
+    AccessPathFragment, Fetch, FieldExpression, HttpMethod, PostingDetailStepFragment,
+    PostingDetailStrategyFragment, PostingDiscoveryStepFragment, PostingDiscoveryStrategyFragment,
+    RequestBody, Select, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,

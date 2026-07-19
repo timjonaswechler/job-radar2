@@ -25,6 +25,7 @@ mod overrides;
 mod resolution;
 mod security;
 mod source_config;
+mod specialization;
 mod support;
 mod templates;
 
@@ -47,10 +48,8 @@ pub struct CompileSourceExecutionPlanResult {
     pub diagnostics: Diagnostics,
 }
 
-/// The complete profile after Source-owned behavior changes have been applied.
-///
-/// The current implementation materializes the existing Source Overrides model;
-/// direct Source specialization can later feed the same compiler boundary.
+/// The complete profile after direct Source fragments or legacy Source Overrides
+/// have been applied and the whole profile has been validated.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct EffectiveSourceProfile {
     pub document: SourceProfileDocument,

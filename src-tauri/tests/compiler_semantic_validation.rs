@@ -174,7 +174,7 @@ fn compiler_validates_capabilities_after_applying_source_overrides() {
 }
 
 #[test]
-fn compiler_validates_source_config_schema_and_rejects_search_request_criteria() {
+fn compiler_rejects_invalid_profile_schema_before_validating_source_config() {
     let mut profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
@@ -205,20 +205,13 @@ fn compiler_validates_source_config_schema_and_rejects_search_request_criteria()
     );
 
     assert_eq!(result.execution_plan, None);
-    for expected_code in [
-        "missing_source_config_required_property",
-        "forbidden_search_criteria_in_source_config",
-        "forbidden_search_criteria_in_source_config_schema",
-    ] {
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == expected_code),
-            "expected diagnostic code {expected_code}, got {:?}",
-            result.diagnostics
-        );
-    }
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "forbidden_search_criteria_in_source_config_schema"
+    }));
+    assert!(result.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code != "missing_source_config_required_property"
+            && diagnostic.code != "forbidden_search_criteria_in_source_config"
+    }));
 }
 
 #[test]

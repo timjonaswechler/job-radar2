@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use serde_json::{json, Value};
 
-use super::{OverridableStep, SourceOverrides, SupportLevel};
+use super::{AccessPathFragment, OverridableStep, SourceOverrides, SupportLevel};
 use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 use crate::source_profile::documents::{SourceProfileDocument, SourceProfileKind};
 
@@ -108,6 +108,74 @@ fn source_overrides_fixture_deserializes_structurally() {
     );
 
     assert_eq!(serde_json::to_value(&overrides).unwrap(), overrides_json);
+}
+
+#[test]
+fn direct_profile_fragments_are_typed_but_dormant_in_source_json() {
+    let fragments: Vec<AccessPathFragment> = serde_json::from_value(json!([{
+        "key": "json_feed",
+        "postingDiscovery": {
+            "strategies": [{
+                "key": "json_api",
+                "fetch": { "timeoutMs": 5000 },
+                "acceptWhen": { "requiredFields": ["url"] }
+            }]
+        }
+    }]))
+    .expect("the final fragment vocabulary should deserialize independently");
+    assert_eq!(fragments[0].key, "json_feed");
+
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source.access_paths = Some(fragments);
+    assert!(
+        serde_json::to_value(&source)
+            .unwrap()
+            .get("accessPaths")
+            .is_none(),
+        "A01 owns activation of persisted direct fragments"
+    );
+
+    let mut authored = read_fixture_value(
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    authored["accessPaths"] = json!([{ "key": "json_feed" }]);
+    let error = serde_json::from_value::<SourceDocument>(authored)
+        .expect_err("direct fragments must remain non-authorable before A01");
+    assert!(error.to_string().contains("accessPaths"));
+}
+
+#[test]
+fn fragment_serde_rejects_structural_null_and_control_fields() {
+    for invalid in [
+        json!([{ "key": "json_feed", "description": null }]),
+        json!([{
+            "key": "json_feed",
+            "postingDiscovery": {
+                "strategies": [{ "key": "json_api", "fetch": { "timeoutMs": null } }]
+            }
+        }]),
+        json!([{
+            "key": "json_feed",
+            "postingDiscovery": { "acceptWhen": { "minResults": null } }
+        }]),
+        json!([{ "key": "json_feed", "disabled": true }]),
+        json!([{ "key": "json_feed", "placement": "first" }]),
+    ] {
+        serde_json::from_value::<Vec<AccessPathFragment>>(invalid)
+            .expect_err("structural null and control fields must be rejected");
+    }
+
+    serde_json::from_value::<Vec<AccessPathFragment>>(json!([{
+        "key": "json_feed",
+        "postingDiscovery": {
+            "strategies": [{
+                "key": "json_api",
+                "fetch": { "body": { "value": { "literalNull": null } } }
+            }]
+        }
+    }]))
+    .expect("literal JSON null remains data inside an admitted request-body value");
 }
 
 #[test]

@@ -3,6 +3,7 @@
 pub mod access_path;
 pub mod extract;
 pub mod fetch;
+pub mod fragments;
 pub mod overrides;
 pub mod pagination;
 pub mod parse;
@@ -19,6 +20,10 @@ mod serde_tests;
 pub use access_path::ReusableAccessPathDocument;
 pub use extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression};
 pub use fetch::{BrowserInteraction, BrowserWait, Fetch, HttpMethod, RequestBody};
+pub use fragments::{
+    AccessPathFragment, PostingDetailStepFragment, PostingDetailStrategyFragment,
+    PostingDiscoveryStepFragment, PostingDiscoveryStrategyFragment,
+};
 pub use overrides::{OverridableStep, SourceOverrides, StrategyOverride};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};
 pub use parse::{Parse, ParseType};
