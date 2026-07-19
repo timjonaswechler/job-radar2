@@ -29,7 +29,9 @@ pub use geo::{
     LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use profile_dsl::compiler::{
-    compile_source_execution_plan, CompileSourceExecutionPlanResult, ProfileCompilerSnapshot,
+    compile_source, compile_source_execution_plan, CompileSourceExecutionPlanResult,
+    CompileSourceOutcome, CompiledSource, CompiledSourceAccess, EffectiveSourceProfile,
+    ProfileCompilerSnapshot, SourceOwnedAccessPath,
 };
 pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,

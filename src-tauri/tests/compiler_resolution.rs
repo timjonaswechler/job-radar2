@@ -209,16 +209,14 @@ fn missing_profile_and_access_path_return_structured_diagnostics() {
     );
 
     assert_eq!(missing_path_result.execution_plan, None);
+    let missing_path_diagnostic = missing_path_result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "access_path_not_found")
+        .expect("missing Access Path should produce its structured diagnostic");
+    assert_eq!(missing_path_diagnostic.path, "/selectedAccessPath/pathKey");
     assert_eq!(
-        missing_path_result.diagnostics[0].code,
-        "access_path_not_found"
-    );
-    assert_eq!(
-        missing_path_result.diagnostics[0].path,
-        "/selectedAccessPath/pathKey"
-    );
-    assert_eq!(
-        missing_path_result.diagnostics[0].details.as_ref().unwrap()["pathKey"],
+        missing_path_diagnostic.details.as_ref().unwrap()["pathKey"],
         "json_feed"
     );
 }

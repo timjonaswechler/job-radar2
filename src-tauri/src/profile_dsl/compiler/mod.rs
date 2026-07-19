@@ -1,8 +1,17 @@
-//! Profile Compiler for resolving concrete Sources into typed Execution Plans.
-//! The compiler performs semantic validation and intentionally performs no
-//! network, browser, parser, selector, extractor, transform, pagination, or
-//! runtime execution. It collects semantic, boundedness, and security
-//! diagnostics before producing executable plans.
+//! Profile Compiler for resolving one authoritative Source into a closed,
+//! immutable compiled result.
+//!
+//! [`compile_source`] accepts the Source directly and uses an immutable registry
+//! snapshot only for Source Profile lookup; a registry Source with the same key
+//! is never consulted. Source lifecycle admission belongs to callers. Profile
+//! access materializes and completely validates an inspectable Effective Source
+//! Profile before Source Config validation, Access Path resolution, and plan
+//! construction. Source-owned access remains a distinct branch. Rejection
+//! exposes only ordered diagnostics, never a partial profile, path, or plan.
+//!
+//! The compiler performs no network, browser, parser, selector, extractor,
+//! transform, pagination, or runtime execution. Runtime receives only the typed
+//! [`SourceExecutionPlan`].
 
 use serde::{Deserialize, Serialize};
 
@@ -19,9 +28,11 @@ mod source_config;
 mod support;
 mod templates;
 
+use crate::profile_dsl::documents::{JsonSchemaObject, PostingDetailStep, PostingDiscoveryStep};
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
 use crate::source::documents::{SourceDocument, SourceStatus};
 use crate::source_profile::documents::SourceProfileDocument;
+use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct ProfileCompilerSnapshot {
@@ -34,6 +45,86 @@ pub struct CompileSourceExecutionPlanResult {
     pub source_key: String,
     pub execution_plan: Option<SourceExecutionPlan>,
     pub diagnostics: Diagnostics,
+}
+
+/// The complete profile after Source-owned behavior changes have been applied.
+///
+/// The current implementation materializes the existing Source Overrides model;
+/// direct Source specialization can later feed the same compiler boundary.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct EffectiveSourceProfile {
+    pub document: SourceProfileDocument,
+}
+
+/// The complete inline Access Path owned by one Source.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SourceOwnedAccessPath {
+    pub key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub source_config_schema: Option<JsonSchemaObject>,
+    pub posting_discovery: PostingDiscoveryStep,
+    pub posting_detail: Option<PostingDetailStep>,
+    pub diagnostics: Option<Diagnostics>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub enum CompiledSourceAccess {
+    Profile {
+        effective_profile: EffectiveSourceProfile,
+    },
+    SourceOwned {
+        access_path: SourceOwnedAccessPath,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct CompiledSource {
+    pub access: CompiledSourceAccess,
+    pub execution_plan: SourceExecutionPlan,
+}
+
+/// Closed result of compiling one authoritative Source.
+///
+/// A rejection cannot expose an Effective Source Profile, selected Access Path,
+/// or Execution Plan. Source lifecycle admission intentionally belongs to callers.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub enum CompileSourceOutcome {
+    Compiled {
+        source: CompiledSource,
+        diagnostics: Diagnostics,
+    },
+    Rejected {
+        diagnostics: Diagnostics,
+    },
+}
+
+pub fn compile_source(
+    source: &SourceDocument,
+    registry: &SourceProfileRegistrySnapshot,
+) -> CompileSourceOutcome {
+    let mut diagnostics = Vec::new();
+    let compiled = resolution::compile_authoritative_source(source, registry, &mut diagnostics);
+
+    if has_error_diagnostics(&diagnostics) {
+        return CompileSourceOutcome::Rejected { diagnostics };
+    }
+
+    match compiled {
+        Some(source) => CompileSourceOutcome::Compiled {
+            source,
+            diagnostics,
+        },
+        None => {
+            diagnostics.push(compiler_error(
+                "compiled_source_invariant_violation",
+                "Compilation produced neither an error Diagnostic nor a compiled Source",
+                "",
+                serde_json::json!({ "sourceKey": source.key }),
+            ));
+            CompileSourceOutcome::Rejected { diagnostics }
+        }
+    }
 }
 
 pub(crate) fn validate_source_profile_document(profile: &SourceProfileDocument) -> Diagnostics {
@@ -85,8 +176,35 @@ pub fn compile_source_execution_plan(
         return result;
     }
 
-    result.execution_plan =
-        resolution::compile_selected_access_path(snapshot, source, &mut result.diagnostics);
+    let registry = SourceProfileRegistrySnapshot {
+        profiles: snapshot
+            .profiles
+            .iter()
+            .cloned()
+            .map(
+                |document| crate::source_profile::registry::RegistrySourceProfile {
+                    origin: "legacy_compiler_snapshot".to_string(),
+                    path: String::new(),
+                    document,
+                },
+            )
+            .collect(),
+        sources: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+
+    match compile_source(source, &registry) {
+        CompileSourceOutcome::Compiled {
+            source,
+            diagnostics,
+        } => {
+            result.execution_plan = Some(source.execution_plan);
+            result.diagnostics = diagnostics;
+        }
+        CompileSourceOutcome::Rejected { diagnostics } => {
+            result.diagnostics = diagnostics;
+        }
+    }
 
     result
 }

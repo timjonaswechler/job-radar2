@@ -1,7 +1,5 @@
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{
-    PostingDetailStep, PostingDiscoveryStep, ReusableAccessPathDocument,
-};
+use crate::profile_dsl::documents::{PostingDetailStep, PostingDiscoveryStep};
 use crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBuildError;
 use crate::profile_dsl::execution_plan::posting_detail::compile_posting_detail_step;
 use crate::profile_dsl::execution_plan::posting_discovery::compile_posting_discovery_step;
@@ -10,6 +8,7 @@ use crate::profile_dsl::execution_plan::{
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
+use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 use super::boundedness::validate_boundedness;
 use super::capabilities::validate_capability_compatibility;
@@ -19,15 +18,15 @@ use super::keys::{
     access_path_index, validate_posting_detail_strategy_keys,
     validate_posting_discovery_strategy_keys, validate_reusable_access_path_keys,
 };
-use super::overrides::{apply_source_overrides, EffectiveAccessPathSteps};
+use super::overrides::apply_source_overrides;
 use super::security::validate_security;
 use super::source_config::{
     source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
-    validate_source_config_contract,
+    validate_source_config_against_validated_contract, validate_source_config_contract,
 };
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
-use super::ProfileCompilerSnapshot;
+use super::{CompiledSource, CompiledSourceAccess, EffectiveSourceProfile, SourceOwnedAccessPath};
 
 pub(super) fn validate_source_profile_document(
     profile: &SourceProfileDocument,
@@ -108,58 +107,87 @@ pub(super) fn validate_source_profile_document(
     }
 }
 
-pub(super) fn compile_selected_access_path(
-    snapshot: &ProfileCompilerSnapshot,
+pub(super) fn compile_authoritative_source(
     source: &SourceDocument,
+    registry: &SourceProfileRegistrySnapshot,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceExecutionPlan> {
+) -> Option<CompiledSource> {
     match &source.selected_access_path {
         SelectedAccessPath::ProfileAccessPath {
             profile_key,
             path_key,
-        } => compile_profile_access_path(snapshot, source, profile_key, path_key, diagnostics),
+        } => compile_profile_access_path(registry, source, profile_key, path_key, diagnostics),
         SelectedAccessPath::SourceOwnedAccessPath { .. } => {
-            compile_source_owned_access_path(source, diagnostics)
+            let execution_plan = compile_source_owned_access_path(source, diagnostics)?;
+            if has_error_diagnostics(diagnostics) {
+                return None;
+            }
+            Some(CompiledSource {
+                access: CompiledSourceAccess::SourceOwned {
+                    access_path: source_owned_access_path(source),
+                },
+                execution_plan,
+            })
         }
     }
 }
 
 fn compile_profile_access_path(
-    snapshot: &ProfileCompilerSnapshot,
+    registry: &SourceProfileRegistrySnapshot,
     source: &SourceDocument,
     profile_key: &str,
     path_key: &str,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceExecutionPlan> {
-    let profile = resolve_profile(snapshot, source, profile_key, diagnostics)?;
-    let access_path = resolve_access_path(source, profile, profile_key, path_key, diagnostics)?;
-    let path_index = access_path_index(profile, &access_path.key);
+) -> Option<CompiledSource> {
+    let base_profile = resolve_profile(registry, source, profile_key, diagnostics)?;
+    let mut effective_profile = base_profile.clone();
 
-    let effective_access_path = apply_source_overrides(
-        source.source_overrides.as_ref(),
-        &access_path.posting_discovery,
-        access_path.posting_detail.as_ref(),
+    if let Some(access_path) = effective_profile
+        .access_paths
+        .iter_mut()
+        .find(|access_path| access_path.key == path_key)
+    {
+        let effective_steps = apply_source_overrides(
+            source.source_overrides.as_ref(),
+            &access_path.posting_discovery,
+            access_path.posting_detail.as_ref(),
+            diagnostics,
+        );
+        access_path.posting_discovery = effective_steps.posting_discovery;
+        access_path.posting_detail = effective_steps.posting_detail;
+    }
+
+    validate_source_profile_document(&effective_profile, diagnostics);
+
+    let path_index = access_path_index(&effective_profile, path_key);
+    let selected_source_config_schema = path_index
+        .and_then(|index| effective_profile.access_paths.get(index))
+        .and_then(|access_path| access_path.source_config_schema.as_ref());
+    validate_source_config_against_validated_contract(
+        effective_profile.source_config_schema.as_ref(),
+        selected_source_config_schema,
+        &source.source_config,
         diagnostics,
     );
-    validate_profile_access_path(
+
+    let access_path = resolve_access_path(
         source,
-        profile,
-        access_path,
-        &effective_access_path,
-        path_index,
+        &effective_profile,
+        profile_key,
+        path_key,
         diagnostics,
-    );
+    )?;
     if has_error_diagnostics(diagnostics) {
         return None;
     }
 
     let posting_discovery = compile_posting_discovery_step(
-        &effective_access_path.posting_discovery,
+        &access_path.posting_discovery,
         &access_path_step_path(path_index, "postingDiscovery"),
     )
     .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
     .ok()?;
-    let posting_detail = effective_access_path
+    let posting_detail = access_path
         .posting_detail
         .as_ref()
         .map(|posting_detail| {
@@ -172,33 +200,41 @@ fn compile_profile_access_path(
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
 
-    Some(SourceExecutionPlan {
+    let execution_plan = SourceExecutionPlan {
         source: ExecutionPlanSource {
             key: source.key.clone(),
             name: source.name.clone(),
         },
         selected_access_path: ExecutionPlanAccessPath::ProfileAccessPath {
-            profile_key: profile.key.clone(),
-            profile_name: profile.name.clone(),
+            profile_key: effective_profile.key.clone(),
+            profile_name: effective_profile.name.clone(),
             path_key: access_path.key.clone(),
             path_name: access_path.name.clone(),
         },
         source_config: source.source_config.clone(),
         posting_discovery,
         posting_detail,
+    };
+
+    Some(CompiledSource {
+        access: CompiledSourceAccess::Profile {
+            effective_profile: EffectiveSourceProfile {
+                document: effective_profile,
+            },
+        },
+        execution_plan,
     })
 }
 
 fn resolve_profile<'a>(
-    snapshot: &'a ProfileCompilerSnapshot,
+    registry: &'a SourceProfileRegistrySnapshot,
     source: &SourceDocument,
     profile_key: &str,
     diagnostics: &mut Diagnostics,
 ) -> Option<&'a SourceProfileDocument> {
-    let profile = snapshot
-        .profiles
-        .iter()
-        .find(|profile| profile.key == profile_key);
+    let profile = registry
+        .profile(profile_key)
+        .map(|profile| &profile.document);
     if profile.is_none() {
         diagnostics.push(compiler_error(
             "source_profile_not_found",
@@ -243,73 +279,6 @@ fn resolve_access_path<'a>(
         ));
     }
     access_path
-}
-
-fn validate_profile_access_path(
-    source: &SourceDocument,
-    profile: &SourceProfileDocument,
-    access_path: &ReusableAccessPathDocument,
-    effective_access_path: &EffectiveAccessPathSteps,
-    path_index: Option<usize>,
-    diagnostics: &mut Diagnostics,
-) {
-    validate_support_metadata(
-        &profile.support,
-        "/support",
-        serde_json::json!({ "sourceProfileKey": profile.key }),
-        diagnostics,
-    );
-    validate_source_config(
-        profile.source_config_schema.as_ref(),
-        access_path.source_config_schema.as_ref(),
-        &source.source_config,
-        path_index,
-        diagnostics,
-    );
-    validate_reusable_access_path_keys(profile, diagnostics);
-
-    validate_posting_discovery_strategy_keys(
-        &effective_access_path.posting_discovery,
-        access_path_step_path(path_index, "postingDiscovery"),
-        diagnostics,
-    );
-    if let Some(posting_detail) = &effective_access_path.posting_detail {
-        validate_posting_detail_strategy_keys(
-            posting_detail,
-            access_path_step_path(path_index, "postingDetail"),
-            diagnostics,
-        );
-    }
-
-    let access_path_base = access_path_base_path(path_index);
-    validate_template_variables(
-        &effective_access_path.posting_discovery,
-        effective_access_path.posting_detail.as_ref(),
-        source_config_schema_keys(
-            profile.source_config_schema.as_ref(),
-            access_path.source_config_schema.as_ref(),
-        ),
-        access_path_base.clone(),
-        diagnostics,
-    );
-    validate_capability_compatibility(
-        &effective_access_path.posting_discovery,
-        effective_access_path.posting_detail.as_ref(),
-        access_path_base.clone(),
-        diagnostics,
-    );
-    validate_boundedness(
-        &effective_access_path.posting_discovery,
-        effective_access_path.posting_detail.as_ref(),
-        access_path_base.clone(),
-        diagnostics,
-    );
-    validate_security(
-        &effective_access_path.posting_discovery,
-        effective_access_path.posting_detail.as_ref(),
-        access_path_base,
-        diagnostics,
-    );
 }
 
 fn compile_source_owned_access_path(
@@ -363,6 +332,31 @@ fn compile_source_owned_access_path(
         posting_discovery: compiled_posting_discovery,
         posting_detail: compiled_posting_detail,
     })
+}
+
+fn source_owned_access_path(source: &SourceDocument) -> SourceOwnedAccessPath {
+    let SelectedAccessPath::SourceOwnedAccessPath {
+        key,
+        name,
+        description,
+        source_config_schema,
+        posting_discovery,
+        posting_detail,
+        diagnostics,
+    } = &source.selected_access_path
+    else {
+        unreachable!("caller only passes Source-owned Access Paths")
+    };
+
+    SourceOwnedAccessPath {
+        key: key.clone(),
+        name: name.clone(),
+        description: description.clone(),
+        source_config_schema: source_config_schema.clone(),
+        posting_discovery: posting_discovery.clone(),
+        posting_detail: posting_detail.clone(),
+        diagnostics: diagnostics.clone(),
+    }
 }
 
 fn validate_source_owned_access_path(

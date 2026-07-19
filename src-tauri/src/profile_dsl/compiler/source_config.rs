@@ -29,11 +29,43 @@ pub(super) fn validate_source_config(
         access_path_index,
         diagnostics,
     );
+    validate_source_config_values(
+        profile_schema,
+        access_path_schema,
+        source_config,
+        contract,
+        diagnostics,
+    );
+}
 
-    let required = schema_required_keys(profile_schema)
+pub(super) fn validate_source_config_against_validated_contract(
+    profile_schema: Option<&JsonSchemaObject>,
+    access_path_schema: Option<&JsonSchemaObject>,
+    source_config: &JsonObject,
+    diagnostics: &mut Diagnostics,
+) {
+    validate_source_config_values(
+        profile_schema,
+        access_path_schema,
+        source_config,
+        source_config_contract(profile_schema, access_path_schema),
+        diagnostics,
+    );
+}
+
+fn validate_source_config_values(
+    profile_schema: Option<&JsonSchemaObject>,
+    access_path_schema: Option<&JsonSchemaObject>,
+    source_config: &JsonObject,
+    contract: SourceConfigContract,
+    diagnostics: &mut Diagnostics,
+) {
+    let mut required = schema_required_keys(profile_schema)
         .into_iter()
         .chain(schema_required_keys(access_path_schema))
-        .collect::<HashSet<_>>();
+        .collect::<Vec<_>>();
+    required.sort();
+    required.dedup();
     for key in required {
         if !source_config.contains_key(&key) {
             diagnostics.push(compiler_error(
@@ -45,9 +77,6 @@ pub(super) fn validate_source_config(
         }
     }
 
-    let allowed = contract.allowed_properties;
-    let additional_allowed = contract.additional_allowed;
-
     for (key, value) in source_config {
         if is_search_request_criteria_key(key) {
             diagnostics.push(compiler_error(
@@ -57,7 +86,7 @@ pub(super) fn validate_source_config(
                 serde_json::json!({ "property": key }),
             ));
         }
-        if !additional_allowed && !allowed.contains(key) {
+        if !contract.additional_allowed && !contract.allowed_properties.contains(key) {
             diagnostics.push(compiler_error(
                 "unknown_source_config_property",
                 format!("Source Config property `{key}` is not declared by the selected Source Config schema"),
@@ -97,7 +126,11 @@ pub(super) fn validate_source_config_contract(
 
     let profile_properties = schema_property_keys(profile_schema);
     let access_path_properties = schema_property_keys(access_path_schema);
-    for key in profile_properties.intersection(&access_path_properties) {
+    let mut redefined_properties = profile_properties
+        .intersection(&access_path_properties)
+        .collect::<Vec<_>>();
+    redefined_properties.sort();
+    for key in redefined_properties {
         diagnostics.push(compiler_error(
             "source_config_schema_property_redefinition",
             format!("Access Path Source Config schema redefines profile-level property `{key}`"),
@@ -106,8 +139,15 @@ pub(super) fn validate_source_config_contract(
         ));
     }
 
-    let allowed_properties = profile_properties
-        .union(&access_path_properties)
+    source_config_contract(profile_schema, access_path_schema)
+}
+
+fn source_config_contract(
+    profile_schema: Option<&JsonSchemaObject>,
+    access_path_schema: Option<&JsonSchemaObject>,
+) -> SourceConfigContract {
+    let allowed_properties = schema_property_keys(profile_schema)
+        .union(&schema_property_keys(access_path_schema))
         .cloned()
         .collect::<HashSet<_>>();
     let additional_allowed = allowed_properties.is_empty()
@@ -133,7 +173,11 @@ fn validate_source_config_schema(
     let Some(schema) = schema else {
         return;
     };
-    for key in schema_property_keys(Some(schema)) {
+    let mut property_keys = schema_property_keys(Some(schema))
+        .into_iter()
+        .collect::<Vec<_>>();
+    property_keys.sort();
+    for key in property_keys {
         if is_search_request_criteria_key(&key) {
             diagnostics.push(compiler_error(
                 "forbidden_search_criteria_in_source_config_schema",
