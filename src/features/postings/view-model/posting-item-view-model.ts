@@ -17,6 +17,34 @@ export type StatusBadge = {
   variant: BadgeProps["variant"];
 };
 
+export type PostingPreparationTaskId =
+  | "posting_data_ready"
+  | "company_research"
+  | "strategy_notes"
+  | "cover_letter"
+  | "documents_ready";
+
+export type PostingPreparationTaskStatus =
+  "not_started" | "in_progress" | "completed" | "not_applicable";
+
+export type PostingPreparationTaskInput = {
+  task: PostingPreparationTaskId;
+  status: PostingPreparationTaskStatus;
+};
+
+export type PostingPreparationStepViewModel = PostingPreparationTaskInput & {
+  label: string;
+  statusLabel: string;
+};
+
+export type PostingPreparationProgressViewModel = {
+  steps: PostingPreparationStepViewModel[];
+  leadLabel: string;
+  completedCount: number;
+  applicableCount: number;
+  accessibleLabel: string;
+};
+
 export type PostingListItemViewModel = {
   id: number;
   title: string;
@@ -29,6 +57,7 @@ export type PostingListItemViewModel = {
   isUnread: boolean;
   readStateBadge: StatusBadge;
   interestStateBadge: StatusBadge;
+  preparationProgress: PostingPreparationProgressViewModel | null;
   processSlotLabel: string | null;
 };
 
@@ -179,6 +208,9 @@ export function createPostingItemViewModel(
       isUnread: posting.readState === "unread",
       readStateBadge: getReadStateBadge(posting.readState),
       interestStateBadge: getInterestStateBadge(posting.interestState),
+      // #232 will map the persisted checklist here. Until then, never derive
+      // individual preparation tasks from the coarse preparationState.
+      preparationProgress: null,
       processSlotLabel,
     },
     preview: {
@@ -205,6 +237,86 @@ export function createPostingItemViewModel(
         { label: "Zuletzt gesehen", value: workflow.lastSeenLabel },
       ],
     },
+  };
+}
+
+const preparationTaskDefinitions: ReadonlyArray<{
+  task: PostingPreparationTaskId;
+  label: string;
+}> = [
+  { task: "posting_data_ready", label: "Bewerbungsdaten" },
+  { task: "company_research", label: "Firmenrecherche" },
+  { task: "strategy_notes", label: "Notizen und Strategie" },
+  { task: "cover_letter", label: "Anschreiben" },
+  { task: "documents_ready", label: "Unterlagen" },
+];
+
+const preparationTaskStatusLabels: Record<
+  PostingPreparationTaskStatus,
+  string
+> = {
+  not_started: "Nicht begonnen",
+  in_progress: "In Arbeit",
+  completed: "Erledigt",
+  not_applicable: "Entfällt",
+};
+
+export function createPostingPreparationProgressViewModel({
+  applicationState,
+  tasks,
+}: {
+  applicationState: JobPostingApplicationState;
+  tasks: readonly PostingPreparationTaskInput[];
+}): PostingPreparationProgressViewModel | null {
+  const tasksById = new Map(tasks.map((task) => [task.task, task.status]));
+
+  const steps = preparationTaskDefinitions.map(({ task, label }) => {
+    const status = tasksById.get(task);
+    if (!status) return null;
+
+    return {
+      task,
+      label,
+      status,
+      statusLabel: preparationTaskStatusLabels[status],
+    } satisfies PostingPreparationStepViewModel;
+  });
+
+  if (steps.some((step) => step === null)) return null;
+
+  const completeSteps = steps.filter(
+    (step): step is PostingPreparationStepViewModel => step !== null,
+  );
+  const completedCount = completeSteps.filter(
+    (step) => step.status === "completed",
+  ).length;
+  const applicableCount = completeSteps.filter(
+    (step) => step.status !== "not_applicable",
+  ).length;
+  const activeStep = completeSteps.find(
+    (step) => step.status === "in_progress",
+  );
+  const nextOpenStep = completeSteps.find(
+    (step) => step.status === "not_started",
+  );
+  const submitted = applicationState !== "not_applied";
+  const leadLabel = submitted
+    ? "Bewerbung eingereicht"
+    : activeStep
+      ? `Als Nächstes: ${activeStep.label}`
+      : nextOpenStep
+        ? `Als Nächstes: ${nextOpenStep.label}`
+        : "Vorbereitung bereit";
+  const stepLabels = completeSteps
+    .map((step) => `${step.label}: ${step.statusLabel}`)
+    .join(", ");
+
+  return {
+    steps: completeSteps,
+    leadLabel,
+    completedCount,
+    applicableCount,
+    accessibleLabel: `Vorbereitungsstatus. ${stepLabels}. Bewerbung: ${submitted ? "eingereicht" : "nicht eingereicht"}.`,
   };
 }
 

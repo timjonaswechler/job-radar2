@@ -3,6 +3,7 @@ import { memo } from "react";
 import { Building2, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
+import { PostingPreparationStepper } from "@/features/postings/list/posting-preparation-stepper";
 import type { PostingListItemViewModel } from "@/features/postings/view-model/posting-item-view-model";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +84,9 @@ export const PostingListRow = memo(function PostingListRow({
               <span className="truncate">{posting.locationLabel}</span>
             </div>
           </div>
-          {posting.processSlotLabel ? (
+          {posting.preparationProgress ? (
+            <PostingPreparationStepper progress={posting.preparationProgress} />
+          ) : posting.processSlotLabel ? (
             <div className="mt-2 flex h-6 min-w-0 items-center rounded-md border border-dashed bg-background/60 px-2 text-xs leading-none text-muted-foreground">
               <span className="truncate">{posting.processSlotLabel}</span>
             </div>

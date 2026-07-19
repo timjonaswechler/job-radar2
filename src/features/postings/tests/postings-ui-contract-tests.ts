@@ -9,6 +9,7 @@ import {
 } from "@/features/postings/queues/posting-queues";
 import {
   createPostingItemViewModel,
+  createPostingPreparationProgressViewModel,
   getPreviewWorkflowProcessStep,
 } from "@/features/postings/view-model/posting-item-view-model";
 import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
@@ -163,6 +164,11 @@ assert.deepEqual(preparationWorkflow, {
   primarySourceLabel: "Acme Careers",
   processStep: 3,
 });
+assert.equal(
+  preparationViewModel.row.preparationProgress,
+  null,
+  "the UI must not invent checklist progress from coarse preparationState",
+);
 assert.deepEqual(preparationViewModel.preview.detailRows.slice(0, 4), [
   { label: "Queue", value: preparationViewModel.preview.workflow.queueLabel },
   {
@@ -178,6 +184,57 @@ assert.deepEqual(preparationViewModel.preview.detailRows.slice(0, 4), [
     value: preparationViewModel.preview.workflow.primarySourceLabel,
   },
 ]);
+
+const explicitPreparationProgress = createPostingPreparationProgressViewModel({
+  applicationState: "not_applied",
+  tasks: [
+    { task: "documents_ready", status: "completed" },
+    { task: "company_research", status: "in_progress" },
+    { task: "posting_data_ready", status: "completed" },
+    { task: "cover_letter", status: "not_applicable" },
+    { task: "strategy_notes", status: "not_started" },
+  ],
+});
+assert.ok(explicitPreparationProgress);
+assert.deepEqual(
+  explicitPreparationProgress.steps.map((step) => [step.task, step.status]),
+  [
+    ["posting_data_ready", "completed"],
+    ["company_research", "in_progress"],
+    ["strategy_notes", "not_started"],
+    ["cover_letter", "not_applicable"],
+    ["documents_ready", "completed"],
+  ],
+  "the stepper must preserve independent task evidence in canonical display order",
+);
+assert.equal(
+  explicitPreparationProgress.leadLabel,
+  "Als Nächstes: Firmenrecherche",
+);
+assert.equal(explicitPreparationProgress.completedCount, 2);
+assert.equal(explicitPreparationProgress.applicableCount, 4);
+assert.match(
+  explicitPreparationProgress.accessibleLabel,
+  /Anschreiben: Entfällt/,
+);
+
+const submittedPreparationProgress = createPostingPreparationProgressViewModel({
+  applicationState: "submitted",
+  tasks: explicitPreparationProgress.steps,
+});
+assert.equal(
+  submittedPreparationProgress?.leadLabel,
+  "Bewerbung eingereicht",
+  "applicationState remains the only submission evidence",
+);
+assert.equal(
+  createPostingPreparationProgressViewModel({
+    applicationState: "not_applied",
+    tasks: explicitPreparationProgress.steps.slice(0, 4),
+  }),
+  null,
+  "an incomplete checklist must remain unavailable instead of inventing a segment",
+);
 
 assert.equal(
   createPostingItemViewModel(queuePostings.interested).preview.workflow
