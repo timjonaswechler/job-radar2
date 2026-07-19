@@ -1,8 +1,13 @@
 use crate::agent::models::{Model, ModelId, ReasoningLevel};
 use crate::agent::{AgentError, AgentErrorCategory};
+use futures_util::task::AtomicWaker;
 use futures_util::Stream;
 use std::fmt;
 use std::pin::Pin;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::task::{Context, Poll};
 
 pub type ProviderEventStream = Pin<Box<dyn Stream<Item = ProviderEvent> + Send + 'static>>;
@@ -29,7 +34,25 @@ pub enum AssistantContent {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct ReplayMetadata(Vec<u8>);
+pub(crate) struct ReplayMetadata {
+    pub(crate) response_id: Option<String>,
+    pub(crate) block_signatures: Vec<Option<BlockSignature>>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) enum BlockSignature {
+    Text(String),
+    Reasoning { signature: String, redacted: bool },
+}
+
+impl ReplayMetadata {
+    fn empty() -> Self {
+        Self {
+            response_id: None,
+            block_signatures: Vec::new(),
+        }
+    }
+}
 
 impl fmt::Debug for ReplayMetadata {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -82,12 +105,31 @@ impl AssistantMessage {
         usage: TokenUsage,
         finish_reason: FinishReason,
     ) -> Self {
+        Self::from_replay(
+            content,
+            model,
+            usage,
+            finish_reason,
+            ReplayMetadata::empty(),
+        )
+    }
+
+    pub(crate) fn from_replay(
+        content: Vec<AssistantContent>,
+        model: Model,
+        usage: TokenUsage,
+        finish_reason: FinishReason,
+        mut replay: ReplayMetadata,
+    ) -> Self {
+        while replay.block_signatures.last().is_some_and(Option::is_none) {
+            replay.block_signatures.pop();
+        }
         Self {
             content,
             model,
             usage,
             finish_reason,
-            replay: ReplayMetadata(Vec::new()),
+            replay,
         }
     }
 
@@ -107,9 +149,8 @@ impl AssistantMessage {
         self.finish_reason
     }
 
-    #[allow(dead_code)] // Concrete provider adapters consume this without exposing opaque payloads.
-    pub(crate) fn replay_metadata(&self) -> &[u8] {
-        &self.replay.0
+    pub(crate) fn replay_metadata(&self) -> &ReplayMetadata {
+        &self.replay
     }
 }
 
@@ -137,20 +178,23 @@ impl ProviderTurnCompletion {
         Self {
             usage,
             finish_reason,
-            replay: ReplayMetadata(Vec::new()),
+            replay: ReplayMetadata::empty(),
         }
     }
 
-    #[allow(dead_code)] // Concrete provider adapters attach opaque replay data through this path.
     pub(crate) fn with_replay(
         usage: TokenUsage,
         finish_reason: FinishReason,
-        replay: Vec<u8>,
+        response_id: Option<String>,
+        block_signatures: Vec<Option<BlockSignature>>,
     ) -> Self {
         Self {
             usage,
             finish_reason,
-            replay: ReplayMetadata(replay),
+            replay: ReplayMetadata {
+                response_id,
+                block_signatures,
+            },
         }
     }
 }
@@ -177,13 +221,67 @@ pub enum ConversationEvent {
     Aborted,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
+pub struct TurnCancellation {
+    inner: Arc<TurnCancellationInner>,
+}
+
+struct TurnCancellationInner {
+    cancelled: AtomicBool,
+    stream_waker: AtomicWaker,
+    provider_waiters: tokio::sync::Notify,
+}
+
+impl TurnCancellation {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(TurnCancellationInner {
+                cancelled: AtomicBool::new(false),
+                stream_waker: AtomicWaker::new(),
+                provider_waiters: tokio::sync::Notify::new(),
+            }),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.inner.cancelled.store(true, Ordering::Release);
+        self.inner.stream_waker.wake();
+        self.inner.provider_waiters.notify_waiters();
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.inner.cancelled.load(Ordering::Acquire)
+    }
+
+    pub async fn cancelled(&self) {
+        if self.is_cancelled() {
+            return;
+        }
+        let notified = self.inner.provider_waiters.notified();
+        if self.is_cancelled() {
+            return;
+        }
+        notified.await;
+    }
+}
+
+impl fmt::Debug for TurnCancellation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TurnCancellation")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
+    }
+}
+
+#[derive(Clone)]
 pub struct ConversationRequest {
     system_prompt: String,
     messages: Vec<Message>,
     model: Model,
     reasoning: ReasoningLevel,
     conversation_id: String,
+    cancellation: TurnCancellation,
 }
 
 impl ConversationRequest {
@@ -206,16 +304,20 @@ impl ConversationRequest {
     pub fn conversation_id(&self) -> &str {
         &self.conversation_id
     }
+
+    pub fn cancellation(&self) -> TurnCancellation {
+        self.cancellation.clone()
+    }
 }
 
-pub trait ConversationProvider: Send + 'static {
+pub trait ConversationProvider: Send + Sync + 'static {
     fn models(&self) -> &[Model];
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream;
 }
 
 pub struct AgentConversation {
     system_prompt: String,
-    provider: Box<dyn ConversationProvider>,
+    provider: Arc<dyn ConversationProvider>,
     models: Vec<Model>,
     model: Model,
     reasoning: ReasoningLevel,
@@ -230,26 +332,57 @@ impl AgentConversation {
         model: ModelId,
         reasoning: ReasoningLevel,
     ) -> Result<Self, AgentError> {
+        let provider = Arc::new(provider);
+        let provider_id = provider
+            .models()
+            .iter()
+            .find(|candidate| candidate.id() == &model)
+            .map(|candidate| candidate.provider().clone())
+            .ok_or_else(AgentError::model_unavailable)?;
+        Self::from_shared(
+            system_prompt,
+            provider,
+            provider_id,
+            model,
+            reasoning,
+            Vec::new(),
+            uuid::Uuid::new_v4().to_string(),
+        )
+    }
+
+    pub(crate) fn from_shared(
+        system_prompt: String,
+        provider: Arc<dyn ConversationProvider>,
+        provider_id: crate::agent::models::ProviderId,
+        model: ModelId,
+        reasoning: ReasoningLevel,
+        messages: Vec<Message>,
+        conversation_id: String,
+    ) -> Result<Self, AgentError> {
         let models = provider.models().to_vec();
         let selected = models
             .iter()
-            .find(|candidate| candidate.id() == &model)
+            .find(|candidate| candidate.provider() == &provider_id && candidate.id() == &model)
             .cloned()
             .ok_or_else(AgentError::model_unavailable)?;
         let reasoning = selected.normalize_reasoning(reasoning);
         Ok(Self {
             system_prompt,
-            provider: Box::new(provider),
+            provider,
             models,
             model: selected,
             reasoning,
-            messages: Vec::new(),
-            conversation_id: uuid::Uuid::new_v4().to_string(),
+            messages,
+            conversation_id,
         })
     }
 
     pub fn messages(&self) -> &[Message] {
         &self.messages
+    }
+
+    pub(crate) fn replace_messages(&mut self, messages: Vec<Message>) {
+        self.messages = messages;
     }
 
     pub fn available_models(&self) -> &[Model] {
@@ -265,10 +398,19 @@ impl AgentConversation {
     }
 
     pub fn select_model(&mut self, model: ModelId) -> Result<(), AgentError> {
+        let provider = self.model.provider().clone();
+        self.select_provider_model(&provider, model)
+    }
+
+    pub(crate) fn select_provider_model(
+        &mut self,
+        provider: &crate::agent::models::ProviderId,
+        model: ModelId,
+    ) -> Result<(), AgentError> {
         let selected = self
             .models
             .iter()
-            .find(|candidate| candidate.id() == &model)
+            .find(|candidate| candidate.provider() == provider && candidate.id() == &model)
             .cloned()
             .ok_or_else(AgentError::model_unavailable)?;
         self.reasoning = selected.normalize_reasoning(self.reasoning);
@@ -285,12 +427,14 @@ impl AgentConversation {
         let user = UserMessage::new(text);
         let mut request_messages = self.messages.clone();
         request_messages.push(Message::User(user.clone()));
+        let cancellation = TurnCancellation::new();
         let request = ConversationRequest {
             system_prompt: self.system_prompt.clone(),
             messages: request_messages,
             model: self.model.clone(),
             reasoning: self.reasoning,
             conversation_id: self.conversation_id.clone(),
+            cancellation: cancellation.clone(),
         };
         let provider_stream = self.provider.stream(request);
         Ok(ConversationEventStream {
@@ -300,6 +444,7 @@ impl AgentConversation {
             state: StreamState::AwaitStarted,
             blocks: Vec::new(),
             active: None,
+            cancellation,
         })
     }
 }
@@ -324,6 +469,7 @@ pub struct ConversationEventStream<'a> {
     state: StreamState,
     blocks: Vec<AssistantContent>,
     active: Option<(usize, ContentKind, String)>,
+    cancellation: TurnCancellation,
 }
 
 enum StreamState {
@@ -340,6 +486,10 @@ enum Terminal {
 }
 
 impl ConversationEventStream<'_> {
+    pub fn cancellation(&self) -> TurnCancellation {
+        self.cancellation.clone()
+    }
+
     fn protocol_failure(&mut self) -> ConversationEvent {
         self.state = StreamState::Finished;
         ConversationEvent::Failed {
@@ -428,6 +578,14 @@ impl Stream for ConversationEventStream<'_> {
 
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
+            self.cancellation
+                .inner
+                .stream_waker
+                .register(context.waker());
+            if self.cancellation.is_cancelled() && !matches!(self.state, StreamState::Finished) {
+                self.state = StreamState::Finished;
+                return Poll::Ready(Some(ConversationEvent::Aborted));
+            }
             if matches!(self.state, StreamState::Finished) {
                 return Poll::Ready(None);
             }

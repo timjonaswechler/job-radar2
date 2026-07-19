@@ -1,7 +1,9 @@
+use crate::agent::conversation::{BlockSignature, ReplayMetadata};
 use crate::agent::models::{Model, ModelId, ReasoningLevel};
 use crate::agent::{
     AgentError, AgentErrorCategory, AssistantContent, AssistantMessage, ConversationProvider,
-    ConversationRequest, FinishReason, Message, ProviderEvent, ProviderEventStream, TokenUsage,
+    ConversationRequest, FinishReason, Message, ProviderEvent, ProviderEventStream,
+    ProviderTurnCompletion, TokenUsage,
 };
 use futures_util::stream;
 use std::collections::VecDeque;
@@ -68,6 +70,66 @@ pub fn synthetic_assistant_message(
         usage,
         finish_reason,
     ))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SyntheticReplaySignature {
+    Text(String),
+    Reasoning { signature: String, redacted: bool },
+}
+
+pub fn synthetic_turn_completion_with_replay(
+    usage: TokenUsage,
+    finish_reason: FinishReason,
+    response_id: Option<String>,
+    signatures: Vec<Option<SyntheticReplaySignature>>,
+) -> ProviderTurnCompletion {
+    ProviderTurnCompletion::with_replay(
+        usage,
+        finish_reason,
+        response_id,
+        replay_signatures(signatures),
+    )
+}
+
+pub fn synthetic_assistant_message_with_replay(
+    content: Vec<AssistantContent>,
+    model: Model,
+    usage: TokenUsage,
+    finish_reason: FinishReason,
+    response_id: Option<String>,
+    signatures: Vec<Option<SyntheticReplaySignature>>,
+) -> Message {
+    Message::Assistant(AssistantMessage::from_replay(
+        content,
+        model,
+        usage,
+        finish_reason,
+        ReplayMetadata {
+            response_id,
+            block_signatures: replay_signatures(signatures),
+        },
+    ))
+}
+
+fn replay_signatures(
+    signatures: Vec<Option<SyntheticReplaySignature>>,
+) -> Vec<Option<BlockSignature>> {
+    signatures
+        .into_iter()
+        .map(|signature| {
+            signature.map(|signature| match signature {
+                SyntheticReplaySignature::Text(signature) => BlockSignature::Text(signature),
+                SyntheticReplaySignature::Reasoning {
+                    signature,
+                    redacted,
+                } => BlockSignature::Reasoning {
+                    signature,
+                    redacted,
+                },
+            })
+        })
+        .collect()
 }
 
 #[derive(Clone)]
@@ -228,6 +290,7 @@ impl SessionTestHarness {
                 sessions::ContinuationBlock::Assistant {
                     blocks,
                     response_id,
+                    ..
                 } => SafeContinuationBlock {
                     role: "assistant",
                     text: blocks

@@ -265,8 +265,9 @@ fn context_entries(path: &[&Entry]) -> Vec<ContinuationBlock> {
                 EntryKind::User(text),
                 EntryKind::Assistant {
                     blocks,
+                    provider,
+                    model,
                     response_id,
-                    ..
                 },
             ) = (&user.kind, &assistant.kind)
             {
@@ -292,6 +293,8 @@ fn context_entries(path: &[&Entry]) -> Vec<ContinuationBlock> {
                             },
                         })
                         .collect(),
+                    provider: provider.clone(),
+                    model: model.clone(),
                     response_id: response_id.clone(),
                 });
                 index += 2;

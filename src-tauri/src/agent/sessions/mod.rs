@@ -520,6 +520,8 @@ pub(crate) enum ContinuationBlock {
     User(String),
     Assistant {
         blocks: Vec<ContinuationAssistantBlock>,
+        provider: String,
+        model: String,
         response_id: Option<String>,
     },
 }
@@ -546,6 +548,9 @@ pub struct SessionHandle {
 impl SessionHandle {
     pub fn snapshot(&self) -> &SessionSnapshot {
         &self.snapshot
+    }
+    pub(crate) fn continuation(&self) -> &[ContinuationBlock] {
+        &self.continuation
     }
     pub fn reload(&mut self) -> Result<(), SessionError> {
         storage::reload(self)

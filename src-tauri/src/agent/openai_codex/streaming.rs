@@ -1,4 +1,5 @@
 use super::{AgentAuthentication, ProviderCredential};
+use crate::agent::conversation::BlockSignature;
 use crate::agent::models::{Model, ProviderId, ReasoningLevel};
 use crate::agent::registry::{ModelRegistry, ResolvedModelRequest};
 use crate::agent::{
@@ -205,14 +206,21 @@ impl ConversationProvider for OpenAiCodexProvider {
             if sender.send(ProviderEvent::Started).await.is_err() {
                 return;
             }
-            let result = run_stream(
-                authentication.as_ref(),
-                http.as_ref(),
-                resolved,
-                request,
-                &sender,
-            )
-            .await;
+            let cancellation = request.cancellation();
+            let result = tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => {
+                    let _ = sender.send(ProviderEvent::Aborted).await;
+                    return;
+                }
+                result = run_stream(
+                    authentication.as_ref(),
+                    http.as_ref(),
+                    resolved,
+                    request,
+                    &sender,
+                ) => result,
+            };
             if let Err(error) = result {
                 let _ = sender.send(ProviderEvent::Failed(error)).await;
             }
@@ -266,33 +274,67 @@ async fn run_stream(
 
 fn build_request_body(request: &ConversationRequest, model: &Model) -> Result<Vec<u8>, AgentError> {
     let mut input = Vec::new();
-    for message in request.messages() {
+    for (message_index, message) in request.messages().iter().enumerate() {
         match message {
             Message::User(user) => input.push(json!({
                 "role": "user",
                 "content": [{"type": "input_text", "text": user.text()}]
             })),
             Message::Assistant(assistant) => {
-                if !assistant.replay_metadata().is_empty() {
-                    let replay: Vec<Value> = serde_json::from_slice(assistant.replay_metadata())
-                        .map_err(|_| AgentError::invalid_provider_configuration())?;
-                    input.extend(replay);
-                } else {
-                    let text = assistant
-                        .content()
-                        .iter()
-                        .filter_map(|content| match content {
-                            AssistantContent::Text(text) => Some(text.as_str()),
-                            AssistantContent::Reasoning(_) => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    input.push(json!({
-                        "type": "message",
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": text, "annotations": []}],
-                        "status": "completed"
-                    }));
+                let replay = assistant.replay_metadata();
+                let same_model = assistant.model().provider() == model.provider()
+                    && assistant.model().id() == model.id()
+                    && assistant.model().api() == model.api();
+                let mut text_index = 0_usize;
+                for (index, content) in assistant.content().iter().enumerate() {
+                    let signature = replay.block_signatures.get(index).and_then(Option::as_ref);
+                    match content {
+                        AssistantContent::Reasoning(reasoning) if same_model => {
+                            if let Some(BlockSignature::Reasoning { signature, .. }) = signature {
+                                let item: Value = serde_json::from_str(signature)
+                                    .map_err(|_| AgentError::invalid_provider_configuration())?;
+                                input.push(item);
+                            } else if !reasoning.is_empty() {
+                                push_assistant_text(
+                                    &mut input,
+                                    message_index,
+                                    &mut text_index,
+                                    reasoning,
+                                    None,
+                                );
+                            }
+                        }
+                        AssistantContent::Reasoning(reasoning) => {
+                            if !reasoning.is_empty() {
+                                push_assistant_text(
+                                    &mut input,
+                                    message_index,
+                                    &mut text_index,
+                                    reasoning,
+                                    None,
+                                );
+                            }
+                        }
+                        AssistantContent::Text(text) => {
+                            let signature = if same_model {
+                                match signature {
+                                    Some(BlockSignature::Text(signature)) => {
+                                        Some(signature.as_str())
+                                    }
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            };
+                            push_assistant_text(
+                                &mut input,
+                                message_index,
+                                &mut text_index,
+                                text,
+                                signature,
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -314,6 +356,57 @@ fn build_request_body(request: &ConversationRequest, model: &Model) -> Result<Ve
         body["reasoning"] = json!({"effort": effort, "summary": "auto"});
     }
     serde_json::to_vec(&body).map_err(|_| AgentError::invalid_provider_configuration())
+}
+
+fn push_assistant_text(
+    input: &mut Vec<Value>,
+    message_index: usize,
+    text_index: &mut usize,
+    text: &str,
+    signature: Option<&str>,
+) {
+    let fallback = if *text_index == 0 {
+        format!("msg_job_radar_{message_index}")
+    } else {
+        format!("msg_job_radar_{message_index}_{text_index}")
+    };
+    *text_index += 1;
+    let (id, phase) = signature
+        .and_then(parse_text_signature)
+        .unwrap_or((fallback.clone(), None));
+    let id = if id.is_empty() || id.len() > 64 {
+        fallback
+    } else {
+        id
+    };
+    let mut item = json!({
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": text, "annotations": []}],
+        "status": "completed",
+        "id": id,
+    });
+    if let Some(phase) = phase {
+        item["phase"] = Value::String(phase);
+    }
+    input.push(item);
+}
+
+fn parse_text_signature(signature: &str) -> Option<(String, Option<String>)> {
+    if !signature.starts_with('{') {
+        return Some((signature.to_owned(), None));
+    }
+    let value: Value = serde_json::from_str(signature).ok()?;
+    if value.get("v").and_then(Value::as_u64) != Some(1) {
+        return None;
+    }
+    let id = value.get("id")?.as_str()?.to_owned();
+    let phase = value
+        .get("phase")
+        .and_then(Value::as_str)
+        .filter(|phase| matches!(*phase, "commentary" | "final_answer"))
+        .map(str::to_owned);
+    Some((id, phase))
 }
 
 fn reasoning_effort(model: &Model, requested: ReasoningLevel) -> Option<String> {
@@ -635,17 +728,49 @@ impl TranslationState {
                     "failed" | "cancelled" => return Err(AgentError::provider()),
                     _ => return Err(AgentError::provider()),
                 };
-                let output = response
-                    .get("output")
-                    .and_then(Value::as_array)
-                    .filter(|output| !output.is_empty())
-                    .cloned()
-                    .unwrap_or_else(|| self.replay_items.values().cloned().collect());
-                let replay = serde_json::to_vec(&output).map_err(|_| AgentError::provider())?;
+                if let Some(output) = response.get("output").and_then(Value::as_array) {
+                    for (index, item) in output.iter().enumerate() {
+                        self.replay_items.insert(index as u64, item.clone());
+                    }
+                }
+                let mut block_signatures = vec![None; self.next_content_index];
+                for (output_index, item) in &self.replay_items {
+                    let Some(slot) = self.slots.get(output_index) else {
+                        continue;
+                    };
+                    let signature = match slot.kind {
+                        ContentKind::Reasoning => Some(BlockSignature::Reasoning {
+                            signature: serde_json::to_string(item)
+                                .map_err(|_| AgentError::provider())?,
+                            redacted: false,
+                        }),
+                        ContentKind::Text => item.get("id").and_then(Value::as_str).map(|id| {
+                            let mut signature = json!({"v": 1, "id": id});
+                            if let Some(phase) = item
+                                .get("phase")
+                                .and_then(Value::as_str)
+                                .filter(|phase| matches!(*phase, "commentary" | "final_answer"))
+                            {
+                                signature["phase"] = Value::String(phase.to_owned());
+                            }
+                            BlockSignature::Text(signature.to_string())
+                        }),
+                    };
+                    block_signatures[slot.content_index] = signature;
+                }
+                let response_id = response
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 let usage = parse_usage(response.get("usage"));
                 self.terminal_seen = true;
                 return Ok(Some(ProviderEvent::Completed(
-                    ProviderTurnCompletion::with_replay(usage, finish_reason, replay),
+                    ProviderTurnCompletion::with_replay(
+                        usage,
+                        finish_reason,
+                        response_id,
+                        block_signatures,
+                    ),
                 )));
             }
             "error" | "response.failed" => {
@@ -956,6 +1081,38 @@ mod tests {
         }
     }
 
+    struct PendingHttp {
+        started: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+        dropped: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    }
+
+    struct DropSignal(Option<tokio::sync::oneshot::Sender<()>>);
+
+    impl Drop for DropSignal {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+
+    impl CodexHttpClient for PendingHttp {
+        fn send(
+            &self,
+            _request: CodexHttpRequest,
+        ) -> BoxFuture<Result<CodexHttpResponse, AgentError>> {
+            let started = self.started.lock().unwrap().take();
+            let dropped = self.dropped.lock().unwrap().take();
+            Box::pin(async move {
+                if let Some(sender) = started {
+                    let _ = sender.send(());
+                }
+                let _drop_signal = DropSignal(dropped);
+                futures_util::future::pending().await
+            })
+        }
+    }
+
     #[derive(Clone)]
     struct SafeRequestInspection {
         url: String,
@@ -1226,6 +1383,41 @@ mod tests {
     }
 
     #[test]
+    fn caller_cancellation_drops_the_in_flight_http_request() {
+        let (started_sender, started_receiver) = tokio::sync::oneshot::channel();
+        let (dropped_sender, dropped_receiver) = tokio::sync::oneshot::channel();
+        let http = Arc::new(PendingHttp {
+            started: Mutex::new(Some(started_sender)),
+            dropped: Mutex::new(Some(dropped_sender)),
+        });
+        let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http);
+        let mut conversation = AgentConversation::new(
+            "System".to_owned(),
+            provider,
+            ModelId::new("gpt-5.4").unwrap(),
+            ReasoningLevel::Medium,
+        )
+        .unwrap();
+
+        tauri::async_runtime::block_on(async {
+            let mut events = conversation.send("Cancel".to_owned()).unwrap();
+            assert!(matches!(
+                events.next().await,
+                Some(ConversationEvent::Started)
+            ));
+            started_receiver.await.unwrap();
+            events.cancellation().cancel();
+            assert!(matches!(
+                events.next().await,
+                Some(ConversationEvent::Aborted)
+            ));
+            drop(events);
+            dropped_receiver.await.unwrap();
+        });
+        assert!(conversation.messages().is_empty());
+    }
+
+    #[test]
     fn public_conversation_streams_codex_text_and_builds_pinned_safe_request() {
         let terminal = event(json!({
             "type": "response.completed",
@@ -1291,7 +1483,7 @@ mod tests {
     }
 
     #[test]
-    fn multi_turn_requests_replay_opaque_output_and_resolve_auth_each_turn() {
+    fn model_change_drops_old_replay_signatures_and_resolves_auth_each_turn() {
         let http = Arc::new(SyntheticHttp::new(vec![
             completed_text_response("First reply", "synthetic-first-item"),
             completed_text_response("Second reply", "synthetic-second-item"),
@@ -1324,12 +1516,13 @@ mod tests {
         assert_eq!(second["reasoning"]["effort"], "max");
         assert_eq!(second["input"].as_array().unwrap().len(), 3);
         assert_eq!(second["input"][0]["content"][0]["text"], "First");
-        assert_eq!(second["input"][1]["id"], "synthetic-first-item");
+        assert_eq!(second["input"][1]["id"], "msg_job_radar_1");
+        assert_eq!(second["input"][1]["content"][0]["text"], "First reply");
         assert_eq!(second["input"][2]["content"][0]["text"], "Second");
     }
 
     #[test]
-    fn refusal_content_preserves_wire_order_and_replays_opaque_output_next_turn() {
+    fn refusal_content_preserves_visible_order_and_replays_only_typed_text_metadata() {
         let refusal_item = json!({
             "type": "message",
             "id": "synthetic-refusal-item",
@@ -1398,10 +1591,12 @@ mod tests {
         let inspections = http.inspections.lock().unwrap();
         let replayed = &inspections[1].body["input"][1];
         assert_eq!(replayed["id"], "synthetic-refusal-item");
+        assert_eq!(replayed["content"].as_array().unwrap().len(), 1);
         assert_eq!(replayed["content"][0]["type"], "output_text");
-        assert_eq!(replayed["content"][1]["type"], "refusal");
-        assert_eq!(replayed["content"][1]["refusal"], "cannot comply");
-        assert_eq!(replayed["content"][2]["type"], "output_text");
+        assert_eq!(
+            replayed["content"][0]["text"],
+            "Prefix cannot comply suffix"
+        );
     }
 
     fn failed_error(events: &[ConversationEvent]) -> &AgentError {
