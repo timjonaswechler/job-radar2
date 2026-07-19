@@ -10,8 +10,9 @@ use job_radar_lib::{
 fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     let profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
-    let source: SourceDocument =
+    let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source.source_overrides = None;
     let registry = registry_with_profile(profile);
 
     let CompileSourceOutcome::Compiled {
@@ -37,8 +38,8 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
-        Some(0),
-        "the complete Effective Source Profile must include existing Source Overrides"
+        Some(1),
+        "without specialization, the Effective Source Profile must preserve the base profile"
     );
     assert_eq!(compiled.execution_plan.source.key, "example_source");
     assert_eq!(
@@ -46,7 +47,7 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
-        Some(0)
+        Some(1)
     );
 }
 
