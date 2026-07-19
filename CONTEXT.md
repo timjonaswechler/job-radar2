@@ -154,6 +154,10 @@ _Avoid_: Source, Source Config, anti-pattern
 A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company and title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
 _Avoid_: match, Source, Search Run
 
+**Application Preparation Progress**:
+The explicit per-Job-Posting checklist of work needed before an application is submitted. It records preparation tasks independently from Job Posting Queues and the application's lifecycle state.
+_Avoid_: preparationState, application status, queue progress, inferred progress
+
 **Job Posting Queue**:
 A user-facing workflow slice for persisted Job Postings, derived from posting decision and application states. A queue helps users decide what needs attention next; it is not an additional storage lifecycle state.
 _Avoid_: backend status, table filter, Search Request, result list

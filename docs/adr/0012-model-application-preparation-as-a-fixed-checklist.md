@@ -1,0 +1,11 @@
+# Model application preparation as a fixed typed checklist
+
+Application Preparation Progress is stored per Job Posting as a fixed, ordered checklist rather than inferred from queues, represented as an event timeline, or configured by users. The first checklist contains `posting_data_ready`, `company_research`, `strategy_notes`, `cover_letter`, and `documents_ready`; each task has an explicit `not_started | in_progress | completed | not_applicable` status and an `updated_at` timestamp. This is the smallest model that can truthfully represent non-linear preparation, optional work, and the current task while keeping the initial UI and API bounded. The step vocabulary is provisional and may be extended through a later domain decision, but stored identifiers are typed rather than arbitrary user data.
+
+`preparation_state` remains the persisted coarse summary used for Job Posting Queue membership, but it is no longer independently writable once checklist support is introduced. Checklist updates roll it up transactionally: all tasks `not_started` means `not_started`; all tasks terminal (`completed | not_applicable`) means `ready`; every other combination means `in_progress`. Existing postings receive structurally initialized `not_started` checklist rows without translating their legacy coarse state into invented task completion; their existing `preparation_state` remains unchanged until the first checklist mutation. Newly imported postings receive the checklist and `not_started` summary together.
+
+The final `submitted` step is not duplicated in the checklist. Every non-`not_applied` `application_state` attests that an application was submitted and is its source of truth; submission does not imply that earlier preparation tasks were completed. The model stores current task state and update time, not an activity timeline.
+
+## Consequences
+
+Persist checklist tasks in a child table with one constrained row per posting and task, cascade deletion, and canonical ordering defined by the typed task vocabulary. Embed the ordered checklist in posting list/detail DTOs and update one task through a dedicated API that also updates the coarse summary and parent timestamp in one transaction. No-op task updates preserve timestamps. Queue state, posting contents, note contents, and task order must never be used to infer completion.
