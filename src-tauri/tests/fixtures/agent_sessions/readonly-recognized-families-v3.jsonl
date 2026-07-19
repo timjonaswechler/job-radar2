@@ -1,0 +1,7 @@
+{"type":"session","version":3,"id":"01890f47-e8b0-7cc3-98c4-dc0c0c07398f","timestamp":"2023-07-01T00:00:00Z","cwd":""}
+{"type":"message","id":"11111111","parentId":null,"timestamp":"2023-07-01T00:00:01Z","message":{"role":"user","content":"Supported context","timestamp":1688169601000}}
+{"type":"message","id":"22222222","parentId":"11111111","timestamp":"2023-07-01T00:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Synthetic answer"}],"api":"synthetic-api","provider":"synthetic-provider","model":"synthetic-model","usage":{"input":1,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1688169602000}}
+{"type":"branch_summary","id":"33333333","parentId":"22222222","timestamp":"2023-07-01T00:00:03Z","fromId":"22222222","summary":"Synthetic summary"}
+{"type":"label","id":"44444444","parentId":"33333333","timestamp":"2023-07-01T00:00:04Z","targetId":"22222222","label":"Synthetic label"}
+{"type":"custom","id":"55555555","parentId":"44444444","timestamp":"2023-07-01T00:00:05Z","customType":"synthetic","data":{}}
+{"type":"custom_message","id":"66666666","parentId":"55555555","timestamp":"2023-07-01T00:00:06Z","customType":"synthetic","content":"Synthetic custom","display":true}

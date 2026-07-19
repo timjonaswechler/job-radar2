@@ -7,6 +7,7 @@ pub mod models;
 pub mod openai_codex;
 pub mod providers;
 pub mod registry;
+pub mod sessions;
 pub mod testing;
 
 pub use conversation::{

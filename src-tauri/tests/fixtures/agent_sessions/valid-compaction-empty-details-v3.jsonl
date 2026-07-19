@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"01890f47-e8b0-7cc3-98c4-dc0c0c07398f","timestamp":"2023-07-01T00:00:00Z","cwd":""}
+{"type":"session_info","id":"10101010","parentId":null,"timestamp":"2023-07-01T00:00:00Z"}
+{"type":"message","id":"11111111","parentId":"10101010","timestamp":"2023-07-01T00:00:01Z","message":{"role":"user","content":"Synthetic fixture question","timestamp":1688169601000}}
+{"type":"message","id":"22222222","parentId":"11111111","timestamp":"2023-07-01T00:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Synthetic fixture answer"}],"api":"synthetic-api","provider":"synthetic-provider","model":"synthetic-model","usage":{"input":1,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1688169602000}}
+{"type":"compaction","id":"33333333","parentId":"22222222","timestamp":"2023-07-01T00:00:03Z","summary":"Synthetic compacted summary","firstKeptEntryId":"11111111","tokensBefore":3,"details":{}}

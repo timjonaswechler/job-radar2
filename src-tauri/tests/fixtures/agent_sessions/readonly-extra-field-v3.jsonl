@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"01890f47-e8b0-7cc3-98c4-dc0c0c07398f","timestamp":"2023-07-01T00:00:00Z","cwd":""}
+{"type":"model_change","id":"11111111","parentId":null,"timestamp":"2023-07-01T00:00:01Z","provider":"synthetic-provider","modelId":"synthetic-model","syntheticExtension":true}

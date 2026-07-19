@@ -5,7 +5,13 @@ use crate::agent::{
 };
 use futures_util::stream;
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
+
+use crate::agent::sessions::{
+    self, SessionCheckpoint, SessionError, SessionHandle, SessionManager,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExpectedConversationRequest {
@@ -138,6 +144,181 @@ impl ConversationProvider for ScriptedProvider {
             ]));
         }
         Box::pin(stream::iter(turn.events))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SafeContinuationBlock {
+    role: &'static str,
+    text: Vec<String>,
+    signature_count: usize,
+    has_response_id: bool,
+    redacted_thinking_count: usize,
+}
+
+impl SafeContinuationBlock {
+    pub fn role(&self) -> &'static str {
+        self.role
+    }
+    pub fn text(&self) -> &[String] {
+        &self.text
+    }
+    pub fn signature_count(&self) -> usize {
+        self.signature_count
+    }
+    pub fn has_response_id(&self) -> bool {
+        self.has_response_id
+    }
+    pub fn redacted_thinking_count(&self) -> usize {
+        self.redacted_thinking_count
+    }
+}
+
+#[derive(Clone)]
+pub struct SessionTestHarness {
+    runtime: Arc<TestSessionRuntime>,
+}
+
+struct TestSessionRuntime {
+    timestamps: Mutex<VecDeque<String>>,
+    uuids: Mutex<VecDeque<Uuid>>,
+    trash_succeeds: bool,
+    trashed: Mutex<Vec<PathBuf>>,
+    failing_checkpoints: Mutex<std::collections::HashSet<SessionCheckpoint>>,
+}
+
+impl SessionTestHarness {
+    pub fn new(timestamps: Vec<String>, uuids: Vec<Uuid>, trash_succeeds: bool) -> Self {
+        Self {
+            runtime: Arc::new(TestSessionRuntime {
+                timestamps: Mutex::new(timestamps.into()),
+                uuids: Mutex::new(uuids.into()),
+                trash_succeeds,
+                trashed: Mutex::new(Vec::new()),
+                failing_checkpoints: Mutex::new(std::collections::HashSet::new()),
+            }),
+        }
+    }
+
+    pub fn fail_at(self, checkpoints: impl IntoIterator<Item = SessionCheckpoint>) -> Self {
+        self.runtime
+            .failing_checkpoints
+            .lock()
+            .expect("session test lock poisoned")
+            .extend(checkpoints);
+        self
+    }
+
+    pub fn manager(&self, agents_root: &Path) -> Result<SessionManager, SessionError> {
+        sessions::manager_with_runtime(agents_root, self.runtime.clone())
+    }
+
+    pub fn continuation(&self, handle: &SessionHandle) -> Vec<SafeContinuationBlock> {
+        handle
+            .continuation
+            .iter()
+            .map(|block| match block {
+                sessions::ContinuationBlock::User(text) => SafeContinuationBlock {
+                    role: "user",
+                    text: vec![text.clone()],
+                    signature_count: 0,
+                    has_response_id: false,
+                    redacted_thinking_count: 0,
+                },
+                sessions::ContinuationBlock::Assistant {
+                    blocks,
+                    response_id,
+                } => SafeContinuationBlock {
+                    role: "assistant",
+                    text: blocks
+                        .iter()
+                        .filter_map(|block| match block {
+                            sessions::ContinuationAssistantBlock::Text { text, .. } => {
+                                Some(text.clone())
+                            }
+                            sessions::ContinuationAssistantBlock::Thinking {
+                                thinking,
+                                redacted: false,
+                                ..
+                            } => Some(thinking.clone()),
+                            sessions::ContinuationAssistantBlock::Thinking {
+                                redacted: true,
+                                ..
+                            } => None,
+                        })
+                        .collect(),
+                    signature_count: blocks
+                        .iter()
+                        .filter(|block| match block {
+                            sessions::ContinuationAssistantBlock::Text { signature, .. }
+                            | sessions::ContinuationAssistantBlock::Thinking {
+                                signature, ..
+                            } => signature.is_some(),
+                        })
+                        .count(),
+                    has_response_id: response_id.is_some(),
+                    redacted_thinking_count: blocks
+                        .iter()
+                        .filter(|block| {
+                            matches!(
+                                block,
+                                sessions::ContinuationAssistantBlock::Thinking {
+                                    redacted: true,
+                                    ..
+                                }
+                            )
+                        })
+                        .count(),
+                },
+            })
+            .collect()
+    }
+
+    pub fn trashed_paths(&self) -> Vec<PathBuf> {
+        self.runtime
+            .trashed
+            .lock()
+            .expect("session test lock poisoned")
+            .clone()
+    }
+}
+
+impl sessions::Runtime for TestSessionRuntime {
+    fn now(&self) -> String {
+        self.timestamps
+            .lock()
+            .expect("session test lock poisoned")
+            .pop_front()
+            .expect("deterministic timestamp exhausted")
+    }
+    fn uuid(&self) -> Uuid {
+        self.uuids
+            .lock()
+            .expect("session test lock poisoned")
+            .pop_front()
+            .expect("deterministic UUID exhausted")
+    }
+    fn trash(&self, path: &Path) -> Result<(), ()> {
+        if !self.trash_succeeds {
+            return Err(());
+        }
+        self.trashed
+            .lock()
+            .expect("session test lock poisoned")
+            .push(path.to_owned());
+        std::fs::rename(path, path.with_extension("trashed")).map_err(|_| ())
+    }
+    fn checkpoint(&self, checkpoint: SessionCheckpoint) -> Result<(), ()> {
+        if self
+            .failing_checkpoints
+            .lock()
+            .expect("session test lock poisoned")
+            .remove(&checkpoint)
+        {
+            Err(())
+        } else {
+            Ok(())
+        }
     }
 }
 

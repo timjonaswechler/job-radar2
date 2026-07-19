@@ -1,0 +1,9 @@
+{"type":"session","version":3,"id":"01890f47-e8b0-7cc3-98c4-dc0c0c07398f","timestamp":"2023-07-01T00:00:00Z","cwd":""}
+{"type":"model_change","id":"11111111","parentId":null,"timestamp":"2023-07-01T00:00:01Z","provider":"old-provider","modelId":"old-model"}
+{"type":"thinking_level_change","id":"22222222","parentId":"11111111","timestamp":"2023-07-01T00:00:02Z","thinkingLevel":"high"}
+{"type":"session_info","id":"33333333","parentId":"22222222","timestamp":"2023-07-01T00:00:03Z","name":"First name"}
+{"type":"message","id":"44444444","parentId":"33333333","timestamp":"2023-07-01T00:00:04Z","message":{"role":"user","content":"History question","timestamp":1688169604000}}
+{"type":"message","id":"55555555","parentId":"44444444","timestamp":"2023-07-01T00:00:05Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Synthetic thought","thinkingSignature":"FAKE-THINKING-SIGNATURE","redacted":false},{"type":"text","text":"History answer","textSignature":"FAKE-TEXT-SIGNATURE"}],"api":"synthetic-api","provider":"synthetic-provider","model":"synthetic-model","usage":{"input":1,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1688169605000,"responseId":"FAKE-RESPONSE-ID","responseModel":"routed-model"}}
+{"type":"session_info","id":"66666666","parentId":"55555555","timestamp":"2023-07-01T00:00:06Z","name":""}
+{"type":"model_change","id":"77777777","parentId":"66666666","timestamp":"2023-07-01T00:00:07Z","provider":"new-provider","modelId":"new-model"}
+{"type":"thinking_level_change","id":"88888888","parentId":"77777777","timestamp":"2023-07-01T00:00:08Z","thinkingLevel":"low"}

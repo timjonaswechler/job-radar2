@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"01890f47-e8b0-7cc3-98c4-dc0c0c07398f","timestamp":"2023-07-01T00:00:00Z","cwd":""}
+{"type":"message","id":"11111111","parentId":null,"timestamp":"2023-07-01T00:00:01Z","message":{"role":"user","content":"Supported","timestamp":1}}
+{"type":"message","id":"22222222","parentId":"11111111","timestamp":"2023-07-01T00:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Answer"}],"api":"synthetic-api","provider":"synthetic-provider","model":"synthetic-model","usage":{"input":1,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":2,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":2}}
+{"type":"message","id":"33333333","parentId":"22222222","timestamp":"2023-07-01T00:00:03Z","message":{"role":"toolResult","toolCallId":"fake","toolName":"synthetic-tool","content":[{"type":"text","text":"Synthetic tool result"}],"isError":false,"timestamp":3}}
