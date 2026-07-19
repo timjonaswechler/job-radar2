@@ -36,6 +36,7 @@ export const en = {
       sources: "Sources",
       searchRequests: "Search Requests",
       settings: "Settings",
+      agentChatPrototype: "Agent Chat prototype",
       postingsInbox: "Postings Inbox",
       notFound: "Not found",
     },

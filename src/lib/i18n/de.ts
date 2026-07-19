@@ -35,6 +35,7 @@ export const de = {
       sources: "Quellen",
       searchRequests: "Search Requests",
       settings: "Einstellungen",
+      agentChatPrototype: "Agent-Chat-Prototyp",
       postingsInbox: "Stellenanzeigen-Inbox",
       notFound: "Nicht gefunden",
     },

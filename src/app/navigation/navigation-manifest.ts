@@ -5,6 +5,7 @@ import {
   RadarIcon,
   SearchCheckIcon,
   SettingsIcon,
+  SparklesIcon,
 } from "lucide-react";
 
 import type {
@@ -34,6 +35,12 @@ const SearchRequestsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((module) => ({
     default: module.SettingsPage,
+  })),
+);
+
+const AgentChatPrototypePage = lazy(() =>
+  import("@/pages/agent-chat-prototype-page").then((module) => ({
+    default: module.AgentChatPrototypePage,
   })),
 );
 
@@ -86,6 +93,13 @@ export const navigationManifest = [
     Component: SettingsPage,
     sidebar: primarySidebarGroup,
     commandSearch: { groupKey: "commandSearch.groups.pages" },
+  },
+  {
+    id: "agent-chat-prototype",
+    path: "/labs/agent",
+    titleKey: "navigation.items.agentChatPrototype",
+    icon: SparklesIcon,
+    Component: AgentChatPrototypePage,
   },
 ] as const satisfies readonly NavigationManifestItem[];
 

@@ -18,7 +18,7 @@ export type CommandSearchItem = {
 
 export const commandSearchItems: readonly CommandSearchItem[] =
   navigationManifest.flatMap((item) =>
-    item.commandSearch
+    "commandSearch" in item && item.commandSearch
       ? [
           {
             id: `page:${item.id}`,
