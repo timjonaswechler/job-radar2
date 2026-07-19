@@ -1,0 +1,1452 @@
+{
+  "dependencies": [
+    {
+      "blocker_label": "C01",
+      "blocker_number": 235,
+      "dependent_label": "C02",
+      "dependent_number": 236
+    },
+    {
+      "blocker_label": "C02",
+      "blocker_number": 236,
+      "dependent_label": "C04",
+      "dependent_number": 237
+    },
+    {
+      "blocker_label": "C04",
+      "blocker_number": 237,
+      "dependent_label": "C05",
+      "dependent_number": 238
+    },
+    {
+      "blocker_label": "C05",
+      "blocker_number": 238,
+      "dependent_label": "C06",
+      "dependent_number": 239
+    },
+    {
+      "blocker_label": "C06",
+      "blocker_number": 239,
+      "dependent_label": "C07",
+      "dependent_number": 240
+    },
+    {
+      "blocker_label": "C07",
+      "blocker_number": 240,
+      "dependent_label": "C08",
+      "dependent_number": 241
+    },
+    {
+      "blocker_label": "C08",
+      "blocker_number": 241,
+      "dependent_label": "A01",
+      "dependent_number": 242
+    },
+    {
+      "blocker_label": "A01",
+      "blocker_number": 242,
+      "dependent_label": "R01",
+      "dependent_number": 243
+    },
+    {
+      "blocker_label": "R01",
+      "blocker_number": 243,
+      "dependent_label": "R02",
+      "dependent_number": 244
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "H01",
+      "dependent_number": 245
+    },
+    {
+      "blocker_label": "A01",
+      "blocker_number": 242,
+      "dependent_label": "P01",
+      "dependent_number": 246
+    },
+    {
+      "blocker_label": "H01",
+      "blocker_number": 245,
+      "dependent_label": "P02",
+      "dependent_number": 247
+    },
+    {
+      "blocker_label": "P02",
+      "blocker_number": 247,
+      "dependent_label": "P03",
+      "dependent_number": 248
+    },
+    {
+      "blocker_label": "P03",
+      "blocker_number": 248,
+      "dependent_label": "P04",
+      "dependent_number": 249
+    },
+    {
+      "blocker_label": "P03",
+      "blocker_number": 248,
+      "dependent_label": "P05",
+      "dependent_number": 250
+    },
+    {
+      "blocker_label": "P03",
+      "blocker_number": 248,
+      "dependent_label": "P06a",
+      "dependent_number": 251
+    },
+    {
+      "blocker_label": "P01",
+      "blocker_number": 246,
+      "dependent_label": "P06bc",
+      "dependent_number": 252
+    },
+    {
+      "blocker_label": "P04",
+      "blocker_number": 249,
+      "dependent_label": "P06bc",
+      "dependent_number": 252
+    },
+    {
+      "blocker_label": "P05",
+      "blocker_number": 250,
+      "dependent_label": "P06bc",
+      "dependent_number": 252
+    },
+    {
+      "blocker_label": "P06a",
+      "blocker_number": 251,
+      "dependent_label": "P06bc",
+      "dependent_number": 252
+    },
+    {
+      "blocker_label": "P06bc",
+      "blocker_number": 252,
+      "dependent_label": "P07",
+      "dependent_number": 253
+    },
+    {
+      "blocker_label": "P06bc",
+      "blocker_number": 252,
+      "dependent_label": "P08",
+      "dependent_number": 254
+    },
+    {
+      "blocker_label": "H01",
+      "blocker_number": 245,
+      "dependent_label": "P09",
+      "dependent_number": 255
+    },
+    {
+      "blocker_label": "P01",
+      "blocker_number": 246,
+      "dependent_label": "P09",
+      "dependent_number": 255
+    },
+    {
+      "blocker_label": "P06bc",
+      "blocker_number": 252,
+      "dependent_label": "O01",
+      "dependent_number": 256
+    },
+    {
+      "blocker_label": "O01",
+      "blocker_number": 256,
+      "dependent_label": "O02",
+      "dependent_number": 257
+    },
+    {
+      "blocker_label": "O01",
+      "blocker_number": 256,
+      "dependent_label": "P11",
+      "dependent_number": 258
+    },
+    {
+      "blocker_label": "O02",
+      "blocker_number": 257,
+      "dependent_label": "P11",
+      "dependent_number": 258
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "O03",
+      "dependent_number": 259
+    },
+    {
+      "blocker_label": "O02",
+      "blocker_number": 257,
+      "dependent_label": "O03",
+      "dependent_number": 259
+    },
+    {
+      "blocker_label": "P11",
+      "blocker_number": 258,
+      "dependent_label": "O03",
+      "dependent_number": 259
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "K01",
+      "dependent_number": 260
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "K02",
+      "dependent_number": 261
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "K03",
+      "dependent_number": 262
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "S01",
+      "dependent_number": 263
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "B01",
+      "dependent_number": 264
+    },
+    {
+      "blocker_label": "B01",
+      "blocker_number": 264,
+      "dependent_label": "B02",
+      "dependent_number": 265
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "B03a",
+      "dependent_number": 266
+    },
+    {
+      "blocker_label": "P01",
+      "blocker_number": 246,
+      "dependent_label": "B03a",
+      "dependent_number": 266
+    },
+    {
+      "blocker_label": "B01",
+      "blocker_number": 264,
+      "dependent_label": "B03a",
+      "dependent_number": 266
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "P10",
+      "dependent_number": 267
+    },
+    {
+      "blocker_label": "P03",
+      "blocker_number": 248,
+      "dependent_label": "P10",
+      "dependent_number": 267
+    },
+    {
+      "blocker_label": "P09",
+      "blocker_number": 255,
+      "dependent_label": "P10",
+      "dependent_number": 267
+    },
+    {
+      "blocker_label": "B03a",
+      "blocker_number": 266,
+      "dependent_label": "P10",
+      "dependent_number": 267
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "B03b",
+      "dependent_number": 268
+    },
+    {
+      "blocker_label": "B03a",
+      "blocker_number": 266,
+      "dependent_label": "B03b",
+      "dependent_number": 268
+    },
+    {
+      "blocker_label": "A01",
+      "blocker_number": 242,
+      "dependent_label": "D01",
+      "dependent_number": 269
+    },
+    {
+      "blocker_label": "P01",
+      "blocker_number": 246,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "P07",
+      "blocker_number": 253,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "P08",
+      "blocker_number": 254,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "P09",
+      "blocker_number": 255,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "K01",
+      "blocker_number": 260,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "D01",
+      "blocker_number": 269,
+      "dependent_label": "D02",
+      "dependent_number": 270
+    },
+    {
+      "blocker_label": "R02",
+      "blocker_number": 244,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "P07",
+      "blocker_number": 253,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "P08",
+      "blocker_number": 254,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "K01",
+      "blocker_number": 260,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "B01",
+      "blocker_number": 264,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "B03a",
+      "blocker_number": 266,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "D01",
+      "blocker_number": 269,
+      "dependent_label": "D03",
+      "dependent_number": 271
+    },
+    {
+      "blocker_label": "S01",
+      "blocker_number": 263,
+      "dependent_label": "A02",
+      "dependent_number": 272
+    },
+    {
+      "blocker_label": "B02",
+      "blocker_number": 265,
+      "dependent_label": "A02",
+      "dependent_number": 272
+    },
+    {
+      "blocker_label": "B03b",
+      "blocker_number": 268,
+      "dependent_label": "A02",
+      "dependent_number": 272
+    },
+    {
+      "blocker_label": "D02",
+      "blocker_number": 270,
+      "dependent_label": "A02",
+      "dependent_number": 272
+    },
+    {
+      "blocker_label": "D03",
+      "blocker_number": 271,
+      "dependent_label": "A02",
+      "dependent_number": 272
+    },
+    {
+      "blocker_label": "O03",
+      "blocker_number": 259,
+      "dependent_label": "Q01",
+      "dependent_number": 273
+    },
+    {
+      "blocker_label": "S01",
+      "blocker_number": 263,
+      "dependent_label": "Q01",
+      "dependent_number": 273
+    },
+    {
+      "blocker_label": "Q01",
+      "blocker_number": 273,
+      "dependent_label": "DB01",
+      "dependent_number": 274
+    },
+    {
+      "blocker_label": "Q01",
+      "blocker_number": 273,
+      "dependent_label": "A03",
+      "dependent_number": 275
+    },
+    {
+      "blocker_label": "DB01",
+      "blocker_number": 274,
+      "dependent_label": "A03",
+      "dependent_number": 275
+    },
+    {
+      "blocker_label": "P01",
+      "blocker_number": 246,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P02",
+      "blocker_number": 247,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P03",
+      "blocker_number": 248,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P04",
+      "blocker_number": 249,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P05",
+      "blocker_number": 250,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P06a",
+      "blocker_number": 251,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P06bc",
+      "blocker_number": 252,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P07",
+      "blocker_number": 253,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P08",
+      "blocker_number": 254,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P09",
+      "blocker_number": 255,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P11",
+      "blocker_number": 258,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "B03a",
+      "blocker_number": 266,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "P10",
+      "blocker_number": 267,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "D02",
+      "blocker_number": 270,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "D03",
+      "blocker_number": 271,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    },
+    {
+      "blocker_label": "A02",
+      "blocker_number": 272,
+      "dependent_label": "G02",
+      "dependent_number": 276
+    }
+  ],
+  "duplicate_planned_titles": [],
+  "final_issues": [
+    {
+      "label": "C01",
+      "labels": [],
+      "number": 235,
+      "state": "open",
+      "title": "Authoritative Effective Profile Compiler Boundary",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/235"
+    },
+    {
+      "label": "C02",
+      "labels": [],
+      "number": 236,
+      "state": "open",
+      "title": "Deterministic Effective Profile Merge and Complete Additions",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/236"
+    },
+    {
+      "label": "C04",
+      "labels": [],
+      "number": 237,
+      "state": "open",
+      "title": "Effective Source Config Contract",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/237"
+    },
+    {
+      "label": "C05",
+      "labels": [],
+      "number": 238,
+      "state": "open",
+      "title": "Final Mandatory `first_accepted` Policy Foundation",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/238"
+    },
+    {
+      "label": "C06",
+      "labels": [],
+      "number": 239,
+      "state": "open",
+      "title": "Final Internal and Compiled Phase Names",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/239"
+    },
+    {
+      "label": "C07",
+      "labels": [],
+      "number": 240,
+      "state": "open",
+      "title": "Complete Effective Profile Provenance",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/240"
+    },
+    {
+      "label": "C08",
+      "labels": [],
+      "number": 241,
+      "state": "open",
+      "title": "Canonical Schema-v3 Fingerprint Foundation",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/241"
+    },
+    {
+      "label": "A01",
+      "labels": [],
+      "number": 242,
+      "state": "open",
+      "title": "Atomic Source Schema-v3 Activation and Old-path Removal",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/242"
+    },
+    {
+      "label": "R01",
+      "labels": [],
+      "number": 243,
+      "state": "open",
+      "title": "Typed Strategy Set Kernel",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/243"
+    },
+    {
+      "label": "R02",
+      "labels": [],
+      "number": 244,
+      "state": "open",
+      "title": "Cumulative Phase Allowances and Complete Reports",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/244"
+    },
+    {
+      "label": "H01",
+      "labels": [],
+      "number": 245,
+      "state": "open",
+      "title": "Byte-preserving Phase-neutral HTTP Acquisition and Strict Decoding",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/245"
+    },
+    {
+      "label": "P01",
+      "labels": [],
+      "number": 246,
+      "state": "open",
+      "title": "Canonical Template Grammar",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/246"
+    },
+    {
+      "label": "P02",
+      "labels": [],
+      "number": 247,
+      "state": "open",
+      "title": "Canonical Parse Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/247"
+    },
+    {
+      "label": "P03",
+      "labels": [],
+      "number": 248,
+      "state": "open",
+      "title": "Canonical Select Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/248"
+    },
+    {
+      "label": "P04",
+      "labels": [],
+      "number": 249,
+      "state": "open",
+      "title": "Canonical Cardinality Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/249"
+    },
+    {
+      "label": "P05",
+      "labels": [],
+      "number": 250,
+      "state": "open",
+      "title": "Canonical Transform Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/250"
+    },
+    {
+      "label": "P06a",
+      "labels": [],
+      "number": 251,
+      "state": "open",
+      "title": "Typed Value Context Foundation",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/251"
+    },
+    {
+      "label": "P06bc",
+      "labels": [],
+      "number": 252,
+      "state": "open",
+      "title": "Complete Value Execution and Composition",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/252"
+    },
+    {
+      "label": "P07",
+      "labels": [],
+      "number": 253,
+      "state": "open",
+      "title": "Canonical Predicate Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/253"
+    },
+    {
+      "label": "P08",
+      "labels": [],
+      "number": 254,
+      "state": "open",
+      "title": "Canonical Named Capture Primitive",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/254"
+    },
+    {
+      "label": "P09",
+      "labels": [],
+      "number": 255,
+      "state": "open",
+      "title": "Canonical Authored HTTP Fetch",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/255"
+    },
+    {
+      "label": "O01",
+      "labels": [],
+      "number": 256,
+      "state": "open",
+      "title": "Source-local Posting Occurrences and Discovery Value Semantics",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/256"
+    },
+    {
+      "label": "O02",
+      "labels": [],
+      "number": 257,
+      "state": "open",
+      "title": "Requested Detail Patches and Conflict-safe Phase Reducers",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/257"
+    },
+    {
+      "label": "P11",
+      "labels": [],
+      "number": 258,
+      "state": "open",
+      "title": "Canonical Phase Acceptance",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/258"
+    },
+    {
+      "label": "O03",
+      "labels": [],
+      "number": 259,
+      "state": "open",
+      "title": "Shared Discovery/Detail Phase Outcome and Commit Boundary",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/259"
+    },
+    {
+      "label": "K01",
+      "labels": [],
+      "number": 260,
+      "state": "open",
+      "title": "`all_required` Strategy Policy",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/260"
+    },
+    {
+      "label": "K02",
+      "labels": [],
+      "number": 261,
+      "state": "open",
+      "title": "`at_least(count)` Strategy Policy",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/261"
+    },
+    {
+      "label": "K03",
+      "labels": [],
+      "number": 262,
+      "state": "open",
+      "title": "`collect_all(minAccepted)` Strategy Policy",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/262"
+    },
+    {
+      "label": "S01",
+      "labels": [],
+      "number": 263,
+      "state": "open",
+      "title": "Candidate-scoped Source Detail Outcome, Routing, and Execution Seam",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/263"
+    },
+    {
+      "label": "B01",
+      "labels": [],
+      "number": 264,
+      "state": "open",
+      "title": "Browser Acquisition Contract and Scripted Adapter",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/264"
+    },
+    {
+      "label": "B02",
+      "labels": [],
+      "number": 265,
+      "state": "open",
+      "title": "Managed Browser Acquisition Adapter",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/265"
+    },
+    {
+      "label": "B03a",
+      "labels": [],
+      "number": 266,
+      "state": "open",
+      "title": "Canonical Browser Fetch, Wait, and Interaction Primitives",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/266"
+    },
+    {
+      "label": "P10",
+      "labels": [],
+      "number": 267,
+      "state": "open",
+      "title": "Canonical Bounded HTTP/Browser Pagination",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/267"
+    },
+    {
+      "label": "B03b",
+      "labels": [],
+      "number": 268,
+      "state": "open",
+      "title": "Discovery and Detail Browser Phase Adapters",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/268"
+    },
+    {
+      "label": "D01",
+      "labels": [],
+      "number": 269,
+      "state": "open",
+      "title": "Reconciled Detection State",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/269"
+    },
+    {
+      "label": "D02",
+      "labels": [],
+      "number": 270,
+      "state": "open",
+      "title": "URL and HTTP Detection Strategies",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/270"
+    },
+    {
+      "label": "D03",
+      "labels": [],
+      "number": 271,
+      "state": "open",
+      "title": "Browser Detection Strategy",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/271"
+    },
+    {
+      "label": "A02",
+      "labels": [],
+      "number": 272,
+      "state": "open",
+      "title": "Atomic Browser/Detection Activation and Residue Proof",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/272"
+    },
+    {
+      "label": "Q01",
+      "labels": [],
+      "number": 273,
+      "state": "open",
+      "title": "Resolve Source Candidates through one Bounded Batch Operation",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/273"
+    },
+    {
+      "label": "DB01",
+      "labels": [],
+      "number": 274,
+      "state": "open",
+      "title": "Atomic Search Run/Match SQLite Transaction Foundation",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/274"
+    },
+    {
+      "label": "A03",
+      "labels": [],
+      "number": 275,
+      "state": "open",
+      "title": "Activate Finalized-only Search Run Resolution, Merge, and Persistence",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/275"
+    },
+    {
+      "label": "G02",
+      "labels": [],
+      "number": 276,
+      "state": "open",
+      "title": "Global Primitive Completeness Gate",
+      "url": "https://github.com/timjonaswechler/job-radar2/issues/276"
+    }
+  ],
+  "manifest_sha256": "7f18862a5ae2e23fda505082a9f77cd12df9ef1b61a03438bb1844d4ac6ffcc4",
+  "old_issues": [
+    {
+      "old_number": 167,
+      "replacement_labels": [
+        "C01",
+        "A01"
+      ],
+      "replacement_numbers": [
+        235,
+        242
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 168,
+      "replacement_labels": [
+        "C02"
+      ],
+      "replacement_numbers": [
+        236
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 169,
+      "replacement_labels": [
+        "C02"
+      ],
+      "replacement_numbers": [
+        236
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 170,
+      "replacement_labels": [
+        "C04"
+      ],
+      "replacement_numbers": [
+        237
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 171,
+      "replacement_labels": [
+        "C07"
+      ],
+      "replacement_numbers": [
+        240
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 175,
+      "replacement_labels": [
+        "C08",
+        "A01"
+      ],
+      "replacement_numbers": [
+        241,
+        242
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 172,
+      "replacement_labels": [
+        "C05"
+      ],
+      "replacement_numbers": [
+        238
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 173,
+      "replacement_labels": [
+        "C06"
+      ],
+      "replacement_numbers": [
+        239
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 174,
+      "replacement_labels": [
+        "A01"
+      ],
+      "replacement_numbers": [
+        242
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 176,
+      "replacement_labels": [
+        "R01"
+      ],
+      "replacement_numbers": [
+        243
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 177,
+      "replacement_labels": [
+        "R02"
+      ],
+      "replacement_numbers": [
+        244
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 178,
+      "replacement_labels": [
+        "H01",
+        "P09",
+        "A01"
+      ],
+      "replacement_numbers": [
+        245,
+        255,
+        242
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 179,
+      "replacement_labels": [
+        "P02"
+      ],
+      "replacement_numbers": [
+        247
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 180,
+      "replacement_labels": [
+        "P03"
+      ],
+      "replacement_numbers": [
+        248
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 192,
+      "replacement_labels": [
+        "P06a",
+        "P06bc"
+      ],
+      "replacement_numbers": [
+        251,
+        252
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 193,
+      "replacement_labels": [
+        "O01"
+      ],
+      "replacement_numbers": [
+        256
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 195,
+      "replacement_labels": [
+        "O02",
+        "O03"
+      ],
+      "replacement_numbers": [
+        257,
+        259
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 202,
+      "replacement_labels": [
+        "K01"
+      ],
+      "replacement_numbers": [
+        260
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 203,
+      "replacement_labels": [
+        "K02"
+      ],
+      "replacement_numbers": [
+        261
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 204,
+      "replacement_labels": [
+        "K03"
+      ],
+      "replacement_numbers": [
+        262
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 205,
+      "replacement_labels": [
+        "D02",
+        "A02"
+      ],
+      "replacement_numbers": [
+        270,
+        272
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 206,
+      "replacement_labels": [
+        "D01"
+      ],
+      "replacement_numbers": [
+        269
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 207,
+      "replacement_labels": [
+        "B01",
+        "B02",
+        "B03a",
+        "B03b",
+        "D03",
+        "A02"
+      ],
+      "replacement_numbers": [
+        264,
+        265,
+        266,
+        268,
+        271,
+        272
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 218,
+      "replacement_labels": [
+        "A02"
+      ],
+      "replacement_numbers": [
+        272
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 219,
+      "replacement_labels": [
+        "S01"
+      ],
+      "replacement_numbers": [
+        263
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 233,
+      "replacement_labels": [
+        "Q01",
+        "A03"
+      ],
+      "replacement_numbers": [
+        273,
+        275
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    },
+    {
+      "old_number": 234,
+      "replacement_labels": [
+        "DB01",
+        "A03"
+      ],
+      "replacement_numbers": [
+        274,
+        275
+      ],
+      "state": "closed",
+      "state_reason": "not_planned"
+    }
+  ],
+  "parent": {
+    "final_children": [
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276
+    ],
+    "managed_rows": 42,
+    "number": 166,
+    "state": "open",
+    "total_children": 69
+  },
+  "readiness": {
+    "new_ready_for_agent": [],
+    "old_167_ready_for_agent": false
+  },
+  "reciprocal_pairs": [
+    {
+      "new_label": "A01",
+      "new_number": 242,
+      "old_number": 167
+    },
+    {
+      "new_label": "C01",
+      "new_number": 235,
+      "old_number": 167
+    },
+    {
+      "new_label": "C02",
+      "new_number": 236,
+      "old_number": 168
+    },
+    {
+      "new_label": "C02",
+      "new_number": 236,
+      "old_number": 169
+    },
+    {
+      "new_label": "C04",
+      "new_number": 237,
+      "old_number": 170
+    },
+    {
+      "new_label": "C07",
+      "new_number": 240,
+      "old_number": 171
+    },
+    {
+      "new_label": "C05",
+      "new_number": 238,
+      "old_number": 172
+    },
+    {
+      "new_label": "C06",
+      "new_number": 239,
+      "old_number": 173
+    },
+    {
+      "new_label": "A01",
+      "new_number": 242,
+      "old_number": 174
+    },
+    {
+      "new_label": "A01",
+      "new_number": 242,
+      "old_number": 175
+    },
+    {
+      "new_label": "C08",
+      "new_number": 241,
+      "old_number": 175
+    },
+    {
+      "new_label": "R01",
+      "new_number": 243,
+      "old_number": 176
+    },
+    {
+      "new_label": "R02",
+      "new_number": 244,
+      "old_number": 177
+    },
+    {
+      "new_label": "A01",
+      "new_number": 242,
+      "old_number": 178
+    },
+    {
+      "new_label": "H01",
+      "new_number": 245,
+      "old_number": 178
+    },
+    {
+      "new_label": "P09",
+      "new_number": 255,
+      "old_number": 178
+    },
+    {
+      "new_label": "P02",
+      "new_number": 247,
+      "old_number": 179
+    },
+    {
+      "new_label": "P03",
+      "new_number": 248,
+      "old_number": 180
+    },
+    {
+      "new_label": "P06a",
+      "new_number": 251,
+      "old_number": 192
+    },
+    {
+      "new_label": "P06bc",
+      "new_number": 252,
+      "old_number": 192
+    },
+    {
+      "new_label": "O01",
+      "new_number": 256,
+      "old_number": 193
+    },
+    {
+      "new_label": "O02",
+      "new_number": 257,
+      "old_number": 195
+    },
+    {
+      "new_label": "O03",
+      "new_number": 259,
+      "old_number": 195
+    },
+    {
+      "new_label": "K01",
+      "new_number": 260,
+      "old_number": 202
+    },
+    {
+      "new_label": "K02",
+      "new_number": 261,
+      "old_number": 203
+    },
+    {
+      "new_label": "K03",
+      "new_number": 262,
+      "old_number": 204
+    },
+    {
+      "new_label": "A02",
+      "new_number": 272,
+      "old_number": 205
+    },
+    {
+      "new_label": "D02",
+      "new_number": 270,
+      "old_number": 205
+    },
+    {
+      "new_label": "D01",
+      "new_number": 269,
+      "old_number": 206
+    },
+    {
+      "new_label": "A02",
+      "new_number": 272,
+      "old_number": 207
+    },
+    {
+      "new_label": "B01",
+      "new_number": 264,
+      "old_number": 207
+    },
+    {
+      "new_label": "B02",
+      "new_number": 265,
+      "old_number": 207
+    },
+    {
+      "new_label": "B03a",
+      "new_number": 266,
+      "old_number": 207
+    },
+    {
+      "new_label": "B03b",
+      "new_number": 268,
+      "old_number": 207
+    },
+    {
+      "new_label": "D03",
+      "new_number": 271,
+      "old_number": 207
+    },
+    {
+      "new_label": "A02",
+      "new_number": 272,
+      "old_number": 218
+    },
+    {
+      "new_label": "S01",
+      "new_number": 263,
+      "old_number": 219
+    },
+    {
+      "new_label": "A03",
+      "new_number": 275,
+      "old_number": 233
+    },
+    {
+      "new_label": "Q01",
+      "new_number": 273,
+      "old_number": 233
+    },
+    {
+      "new_label": "A03",
+      "new_number": 275,
+      "old_number": 234
+    },
+    {
+      "new_label": "DB01",
+      "new_number": 274,
+      "old_number": 234
+    }
+  ],
+  "repository": "timjonaswechler/job-radar2",
+  "unknown_dependency_endpoints": [],
+  "unrelated_preexisting_issue_changes": [],
+  "validated_at": "2026-07-19T20:40:58.209164+00:00"
+}

@@ -69,11 +69,14 @@ Deterministic request, page, byte, action, duration, candidate, and enrichment l
 
 Pacing, concurrency policy, rate limiting, and standards-based handling such as `Retry-After` require a separate generic, evidence-backed capability and owner. Retry fields or accounting must not exist before executable retry behavior exists. Anti-Bot evasion, browser-fingerprint manipulation, CAPTCHA bypass, and provider-specific stealth behavior remain excluded.
 
+The final Detection HTTP route reuses the existing immutable **67,108,864-byte (64 MiB)** HTTP `response_bytes` value as one cumulative backend safety ceiling per public Detection operation. One allowance spans every HTTP check in that operation; D02 passes only the remaining allowance through P09 to H01. H01 remains the sole collector/counter and D02 owns typed Detection projection/reporting. Exact-boundary work may complete. Known-cost work above the remaining allowance does not start; an already-started stream may prove one excess byte, charges only its admitted prefix, commits no response or domain payload, and starts no later work. This adds no authored Detection byte field, provider/Profile/host override, Discovery/Detail O03 outcome transfer, or new capability, and HTTP `response_bytes` remains distinct from Browser `browser_rendered_bytes`.
+
 ### Consequences for restructuring
 
 - T9/T10/T14c/T16 must describe ceilings consistently as safety controls.
 - T16’s unowned retry dimension is removed or deferred to a real retry capability.
 - No budget ticket silently acquires pacing, stealth, or Bot-Detection responsibilities.
+- H01 owns the one HTTP collector/counter; D02 supplies and projects the cumulative Detection-operation allowance without creating a second ledger or authored limit.
 
 ## D-003 — One closed phase outcome and commit boundary
 

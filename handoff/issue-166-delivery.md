@@ -7,7 +7,7 @@ This document contains the delivery rules shared by every implementation ticket 
 ## 1. Authority and readiness
 
 - Live GitHub parent links, native dependencies, labels, and issue state are authoritative.
-- `handoff/issue-166-ticket-index.md` is a local navigation aid, not a tracker replacement.
+- The managed final-ticket map in live GitHub Issue #166 is the navigation surface; native GitHub relationships remain authoritative.
 - A blocked ticket must not carry `ready-for-agent`.
 - Before assignment, re-check all direct blockers and re-baseline the ticket's Current Gap against the landed repository.
 - Future type/path sketches may adapt to landed names. Responsibility, invariants, and observable behavior may not drift silently.
@@ -20,6 +20,19 @@ A ticket is ready only when:
 3. no unresolved decision remains inside the ticket scope;
 4. the Target Delta is still coherent against landed blockers;
 5. GitHub readiness metadata has been reviewed.
+
+### Implementation workflow after readiness
+
+Each ticket is implemented in a fresh agent context on a clean ticket branch or isolated worktree:
+
+1. start with `/implement #<issue-number>` only after the readiness gate above passes;
+2. use `/tdd` where practical at the ticket's pre-agreed seams;
+3. run focused tests and type-checking regularly, then the ticket's required regression commands and the full applicable test suite;
+4. run `/code-review` after implementation, address every blocking finding, and rerun affected checks;
+5. merge only after the review is clean, required CI/checks pass, the ticket-specific Definition of Done is satisfied, and residual risk is recorded;
+6. update issue completion, dependency and successor-readiness metadata only through the repository's approved tracker workflow.
+
+`/implement` includes the expectation to test, invoke `/code-review`, and commit the ticket work. It does not authorize an automatic merge, bypass readiness, weaken a blocker, or modify unrelated worktree changes. Publication, implementation completion, review completion and merge are distinct gates.
 
 ## 2. Inherited architecture constraints
 

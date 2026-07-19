@@ -1,58 +1,39 @@
 # Handoff inventory
 
-`handoff/` contains temporary planning and transfer artifacts. It is not the canonical source for GitHub tracker state or accepted architecture.
+`handoff/` now contains only the active implementation-transfer contract and the compact publication record for Issue #166. Live GitHub remains authoritative for issue state, native parent links, dependencies, labels and readiness.
 
 ## Canonical sources
 
-1. Live GitHub issues and native dependencies — current tracker state.
-2. `CONTEXT.md` — domain vocabulary.
-3. `docs/prd/` and `docs/adr/` — accepted product and architecture decisions.
-4. `AGENTS.md` and `docs/agents/` — repository and tracker workflow.
+1. [GitHub Issue #166](https://github.com/timjonaswechler/job-radar2/issues/166) — Wayfinder Map and canonical architecture specification.
+2. GitHub Issues [#235–#276](https://github.com/timjonaswechler/job-radar2/issues/235) — 42 final `wayfinder:task` implementation tickets.
+3. `CONTEXT.md` — domain vocabulary.
+4. `docs/prd/` and `docs/adr/` — accepted product and architecture decisions.
+5. `AGENTS.md` and `docs/agents/` — repository and tracker workflow.
 
-A handoff file is useful only while it supports an active review, planning, or implementation transfer that is not already represented canonically elsewhere.
+## Active implementation-transfer files
 
-## Active review artifacts
-
-| File | Purpose | Status |
+| File | Purpose | Retention |
 |---|---|---|
-| `issue-166-content-deduplication-matrix.md` | Approved inventory for reducing repetition before restructuring the #166 ticket series | Keep; current work basis |
-| `issue-166-delivery.md` | Approved shared delivery, testing, migration, deletion, and PR-evidence rules for lean tickets | Keep; shared Phase-2 contract |
+| `issue-166-delivery.md` | Shared readiness, testing, migration, deletion and PR-evidence contract referenced by all 42 final tickets | Keep while any #166 implementation ticket remains active |
+| `issue-166-contract-decisions.md` | Definitions and rationale for accepted D-001–D-013 contracts referenced by the final tickets | Keep while any #166 implementation ticket remains active |
 
+Neither file replaces live GitHub dependencies or readiness metadata.
 
-## Published-ticket snapshots
+## Publication record
 
-### `issue-166-final-tickets/`
+`issue-166-phase-5-working/` retains only the compact verified publication evidence:
 
-The directory is retained temporarily as Phase-2 rewrite input. It contains:
+- `phase-5-final-report.md` — complete 42-issue map, 86 dependency edges and 27 predecessor dispositions;
+- `wayfinder-migration-report.md` — verified Wayfinder labels and map structure;
+- `final-live-snapshot.json` — redacted deterministic final tracker snapshot;
+- `publication-journal.json` and `wayfinder-migration-journal.json` — resumable mutation histories retained until this repository state is safely committed.
 
-- 27 files that are byte-for-byte copies of the current published GitHub issue bodies;
-- one obsolete combined draft, `T3-effective-profile-additions-and-source-config.md`, superseded by the published split T3a/T3b issues.
+The Phase-5 publication and Wayfinder migration are complete. No implementation readiness was granted by publication.
 
-These files are **non-canonical snapshots**. Live GitHub remains authoritative. Lean rewrites should go into a separate `issue-166-lean-tickets/` directory so old and proposed bodies cannot be confused. Once the new bodies are approved and published, this snapshot directory can be removed.
+## Removed historical material
 
-## Historical workflow artifacts
-
-| File | Assessment | Status |
-|---|---|---|
-| `archive/issue-166-ticket-draft.md` | Decision-gate/tracer-bullet draft whose decisions are incorporated into #166 and the published issues | Historical; non-canonical |
-| `archive/issue-33-to-profile-strategy-algebra.md` | Operational handoff already reflected in current #33; #165 is closed as superseded by #166 | Historical; non-canonical |
-
-
-## Current and next layout
-
-```text
-handoff/
-├── README.md
-├── issue-166-content-deduplication-matrix.md
-├── issue-166-ticket-index.md
-├── issue-166-delivery.md                 # shared Phase-2 contract
-└── issue-166-lean-tickets/               # later Phase-2 drafts
-```
+Lean drafts, Phase-1–4 orchestration/review artifacts, frozen publication-source copies, raw GitHub baselines, helper scripts, caches, inventories and superseded planning documents were removed after successful live validation. They must not be restored as implementation authority.
 
 ## Next gate
 
-1. Use `issue-166-lean-ticket-worker-handoff.md` for exactly one ticket per fresh-context invocation, starting with T2/#168.
-2. Review each lean result against its published snapshot before continuing.
-3. Produce the remaining lean ticket drafts separately from the published-body snapshots.
-4. Review content and only then reconsider ticket boundaries/dependencies.
-5. Remove the snapshot directory after approved bodies are published.
+Before assigning any final ticket, apply `issue-166-delivery.md`: verify direct blockers live, re-inspect current code and tests, re-baseline provisional paths and names, confirm that no in-scope decision remains unresolved, and only then review `ready-for-agent`.
