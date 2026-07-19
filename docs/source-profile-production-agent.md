@@ -1,3 +1,5 @@
+# !! outdated !! update after #166 is done
+
 # Standalone Source Profile implementation prompt for production agents
 
 Use this file as the self-contained handoff for an agent that runs in a production Job Radar installation and needs to add support for one recruiting system, job board, career-site family, or concrete public career source that is not already supported.

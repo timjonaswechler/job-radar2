@@ -1,5 +1,13 @@
 Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht alle denkbaren Primitives sofort implementieren.
 
+## Festgehaltene Namens- und Source-Entscheidungen
+
+- Die drei Profilphasen heißen im Schema-v3-Zielbild `detection`, `discovery` und `detail` statt `detect`, `postingDiscovery` und `postingDetail`.
+- Eine Source darf die ausführungsrelevanten Source-Profile-Bereiche direkt auf ihrer Root-Ebene in derselben verschachtelten Form partiell wiederholen. Es gibt weder eine `overrides`-/`overlay`-Zwischenebene noch eine Liste aus `operation`/`target`/`value`-Anweisungen.
+- Vorhandene Profilwerte werden rekursiv überschrieben, neue Profilbereiche, Access Paths und Strategies können vollständig eingefügt werden. Source-Identität (`schemaVersion`, `key`, `name`, `status`) und die Basisprofil-Referenz bleiben eigenständig; Profile Detection gehört nicht in die Source.
+- Access Paths und Strategies werden beim Merge über ihren stabilen `key` identifiziert. Geordnete Strategies bleiben Arrays; vorhandene Strategies behalten zunächst ihre Profile-Reihenfolge, neue Source-Strategies werden angehängt.
+- Bestehende Schema-v2-Typen und Dateinamen behalten während der Migration vorübergehend `posting_discovery`/`posting_detail`; mit dem Schema-v3-Hard-Cut werden Dokumentfelder, Rust-Typen und Zieldateien konsistent auf `detection`/`discovery`/`detail` umbenannt.
+
  Die drei untersuchten Varianten waren:
 
  1. Universelle Primitive-AST: maximal flexibel, aber großer Rewrite und Gefahr einer Programmiersprache in JSON.
@@ -814,7 +822,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
        "summary": "Reusable public RMK behavior."
      },
 
-     "detect": {
+     "detection": {
        "policy": {
          "type": "at_least",
          "count": 2
@@ -933,7 +941,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
          "key": "public_catalog",
          "name": "Public catalog",
 
-         "postingDiscovery": {
+         "discovery": {
            "policy": {
              "type": "first_accepted"
            },
@@ -1039,7 +1047,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
            ]
          },
 
-         "postingDetail": {
+         "detail": {
            "policy": {
              "type": "first_accepted"
            },
@@ -1117,75 +1125,127 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
 
  2.5 Source
 
- Eine normale Source bleibt klein:
+ Eine Source bleibt ein eigenes Dokument, darf die ausführungsrelevanten Profilbereiche aber direkt auf Root-Ebene partiell wiederholen. Dadurch entsteht keine zusätzliche `override`- oder `overlay`-Ebene:
 
  ```json
-   {
-     "schemaVersion": 3,
-     "key": "schott",
-     "name": "SCHOTT",
-     "status": "active",
-
-     "sourceConfig": {
-       "sitemapUrl": "https://join.schott.com/sitemap.xml"
-     },
-
-     "selectedAccessPath": {
-       "type": "profile_access_path",
-       "profileKey": "successfactors",
-       "pathKey": "public_catalog"
-     },
-     <!-- Das hier statt das unten -->
-     "accessPaths": [
-       {
-         "postingDetail": {
-           "strategies": [
-             {
-               "key": "structured_html",
-               "fetch": {
-                 "timeoutMs": 150000 // im profil Bsp. 10000
-               },
-               
-               "extract": {
-                 "fields": {
-                   "descriptionText": {
-                     "type": "css_text",
-                     "selector": ".description",
-                   }
+ {
+   "schemaVersion": 3,
+   "key": "schott",
+   "name": "SCHOTT",
+   "status": "active",
+   "sourceConfig": {
+     "sitemapUrl": "https://join.schott.com/sitemap.xml",
+     "detailLocale": "de-DE"
+   },
+   "selectedAccessPath": {
+     "type": "profile_access_path",
+     "profileKey": "successfactors",
+     "pathKey": "public_catalog"
+   },
+   "sourceConfigSchema": {
+     "properties": {
+       "detailLocale": {
+         "type": "string"
+       }
+     }
+   },
+   "accessPaths": [
+     {
+       "key": "public_catalog",
+       "detail": {
+         "policy": {
+           "type": "collect_all"
+         },
+         "strategies": [
+           {
+             "key": "structured_html",
+             "fetch": {
+               "timeoutMs": 15000
+             },
+             "extract": {
+               "fields": {
+                 "descriptionText": {
+                   "selector": ".description"
                  }
-               },
+               }
              }
-           ]
-         }
+           },
+           {
+             "key": "schott_structured_data",
+             "fetch": {
+               "mode": "http",
+               "method": "GET",
+               "url": "{{posting:url}}",
+               "timeoutMs": 10000
+             },
+             "parse": { "type": "html" },
+             "select": { "type": "document" },
+             "extract": {
+               "fields": {
+                 "locations": {
+                   "type": "css_attribute",
+                   "selector": "[itemprop='addressLocality']",
+                   "attribute": "content",
+                   "semantics": "provider_value"
+                 }
+               }
+             },
+             "acceptWhen": {
+               "requiredFields": ["locations"]
+             }
+           }
+         ]
        }
-     ]
-   <!-- Das darüber statt dem hier  -->
-   // wenn man was überschreiben möchte soll einfach er Daten punkt also Key Value Paar angeben werden statt ein  flat json object
-     "sourceOverrides": [
-       {
-         "operation": "replace",
-         "step": "postingDetail",
-         "strategyKey": "structured_html",
-         "target": "extract.fields.locations",
-         "value": {
-           "type": "css_attribute",
-           "selector": "[itemprop='addressLocality']",
-           "attribute": "content",
-           "semantics": "provider_value"
-         }
-       }
-     ]
-   }
+     }
+   ]
+ }
  ```
 
- Leitplanken:
+ `sourceConfigSchema` und `accessPaths` stehen direkt dort, wo sie auch in einem Source Profile stehen. `structured_html` wird über seinen Key gefunden und partiell verändert; `schott_structured_data` wird als neue vollständige Strategy eingefügt.
 
- - Policy zunächst nicht überschreibbar;
- - Strategy-Listen zunächst nicht frei veränderbar;
- - nur typisierte, erlaubte Override-Ziele;
- - anschließend vollständige Compiler-Validierung.
+ Die strukturelle Spezialisierung besitzt folgende Merge-Algebra:
 
- Wenn kein Profil passt, verwendet die Source einen Source-owned Access Path mit demselben Access-Path-Schema.
+ - fehlender Datenpunkt: Basisprofil-Wert bleibt unverändert;
+ - Objekt: rekursiver Merge;
+ - Scalar: Source-Wert ersetzt Basisprofil-Wert;
+ - `accessPaths`: keyed Merge über `key`; neue vollständige Access Paths sind erlaubt;
+ - `strategies`: keyed Merge über `key`; neue vollständige Strategies sind erlaubt;
+ - bestehende Strategy: partieller Source-Eintrag wird mit der vollständigen Basisprofil-Strategy gemerged;
+ - neue Strategy: Source-Eintrag muss nach dem Merge vollständig sein und wird standardmäßig nach den geerbten Strategies angehängt;
+ - sonstige Arrays, etwa `transforms` oder `requiredFields`: vollständiger Ersatz statt Merge nach Index;
+ - `null`: zunächst verboten; Entfernen benötigt später eine explizite Semantik wie ein typisiertes `enabled: false`;
+ - nach dem Merge wird das vollständige effektive Ausführungsprofil erneut durch Schema, Profile Compiler, Security- und Boundedness-Prüfung validiert.
+
+ Compiler-Reihenfolge:
+
+ ```text
+ Basisprofil laden
+   → direkte Profilfragmente der Source strukturell mergen
+   → effektives Ausführungsprofil vollständig validieren
+   → Source Config gegen das effektive sourceConfigSchema validieren
+   → selectedAccessPath im effektiven Profil auflösen
+   → Execution Plan kompilieren
+ ```
+
+ Direkt spezialisierbar sind insbesondere:
+
+ - `sourceConfigSchema`;
+ - `accessPaths`;
+ - Policies und Acceptance;
+ - bestehende und neue Strategies;
+ - Fetch, Pagination, Parse, Select, Predicates, Captures, Extract und Transforms;
+ - Source-bezogene Supporthinweise oder Diagnostics, sofern wir diese Felder im Source-Schema vorsehen.
+
+ Nicht aus dem Profil übernommen beziehungsweise überschrieben werden:
+
+ - `detection`, weil die konkrete Source zu diesem Zeitpunkt bereits existiert;
+ - `schemaVersion` und Profile-Key als Dokument-/Referenzidentität;
+ - Profile-Name und Profile-Kind, weil `name` auf Source-Root die konkrete Source bezeichnet;
+ - Search-Request-Kriterien und Persistenzlogik.
+
+ Neue Access Paths können direkt ergänzt und danach über `selectedAccessPath.pathKey` ausgewählt werden. Wenn kein Basisprofil passt, verwendet die Source weiterhin einen Source-owned Access Path oder ein Custom Source Profile.
+
+ Das Basisprofil, alle direkten Source-Spezialisierungen und die Source Config fließen in die Freshness-Fingerprints ein. Wiederholte Spezialisierungen können als Hinweis für einen gemeinsamen Access Path oder ein Custom Source Profile diagnostiziert werden, werden aber nicht blockiert oder automatisch umgebaut; diese Pflege bleibt beim User.
 
  ────────────────────────────────────────────────────────────────────────────────
 
@@ -1434,15 +1494,33 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
  ```text
    Discovery
      → konservativer Hint-Vorfilter
-     → bounded postingDetail für plausible Kandidaten
+     → bounded Detail für plausible Kandidaten
      → zentrale Normalisierung
      → finale Regeln
      → Persistenz
  ```
 
- Phase 7: Source Overrides erweitern
+ Phase 7: Direkte strukturelle Source-Spezialisierung einführen
+
+ Neu:
+
+ ```text
+   src-tauri/src/schema/profile-dsl/source-profile-fragment.schema.json
+   src-tauri/src/profile_dsl/documents/source_profile_fragment.rs
+   src-tauri/src/profile_dsl/compiler/source_specialization.rs
+   src-tauri/tests/profile_dsl_source_specialization.rs
+ ```
 
  Ändern:
+
+ ```text
+   src-tauri/src/schema/source.schema.json
+   src-tauri/src/source/documents.rs
+   src-tauri/src/profile_dsl/compiler/resolution.rs
+   src-tauri/src/checks/source_live/mod.rs
+ ```
+
+ Nach dem Schema-v3-Hard-Cut entfernen oder ersetzen:
 
  ```text
    src-tauri/src/schema/profile-dsl/overrides.schema.json
@@ -1450,22 +1528,26 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
    src-tauri/src/profile_dsl/compiler/overrides.rs
  ```
 
- Zunächst erlaubt:
+ Der Compiler arbeitet nicht mit einer öffentlichen JSON-Patch-Sprache und benötigt keine `override`-/`overlay`-Zwischenebene. Er lädt das referenzierte Basisprofil, liest die direkt auf Source-Root vorhandenen Profilfragmente, merged sie strukturell in dieselbe Dokumentform, validiert das vollständige effektive Ausführungsprofil und löst erst danach Source Config und ausgewählten Access Path auf.
 
- - Fetch URL/Headers;
- - Selector;
- - JSON/XML/CSS-Pfad;
- - Transform;
- - Acceptance-Grenze;
- - einzelne Extract-Expression.
+ Überschreibbar oder ergänzbar sind grundsätzlich alle ausführungsrelevanten und source-bezogenen Bereiche des Source Profiles:
+
+ - Source-bezogene Supporthinweise und Diagnostics;
+ - Source Config Schema;
+ - Access Paths;
+ - Policies und Acceptance;
+ - bestehende und neue Strategies;
+ - Fetch, Pagination, Parse, Select, Predicates, Captures, Extract und Transforms.
 
  Zunächst verboten:
 
- - Policy ändern;
- - beliebige Strategies hinzufügen oder löschen;
- - Phase wechseln;
- - Search-Request-Kriterien;
- - beliebige JSON Pointer.
+ - Strategies oder Access Paths löschen oder umsortieren, solange dafür noch keine explizite Semantik existiert;
+ - `detection` in einer bereits bestehenden Source definieren;
+ - `schemaVersion`, Profile-Key, Profile-Name oder Profile-Kind überschreiben;
+ - Search-Request-Kriterien in das Profil verschieben;
+ - Array-Merge nach Index;
+ - `null` als implizite Löschoperation;
+ - unbekannte oder beliebige JSON Pointer.
 
  Phase 8: Built-ins migrieren und beweisen
 
@@ -1484,7 +1566,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
    src-tauri/tests/profile_dsl_typing.rs
    src-tauri/tests/profile_dsl_budgets.rs
    src-tauri/tests/profile_dsl_merge.rs
-   src-tauri/tests/profile_dsl_overrides.rs
+   src-tauri/tests/profile_dsl_source_specialization.rs
    src-tauri/tests/profile_dsl_phase_contracts.rs
    src-tauri/tests/search_run_candidate_finalization.rs
  ```
@@ -1513,13 +1595,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
  5. Detection auf dasselbe Strategy-Set-Modell migrieren.
  6. Erst dann hint/provider_value und erweiterte Detailfelder einführen.
  7. Greenhouse, Workday und SuccessFactors als drei Akzeptanzfälle verwenden.
- 8. Weitere Primitives nur evidenzbasiert aus dem Katalog auswählen.
+ 8. Schema-v3-Hard-Cut durchführen: `detection`/`discovery`/`detail`, direkte strukturelle Source-Spezialisierung ohne Wrapper-Ebene und konsistente Rust-/Dateinamen.
+ 9. Weitere Primitives nur evidenzbasiert aus dem Katalog auswählen.
 
  So bekommen wir eine flexible gemeinsame Algebra, ohne die Profile DSL sofort in eine universelle Programmiersprache zu verwandeln.
-
-
-
-
-meine Anmerkungen 
-discovery statt postingDiscovery
-detail statt postingDetail
