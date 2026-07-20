@@ -245,6 +245,12 @@ fn validate_provenance(
     Some(())
 }
 
+pub(crate) fn validate_detection_template_document(profile: &SourceProfileDocument) -> Diagnostics {
+    let mut diagnostics = Vec::new();
+    templates::validate_detection_templates(profile, &mut diagnostics);
+    diagnostics
+}
+
 pub(crate) fn validate_source_profile_document(profile: &SourceProfileDocument) -> Diagnostics {
     let mut diagnostics = Vec::new();
     resolution::validate_source_profile_document(profile, &mut diagnostics);

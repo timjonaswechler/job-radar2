@@ -1,11 +1,13 @@
 use super::document::RuntimeItem;
-use super::support::render_source_config_template;
 use super::values::{
     css_attribute_values, css_text_values, json_value_to_strings, xml_descendant_elements,
     xml_node_text, xml_path_texts, JsonStringsResult,
 };
 use super::*;
-use crate::profile_dsl::documents::select::{CaptureRule, Captures, Filter};
+use crate::profile_dsl::execution_plan::values::{
+    ExecutionPlanCaptureRule as CaptureRule, ExecutionPlanCaptures as Captures,
+    ExecutionPlanFilter as Filter,
+};
 
 mod captures;
 mod fields;

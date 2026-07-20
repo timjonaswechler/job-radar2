@@ -24,7 +24,7 @@ use super::source_config::{
     source_owned_access_path_schema, validate_source_config_against_contract,
 };
 use super::support::validate_support_metadata;
-use super::templates::validate_template_variables;
+use super::templates::{validate_detection_templates, validate_template_variables};
 use super::SourceRuntimeBindingDependencies;
 
 pub(super) struct ResolvedSourceExecutionPlan {
@@ -48,6 +48,7 @@ fn validate_source_profile_document_with_contracts(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
 ) -> Vec<ValidatedAccessPath> {
+    validate_detection_templates(profile, diagnostics);
     validate_support_metadata(
         &profile.support,
         "/support",
@@ -159,16 +160,36 @@ pub(super) fn compile_materialized_profile_access_path(
         return None;
     }
 
+    let source_config_keys = path_index
+        .map(|index| {
+            contracts[index]
+                .contract
+                .as_ref()
+                .expect("validated contract")
+                .property_keys()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let posting_meta_keys = posting_meta_keys(&access_path.discovery);
     let discovery = compile_discovery_step(
         &access_path.discovery,
         &access_path_step_path(path_index, "discovery"),
+        &source_config_keys,
     )
     .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
     .ok()?;
     let detail = access_path
         .detail
         .as_ref()
-        .map(|detail| compile_detail_step(detail, &access_path_step_path(path_index, "detail")))
+        .map(|detail| {
+            compile_detail_step(
+                detail,
+                &access_path_step_path(path_index, "detail"),
+                &source_config_keys,
+                &posting_meta_keys,
+            )
+        })
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
@@ -248,12 +269,25 @@ pub(super) fn compile_source_owned_access_path(
         return None;
     }
 
-    let compiled_discovery = compile_discovery_step(discovery, "/selectedAccessPath/discovery")
-        .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
-        .ok()?;
+    let source_config_keys = source.source_config.keys().cloned().collect::<Vec<_>>();
+    let posting_meta_keys = posting_meta_keys(discovery);
+    let compiled_discovery = compile_discovery_step(
+        discovery,
+        "/selectedAccessPath/discovery",
+        &source_config_keys,
+    )
+    .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+    .ok()?;
     let compiled_detail = detail
         .as_ref()
-        .map(|detail| compile_detail_step(detail, "/selectedAccessPath/detail"))
+        .map(|detail| {
+            compile_detail_step(
+                detail,
+                "/selectedAccessPath/detail",
+                &source_config_keys,
+                &posting_meta_keys,
+            )
+        })
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
@@ -384,4 +418,15 @@ fn access_path_base_path(path_index: Option<usize>) -> String {
 
 fn access_path_step_path(path_index: Option<usize>, step: &str) -> String {
     format!("{}/{step}", access_path_base_path(path_index))
+}
+
+fn posting_meta_keys(discovery: &DiscoveryStep) -> Vec<String> {
+    discovery
+        .strategies
+        .iter()
+        .filter_map(|strategy| strategy.extract.fields.posting_meta.as_ref())
+        .flat_map(|values| values.keys().cloned())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }

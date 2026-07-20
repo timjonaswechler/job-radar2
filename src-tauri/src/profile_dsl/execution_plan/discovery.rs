@@ -1,15 +1,23 @@
 use serde::{Deserialize, Serialize};
 
+use super::values::{
+    compile_captures, compile_field_expression, compile_filters, compile_list_field_expression,
+    ExecutionPlanCaptures, ExecutionPlanFieldExpression, ExecutionPlanFilter,
+    ExecutionPlanListFieldExpression,
+};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::discovery::{
     DiscoveryExtraction, DiscoveryStep, DiscoveryStrategy,
 };
-use crate::profile_dsl::documents::extract::{FieldExpression, ListFieldExpression};
-use crate::profile_dsl::documents::select::{Captures, Filter, Select};
+use crate::profile_dsl::documents::select::Select;
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::Parse;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::template::{
+    descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplateDescriptor,
+    TemplatePlacement,
+};
 
 use super::capabilities::{
     clone_parse, clone_select, compile_fetch, compile_pagination, ExecutionPlanBuildError,
@@ -39,9 +47,9 @@ pub struct ExecutionPlanDiscoveryStrategy {
     pub parse: Parse,
     pub select: Select,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<Filter>>,
+    pub conditions: Option<Vec<ExecutionPlanFilter>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub captures: Option<Captures>,
+    pub captures: Option<ExecutionPlanCaptures>,
     pub extract: ExecutionPlanDiscoveryExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
@@ -58,20 +66,21 @@ pub struct ExecutionPlanDiscoveryExtraction {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPlanDiscoveryFields {
-    pub title: FieldExpression,
-    pub company: FieldExpression,
-    pub url: FieldExpression,
+    pub title: ExecutionPlanFieldExpression,
+    pub company: ExecutionPlanFieldExpression,
+    pub url: ExecutionPlanFieldExpression,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub locations: Option<ListFieldExpression>,
+    pub locations: Option<ExecutionPlanListFieldExpression>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_meta: Option<std::collections::BTreeMap<String, FieldExpression>>,
+    pub posting_meta: Option<std::collections::BTreeMap<String, ExecutionPlanFieldExpression>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description_text: Option<FieldExpression>,
+    pub description_text: Option<ExecutionPlanFieldExpression>,
 }
 
 pub(crate) fn compile_discovery_step(
     step: &DiscoveryStep,
     path: &str,
+    source_config_keys: &[String],
 ) -> Result<ExecutionPlanDiscoveryStep, ExecutionPlanBuildError> {
     Ok(ExecutionPlanDiscoveryStep {
         policy: step.policy,
@@ -80,7 +89,11 @@ pub(crate) fn compile_discovery_step(
             .iter()
             .enumerate()
             .map(|(index, strategy)| {
-                compile_discovery_strategy(strategy, &format!("{path}/strategies/{index}"))
+                compile_discovery_strategy(
+                    strategy,
+                    &format!("{path}/strategies/{index}"),
+                    source_config_keys,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?,
         limits: step.limits.unwrap_or(PhaseLimits::BACKEND),
@@ -92,11 +105,35 @@ pub(crate) fn compile_discovery_step(
 fn compile_discovery_strategy(
     strategy: &DiscoveryStrategy,
     path: &str,
+    source_config_keys: &[String],
 ) -> Result<ExecutionPlanDiscoveryStrategy, ExecutionPlanBuildError> {
+    let keys = TemplateAdmissionKeys {
+        source_config: source_config_keys.iter().cloned().collect(),
+        captures: strategy
+            .captures
+            .as_ref()
+            .into_iter()
+            .flat_map(|values| values.keys().cloned())
+            .collect(),
+        posting_meta: Default::default(),
+    };
+    let field_descriptor = descriptor_for_placement(TemplatePlacement::DiscoveryValue, &keys);
     Ok(ExecutionPlanDiscoveryStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
-        fetch: compile_fetch(&strategy.fetch, &format!("{path}/fetch"))?,
+        fetch: compile_fetch(
+            &strategy.fetch,
+            &format!("{path}/fetch"),
+            match strategy.fetch {
+                crate::profile_dsl::documents::Fetch::Http { .. } => {
+                    TemplatePlacement::DiscoveryHttpUrl
+                }
+                crate::profile_dsl::documents::Fetch::Browser { .. } => {
+                    TemplatePlacement::DiscoveryBrowserUrl
+                }
+            },
+            &keys,
+        )?,
         pagination: strategy
             .pagination
             .as_ref()
@@ -104,9 +141,19 @@ fn compile_discovery_strategy(
             .transpose()?,
         parse: clone_parse(&strategy.parse),
         select: clone_select(&strategy.select),
-        conditions: strategy.conditions.clone(),
-        captures: strategy.captures.clone(),
-        extract: compile_discovery_extraction(&strategy.extract),
+        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
+            |error| ExecutionPlanBuildError {
+                path: format!("{path}/where"),
+                message: error.to_string(),
+            },
+        )?,
+        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor).map_err(
+            |error| ExecutionPlanBuildError {
+                path: format!("{path}/captures"),
+                message: error.to_string(),
+            },
+        )?,
+        extract: compile_discovery_extraction(&strategy.extract, &field_descriptor, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
@@ -114,15 +161,79 @@ fn compile_discovery_strategy(
 
 fn compile_discovery_extraction(
     extraction: &DiscoveryExtraction,
-) -> ExecutionPlanDiscoveryExtraction {
-    ExecutionPlanDiscoveryExtraction {
+    descriptor: &TemplateDescriptor,
+    path: &str,
+) -> Result<ExecutionPlanDiscoveryExtraction, ExecutionPlanBuildError> {
+    Ok(ExecutionPlanDiscoveryExtraction {
         fields: ExecutionPlanDiscoveryFields {
-            title: extraction.fields.title.clone(),
-            company: extraction.fields.company.clone(),
-            url: extraction.fields.url.clone(),
-            locations: extraction.fields.locations.clone(),
-            posting_meta: extraction.fields.posting_meta.clone(),
-            description_text: extraction.fields.description_text.clone(),
+            title: compile_field_expression(&extraction.fields.title, descriptor).map_err(
+                |error| ExecutionPlanBuildError {
+                    path: format!("{path}/extract/fields/title"),
+                    message: error.to_string(),
+                },
+            )?,
+            company: compile_field_expression(&extraction.fields.company, descriptor).map_err(
+                |error| ExecutionPlanBuildError {
+                    path: format!("{path}/extract/fields/company"),
+                    message: error.to_string(),
+                },
+            )?,
+            url: compile_field_expression(&extraction.fields.url, descriptor).map_err(|error| {
+                ExecutionPlanBuildError {
+                    path: format!("{path}/extract/fields/url"),
+                    message: error.to_string(),
+                }
+            })?,
+            locations: extraction
+                .fields
+                .locations
+                .as_ref()
+                .map(|value| {
+                    compile_list_field_expression(value, descriptor).map_err(|error| {
+                        ExecutionPlanBuildError {
+                            path: format!("{path}/extract/fields/locations"),
+                            message: error.to_string(),
+                        }
+                    })
+                })
+                .transpose()?,
+            posting_meta: extraction
+                .fields
+                .posting_meta
+                .as_ref()
+                .map(|values| {
+                    values
+                        .iter()
+                        .map(|(key, value)| {
+                            Ok((
+                                key.clone(),
+                                compile_field_expression(value, descriptor).map_err(|error| {
+                                    ExecutionPlanBuildError {
+                                        path: format!(
+                                            "{path}/extract/fields/postingMeta/{}",
+                                            json_pointer_segment(key)
+                                        ),
+                                        message: error.to_string(),
+                                    }
+                                })?,
+                            ))
+                        })
+                        .collect::<Result<_, ExecutionPlanBuildError>>()
+                })
+                .transpose()?,
+            description_text: extraction
+                .fields
+                .description_text
+                .as_ref()
+                .map(|value| {
+                    compile_field_expression(value, descriptor).map_err(|error| {
+                        ExecutionPlanBuildError {
+                            path: format!("{path}/extract/fields/descriptionText"),
+                            message: error.to_string(),
+                        }
+                    })
+                })
+                .transpose()?,
         },
-    }
+    })
 }

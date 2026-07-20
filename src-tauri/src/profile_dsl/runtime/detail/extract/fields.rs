@@ -266,7 +266,7 @@ fn raw_field_values<'a>(
                         format!("Field template could not be rendered: {message}"),
                         path,
                         strategy_key,
-                        json!({ "template": template }),
+                        json!({}),
                     ));
                     RawFieldValues {
                         values: Vec::new(),

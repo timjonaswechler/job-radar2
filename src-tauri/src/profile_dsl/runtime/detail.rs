@@ -10,13 +10,15 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
         documents::{
-            extract::{Cardinality, CombinePart, FieldExpression},
-            select::{CaptureRule, Filter},
-            transform::Transform,
-            HttpMethod, ParseType, RequestBody, Select,
+            extract::Cardinality, transform::Transform, HttpMethod, ParseType, RequestBody, Select,
         },
         execution_plan::{
-            capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
+            capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
+            detail::ExecutionPlanDetailStrategy,
+            values::{
+                ExecutionPlanCaptureRule as CaptureRule, ExecutionPlanCombinePart as CombinePart,
+                ExecutionPlanFieldExpression as FieldExpression, ExecutionPlanFilter as Filter,
+            },
             SourceExecutionPlan,
         },
     },

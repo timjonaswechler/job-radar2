@@ -334,9 +334,9 @@ fn compiled_detail_runtime_reports_unsupported_max_error_ratio() {
 }
 
 #[test]
-fn compiled_detail_runtime_renders_fetch_templates_from_all_runtime_contexts() {
+fn compiled_detail_runtime_renders_fetch_templates_from_pre_fetch_contexts() {
     let plan = compiled_json_detail_plan(
-        "{{sourceConfig:apiBase}}/{{captures:tenant}}/{{postingMeta:jobId}}?u={{posting:url}}",
+        "{{sourceConfig:apiBase}}/{{postingMeta:tenant}}/{{postingMeta:jobId}}?u={{posting:url}}",
         json!({
             "type": "json_path",
             "jsonPath": "$.description",

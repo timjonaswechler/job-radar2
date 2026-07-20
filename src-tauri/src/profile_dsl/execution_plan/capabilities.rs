@@ -6,6 +6,10 @@ use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
     Fetch, HttpMethod, Pagination, PaginationParameterLocation, Parse, RequestBody, Select,
 };
+use crate::profile_dsl::template::{
+    compile_template, descriptor_for_placement, json_pointer_segment, CompiledTemplate,
+    TemplateAdmissionKeys, TemplateDescriptor, TemplatePlacement,
+};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
@@ -13,16 +17,16 @@ pub enum ExecutionPlanFetch {
     Http {
         #[serde(skip_serializing_if = "Option::is_none")]
         method: Option<HttpMethod>,
-        url: String,
+        url: CompiledTemplate,
         #[serde(skip_serializing_if = "Option::is_none")]
-        headers: Option<BTreeMap<String, String>>,
+        headers: Option<BTreeMap<String, CompiledTemplate>>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        body: Option<RequestBody>,
+        body: Option<ExecutionPlanRequestBody>,
         #[serde(rename = "timeoutMs")]
         timeout_ms: u64,
     },
     Browser {
-        url: String,
+        url: CompiledTemplate,
         #[serde(rename = "timeoutMs")]
         timeout_ms: u64,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -132,6 +136,29 @@ pub struct ExecutionPlanPaginationLimits {
     pub max_depth: Option<u64>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExecutionPlanRequestBody {
+    Json {
+        value: BTreeMap<String, ExecutionPlanJsonValue>,
+    },
+    Text {
+        value: CompiledTemplate,
+    },
+    Form {
+        fields: BTreeMap<String, CompiledTemplate>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+pub enum ExecutionPlanJsonValue {
+    Template(CompiledTemplate),
+    Array(Vec<ExecutionPlanJsonValue>),
+    Object(BTreeMap<String, ExecutionPlanJsonValue>),
+    Scalar(serde_json::Value),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExecutionPlanBuildError {
     pub path: String,
@@ -150,7 +177,21 @@ impl ExecutionPlanBuildError {
 pub(crate) fn compile_fetch(
     fetch: &Fetch,
     path: &str,
+    placement: TemplatePlacement,
+    keys: &TemplateAdmissionKeys,
 ) -> Result<ExecutionPlanFetch, ExecutionPlanBuildError> {
+    let descriptor = descriptor_for_placement(placement, keys);
+    let (header_descriptor, body_descriptor) = match placement {
+        TemplatePlacement::DiscoveryHttpUrl => (
+            descriptor_for_placement(TemplatePlacement::DiscoveryHttpHeader, keys),
+            descriptor_for_placement(TemplatePlacement::DiscoveryHttpBody, keys),
+        ),
+        TemplatePlacement::DetailHttpUrl => (
+            descriptor_for_placement(TemplatePlacement::DetailHttpHeader, keys),
+            descriptor_for_placement(TemplatePlacement::DetailHttpBody, keys),
+        ),
+        _ => (descriptor.clone(), descriptor.clone()),
+    };
     match fetch {
         Fetch::Http {
             method,
@@ -160,9 +201,32 @@ pub(crate) fn compile_fetch(
             timeout_ms,
         } => Ok(ExecutionPlanFetch::Http {
             method: *method,
-            url: url.clone(),
-            headers: headers.clone(),
-            body: body.clone(),
+            url: compile_template(url, &descriptor).map_err(|error| {
+                ExecutionPlanBuildError::new(format!("{path}/url"), error.to_string())
+            })?,
+            headers: headers
+                .as_ref()
+                .map(|headers| {
+                    headers
+                        .iter()
+                        .map(|(name, value)| {
+                            Ok((
+                                name.clone(),
+                                compile_template(value, &header_descriptor).map_err(|error| {
+                                    ExecutionPlanBuildError::new(
+                                        format!("{path}/headers/{}", json_pointer_segment(name)),
+                                        error.to_string(),
+                                    )
+                                })?,
+                            ))
+                        })
+                        .collect::<Result<_, ExecutionPlanBuildError>>()
+                })
+                .transpose()?,
+            body: body
+                .as_ref()
+                .map(|body| compile_request_body(body, &body_descriptor, &format!("{path}/body")))
+                .transpose()?,
             timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
         }),
         Fetch::Browser {
@@ -171,7 +235,9 @@ pub(crate) fn compile_fetch(
             waits,
             interactions,
         } => Ok(ExecutionPlanFetch::Browser {
-            url: url.clone(),
+            url: compile_template(url, &descriptor).map_err(|error| {
+                ExecutionPlanBuildError::new(format!("{path}/url"), error.to_string())
+            })?,
             timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
             waits: waits
                 .as_deref()
@@ -347,6 +413,88 @@ pub(crate) fn clone_parse(parse: &Parse) -> Parse {
 
 pub(crate) fn clone_select(select: &Select) -> Select {
     select.clone()
+}
+
+fn compile_request_body(
+    body: &RequestBody,
+    descriptor: &TemplateDescriptor,
+    path: &str,
+) -> Result<ExecutionPlanRequestBody, ExecutionPlanBuildError> {
+    Ok(match body {
+        RequestBody::Text { value } => ExecutionPlanRequestBody::Text {
+            value: compile_template(value, descriptor)
+                .map_err(|error| ExecutionPlanBuildError::new(path, error.to_string()))?,
+        },
+        RequestBody::Form { fields } => ExecutionPlanRequestBody::Form {
+            fields: fields
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        compile_template(value, descriptor).map_err(|error| {
+                            ExecutionPlanBuildError::new(
+                                format!("{path}/{}", json_pointer_segment(key)),
+                                error.to_string(),
+                            )
+                        })?,
+                    ))
+                })
+                .collect::<Result<_, ExecutionPlanBuildError>>()?,
+        },
+        RequestBody::Json { value } => ExecutionPlanRequestBody::Json {
+            value: value
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        compile_json_value(
+                            value,
+                            descriptor,
+                            &format!("{path}/{}", json_pointer_segment(key)),
+                        )?,
+                    ))
+                })
+                .collect::<Result<_, ExecutionPlanBuildError>>()?,
+        },
+    })
+}
+
+fn compile_json_value(
+    value: &serde_json::Value,
+    descriptor: &TemplateDescriptor,
+    path: &str,
+) -> Result<ExecutionPlanJsonValue, ExecutionPlanBuildError> {
+    Ok(match value {
+        serde_json::Value::String(value) => ExecutionPlanJsonValue::Template(
+            compile_template(value, descriptor)
+                .map_err(|error| ExecutionPlanBuildError::new(path, error.to_string()))?,
+        ),
+        serde_json::Value::Array(values) => ExecutionPlanJsonValue::Array(
+            values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    compile_json_value(value, descriptor, &format!("{path}/{index}"))
+                })
+                .collect::<Result<_, _>>()?,
+        ),
+        serde_json::Value::Object(values) => ExecutionPlanJsonValue::Object(
+            values
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        key.clone(),
+                        compile_json_value(
+                            value,
+                            descriptor,
+                            &format!("{path}/{}", json_pointer_segment(key)),
+                        )?,
+                    ))
+                })
+                .collect::<Result<_, ExecutionPlanBuildError>>()?,
+        ),
+        _ => ExecutionPlanJsonValue::Scalar(value.clone()),
+    })
 }
 
 fn require_positive(value: Option<u64>, path: &str) -> Result<u64, ExecutionPlanBuildError> {

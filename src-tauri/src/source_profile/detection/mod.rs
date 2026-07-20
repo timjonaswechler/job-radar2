@@ -4,7 +4,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
+use crate::profile_dsl::compiler::validate_detection_template_document;
+use crate::profile_dsl::diagnostics::{DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 use crate::profile_dsl::documents::{DetectionDocument, DetectionEvidenceKind, SupportLevel};
 use crate::profile_dsl::runtime::ProfileBrowserClient;
 use crate::profile_dsl::source_config::{compile_contract, SchemaLocation};
@@ -13,6 +14,7 @@ use crate::source_profile::documents::SourceProfileDocument;
 mod browser;
 mod diagnostics;
 mod http;
+mod naming;
 mod proposal;
 mod templates;
 
@@ -32,7 +34,8 @@ use proposal::{
     ValidationCompleteness,
 };
 use templates::{
-    render_detection_template, render_detection_template_with_source_config, template_diagnostic,
+    render_detection_http_template, render_detection_template,
+    render_detection_template_with_source_config, template_diagnostic,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -141,6 +144,11 @@ async fn detect_source_proposal_internal<C: DetectionHttpClient + Sync>(
         return failed_result(diagnostics);
     }
 
+    let template_diagnostics = validate_detection_template_preflight(profiles);
+    if !template_diagnostics.is_empty() {
+        return failed_result(template_diagnostics);
+    }
+
     let definition_diagnostics = validate_detection_source_config_contracts(profiles);
     if !definition_diagnostics.is_empty() {
         return failed_result(definition_diagnostics);
@@ -206,6 +214,26 @@ pub async fn detect_source_proposal(
     profiles: &[SourceProfileDocument],
 ) -> SourceProposalDetectionResult {
     detect_source_proposal_with_http_client(input_url, profiles, &NoopDetectionHttpClient).await
+}
+
+fn validate_detection_template_preflight(profiles: &[SourceProfileDocument]) -> Diagnostics {
+    profiles
+        .iter()
+        .enumerate()
+        .flat_map(|(profile_index, profile)| {
+            validate_detection_template_document(profile)
+                .into_iter()
+                .map(move |mut diagnostic| {
+                    diagnostic.category = DiagnosticCategory::Detection;
+                    let suffix = diagnostic
+                        .path
+                        .strip_prefix("/detection")
+                        .unwrap_or(&diagnostic.path);
+                    diagnostic.path = format!("/profiles/{profile_index}/detect{suffix}");
+                    diagnostic
+                })
+        })
+        .collect()
 }
 
 fn validate_detection_source_config_contracts(profiles: &[SourceProfileDocument]) -> Diagnostics {

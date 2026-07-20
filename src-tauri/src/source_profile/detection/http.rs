@@ -6,7 +6,7 @@ use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{DetectionEvidenceKind, DetectionHttpCheck};
 
 use super::{
-    detection_error, detection_warning, render_detection_template, template_diagnostic,
+    detection_error, detection_warning, render_detection_http_template, template_diagnostic,
     SourceProposalEvidence,
 };
 
@@ -96,7 +96,7 @@ pub(super) async fn evaluate_http_checks<C: DetectionHttpClient + Sync>(
 ) -> bool {
     for (index, check) in checks.iter().enumerate() {
         let check_path = format!("{base_path}/httpChecks/{index}");
-        let rendered_url = match render_detection_template(&check.url, input_url, captures) {
+        let rendered_url = match render_detection_http_template(&check.url, input_url, captures) {
             Ok(url) => url,
             Err(error) => {
                 diagnostics.push(template_diagnostic(

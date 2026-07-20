@@ -1,4 +1,8 @@
 use super::*;
+use crate::profile_dsl::template::{
+    render_template as render_compiled_template, CompiledTemplate, TemplateReference,
+    TemplateValueView,
+};
 
 pub(super) struct TemplateRuntimeContext<'a> {
     pub(super) source_config: &'a SourceConfig,
@@ -7,96 +11,45 @@ pub(super) struct TemplateRuntimeContext<'a> {
     pub(super) posting_meta: &'a BTreeMap<String, String>,
     pub(super) captures: &'a BTreeMap<String, String>,
 }
-
-pub(super) fn render_template(
-    template: &str,
-    context: &TemplateRuntimeContext<'_>,
-) -> Result<String, String> {
-    let placeholder_regex = Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}").unwrap();
-    let mut first_error = None;
-    let rendered = placeholder_regex
-        .replace_all(template, |captures: &regex::Captures<'_>| {
-            let variable = captures[1].trim();
-            match render_template_variable(variable, context) {
-                Ok(value) => value,
-                Err(error) => {
-                    if first_error.is_none() {
-                        first_error = Some(error);
-                    }
-                    String::new()
+impl TemplateValueView for TemplateRuntimeContext<'_> {
+    fn resolve(&self, reference: &TemplateReference) -> Option<String> {
+        match reference.namespace.as_deref() {
+            Some("sourceConfig") => self.source_config.get(&reference.key).and_then(json_scalar),
+            Some("captures") => self.captures.get(&reference.key).cloned(),
+            Some("postingMeta") => self.posting_meta.get(&reference.key).cloned(),
+            Some("posting") => match reference.key.as_str() {
+                "url" => Some(self.posting.url.clone()),
+                "title" => self.posting.title.clone(),
+                "company" => self.posting.company.clone(),
+                "descriptionText" => self.posting.description_text.clone(),
+                "locations" if !self.posting.locations.is_empty() => {
+                    Some(self.posting.locations.join(", "))
                 }
-            }
-        })
-        .to_string();
-
-    if let Some(error) = first_error {
-        Err(error)
-    } else {
-        Ok(rendered)
+                _ => None,
+            },
+            Some("source") if reference.key == "name" => Some(self.source_name.to_string()),
+            _ => None,
+        }
     }
 }
-
-fn render_template_variable(
-    variable: &str,
+pub(super) fn render_template(
+    template: &CompiledTemplate,
     context: &TemplateRuntimeContext<'_>,
 ) -> Result<String, String> {
-    let Some((namespace, key)) = split_template_variable(variable) else {
-        return Err(format!(
-            "template variable `{variable}` must use namespace:key syntax"
-        ));
-    };
-
-    match namespace {
-        "sourceConfig" => source_config_value_as_string(context.source_config, key)
-            .ok_or_else(|| format!("sourceConfig `{key}` is missing or not scalar")),
-        "captures" => context
-            .captures
-            .get(key)
-            .cloned()
-            .ok_or_else(|| format!("capture `{key}` is missing")),
-        "postingMeta" => context
-            .posting_meta
-            .get(key)
-            .cloned()
-            .ok_or_else(|| format!("postingMeta `{key}` is missing")),
-        "posting" => posting_value_as_string(context.posting, key)
-            .ok_or_else(|| format!("posting `{key}` is missing or not scalar")),
-        "source" if key == "name" => Ok(context.source_name.to_string()),
-        "source" => Err(format!("source `{key}` is missing or not scalar")),
-        _ => Err(format!("unsupported template namespace `{namespace}`")),
-    }
+    render_compiled_template(template, context).map_err(|error| error.to_string())
 }
-
-fn split_template_variable(variable: &str) -> Option<(&str, &str)> {
-    variable
-        .split_once(':')
-        .or_else(|| variable.split_once('.'))
-        .filter(|(namespace, key)| !namespace.is_empty() && !key.is_empty())
-}
-
-fn source_config_value_as_string(source_config: &SourceConfig, key: &str) -> Option<String> {
-    match source_config.get(key)? {
+fn json_scalar(value: &Value) -> Option<String> {
+    match value {
         Value::String(value) => Some(value.clone()),
         Value::Number(value) => Some(value.to_string()),
         Value::Bool(value) => Some(value.to_string()),
-        Value::Null | Value::Array(_) | Value::Object(_) => None,
-    }
-}
-
-fn posting_value_as_string(posting: &DetailPostingOccurrence, key: &str) -> Option<String> {
-    match key {
-        "url" => Some(posting.url.clone()),
-        "title" => posting.title.clone(),
-        "company" => posting.company.clone(),
-        "descriptionText" => posting.description_text.clone(),
-        "locations" if !posting.locations.is_empty() => Some(posting.locations.join(", ")),
         _ => None,
     }
 }
 
 pub(super) fn push_browser_fetch_diagnostic(
     error: ProfileBrowserFetchError,
-    rendered_url: &str,
+    _rendered_url: &str,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -132,12 +85,11 @@ pub(super) fn push_browser_fetch_diagnostic(
             ("browser_content_read_failed", format!("{base_path}/fetch"))
         }
     };
-
     diagnostics.push(runtime_error(
         code,
-        format!("Browser fetch failed for {rendered_url}: {}", error.message),
+        format!("Browser fetch failed: {}", error.message),
         path,
         strategy_key,
-        json!({ "url": rendered_url, "error": error.message }),
+        json!({ "error": error.message }),
     ));
 }

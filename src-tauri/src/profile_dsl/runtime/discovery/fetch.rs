@@ -191,9 +191,9 @@ where
 async fn fetch_http_strategy_document<F>(
     fetcher: &F,
     method: Option<HttpMethod>,
-    url: &str,
-    headers: Option<&BTreeMap<String, String>>,
-    body: Option<&RequestBody>,
+    url: &crate::profile_dsl::template::CompiledTemplate,
+    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
+    body: Option<&ExecutionPlanRequestBody>,
     timeout_ms: u64,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -346,7 +346,7 @@ where
 
 async fn fetch_browser_strategy_document<B>(
     browser: &B,
-    url: &str,
+    url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
     interactions: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserInteraction],
@@ -437,7 +437,7 @@ where
 }
 
 fn render_fetch_url(
-    url: &str,
+    url: &crate::profile_dsl::template::CompiledTemplate,
     source_config: &SourceConfig,
     source_name: &str,
     url_override: Option<&str>,
@@ -451,7 +451,7 @@ fn render_fetch_url(
 }
 
 fn render_headers(
-    headers: Option<&BTreeMap<String, String>>,
+    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
     source_config: &SourceConfig,
     source_name: &str,
 ) -> Result<BTreeMap<String, String>, String> {
@@ -466,7 +466,7 @@ fn render_headers(
 }
 
 fn render_request_body(
-    body: Option<&RequestBody>,
+    body: Option<&ExecutionPlanRequestBody>,
     source_config: &SourceConfig,
     source_name: &str,
     json_body_params: &[(&str, String)],
@@ -475,7 +475,7 @@ fn render_request_body(
         return Ok(None);
     };
     match body {
-        RequestBody::Json { value } => {
+        ExecutionPlanRequestBody::Json { value } => {
             let mut rendered = value
                 .iter()
                 .map(|(key, value)| {
@@ -490,10 +490,10 @@ fn render_request_body(
             }
             Ok(Some(RequestBody::Json { value: rendered }))
         }
-        RequestBody::Text { value } => Ok(Some(RequestBody::Text {
+        ExecutionPlanRequestBody::Text { value } => Ok(Some(RequestBody::Text {
             value: render_source_config_template(value, source_config, source_name)?,
         })),
-        RequestBody::Form { fields } => Ok(Some(RequestBody::Form {
+        ExecutionPlanRequestBody::Form { fields } => Ok(Some(RequestBody::Form {
             fields: fields
                 .iter()
                 .map(|(key, value)| {
@@ -516,23 +516,21 @@ fn render_pagination_json_value(value: &str) -> Value {
 }
 
 fn render_json_body_value(
-    value: &Value,
+    value: &ExecutionPlanJsonValue,
     source_config: &SourceConfig,
     source_name: &str,
 ) -> Result<Value, String> {
     match value {
-        Value::String(value) => Ok(Value::String(render_source_config_template(
-            value,
-            source_config,
-            source_name,
-        )?)),
-        Value::Array(values) => Ok(Value::Array(
+        ExecutionPlanJsonValue::Template(value) => Ok(Value::String(
+            render_source_config_template(value, source_config, source_name)?,
+        )),
+        ExecutionPlanJsonValue::Array(values) => Ok(Value::Array(
             values
                 .iter()
                 .map(|value| render_json_body_value(value, source_config, source_name))
                 .collect::<Result<Vec<_>, _>>()?,
         )),
-        Value::Object(values) => Ok(Value::Object(
+        ExecutionPlanJsonValue::Object(values) => Ok(Value::Object(
             values
                 .iter()
                 .map(|(key, value)| {
@@ -543,7 +541,7 @@ fn render_json_body_value(
                 })
                 .collect::<Result<serde_json::Map<String, Value>, String>>()?,
         )),
-        Value::Null | Value::Bool(_) | Value::Number(_) => Ok(value.clone()),
+        ExecutionPlanJsonValue::Scalar(value) => Ok(value.clone()),
     }
 }
 

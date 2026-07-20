@@ -72,7 +72,11 @@ fn typed_limit_fragment_rejects_empty_null_and_unknown_shapes() {
 async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without_panic() {
     let mut plan = plan();
     plan.discovery.strategies[0].fetch = ExecutionPlanFetch::Browser {
-        url: "https://example.test/jobs".to_string(),
+        url: job_radar_lib::compile_template(
+            "https://example.test/jobs",
+            &job_radar_lib::TemplateDescriptor::new(),
+        )
+        .unwrap(),
         timeout_ms: 1_000,
         waits: Vec::new(),
         interactions: Vec::new(),
@@ -101,7 +105,11 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
 async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic() {
     let mut plan = plan();
     plan.discovery.strategies[0].fetch = ExecutionPlanFetch::Browser {
-        url: "https://example.test/jobs".to_string(),
+        url: job_radar_lib::compile_template(
+            "https://example.test/jobs",
+            &job_radar_lib::TemplateDescriptor::new(),
+        )
+        .unwrap(),
         timeout_ms: 1_000,
         waits: Vec::new(),
         interactions: Vec::new(),

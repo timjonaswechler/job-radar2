@@ -272,7 +272,12 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             template,
             cardinality,
             transforms,
-        } => match render_source_config_template(template, source_config, source_name) {
+        } => match super::super::support::render_template_with_captures(
+            template,
+            source_config,
+            source_name,
+            captures,
+        ) {
             Ok(value) => RawFieldValues {
                 values: vec![value],
                 failed: false,
@@ -285,7 +290,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                     format!("Field template could not be rendered: {message}"),
                     path,
                     strategy_key,
-                    json!({ "itemIndex": item_index, "template": template }),
+                    json!({ "itemIndex": item_index }),
                 ));
                 RawFieldValues {
                     values: Vec::new(),

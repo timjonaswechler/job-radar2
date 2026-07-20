@@ -2,10 +2,11 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
+use super::naming::{title_case, to_technical_key};
+use super::templates::DetectionTemplateError;
 use crate::profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 use crate::profile_dsl::documents::{DetectionDocument, ReusableAccessPathDocument};
 use crate::profile_dsl::source_config::{compile_contract, ContractViolation, SchemaLocation};
-use crate::profile_dsl::template::{title_case, to_technical_key, TemplateError};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::{
@@ -185,7 +186,7 @@ pub(super) fn build_source_config(
     access_path: Option<&ReusableAccessPathDocument>,
     detection: &DetectionDocument,
     captures: &BTreeMap<String, String>,
-) -> Result<Value, TemplateError> {
+) -> Result<Value, DetectionTemplateError> {
     let Some(template) = &detection.source_config else {
         return Ok(Value::Object(default_source_config(
             profile,
@@ -248,7 +249,7 @@ fn render_json_object_templates(
     template: &Map<String, Value>,
     input_url: &str,
     captures: &BTreeMap<String, String>,
-) -> Result<Map<String, Value>, TemplateError> {
+) -> Result<Map<String, Value>, DetectionTemplateError> {
     let mut rendered = Map::new();
     for (key, value) in template {
         rendered.insert(
@@ -263,7 +264,7 @@ fn render_json_value_templates(
     value: &Value,
     input_url: &str,
     captures: &BTreeMap<String, String>,
-) -> Result<Value, TemplateError> {
+) -> Result<Value, DetectionTemplateError> {
     match value {
         Value::String(value) => {
             render_detection_template(value, input_url, captures).map(Value::String)

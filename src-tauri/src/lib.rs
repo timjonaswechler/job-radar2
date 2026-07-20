@@ -48,7 +48,12 @@ pub use profile_dsl::documents::{
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
-    ExecutionPlanPagination,
+    ExecutionPlanJsonValue, ExecutionPlanPagination, ExecutionPlanRequestBody,
+};
+pub use profile_dsl::execution_plan::values::{
+    ExecutionPlanCaptureRule, ExecutionPlanCaptures, ExecutionPlanCombinePart,
+    ExecutionPlanFieldExpression, ExecutionPlanFieldMatch, ExecutionPlanFilter,
+    ExecutionPlanListFieldExpression,
 };
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
@@ -64,6 +69,11 @@ pub use profile_dsl::runtime::{
     ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient,
     RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SensitiveRequestBody, UnavailableProfileBrowserClient,
+};
+pub use profile_dsl::template::{
+    compile_template, render_template, CompiledTemplate, TemplateCompileError,
+    TemplateCompileErrorKind, TemplateDescriptor, TemplateReference, TemplateRenderError,
+    TemplateSegment, TemplateValueView,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};

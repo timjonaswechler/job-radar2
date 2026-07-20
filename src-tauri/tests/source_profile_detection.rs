@@ -90,6 +90,144 @@ fn source_profile_detection_rejects_template_transform_pipes_in_detection_candid
 }
 
 #[test]
+fn detection_template_preflight_validates_all_profiles_before_any_client_call() {
+    let first = fixture_profile(json!({
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<tenant>[a-z]+)$" }],
+        "httpChecks": [{
+            "key": "first_valid_check",
+            "url": "https://probe.example.test/ok",
+            "timeoutMs": 1000,
+            "expectStatus": 200
+        }]
+    }));
+    let second = fixture_profile(json!({
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<tenant>[a-z]+)$" }],
+        "keyCandidates": ["{{capture:unavailable}}"]
+    }));
+    let http = FakeHttpClient::with_response(
+        "https://probe.example.test/ok",
+        DetectionHttpResponse {
+            status: 200,
+            body: "ok".to_string(),
+        },
+    );
+    let browser = FakeBrowser::new([]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[first, second],
+        &http,
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert_eq!(
+        http.request_count(),
+        0,
+        "preflight must precede every HTTP check"
+    );
+    assert!(
+        browser.requests().is_empty(),
+        "preflight must precede every browser probe"
+    );
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.code == "invalid_detection_template"
+            && diagnostic.path == "/profiles/1/detect/keyCandidates/0"
+    }));
+}
+
+#[test]
+fn detection_template_preflight_respects_capture_execution_order_without_io() {
+    let profile = fixture_profile(json!({
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<tenant>[a-z]+)$" }],
+        "httpChecks": [
+            {
+                "key": "uses_future_capture",
+                "url": "https://probe.example.test/{{capture:laterHttp}}",
+                "timeoutMs": 1000,
+                "expectStatus": 200
+            },
+            {
+                "key": "declares_future_capture",
+                "url": "https://probe.example.test/later",
+                "timeoutMs": 1000,
+                "regex": "(?<laterHttp>available-later)"
+            }
+        ],
+        "sourceConfig": {
+            "slug": "{{capture:browserOnly}}"
+        },
+        "browserProbes": [{
+            "key": "declares_browser_capture",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 1000,
+            "htmlRegex": "(?<browserOnly>available-after-source-config)"
+        }]
+    }));
+    let http = FakeHttpClient::default();
+    let browser = FakeBrowser::new([]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &http,
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert_eq!(http.request_count(), 0);
+    assert!(browser.requests().is_empty());
+    let paths = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "invalid_detection_template")
+        .map(|diagnostic| diagnostic.path.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        vec![
+            "/profiles/0/detect/httpChecks/0/url",
+            "/profiles/0/detect/sourceConfig/slug"
+        ]
+    );
+}
+
+#[test]
+fn detection_template_preflight_only_admits_captures_shared_by_every_input_pattern() {
+    let profile = fixture_profile(json!({
+        "inputUrlPatterns": [
+            { "pattern": "^https://jobs\\.example\\.test/first/(?<firstSlug>[a-z]+)$" },
+            { "pattern": "^https://jobs\\.example\\.test/(?<otherSlug>[a-z]+)$" }
+        ],
+        "httpChecks": [{
+            "key": "uses_other_pattern_capture",
+            "url": "https://probe.example.test/{{capture:otherSlug}}",
+            "timeoutMs": 1000,
+            "expectStatus": 200
+        }]
+    }));
+    let http = FakeHttpClient::default();
+    let browser = FakeBrowser::new([]);
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/first/acme",
+        &[profile],
+        &http,
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert_eq!(http.request_count(), 0);
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.code == "invalid_detection_template"
+            && diagnostic.path == "/profiles/0/detect/httpChecks/0/url"
+    }));
+}
+
+#[test]
 fn source_profile_detection_normalizes_rendered_key_candidates_to_source_key_pattern() {
     let profile = fixture_profile(json!({
         "recommendedAccessPathKey": "api",
@@ -1348,19 +1486,26 @@ fn source_profile_detection_reports_browser_probe_required_when_executor_is_unav
 #[derive(Default)]
 struct FakeHttpClient {
     responses: HashMap<String, Result<DetectionHttpResponse, DetectionHttpError>>,
+    requests: std::sync::Mutex<Vec<String>>,
 }
 
 impl FakeHttpClient {
     fn with_response(url: &str, response: DetectionHttpResponse) -> Self {
         Self {
             responses: HashMap::from([(url.to_string(), Ok(response))]),
+            requests: std::sync::Mutex::new(Vec::new()),
         }
     }
 
     fn with_error(url: &str, error: DetectionHttpError) -> Self {
         Self {
             responses: HashMap::from([(url.to_string(), Err(error))]),
+            requests: std::sync::Mutex::new(Vec::new()),
         }
+    }
+
+    fn request_count(&self) -> usize {
+        self.requests.lock().unwrap().len()
     }
 }
 
@@ -1427,6 +1572,7 @@ impl DetectionHttpClient for FakeHttpClient {
     ) -> Pin<Box<dyn Future<Output = Result<DetectionHttpResponse, DetectionHttpError>> + Send + 'a>>
     {
         Box::pin(async move {
+            self.requests.lock().unwrap().push(url.clone());
             self.responses.get(&url).cloned().unwrap_or_else(|| {
                 Err(DetectionHttpError::new(format!(
                     "missing fixture for {url}"

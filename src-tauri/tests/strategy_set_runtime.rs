@@ -413,7 +413,11 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     let mut plan = compile(profile_source(None, "main"), profile_document());
     let detail_plan = plan.detail.as_mut().expect("fixture has Detail");
     detail_plan.strategies[0].fetch = ExecutionPlanFetch::Browser {
-        url: "https://example.test/detail/browser".to_string(),
+        url: job_radar_lib::compile_template(
+            "https://example.test/detail/browser",
+            &job_radar_lib::TemplateDescriptor::new(),
+        )
+        .unwrap(),
         timeout_ms: 1_000,
         waits: Vec::new(),
         interactions: Vec::new(),

@@ -81,9 +81,9 @@ where
 async fn fetch_http_strategy_document<F>(
     fetcher: &F,
     method: Option<HttpMethod>,
-    url: &str,
-    headers: Option<&BTreeMap<String, String>>,
-    body: Option<&RequestBody>,
+    url: &crate::profile_dsl::template::CompiledTemplate,
+    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
+    body: Option<&ExecutionPlanRequestBody>,
     timeout_ms: u64,
     authored_charset: Option<&str>,
     context: &TemplateRuntimeContext<'_>,
@@ -229,7 +229,7 @@ where
 
 async fn fetch_browser_strategy_document<B>(
     browser: &B,
-    url: &str,
+    url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
     interactions: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserInteraction],
@@ -318,7 +318,7 @@ where
 }
 
 fn render_headers(
-    headers: Option<&BTreeMap<String, String>>,
+    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
     context: &TemplateRuntimeContext<'_>,
 ) -> Result<BTreeMap<String, String>, String> {
     let mut rendered = BTreeMap::new();
@@ -329,23 +329,23 @@ fn render_headers(
 }
 
 fn render_request_body(
-    body: Option<&RequestBody>,
+    body: Option<&ExecutionPlanRequestBody>,
     context: &TemplateRuntimeContext<'_>,
 ) -> Result<Option<RequestBody>, String> {
     let Some(body) = body else {
         return Ok(None);
     };
     match body {
-        RequestBody::Json { value } => Ok(Some(RequestBody::Json {
+        ExecutionPlanRequestBody::Json { value } => Ok(Some(RequestBody::Json {
             value: value
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), render_json_body_value(value, context)?)))
                 .collect::<Result<serde_json::Map<String, Value>, String>>()?,
         })),
-        RequestBody::Text { value } => Ok(Some(RequestBody::Text {
+        ExecutionPlanRequestBody::Text { value } => Ok(Some(RequestBody::Text {
             value: render_template(value, context)?,
         })),
-        RequestBody::Form { fields } => Ok(Some(RequestBody::Form {
+        ExecutionPlanRequestBody::Form { fields } => Ok(Some(RequestBody::Form {
             fields: fields
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), render_template(value, context)?)))
@@ -355,24 +355,26 @@ fn render_request_body(
 }
 
 fn render_json_body_value(
-    value: &Value,
+    value: &ExecutionPlanJsonValue,
     context: &TemplateRuntimeContext<'_>,
 ) -> Result<Value, String> {
     match value {
-        Value::String(value) => Ok(Value::String(render_template(value, context)?)),
-        Value::Array(values) => Ok(Value::Array(
+        ExecutionPlanJsonValue::Template(value) => {
+            Ok(Value::String(render_template(value, context)?))
+        }
+        ExecutionPlanJsonValue::Array(values) => Ok(Value::Array(
             values
                 .iter()
                 .map(|value| render_json_body_value(value, context))
                 .collect::<Result<Vec<_>, _>>()?,
         )),
-        Value::Object(values) => Ok(Value::Object(
+        ExecutionPlanJsonValue::Object(values) => Ok(Value::Object(
             values
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), render_json_body_value(value, context)?)))
                 .collect::<Result<serde_json::Map<String, Value>, String>>()?,
         )),
-        Value::Null | Value::Bool(_) | Value::Number(_) => Ok(value.clone()),
+        ExecutionPlanJsonValue::Scalar(value) => Ok(value.clone()),
     }
 }
 

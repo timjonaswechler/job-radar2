@@ -54,7 +54,11 @@ fn discovery_url_render_failure_does_not_expose_authored_template() {
     let ExecutionPlanFetch::Http { url, .. } = &mut plan.discovery.strategies[0].fetch else {
         panic!("fixture must use HTTP fetch");
     };
-    *url = format!("https://{SECRET}.example.test/{{{{unsupported:key}}}}");
+    *url = job_radar_lib::compile_template(
+        &format!("https://{SECRET}.example.test/{{{{unsupported:key}}}}"),
+        &job_radar_lib::TemplateDescriptor::new().allow_namespace("unsupported", ["key"]),
+    )
+    .unwrap();
 
     let result = block_on(execute_discovery_test(&plan, &fake_fetcher([])));
 

@@ -5,6 +5,7 @@ use crate::source::documents::SourceConfig;
 pub(crate) mod capabilities;
 pub(crate) mod detail;
 pub(crate) mod discovery;
+pub(crate) mod values;
 
 use detail::ExecutionPlanDetailStep;
 use discovery::ExecutionPlanDiscoveryStep;

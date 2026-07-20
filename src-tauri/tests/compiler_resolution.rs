@@ -1,10 +1,11 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
+    compile_source, compile_template, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanAccessPath, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
     ExecutionPlanFetch, ExecutionPlanPagination, RegistrySourceProfile, SourceDocument,
     SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
+    TemplateDescriptor,
 };
 
 #[test]
@@ -28,10 +29,14 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
         discovery_strategy.fetch,
         ExecutionPlanFetch::Http {
             method: Some(job_radar_lib::HttpMethod::Get),
-            url: "{{sourceConfig:feedUrl}}".to_string(),
+            url: compile_template(
+                "{{sourceConfig:feedUrl}}",
+                &TemplateDescriptor::new().allow_namespace("sourceConfig", ["feedUrl"])
+            )
+            .unwrap(),
             headers: Some(std::collections::BTreeMap::from([(
                 "accept".to_string(),
-                "application/json".to_string(),
+                compile_template("application/json", &TemplateDescriptor::new()).unwrap(),
             )])),
             body: None,
             timeout_ms: 10000,

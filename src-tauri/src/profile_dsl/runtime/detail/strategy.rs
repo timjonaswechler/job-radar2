@@ -348,7 +348,7 @@ fn match_xml_detail_collection<'doc, 'body>(
 
 fn detail_document_matches_field(
     item_document: &RuntimeItem<'_, '_>,
-    field_match: &crate::profile_dsl::documents::strategy::FieldMatch,
+    field_match: &crate::profile_dsl::execution_plan::values::ExecutionPlanFieldMatch,
     plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
