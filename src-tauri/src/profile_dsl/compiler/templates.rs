@@ -5,7 +5,7 @@ use crate::profile_dsl::documents::{
     DetailStep, DiscoveryStep, Fetch, FieldExpression, JsonObject, ListFieldExpression, RequestBody,
 };
 
-use super::compiler_error;
+use super::{compiler_error, SourceRuntimeBinding, SourceRuntimeBindingDependencies};
 
 #[derive(Clone, Copy)]
 enum TemplateContext {
@@ -28,7 +28,8 @@ pub(super) fn validate_template_variables(
     source_config_keys: HashSet<String>,
     base_path: String,
     diagnostics: &mut Diagnostics,
-) {
+) -> SourceRuntimeBindingDependencies {
+    let mut dependencies = SourceRuntimeBindingDependencies::default();
     let posting_meta_keys = discovery_posting_meta_keys(discovery);
     for (index, strategy) in discovery.strategies.iter().enumerate() {
         let captures = strategy
@@ -46,6 +47,7 @@ pub(super) fn validate_template_variables(
             &captures,
             &posting_meta_keys,
             diagnostics,
+            &mut dependencies,
         );
         validate_discovery_field_templates(
             discovery,
@@ -56,6 +58,7 @@ pub(super) fn validate_template_variables(
             &captures,
             &posting_meta_keys,
             diagnostics,
+            &mut dependencies,
         );
     }
 
@@ -76,6 +79,7 @@ pub(super) fn validate_template_variables(
                 &captures,
                 &posting_meta_keys,
                 diagnostics,
+                &mut dependencies,
             );
             validate_field_expression_templates(
                 &strategy.extract.fields.description_text,
@@ -86,6 +90,7 @@ pub(super) fn validate_template_variables(
                 &captures,
                 &posting_meta_keys,
                 diagnostics,
+                &mut dependencies,
             );
             if let Some(field_match) = &strategy.field_match {
                 validate_field_expression_templates(
@@ -97,6 +102,7 @@ pub(super) fn validate_template_variables(
                     &captures,
                     &posting_meta_keys,
                     diagnostics,
+                    &mut dependencies,
                 );
                 validate_field_expression_templates(
                     &field_match.right,
@@ -107,8 +113,10 @@ pub(super) fn validate_template_variables(
                     &captures,
                     &posting_meta_keys,
                     diagnostics,
+                    &mut dependencies,
                 );
             }
         }
     }
+    dependencies
 }

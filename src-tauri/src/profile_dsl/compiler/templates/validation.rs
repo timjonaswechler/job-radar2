@@ -9,6 +9,7 @@ pub(super) fn validate_template_string(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     for reference in template_references(template) {
         if reference.contains('|') {
@@ -46,6 +47,7 @@ pub(super) fn validate_template_string(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         );
     }
 }
@@ -60,6 +62,7 @@ pub(super) fn validate_variable_reference(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     let known = match namespace {
         "sourceConfig" => source_config_keys.contains(key),
@@ -112,6 +115,8 @@ pub(super) fn validate_variable_reference(
             namespace,
             key,
         );
+    } else if namespace == "source" && key == "name" {
+        dependencies.insert(SourceRuntimeBinding::Name);
     }
 }
 

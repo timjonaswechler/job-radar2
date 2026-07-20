@@ -28,6 +28,17 @@ use super::source_config::{
 use super::specialization::specialize_profile;
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
+use super::SourceRuntimeBindingDependencies;
+
+pub(super) struct ResolvedSourceExecutionPlan {
+    pub(super) execution_plan: SourceExecutionPlan,
+    pub(super) runtime_binding_dependencies: SourceRuntimeBindingDependencies,
+}
+
+struct ValidatedAccessPath {
+    contract: Option<EffectiveSourceConfigContract>,
+    runtime_binding_dependencies: SourceRuntimeBindingDependencies,
+}
 
 pub(super) fn validate_source_profile_document(
     profile: &SourceProfileDocument,
@@ -39,7 +50,7 @@ pub(super) fn validate_source_profile_document(
 fn validate_source_profile_document_with_contracts(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
-) -> Vec<Option<EffectiveSourceConfigContract>> {
+) -> Vec<ValidatedAccessPath> {
     validate_support_metadata(
         &profile.support,
         "/support",
@@ -78,7 +89,7 @@ fn validate_source_profile_document_with_contracts(
             }
 
             let access_path_base = access_path_base_path(Some(path_index));
-            validate_template_variables(
+            let runtime_binding_dependencies = validate_template_variables(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
                 contract
@@ -108,7 +119,10 @@ fn validate_source_profile_document_with_contracts(
                 access_path_base,
                 diagnostics,
             );
-            contract
+            ValidatedAccessPath {
+                contract,
+                runtime_binding_dependencies,
+            }
         })
         .collect()
 }
@@ -117,7 +131,7 @@ pub(super) fn compile_source_execution_plan(
     source: &SourceDocument,
     registry: &SourceProfileRegistrySnapshot,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceExecutionPlan> {
+) -> Option<ResolvedSourceExecutionPlan> {
     match &source.selected_access_path {
         SelectedAccessPath::ProfileAccessPath {
             profile_key,
@@ -139,7 +153,7 @@ fn compile_profile_access_path(
     profile_key: &str,
     path_key: &str,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceExecutionPlan> {
+) -> Option<ResolvedSourceExecutionPlan> {
     let base_profile = resolve_profile(registry, source, profile_key, diagnostics)?;
     if source.access_paths.is_some() && source.source_overrides.is_some() {
         diagnostics.push(compiler_error(
@@ -185,6 +199,7 @@ fn compile_profile_access_path(
     let path_index = access_path_index(&effective_profile, path_key);
     if let Some(index) = path_index {
         let contract = contracts[index]
+            .contract
             .as_ref()
             .expect("error-free whole-profile validation must retain every compiled contract");
         validate_source_config_against_contract(contract, &source.source_config, diagnostics);
@@ -236,7 +251,13 @@ fn compile_profile_access_path(
         detail,
     };
 
-    Some(execution_plan)
+    let runtime_binding_dependencies = path_index
+        .map(|index| contracts[index].runtime_binding_dependencies.clone())
+        .expect("successful Access Path resolution must retain selected validation dependencies");
+    Some(ResolvedSourceExecutionPlan {
+        execution_plan,
+        runtime_binding_dependencies,
+    })
 }
 
 fn resolve_profile<'a>(
@@ -297,7 +318,7 @@ fn resolve_access_path<'a>(
 fn compile_source_owned_access_path(
     source: &SourceDocument,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceExecutionPlan> {
+) -> Option<ResolvedSourceExecutionPlan> {
     let SelectedAccessPath::SourceOwnedAccessPath {
         key,
         name,
@@ -309,7 +330,8 @@ fn compile_source_owned_access_path(
         unreachable!("caller only passes Source-owned Access Paths")
     };
 
-    validate_source_owned_access_path(source, discovery, detail.as_ref(), diagnostics);
+    let runtime_binding_dependencies =
+        validate_source_owned_access_path(source, discovery, detail.as_ref(), diagnostics);
     if has_error_diagnostics(diagnostics) {
         return None;
     }
@@ -325,18 +347,21 @@ fn compile_source_owned_access_path(
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
 
-    Some(SourceExecutionPlan {
-        source: ExecutionPlanSource {
-            key: source.key.clone(),
-            name: source.name.clone(),
+    Some(ResolvedSourceExecutionPlan {
+        execution_plan: SourceExecutionPlan {
+            source: ExecutionPlanSource {
+                key: source.key.clone(),
+                name: source.name.clone(),
+            },
+            selected_access_path: ExecutionPlanAccessPath::SourceOwnedAccessPath {
+                key: key.clone(),
+                name: name.clone(),
+            },
+            source_config: source.source_config.clone(),
+            discovery: compiled_discovery,
+            detail: compiled_detail,
         },
-        selected_access_path: ExecutionPlanAccessPath::SourceOwnedAccessPath {
-            key: key.clone(),
-            name: name.clone(),
-        },
-        source_config: source.source_config.clone(),
-        discovery: compiled_discovery,
-        detail: compiled_detail,
+        runtime_binding_dependencies,
     })
 }
 
@@ -345,7 +370,7 @@ fn validate_source_owned_access_path(
     discovery: &DiscoveryStep,
     detail: Option<&DetailStep>,
     diagnostics: &mut Diagnostics,
-) {
+) -> SourceRuntimeBindingDependencies {
     match &source.source_support {
         Some(source_support) => validate_support_metadata(
             source_support,
@@ -411,7 +436,7 @@ fn validate_source_owned_access_path(
             diagnostics,
         );
     }
-    validate_template_variables(
+    let runtime_binding_dependencies = validate_template_variables(
         discovery,
         detail,
         source_config_keys,
@@ -436,6 +461,7 @@ fn validate_source_owned_access_path(
         "/selectedAccessPath".to_string(),
         diagnostics,
     );
+    runtime_binding_dependencies
 }
 
 fn push_compiled_plan_invariant(error: ExecutionPlanBuildError, diagnostics: &mut Diagnostics) {

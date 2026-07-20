@@ -2,6 +2,7 @@ pub(crate) mod fingerprints;
 pub(crate) mod freshness;
 pub(crate) mod persistence;
 pub(crate) mod report;
+pub(crate) mod source_behavior_fingerprints;
 pub(crate) mod source_live;
 
 pub use fingerprints::CheckFingerprint;
@@ -16,6 +17,10 @@ pub use persistence::{
 pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
     CHECK_REPORT_SCHEMA_VERSION,
+};
+pub use source_behavior_fingerprints::{
+    prepare_source_behavior_fingerprints, SourceBehaviorFingerprintPreparationError,
+    SourceBehaviorFingerprintPreparationErrorKind,
 };
 pub use source_live::{
     check_and_activate_source, check_and_activate_source_with_clients,

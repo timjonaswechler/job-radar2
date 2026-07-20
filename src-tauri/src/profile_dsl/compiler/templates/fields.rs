@@ -10,6 +10,7 @@ pub(super) fn validate_discovery_field_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     let strategy = &discovery.strategies[strategy_index];
     let base = format!("{strategy_path}/extract/fields");
@@ -22,6 +23,7 @@ pub(super) fn validate_discovery_field_templates(
         captures,
         posting_meta_keys,
         diagnostics,
+        dependencies,
     );
     validate_field_expression_templates(
         &strategy.extract.fields.company,
@@ -32,6 +34,7 @@ pub(super) fn validate_discovery_field_templates(
         captures,
         posting_meta_keys,
         diagnostics,
+        dependencies,
     );
     validate_field_expression_templates(
         &strategy.extract.fields.url,
@@ -42,6 +45,7 @@ pub(super) fn validate_discovery_field_templates(
         captures,
         posting_meta_keys,
         diagnostics,
+        dependencies,
     );
     if let Some(locations) = &strategy.extract.fields.locations {
         validate_list_field_expression_templates(
@@ -53,6 +57,7 @@ pub(super) fn validate_discovery_field_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         );
     }
     if let Some(posting_meta) = &strategy.extract.fields.posting_meta {
@@ -66,6 +71,7 @@ pub(super) fn validate_discovery_field_templates(
                 captures,
                 posting_meta_keys,
                 diagnostics,
+                dependencies,
             );
         }
     }
@@ -79,6 +85,7 @@ pub(super) fn validate_discovery_field_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         );
     }
 }
@@ -92,6 +99,7 @@ fn validate_list_field_expression_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match expression {
         ListFieldExpression::Single(expression) => validate_field_expression_templates(
@@ -103,6 +111,7 @@ fn validate_list_field_expression_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         ListFieldExpression::Multiple(expressions) => {
             for (index, expression) in expressions.iter().enumerate() {
@@ -115,6 +124,7 @@ fn validate_list_field_expression_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }
@@ -130,6 +140,7 @@ pub(super) fn validate_field_expression_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match expression {
         FieldExpression::Template { template, .. } => validate_template_string(
@@ -141,6 +152,7 @@ pub(super) fn validate_field_expression_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         FieldExpression::SourceConfig { key, .. } => validate_variable_reference(
             "sourceConfig",
@@ -152,6 +164,7 @@ pub(super) fn validate_field_expression_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         FieldExpression::PostingMeta { key, .. } => validate_variable_reference(
             "postingMeta",
@@ -163,6 +176,7 @@ pub(super) fn validate_field_expression_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         FieldExpression::Capture { key, .. } => validate_variable_reference(
             "captures",
@@ -174,6 +188,7 @@ pub(super) fn validate_field_expression_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         FieldExpression::Combine { parts, .. } => {
             for (index, part) in parts.iter().enumerate() {
@@ -186,6 +201,7 @@ pub(super) fn validate_field_expression_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }

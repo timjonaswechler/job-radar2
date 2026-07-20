@@ -10,6 +10,7 @@ pub(super) fn validate_fetch_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match fetch {
         Fetch::Http {
@@ -24,6 +25,7 @@ pub(super) fn validate_fetch_templates(
                 captures,
                 posting_meta_keys,
                 diagnostics,
+                dependencies,
             );
             if let Some(headers) = headers {
                 for (header, value) in headers {
@@ -36,6 +38,7 @@ pub(super) fn validate_fetch_templates(
                         captures,
                         posting_meta_keys,
                         diagnostics,
+                        dependencies,
                     );
                 }
             }
@@ -49,6 +52,7 @@ pub(super) fn validate_fetch_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }
@@ -62,6 +66,7 @@ pub(super) fn validate_fetch_templates(
                 captures,
                 posting_meta_keys,
                 diagnostics,
+                dependencies,
             );
         }
     }
@@ -76,6 +81,7 @@ fn validate_request_body_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match body {
         RequestBody::Json { value } => validate_json_object_templates(
@@ -87,6 +93,7 @@ fn validate_request_body_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         RequestBody::Text { value } => validate_template_string(
             value,
@@ -97,6 +104,7 @@ fn validate_request_body_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         RequestBody::Form { fields } => {
             for (key, value) in fields {
@@ -109,6 +117,7 @@ fn validate_request_body_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }
@@ -124,6 +133,7 @@ fn validate_json_object_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     for (key, value) in value {
         validate_json_value_templates(
@@ -135,6 +145,7 @@ fn validate_json_object_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         );
     }
 }
@@ -148,6 +159,7 @@ fn validate_json_value_templates(
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
+    dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match value {
         serde_json::Value::String(value) => validate_template_string(
@@ -159,6 +171,7 @@ fn validate_json_value_templates(
             captures,
             posting_meta_keys,
             diagnostics,
+            dependencies,
         ),
         serde_json::Value::Array(values) => {
             for (index, value) in values.iter().enumerate() {
@@ -171,6 +184,7 @@ fn validate_json_value_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }
@@ -185,6 +199,7 @@ fn validate_json_value_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
+                    dependencies,
                 );
             }
         }

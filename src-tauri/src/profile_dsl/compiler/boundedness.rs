@@ -12,7 +12,7 @@ use crate::profile_dsl::documents::{
 
 use super::compiler_error;
 
-const MAX_FALLBACK_STRATEGIES: usize = 50;
+pub(crate) const MAX_FALLBACK_STRATEGIES: usize = 50;
 
 pub(super) fn validate_boundedness(
     discovery: &DiscoveryStep,

@@ -39,7 +39,7 @@ pub use activation::{
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
-const SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY: u64 = 1;
+pub(crate) const SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY: u64 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
