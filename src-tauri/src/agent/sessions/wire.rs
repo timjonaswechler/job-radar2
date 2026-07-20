@@ -36,6 +36,7 @@ pub(super) enum EntryKind {
         provider: String,
         model: String,
         response_id: Option<String>,
+        authoritative_tokens: Option<u64>,
     },
     Model {
         provider: String,
@@ -895,6 +896,18 @@ fn parse_message(m: &Map<String, Value>, line: u32) -> Result<(EntryKind, bool),
                 .get("responseId")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            authoritative_tokens: {
+                let total = usage
+                    .get("totalTokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                let calculated = ["input", "output", "cacheRead", "cacheWrite"]
+                    .into_iter()
+                    .filter_map(|key| usage.get(key).and_then(Value::as_u64))
+                    .fold(0_u64, u64::saturating_add);
+                let tokens = if total > 0 { total } else { calculated };
+                (tokens > 0).then_some(tokens)
+            },
         },
         outer && msg_ok && usage_ok && content_ok && stop_ok,
     ))

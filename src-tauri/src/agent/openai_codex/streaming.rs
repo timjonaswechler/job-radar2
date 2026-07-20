@@ -350,7 +350,8 @@ fn build_request_body(request: &ConversationRequest, model: &Model) -> Result<Ve
         "include": ["reasoning.encrypted_content"],
         "prompt_cache_key": clamp_identifier(request.conversation_id()),
         "tool_choice": "auto",
-        "parallel_tool_calls": true
+        "parallel_tool_calls": true,
+        "max_output_tokens": model.max_tokens()
     });
     if let Some(effort) = effort {
         body["reasoning"] = json!({"effort": effort, "summary": "auto"});
@@ -526,6 +527,17 @@ fn classify_error(status: u16, retry_after: Option<Duration>, body: Option<&[u8]
         )
     {
         return AgentError::model_unavailable();
+    }
+    if matches!(
+        code.as_deref(),
+        Some(
+            "context_length_exceeded"
+                | "context_window_exceeded"
+                | "max_tokens_exceeded"
+                | "prompt_too_long"
+        )
+    ) {
+        return AgentError::context_overflow();
     }
     AgentError::provider()
 }
@@ -725,7 +737,22 @@ impl TranslationState {
                 let finish_reason = match status {
                     "completed" => FinishReason::Completed,
                     "incomplete" => FinishReason::LengthLimit,
-                    "failed" | "cancelled" => return Err(AgentError::provider()),
+                    "failed" => {
+                        let code = response.get("error").and_then(error_code);
+                        if matches!(
+                            code,
+                            Some(
+                                "context_length_exceeded"
+                                    | "context_window_exceeded"
+                                    | "max_tokens_exceeded"
+                                    | "prompt_too_long"
+                            )
+                        ) {
+                            return Err(AgentError::context_overflow());
+                        }
+                        return Err(AgentError::provider());
+                    }
+                    "cancelled" => return Err(AgentError::provider()),
                     _ => return Err(AgentError::provider()),
                 };
                 if let Some(output) = response.get("output").and_then(Value::as_array) {
@@ -1476,6 +1503,7 @@ mod tests {
         assert_eq!(inspection.body["model"], "gpt-5.4");
         assert_eq!(inspection.body["store"], false);
         assert_eq!(inspection.body["stream"], true);
+        assert_eq!(inspection.body["max_output_tokens"], 128_000);
         assert_eq!(inspection.body["instructions"], "Be concise.");
         assert_eq!(inspection.body["reasoning"]["effort"], "medium");
         assert_eq!(inspection.body["input"][0]["content"][0]["text"], "Hi");
