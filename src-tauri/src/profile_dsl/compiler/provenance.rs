@@ -596,7 +596,7 @@ fn expected_access_path_paths(path: &Map<String, Value>) -> Vec<ProvenancePath> 
         };
         segments.push(field(canonical));
         expected.push(ProvenancePath {
-            segments: [segments.clone(), vec![field("policy")]].concat(),
+            segments: [segments.clone(), vec![field("policy"), field("type")]].concat(),
         });
         for strategy_value in step["strategies"].as_array().expect("strategies array") {
             let strategy_object = strategy_value.as_object().expect("Strategy object");
@@ -730,13 +730,13 @@ pub(super) fn invariant_fault(reason: &str) -> RecordedProvenance {
     let mut recorder = ProvenanceRecorder::default();
     push_terminal(
         ProvenanceOrigin::BaseSourceProfile,
-        vec![field("policy")],
+        vec![field("policy"), field("type")],
         &mut recorder,
     );
     let mut recorded = recorder.finish(
         true,
         vec![ProvenancePath {
-            segments: vec![field("policy")],
+            segments: vec![field("policy"), field("type")],
         }],
     );
     let CompiledSourceProvenance::Profile { entries } = &mut recorded.value else {

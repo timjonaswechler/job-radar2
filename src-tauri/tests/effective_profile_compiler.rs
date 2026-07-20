@@ -195,7 +195,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
             "key": "new_path",
             "name": "New path",
             "postingDiscovery": {
-                "policy": "first_accepted",
+                "policy": { "type": "first_accepted" },
                 "strategies": [
                     serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap()
                 ]
@@ -369,7 +369,7 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
         "key": "invalid_unselected",
         "name": "Invalid unselected path",
         "postingDiscovery": {
-            "policy": "first_accepted",
+            "policy": { "type": "first_accepted" },
             "strategies": [strategy]
         }
     }])));
@@ -839,7 +839,7 @@ fn add_first_accepted_policy(value: &mut serde_json::Value) {
             {
                 object
                     .entry("policy")
-                    .or_insert_with(|| serde_json::json!("first_accepted"));
+                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
             }
             for child in object.values_mut() {
                 add_first_accepted_policy(child);

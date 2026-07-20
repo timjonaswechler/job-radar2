@@ -32,7 +32,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
             "required": ["language"]
         },
         "postingDiscovery": {
-            "policy": "first_accepted",
+            "policy": { "type": "first_accepted" },
             "strategies": [{
                 "key": "json_api",
                 "fetch": { "headers": { "x-source": "direct" } },
@@ -266,7 +266,12 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
 
     assert_origin(
         entries,
-        &[access("json_feed"), field("discovery"), field("policy")],
+        &[
+            access("json_feed"),
+            field("discovery"),
+            field("policy"),
+            field("type"),
+        ],
         ProvenanceOrigin::BaseSourceProfile,
     );
     assert_origin(
@@ -357,7 +362,7 @@ fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
             "key": "unselected_added",
             "name": "Unselected added",
             "postingDiscovery": {
-                "policy": "first_accepted",
+                "policy": { "type": "first_accepted" },
                 "strategies": [path_strategy]
             }
         }
@@ -513,7 +518,7 @@ fn add_policy(value: &mut serde_json::Value) {
             {
                 object
                     .entry("policy")
-                    .or_insert_with(|| serde_json::json!("first_accepted"));
+                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
             }
             for child in object.values_mut() {
                 add_policy(child);

@@ -499,7 +499,7 @@ fn add_first_accepted_policy(value: &mut serde_json::Value) {
             {
                 object
                     .entry("policy")
-                    .or_insert_with(|| serde_json::json!("first_accepted"));
+                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
             }
             for child in object.values_mut() {
                 add_first_accepted_policy(child);

@@ -229,7 +229,6 @@ fn compiler_validates_required_support_metadata() {
             && diagnostic.path == "/sourceSupport"
             && diagnostic.details.as_ref().unwrap()["sourceKey"] == "owned_source"
     }));
-
 }
 
 #[test]

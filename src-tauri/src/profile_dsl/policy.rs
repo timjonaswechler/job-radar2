@@ -22,9 +22,23 @@ use crate::source::documents::{SourceConfig, SourceStatus};
 use crate::source_profile::documents::{SourceProfileDocument, SourceProfileKind};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StrategyPolicy {
+    #[serde(rename = "type")]
+    policy_type: StrategyPolicyType,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum StrategyPolicy {
+enum StrategyPolicyType {
     FirstAccepted,
+}
+
+impl StrategyPolicy {
+    #[allow(non_upper_case_globals)]
+    pub const FirstAccepted: Self = Self {
+        policy_type: StrategyPolicyType::FirstAccepted,
+    };
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

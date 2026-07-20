@@ -168,7 +168,10 @@ fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
 
     harness.assert_json_valid(
         SchemaEntrypoint::PolicyStrategySet,
-        json!({ "policy": "first_accepted", "strategies": [strategy.clone()] }),
+        json!({
+            "policy": { "type": "first_accepted" },
+            "strategies": [strategy.clone()]
+        }),
         "dormant final first_accepted Strategy Set",
     );
     harness.assert_json_invalid(
@@ -178,7 +181,20 @@ fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
     );
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
-        json!({ "policy": "unknown", "strategies": [strategy] }),
+        json!({ "policy": "first_accepted", "strategies": [strategy.clone()] }),
+        &["first_accepted"],
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({
+            "policy": { "type": "first_accepted", "extra": true },
+            "strategies": [strategy.clone()]
+        }),
+        &["extra"],
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({ "policy": { "type": "unknown" }, "strategies": [strategy] }),
         &["unknown"],
     );
 }

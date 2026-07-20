@@ -8,8 +8,12 @@
   ],
   "$defs": {
     "strategyPolicy": {
-      "type": "string",
-      "enum": ["first_accepted"]
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "first_accepted" }
+      }
     },
     "postingDiscoveryStrategySet": {
       "type": "object",

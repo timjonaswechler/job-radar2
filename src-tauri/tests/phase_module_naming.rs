@@ -12,11 +12,11 @@ fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
         },
         "sourceConfig": {},
         "discovery": {
-            "policy": "first_accepted",
+            "policy": { "type": "first_accepted" },
             "strategies": []
         },
         "detail": {
-            "policy": "first_accepted",
+            "policy": { "type": "first_accepted" },
             "strategies": []
         }
     }))
@@ -46,7 +46,7 @@ fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
         "sourceConfig": {}
     });
     old_names[old_discovery_key] = json!({
-        "policy": "first_accepted",
+        "policy": { "type": "first_accepted" },
         "strategies": []
     });
     assert!(serde_json::from_value::<PolicySourceExecutionPlan>(old_names).is_err());

@@ -25,16 +25,34 @@ fn final_strategy_set_requires_the_closed_first_accepted_policy() {
     serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
         .expect_err("a final Strategy Set without Policy must be rejected");
 
-    let strategy_set = json!({ "policy": "unknown", "strategies": [] });
+    let strategy_set = json!({ "policy": "first_accepted", "strategies": [] });
+    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+        .expect_err("a raw string Policy must be rejected");
+
+    let strategy_set = json!({
+        "policy": { "type": "unknown" },
+        "strategies": []
+    });
     serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
         .expect_err("an unknown Policy must be rejected");
 
+    let strategy_set = json!({
+        "policy": { "type": "first_accepted", "extra": true },
+        "strategies": []
+    });
+    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+        .expect_err("additional Policy properties must be rejected");
+
     let strategy_set: PolicyDiscoveryStep = serde_json::from_value(json!({
-        "policy": "first_accepted",
+        "policy": { "type": "first_accepted" },
         "strategies": []
     }))
     .unwrap();
     assert_eq!(strategy_set.policy, StrategyPolicy::FirstAccepted);
+    assert_eq!(
+        serde_json::to_value(strategy_set.policy).unwrap(),
+        json!({ "type": "first_accepted" })
+    );
 }
 
 #[test]
@@ -49,13 +67,13 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
             Some(json!([{
                 "key": "main",
                 "postingDiscovery": {
-                    "policy": "first_accepted",
+                    "policy": { "type": "first_accepted" },
                     "strategies": [discovery_strategy(
                         "source_added",
                         "https://example.test/discovery/source-added"
                     )]
                 },
-                "postingDetail": { "policy": "first_accepted" }
+                "postingDetail": { "policy": { "type": "first_accepted" } }
             }])),
             "main",
         ),
@@ -473,7 +491,7 @@ fn discovery_step() -> Value {
     let mut rejected = discovery_strategy("empty", "https://example.test/discovery/empty");
     rejected["acceptWhen"] = json!({ "minResults": 2 });
     json!({
-        "policy": "first_accepted",
+        "policy": { "type": "first_accepted" },
         "acceptWhen": { "minResults": 1 },
         "strategies": [
             rejected,
@@ -503,7 +521,7 @@ fn detail_step() -> Value {
     let mut rejected = detail_strategy("failed", "https://example.test/detail/failed");
     rejected["acceptWhen"] = json!({ "minDescriptionLength": 100 });
     json!({
-        "policy": "first_accepted",
+        "policy": { "type": "first_accepted" },
         "strategies": [
             rejected,
             detail_strategy("accepted", "https://example.test/detail/accepted"),
