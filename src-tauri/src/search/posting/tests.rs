@@ -1,9 +1,9 @@
 use super::*;
 use crate::{
     profile_dsl::runtime::{
-        DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchRequest,
-        ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+        ProfileBrowserFetchResponse, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+        ScriptedProfileHttpClient, UnavailableProfileBrowserClient,
     },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
@@ -27,10 +27,8 @@ mod import_and_merge;
 mod listing_and_queues;
 mod state_updates;
 
-#[derive(Clone)]
 struct FixtureDetailHttpClient {
-    responses: Arc<Mutex<BTreeMap<String, Result<String, String>>>>,
-    requested_urls: Arc<Mutex<Vec<String>>>,
+    client: ScriptedProfileHttpClient,
 }
 
 #[derive(Clone, Default)]
@@ -41,14 +39,35 @@ struct FixtureProfileBrowserClient {
 
 impl FixtureDetailHttpClient {
     fn new(responses: impl IntoIterator<Item = (String, Result<String, String>)>) -> Self {
+        let events = responses
+            .into_iter()
+            .map(|(url, result)| ScriptedHttpEvent::Response {
+                status: 200,
+                final_url: url,
+                headers: Vec::new(),
+                body: vec![match result {
+                    Ok(body) => ScriptedHttpBodyEvent::Chunk(body.into_bytes()),
+                    Err(_) => ScriptedHttpBodyEvent::Failure(
+                        crate::profile_dsl::runtime::ProfileHttpFailureKind::BodyStream,
+                    ),
+                }],
+                content_length: None,
+            });
         Self {
-            responses: Arc::new(Mutex::new(responses.into_iter().collect())),
-            requested_urls: Arc::new(Mutex::new(Vec::new())),
+            client: ScriptedProfileHttpClient::new(events),
         }
     }
 
+    fn client(&self) -> &ScriptedProfileHttpClient {
+        &self.client
+    }
+
     fn requested_urls(&self) -> Vec<String> {
-        self.requested_urls.lock().unwrap().clone()
+        self.client
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect()
     }
 }
 
@@ -93,29 +112,6 @@ impl ProfileBrowserClient for FixtureProfileBrowserClient {
                 ))
             });
         Box::pin(async move { result.map(|body| ProfileBrowserFetchResponse { body }) })
-    }
-}
-
-impl DetailFetcher for FixtureDetailHttpClient {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        let url = request.url;
-        self.requested_urls.lock().unwrap().push(url.clone());
-        let result = self
-            .responses
-            .lock()
-            .unwrap()
-            .get(&url)
-            .cloned()
-            .unwrap_or_else(|| Err(format!("unexpected detail URL: {url}")));
-        Box::pin(async move {
-            result
-                .map(|body| DetailFetchResponse { body })
-                .map_err(DetailFetchError::new)
-        })
     }
 }
 

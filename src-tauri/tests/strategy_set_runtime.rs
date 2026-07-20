@@ -1,19 +1,10 @@
-use std::{
-    collections::{BTreeMap, VecDeque},
-    future::Future,
-    pin::Pin,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-};
+use std::{collections::BTreeMap, future::Future};
 
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
-    DiscoveryFetcher, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits,
-    RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext, SourceDocument,
+    DetailPostingOccurrence, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits,
+    ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
     SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
     UnavailableProfileBrowserClient,
 };
@@ -132,7 +123,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
 #[test]
 fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
     let plan = compile(profile_source(None, "main"), profile_document());
-    let discovery = ScriptedDiscoveryFetcher::new([
+    let discovery = DiscoveryScriptedClient::new([
         (
             "https://example.test/discovery/empty",
             Ok(json!({
@@ -159,7 +150,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
 
     let result = block_on(execute_discovery(
         &plan,
-        &discovery,
+        discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -189,7 +180,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         vec!["acceptance_min_results_not_met",]
     );
 
-    let detail = ScriptedDetailFetcher::new([
+    let detail = DetailScriptedClient::new([
         (
             "https://example.test/detail/failed",
             Ok(json!({ "description": "Rejected partial detail." }).to_string()),
@@ -202,7 +193,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
     let result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -239,7 +230,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
 #[test]
 fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
     let plan = compile(profile_source(None, "main"), profile_document());
-    let discovery = ScriptedDiscoveryFetcher::new([(
+    let discovery = DiscoveryScriptedClient::new([(
         "https://example.test/discovery/empty",
         Ok(json!({
             "jobs": [
@@ -259,7 +250,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
     )]);
     let result = block_on(execute_discovery(
         &plan,
-        &discovery,
+        discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -268,14 +259,14 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
     assert!(result.diagnostics.is_empty());
 
     let accepted_description = "accepted ".repeat(20);
-    let detail = ScriptedDetailFetcher::new([(
+    let detail = DetailScriptedClient::new([(
         "https://example.test/detail/failed",
         Ok(json!({ "description": accepted_description }).to_string()),
     )]);
     let result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -287,7 +278,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
 #[test]
 fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     let plan = compile(profile_source(None, "main"), profile_document());
-    let discovery = ScriptedDiscoveryFetcher::new([
+    let discovery = DiscoveryScriptedClient::new([
         (
             "https://example.test/discovery/empty",
             Ok(json!({ "jobs": [] }).to_string()),
@@ -304,7 +295,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
 
     let result = block_on(execute_discovery(
         &plan,
-        &discovery,
+        discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -334,7 +325,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         "/discovery/strategies"
     );
 
-    let detail = ScriptedDetailFetcher::new([
+    let detail = DetailScriptedClient::new([
         (
             "https://example.test/detail/failed",
             Err("failed one".to_string()),
@@ -351,7 +342,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     let result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -384,7 +375,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
 #[test]
 fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
     let plan = compile(profile_source(None, "main"), profile_document());
-    let detail = ScriptedDetailFetcher::new([(
+    let detail = DetailScriptedClient::new([(
         "https://example.test/detail/failed",
         Err("first failed".to_string()),
     )]);
@@ -396,7 +387,7 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
     let result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     ));
@@ -428,12 +419,12 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
         interactions: Vec::new(),
     };
     detail_plan.limits.max_duration_ms = 1_999;
-    let detail = ScriptedDetailFetcher::new([]);
+    let detail = DetailScriptedClient::new([]);
 
     let invalid_plan_result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
@@ -453,7 +444,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     let caller_result = block_on(execute_detail(
         &plan,
         &posting(),
-        &detail,
+        detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     ));
@@ -472,12 +463,16 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
 #[test]
 fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhaustion() {
     let plan = compile(profile_source(None, "main"), profile_document());
-    let cancellation = Arc::new(AtomicBool::new(false));
-    let fetcher = CancellingDiscoveryFetcher {
-        cancellation: cancellation.clone(),
-        requests: Mutex::new(Vec::new()),
-    };
-    let signal = AtomicCancellation(cancellation);
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/discovery/empty".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(
+            json!({ "jobs": [] }).to_string().into_bytes(),
+        )],
+        content_length: None,
+    }]);
+    let signal = RequestObservedCancellation { client: &fetcher };
 
     let result = block_on(execute_discovery(
         &plan,
@@ -487,7 +482,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
     ));
 
     assert!(result.candidates.is_empty());
-    assert_eq!(fetcher.requests.lock().unwrap().len(), 1);
+    assert_eq!(fetcher.request_count(), 1);
     assert_eq!(
         result
             .diagnostics
@@ -501,12 +496,18 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         .iter()
         .all(|d| d.code != "fallback_exhausted"));
 
-    let cancellation = Arc::new(AtomicBool::new(false));
-    let fetcher = CancellingDetailFetcher {
-        cancellation: cancellation.clone(),
-        requests: Mutex::new(Vec::new()),
-    };
-    let signal = AtomicCancellation(cancellation);
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/detail/failed".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(
+            json!({ "description": "Discarded detail description." })
+                .to_string()
+                .into_bytes(),
+        )],
+        content_length: None,
+    }]);
+    let signal = RequestObservedCancellation { client: &fetcher };
     let result = block_on(execute_detail(
         &plan,
         &posting(),
@@ -515,7 +516,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         RuntimeExecutionContext::with_cancellation(&signal),
     ));
     assert!(result.description_text.is_none());
-    assert_eq!(fetcher.requests.lock().unwrap().len(), 1);
+    assert_eq!(fetcher.request_count(), 1);
     assert_eq!(
         result
             .diagnostics
@@ -669,95 +670,69 @@ fn posting() -> DetailPostingOccurrence {
     }
 }
 
-type DiscoveryScript = BTreeMap<String, Result<String, String>>;
-
-struct ScriptedDiscoveryFetcher {
-    script: DiscoveryScript,
-    requests: Mutex<Vec<String>>,
+struct DiscoveryScriptedClient {
+    client: ScriptedProfileHttpClient,
 }
 
-impl ScriptedDiscoveryFetcher {
+impl DiscoveryScriptedClient {
     fn new<const N: usize>(entries: [(&str, Result<String, String>); N]) -> Self {
         Self {
-            script: entries
-                .into_iter()
-                .map(|(url, result)| (url.to_string(), result))
-                .collect(),
-            requests: Mutex::new(Vec::new()),
+            client: scripted_client(entries),
         }
     }
 
+    fn client(&self) -> &ScriptedProfileHttpClient {
+        &self.client
+    }
+
     fn requests(&self) -> Vec<String> {
-        self.requests.lock().unwrap().clone()
+        self.client
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect()
     }
 }
 
-impl DiscoveryFetcher for ScriptedDiscoveryFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.url.clone());
-            match self
-                .script
-                .get(&request.url)
-                .cloned()
-                .unwrap_or_else(|| Err("unexpected request".to_string()))
-            {
-                Ok(body) => Ok(DiscoveryFetchResponse { body }),
-                Err(message) => Err(DiscoveryFetchError::new(message)),
-            }
-        })
-    }
+struct DetailScriptedClient {
+    client: ScriptedProfileHttpClient,
 }
 
-struct ScriptedDetailFetcher {
-    script: Mutex<VecDeque<(String, Result<String, String>)>>,
-    requests: Mutex<Vec<String>>,
-}
-
-impl ScriptedDetailFetcher {
+impl DetailScriptedClient {
     fn new<const N: usize>(entries: [(&str, Result<String, String>); N]) -> Self {
         Self {
-            script: Mutex::new(
-                entries
-                    .into_iter()
-                    .map(|(url, result)| (url.to_string(), result))
-                    .collect(),
-            ),
-            requests: Mutex::new(Vec::new()),
+            client: scripted_client(entries),
         }
     }
 
+    fn client(&self) -> &ScriptedProfileHttpClient {
+        &self.client
+    }
+
     fn requests(&self) -> Vec<String> {
-        self.requests.lock().unwrap().clone()
+        self.client
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect()
     }
 }
 
-impl DetailFetcher for ScriptedDetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.url.clone());
-            let (expected, result) = self
-                .script
-                .lock()
-                .unwrap()
-                .pop_front()
-                .expect("unexpected detail request");
-            assert_eq!(request.url, expected);
-            match result {
-                Ok(body) => Ok(DetailFetchResponse { body }),
-                Err(message) => Err(DetailFetchError::new(message)),
-            }
-        })
-    }
+fn scripted_client<const N: usize>(
+    entries: [(&str, Result<String, String>); N],
+) -> ScriptedProfileHttpClient {
+    ScriptedProfileHttpClient::new(entries.into_iter().map(|(url, result)| {
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: url.to_string(),
+            headers: Vec::new(),
+            body: vec![match result {
+                Ok(body) => ScriptedHttpBodyEvent::Chunk(body.into_bytes()),
+                Err(_) => ScriptedHttpBodyEvent::Failure(ProfileHttpFailureKind::BodyStream),
+            }],
+            content_length: None,
+        }
+    }))
 }
 
 fn block_on<T>(future: impl Future<Output = T>) -> T {
@@ -768,60 +743,12 @@ fn block_on<T>(future: impl Future<Output = T>) -> T {
         .block_on(future)
 }
 
-struct AtomicCancellation(Arc<AtomicBool>);
+struct RequestObservedCancellation<'a> {
+    client: &'a ScriptedProfileHttpClient,
+}
 
-impl RuntimeCancellation for AtomicCancellation {
+impl RuntimeCancellation for RequestObservedCancellation<'_> {
     fn is_cancelled(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
-    }
-}
-
-struct CancellingDiscoveryFetcher {
-    cancellation: Arc<AtomicBool>,
-    requests: Mutex<Vec<String>>,
-}
-
-struct CancellingDetailFetcher {
-    cancellation: Arc<AtomicBool>,
-    requests: Mutex<Vec<String>>,
-}
-
-impl DetailFetcher for CancellingDetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.url);
-            self.cancellation.store(true, Ordering::SeqCst);
-            Ok(DetailFetchResponse {
-                body: json!({ "description": "Discarded detail description." }).to_string(),
-            })
-        })
-    }
-}
-
-impl DiscoveryFetcher for CancellingDiscoveryFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.url);
-            self.cancellation.store(true, Ordering::SeqCst);
-            Ok(DiscoveryFetchResponse {
-                body: json!({
-                    "jobs": [{
-                        "title": "Discarded",
-                        "company": "Example",
-                        "url": "https://example.test/jobs/discarded"
-                    }]
-                })
-                .to_string(),
-            })
-        })
+        self.client.request_count() > 0
     }
 }

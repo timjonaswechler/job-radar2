@@ -64,6 +64,7 @@ fn backend_limits() -> serde_json::Value {
         "maxDurationMs": 120000,
         "maxPages": 1000,
         "maxBrowserActions": 50,
-        "maxFanOut": 100000
+        "maxFanOut": 100000,
+        "maxResponseBytes": 67108864
     })
 }

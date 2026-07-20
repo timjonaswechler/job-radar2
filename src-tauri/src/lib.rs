@@ -56,14 +56,14 @@ pub use profile_dsl::execution_plan::{
 pub use profile_dsl::policy::StrategyPolicy;
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
-    AllowanceLimitSource, DetailExecutionResult, DetailFetchError, DetailFetchRequest,
-    DetailFetchResponse, DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate,
-    DiscoveryExecutionResult, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
-    DiscoveryFetcher, ManagedProfileBrowserClient, PhaseCancellationReason, PhaseCompletion,
-    PhaseExecutionReport, PhaseUsage, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ReqwestDetailFetcher, ReqwestDiscoveryFetcher, RuntimeCancellation, RuntimeExecutionContext,
-    UnavailableProfileBrowserClient,
+    AllowanceLimitSource, DetailExecutionResult, DetailPostingOccurrence, DiscoveryCandidate,
+    DiscoveryExecutionResult, ManagedProfileBrowserClient, PhaseCancellationReason,
+    PhaseCompletion, PhaseExecutionReport, PhaseUsage, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
+    ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient,
+    RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SensitiveRequestBody, UnavailableProfileBrowserClient,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};

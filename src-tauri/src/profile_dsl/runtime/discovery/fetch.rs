@@ -5,6 +5,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     base_path: &str,
@@ -12,15 +13,16 @@ pub(super) async fn fetch_strategy_document<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_query_params(
         fetcher,
         browser,
         fetch,
+        authored_charset,
         source_config,
         source_name,
         &[],
@@ -38,6 +40,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     query_params: &[(&str, String)],
@@ -47,15 +50,16 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_url_options(
         fetcher,
         browser,
         fetch,
+        authored_charset,
         source_config,
         source_name,
         None,
@@ -74,6 +78,7 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     url_override: &str,
@@ -82,15 +87,16 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_url_options(
         fetcher,
         browser,
         fetch,
+        authored_charset,
         source_config,
         source_name,
         Some(url_override),
@@ -109,6 +115,7 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     url_override: Option<&str>,
@@ -119,9 +126,9 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     match fetch {
@@ -140,6 +147,7 @@ where
                 headers.as_ref(),
                 body.as_ref(),
                 *timeout_ms,
+                authored_charset,
                 source_config,
                 source_name,
                 url_override,
@@ -187,6 +195,7 @@ async fn fetch_http_strategy_document<F>(
     headers: Option<&BTreeMap<String, String>>,
     body: Option<&RequestBody>,
     timeout_ms: u64,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     url_override: Option<&str>,
@@ -197,9 +206,9 @@ async fn fetch_http_strategy_document<F>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
 {
     let method = method.unwrap_or(HttpMethod::Get);
     if method == HttpMethod::Get && body.is_some() {
@@ -222,7 +231,7 @@ where
                     format!("Fetch URL template could not be rendered: {message}"),
                     format!("{base_path}/fetch/url"),
                     strategy_key,
-                    json!({ "template": url }),
+                    json!({}),
                 ));
                 return Ok(None);
             }
@@ -257,12 +266,28 @@ where
             }
         };
 
-    let request = DiscoveryFetchRequest {
+    let request = ProfileHttpRequest {
         method,
         url: rendered_url.clone(),
-        headers: rendered_headers,
-        body: rendered_body,
+        headers: rendered_headers
+            .into_iter()
+            .map(|(name, value)| (name, value.into_bytes()))
+            .collect(),
+        body: match rendered_body.map(SensitiveRequestBody::render).transpose() {
+            Ok(body) => body,
+            Err(()) => {
+                diagnostics.push(runtime_error(
+                    "fetch_body_render_failed",
+                    "Rendered HTTP request body could not be encoded",
+                    format!("{base_path}/fetch/body"),
+                    strategy_key,
+                    json!({}),
+                ));
+                return Ok(None);
+            }
+        },
         timeout_ms,
+        authored_charset: authored_charset.map(ToString::to_string),
     };
 
     if context.is_cancelled() {
@@ -294,54 +319,25 @@ where
         ));
     }
 
-    enum FetchWait<T> {
-        Completed(T),
-        Cancelled,
-        Deadline,
-    }
-    let result = tokio::select! {
-        biased;
-        _ = context.cancelled() => FetchWait::Cancelled,
-        result = fetcher.fetch(request) => FetchWait::Completed(result),
-        _ = context.deadline_reached() => FetchWait::Deadline,
-    };
-    let result = match result {
-        FetchWait::Completed(result) => result,
-        FetchWait::Cancelled => {
-            return Err(TypedCancellation::strategy(
+    let result = fetcher.fetch(request, context).await;
+
+    match result {
+        Ok(response) => Ok(Some(response.body)),
+        Err(error) if error.kind == ProfileHttpFailureKind::Cancelled => {
+            Err(TypedCancellation::strategy(
                 RuntimePhase::Discovery,
                 strategy_index,
                 strategy_key.expect("compiled strategy has a key"),
                 CancellationOperation::Fetch,
             ))
         }
-        FetchWait::Deadline => {
-            if context.is_cancelled() {
-                return Err(TypedCancellation::strategy(
-                    RuntimePhase::Discovery,
-                    strategy_index,
-                    strategy_key.expect("compiled strategy has a key"),
-                    CancellationOperation::Fetch,
-                ));
-            }
-            context.mark_deadline();
-            return Ok(None);
-        }
-    };
-
-    match result {
-        Ok(response) => Ok(Some(response)),
         Err(error) => {
             diagnostics.push(runtime_error(
                 "fetch_failed",
-                format!(
-                    "HTTP {} fetch failed for {rendered_url}: {}",
-                    http_method_label(method),
-                    error.message
-                ),
+                "HTTP fetch failed",
                 format!("{base_path}/fetch"),
                 strategy_key,
-                json!({ "url": rendered_url, "error": error.message }),
+                json!({ "method": http_method_label(method), "kind": format!("{:?}", error.kind), "admittedBytes": error.admitted_bytes }),
             ));
             Ok(None)
         }
@@ -363,7 +359,7 @@ async fn fetch_browser_strategy_document<B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -376,7 +372,7 @@ where
                     format!("Fetch URL template could not be rendered: {message}"),
                     format!("{base_path}/fetch/url"),
                     strategy_key,
-                    json!({ "template": url }),
+                    json!({}),
                 ));
                 return Ok(None);
             }
@@ -418,7 +414,7 @@ where
     };
 
     match browser.render_with_context(request, context).await {
-        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(DiscoveryFetchResponse { body })),
+        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(body)),
         Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
             Err(TypedCancellation::strategy(
                 RuntimePhase::Discovery,

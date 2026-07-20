@@ -5,6 +5,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
+    authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
     posting: &DetailPostingOccurrence,
@@ -14,9 +15,9 @@ pub(super) async fn fetch_strategy_document<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DetailFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let context = TemplateRuntimeContext {
@@ -43,6 +44,7 @@ where
                 headers.as_ref(),
                 body.as_ref(),
                 *timeout_ms,
+                authored_charset,
                 &context,
                 base_path,
                 strategy_key,
@@ -83,15 +85,16 @@ async fn fetch_http_strategy_document<F>(
     headers: Option<&BTreeMap<String, String>>,
     body: Option<&RequestBody>,
     timeout_ms: u64,
+    authored_charset: Option<&str>,
     context: &TemplateRuntimeContext<'_>,
     base_path: &str,
     strategy_key: Option<&str>,
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DetailFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
-    F: DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
 {
     let method = method.unwrap_or(HttpMethod::Get);
     if method == HttpMethod::Get && body.is_some() {
@@ -113,7 +116,7 @@ where
                 format!("Fetch URL template could not be rendered: {message}"),
                 format!("{base_path}/fetch/url"),
                 strategy_key,
-                json!({ "template": url }),
+                json!({}),
             ));
             return Ok(None);
         }
@@ -147,12 +150,28 @@ where
         }
     };
 
-    let request = DetailFetchRequest {
+    let request = ProfileHttpRequest {
         method,
         url: rendered_url.clone(),
-        headers: rendered_headers,
-        body: rendered_body,
+        headers: rendered_headers
+            .into_iter()
+            .map(|(name, value)| (name, value.into_bytes()))
+            .collect(),
+        body: match rendered_body.map(SensitiveRequestBody::render).transpose() {
+            Ok(body) => body,
+            Err(()) => {
+                diagnostics.push(runtime_error(
+                    "fetch_body_render_failed",
+                    "Rendered HTTP request body could not be encoded",
+                    format!("{base_path}/fetch/body"),
+                    strategy_key,
+                    json!({}),
+                ));
+                return Ok(None);
+            }
+        },
         timeout_ms,
+        authored_charset: authored_charset.map(ToString::to_string),
     };
 
     if execution_context.is_cancelled() {
@@ -183,54 +202,25 @@ where
         ));
     }
 
-    enum FetchWait<T> {
-        Completed(T),
-        Cancelled,
-        Deadline,
-    }
-    let result = tokio::select! {
-        biased;
-        _ = execution_context.cancelled() => FetchWait::Cancelled,
-        result = fetcher.fetch(request) => FetchWait::Completed(result),
-        _ = execution_context.deadline_reached() => FetchWait::Deadline,
-    };
-    let result = match result {
-        FetchWait::Completed(result) => result,
-        FetchWait::Cancelled => {
-            return Err(TypedCancellation::strategy(
+    let result = fetcher.fetch(request, execution_context).await;
+
+    match result {
+        Ok(response) => Ok(Some(response.body)),
+        Err(error) if error.kind == ProfileHttpFailureKind::Cancelled => {
+            Err(TypedCancellation::strategy(
                 RuntimePhase::Detail,
                 strategy_index,
                 strategy_key.expect("compiled strategy has a key"),
                 CancellationOperation::Fetch,
             ))
         }
-        FetchWait::Deadline => {
-            if execution_context.is_cancelled() {
-                return Err(TypedCancellation::strategy(
-                    RuntimePhase::Detail,
-                    strategy_index,
-                    strategy_key.expect("compiled strategy has a key"),
-                    CancellationOperation::Fetch,
-                ));
-            }
-            execution_context.mark_deadline();
-            return Ok(None);
-        }
-    };
-
-    match result {
-        Ok(response) => Ok(Some(response)),
         Err(error) => {
             diagnostics.push(runtime_error(
                 "fetch_failed",
-                format!(
-                    "HTTP {} fetch failed for {rendered_url}: {}",
-                    http_method_label(method),
-                    error.message
-                ),
+                "HTTP fetch failed",
                 format!("{base_path}/fetch"),
                 strategy_key,
-                json!({ "url": rendered_url, "error": error.message }),
+                json!({ "method": http_method_label(method), "kind": format!("{:?}", error.kind), "admittedBytes": error.admitted_bytes }),
             ));
             Ok(None)
         }
@@ -249,7 +239,7 @@ async fn fetch_browser_strategy_document<B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Result<Option<DetailFetchResponse>, TypedCancellation>
+) -> Result<Option<String>, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -261,7 +251,7 @@ where
                 format!("Fetch URL template could not be rendered: {message}"),
                 format!("{base_path}/fetch/url"),
                 strategy_key,
-                json!({ "template": url }),
+                json!({}),
             ));
             return Ok(None);
         }
@@ -305,7 +295,7 @@ where
         .render_with_context(request, execution_context)
         .await
     {
-        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(DetailFetchResponse { body })),
+        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(body)),
         Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
             Err(TypedCancellation::strategy(
                 RuntimePhase::Detail,

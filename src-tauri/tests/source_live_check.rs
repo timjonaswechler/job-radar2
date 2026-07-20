@@ -1,14 +1,13 @@
-use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin, sync::Mutex};
+use std::{fs, path::Path};
 
 use job_radar_lib::{
     check_and_activate_source_with_fetcher, check_and_reactivate_source_with_fetcher, check_source,
     check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
     source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
     CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
-    DiscoveryFetcher, RequestBody, SourceDocument, SourceLiveCheckReportState, SourceStatus,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    DiagnosticCategory, DiagnosticSeverity, ProfileHttpRequest, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceLiveCheckReportState,
+    SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -96,12 +95,8 @@ fn passing_live_check_fetcher() -> FakeLiveCheckFetcher {
 fn create_passed_source_live_check(app_data_dir: &Path) -> job_radar_lib::CheckReport {
     write_profile(app_data_dir, &simple_profile_without_pagination());
     write_source(app_data_dir, &simple_source_with_status("draft"));
-    check_source_with_fetcher(
-        app_data_dir,
-        "example_source",
-        &passing_live_check_fetcher(),
-    )
-    .unwrap()
+    let fetcher = passing_live_check_fetcher();
+    check_source_with_fetcher(app_data_dir, "example_source", fetcher.client()).unwrap()
 }
 
 fn assert_stale_detail(
@@ -149,7 +144,8 @@ fn source_live_check_reports_cumulative_request_exhaustion_without_partial_paylo
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -233,22 +229,19 @@ fn workday_source_live_check_exhausts_after_one_cumulative_request_without_detai
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "workday_smoke", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "workday_smoke", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     let requests = fetcher.discovery_requests();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].url, discovery_url);
+    let body = requests[0].body.as_ref().expect("rendered JSON body");
     assert_eq!(
-        requests[0].body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(20)),
-                ("offset".to_string(), json!(0)),
-            ])
-        })
+        body.bytes(),
+        br#"{"appliedFacets":{},"limit":20,"offset":0}"#
     );
+    assert_eq!(body.default_content_type(), Some("application/json"));
     assert!(fetcher.detail_requested_urls().is_empty());
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "phase_allowance_exhausted"
@@ -290,7 +283,8 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.kind, CheckReportKind::SourceLiveCheck);
     assert_eq!(report.subject.subject_type, CheckReportSubjectType::Source);
@@ -345,9 +339,9 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
 fn check_source_rejects_invalid_source_key_without_writing_outside_report_dir() {
     let temp_dir = tempfile::tempdir().unwrap();
 
+    let fetcher = passing_live_check_fetcher();
     let error =
-        check_source_with_fetcher(temp_dir.path(), "../outside", &passing_live_check_fetcher())
-            .unwrap_err();
+        check_source_with_fetcher(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
 
     assert!(error.contains("invalid Source key `../outside`"));
     assert!(!temp_dir.path().join("outside.json").exists());
@@ -535,7 +529,8 @@ fn check_source_emits_no_candidates_diagnostic_for_empty_live_discovery() {
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -565,7 +560,8 @@ fn check_source_preserves_runtime_diagnostics_from_failed_live_discovery() {
     let fetcher =
         FakeLiveCheckFetcher::new([("https://example.test/jobs.json", "not json".to_string())]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert!(report.diagnostics.iter().any(|diagnostic| {
@@ -604,7 +600,8 @@ fn check_source_does_not_need_search_request_or_match_rule_context() {
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(1));
@@ -636,7 +633,8 @@ fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -698,9 +696,17 @@ fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
             })
             .to_string(),
         ),
+        (
+            "job-1",
+            json!({
+                "descriptionHtml": "<p>This fallback detail text is long enough to pass acceptance checks.</p>"
+            })
+            .to_string(),
+        ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_passed"));
@@ -737,7 +743,8 @@ fn check_source_leaves_detail_unchecked_when_access_path_has_no_detail() {
         .to_string(),
     )]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["detailChecked"], json!(false));
@@ -784,7 +791,8 @@ fn check_source_checks_detail_for_no_more_than_one_candidate() {
         ),
     ]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
+    let report =
+        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(2));
@@ -801,7 +809,7 @@ fn check_and_activate_source_changes_draft_to_active_after_passed_live_check() {
     let fetcher = passing_live_check_fetcher();
 
     let report =
-        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client())
             .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
@@ -834,7 +842,7 @@ fn check_and_activate_source_leaves_draft_unchanged_after_failed_live_check() {
     )]);
 
     let report =
-        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
+        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client())
             .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
@@ -870,9 +878,12 @@ fn check_and_reactivate_source_changes_disabled_to_active_after_passed_live_chec
     write_source(temp_dir.path(), &simple_source_with_status("disabled"));
     let fetcher = passing_live_check_fetcher();
 
-    let report =
-        check_and_reactivate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
-            .unwrap();
+    let report = check_and_reactivate_source_with_fetcher(
+        temp_dir.path(),
+        "example_source",
+        fetcher.client(),
+    )
+    .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(
@@ -897,9 +908,12 @@ fn check_and_reactivate_source_leaves_disabled_unchanged_after_failed_live_check
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report =
-        check_and_reactivate_source_with_fetcher(temp_dir.path(), "example_source", &fetcher)
-            .unwrap();
+    let report = check_and_reactivate_source_with_fetcher(
+        temp_dir.path(),
+        "example_source",
+        fetcher.client(),
+    )
+    .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -926,10 +940,11 @@ fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
         activate_temp_dir.path(),
         &simple_source_with_status("active"),
     );
+    let fetcher = passing_live_check_fetcher();
     let activate_report = check_and_activate_source_with_fetcher(
         activate_temp_dir.path(),
         "example_source",
-        &passing_live_check_fetcher(),
+        fetcher.client(),
     )
     .unwrap();
 
@@ -955,10 +970,11 @@ fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
         reactivate_temp_dir.path(),
         &simple_source_with_status("draft"),
     );
+    let fetcher = passing_live_check_fetcher();
     let reactivate_report = check_and_reactivate_source_with_fetcher(
         reactivate_temp_dir.path(),
         "example_source",
-        &passing_live_check_fetcher(),
+        fetcher.client(),
     )
     .unwrap();
 
@@ -999,25 +1015,34 @@ fn assert_activation_blocked(
 }
 
 struct FakeLiveCheckFetcher {
-    responses: BTreeMap<String, String>,
-    discovery_requests: Mutex<Vec<DiscoveryFetchRequest>>,
-    detail_requests: Mutex<Vec<DetailFetchRequest>>,
+    client: ScriptedProfileHttpClient,
 }
 
 impl FakeLiveCheckFetcher {
     fn new<'a>(responses: impl IntoIterator<Item = (&'a str, String)>) -> Self {
         Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            discovery_requests: Mutex::new(Vec::new()),
-            detail_requests: Mutex::new(Vec::new()),
+            client: ScriptedProfileHttpClient::new(responses.into_iter().map(|(url, body)| {
+                ScriptedHttpEvent::Response {
+                    status: 200,
+                    final_url: url.to_string(),
+                    headers: Vec::new(),
+                    body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+                    content_length: None,
+                }
+            })),
         }
     }
 
-    fn discovery_requests(&self) -> Vec<DiscoveryFetchRequest> {
-        self.discovery_requests.lock().unwrap().clone()
+    fn client(&self) -> &ScriptedProfileHttpClient {
+        &self.client
+    }
+
+    fn discovery_requests(&self) -> Vec<ProfileHttpRequest> {
+        self.client
+            .requests()
+            .into_iter()
+            .filter(|request| request.url != "job-1")
+            .collect()
     }
 
     fn discovery_requested_urls(&self) -> Vec<String> {
@@ -1028,44 +1053,11 @@ impl FakeLiveCheckFetcher {
     }
 
     fn detail_requested_urls(&self) -> Vec<String> {
-        self.detail_requests
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|request| request.url.clone())
+        self.client
+            .requests()
+            .into_iter()
+            .filter(|request| request.url == "job-1")
+            .map(|request| request.url)
             .collect()
-    }
-}
-
-impl DiscoveryFetcher for FakeLiveCheckFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DiscoveryFetchError::new(format!("missing fake response for {}", request.url))
-            })?;
-            self.discovery_requests.lock().unwrap().push(request);
-            Ok(DiscoveryFetchResponse { body })
-        })
-    }
-}
-
-impl DetailFetcher for FakeLiveCheckFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DetailFetchError::new(format!("missing fake response for {}", request.url))
-            })?;
-            self.detail_requests.lock().unwrap().push(request);
-            Ok(DetailFetchResponse { body })
-        })
     }
 }

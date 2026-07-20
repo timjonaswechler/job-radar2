@@ -9,13 +9,21 @@ use tokio::sync::Notify;
 fn discovery_cancellation_interrupts_an_active_http_fetch_without_fallback_failure() {
     block_on(async {
         let plan = compiled_json_discovery_plan(default_fields(), default_select());
-        let fetcher = HangingFetcher::default();
+        let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs.json".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Gate("active-fetch".to_string())],
+            content_length: None,
+        }]);
         let browser = FakeBrowser::new([]);
         let cancellation = TestCancellation::default();
         let context = RuntimeExecutionContext::with_cancellation(&cancellation);
 
         let cancel_after_fetch_starts = async {
-            fetcher.started.notified().await;
+            while !fetcher.gate_is_waiting("active-fetch") {
+                tokio::task::yield_now().await;
+            }
             cancellation.cancel();
         };
         let execute = async {
@@ -59,7 +67,7 @@ fn discovery_browser_cancellation_is_distinct_from_runtime_failure() {
             default_html_fields(),
             "https://example.test/jobs",
         );
-        let fetcher = FakeFetcher::default();
+        let fetcher = fake_fetcher([]);
         let browser = CancellationAwareBrowser::default();
         let cancellation = TestCancellation::default();
         let context = RuntimeExecutionContext::with_cancellation(&cancellation);
@@ -111,22 +119,44 @@ fn discovery_cancellation_stops_page_pagination_before_the_next_request() {
             )]),
         );
         let cancellation = TestCancellation::default();
-        let fetcher = CancelAfterFirstPageFetcher {
-            cancellation: &cancellation,
-            request_count: std::sync::Mutex::new(0),
-        };
+        let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs.json?page=1".to_string(),
+            headers: Vec::new(),
+            body: vec![
+                ScriptedHttpBodyEvent::Chunk(b"{\"jobs\":[".to_vec()),
+                ScriptedHttpBodyEvent::Gate("first-page-prefix".to_string()),
+                ScriptedHttpBodyEvent::Chunk(b"]}".to_vec()),
+            ],
+            content_length: None,
+        }]);
         let browser = FakeBrowser::new([]);
 
-        let result = execute_discovery(
+        let cancel = async {
+            while !fetcher.gate_is_waiting("first-page-prefix") {
+                tokio::task::yield_now().await;
+            }
+            cancellation.cancel();
+        };
+        let execute = execute_discovery(
             &plan,
             &fetcher,
             &browser,
             RuntimeExecutionContext::with_cancellation(&cancellation),
-        )
-        .await;
+        );
+        let (_, result) = tokio::join!(cancel, execute);
 
         assert!(result.candidates.is_empty());
         assert_eq!(fetcher.request_count(), 1);
+        assert_eq!(
+            result
+                .report
+                .as_ref()
+                .expect("cancelled execution report")
+                .usage
+                .response_bytes,
+            b"{\"jobs\":[".len() as u64
+        );
         assert!(result
             .diagnostics
             .iter()
@@ -202,68 +232,6 @@ impl ProfileBrowserClient for CancellationAwareBrowser {
                 ProfileBrowserFetchErrorKind::Cancelled,
                 "discovery cancelled",
             ))
-        })
-    }
-}
-
-struct CancelAfterFirstPageFetcher<'a> {
-    cancellation: &'a TestCancellation,
-    request_count: std::sync::Mutex<usize>,
-}
-
-impl CancelAfterFirstPageFetcher<'_> {
-    fn request_count(&self) -> usize {
-        *self.request_count.lock().unwrap()
-    }
-}
-
-impl DiscoveryFetcher for CancelAfterFirstPageFetcher<'_> {
-    fn fetch<'a>(
-        &'a self,
-        _request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            *self.request_count.lock().unwrap() += 1;
-            self.cancellation.cancel();
-            Ok(DiscoveryFetchResponse {
-                body: json!({
-                    "jobs": [{
-                        "title": "Platform Engineer",
-                        "company": "Example GmbH",
-                        "url": "https://example.test/jobs/1"
-                    }]
-                })
-                .to_string(),
-            })
-        })
-    }
-}
-
-#[derive(Default)]
-struct HangingFetcher {
-    started: Arc<Notify>,
-    request_count: std::sync::Mutex<usize>,
-}
-
-impl HangingFetcher {
-    fn request_count(&self) -> usize {
-        *self.request_count.lock().unwrap()
-    }
-}
-
-impl DiscoveryFetcher for HangingFetcher {
-    fn fetch<'a>(
-        &'a self,
-        _request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            *self.request_count.lock().unwrap() += 1;
-            self.started.notify_one();
-            std::future::pending().await
         })
     }
 }

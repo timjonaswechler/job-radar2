@@ -103,7 +103,8 @@ fn browser_phase_duration_must_preserve_the_two_second_teardown_reserve() {
         "maxDurationMs": 1999,
         "maxPages": 1000,
         "maxBrowserActions": 50,
-        "maxFanOut": 100000
+        "maxFanOut": 100000,
+        "maxResponseBytes": 67108864
     });
 
     let result = compile_profile_value(profile);
@@ -438,7 +439,8 @@ fn phase_limits(max_requests: u64) -> Value {
         "maxDurationMs": 120000,
         "maxPages": 1000,
         "maxBrowserActions": 50,
-        "maxFanOut": 100000
+        "maxFanOut": 100000,
+        "maxResponseBytes": 67108864
     })
 }
 

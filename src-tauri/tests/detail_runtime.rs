@@ -13,12 +13,12 @@ use std::{
 };
 
 use job_radar_lib::{
-    execute_detail, DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    execute_detail, DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
     ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    ProfileBrowserFetchResponse, RuntimeCancellation, RuntimeExecutionContext,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 use tokio::sync::Notify;
@@ -36,7 +36,7 @@ fn compiled_detail_runtime_extracts_direct_json_description_text() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.json",
         json!({ "description": "First paragraph.\n\nSecond paragraph." }).to_string(),
     )]);
@@ -96,7 +96,7 @@ fn compiled_detail_runtime_falls_back_to_first_accepted_strategy() {
         ],
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([
+    let fetcher = fake_profile_http_client([
         (
             "https://example.test/jobs/short.json",
             json!({ "description": "Too short" }).to_string(),
@@ -177,7 +177,7 @@ fn compiled_detail_runtime_applies_where_filters_before_extraction() {
         ],
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([
+    let fetcher = fake_profile_http_client([
         (
             "https://example.test/jobs/filtered.json",
             json!({ "status": "draft", "description": "This draft description must be filtered before extraction." }).to_string(),
@@ -229,7 +229,7 @@ fn compiled_detail_runtime_reports_invalid_where_regex_diagnostic() {
         })],
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/invalid-where.json",
         json!({ "status": "published", "description": "This description is not extracted." })
             .to_string(),
@@ -273,7 +273,7 @@ fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
         })],
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/short.json",
         json!({ "description": "Too short" }).to_string(),
     )]);
@@ -314,7 +314,7 @@ fn compiled_detail_runtime_reports_unsupported_max_error_ratio() {
         })],
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/detail.json",
         json!({ "description": "Detailed role description." }).to_string(),
     )]);
@@ -352,7 +352,7 @@ fn compiled_detail_runtime_renders_fetch_templates_from_all_runtime_contexts() {
     );
     let posting = posting_occurrence("job-42", [("jobId", "REQ-42"), ("tenant", "acme_jobs")]);
     let expected_url = "https://api.example.test/acme_jobs/REQ-42?u=job-42";
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         expected_url,
         json!({ "description": "Rendered from all template contexts." }).to_string(),
     )]);
@@ -400,7 +400,7 @@ fn compiled_detail_runtime_posts_rendered_json_body() {
         "https://example.test/jobs/42",
         [("jobId", "REQ-42"), ("tenant", "acme_jobs")],
     );
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://api.example.test/detail",
         json!({ "description": "Detail POST response." }).to_string(),
     )]);
@@ -418,22 +418,14 @@ fn compiled_detail_runtime_posts_rendered_json_body() {
     assert_eq!(request.timeout_ms, 15_000);
     assert_eq!(
         request.headers,
-        BTreeMap::from_iter([("content-type".to_string(), "application/json".to_string())])
+        vec![("content-type".to_string(), b"application/json".to_vec())]
     );
+    let body = request.body.as_ref().expect("rendered JSON body");
     assert_eq!(
-        request.body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("jobId".to_string(), json!("REQ-42")),
-                (
-                    "postingUrl".to_string(),
-                    json!("https://example.test/jobs/42")
-                ),
-                ("source".to_string(), json!("Example Source")),
-                ("tenant".to_string(), json!("acme_jobs")),
-            ])
-        })
+        body.bytes(),
+        br#"{"jobId":"REQ-42","postingUrl":"https://example.test/jobs/42","source":"Example Source","tenant":"acme_jobs"}"#
     );
+    assert_eq!(body.default_content_type(), Some("application/json"));
 }
 
 #[test]
@@ -450,7 +442,7 @@ fn compiled_detail_runtime_normalizes_html_in_json_description_text() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.json",
         json!({ "descriptionHtml": "<p>First paragraph.</p><p>Second <strong>paragraph</strong>.</p>" }).to_string(),
     )]);
@@ -478,7 +470,7 @@ fn compiled_detail_runtime_applies_explicit_text_transforms() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.json",
         json!({ "descriptionSlug": "senior%20rust-engineer" }).to_string(),
     )]);
@@ -510,7 +502,7 @@ fn compiled_detail_runtime_combines_description_text_parts() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.json",
         json!({
             "intro": "About the role.",
@@ -543,7 +535,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
     let missing_result = block_on(execute_detail_test(
         &empty_plan,
         &posting_occurrence("https://example.test/jobs/missing-description.json", []),
-        &FakeDetailFetcher::new([(
+        &fake_profile_http_client([(
             "https://example.test/jobs/missing-description.json",
             json!({ "title": "Engineer" }).to_string(),
         )]),
@@ -554,7 +546,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
     let empty_result = block_on(execute_detail_test(
         &empty_plan,
         &posting_occurrence("https://example.test/jobs/empty.json", []),
-        &FakeDetailFetcher::new([(
+        &fake_profile_http_client([(
             "https://example.test/jobs/empty.json",
             json!({ "description": " \n \t " }).to_string(),
         )]),
@@ -579,7 +571,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
     let too_short_result = block_on(execute_detail_test(
         &too_short_plan,
         &posting_occurrence("https://example.test/jobs/short.json", []),
-        &FakeDetailFetcher::new([(
+        &fake_profile_http_client([(
             "https://example.test/jobs/short.json",
             json!({ "description": "Too short" }).to_string(),
         )]),
@@ -603,7 +595,7 @@ fn compiled_detail_runtime_extracts_xml_description_text() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.xml", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.xml",
         r#"<jobs><job><description>First paragraph.
 
@@ -646,7 +638,7 @@ fn compiled_detail_runtime_matches_xml_detail_collection() {
         })],
     );
     let posting = posting_occurrence("https://example.test/jobs/42", [("jobId", "42")]);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs.xml",
         r#"<jobs>
             <job><id>41</id><description>Wrong job.</description></job>
@@ -690,7 +682,7 @@ fn compiled_detail_runtime_matches_one_item_xml_detail_collection() {
         })],
     );
     let posting = posting_occurrence("https://example.test/jobs/42", [("jobId", "42")]);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/one-job.xml",
         r#"<jobs><job><id>42</id><description>Single XML detail description.</description></job></jobs>"#
             .to_string(),
@@ -716,7 +708,7 @@ fn compiled_detail_runtime_extracts_html_description_text_with_css() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.html", []);
-    let fetcher = FakeDetailFetcher::new([(
+    let fetcher = fake_profile_http_client([(
         "https://example.test/jobs/42.html",
         r#"<main class="job"><section class="description"><p>First paragraph.</p><p>Second paragraph.</p></section></main>"#.to_string(),
     )]);
@@ -742,7 +734,7 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
         "https://example.test/jobs/42.html",
         [("tenant", "acme"), ("jobId", "42")],
     );
-    let fetcher = FakeDetailFetcher::new([]);
+    let fetcher = fake_profile_http_client([]);
     let browser = FakeBrowser::new([(
         "https://example.test/jobs/42.html?tenant=acme",
         r#"<main class="job"><section class="description">Rendered browser detail.</section></main>"#
@@ -794,7 +786,7 @@ fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
         json!({ "type": "css", "selector": "main.job" }),
         json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
     );
-    let fetcher = FakeDetailFetcher::new([]);
+    let fetcher = fake_profile_http_client([]);
     let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
         ProfileBrowserFetchErrorKind::InteractionFailed {
             interaction_index: Some(0),
@@ -834,14 +826,14 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
     let fetch_failure = block_on(execute_detail_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/missing.json", []),
-        &FakeDetailFetcher::new([]),
+        &fake_profile_http_client([]),
     ));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
     let parse_failure = block_on(execute_detail_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/bad-json.json", []),
-        &FakeDetailFetcher::new([(
+        &fake_profile_http_client([(
             "https://example.test/jobs/bad-json.json",
             "{not-json".to_string(),
         )]),
@@ -861,15 +853,16 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
     let extract_failure = block_on(execute_detail_test(
         &extract_plan,
         &posting_occurrence("https://example.test/jobs/42.json", []),
-        &FakeDetailFetcher::new([(
+        &fake_profile_http_client([(
             "https://example.test/jobs/42.json",
             json!({ "description": "Text" }).to_string(),
         )]),
     ));
     assert_runtime_diagnostic(&extract_failure.diagnostics[0], "field_json_path_failed");
 
+    const AUTHORED_URL_SECRET: &str = "raw-authored-detail-secret";
     let missing_context_plan = compiled_json_detail_plan(
-        "https://example.test/{{postingMeta:jobId}}.json",
+        "https://raw-authored-detail-secret.example.test/{{postingMeta:jobId}}.json",
         json!({
             "type": "json_path",
             "jsonPath": "$.description",
@@ -881,12 +874,16 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
     let missing_context = block_on(execute_detail_test(
         &missing_context_plan,
         &posting_occurrence("https://example.test/jobs/42", []),
-        &FakeDetailFetcher::new([]),
+        &fake_profile_http_client([]),
     ));
     assert_runtime_diagnostic(
         &missing_context.diagnostics[0],
         "runtime_template_context_missing",
     );
+    let diagnostic = &missing_context.diagnostics[0];
+    let serialized = serde_json::to_string(diagnostic).unwrap();
+    assert!(!serialized.contains(AUTHORED_URL_SECRET));
+    assert_eq!(diagnostic.details, Some(json!({})));
 }
 
 #[test]
@@ -902,7 +899,7 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
         None,
     );
     let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = FakeDetailFetcher::default();
+    let fetcher = fake_profile_http_client([]);
     let browser = FakeBrowser::new([]);
     let cancellation = AlwaysCancelled;
 
@@ -938,12 +935,20 @@ fn detail_cancellation_interrupts_an_active_http_fetch() {
             None,
         );
         let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-        let fetcher = HangingDetailFetcher::default();
+        let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs/42.json".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Gate("active-fetch".to_string())],
+            content_length: None,
+        }]);
         let browser = FakeBrowser::new([]);
         let cancellation = TestCancellation::default();
 
         let cancel = async {
-            fetcher.started.notified().await;
+            while !fetcher.gate_is_waiting("active-fetch") {
+                tokio::task::yield_now().await;
+            }
             cancellation.cancel();
         };
         let execute = tokio::time::timeout(
@@ -976,7 +981,7 @@ fn detail_browser_cancellation_is_typed_control_flow() {
             json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
         );
         let posting = posting_occurrence("https://example.test/jobs/42.html", []);
-        let fetcher = FakeDetailFetcher::default();
+        let fetcher = fake_profile_http_client([]);
         let browser = CancellationAwareDetailBrowser::default();
         let cancellation = TestCancellation::default();
 
@@ -1018,32 +1023,6 @@ impl TestCancellation {
 impl RuntimeCancellation for TestCancellation {
     fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
-    }
-}
-
-#[derive(Default)]
-struct HangingDetailFetcher {
-    started: Arc<Notify>,
-    request_count: std::sync::Mutex<usize>,
-}
-
-impl HangingDetailFetcher {
-    fn request_count(&self) -> usize {
-        *self.request_count.lock().unwrap()
-    }
-}
-
-impl DetailFetcher for HangingDetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        _request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            *self.request_count.lock().unwrap() += 1;
-            self.started.notify_one();
-            std::future::pending().await
-        })
     }
 }
 
@@ -1104,42 +1083,18 @@ impl RuntimeCancellation for AlwaysCancelled {
     }
 }
 
-#[derive(Default)]
-struct FakeDetailFetcher {
-    responses: BTreeMap<String, String>,
-    requests: std::sync::Mutex<Vec<DetailFetchRequest>>,
-}
-
-impl FakeDetailFetcher {
-    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
-        Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            requests: std::sync::Mutex::new(Vec::new()),
+fn fake_profile_http_client(
+    responses: impl IntoIterator<Item = (&'static str, String)>,
+) -> ScriptedProfileHttpClient {
+    ScriptedProfileHttpClient::new(responses.into_iter().map(|(url, body)| {
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: url.to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+            content_length: None,
         }
-    }
-
-    fn requests(&self) -> Vec<DetailFetchRequest> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-impl DetailFetcher for FakeDetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.clone());
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DetailFetchError::new(format!("missing fake response for {}", request.url))
-            })?;
-            Ok(DetailFetchResponse { body })
-        })
-    }
+    }))
 }
 
 struct FakeBrowser {

@@ -11,6 +11,7 @@ pub struct PhaseLimits {
     pub max_pages: u64,
     pub max_browser_actions: u64,
     pub max_fan_out: u64,
+    pub max_response_bytes: u64,
 }
 
 impl PhaseLimits {
@@ -22,6 +23,7 @@ impl PhaseLimits {
         max_pages: 1_000,
         max_browser_actions: 50,
         max_fan_out: 100_000,
+        max_response_bytes: 67_108_864,
     };
 
     pub const fn minimum(self, other: Self) -> Self {
@@ -61,6 +63,11 @@ impl PhaseLimits {
             } else {
                 other.max_fan_out
             },
+            max_response_bytes: if self.max_response_bytes < other.max_response_bytes {
+                self.max_response_bytes
+            } else {
+                other.max_response_bytes
+            },
         }
     }
 
@@ -72,6 +79,7 @@ impl PhaseLimits {
             && self.max_pages > 0
             && self.max_browser_actions > 0
             && self.max_fan_out > 0
+            && self.max_response_bytes > 0
     }
 
     pub const fn within(self, inherited: Self) -> bool {
@@ -82,6 +90,7 @@ impl PhaseLimits {
             && self.max_pages <= inherited.max_pages
             && self.max_browser_actions <= inherited.max_browser_actions
             && self.max_fan_out <= inherited.max_fan_out
+            && self.max_response_bytes <= inherited.max_response_bytes
     }
 }
 
@@ -102,6 +111,8 @@ pub struct PhaseLimitsFragment {
     pub max_browser_actions: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_fan_out: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_response_bytes: Option<u64>,
 }
 
 impl<'de> Deserialize<'de> for PhaseLimitsFragment {
@@ -121,6 +132,7 @@ impl<'de> Deserialize<'de> for PhaseLimitsFragment {
             "maxPages",
             "maxBrowserActions",
             "maxFanOut",
+            "maxResponseBytes",
         ];
         if object.is_empty() {
             return Err(D::Error::custom(
@@ -146,6 +158,7 @@ impl<'de> Deserialize<'de> for PhaseLimitsFragment {
             max_pages: field("maxPages")?,
             max_browser_actions: field("maxBrowserActions")?,
             max_fan_out: field("maxFanOut")?,
+            max_response_bytes: field("maxResponseBytes")?,
         })
     }
 }

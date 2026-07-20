@@ -63,7 +63,7 @@ npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-s
 - The Source Profile registry loads built-in Source Profiles and the local `schott_ag` Source document.
 - Source validation derives `validationState` from schema, registry, and Profile Compiler diagnostics; Source status remains the user-controlled `active` lifecycle state.
 - At Search Run start, the selected Source Profile Access Path and Source Config compile into a typed Execution Plan.
-- The Search Run executes the compiled policy-bearing `discovery` plan for `schott_ag` under the backend's cumulative seven-dimension phase safety allowance and then applies Search Request match and exclusion rules locally. Search Run does not invent a tighter product allowance.
+- The Search Run executes the compiled policy-bearing `discovery` plan for `schott_ag` under the backend's cumulative eight-dimension phase safety allowance, including HTTP response bytes, and then applies Search Request match and exclusion rules locally. Search Run does not invent a tighter product allowance.
 - Source Run diagnostics remain structured and source-scoped so one Source failure does not hide other Source outcomes.
 
 ## Expected validation

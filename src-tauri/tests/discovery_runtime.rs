@@ -6,11 +6,11 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
     execute_discovery, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
-    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
-    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch, HttpMethod,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileHttpFailureKind,
+    RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -33,43 +33,18 @@ mod template_validation;
 #[path = "discovery_runtime/transforms_and_combine.rs"]
 mod transforms_and_combine;
 
-#[derive(Default)]
-struct FakeFetcher {
-    responses: BTreeMap<String, String>,
-    requests: std::sync::Mutex<Vec<DiscoveryFetchRequest>>,
-}
-
-impl FakeFetcher {
-    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
-        Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            requests: std::sync::Mutex::new(Vec::new()),
+fn fake_fetcher(
+    responses: impl IntoIterator<Item = (&'static str, String)>,
+) -> ScriptedProfileHttpClient {
+    ScriptedProfileHttpClient::new(responses.into_iter().map(|(url, body)| {
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: url.to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+            content_length: None,
         }
-    }
-
-    fn requests(&self) -> Vec<DiscoveryFetchRequest> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-impl DiscoveryFetcher for FakeFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.clone());
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DiscoveryFetchError::new(format!("missing fake response for {}", request.url))
-            })?;
-            Ok(DiscoveryFetchResponse { body })
-        })
-    }
+    }))
 }
 
 struct FakeBrowser {

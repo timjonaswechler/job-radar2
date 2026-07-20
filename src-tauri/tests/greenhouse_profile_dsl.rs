@@ -2,12 +2,11 @@ mod support;
 
 use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
 
-use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
+use std::{fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
-    DiscoveryFetchResponse, DiscoveryFetcher, SourceDocument, SourceProfileDocument,
+    DetailPostingOccurrence, DiscoveryCandidate, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -40,7 +39,7 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     let compile_result = compile_test_source(&source, Some(profile));
     let plan = unwrap_plan(compile_result);
 
-    let fetcher = OfflineFetcher::new([
+    let fetcher = offline_fetcher([
         (
             "https://boards-api.greenhouse.io/v1/boards/acmejobs/jobs",
             read_text("tests/fixtures/greenhouse/posting-discovery-response.json"),
@@ -79,7 +78,11 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     );
 
     assert_eq!(
-        fetcher.requested_urls(),
+        fetcher
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect::<Vec<_>>(),
         vec![
             "https://boards-api.greenhouse.io/v1/boards/acmejobs/jobs".to_string(),
             "https://boards-api.greenhouse.io/v1/boards/acmejobs/jobs/9001".to_string(),
@@ -101,71 +104,18 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     }
 }
 
-#[derive(Default)]
-struct OfflineFetcher {
-    responses: BTreeMap<String, String>,
-    requested_urls: std::sync::Mutex<Vec<String>>,
-}
-
-impl OfflineFetcher {
-    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
-        Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            requested_urls: std::sync::Mutex::new(Vec::new()),
+fn offline_fetcher(
+    responses: impl IntoIterator<Item = (&'static str, String)>,
+) -> ScriptedProfileHttpClient {
+    ScriptedProfileHttpClient::new(responses.into_iter().map(|(url, body)| {
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: url.to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+            content_length: None,
         }
-    }
-
-    fn requested_urls(&self) -> Vec<String> {
-        self.requested_urls.lock().unwrap().clone()
-    }
-}
-
-impl DiscoveryFetcher for OfflineFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.requested_urls
-                .lock()
-                .unwrap()
-                .push(request.url.clone());
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DiscoveryFetchError::new(format!(
-                    "missing offline discovery fixture for {}",
-                    request.url
-                ))
-            })?;
-            Ok(DiscoveryFetchResponse { body })
-        })
-    }
-}
-
-impl DetailFetcher for OfflineFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            self.requested_urls
-                .lock()
-                .unwrap()
-                .push(request.url.clone());
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                DetailFetchError::new(format!(
-                    "missing offline detail fixture for {}",
-                    request.url
-                ))
-            })?;
-            Ok(DetailFetchResponse { body })
-        })
-    }
+    }))
 }
 
 fn read_text(relative_path: &str) -> String {

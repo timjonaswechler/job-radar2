@@ -6,8 +6,9 @@ use crate::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_detail, DetailFetcher, DetailPostingOccurrence, ManagedProfileBrowserClient,
-            PhaseCompletion, ProfileBrowserClient, ReqwestDetailFetcher, RuntimeExecutionContext,
+            execute_detail, DetailPostingOccurrence, ManagedProfileBrowserClient, PhaseCompletion,
+            ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
+            RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -130,7 +131,7 @@ impl<'a> JobPostingService<'a> {
         browser_runtime_dir: impl Into<std::path::PathBuf>,
     ) -> Result<JobPostingView, String> {
         let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-        let fetcher = ReqwestDetailFetcher::new();
+        let fetcher = ReqwestProfileHttpClient::new();
         let browser = ManagedProfileBrowserClient::new(browser_runtime_dir);
         self.get_job_posting_with_clients(id, &snapshot, &fetcher, &browser)
             .await
@@ -144,7 +145,7 @@ impl<'a> JobPostingService<'a> {
         browser: &B,
     ) -> Result<JobPostingView, String>
     where
-        F: DetailFetcher + Sync + ?Sized,
+        F: ProfileHttpClient + Sync + ?Sized,
         B: ProfileBrowserClient + Sync + ?Sized,
     {
         let mut posting = self.get(id).await?;

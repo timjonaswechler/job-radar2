@@ -50,7 +50,7 @@ fn get_job_posting_loads_missing_description_marks_read_and_persists_text() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -129,7 +129,7 @@ fn get_job_posting_returns_existing_description_without_fetching() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -191,7 +191,7 @@ fn get_job_posting_returns_unsupported_when_no_concrete_source_supports_detail()
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await

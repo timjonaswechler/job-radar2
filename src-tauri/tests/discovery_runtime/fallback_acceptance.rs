@@ -45,7 +45,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
             }),
         ],
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         ("https://example.test/empty.json", json!({ "jobs": [] }).to_string()),
         (
             "https://example.test/fallback.json",
@@ -123,25 +123,46 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
             }),
         ],
     );
-    let fetcher = FakeFetcher::new([
-        (
-            "https://example.test/paginated.json?page=1",
-            json!({
-                "jobs": [
-                    { "title": "Partial Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
-                ]
-            })
-            .to_string(),
-        ),
-        (
-            "https://example.test/fallback.json",
-            json!({
-                "jobs": [
-                    { "title": "Fallback Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
-                ]
-            })
-            .to_string(),
-        ),
+    let fetcher = ScriptedProfileHttpClient::new([
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/paginated.json?page=1".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(
+                json!({
+                    "jobs": [
+                        { "title": "Partial Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                    ]
+                })
+                .to_string()
+                .into_bytes(),
+            )],
+            content_length: None,
+        },
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/paginated.json?page=2".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Failure(
+                ProfileHttpFailureKind::BodyStream,
+            )],
+            content_length: None,
+        },
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/fallback.json".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(
+                json!({
+                    "jobs": [
+                        { "title": "Fallback Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
+                    ]
+                })
+                .to_string()
+                .into_bytes(),
+            )],
+            content_length: None,
+        },
     ]);
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
@@ -186,7 +207,7 @@ fn compiled_discovery_runtime_combines_step_and_strategy_acceptance() {
             "acceptWhen": { "minResults": 1 }
         })],
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/one-result.json",
         json!({
             "jobs": [
@@ -258,7 +279,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
             }),
         ],
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/missing-description.json",
             json!({
@@ -333,7 +354,7 @@ fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
             "acceptWhen": { "maxErrorRatio": 0.25 }
         })],
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [

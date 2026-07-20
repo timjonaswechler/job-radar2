@@ -11,7 +11,7 @@ pub(super) async fn execute_strategy<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> StrategyExecution<String>
 where
-    F: DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let base_path = format!("/detail/strategies/{strategy_index}");
@@ -35,6 +35,7 @@ where
         fetcher,
         browser,
         &strategy.fetch,
+        strategy.parse.charset.as_deref(),
         &plan.source_config,
         &plan.source.name,
         posting,
@@ -58,7 +59,7 @@ where
     };
 
     let document = match parse_response_document(
-        &response.body,
+        &response,
         strategy,
         &base_path,
         strategy_key.as_deref(),

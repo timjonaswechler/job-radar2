@@ -3,12 +3,12 @@ use super::*;
 #[test]
 fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetch_failure = block_on(execute_discovery_test(&plan, &FakeFetcher::new([])));
+    let fetch_failure = block_on(execute_discovery_test(&plan, &fake_fetcher([])));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
     let parse_failure = block_on(execute_discovery_test(
         &plan,
-        &FakeFetcher::new([("https://example.test/jobs.json", "{not-json".to_string())]),
+        &fake_fetcher([("https://example.test/jobs.json", "{not-json".to_string())]),
     ));
     assert_runtime_diagnostic(&parse_failure.diagnostics[0], "json_parse_failed");
 
@@ -18,7 +18,7 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     );
     let select_failure = block_on(execute_discovery_test(
         &select_plan,
-        &FakeFetcher::new([(
+        &fake_fetcher([(
             "https://example.test/jobs.json",
             json!({ "jobs": [] }).to_string(),
         )]),
@@ -31,7 +31,7 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     let extract_plan = compiled_json_discovery_plan(fields, default_select());
     let extract_failure = block_on(execute_discovery_test(
         &extract_plan,
-        &FakeFetcher::new([(
+        &fake_fetcher([(
             "https://example.test/jobs.json",
             json!({
                 "jobs": [{
@@ -45,4 +45,22 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     ));
     assert_runtime_diagnostic(&extract_failure.diagnostics[0], "field_json_path_failed");
     assert!(extract_failure.candidates.is_empty());
+}
+
+#[test]
+fn discovery_url_render_failure_does_not_expose_authored_template() {
+    const SECRET: &str = "raw-authored-discovery-secret";
+    let mut plan = compiled_json_discovery_plan(default_fields(), default_select());
+    let ExecutionPlanFetch::Http { url, .. } = &mut plan.discovery.strategies[0].fetch else {
+        panic!("fixture must use HTTP fetch");
+    };
+    *url = format!("https://{SECRET}.example.test/{{{{unsupported:key}}}}");
+
+    let result = block_on(execute_discovery_test(&plan, &fake_fetcher([])));
+
+    let diagnostic = &result.diagnostics[0];
+    assert_runtime_diagnostic(diagnostic, "fetch_url_template_failed");
+    let serialized = serde_json::to_string(diagnostic).unwrap();
+    assert!(!serialized.contains(SECRET));
+    assert_eq!(diagnostic.details, Some(json!({})));
 }

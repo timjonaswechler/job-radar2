@@ -10,7 +10,7 @@ pub(super) async fn execute_strategy<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> StrategyExecution<Vec<DiscoveryCandidate>>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let base_path = format!("/discovery/strategies/{strategy_index}");
@@ -183,7 +183,7 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> Result<StrategyFetchOutput, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
@@ -203,6 +203,7 @@ where
         fetcher,
         browser,
         &strategy.fetch,
+        strategy.parse.charset.as_deref(),
         &plan.source_config,
         &plan.source.name,
         query_params_for_location(pagination_params, parameter_location),
@@ -228,7 +229,7 @@ where
     Ok(extract_candidates_from_response(
         plan,
         strategy,
-        &response.body,
+        &response,
         total_path,
         next_cursor_path,
         base_path,

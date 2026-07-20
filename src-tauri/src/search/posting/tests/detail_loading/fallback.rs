@@ -73,7 +73,7 @@ fn get_job_posting_falls_back_after_detail_capable_source_failure() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -154,7 +154,7 @@ fn get_job_posting_reports_failed_after_all_detail_capable_sources_fail() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -165,7 +165,7 @@ fn get_job_posting_reports_failed_after_all_detail_capable_sources_fail() {
                 message,
                 diagnostics,
             } => {
-                assert!(message.contains("HTTP 500"));
+                assert!(message.contains("HTTP fetch failed"));
                 assert!(diagnostics.iter().any(|diagnostic| {
                     diagnostic.code == "fetch_failed"
                         && diagnostic.details.as_ref().unwrap()["postingSourceKey"]

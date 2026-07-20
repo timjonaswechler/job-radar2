@@ -28,6 +28,7 @@ pub enum AllowanceDimension {
     Pages,
     BrowserActions,
     FanOut,
+    ResponseBytes,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -73,6 +74,7 @@ pub struct PhaseUsage {
     pub pages: u64,
     pub browser_actions: u64,
     pub fan_out: u64,
+    pub response_bytes: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -90,6 +92,7 @@ pub(crate) struct AllowanceCharge {
     pub(crate) pages: u64,
     pub(crate) browser_actions: u64,
     pub(crate) fan_out: u64,
+    pub(crate) response_bytes: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -205,6 +208,12 @@ impl InvocationAllowance {
                 charge.produced_items,
                 self.limits.values.max_produced_items,
             ),
+            (
+                AllowanceDimension::ResponseBytes,
+                state.usage.response_bytes,
+                charge.response_bytes,
+                self.limits.values.max_response_bytes,
+            ),
         ];
         for (dimension, used, requested, limit) in before_duration {
             let Some(next) = used.checked_add(requested) else {
@@ -256,7 +265,42 @@ impl InvocationAllowance {
         state.usage.pages += charge.pages;
         state.usage.browser_actions += charge.browser_actions;
         state.usage.fan_out += charge.fan_out;
+        state.usage.response_bytes += charge.response_bytes;
         Ok(())
+    }
+
+    pub(crate) fn remaining_response_bytes(&self) -> u64 {
+        let used = self
+            .state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .usage
+            .response_bytes;
+        self.limits.values.max_response_bytes.saturating_sub(used)
+    }
+
+    /// Commits bytes already admitted by the HTTP collector exactly once.
+    ///
+    /// Unlike generic debit this deliberately ignores an elapsed deadline and an
+    /// already-recorded stop: transport bytes that crossed H01 remain observable
+    /// even when cancellation or another terminal condition wins afterward.
+    pub(crate) fn commit_response_bytes(&self, admitted: u64, exceeded: Option<u64>) {
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let remaining = match state.usage.response_bytes.checked_add(admitted) {
+            Some(next) if next <= self.limits.values.max_response_bytes => {
+                state.usage.response_bytes = next;
+                self.limits.values.max_response_bytes - next
+            }
+            _ => {
+                drop(state);
+                let _ = self.fail_internal();
+                return;
+            }
+        };
+        drop(state);
+        if let Some(requested) = exceeded {
+            let _ = self.exhaust(AllowanceDimension::ResponseBytes, requested, remaining);
+        }
     }
 
     pub(crate) fn mark_deadline(&self) {
@@ -385,6 +429,7 @@ fn dimension_value(limits: PhaseLimits, dimension: AllowanceDimension) -> u64 {
         AllowanceDimension::Pages => limits.max_pages,
         AllowanceDimension::BrowserActions => limits.max_browser_actions,
         AllowanceDimension::FanOut => limits.max_fan_out,
+        AllowanceDimension::ResponseBytes => limits.max_response_bytes,
     }
 }
 
@@ -402,6 +447,7 @@ mod tests {
             max_pages: 1,
             max_browser_actions: 1,
             max_fan_out: 1,
+            max_response_bytes: 67_108_864,
         };
         let allowance = InvocationAllowance::new(limits, true, None);
         allowance
@@ -439,6 +485,7 @@ mod tests {
             max_pages: 1,
             max_browser_actions: 1,
             max_fan_out: 1,
+            max_response_bytes: 67_108_864,
         };
         let cases = [
             (
@@ -494,6 +541,26 @@ mod tests {
             assert_eq!(exhaustion.requested, 1);
             assert_eq!(exhaustion.remaining, 0);
         }
+    }
+
+    #[test]
+    fn response_byte_prefix_is_committed_to_the_single_root_before_exhaustion() {
+        let limits = PhaseLimits {
+            max_response_bytes: 3,
+            ..PhaseLimits::BACKEND
+        };
+        let allowance = InvocationAllowance::new(limits, true, None);
+        allowance.commit_response_bytes(3, Some(1));
+        let stop = allowance
+            .stop()
+            .expect("one proven excess byte exhausts response capacity");
+        let AllowanceStop::Exhausted(exhaustion) = stop else {
+            panic!("expected byte exhaustion")
+        };
+        assert_eq!(exhaustion.dimension, AllowanceDimension::ResponseBytes);
+        assert_eq!(exhaustion.remaining, 0);
+        let report = allowance.report(PhaseCompletion::BudgetExhausted { exhaustion });
+        assert_eq!(report.usage.response_bytes, 3);
     }
 
     #[test]

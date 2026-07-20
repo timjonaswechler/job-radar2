@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn compiled_discovery_runtime_returns_one_normalized_candidate() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -29,7 +29,7 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
 #[test]
 fn compiled_discovery_runtime_selects_multiple_json_items() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
@@ -51,7 +51,7 @@ fn compiled_discovery_runtime_selects_multiple_json_items() {
 #[test]
 fn compiled_discovery_runtime_reports_required_field_and_cardinality_diagnostics() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -99,7 +99,7 @@ fn compiled_discovery_runtime_applies_where_filters_before_extraction() {
             ]),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
@@ -121,7 +121,7 @@ fn compiled_discovery_runtime_applies_where_filters_before_extraction() {
 #[test]
 fn compiled_discovery_runtime_preserves_successful_items_with_partial_diagnostics() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [

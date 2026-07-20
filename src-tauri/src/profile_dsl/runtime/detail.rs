@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
+use std::collections::BTreeMap;
 
 use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
@@ -38,6 +38,7 @@ use super::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
     },
+    http::{ProfileHttpClient, ProfileHttpFailureKind, ProfileHttpRequest, SensitiveRequestBody},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
@@ -86,111 +87,6 @@ pub struct DetailPostingOccurrence {
     pub posting_meta: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct DetailFetchRequest {
-    pub method: HttpMethod,
-    pub url: String,
-    pub headers: BTreeMap<String, String>,
-    pub body: Option<RequestBody>,
-    pub timeout_ms: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DetailFetchResponse {
-    pub body: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DetailFetchError {
-    pub message: String,
-}
-
-impl DetailFetchError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-pub trait DetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>;
-}
-
-#[derive(Clone, Debug)]
-pub struct ReqwestDetailFetcher {
-    client: reqwest::Client,
-}
-
-impl ReqwestDetailFetcher {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
-    }
-}
-
-impl Default for ReqwestDetailFetcher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DetailFetcher for ReqwestDetailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            let method = match request.method {
-                HttpMethod::Get => reqwest::Method::GET,
-                HttpMethod::Post => reqwest::Method::POST,
-            };
-            let mut builder = self
-                .client
-                .request(method, &request.url)
-                .timeout(Duration::from_millis(request.timeout_ms));
-            for (name, value) in &request.headers {
-                builder = builder.header(name, value);
-            }
-            if let Some(body) = &request.body {
-                builder = match body {
-                    RequestBody::Json { value } => {
-                        if !request
-                            .headers
-                            .keys()
-                            .any(|name| name.eq_ignore_ascii_case("content-type"))
-                        {
-                            builder = builder.header("content-type", "application/json");
-                        }
-                        builder.body(
-                            serde_json::to_string(value)
-                                .map_err(|error| DetailFetchError::new(error.to_string()))?,
-                        )
-                    }
-                    RequestBody::Text { value } => builder.body(value.clone()),
-                    RequestBody::Form { fields } => builder.form(fields),
-                };
-            }
-            let response = builder
-                .send()
-                .await
-                .map_err(|error| DetailFetchError::new(error.to_string()))?
-                .error_for_status()
-                .map_err(|error| DetailFetchError::new(error.to_string()))?;
-            let body = response
-                .text()
-                .await
-                .map_err(|error| DetailFetchError::new(error.to_string()))?;
-            Ok(DetailFetchResponse { body })
-        })
-    }
-}
-
 pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
@@ -199,7 +95,7 @@ pub async fn execute_detail<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> DetailExecutionResult
 where
-    F: DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let Some(detail) = &plan.detail else {

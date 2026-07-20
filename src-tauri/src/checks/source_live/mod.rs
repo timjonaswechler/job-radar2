@@ -13,10 +13,9 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
-    execute_detail, execute_discovery, DetailExecutionResult, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetcher, PhaseCompletion,
-    ProfileBrowserClient, ReqwestDetailFetcher, ReqwestDiscoveryFetcher, RuntimeExecutionContext,
-    UnavailableProfileBrowserClient,
+    execute_detail, execute_discovery, DetailExecutionResult, DetailPostingOccurrence,
+    DiscoveryCandidate, PhaseCompletion, ProfileBrowserClient, ProfileHttpClient,
+    ReqwestProfileHttpClient, RuntimeExecutionContext, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -61,8 +60,8 @@ pub fn check_source(
     check_source_with_clients(
         app_data_dir,
         source_key,
-        &ReqwestDiscoveryFetcher::new(),
-        &ReqwestDetailFetcher::new(),
+        &ReqwestProfileHttpClient::new(),
+        &ReqwestProfileHttpClient::new(),
         &UnavailableProfileBrowserClient,
     )
 }
@@ -73,7 +72,7 @@ pub fn check_source_with_fetcher<F>(
     fetcher: &F,
 ) -> Result<CheckReport, String>
 where
-    F: DiscoveryFetcher + DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
 {
     check_source_with_clients(
         app_data_dir,
@@ -92,8 +91,8 @@ pub fn check_source_with_clients<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: DiscoveryFetcher + Sync + ?Sized,
-    T: DetailFetcher + Sync + ?Sized,
+    D: ProfileHttpClient + Sync + ?Sized,
+    T: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let app_data_dir = app_data_dir.as_ref();
@@ -158,8 +157,8 @@ pub(crate) fn build_source_live_check_report<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: DiscoveryFetcher + Sync + ?Sized,
-    T: DetailFetcher + Sync + ?Sized,
+    D: ProfileHttpClient + Sync + ?Sized,
+    T: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let prepared = prepare_source_live_check(snapshot, source_key)?;

@@ -70,7 +70,7 @@ fn get_job_posting_fetches_with_aligned_source_url_config_and_posting_meta() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await

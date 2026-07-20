@@ -6,8 +6,8 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_discovery, DiscoveryCandidate, DiscoveryFetcher, ManagedProfileBrowserClient,
-            PhaseCompletion, ProfileBrowserClient, ReqwestDiscoveryFetcher,
+            execute_discovery, DiscoveryCandidate, ManagedProfileBrowserClient, PhaseCompletion,
+            ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
             RuntimeExecutionContext,
         },
     },
@@ -96,7 +96,7 @@ impl DefaultSourceExecutor {
 impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            let fetcher = ReqwestDiscoveryFetcher::new();
+            let fetcher = ReqwestProfileHttpClient::new();
             let browser = ManagedProfileBrowserClient::new(self.browser_runtime_dir.clone());
             execute_discovery_for_source(input, &fetcher, &browser).await
         })
@@ -109,7 +109,7 @@ pub(super) async fn execute_discovery_for_source<F, B>(
     browser: &B,
 ) -> Result<SourceExecutionOutput, SourceExecutionError>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if input

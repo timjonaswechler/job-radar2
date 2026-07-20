@@ -1,78 +1,46 @@
-use std::{
-    collections::VecDeque,
-    future::Future,
-    pin::Pin,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    },
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use job_radar_lib::{
-    execute_discovery, AllowanceDimension, CompileSourceOutcome, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, ExecutionPlanFetch,
+    execute_discovery, AllowanceDimension, CompileSourceOutcome, ExecutionPlanFetch,
     PhaseCancellationReason, PhaseCompletion, PhaseLimits, PhaseLimitsFragment,
-    RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext, SourceDocument,
+    ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
     SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
 struct QueueFetcher {
-    bodies: Mutex<VecDeque<String>>,
-    calls: Mutex<Vec<String>>,
+    client: ScriptedProfileHttpClient,
 }
 
 impl QueueFetcher {
     fn new(bodies: impl IntoIterator<Item = Value>) -> Self {
-        Self {
-            bodies: Mutex::new(bodies.into_iter().map(|value| value.to_string()).collect()),
-            calls: Mutex::new(Vec::new()),
-        }
+        Self::new_raw(bodies.into_iter().map(|value| value.to_string()))
     }
 
     fn new_raw(bodies: impl IntoIterator<Item = String>) -> Self {
+        let events = bodies.into_iter().map(scripted_text_response);
         Self {
-            bodies: Mutex::new(bodies.into_iter().collect()),
-            calls: Mutex::new(Vec::new()),
+            client: ScriptedProfileHttpClient::new(events),
         }
     }
-}
 
-impl DiscoveryFetcher for QueueFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.calls.lock().unwrap().push(request.url);
-            let body = self
-                .bodies
-                .lock()
-                .unwrap()
-                .pop_front()
-                .unwrap_or_else(|| json!({ "jobs": [] }).to_string());
-            Ok(DiscoveryFetchResponse { body })
-        })
+    fn client(&self) -> &ScriptedProfileHttpClient {
+        &self.client
+    }
+
+    fn request_count(&self) -> usize {
+        self.client.request_count()
     }
 }
 
-struct AlwaysFailFetcher {
-    calls: AtomicUsize,
-}
-
-impl DiscoveryFetcher for AlwaysFailFetcher {
-    fn fetch<'a>(
-        &'a self,
-        _request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            Err(DiscoveryFetchError::new("deterministic failure"))
-        })
+fn scripted_text_response(body: String) -> ScriptedHttpEvent {
+    ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/fixture".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+        content_length: None,
     }
 }
 
@@ -114,7 +82,7 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     )
@@ -126,7 +94,7 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
         diagnostic.code == "invalid_compiled_browser_phase_duration"
             && diagnostic.path == "/discovery/limits/maxDurationMs"
     }));
-    assert!(fetcher.calls.lock().unwrap().is_empty());
+    assert!(fetcher.request_count() == 0);
 }
 
 #[tokio::test]
@@ -146,7 +114,7 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )
@@ -160,11 +128,11 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == "invalid_caller_phase_limits"));
-    assert!(fetcher.calls.lock().unwrap().is_empty());
+    assert!(fetcher.request_count() == 0);
 }
 
 #[tokio::test]
-async fn accepted_discovery_has_one_complete_exact_seven_dimension_report() {
+async fn accepted_discovery_has_one_complete_exact_eight_dimension_report() {
     let plan = plan();
     let fetcher = QueueFetcher::new([
         json!({ "jobs": [{ "id": "1", "title": "Engineer", "url": "https://example.test/1", "locations": [] }] }),
@@ -180,7 +148,7 @@ async fn accepted_discovery_has_one_complete_exact_seven_dimension_report() {
     };
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(equality_limits),
     )
@@ -204,9 +172,15 @@ async fn attempt_one_over_is_denied_before_second_strategy() {
     let mut fallback = plan.discovery.strategies[0].clone();
     fallback.key = "second".to_string();
     plan.discovery.strategies.push(fallback);
-    let fetcher = AlwaysFailFetcher {
-        calls: AtomicUsize::new(0),
-    };
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 503,
+        final_url: "https://example.test/failure".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Failure(
+            ProfileHttpFailureKind::BodyStream,
+        )],
+        content_length: None,
+    }]);
     let caller = PhaseLimits {
         max_strategy_attempts: 1,
         ..PhaseLimits::BACKEND
@@ -223,7 +197,7 @@ async fn attempt_one_over_is_denied_before_second_strategy() {
     let report = result.report.expect("attempt exhaustion report");
     assert_exhaustion(&report.completion, AllowanceDimension::StrategyAttempts);
     assert_eq!(report.usage.strategy_attempts, 1);
-    assert_eq!(fetcher.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(fetcher.request_count(), 1);
     assert!(result.candidates.is_empty());
 }
 
@@ -240,7 +214,7 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )
@@ -251,8 +225,91 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
     assert_eq!(report.usage.requests, 1);
     assert_eq!(report.usage.pages, 1);
     assert_eq!(report.usage.produced_items, 1);
-    assert_eq!(fetcher.calls.lock().unwrap().len(), 1);
+    assert_eq!(fetcher.request_count(), 1);
     assert!(result.candidates.is_empty());
+}
+
+#[tokio::test]
+async fn exact_response_byte_allowance_followed_by_eof_succeeds() {
+    let mut plan = plan();
+    plan.discovery.strategies[0].pagination = None;
+    let body = "{\"jobs\":[]}";
+    let fetcher = QueueFetcher::new_raw([body.to_string()]);
+    let caller = PhaseLimits {
+        max_response_bytes: body.len() as u64,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = execute_discovery(
+        &plan,
+        fetcher.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    )
+    .await;
+
+    assert!(result.candidates.is_empty());
+    let report = result.report.expect("accepted exact-boundary report");
+    assert_eq!(report.completion, PhaseCompletion::Accepted);
+    assert_eq!(report.usage.response_bytes, body.len() as u64);
+    assert_eq!(fetcher.request_count(), 1);
+}
+
+#[tokio::test]
+async fn response_byte_one_over_commits_only_the_admitted_prefix_and_hides_payload() {
+    let mut plan = plan();
+    plan.discovery.strategies[0].pagination = None;
+    let fetcher = QueueFetcher::new_raw(["{\"jobs\":[]}".to_string()]);
+    let caller = PhaseLimits {
+        max_response_bytes: 10,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = execute_discovery(
+        &plan,
+        fetcher.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    )
+    .await;
+
+    assert!(result.candidates.is_empty());
+    assert_eq!(fetcher.request_count(), 1);
+    let report = result.report.expect("response-byte exhaustion report");
+    assert_exhaustion(&report.completion, AllowanceDimension::ResponseBytes);
+    assert_eq!(report.usage.response_bytes, 10);
+}
+
+#[tokio::test]
+async fn response_byte_allowance_is_cumulative_across_pages() {
+    let plan = plan();
+    let first = json!({ "jobs": [
+        { "id": "1", "title": "One", "url": "https://example.test/1", "locations": [] }
+    ] })
+    .to_string();
+    let second = json!({ "jobs": [] }).to_string();
+    let limit = first.len() as u64 + 5;
+    let fetcher = QueueFetcher::new_raw([first, second]);
+    let caller = PhaseLimits {
+        max_response_bytes: limit,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = execute_discovery(
+        &plan,
+        fetcher.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    )
+    .await;
+
+    assert!(result.candidates.is_empty());
+    assert_eq!(fetcher.request_count(), 2);
+    let report = result.report.expect("cumulative byte exhaustion report");
+    assert_exhaustion(&report.completion, AllowanceDimension::ResponseBytes);
+    assert_eq!(report.usage.response_bytes, limit);
+    assert_eq!(report.usage.requests, 2);
+    assert_eq!(report.usage.pages, 2);
 }
 
 #[tokio::test]
@@ -268,7 +325,7 @@ async fn atomic_request_page_one_over_does_not_charge_the_fitting_request() {
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )
@@ -281,7 +338,7 @@ async fn atomic_request_page_one_over_does_not_charge_the_fitting_request() {
         "denied request+page debit is atomic"
     );
     assert_eq!(report.usage.pages, 1);
-    assert_eq!(fetcher.calls.lock().unwrap().len(), 1);
+    assert_eq!(fetcher.request_count(), 1);
 }
 
 #[tokio::test]
@@ -296,7 +353,7 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&cancellation),
     )
@@ -311,7 +368,7 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
     );
     assert_eq!(report.usage.requests, 1);
     assert!(
-        fetcher.calls.lock().unwrap().is_empty(),
+        fetcher.request_count() == 0,
         "effect must not start after Cancellation becomes observable"
     );
 }
@@ -330,14 +387,14 @@ async fn produced_item_prefix_is_charged_and_denial_exposes_no_payload() {
 
     let result = execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )
     .await;
 
     assert!(result.candidates.is_empty());
-    assert_eq!(fetcher.calls.lock().unwrap().len(), 1);
+    assert_eq!(fetcher.request_count(), 1);
     let report = result.report.expect("budget terminal has a report");
     let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
         panic!("expected budget exhaustion")
@@ -360,6 +417,82 @@ async fn fan_out_one_over_charges_only_the_fitting_nonduplicate_prefix() {
     ]);
     let caller = PhaseLimits {
         max_fan_out: 1,
+        max_response_bytes: 67_108_864,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = execute_discovery(
+        &plan,
+        fetcher.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    )
+    .await;
+
+    let report = result.report.expect("fan-out exhaustion report");
+    assert_exhaustion(&report.completion, AllowanceDimension::FanOut);
+    assert_eq!(report.usage.fan_out, 1);
+    assert_eq!(report.usage.requests, 1);
+    assert_eq!(fetcher.request_count(), 1);
+    assert!(result.candidates.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn exact_duration_boundary_may_complete_before_deadline_exhaustion() {
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs".to_string(),
+        headers: Vec::new(),
+        body: vec![
+            ScriptedHttpBodyEvent::Gate("exact-boundary".to_string()),
+            ScriptedHttpBodyEvent::Chunk(json!({ "jobs": [] }).to_string().into_bytes()),
+        ],
+        content_length: None,
+    }]);
+    let mut plan = plan();
+    plan.discovery.strategies[0].pagination = None;
+    let caller = PhaseLimits {
+        max_duration_ms: 50,
+        ..PhaseLimits::BACKEND
+    };
+
+    let release = async {
+        while !fetcher.gate_is_waiting("exact-boundary") {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(fetcher.release_gate("exact-boundary"));
+    };
+    let execute = execute_discovery(
+        &plan,
+        &fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    );
+    let (_, result) = tokio::join!(release, execute);
+
+    let report = result.report.expect("boundary completion report");
+    assert_eq!(report.completion, PhaseCompletion::Accepted);
+    assert_eq!(report.usage.duration_ms, 50);
+}
+
+#[tokio::test(start_paused = true)]
+async fn admitted_response_prefix_is_committed_after_deadline_stop_is_recorded() {
+    let prefix = b"{\"jobs\":[";
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs".to_string(),
+        headers: Vec::new(),
+        body: vec![
+            ScriptedHttpBodyEvent::Chunk(prefix.to_vec()),
+            ScriptedHttpBodyEvent::Gate("deadline-prefix".to_string()),
+        ],
+        content_length: None,
+    }]);
+    let mut plan = plan();
+    plan.discovery.strategies[0].pagination = None;
+    let caller = PhaseLimits {
+        max_duration_ms: 50,
         ..PhaseLimits::BACKEND
     };
 
@@ -371,54 +504,11 @@ async fn fan_out_one_over_charges_only_the_fitting_nonduplicate_prefix() {
     )
     .await;
 
-    let report = result.report.expect("fan-out exhaustion report");
-    assert_exhaustion(&report.completion, AllowanceDimension::FanOut);
-    assert_eq!(report.usage.fan_out, 1);
-    assert_eq!(report.usage.requests, 1);
-    assert_eq!(fetcher.calls.lock().unwrap().len(), 1);
     assert!(result.candidates.is_empty());
-}
-
-#[tokio::test(start_paused = true)]
-async fn exact_duration_boundary_may_complete_before_deadline_exhaustion() {
-    struct BoundaryFetcher;
-    impl DiscoveryFetcher for BoundaryFetcher {
-        fn fetch<'a>(
-            &'a self,
-            _request: DiscoveryFetchRequest,
-        ) -> Pin<
-            Box<
-                dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>>
-                    + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                Ok(DiscoveryFetchResponse {
-                    body: json!({ "jobs": [] }).to_string(),
-                })
-            })
-        }
-    }
-    let mut plan = plan();
-    plan.discovery.strategies[0].pagination = None;
-    let caller = PhaseLimits {
-        max_duration_ms: 50,
-        ..PhaseLimits::BACKEND
-    };
-
-    let result = execute_discovery(
-        &plan,
-        &BoundaryFetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
-
-    let report = result.report.expect("boundary completion report");
-    assert_eq!(report.completion, PhaseCompletion::Accepted);
-    assert_eq!(report.usage.duration_ms, 50);
+    let report = result.report.expect("deadline exhaustion report");
+    assert_exhaustion(&report.completion, AllowanceDimension::Duration);
+    assert_eq!(report.usage.response_bytes, prefix.len() as u64);
+    assert_eq!(fetcher.request_count(), 1);
 }
 
 #[tokio::test(start_paused = true)]
@@ -429,21 +519,15 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
             tokio::time::Instant::now() >= self.0
         }
     }
-    struct PendingFetcher;
-    impl DiscoveryFetcher for PendingFetcher {
-        fn fetch<'a>(
-            &'a self,
-            _request: DiscoveryFetchRequest,
-        ) -> Pin<
-            Box<
-                dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>>
-                    + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(std::future::pending())
-        }
-    }
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Gate(
+            "deadline-cancellation".to_string(),
+        )],
+        content_length: None,
+    }]);
     let mut plan = plan();
     plan.discovery.strategies[0].pagination = None;
     let duration_ms = 50;
@@ -457,7 +541,7 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
 
     let result = execute_discovery(
         &plan,
-        &PendingFetcher,
+        &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&cancellation).with_limits(caller),
     )
@@ -479,26 +563,13 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
 
 #[tokio::test]
 async fn invocation_deadline_stops_active_effect_and_reports_duration_exhaustion() {
-    struct SlowFetcher;
-    impl DiscoveryFetcher for SlowFetcher {
-        fn fetch<'a>(
-            &'a self,
-            _request: DiscoveryFetchRequest,
-        ) -> Pin<
-            Box<
-                dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>>
-                    + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                Ok(DiscoveryFetchResponse {
-                    body: json!({ "jobs": [] }).to_string(),
-                })
-            })
-        }
-    }
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Gate("past-deadline".to_string())],
+        content_length: None,
+    }]);
     let plan = plan();
     let caller = PhaseLimits {
         max_duration_ms: 1,
@@ -506,7 +577,7 @@ async fn invocation_deadline_stops_active_effect_and_reports_duration_exhaustion
     };
     let result = execute_discovery(
         &plan,
-        &SlowFetcher,
+        &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )
@@ -533,7 +604,7 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
 
     let result = tauri::async_runtime::block_on(execute_discovery(
         &plan,
-        &fetcher,
+        fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     ));
@@ -549,7 +620,8 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
     assert_eq!(report.usage.pages, 0);
     assert_eq!(report.usage.browser_actions, 0);
     assert_eq!(report.usage.fan_out, 0);
-    assert!(fetcher.calls.lock().unwrap().is_empty());
+    assert_eq!(report.usage.response_bytes, 0);
+    assert!(fetcher.request_count() == 0);
     assert_eq!(result.diagnostics[0].code, "invalid_caller_phase_limits");
 }
 

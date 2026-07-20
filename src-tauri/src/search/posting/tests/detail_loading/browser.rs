@@ -52,7 +52,7 @@ fn get_job_posting_executes_compiled_browser_detail_plan_through_browser_client(
         )]);
 
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(posting_id, &snapshot, &fetcher, &browser)
+            .get_job_posting_with_clients(posting_id, &snapshot, fetcher.client(), &browser)
             .await
             .unwrap();
 

@@ -1,8 +1,8 @@
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailExecutionResult,
-    DetailFetcher, DetailPostingOccurrence, DiscoveryExecutionResult, DiscoveryFetcher,
-    RegistrySourceProfile, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
+    DetailPostingOccurrence, DiscoveryExecutionResult, ProfileHttpClient, RegistrySourceProfile,
+    RuntimeExecutionContext, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
 };
 
 #[allow(dead_code)]
@@ -11,7 +11,7 @@ pub async fn execute_discovery_test<F>(
     fetcher: &F,
 ) -> DiscoveryExecutionResult
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
 {
     execute_discovery(
         plan,
@@ -29,7 +29,7 @@ pub async fn execute_detail_test<F>(
     fetcher: &F,
 ) -> DetailExecutionResult
 where
-    F: DetailFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
 {
     execute_detail(
         plan,

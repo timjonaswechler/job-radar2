@@ -111,6 +111,11 @@ fn validate_phase_limits(
             limits.max_fan_out,
             PhaseLimits::BACKEND.max_fan_out,
         ),
+        (
+            "maxResponseBytes",
+            limits.max_response_bytes,
+            PhaseLimits::BACKEND.max_response_bytes,
+        ),
     ];
     for (field, value, ceiling) in fields {
         if value == 0 || value > ceiling {

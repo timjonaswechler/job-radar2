@@ -144,6 +144,17 @@ impl<'a> RuntimeExecutionContext<'a> {
     pub(crate) fn stop(self) -> Option<AllowanceStop> {
         self.allowance.and_then(InvocationAllowance::stop)
     }
+    pub(crate) fn remaining_response_bytes(self) -> u64 {
+        self.allowance.map_or(
+            PhaseLimits::BACKEND.max_response_bytes,
+            InvocationAllowance::remaining_response_bytes,
+        )
+    }
+    pub(crate) fn commit_response_bytes(self, admitted: u64, exceeded: Option<u64>) {
+        if let Some(allowance) = self.allowance {
+            allowance.commit_response_bytes(admitted, exceeded);
+        }
+    }
     pub(crate) fn mark_deadline(self) {
         if let Some(allowance) = self.allowance {
             allowance.mark_deadline();
@@ -156,6 +167,10 @@ impl<'a> RuntimeExecutionContext<'a> {
     }
     pub(crate) fn deadline(self) -> Option<tokio::time::Instant> {
         self.allowance.map(InvocationAllowance::deadline)
+    }
+    pub(crate) fn deadline_is_expired(self) -> bool {
+        self.deadline()
+            .is_some_and(|deadline| tokio::time::Instant::now() >= deadline)
     }
     pub(crate) fn browser_work_deadline(self) -> Option<tokio::time::Instant> {
         self.allowance

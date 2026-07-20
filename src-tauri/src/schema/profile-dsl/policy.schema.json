@@ -18,7 +18,7 @@
     "phaseLimits": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxStrategyAttempts", "maxRequests", "maxProducedItems", "maxDurationMs", "maxPages", "maxBrowserActions", "maxFanOut"],
+      "required": ["maxStrategyAttempts", "maxRequests", "maxProducedItems", "maxDurationMs", "maxPages", "maxBrowserActions", "maxFanOut", "maxResponseBytes"],
       "properties": {
         "maxStrategyAttempts": { "type": "integer", "minimum": 1, "maximum": 50 },
         "maxRequests": { "type": "integer", "minimum": 1, "maximum": 1000 },
@@ -26,7 +26,8 @@
         "maxDurationMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
         "maxPages": { "type": "integer", "minimum": 1, "maximum": 1000 },
         "maxBrowserActions": { "type": "integer", "minimum": 1, "maximum": 50 },
-        "maxFanOut": { "type": "integer", "minimum": 1, "maximum": 100000 }
+        "maxFanOut": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maxResponseBytes": { "type": "integer", "minimum": 1, "maximum": 67108864 }
       }
     },
     "discoveryStrategySet": {

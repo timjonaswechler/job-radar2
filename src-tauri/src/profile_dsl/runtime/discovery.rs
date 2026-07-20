@@ -1,9 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashSet, VecDeque},
-    future::Future,
-    pin::Pin,
-    time::Duration,
-};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 
 use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
@@ -43,6 +38,7 @@ use super::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
     },
+    http::{ProfileHttpClient, ProfileHttpFailureKind, ProfileHttpRequest, SensitiveRequestBody},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
@@ -90,114 +86,6 @@ pub struct DiscoveryCandidate {
     pub description_text: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct DiscoveryFetchRequest {
-    pub method: HttpMethod,
-    pub url: String,
-    pub headers: BTreeMap<String, String>,
-    pub body: Option<RequestBody>,
-    pub timeout_ms: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DiscoveryFetchResponse {
-    pub body: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DiscoveryFetchError {
-    pub message: String,
-}
-
-impl DiscoveryFetchError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-pub trait DiscoveryFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    >;
-}
-
-#[derive(Clone, Debug)]
-pub struct ReqwestDiscoveryFetcher {
-    client: reqwest::Client,
-}
-
-impl ReqwestDiscoveryFetcher {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
-    }
-}
-
-impl Default for ReqwestDiscoveryFetcher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DiscoveryFetcher for ReqwestDiscoveryFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            let method = match request.method {
-                HttpMethod::Get => reqwest::Method::GET,
-                HttpMethod::Post => reqwest::Method::POST,
-            };
-            let mut builder = self
-                .client
-                .request(method, &request.url)
-                .timeout(Duration::from_millis(request.timeout_ms));
-            for (name, value) in &request.headers {
-                builder = builder.header(name, value);
-            }
-            if let Some(body) = &request.body {
-                builder = match body {
-                    RequestBody::Json { value } => {
-                        if !request
-                            .headers
-                            .keys()
-                            .any(|name| name.eq_ignore_ascii_case("content-type"))
-                        {
-                            builder = builder.header("content-type", "application/json");
-                        }
-                        builder.body(
-                            serde_json::to_string(value)
-                                .map_err(|error| DiscoveryFetchError::new(error.to_string()))?,
-                        )
-                    }
-                    RequestBody::Text { value } => builder.body(value.clone()),
-                    RequestBody::Form { fields } => builder.form(fields),
-                };
-            }
-            let response = builder
-                .send()
-                .await
-                .map_err(|error| DiscoveryFetchError::new(error.to_string()))?
-                .error_for_status()
-                .map_err(|error| DiscoveryFetchError::new(error.to_string()))?;
-            let body = response
-                .text()
-                .await
-                .map_err(|error| DiscoveryFetchError::new(error.to_string()))?;
-            Ok(DiscoveryFetchResponse { body })
-        })
-    }
-}
-
 pub async fn execute_discovery<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
@@ -205,7 +93,7 @@ pub async fn execute_discovery<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> DiscoveryExecutionResult
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if plan.discovery.strategies.is_empty() {

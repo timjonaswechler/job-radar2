@@ -13,7 +13,7 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     context: RuntimeExecutionContext<'_>,
 ) -> Result<Vec<DiscoveryCandidate>, TypedCancellation>
 where
-    F: DiscoveryFetcher + Sync + ?Sized,
+    F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     match pagination {
@@ -278,6 +278,7 @@ where
                             fetcher,
                             browser,
                             &strategy.fetch,
+                            strategy.parse.charset.as_deref(),
                             &plan.source_config,
                             &plan.source.name,
                             url,
@@ -294,6 +295,7 @@ where
                             fetcher,
                             browser,
                             &strategy.fetch,
+                            strategy.parse.charset.as_deref(),
                             &plan.source_config,
                             &plan.source.name,
                             &[],
@@ -314,7 +316,7 @@ where
                 request_count += 1;
 
                 let document = match parse_response_document(
-                    &response.body,
+                    &response,
                     strategy,
                     base_path,
                     strategy_key,

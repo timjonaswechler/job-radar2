@@ -17,7 +17,7 @@ fn compiled_discovery_runtime_extracts_xml_posting_fields() {
         fields,
         "https://example.test/jobs.xml",
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.xml",
         r#"<jobs>
             <job>
@@ -57,7 +57,7 @@ fn compiled_discovery_runtime_extracts_html_posting_fields_with_css() {
         fields,
         "https://example.test/jobs.html",
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.html",
         r#"<html><body>
             <article class="posting">
@@ -97,7 +97,7 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
         fields,
         "https://example.test/rendered?tenant=acme",
     );
-    let fetcher = FakeFetcher::new(std::iter::empty());
+    let fetcher = fake_fetcher(std::iter::empty());
     let browser = FakeBrowser::new([(
         "https://example.test/rendered?tenant=acme",
         r#"<html><body>
@@ -164,7 +164,7 @@ fn compiled_discovery_runtime_reports_browser_fetch_diagnostics() {
         default_html_fields(),
         "https://example.test/rendered",
     );
-    let fetcher = FakeFetcher::new(std::iter::empty());
+    let fetcher = fake_fetcher(std::iter::empty());
     let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
         ProfileBrowserFetchErrorKind::WaitTimeout {
             wait_index: Some(0),
@@ -197,7 +197,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     );
     let xml_parse_failure = block_on(execute_discovery_test(
         &xml_plan,
-        &FakeFetcher::new([("https://example.test/jobs.xml", "<jobs><job>".to_string())]),
+        &fake_fetcher([("https://example.test/jobs.xml", "<jobs><job>".to_string())]),
     ));
     assert_runtime_diagnostic(&xml_parse_failure.diagnostics[0], "xml_parse_failed");
     assert_eq!(
@@ -213,7 +213,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     );
     let html_select_failure = block_on(execute_discovery_test(
         &html_select_plan,
-        &FakeFetcher::new([(
+        &fake_fetcher([(
             "https://example.test/jobs.html",
             "<article></article>".to_string(),
         )]),
@@ -234,7 +234,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     );
     let html_extract_failure = block_on(execute_discovery_test(
         &html_extract_plan,
-        &FakeFetcher::new([(
+        &fake_fetcher([(
             "https://example.test/jobs.html",
             "<article><a class='apply' href='https://example.test/jobs/1'></a><span class='company'>Example GmbH</span></article>".to_string(),
         )]),

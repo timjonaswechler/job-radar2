@@ -227,12 +227,13 @@ fn final_strategy_set_schema_requires_first_accepted_policy() {
         "maxDurationMs": 120000,
         "maxPages": 1000,
         "maxBrowserActions": 50,
-        "maxFanOut": 100000
+        "maxFanOut": 100000,
+        "maxResponseBytes": 67108864
     });
     harness.assert_json_valid(
         SchemaEntrypoint::PolicyStrategySet,
         json!({ "policy": { "type": "first_accepted" }, "strategies": [strategy.clone()], "limits": limits.clone() }),
-        "Strategy Set with all seven phase limits",
+        "Strategy Set with all eight phase limits",
     );
     for invalid_limits in [
         {

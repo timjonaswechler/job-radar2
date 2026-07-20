@@ -3,6 +3,7 @@ pub(crate) mod browser;
 pub(crate) mod cancellation;
 pub(crate) mod detail;
 pub(crate) mod discovery;
+pub mod http;
 pub(crate) mod strategy_set;
 pub(crate) mod transform;
 
@@ -16,11 +17,10 @@ pub use browser::{
     UnavailableProfileBrowserClient,
 };
 pub use cancellation::{RuntimeCancellation, RuntimeExecutionContext};
-pub use detail::{
-    execute_detail, DetailExecutionResult, DetailFetchError, DetailFetchRequest,
-    DetailFetchResponse, DetailFetcher, DetailPostingOccurrence, ReqwestDetailFetcher,
-};
-pub use discovery::{
-    execute_discovery, DiscoveryCandidate, DiscoveryExecutionResult, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, ReqwestDiscoveryFetcher,
+pub use detail::{execute_detail, DetailExecutionResult, DetailPostingOccurrence};
+pub use discovery::{execute_discovery, DiscoveryCandidate, DiscoveryExecutionResult};
+pub use http::{
+    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
+    ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SensitiveRequestBody,
 };

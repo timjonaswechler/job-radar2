@@ -11,6 +11,9 @@ pub(super) use serde_json::{json, Value};
 pub(super) use sqlx::{Row, SqlitePool};
 pub(super) use std::collections::BTreeMap;
 
+use crate::profile_dsl::runtime::{
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{
     collections::HashMap,
@@ -81,54 +84,39 @@ impl SourceExecutor for CancellingRuntimeDiscoveryExecutor {
             if matches!(self.timing, RuntimeCancellationTiming::BeforePhase) {
                 cancellation.cancel();
             }
-            let fetcher = CancellingFixtureDiscoveryFetcher {
-                cancellation,
-                cancel_during_fetch: matches!(self.timing, RuntimeCancellationTiming::DuringFetch),
-            };
-            super::super::execution::execute_discovery_for_source(
+            let during_fetch = matches!(self.timing, RuntimeCancellationTiming::DuringFetch);
+            let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+                status: 200,
+                final_url: "https://example.test/jobs".to_string(),
+                headers: Vec::new(),
+                body: if during_fetch {
+                    vec![ScriptedHttpBodyEvent::Gate(
+                        "active-search-run-fetch".to_string(),
+                    )]
+                } else {
+                    vec![ScriptedHttpBodyEvent::Chunk(
+                        json!({ "jobs": [] }).to_string().into_bytes(),
+                    )]
+                },
+                content_length: None,
+            }]);
+            let execute = super::super::execution::execute_discovery_for_source(
                 input,
                 &fetcher,
                 &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
-            )
-            .await
-        })
-    }
-}
-
-struct CancellingFixtureDiscoveryFetcher<'a> {
-    cancellation: &'a CancellationToken,
-    cancel_during_fetch: bool,
-}
-
-impl crate::profile_dsl::runtime::DiscoveryFetcher for CancellingFixtureDiscoveryFetcher<'_> {
-    fn fetch<'a>(
-        &'a self,
-        _request: crate::profile_dsl::runtime::DiscoveryFetchRequest,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<
-                        crate::profile_dsl::runtime::DiscoveryFetchResponse,
-                        crate::profile_dsl::runtime::DiscoveryFetchError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            if self.cancel_during_fetch {
-                self.cancellation.cancel();
+            );
+            if during_fetch {
+                let cancel = async {
+                    while !fetcher.gate_is_waiting("active-search-run-fetch") {
+                        tokio::task::yield_now().await;
+                    }
+                    cancellation.cancel();
+                };
+                let (_, result) = tokio::join!(cancel, execute);
+                result
+            } else {
+                execute.await
             }
-            Ok(crate::profile_dsl::runtime::DiscoveryFetchResponse {
-                body: json!({
-                    "jobs": [{
-                        "title": "Laser Engineer",
-                        "company": "ACME",
-                        "url": "https://example.test/laser"
-                    }]
-                })
-                .to_string(),
-            })
         })
     }
 }
@@ -148,9 +136,15 @@ impl RuntimeDiscoveryExecutor {
 impl SourceExecutor for RuntimeDiscoveryExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            let fetcher = FixtureDiscoveryFetcher {
-                response_body: self.response_body.clone(),
-            };
+            let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+                status: 200,
+                final_url: "https://example.test/jobs".to_string(),
+                headers: Vec::new(),
+                body: vec![ScriptedHttpBodyEvent::Chunk(
+                    self.response_body.clone().into_bytes(),
+                )],
+                content_length: None,
+            }]);
             let result = crate::profile_dsl::runtime::execute_discovery(
                 &input.source.execution_plan,
                 &fetcher,
@@ -187,33 +181,6 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
                     })
                     .collect(),
                 diagnostics: result.diagnostics,
-            })
-        })
-    }
-}
-
-pub(super) struct FixtureDiscoveryFetcher {
-    response_body: String,
-}
-
-impl crate::profile_dsl::runtime::DiscoveryFetcher for FixtureDiscoveryFetcher {
-    fn fetch<'a>(
-        &'a self,
-        _request: crate::profile_dsl::runtime::DiscoveryFetchRequest,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<
-                        crate::profile_dsl::runtime::DiscoveryFetchResponse,
-                        crate::profile_dsl::runtime::DiscoveryFetchError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            Ok(crate::profile_dsl::runtime::DiscoveryFetchResponse {
-                body: self.response_body.clone(),
             })
         })
     }

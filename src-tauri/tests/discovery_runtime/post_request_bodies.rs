@@ -32,7 +32,7 @@ fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -54,22 +54,18 @@ fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
     assert_eq!(request.timeout_ms, 12_000);
     assert_eq!(
         request.headers,
-        BTreeMap::from_iter([
-            ("accept".to_string(), "application/json".to_string()),
-            ("content-type".to_string(), "application/json".to_string()),
-            ("x-requested-with".to_string(), "XMLHttpRequest".to_string()),
-        ])
+        vec![
+            ("accept".to_string(), b"application/json".to_vec()),
+            ("content-type".to_string(), b"application/json".to_vec()),
+            ("x-requested-with".to_string(), b"XMLHttpRequest".to_vec()),
+        ]
     );
+    let body = request.body.as_ref().expect("rendered JSON body");
     assert_eq!(
-        request.body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("feed".to_string(), json!("https://example.test/jobs.json")),
-                ("limit".to_string(), json!(25)),
-                ("tenant".to_string(), json!("Example Source")),
-            ])
-        })
+        body.bytes(),
+        br#"{"feed":"https://example.test/jobs.json","limit":25,"tenant":"Example Source"}"#
     );
+    assert_eq!(body.default_content_type(), Some("application/json"));
 }
 
 #[test]
@@ -95,7 +91,7 @@ fn compiled_discovery_runtime_posts_rendered_text_body() {
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -110,12 +106,13 @@ fn compiled_discovery_runtime_posts_rendered_text_body() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
+    let requests = fetcher.requests();
+    let body = requests[0].body.as_ref().expect("rendered text body");
     assert_eq!(
-        fetcher.requests()[0].body,
-        Some(RequestBody::Text {
-            value: "source=Example Source&feed=https://example.test/jobs.json".to_string()
-        })
+        body.bytes(),
+        b"source=Example Source&feed=https://example.test/jobs.json"
     );
+    assert_eq!(body.default_content_type(), None);
 }
 
 #[test]
@@ -175,7 +172,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     .unwrap();
     let compile_result = compile_test_source(&source, Some(profile));
     let plan = unwrap_plan(compile_result);
-    let fetcher = FakeFetcher::default();
+    let fetcher = fake_fetcher([]);
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
@@ -212,7 +209,7 @@ fn compiled_discovery_runtime_reports_get_body_combination() {
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = FakeFetcher::default();
+    let fetcher = fake_fetcher([]);
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
@@ -255,7 +252,7 @@ fn compiled_discovery_runtime_posts_rendered_form_body() {
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -270,16 +267,14 @@ fn compiled_discovery_runtime_posts_rendered_form_body() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
+    let requests = fetcher.requests();
+    let body = requests[0].body.as_ref().expect("rendered form body");
     assert_eq!(
-        fetcher.requests()[0].body,
-        Some(RequestBody::Form {
-            fields: BTreeMap::from_iter([
-                (
-                    "feed".to_string(),
-                    "https://example.test/jobs.json".to_string()
-                ),
-                ("source".to_string(), "Example Source".to_string()),
-            ])
-        })
+        body.bytes(),
+        b"feed=https%3A%2F%2Fexample.test%2Fjobs.json&source=Example+Source"
+    );
+    assert_eq!(
+        body.default_content_type(),
+        Some("application/x-www-form-urlencoded")
     );
 }

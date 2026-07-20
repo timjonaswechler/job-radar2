@@ -2,13 +2,12 @@ mod support;
 
 use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
 
-use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
+use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    detect_source_proposal, DetailFetchError, DetailFetchRequest, DetailFetchResponse,
-    DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, HttpMethod, RequestBody,
-    SourceDocument, SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, DetailPostingOccurrence, DiscoveryCandidate, HttpMethod,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -47,7 +46,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let plan = unwrap_plan(compile_result);
 
     let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
-    let fetcher = OfflineCxsFetcher::new(
+    let fetcher = offline_cxs_fetcher(
         [
             (
                 FetchKey::post_json(
@@ -82,31 +81,23 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     assert_eq!(requests[0].url, discovery_url);
     assert_eq!(requests[0].timeout_ms, 10000);
     assert_eq!(
-        requests[0].headers,
+        requests[0]
+            .headers
+            .iter()
+            .map(|(name, value)| (name.clone(), String::from_utf8(value.clone()).unwrap()))
+            .collect::<BTreeMap<_, _>>(),
         BTreeMap::from_iter([
             ("accept".to_string(), "application/json".to_string()),
             ("content-type".to_string(), "application/json".to_string()),
         ])
     );
     assert_eq!(
-        requests[0].body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(20)),
-                ("offset".to_string(), json!(0)),
-            ])
-        })
+        requests[0].body.as_ref().map(|body| body.bytes()),
+        Some(br#"{"appliedFacets":{},"limit":20,"offset":0}"#.as_slice())
     );
     assert_eq!(
-        requests[1].body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(20)),
-                ("offset".to_string(), json!(20)),
-            ])
-        })
+        requests[1].body.as_ref().map(|body| body.bytes()),
+        Some(br#"{"appliedFacets":{},"limit":20,"offset":20}"#.as_slice())
     );
 
     let first_candidate = discovery.candidates.first().unwrap();
@@ -137,7 +128,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         requests[2].url,
         "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
     );
-    assert_eq!(requests[2].body, None);
+    assert!(requests[2].body.is_none());
 }
 
 #[test]
@@ -167,7 +158,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
     let plan = unwrap_plan(compile_test_source(&source, Some(profile)));
 
     let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
-    let fetcher = OfflineCxsFetcher::new([
+    let fetcher = offline_cxs_fetcher([
         (
             FetchKey::post_json(
                 discovery_url,
@@ -297,127 +288,20 @@ impl FetchKey {
             body: Some(serde_json::to_string(&body).unwrap()),
         }
     }
+}
 
-    fn from_discovery_request(request: &DiscoveryFetchRequest) -> Self {
-        Self {
-            method: http_method_key(request.method),
-            url: request.url.clone(),
-            body: request_body_key(request.body.as_ref()),
+fn offline_cxs_fetcher(
+    responses: impl IntoIterator<Item = (FetchKey, String)>,
+) -> ScriptedProfileHttpClient {
+    ScriptedProfileHttpClient::new(responses.into_iter().map(|(key, body)| {
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: key.url,
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
+            content_length: None,
         }
-    }
-
-    fn from_detail_request(request: &DetailFetchRequest) -> Self {
-        Self {
-            method: http_method_key(request.method),
-            url: request.url.clone(),
-            body: request_body_key(request.body.as_ref()),
-        }
-    }
-}
-
-#[derive(Default)]
-struct OfflineCxsFetcher {
-    responses: BTreeMap<FetchKey, String>,
-    requests: std::sync::Mutex<Vec<UnifiedRequest>>,
-}
-
-impl OfflineCxsFetcher {
-    fn new(responses: impl IntoIterator<Item = (FetchKey, String)>) -> Self {
-        Self {
-            responses: responses.into_iter().collect(),
-            requests: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    fn requests(&self) -> Vec<UnifiedRequest> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct UnifiedRequest {
-    method: HttpMethod,
-    url: String,
-    headers: BTreeMap<String, String>,
-    body: Option<RequestBody>,
-    timeout_ms: u64,
-}
-
-impl From<DiscoveryFetchRequest> for UnifiedRequest {
-    fn from(request: DiscoveryFetchRequest) -> Self {
-        Self {
-            method: request.method,
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout_ms: request.timeout_ms,
-        }
-    }
-}
-
-impl From<DetailFetchRequest> for UnifiedRequest {
-    fn from(request: DetailFetchRequest) -> Self {
-        Self {
-            method: request.method,
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout_ms: request.timeout_ms,
-        }
-    }
-}
-
-impl DiscoveryFetcher for OfflineCxsFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DiscoveryFetchRequest,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            let key = FetchKey::from_discovery_request(&request);
-            self.requests.lock().unwrap().push(request.into());
-            let body = self.responses.get(&key).cloned().ok_or_else(|| {
-                DiscoveryFetchError::new(format!("missing offline discovery fixture for {:?}", key))
-            })?;
-            Ok(DiscoveryFetchResponse { body })
-        })
-    }
-}
-
-impl DetailFetcher for OfflineCxsFetcher {
-    fn fetch<'a>(
-        &'a self,
-        request: DetailFetchRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            let key = FetchKey::from_detail_request(&request);
-            self.requests.lock().unwrap().push(request.into());
-            let body = self.responses.get(&key).cloned().ok_or_else(|| {
-                DetailFetchError::new(format!("missing offline detail fixture for {:?}", key))
-            })?;
-            Ok(DetailFetchResponse { body })
-        })
-    }
-}
-
-fn http_method_key(method: HttpMethod) -> String {
-    match method {
-        HttpMethod::Get => "GET".to_string(),
-        HttpMethod::Post => "POST".to_string(),
-    }
-}
-
-fn request_body_key(body: Option<&RequestBody>) -> Option<String> {
-    match body {
-        Some(RequestBody::Json { value }) => {
-            Some(serde_json::to_string(&Value::Object(value.clone())).unwrap())
-        }
-        Some(RequestBody::Text { value }) => Some(value.clone()),
-        Some(RequestBody::Form { fields }) => Some(serde_json::to_string(fields).unwrap()),
-        None => None,
-    }
+    }))
 }
 
 fn read_text(relative_path: &str) -> String {

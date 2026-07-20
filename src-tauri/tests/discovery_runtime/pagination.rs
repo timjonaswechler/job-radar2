@@ -19,7 +19,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/jobs.json?page=1&per_page=2",
             json!({
@@ -74,7 +74,7 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json?page=1",
         json!({
             "jobs": [
@@ -122,7 +122,7 @@ fn compiled_discovery_runtime_stops_page_pagination_when_total_path_is_exhausted
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/jobs.json?page=1",
             json!({
@@ -168,7 +168,7 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json?page=1",
         json!({
             "jobs": [
@@ -215,7 +215,7 @@ fn compiled_discovery_runtime_stops_offset_limit_pagination_when_total_path_is_e
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json?offset=0&limit=2",
         json!({
             "total": 2,
@@ -254,7 +254,7 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/sitemap.xml",
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <urlset>
@@ -302,7 +302,7 @@ fn compiled_discovery_runtime_follows_child_sitemaps_within_max_depth() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/root-sitemap.xml",
             r#"<sitemapindex>
@@ -358,7 +358,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_depth_limit() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/root-sitemap.xml",
         r#"<sitemapindex>
             <sitemap><loc>https://example.test/jobs-sitemap.xml</loc></sitemap>
@@ -401,7 +401,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/root-sitemap.xml",
         r#"<sitemapindex>
             <sitemap><loc>https://example.test/jobs-sitemap.xml</loc></sitemap>
@@ -443,7 +443,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/jobs.json?tenant=acme",
             json!({
@@ -512,7 +512,7 @@ fn compiled_discovery_runtime_stops_cursor_pagination_when_next_cursor_is_missin
             }),
         )]),
     );
-    let missing_cursor_fetcher = FakeFetcher::new([(
+    let missing_cursor_fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
@@ -521,7 +521,7 @@ fn compiled_discovery_runtime_stops_cursor_pagination_when_next_cursor_is_missin
         })
         .to_string(),
     )]);
-    let empty_cursor_fetcher = FakeFetcher::new([(
+    let empty_cursor_fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
@@ -560,7 +560,7 @@ fn compiled_discovery_runtime_reports_duplicate_cursor_loop() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/jobs.json",
             json!({
@@ -618,7 +618,7 @@ fn compiled_discovery_runtime_reports_cursor_max_items_limit() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [
@@ -668,7 +668,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
             }),
         )]),
     );
-    let fetcher = FakeFetcher::new([
+    let fetcher = fake_fetcher([
         (
             "https://example.test/jobs.json?tenant=acme&offset=0&limit=2",
             json!({
@@ -751,16 +751,17 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = FakeFetcher::new([(
-        "https://example.test/jobs.json",
-        json!({
-            "total": 4,
-            "jobs": [
-                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
-            ]
-        })
-        .to_string(),
-    )]);
+    let page = json!({
+        "total": 4,
+        "jobs": [
+            { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+        ]
+    })
+    .to_string();
+    let fetcher = fake_fetcher([
+        ("https://example.test/jobs.json", page.clone()),
+        ("https://example.test/jobs.json", page),
+    ]);
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
@@ -768,24 +769,19 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
     let requests = fetcher.requests();
     assert_eq!(requests[0].url, "https://example.test/jobs.json");
     assert_eq!(requests[1].url, "https://example.test/jobs.json");
+    let first_body = requests[0].body.as_ref().expect("first rendered JSON body");
     assert_eq!(
-        requests[0].body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(2)),
-                ("offset".to_string(), json!(0)),
-            ])
-        })
+        first_body.bytes(),
+        br#"{"appliedFacets":{},"limit":2,"offset":0}"#
     );
+    assert_eq!(first_body.default_content_type(), Some("application/json"));
+    let second_body = requests[1]
+        .body
+        .as_ref()
+        .expect("second rendered JSON body");
     assert_eq!(
-        requests[1].body,
-        Some(RequestBody::Json {
-            value: serde_json::Map::from_iter([
-                ("appliedFacets".to_string(), json!({})),
-                ("limit".to_string(), json!(2)),
-                ("offset".to_string(), json!(2)),
-            ])
-        })
+        second_body.bytes(),
+        br#"{"appliedFacets":{},"limit":2,"offset":2}"#
     );
+    assert_eq!(second_body.default_content_type(), Some("application/json"));
 }

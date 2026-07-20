@@ -10,7 +10,7 @@ fn compiled_discovery_runtime_applies_explicit_whitespace_transforms() {
         "transforms": [{ "type": "trim" }, { "type": "normalize_whitespace" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -38,7 +38,7 @@ fn compiled_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in
         "transforms": [{ "type": "url_decode" }, { "type": "slug_to_title" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -66,7 +66,7 @@ fn compiled_discovery_runtime_dedupes_string_arrays_before_cardinality() {
         "transforms": [{ "type": "dedupe" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -94,7 +94,7 @@ fn compiled_discovery_runtime_joins_arrays_before_cardinality() {
         "transforms": [{ "type": "join", "separator": " " }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -122,7 +122,7 @@ fn compiled_discovery_runtime_applies_regex_replace_transforms() {
         "transforms": [{ "type": "regex_replace", "pattern": "\\s*\\(m/f/d\\)$", "replacement": "" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -152,7 +152,7 @@ fn compiled_discovery_runtime_combines_parts_in_declared_order() {
         ]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -183,7 +183,7 @@ fn compiled_discovery_runtime_fails_combine_when_required_part_is_missing() {
         ]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -217,7 +217,7 @@ fn compiled_discovery_runtime_allows_missing_optional_combine_part() {
         ]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -247,7 +247,7 @@ fn compiled_discovery_runtime_preserves_empty_combine_join() {
         ]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -279,7 +279,7 @@ fn compiled_discovery_runtime_applies_final_transforms_after_combine() {
         "transforms": [{ "type": "slug_to_title" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -310,7 +310,7 @@ fn source_owned_discovery_runtime_uses_same_combine_behavior() {
         ]
     });
     let plan = source_owned_json_discovery_plan(fields);
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/source-owned.json",
         json!({
             "jobs": [{
@@ -338,7 +338,7 @@ fn compiled_discovery_runtime_normalizes_single_location_expression_without_impl
         "cardinality": "all"
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -368,7 +368,7 @@ fn compiled_discovery_runtime_normalizes_list_style_locations_in_order() {
         { "type": "json_path", "jsonPath": "$.otherLocations", "cardinality": "all" }
     ]);
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{
@@ -405,7 +405,7 @@ fn compiled_discovery_runtime_splits_and_dedupes_location_arrays_in_order() {
         ]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
-    let fetcher = FakeFetcher::new([(
+    let fetcher = fake_fetcher([(
         "https://example.test/jobs.json",
         json!({
             "jobs": [{

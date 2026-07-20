@@ -57,7 +57,7 @@ fn get_job_posting_surfaces_missing_and_invalid_source_diagnostics_as_unsupporte
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -211,7 +211,7 @@ fn get_job_posting_reports_parse_empty_too_short_and_missing_meta_diagnostics() 
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await
@@ -319,7 +319,7 @@ fn get_job_posting_reports_no_match_and_multiple_match_diagnostics() {
             .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
-                &client,
+                client.client(),
                 &UnavailableProfileBrowserClient,
             )
             .await

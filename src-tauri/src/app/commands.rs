@@ -425,8 +425,8 @@ pub fn check_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestDiscoveryFetcher::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestDetailFetcher::new();
+    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
+    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
         state.paths.browser_runtime_dir.clone(),
     );
@@ -444,8 +444,8 @@ pub fn check_and_activate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestDiscoveryFetcher::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestDetailFetcher::new();
+    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
+    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
         state.paths.browser_runtime_dir.clone(),
     );
@@ -463,8 +463,8 @@ pub fn check_and_reactivate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestDiscoveryFetcher::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestDetailFetcher::new();
+    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
+    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
         state.paths.browser_runtime_dir.clone(),
     );
