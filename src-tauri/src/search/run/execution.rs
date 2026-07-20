@@ -7,7 +7,8 @@ use crate::{
         execution_plan::SourceExecutionPlan,
         runtime::{
             execute_discovery, DiscoveryCandidate, DiscoveryFetcher, ManagedProfileBrowserClient,
-            ProfileBrowserClient, ReqwestDiscoveryFetcher, RuntimeExecutionContext,
+            PhaseCompletion, ProfileBrowserClient, ReqwestDiscoveryFetcher,
+            RuntimeExecutionContext,
         },
     },
 };
@@ -131,11 +132,10 @@ where
         return Err(source_execution_cancelled_error(result.diagnostics));
     }
 
-    let execution_failed = result.candidates.is_empty()
-        && result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
+    let execution_failed = !matches!(
+        result.report.as_ref().map(|report| &report.completion),
+        Some(PhaseCompletion::Accepted)
+    );
 
     if execution_failed {
         let message = result

@@ -55,7 +55,7 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
             ("behavior_version", "immutable_globals"),
             (
                 "immutable_global_behavior",
-                "source_live_check_pagination_smoke_budget",
+                "source_live_check_cumulative_discovery_request_limit",
             ),
             (
                 "immutable_global_behavior",
@@ -412,7 +412,7 @@ fn assert_behavior_order(
         "profile_compiler",
         "profile_runtime",
         "immutable_globals",
-        "source_live_check_pagination_smoke_budget",
+        "source_live_check_cumulative_discovery_request_limit",
         "compiler_max_fallback_strategies",
         "security_forbidden_request_key_behavior",
     ]);

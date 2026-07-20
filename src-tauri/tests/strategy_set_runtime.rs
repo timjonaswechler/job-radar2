@@ -9,12 +9,13 @@ use std::{
 };
 
 use job_radar_lib::{
-    compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailFetchError,
-    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
-    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
-    DiscoveryStep, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
-    StrategyPolicy, UnavailableProfileBrowserClient,
+    compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
+    DiscoveryFetcher, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits,
+    RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext, SourceDocument,
+    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
+    UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
@@ -164,6 +165,14 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
     ));
 
     assert_eq!(result.candidates[0].title, "Platform Engineer");
+    let report = result
+        .report
+        .as_ref()
+        .expect("started Discovery carries a report");
+    assert_eq!(report.completion, PhaseCompletion::Accepted);
+    assert_eq!(report.usage.strategy_attempts, 2);
+    assert_eq!(report.usage.requests, 2);
+    assert_eq!(report.usage.produced_items, 2);
     assert_eq!(
         discovery.requests(),
         vec![
@@ -202,6 +211,14 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         result.description_text.as_deref(),
         Some("A complete accepted description.")
     );
+    let report = result
+        .report
+        .as_ref()
+        .expect("started Detail carries a report");
+    assert_eq!(report.completion, PhaseCompletion::Accepted);
+    assert_eq!(report.usage.strategy_attempts, 2);
+    assert_eq!(report.usage.requests, 2);
+    assert_eq!(report.usage.produced_items, 1);
     assert_eq!(
         detail.requests(),
         vec![
@@ -293,6 +310,11 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     ));
 
     assert!(result.candidates.is_empty());
+    assert_eq!(
+        result.report.as_ref().unwrap().completion,
+        PhaseCompletion::PolicyUnsatisfied
+    );
+    assert_eq!(result.report.as_ref().unwrap().usage.strategy_attempts, 3);
     let codes = result
         .diagnostics
         .iter()
@@ -335,6 +357,12 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     ));
     assert!(result.description_text.is_none());
     assert_eq!(
+        result.report.as_ref().unwrap().completion,
+        PhaseCompletion::PolicyUnsatisfied
+    );
+    assert_eq!(result.report.as_ref().unwrap().usage.strategy_attempts, 3);
+    assert_eq!(result.report.as_ref().unwrap().usage.produced_items, 0);
+    assert_eq!(
         result
             .diagnostics
             .iter()
@@ -351,6 +379,94 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         result.diagnostics.last().unwrap().path,
         "/detail/strategies"
     );
+}
+
+#[test]
+fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
+    let plan = compile(profile_source(None, "main"), profile_document());
+    let detail = ScriptedDetailFetcher::new([(
+        "https://example.test/detail/failed",
+        Err("first failed".to_string()),
+    )]);
+    let caller = PhaseLimits {
+        max_requests: 1,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = block_on(execute_detail(
+        &plan,
+        &posting(),
+        &detail,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    ));
+
+    assert!(result.description_text.is_none());
+    let report = result.report.expect("Detail budget terminal report");
+    let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
+        panic!("expected Detail budget exhaustion")
+    };
+    assert_eq!(exhaustion.dimension, AllowanceDimension::Requests);
+    assert_eq!(report.usage.strategy_attempts, 2);
+    assert_eq!(report.usage.requests, 1);
+    assert_eq!(report.usage.produced_items, 0);
+    assert_eq!(detail.requests().len(), 1);
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
+}
+
+#[test]
+fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic() {
+    let mut plan = compile(profile_source(None, "main"), profile_document());
+    let detail_plan = plan.detail.as_mut().expect("fixture has Detail");
+    detail_plan.strategies[0].fetch = ExecutionPlanFetch::Browser {
+        url: "https://example.test/detail/browser".to_string(),
+        timeout_ms: 1_000,
+        waits: Vec::new(),
+        interactions: Vec::new(),
+    };
+    detail_plan.limits.max_duration_ms = 1_999;
+    let detail = ScriptedDetailFetcher::new([]);
+
+    let invalid_plan_result = block_on(execute_detail(
+        &plan,
+        &posting(),
+        &detail,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+
+    assert!(invalid_plan_result.report.is_none());
+    assert!(invalid_plan_result.description_text.is_none());
+    assert!(invalid_plan_result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "invalid_compiled_browser_phase_duration"
+            && diagnostic.path == "/detail/limits/maxDurationMs"
+    }));
+
+    plan.detail.as_mut().unwrap().limits.max_duration_ms = PhaseLimits::BACKEND.max_duration_ms;
+    let caller = PhaseLimits {
+        max_duration_ms: 1_999,
+        ..PhaseLimits::BACKEND
+    };
+    let caller_result = block_on(execute_detail(
+        &plan,
+        &posting(),
+        &detail,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(caller),
+    ));
+
+    let report = caller_result.report.expect("caller mismatch has a report");
+    assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
+    assert_eq!(report.usage, Default::default());
+    assert!(caller_result.description_text.is_none());
+    assert!(caller_result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "invalid_caller_phase_limits"));
+    assert!(detail.requests().is_empty());
 }
 
 #[test]

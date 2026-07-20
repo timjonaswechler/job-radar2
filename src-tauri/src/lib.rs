@@ -43,8 +43,8 @@ pub use profile_dsl::documents::{
     AccessPathFragment, DetailStep, DetailStepFragment, DetailStrategyFragment,
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
     DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, RequestBody,
-    ReusableAccessPathDocument, Select, SupportLevel,
+    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, PhaseLimits,
+    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -55,13 +55,15 @@ pub use profile_dsl::execution_plan::{
 };
 pub use profile_dsl::policy::StrategyPolicy;
 pub use profile_dsl::runtime::{
-    execute_detail, execute_discovery, DetailExecutionResult, DetailFetchError, DetailFetchRequest,
+    execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
+    AllowanceLimitSource, DetailExecutionResult, DetailFetchError, DetailFetchRequest,
     DetailFetchResponse, DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate,
-    DiscoveryExecutionBudget, DiscoveryExecutionResult, DiscoveryFetchError, DiscoveryFetchRequest,
-    DiscoveryFetchResponse, DiscoveryFetcher, ManagedProfileBrowserClient, ProfileBrowserClient,
-    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, ReqwestDetailFetcher, ReqwestDiscoveryFetcher,
-    RuntimeCancellation, RuntimeExecutionContext, UnavailableProfileBrowserClient,
+    DiscoveryExecutionResult, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
+    DiscoveryFetcher, ManagedProfileBrowserClient, PhaseCancellationReason, PhaseCompletion,
+    PhaseExecutionReport, PhaseUsage, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    ReqwestDetailFetcher, ReqwestDiscoveryFetcher, RuntimeCancellation, RuntimeExecutionContext,
+    UnavailableProfileBrowserClient,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};

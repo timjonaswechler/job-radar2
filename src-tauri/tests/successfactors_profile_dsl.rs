@@ -8,7 +8,7 @@ use job_radar_lib::{
     DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
     DetailPostingOccurrence, DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate,
     DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
-    SourceDocument, SourceProfileDocument, SupportLevel,
+    PhaseCompletion, SourceDocument, SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -68,6 +68,15 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
+    let discovery_report = discovery.report.as_ref().expect("Discovery report");
+    assert_eq!(discovery_report.completion, PhaseCompletion::Accepted);
+    assert_eq!(discovery_report.usage.strategy_attempts, 1);
+    assert_eq!(discovery_report.usage.requests, 1);
+    assert_eq!(discovery_report.usage.pages, 1);
+    assert_eq!(
+        discovery_report.usage.produced_items,
+        discovery.candidates.len() as u64
+    );
 
     let primary_candidate = &discovery.candidates[0];
     let primary_detail = block_on(execute_detail_test(
@@ -76,6 +85,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         &fetcher,
     ));
     assert_eq!(primary_detail.diagnostics, Vec::new());
+    let primary_report = primary_detail.report.as_ref().expect("Detail report");
+    assert_eq!(primary_report.completion, PhaseCompletion::Accepted);
+    assert_eq!(primary_report.usage.strategy_attempts, 1);
+    assert_eq!(primary_report.usage.requests, 1);
+    assert_eq!(primary_report.usage.produced_items, 1);
     let expected_primary_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1001-expected.json");
     assert_eq!(
@@ -95,6 +109,14 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         fallback_detail.description_text.as_deref(),
         expected_fallback_detail["descriptionText"].as_str()
     );
+    let fallback_report = fallback_detail
+        .report
+        .as_ref()
+        .expect("fallback Detail report");
+    assert_eq!(fallback_report.completion, PhaseCompletion::Accepted);
+    assert_eq!(fallback_report.usage.strategy_attempts, 2);
+    assert_eq!(fallback_report.usage.requests, 2);
+    assert_eq!(fallback_report.usage.produced_items, 1);
     assert_eq!(fallback_detail.diagnostics.len(), 1);
     assert_eq!(
         fallback_detail.diagnostics[0].category,

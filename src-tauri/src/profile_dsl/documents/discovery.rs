@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::extract::{FieldExpression, ListFieldExpression};
 use crate::profile_dsl::documents::fetch::Fetch;
+use crate::profile_dsl::documents::limits::PhaseLimits;
 use crate::profile_dsl::documents::pagination::Pagination;
 use crate::profile_dsl::documents::parse::Parse;
 use crate::profile_dsl::documents::select::{Captures, Filter, Select};
@@ -16,6 +17,8 @@ use crate::profile_dsl::policy::StrategyPolicy;
 pub struct DiscoveryStep {
     pub policy: StrategyPolicy,
     pub strategies: Vec<DiscoveryStrategy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limits: Option<PhaseLimits>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }

@@ -68,9 +68,37 @@ where
         }
     };
 
+    if strategy.pagination.is_none() {
+        for _ in &candidates {
+            if context.is_cancelled() {
+                return StrategyExecution {
+                    diagnostics,
+                    completion: StrategyAttemptCompletion::Cancelled(TypedCancellation::strategy(
+                        RuntimePhase::Discovery,
+                        strategy_index,
+                        strategy_key
+                            .as_deref()
+                            .expect("compiled strategy has a key"),
+                        CancellationOperation::Phase,
+                    )),
+                };
+            }
+            if let Err(stop) = context.debit(AllowanceCharge {
+                produced_items: 1,
+                ..AllowanceCharge::default()
+            }) {
+                return StrategyExecution {
+                    diagnostics,
+                    completion: StrategyAttemptCompletion::Stopped(stop),
+                };
+            }
+        }
+    }
+
     let mut result = DiscoveryExecutionResult {
         candidates,
         diagnostics,
+        report: None,
     };
     let execution_failed = discovery_execution_failed(&result);
     let accepted = !execution_failed
@@ -158,6 +186,19 @@ where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
+    if context.is_cancelled() {
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Discovery,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            if strategy.pagination.is_some() {
+                CancellationOperation::Pagination
+            } else {
+                CancellationOperation::Fetch
+            },
+        ));
+    }
+    let context = context.with_page_request(strategy.pagination.is_some());
     let response = match fetch_strategy_document_with_query_params(
         fetcher,
         browser,

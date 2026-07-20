@@ -2,13 +2,14 @@ use std::{future::Future, pin::Pin};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 
-use super::cancellation::TypedCancellation;
+use super::{allowance::AllowanceStop, cancellation::TypedCancellation};
 
 pub(crate) enum StrategyAttemptCompletion<O> {
     Accepted(O),
     Rejected,
     Failed,
     Cancelled(TypedCancellation),
+    Stopped(AllowanceStop),
 }
 
 pub(crate) struct StrategyExecution<O> {
@@ -26,6 +27,7 @@ pub(crate) struct StrategyAttempt<O> {
 pub(crate) enum StrategySetTerminal {
     Accepted { attempt_index: usize },
     Cancelled(TypedCancellation),
+    Stopped(AllowanceStop),
     Exhausted,
 }
 
@@ -67,6 +69,9 @@ where
             }),
             StrategyAttemptCompletion::Cancelled(cancellation) => {
                 Some(StrategySetTerminal::Cancelled(cancellation.clone()))
+            }
+            StrategyAttemptCompletion::Stopped(stop) => {
+                Some(StrategySetTerminal::Stopped(stop.clone()))
             }
             StrategyAttemptCompletion::Rejected | StrategyAttemptCompletion::Failed => None,
         };

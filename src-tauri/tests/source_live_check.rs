@@ -121,7 +121,7 @@ fn assert_stale_detail(
 }
 
 #[test]
-fn source_live_check_applies_a_small_pagination_budget_without_changing_the_profile_plan() {
+fn source_live_check_reports_cumulative_request_exhaustion_without_partial_payload() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile());
     write_source(temp_dir.path(), &simple_source_with_status("draft"));
@@ -151,27 +151,41 @@ fn source_live_check_applies_a_small_pagination_budget_without_changing_the_prof
 
     let report = check_source_with_fetcher(temp_dir.path(), "example_source", &fetcher).unwrap();
 
-    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
         fetcher.discovery_requested_urls(),
         vec!["https://example.test/jobs.json?page=1"]
     );
     assert_eq!(report.details["discoveryMode"], json!("bounded_smoke"));
-    assert_eq!(report.details["maxPaginationRequestsPerStrategy"], json!(1));
-    let budget_diagnostic = report
+    assert_eq!(report.details["maxDiscoveryRequests"], json!(1));
+    assert_eq!(
+        report.details["discoveryExecutionReport"]["usage"]["requests"],
+        json!(1)
+    );
+    assert_eq!(
+        report.details["discoveryExecutionReport"]["usage"]["pages"],
+        json!(1)
+    );
+    assert_eq!(report.details["candidateCount"], json!(0));
+    assert_eq!(
+        report.details["discoveryExecutionReport"]["completion"]["type"],
+        json!("budget_exhausted")
+    );
+    assert_eq!(
+        report.details["discoveryExecutionReport"]["completion"]["exhaustion"]["dimension"],
+        json!("requests")
+    );
+    let allowance_diagnostic = report
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.code == "discovery_request_budget_reached")
-        .expect("bounded Source Live Check should report its execution budget");
-    assert_eq!(budget_diagnostic.severity, DiagnosticSeverity::Info);
-    assert_eq!(
-        budget_diagnostic.path,
-        "/discovery/strategies/0/executionBudget/maxRequestsPerStrategy"
-    );
+        .find(|diagnostic| diagnostic.code == "phase_allowance_exhausted")
+        .expect("bounded Source Live Check should report cumulative exhaustion");
+    assert_eq!(allowance_diagnostic.severity, DiagnosticSeverity::Error);
+    assert_eq!(allowance_diagnostic.path, "/discovery");
 }
 
 #[test]
-fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
+fn workday_source_live_check_exhausts_after_one_cumulative_request_without_detail() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_source(
         temp_dir.path(),
@@ -221,7 +235,7 @@ fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
 
     let report = check_source_with_fetcher(temp_dir.path(), "workday_smoke", &fetcher).unwrap();
 
-    assert_eq!(report.result, CheckReportResult::Passed);
+    assert_eq!(report.result, CheckReportResult::Failed);
     let requests = fetcher.discovery_requests();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].url, discovery_url);
@@ -235,11 +249,15 @@ fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
             ])
         })
     );
-    assert_eq!(fetcher.detail_requested_urls(), vec![detail_url]);
+    assert!(fetcher.detail_requested_urls().is_empty());
     assert!(report.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "discovery_request_budget_reached"
-            && diagnostic.severity == DiagnosticSeverity::Info
+        diagnostic.code == "phase_allowance_exhausted"
+            && diagnostic.severity == DiagnosticSeverity::Error
     }));
+    assert_eq!(
+        report.details["discoveryExecutionReport"]["usage"]["requests"],
+        json!(1)
+    );
 }
 
 #[test]

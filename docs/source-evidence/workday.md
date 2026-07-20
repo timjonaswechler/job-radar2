@@ -98,17 +98,13 @@ A new isolated temporary app-data directory was populated only with copies of th
 
 The harness also performed a separate immediate discovery after each persisted check. Deutsche Bank and NVIDIA again returned four candidates with `pagination_max_requests_reached`. The separate Workday-vendor discovery encountered `fetch_failed` (`error decoding response body`) followed by `fallback_exhausted`; this does not change its already persisted passing Check Report or the separately derived `fresh` state. These checks are historical intermediate evidence from before the dedicated Source Live Check budget and production pagination settings.
 
-## Final bounded-smoke Source Live Checks
+## Superseded bounded-smoke Source Live Checks
 
-The final checks used a new isolated temporary app-data directory and `source-live-check/v2`. The generic Source Live Check execution budget allowed one pagination request per strategy without changing the compiled profile's Search Run bounds. Each check requested `offset: 0`, `limit: 20`, checked at most one detail candidate, persisted its report, and was read back immediately for Freshness. The expected `posting_discovery_request_budget_reached` diagnostic has `info` severity and describes the intentional smoke bound rather than profile truncation.
+The 2026-07-10 checks used the former `source-live-check/v2` bounded-smoke semantics. They returned 20 candidates, checked one Detail candidate, and persisted passing reports after the smoke bound stopped pagination. Those observations remain historical evidence only; they are not the current Source Live Check contract.
 
-| Temporary Source | Checked at | Persisted result | Derived Freshness | Candidates | Detail | Diagnostic |
-|---|---|---|---|---:|---|---|
-| `workday_vendor` | `2026-07-10T22:15:29Z` | `passed` | `fresh` | 20 | checked and passed | info `posting_discovery_request_budget_reached` |
-| `workday_deutsche_bank` | `2026-07-10T22:15:31Z` | `passed` | `fresh` | 20 | checked and passed | info `posting_discovery_request_budget_reached` |
-| `workday_nvidia` | `2026-07-10T22:15:35Z` | `passed` | `fresh` | 20 | checked and passed | info `posting_discovery_request_budget_reached` |
+Source Live Check now applies one cumulative Discovery request allowance to the whole invocation. For a Workday response that declares additional pages, the known next request attempts the cumulative debit and exhausts it. The check returns no partial candidate payload, skips Detail, fails with error diagnostic `phase_allowance_exhausted`, and records a `budget_exhausted` Discovery completion whose denied dimension is `requests`. Search Run continues to use its separately compiled phase limits.
 
-These results are the current operational evidence. They intentionally do not claim complete Search Run inventory coverage.
+No replacement live timestamps are claimed here; the current behavior is covered by the deterministic `workday_source_live_check_exhausts_after_one_cumulative_request_without_detail` regression test.
 
 ## Evidence still needed
 

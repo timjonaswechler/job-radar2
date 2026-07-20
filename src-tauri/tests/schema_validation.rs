@@ -216,9 +216,57 @@ fn final_strategy_set_schema_requires_first_accepted_policy() {
     );
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
-        json!({ "policy": { "type": "unknown" }, "strategies": [strategy] }),
+        json!({ "policy": { "type": "unknown" }, "strategies": [strategy.clone()] }),
         &["unknown"],
     );
+
+    let limits = json!({
+        "maxStrategyAttempts": 50,
+        "maxRequests": 1000,
+        "maxProducedItems": 100000,
+        "maxDurationMs": 120000,
+        "maxPages": 1000,
+        "maxBrowserActions": 50,
+        "maxFanOut": 100000
+    });
+    harness.assert_json_valid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({ "policy": { "type": "first_accepted" }, "strategies": [strategy.clone()], "limits": limits.clone() }),
+        "Strategy Set with all seven phase limits",
+    );
+    for invalid_limits in [
+        {
+            let mut value = limits.clone();
+            value["maxRequests"] = json!(0);
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value["maxRequests"] = Value::Null;
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value["maxRequests"] = json!(1001);
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value["unknownLimit"] = json!(1);
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value.as_object_mut().unwrap().remove("maxFanOut");
+            value
+        },
+    ] {
+        harness.assert_json_invalid(
+            SchemaEntrypoint::PolicyStrategySet,
+            json!({ "policy": { "type": "first_accepted" }, "strategies": [strategy.clone()], "limits": invalid_limits }),
+            &["oneOf"],
+        );
+    }
 }
 
 #[test]

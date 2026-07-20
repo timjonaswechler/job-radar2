@@ -47,7 +47,7 @@ unicode-normalization = "0.1"
 unicode-segmentation = "1"
 url = "2"
 sha2 = "0.10"
-tokio = { version = "1", features = ["fs", "io-util", "rt", "sync", "time"] }
+tokio = { version = "1", features = ["fs", "io-util", "rt", "sync", "test-util", "time"] }
 uuid = { version = "1", features = ["v4", "v7"] }
 time = { version = "=0.3.41", features = ["formatting", "parsing"] }
 trash = "=5.2.2"

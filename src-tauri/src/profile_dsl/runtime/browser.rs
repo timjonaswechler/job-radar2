@@ -68,11 +68,21 @@ pub trait ProfileBrowserClient {
             if context.is_cancelled() {
                 return Err(profile_browser_cancelled_error());
             }
-            let result = self.render(request).await;
-            if context.is_cancelled() {
-                return Err(profile_browser_cancelled_error());
+            tokio::select! {
+                biased;
+                _ = context.cancelled() => Err(profile_browser_cancelled_error()),
+                result = self.render(request) => {
+                    if context.is_cancelled() { Err(profile_browser_cancelled_error()) } else { result }
+                },
+                _ = context.deadline_reached() => {
+                    if context.is_cancelled() {
+                        Err(profile_browser_cancelled_error())
+                    } else {
+                        context.mark_deadline();
+                        Err(ProfileBrowserFetchError::new(ProfileBrowserFetchErrorKind::RenderTimeout, "Profile DSL browser execution exceeded the cumulative phase deadline"))
+                    }
+                }
             }
-            result
         })
     }
 }

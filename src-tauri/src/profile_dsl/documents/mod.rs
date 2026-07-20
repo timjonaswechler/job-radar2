@@ -7,6 +7,7 @@ pub mod discovery;
 pub mod extract;
 pub mod fetch;
 pub mod fragments;
+pub mod limits;
 pub mod pagination;
 pub mod parse;
 pub mod select;
@@ -30,6 +31,7 @@ pub use fragments::{
     AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DiscoveryStepFragment,
     DiscoveryStrategyFragment,
 };
+pub use limits::{PhaseLimits, PhaseLimitsFragment};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};
 pub use parse::{Parse, ParseType};
 pub use select::{CaptureRule, Captures, Filter, Select};
