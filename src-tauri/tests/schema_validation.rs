@@ -15,6 +15,7 @@ const SCHEMA_FILES: &[&str] = &[
     "src/schema/profile-dsl/transform.schema.json",
     "src/schema/profile-dsl/pagination.schema.json",
     "src/schema/profile-dsl/strategy.schema.json",
+    "src/schema/profile-dsl/policy.schema.json",
     "src/schema/profile-dsl/overrides.schema.json",
     "src/schema/profile-dsl/diagnostics.schema.json",
 ];
@@ -22,6 +23,7 @@ const SCHEMA_FILES: &[&str] = &[
 #[derive(Clone, Copy)]
 enum SchemaEntrypoint {
     CheckReport,
+    PolicyStrategySet,
     SourceProfile,
     Source,
 }
@@ -30,6 +32,7 @@ impl SchemaEntrypoint {
     fn path(self) -> &'static str {
         match self {
             Self::CheckReport => "src/schema/check-report.schema.json",
+            Self::PolicyStrategySet => "src/schema/profile-dsl/policy.schema.json",
             Self::SourceProfile => "src/schema/source-profile.schema.json",
             Self::Source => "src/schema/source.schema.json",
         }
@@ -138,6 +141,45 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
         SchemaEntrypoint::Source,
         "tests/fixtures/source-profile-dsl/invalid/v1-source-specific-pascal.json",
         &["SourceSpecific"],
+    );
+}
+
+#[test]
+fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
+    let harness = SchemaHarness::new();
+    let strategy = json!({
+        "key": "json_api",
+        "fetch": {
+            "mode": "http",
+            "method": "GET",
+            "url": "https://example.test/jobs",
+            "timeoutMs": 1000
+        },
+        "parse": { "type": "json" },
+        "select": { "type": "json_path", "jsonPath": "$.jobs" },
+        "extract": {
+            "fields": {
+                "title": { "type": "json_path", "jsonPath": "$.title" },
+                "company": { "type": "json_path", "jsonPath": "$.company" },
+                "url": { "type": "json_path", "jsonPath": "$.url" }
+            }
+        }
+    });
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({ "policy": "first_accepted", "strategies": [strategy.clone()] }),
+        "dormant final first_accepted Strategy Set",
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({ "strategies": [strategy.clone()] }),
+        &["oneOf"],
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({ "policy": "unknown", "strategies": [strategy] }),
+        &["unknown"],
     );
 }
 

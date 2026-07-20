@@ -19,6 +19,7 @@ use crate::{
             capabilities::ExecutionPlanFetch, posting_detail::ExecutionPlanPostingDetailStrategy,
             SourceExecutionPlan,
         },
+        policy::{PolicySourceExecutionPlan, StrategyPolicy},
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -307,6 +308,117 @@ where
             };
         }
         diagnostics.extend(attempt.result.diagnostics);
+    }
+
+    diagnostics.push(runtime_error(
+        "fallback_exhausted",
+        "postingDetail fallback strategies were exhausted without an accepted result",
+        "/postingDetail/strategies",
+        None,
+        json!({}),
+    ));
+    PostingDetailExecutionResult {
+        description_text: None,
+        diagnostics,
+    }
+}
+
+pub async fn execute_policy_posting_detail_with_clients_and_context<F, B>(
+    plan: &PolicySourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDetailExecutionResult
+where
+    F: PostingDetailFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    let Some(detail) = &plan.posting_detail else {
+        return PostingDetailExecutionResult {
+            description_text: None,
+            diagnostics: vec![runtime_error(
+                "posting_detail_missing",
+                "Execution Plan does not contain compiled postingDetail",
+                "/postingDetail",
+                None,
+                json!({}),
+            )],
+        };
+    };
+    match detail.policy {
+        StrategyPolicy::FirstAccepted => {
+            execute_policy_first_accepted(plan, posting, fetcher, browser, context).await
+        }
+    }
+}
+
+async fn execute_policy_first_accepted<F, B>(
+    policy_plan: &PolicySourceExecutionPlan,
+    posting: &PostingDetailPostingOccurrence,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDetailExecutionResult
+where
+    F: PostingDetailFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    if context.is_cancelled() {
+        return cancelled_posting_detail_result("/postingDetail", None);
+    }
+    let plan = policy_plan.legacy();
+    let posting_detail = plan
+        .posting_detail
+        .as_ref()
+        .expect("policy-bearing detail dispatch requires compiled detail");
+    if posting_detail.strategies.is_empty() {
+        return PostingDetailExecutionResult {
+            description_text: None,
+            diagnostics: vec![runtime_error(
+                "posting_detail_strategy_missing",
+                "postingDetail does not contain an executable strategy",
+                "/postingDetail/strategies",
+                None,
+                json!({}),
+            )],
+        };
+    }
+
+    let mut diagnostics = Vec::new();
+    for (strategy_index, strategy) in posting_detail.strategies.iter().enumerate() {
+        let attempt = execute_strategy(
+            &plan,
+            posting,
+            fetcher,
+            browser,
+            strategy_index,
+            strategy,
+            posting_detail.accept_when.as_ref(),
+            context,
+        )
+        .await;
+        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
+            || context.is_cancelled()
+        {
+            diagnostics.extend(attempt.result.diagnostics);
+            push_runtime_execution_cancelled(
+                &mut diagnostics,
+                format!("/postingDetail/strategies/{strategy_index}"),
+                Some(&strategy.key),
+            );
+            return PostingDetailExecutionResult {
+                description_text: None,
+                diagnostics,
+            };
+        }
+        diagnostics.extend(attempt.result.diagnostics);
+        if attempt.accepted {
+            return PostingDetailExecutionResult {
+                description_text: attempt.result.description_text,
+                diagnostics,
+            };
+        }
     }
 
     diagnostics.push(runtime_error(

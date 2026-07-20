@@ -764,7 +764,7 @@ fn reject_direct_schema_titles(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn reject_structural_null(value: &Value, path: &mut Vec<String>) -> Result<(), String> {
+pub(crate) fn reject_structural_null(value: &Value, path: &mut Vec<String>) -> Result<(), String> {
     match value {
         Value::Null => Err(format!(
             "null is not a structural fragment value at /{}",

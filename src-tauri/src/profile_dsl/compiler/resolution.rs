@@ -28,7 +28,6 @@ use super::source_config::{
 use super::specialization::specialize_profile;
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
-use super::{CompiledSource, CompiledSourceAccess, EffectiveSourceProfile, SourceOwnedAccessPath};
 
 pub(super) fn validate_source_profile_document(
     profile: &SourceProfileDocument,
@@ -114,11 +113,11 @@ fn validate_source_profile_document_with_contracts(
         .collect()
 }
 
-pub(super) fn compile_authoritative_source(
+pub(super) fn compile_legacy_source_execution_plan(
     source: &SourceDocument,
     registry: &SourceProfileRegistrySnapshot,
     diagnostics: &mut Diagnostics,
-) -> Option<CompiledSource> {
+) -> Option<SourceExecutionPlan> {
     match &source.selected_access_path {
         SelectedAccessPath::ProfileAccessPath {
             profile_key,
@@ -129,12 +128,7 @@ pub(super) fn compile_authoritative_source(
             if has_error_diagnostics(diagnostics) {
                 return None;
             }
-            Some(CompiledSource {
-                access: CompiledSourceAccess::SourceOwned {
-                    access_path: source_owned_access_path(source),
-                },
-                execution_plan,
-            })
+            Some(execution_plan)
         }
     }
 }
@@ -145,7 +139,7 @@ fn compile_profile_access_path(
     profile_key: &str,
     path_key: &str,
     diagnostics: &mut Diagnostics,
-) -> Option<CompiledSource> {
+) -> Option<SourceExecutionPlan> {
     let base_profile = resolve_profile(registry, source, profile_key, diagnostics)?;
     if source.access_paths.is_some() && source.source_overrides.is_some() {
         diagnostics.push(compiler_error(
@@ -245,14 +239,7 @@ fn compile_profile_access_path(
         posting_detail,
     };
 
-    Some(CompiledSource {
-        access: CompiledSourceAccess::Profile {
-            effective_profile: EffectiveSourceProfile {
-                document: effective_profile,
-            },
-        },
-        execution_plan,
-    })
+    Some(execution_plan)
 }
 
 fn resolve_profile<'a>(
@@ -361,31 +348,6 @@ fn compile_source_owned_access_path(
         posting_discovery: compiled_posting_discovery,
         posting_detail: compiled_posting_detail,
     })
-}
-
-fn source_owned_access_path(source: &SourceDocument) -> SourceOwnedAccessPath {
-    let SelectedAccessPath::SourceOwnedAccessPath {
-        key,
-        name,
-        description,
-        source_config_schema,
-        posting_discovery,
-        posting_detail,
-        diagnostics,
-    } = &source.selected_access_path
-    else {
-        unreachable!("caller only passes Source-owned Access Paths")
-    };
-
-    SourceOwnedAccessPath {
-        key: key.clone(),
-        name: name.clone(),
-        description: description.clone(),
-        source_config_schema: source_config_schema.clone(),
-        posting_discovery: posting_discovery.clone(),
-        posting_detail: posting_detail.clone(),
-        diagnostics: diagnostics.clone(),
-    }
 }
 
 fn validate_source_owned_access_path(

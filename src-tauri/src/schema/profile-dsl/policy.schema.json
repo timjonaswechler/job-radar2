@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/policy.schema.json",
+  "title": "Dormant final Strategy Policy definitions",
+  "oneOf": [
+    { "$ref": "#/$defs/postingDiscoveryStrategySet" },
+    { "$ref": "#/$defs/postingDetailStrategySet" }
+  ],
+  "$defs": {
+    "strategyPolicy": {
+      "type": "string",
+      "enum": ["first_accepted"]
+    },
+    "postingDiscoveryStrategySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "strategies"],
+      "properties": {
+        "policy": { "$ref": "#/$defs/strategyPolicy" },
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "strategy.schema.json#/$defs/postingDiscoveryStrategy" }
+        },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "postingDetailStrategySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "strategies"],
+      "properties": {
+        "policy": { "$ref": "#/$defs/strategyPolicy" },
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "strategy.schema.json#/$defs/postingDetailStrategy" }
+        },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    }
+  }
+}

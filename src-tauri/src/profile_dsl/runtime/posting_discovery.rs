@@ -26,6 +26,7 @@ use crate::{
             },
             SourceExecutionPlan,
         },
+        policy::{PolicySourceExecutionPlan, StrategyPolicy},
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -293,6 +294,98 @@ where
             };
         }
         diagnostics.extend(attempt.result.diagnostics);
+    }
+
+    diagnostics.push(runtime_error(
+        "fallback_exhausted",
+        "postingDiscovery fallback strategies were exhausted without an accepted result",
+        "/postingDiscovery/strategies",
+        None,
+        json!({}),
+    ));
+    PostingDiscoveryExecutionResult {
+        candidates: Vec::new(),
+        diagnostics,
+    }
+}
+
+pub async fn execute_policy_posting_discovery_with_clients_and_context<F, B>(
+    plan: &PolicySourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDiscoveryExecutionResult
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    match plan.posting_discovery.policy {
+        StrategyPolicy::FirstAccepted => {
+            execute_policy_first_accepted(plan, fetcher, browser, context).await
+        }
+    }
+}
+
+async fn execute_policy_first_accepted<F, B>(
+    policy_plan: &PolicySourceExecutionPlan,
+    fetcher: &F,
+    browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PostingDiscoveryExecutionResult
+where
+    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    if context.is_cancelled() {
+        return cancelled_posting_discovery_result("/postingDiscovery", None);
+    }
+    let plan = policy_plan.legacy();
+    if plan.posting_discovery.strategies.is_empty() {
+        return PostingDiscoveryExecutionResult {
+            candidates: Vec::new(),
+            diagnostics: vec![runtime_error(
+                "posting_discovery_strategy_missing",
+                "postingDiscovery does not contain an executable strategy",
+                "/postingDiscovery/strategies",
+                None,
+                json!({}),
+            )],
+        };
+    }
+
+    let mut diagnostics = Vec::new();
+    for (strategy_index, strategy) in plan.posting_discovery.strategies.iter().enumerate() {
+        let attempt = execute_strategy(
+            &plan,
+            fetcher,
+            browser,
+            strategy_index,
+            strategy,
+            plan.posting_discovery.accept_when.as_ref(),
+            context,
+        )
+        .await;
+        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
+            || context.is_cancelled()
+        {
+            diagnostics.extend(attempt.result.diagnostics);
+            push_runtime_execution_cancelled(
+                &mut diagnostics,
+                format!("/postingDiscovery/strategies/{strategy_index}"),
+                Some(&strategy.key),
+            );
+            return PostingDiscoveryExecutionResult {
+                candidates: Vec::new(),
+                diagnostics,
+            };
+        }
+        diagnostics.extend(attempt.result.diagnostics);
+        if attempt.accepted {
+            return PostingDiscoveryExecutionResult {
+                candidates: attempt.result.candidates,
+                diagnostics,
+            };
+        }
     }
 
     diagnostics.push(runtime_error(

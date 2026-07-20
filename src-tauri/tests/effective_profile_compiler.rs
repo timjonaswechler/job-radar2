@@ -1,19 +1,19 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceAccess,
-    DiagnosticCategory, DiagnosticSeverity, Fetch, RegistrySource, RegistrySourceProfile,
-    SourceDocument, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
-    SourceValidationState, ValidationStateKind,
+    compile_source, CompileSourceOutcome, CompiledSourceAccess, DiagnosticCategory,
+    DiagnosticSeverity, Fetch, PolicyAccessPathFragment as AccessPathFragment,
+    PolicySelectedAccessPath as SelectedAccessPath, PolicySourceDocument as SourceDocument,
+    PolicySourceProfileDocument as SourceProfileDocument,
+    PolicySourceProfileRegistrySnapshot as SourceProfileRegistrySnapshot, SourceStatus,
 };
 
 #[test]
 fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     let profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
-    let mut source: SourceDocument =
+    let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     let registry = registry_with_profile(profile);
 
     let CompileSourceOutcome::Compiled {
@@ -44,7 +44,11 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     );
     assert_eq!(compiled.execution_plan.source.key, "example_source");
     assert_eq!(
-        compiled.execution_plan.posting_discovery.strategies[0]
+        compiled
+            .execution_plan
+            .posting_discovery
+            .execution
+            .strategies[0]
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
@@ -93,7 +97,6 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
 
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "second_path",
@@ -179,7 +182,6 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source.source_config.remove("language");
     let base_strategy =
         serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap();
@@ -198,13 +200,14 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
             "key": "new_path",
             "name": "New path",
             "postingDiscovery": {
+                "policy": "first_accepted",
                 "strategies": [
                     serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap()
                 ]
             }
         }
     ])));
-    source.selected_access_path = job_radar_lib::SelectedAccessPath::ProfileAccessPath {
+    source.selected_access_path = SelectedAccessPath::ProfileAccessPath {
         profile_key: "example_jobs".to_string(),
         path_key: "new_path".to_string(),
     };
@@ -238,7 +241,12 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
         vec!["json_api", "second_new", "first_new"]
     );
     assert_eq!(
-        compiled.execution_plan.posting_discovery.strategies.len(),
+        compiled
+            .execution_plan
+            .posting_discovery
+            .execution
+            .strategies
+            .len(),
         1
     );
 }
@@ -249,7 +257,6 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
@@ -317,7 +324,6 @@ fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
@@ -360,7 +366,6 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source.source_config.remove("feedUrl");
     let mut strategy =
         serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap();
@@ -373,7 +378,10 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "invalid_unselected",
         "name": "Invalid unselected path",
-        "postingDiscovery": { "strategies": [strategy] }
+        "postingDiscovery": {
+            "policy": "first_accepted",
+            "strategies": [strategy]
+        }
     }])));
 
     let CompileSourceOutcome::Rejected { diagnostics } =
@@ -407,7 +415,6 @@ fn compiler_is_deterministic_for_equivalent_fragment_object_orders() {
     ]
     .map(|json| {
         let mut source = source.clone();
-        source.source_overrides = None;
         source.access_paths = Some(serde_json::from_str(json).unwrap());
         compile_source(&source, &registry)
     });
@@ -416,24 +423,18 @@ fn compiler_is_deterministic_for_equivalent_fragment_object_orders() {
 }
 
 #[test]
-fn compiler_rejects_mixed_legacy_and_direct_specialization_models() {
-    let profile: SourceProfileDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
-    let mut source: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.access_paths = Some(fragments(serde_json::json!([{ "key": "json_feed" }])));
+fn final_source_shape_rejects_the_legacy_specialization_model() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    let mut source: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    add_first_accepted_policy(&mut source);
+    source["accessPaths"] = serde_json::json!([{ "key": "json_feed" }]);
 
-    let CompileSourceOutcome::Rejected { diagnostics } =
-        compile_source(&source, &registry_with_profile(profile))
-    else {
-        panic!("mixed specialization models must be rejected without precedence rules");
-    };
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(
-        diagnostics[0].code,
-        "conflicting_source_specialization_models"
-    );
-    assert_eq!(diagnostics[0].path, "/accessPaths");
+    let error = serde_json::from_value::<SourceDocument>(source)
+        .expect_err("the dormant final Source shape must not admit legacy sourceOverrides");
+
+    assert!(error.to_string().contains("sourceOverrides"));
 }
 
 #[test]
@@ -680,7 +681,6 @@ fn direct_source_schema_specialization_replaces_arrays_and_preserves_profile_tit
     );
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source.source_overrides = None;
     source
         .source_config
         .insert("region".to_string(), serde_json::json!("eu"));
@@ -744,7 +744,7 @@ fn direct_and_source_owned_schema_titles_are_rejected() {
 
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
-    let job_radar_lib::SelectedAccessPath::SourceOwnedAccessPath {
+    let SelectedAccessPath::SourceOwnedAccessPath {
         source_config_schema,
         ..
     } = &mut source.selected_access_path
@@ -817,29 +817,13 @@ fn fragments(value: serde_json::Value) -> Vec<AccessPathFragment> {
 
 fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
     SourceProfileRegistrySnapshot {
-        profiles: vec![RegistrySourceProfile {
-            origin: "test".to_string(),
-            path: "test-profile.json".to_string(),
-            document: profile,
-        }],
+        profiles: vec![profile],
         sources: Vec::new(),
-        diagnostics: Vec::new(),
     }
 }
 
-fn registry_source(document: SourceDocument) -> RegistrySource {
-    RegistrySource {
-        origin: "test".to_string(),
-        path: "test-source.json".to_string(),
-        validation_state: SourceValidationState {
-            source_key: document.key.clone(),
-            state: ValidationStateKind::Unknown,
-            can_compile: false,
-            can_execute: false,
-            diagnostics: Vec::new(),
-        },
-        document,
-    }
+fn registry_source(document: SourceDocument) -> SourceDocument {
+    document
 }
 
 fn read_fixture<T>(relative_path: &str) -> T
@@ -849,6 +833,36 @@ where
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
     let contents = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-    serde_json::from_str(&contents)
+    let mut value: serde_json::Value = serde_json::from_str(&contents)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    add_first_accepted_policy(&mut value);
+    if let Some(object) = value.as_object_mut() {
+        object.remove("sourceOverrides");
+    }
+    serde_json::from_value(value)
         .unwrap_or_else(|error| panic!("failed to deserialize {}: {error}", path.display()))
+}
+
+fn add_first_accepted_policy(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            if object
+                .get("strategies")
+                .is_some_and(serde_json::Value::is_array)
+            {
+                object
+                    .entry("policy")
+                    .or_insert_with(|| serde_json::json!("first_accepted"));
+            }
+            for child in object.values_mut() {
+                add_first_accepted_policy(child);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for child in values {
+                add_first_accepted_policy(child);
+            }
+        }
+        _ => {}
+    }
 }

@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::AccessPathFragment;
+use crate::profile_dsl::policy::{PolicyAccessPathFragment, PolicySourceProfileDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::{compiler_error, has_error_diagnostics};
@@ -47,18 +48,38 @@ pub(super) fn specialize_profile(
     fragments: Option<&[AccessPathFragment]>,
     diagnostics: &mut Diagnostics,
 ) -> Option<SourceProfileDocument> {
+    specialize_serialized_profile(base, fragments, diagnostics)
+}
+
+pub(super) fn specialize_policy_profile(
+    base: &PolicySourceProfileDocument,
+    fragments: Option<&[PolicyAccessPathFragment]>,
+    diagnostics: &mut Diagnostics,
+) -> Option<PolicySourceProfileDocument> {
+    specialize_serialized_profile(base, fragments, diagnostics)
+}
+
+fn specialize_serialized_profile<T, F>(
+    base: &T,
+    fragments: Option<&[F]>,
+    diagnostics: &mut Diagnostics,
+) -> Option<T>
+where
+    T: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    F: serde::Serialize,
+{
     let Some(fragments) = fragments else {
         return Some(base.clone());
     };
 
     let mut profile = serde_json::to_value(base).expect("Source Profile documents must serialize");
-    validate_direct_source_config_schema_fragments(fragments, diagnostics);
     let fragment_values = fragments
         .iter()
         .map(|fragment| {
             serde_json::to_value(fragment).expect("typed Access Path fragments must serialize")
         })
         .collect::<Vec<_>>();
+    validate_direct_source_config_schema_fragments(&fragment_values, diagnostics);
     let initial_diagnostic_count = diagnostics.len();
 
     let base_paths = profile
@@ -94,13 +115,12 @@ pub(super) fn specialize_profile(
 }
 
 fn validate_direct_source_config_schema_fragments(
-    fragments: &[AccessPathFragment],
+    fragments: &[Value],
     diagnostics: &mut Diagnostics,
 ) {
     for (fragment_index, fragment) in fragments.iter().enumerate() {
         let Some(properties) = fragment
-            .source_config_schema
-            .as_ref()
+            .get("sourceConfigSchema")
             .and_then(|schema| schema.get("properties"))
             .and_then(Value::as_object)
         else {
