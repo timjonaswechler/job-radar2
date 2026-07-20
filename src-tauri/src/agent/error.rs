@@ -6,6 +6,7 @@ pub enum AgentErrorCategory {
     ModelUnavailable,
     Transport,
     RateLimited,
+    ContextOverflow,
     Provider,
     InvalidConfiguration,
 }
@@ -66,6 +67,17 @@ impl AgentError {
 
     pub(crate) fn provider() -> Self {
         Self::fixed(AgentErrorCategory::Provider, "provider request failed")
+    }
+
+    pub(crate) fn context_overflow() -> Self {
+        Self::fixed(
+            AgentErrorCategory::ContextOverflow,
+            "provider context window exceeded",
+        )
+    }
+
+    pub fn is_context_overflow(&self) -> bool {
+        self.category == AgentErrorCategory::ContextOverflow
     }
 
     pub(crate) fn invalid_provider_configuration() -> Self {

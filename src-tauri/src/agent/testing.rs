@@ -18,9 +18,10 @@ use crate::agent::sessions::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExpectedConversationRequest {
     system_prompt: String,
-    messages: Vec<Message>,
+    messages: Option<Vec<Message>>,
     model: ModelId,
     reasoning: ReasoningLevel,
+    max_tokens: Option<u64>,
 }
 
 impl ExpectedConversationRequest {
@@ -32,17 +33,43 @@ impl ExpectedConversationRequest {
     ) -> Self {
         Self {
             system_prompt: system_prompt.into(),
-            messages,
+            messages: Some(messages),
             model,
             reasoning,
+            max_tokens: None,
         }
+    }
+
+    pub fn any_messages(
+        system_prompt: impl Into<String>,
+        model: ModelId,
+        reasoning: ReasoningLevel,
+    ) -> Self {
+        Self {
+            system_prompt: system_prompt.into(),
+            messages: None,
+            model,
+            reasoning,
+            max_tokens: None,
+        }
+    }
+
+    pub fn with_max_tokens(mut self, max_tokens: u64) -> Self {
+        self.max_tokens = Some(max_tokens);
+        self
     }
 
     fn matches(&self, request: &ConversationRequest) -> bool {
         self.system_prompt == request.system_prompt()
-            && self.messages == request.messages()
+            && self
+                .messages
+                .as_ref()
+                .is_none_or(|messages| messages == request.messages())
             && &self.model == request.model().id()
             && self.reasoning == request.reasoning_level()
+            && self
+                .max_tokens
+                .is_none_or(|tokens| request.model().max_tokens() == tokens)
     }
 }
 
@@ -56,6 +83,16 @@ impl ScriptedTurn {
     pub fn new(expected: ExpectedConversationRequest, events: Vec<ProviderEvent>) -> Self {
         Self { expected, events }
     }
+}
+
+pub fn synthetic_model_with_limits(
+    mut model: Model,
+    context_window: u64,
+    max_tokens: u64,
+) -> Model {
+    *model.parts_mut().context_window = context_window;
+    *model.parts_mut().max_tokens = max_tokens;
+    model
 }
 
 pub fn synthetic_assistant_message(

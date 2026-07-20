@@ -6,8 +6,8 @@ use super::sessions::{
     SessionSnapshot, StopReason,
 };
 use super::{
-    AgentConversation, AgentError, AssistantContent, AssistantMessage, ContentKind,
-    ConversationEvent, ConversationEventStream, ConversationProvider, FinishReason, Message,
+    conversation::ConversationAttempt, AgentConversation, AgentError, AssistantContent,
+    AssistantMessage, ContentKind, ConversationEvent, ConversationProvider, FinishReason, Message,
     TokenUsage, TurnCancellation, UserMessage,
 };
 use futures_util::Stream;
@@ -15,6 +15,12 @@ use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+
+use super::compaction::{
+    compaction_capable, prepare as prepare_compaction, requires_compaction, validate_split_summary,
+    validate_summary, CompactionPreparation,
+};
+use super::sessions::{CompactionReason, CompactionRecord};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AgentChatState {
@@ -141,6 +147,57 @@ impl AgentChat {
         }
     }
 
+    pub fn compact(
+        &mut self,
+        focus: Option<String>,
+    ) -> Result<AgentChatEventStream<'_>, AgentChatError> {
+        self.ensure_mutable()?;
+        let conversation = self
+            .conversation
+            .as_mut()
+            .ok_or(AgentChatError::ModelUnavailable)?;
+        if !compaction_capable(conversation.model().context_window()) {
+            return Err(AgentError::fixed(
+                super::AgentErrorCategory::InvalidConfiguration,
+                "the selected model is not compaction-capable",
+            )
+            .into());
+        }
+        let preparation = prepare_compaction(
+            self.session.snapshot(),
+            CompactionReason::Manual,
+            focus.as_deref(),
+        )
+        .ok_or_else(|| {
+            AgentError::fixed(
+                super::AgentErrorCategory::InvalidConfiguration,
+                "there is not enough history to compact",
+            )
+        })?;
+        let cancellation = TurnCancellation::new();
+        let attempt = conversation.begin_compaction(
+            preparation.prompt().to_owned(),
+            cancellation.clone(),
+            13_107,
+        );
+        Ok(AgentChatEventStream {
+            phase: ChatPhase::Compacting {
+                attempt,
+                preparation,
+                intent: CompactionIntent::Finish,
+                stage: SummaryStage::History,
+            },
+            session: &mut self.session,
+            conversation,
+            user_text: None,
+            cancellation,
+            not_saved: &mut self.not_saved,
+            overflow_attempted: false,
+            pending_completed: None,
+            finished: false,
+        })
+    }
+
     pub fn send(&mut self, text: String) -> Result<AgentChatEventStream<'_>, AgentChatError> {
         match self.state() {
             AgentChatState::Ready => {}
@@ -156,21 +213,51 @@ impl AgentChat {
                 .into())
             }
         }
-        let Self {
-            session,
-            conversation,
-            not_saved,
-            ..
-        } = self;
-        let stream = conversation
+        let cancellation = TurnCancellation::new();
+        let conversation = self
+            .conversation
             .as_mut()
-            .expect("ready chat has a conversation")
-            .send(text.clone())?;
+            .expect("ready chat has a conversation");
+        let context_tokens = self.session.snapshot().context_tokens();
+        let model = conversation.model();
+        let phase = if requires_compaction(context_tokens, model.context_window()) {
+            if !compaction_capable(model.context_window()) {
+                return Err(AgentError::fixed(
+                    super::AgentErrorCategory::InvalidConfiguration,
+                    "the selected model context is full; select a model with a larger context window",
+                ).into());
+            }
+            let preparation =
+                prepare_compaction(self.session.snapshot(), CompactionReason::Threshold, None)
+                    .ok_or_else(|| {
+                        AgentError::fixed(
+                            super::AgentErrorCategory::InvalidConfiguration,
+                            "the selected model context cannot be compacted safely",
+                        )
+                    })?;
+            let attempt = conversation.begin_compaction(
+                preparation.prompt().to_owned(),
+                cancellation.clone(),
+                13_107,
+            );
+            ChatPhase::Compacting {
+                attempt,
+                preparation,
+                intent: CompactionIntent::SendDraft,
+                stage: SummaryStage::History,
+            }
+        } else {
+            ChatPhase::Turning(conversation.begin_attempt(text.clone(), cancellation.clone()))
+        };
         Ok(AgentChatEventStream {
-            stream,
-            session,
-            user_text: text,
-            not_saved,
+            phase,
+            session: &mut self.session,
+            conversation,
+            user_text: Some(text),
+            cancellation,
+            not_saved: &mut self.not_saved,
+            overflow_attempted: false,
+            pending_completed: None,
             finished: false,
         })
     }
@@ -393,6 +480,21 @@ pub enum AgentChatEvent {
         message: AssistantMessage,
         error: SessionError,
     },
+    CompactionStarted {
+        reason: CompactionReason,
+    },
+    CompactionCompleted {
+        reason: CompactionReason,
+    },
+    CompactionCancelled {
+        reason: CompactionReason,
+    },
+    CompactionFailed {
+        error: AgentError,
+    },
+    CompactionNotSaved {
+        error: SessionError,
+    },
 }
 
 impl fmt::Debug for AgentChatEvent {
@@ -424,21 +526,88 @@ impl fmt::Debug for AgentChatEvent {
                 .field("message", &"[redacted]")
                 .field("error", error)
                 .finish(),
+            Self::CompactionStarted { reason } => formatter
+                .debug_struct("CompactionStarted")
+                .field("reason", reason)
+                .finish(),
+            Self::CompactionCompleted { reason } => formatter
+                .debug_struct("CompactionCompleted")
+                .field("reason", reason)
+                .finish(),
+            Self::CompactionCancelled { reason } => formatter
+                .debug_struct("CompactionCancelled")
+                .field("reason", reason)
+                .finish(),
+            Self::CompactionFailed { error } => formatter
+                .debug_struct("CompactionFailed")
+                .field("error", error)
+                .finish(),
+            Self::CompactionNotSaved { error } => formatter
+                .debug_struct("CompactionNotSaved")
+                .field("error", error)
+                .finish(),
         }
     }
 }
 
+#[derive(Clone, Copy)]
+enum CompactionIntent {
+    Finish,
+    SendDraft,
+    RetryOverflow,
+}
+
+enum SummaryStage {
+    History,
+    SplitPrefix(String),
+}
+
+enum ChatPhase {
+    Compacting {
+        attempt: ConversationAttempt,
+        preparation: CompactionPreparation,
+        intent: CompactionIntent,
+        stage: SummaryStage,
+    },
+    Turning(ConversationAttempt),
+    Finished,
+}
+
 pub struct AgentChatEventStream<'a> {
-    stream: ConversationEventStream<'a>,
+    phase: ChatPhase,
     session: &'a mut SessionHandle,
-    user_text: String,
+    conversation: &'a mut AgentConversation,
+    user_text: Option<String>,
+    cancellation: TurnCancellation,
     not_saved: &'a mut bool,
+    overflow_attempted: bool,
+    pending_completed: Option<AssistantMessage>,
     finished: bool,
 }
 
 impl AgentChatEventStream<'_> {
     pub fn cancellation(&self) -> TurnCancellation {
-        self.stream.cancellation()
+        self.cancellation.clone()
+    }
+
+    fn fail_compaction(&mut self, error: AgentError) -> Poll<Option<AgentChatEvent>> {
+        self.phase = ChatPhase::Finished;
+        self.finished = self.pending_completed.is_none();
+        Poll::Ready(Some(AgentChatEvent::CompactionFailed { error }))
+    }
+
+    fn cancel_compaction(&mut self, reason: CompactionReason) -> Poll<Option<AgentChatEvent>> {
+        self.phase = ChatPhase::Finished;
+        self.finished = self.pending_completed.is_none();
+        Poll::Ready(Some(AgentChatEvent::CompactionCancelled { reason }))
+    }
+
+    fn start_turn(&mut self) {
+        let text = self.user_text.clone().expect("send compaction has a draft");
+        self.phase = ChatPhase::Turning(
+            self.conversation
+                .begin_attempt(text, self.cancellation.clone()),
+        );
     }
 }
 
@@ -446,49 +615,251 @@ impl Stream for AgentChatEventStream<'_> {
     type Item = AgentChatEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.finished {
-            return Poll::Ready(None);
-        }
-        let event = match Pin::new(&mut self.stream).poll_next(context) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(None) => {
+        loop {
+            if self.finished {
+                return Poll::Ready(None);
+            }
+            if matches!(self.phase, ChatPhase::Finished) {
+                if let Some(message) = self.pending_completed.take() {
+                    self.finished = true;
+                    return Poll::Ready(Some(AgentChatEvent::Completed { message }));
+                }
                 self.finished = true;
                 return Poll::Ready(None);
             }
-            Poll::Ready(Some(event)) => event,
-        };
-        let public = match event {
-            ConversationEvent::Started => AgentChatEvent::Started,
-            ConversationEvent::ContentStarted { index, kind } => {
-                AgentChatEvent::ContentStarted { index, kind }
+            if self.cancellation.is_cancelled() {
+                if let ChatPhase::Compacting { preparation, .. } = &self.phase {
+                    let reason = preparation.reason();
+                    return self.cancel_compaction(reason);
+                }
+                self.phase = ChatPhase::Finished;
+                self.finished = self.pending_completed.is_none();
+                return Poll::Ready(Some(AgentChatEvent::Aborted));
             }
-            ConversationEvent::ContentDelta { index, delta } => {
-                AgentChatEvent::ContentDelta { index, delta }
-            }
-            ConversationEvent::ContentFinished { index } => {
-                AgentChatEvent::ContentFinished { index }
-            }
-            ConversationEvent::Failed { error } => {
-                self.finished = true;
-                AgentChatEvent::Failed { error }
-            }
-            ConversationEvent::Aborted => {
-                self.finished = true;
-                AgentChatEvent::Aborted
-            }
-            ConversationEvent::Completed { message } => {
-                let turn = completed_turn(&self.user_text, &message);
-                self.finished = true;
-                match self.session.append_completed_turn(turn) {
-                    Ok(()) => AgentChatEvent::Completed { message },
-                    Err(error) => {
-                        *self.not_saved = true;
-                        AgentChatEvent::NotSaved { message, error }
+            let event = match &mut self.phase {
+                ChatPhase::Compacting { attempt, .. } | ChatPhase::Turning(attempt) => {
+                    match Pin::new(attempt).poll_next(context) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(None) => {
+                            self.finished = true;
+                            return Poll::Ready(None);
+                        }
+                        Poll::Ready(Some(event)) => event,
+                    }
+                }
+                ChatPhase::Finished => return Poll::Ready(None),
+            };
+
+            if matches!(self.phase, ChatPhase::Compacting { .. }) {
+                let reason = match &self.phase {
+                    ChatPhase::Compacting { preparation, .. } => preparation.reason(),
+                    _ => unreachable!(),
+                };
+                match event {
+                    ConversationEvent::Started => {
+                        return Poll::Ready(Some(AgentChatEvent::CompactionStarted { reason }));
+                    }
+                    ConversationEvent::ContentStarted { .. }
+                    | ConversationEvent::ContentDelta { .. }
+                    | ConversationEvent::ContentFinished { .. } => continue,
+                    ConversationEvent::Aborted => return self.cancel_compaction(reason),
+                    ConversationEvent::Failed { error } => return self.fail_compaction(error),
+                    ConversationEvent::Completed { message } => {
+                        if message.finish_reason() != FinishReason::Completed {
+                            return self.fail_compaction(AgentError::fixed(
+                                super::AgentErrorCategory::Provider,
+                                "compaction summary was truncated",
+                            ));
+                        }
+                        let summary = message
+                            .content()
+                            .iter()
+                            .filter_map(|block| match block {
+                                AssistantContent::Text(text) => Some(text.as_str()),
+                                AssistantContent::Reasoning(_) => None,
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        let (preparation, intent, history_summary) = match &self.phase {
+                            ChatPhase::Compacting {
+                                preparation,
+                                intent,
+                                stage: SummaryStage::History,
+                                ..
+                            } => {
+                                if !validate_summary(&summary) {
+                                    return self.fail_compaction(AgentError::fixed(
+                                        super::AgentErrorCategory::Provider,
+                                        "compaction summary is malformed",
+                                    ));
+                                }
+                                if let Some(prompt) = preparation.split_prefix_prompt() {
+                                    let attempt = self.conversation.begin_compaction(
+                                        prompt.to_owned(),
+                                        self.cancellation.clone(),
+                                        8_192,
+                                    );
+                                    self.phase = ChatPhase::Compacting {
+                                        attempt,
+                                        preparation: preparation.clone(),
+                                        intent: *intent,
+                                        stage: SummaryStage::SplitPrefix(summary),
+                                    };
+                                    continue;
+                                }
+                                (preparation.clone(), *intent, summary)
+                            }
+                            ChatPhase::Compacting {
+                                preparation,
+                                intent,
+                                stage: SummaryStage::SplitPrefix(history),
+                                ..
+                            } => {
+                                if !validate_split_summary(&summary) {
+                                    return self.fail_compaction(AgentError::fixed(
+                                        super::AgentErrorCategory::Provider,
+                                        "split-turn summary is malformed",
+                                    ));
+                                }
+                                (
+                                    preparation.clone(),
+                                    *intent,
+                                    format!("{history}\n\n---\n\n**Turn Context (split turn):**\n\n{summary}"),
+                                )
+                            }
+                            _ => unreachable!(),
+                        };
+                        if self.cancellation.is_cancelled() {
+                            return self.cancel_compaction(preparation.reason());
+                        }
+                        let record = CompactionRecord::new(
+                            history_summary,
+                            preparation.first_kept_entry_id().to_owned(),
+                            preparation.tokens_before(),
+                            Some(preparation.reason()),
+                        );
+                        if let Err(error) = self.session.append_compaction(record) {
+                            *self.not_saved = true;
+                            self.phase = ChatPhase::Finished;
+                            self.finished = self.pending_completed.is_none();
+                            return Poll::Ready(Some(AgentChatEvent::CompactionNotSaved { error }));
+                        }
+                        let messages = hydrate_messages(
+                            self.session.continuation(),
+                            self.conversation.model(),
+                            self.conversation.provider(),
+                        );
+                        self.conversation.replace_messages(messages);
+                        match intent {
+                            CompactionIntent::SendDraft | CompactionIntent::RetryOverflow => {
+                                self.start_turn()
+                            }
+                            CompactionIntent::Finish => {
+                                self.phase = ChatPhase::Finished;
+                                self.finished = self.pending_completed.is_none();
+                            }
+                        }
+                        return Poll::Ready(Some(AgentChatEvent::CompactionCompleted { reason }));
                     }
                 }
             }
-        };
-        Poll::Ready(Some(public))
+
+            match event {
+                ConversationEvent::Started => return Poll::Ready(Some(AgentChatEvent::Started)),
+                ConversationEvent::ContentStarted { index, kind } => {
+                    return Poll::Ready(Some(AgentChatEvent::ContentStarted { index, kind }));
+                }
+                ConversationEvent::ContentDelta { index, delta } => {
+                    return Poll::Ready(Some(AgentChatEvent::ContentDelta { index, delta }));
+                }
+                ConversationEvent::ContentFinished { index } => {
+                    return Poll::Ready(Some(AgentChatEvent::ContentFinished { index }));
+                }
+                ConversationEvent::Aborted => {
+                    self.finished = true;
+                    self.phase = ChatPhase::Finished;
+                    return Poll::Ready(Some(AgentChatEvent::Aborted));
+                }
+                ConversationEvent::Failed { error }
+                    if error.is_context_overflow() && !self.overflow_attempted =>
+                {
+                    self.overflow_attempted = true;
+                    let model = self.conversation.model();
+                    if !compaction_capable(model.context_window()) {
+                        self.finished = true;
+                        self.phase = ChatPhase::Finished;
+                        return Poll::Ready(Some(AgentChatEvent::Failed { error }));
+                    }
+                    let Some(preparation) = prepare_compaction(
+                        self.session.snapshot(),
+                        CompactionReason::Overflow,
+                        None,
+                    ) else {
+                        self.finished = true;
+                        self.phase = ChatPhase::Finished;
+                        return Poll::Ready(Some(AgentChatEvent::Failed { error }));
+                    };
+                    let attempt = self.conversation.begin_compaction(
+                        preparation.prompt().to_owned(),
+                        self.cancellation.clone(),
+                        13_107,
+                    );
+                    self.phase = ChatPhase::Compacting {
+                        attempt,
+                        preparation,
+                        intent: CompactionIntent::RetryOverflow,
+                        stage: SummaryStage::History,
+                    };
+                    continue;
+                }
+                ConversationEvent::Failed { error } => {
+                    self.finished = true;
+                    self.phase = ChatPhase::Finished;
+                    return Poll::Ready(Some(AgentChatEvent::Failed { error }));
+                }
+                ConversationEvent::Completed { message } => {
+                    let user_text = self.user_text.clone().expect("turn has user draft");
+                    let turn = completed_turn(&user_text, &message);
+                    if let Err(error) = self.session.append_completed_turn(turn) {
+                        *self.not_saved = true;
+                        self.finished = true;
+                        self.phase = ChatPhase::Finished;
+                        return Poll::Ready(Some(AgentChatEvent::NotSaved { message, error }));
+                    }
+                    self.conversation
+                        .commit(UserMessage::new(user_text), message.clone());
+                    let model = self.conversation.model();
+                    if requires_compaction(
+                        self.session.snapshot().context_tokens(),
+                        model.context_window(),
+                    ) && compaction_capable(model.context_window())
+                    {
+                        if let Some(preparation) = prepare_compaction(
+                            self.session.snapshot(),
+                            CompactionReason::Threshold,
+                            None,
+                        ) {
+                            let attempt = self.conversation.begin_compaction(
+                                preparation.prompt().to_owned(),
+                                self.cancellation.clone(),
+                                13_107,
+                            );
+                            self.pending_completed = Some(message);
+                            self.phase = ChatPhase::Compacting {
+                                attempt,
+                                preparation,
+                                intent: CompactionIntent::Finish,
+                                stage: SummaryStage::History,
+                            };
+                            continue;
+                        }
+                    }
+                    self.finished = true;
+                    self.phase = ChatPhase::Finished;
+                    return Poll::Ready(Some(AgentChatEvent::Completed { message }));
+                }
+            }
+        }
     }
 }
 

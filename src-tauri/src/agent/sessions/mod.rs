@@ -88,11 +88,18 @@ impl VisibleTurn {
     }
 }
 #[derive(Clone, Eq, PartialEq)]
+pub enum VisibleHistoryEntry {
+    Turn(VisibleTurn),
+    Compaction(CompactionSnapshot),
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct CompactionSnapshot {
     summary: String,
     first_kept_entry_id: String,
     tokens_before: u64,
     reason: Option<String>,
+    pub(crate) path_index: usize,
 }
 impl fmt::Debug for CompactionSnapshot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -118,6 +125,20 @@ impl CompactionSnapshot {
     }
 }
 #[derive(Clone, Eq, PartialEq)]
+pub(crate) struct ContextEntry {
+    pub(crate) id: String,
+    pub(crate) role: ContextRole,
+    pub(crate) text: String,
+    pub(crate) authoritative_tokens: Option<u64>,
+    pub(crate) path_index: usize,
+}
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ContextRole {
+    User,
+    Assistant,
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct SessionSnapshot {
     id: SessionId,
     access: SessionAccess,
@@ -130,6 +151,9 @@ pub struct SessionSnapshot {
     reasoning_level: ReasoningLevel,
     compactions: Vec<CompactionSnapshot>,
     recovery_notices: Vec<RecoveryNotice>,
+    visible_history: Vec<VisibleHistoryEntry>,
+    pub(crate) context_entries: Vec<ContextEntry>,
+    pub(crate) compaction_entries: Vec<ContextEntry>,
 }
 impl fmt::Debug for SessionSnapshot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -157,6 +181,9 @@ impl SessionSnapshot {
             reasoning_level: ReasoningLevel::Off,
             compactions: Vec::new(),
             recovery_notices: Vec::new(),
+            visible_history: Vec::new(),
+            context_entries: Vec::new(),
+            compaction_entries: Vec::new(),
         }
     }
     pub fn id(&self) -> SessionId {
@@ -192,6 +219,38 @@ impl SessionSnapshot {
     pub fn recovery_notices(&self) -> &[RecoveryNotice] {
         &self.recovery_notices
     }
+    pub fn visible_history(&self) -> &[VisibleHistoryEntry] {
+        &self.visible_history
+    }
+
+    /// Estimated tokens in the provider context reconstructed for the next request.
+    pub fn context_tokens(&self) -> u64 {
+        let anchor = self
+            .context_entries
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, entry)| {
+                entry
+                    .authoritative_tokens
+                    .filter(|tokens| *tokens > 0)
+                    .map(|tokens| (index, tokens))
+            });
+        match anchor {
+            Some((index, tokens)) => self.context_entries[index + 1..]
+                .iter()
+                .fold(tokens, |total, entry| {
+                    total.saturating_add(estimate_text(&entry.text))
+                }),
+            None => self.context_entries.iter().fold(0, |total, entry| {
+                total.saturating_add(estimate_text(&entry.text))
+            }),
+        }
+    }
+}
+
+fn estimate_text(text: &str) -> u64 {
+    (text.chars().count() as u64).saturating_add(3) / 4
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct SessionSummary {
