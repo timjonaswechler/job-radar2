@@ -6,16 +6,16 @@ use crate::{
         compiler::{compile_source_execution_plan, ProfileCompilerSnapshot},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_posting_detail_with_clients, ManagedProfileBrowserClient, PostingDetailFetcher,
-            PostingDetailPostingOccurrence, ProfileBrowserClient, ReqwestPostingDetailFetcher,
+            execute_detail_with_clients, DetailFetcher, DetailPostingOccurrence,
+            ManagedProfileBrowserClient, ProfileBrowserClient, ReqwestDetailFetcher,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
 };
 
 use super::{
-    ApplicationState, InterestState, JobPosting, JobPostingDetail, JobPostingQueueCounts,
-    JobPostingQueueId, JobPostingSource, PostingDescriptionState, PreparationState, ReadState,
+    ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
+    JobPostingSource, JobPostingView, PostingDescriptionState, PreparationState, ReadState,
     UpdateJobPostingStateInput,
 };
 
@@ -123,28 +123,28 @@ impl<'a> JobPostingService<'a> {
         })
     }
 
-    pub async fn get_posting_detail(
+    pub async fn get_job_posting(
         &self,
         id: i64,
         app_data_dir: impl AsRef<Path>,
         browser_runtime_dir: impl Into<std::path::PathBuf>,
-    ) -> Result<JobPostingDetail, String> {
+    ) -> Result<JobPostingView, String> {
         let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-        let fetcher = ReqwestPostingDetailFetcher::new();
+        let fetcher = ReqwestDetailFetcher::new();
         let browser = ManagedProfileBrowserClient::new(browser_runtime_dir);
-        self.get_posting_detail_with_clients(id, &snapshot, &fetcher, &browser)
+        self.get_job_posting_with_clients(id, &snapshot, &fetcher, &browser)
             .await
     }
 
-    pub(crate) async fn get_posting_detail_with_clients<F, B>(
+    pub(crate) async fn get_job_posting_with_clients<F, B>(
         &self,
         id: i64,
         snapshot: &SourceProfileRegistrySnapshot,
         fetcher: &F,
         browser: &B,
-    ) -> Result<JobPostingDetail, String>
+    ) -> Result<JobPostingView, String>
     where
-        F: PostingDetailFetcher + Sync + ?Sized,
+        F: DetailFetcher + Sync + ?Sized,
         B: ProfileBrowserClient + Sync + ?Sized,
     {
         let mut posting = self.get(id).await?;
@@ -163,7 +163,7 @@ impl<'a> JobPostingService<'a> {
         }
 
         if let Some(text) = posting.description_text.clone() {
-            return Ok(JobPostingDetail {
+            return Ok(JobPostingView {
                 posting,
                 description_state: PostingDescriptionState::Loaded {
                     text,
@@ -218,7 +218,7 @@ impl<'a> JobPostingService<'a> {
             let execution_plan = compile_result
                 .execution_plan
                 .expect("compile result has an execution plan");
-            if execution_plan.posting_detail.is_none() {
+            if execution_plan.detail.is_none() {
                 diagnostics.push(detail_source_diagnostic(
                     &posting_source,
                     "posting_detail_missing",
@@ -233,7 +233,7 @@ impl<'a> JobPostingService<'a> {
             }
 
             attempted_detail_capable_source = true;
-            let result = execute_posting_detail_with_clients(
+            let result = execute_detail_with_clients(
                 &execution_plan,
                 &posting_occurrence(&posting, &posting_source),
                 fetcher,
@@ -257,7 +257,7 @@ impl<'a> JobPostingService<'a> {
                 .await
                 .map_err(db_error)?;
                 let posting = self.get(id).await?;
-                return Ok(JobPostingDetail {
+                return Ok(JobPostingView {
                     posting,
                     description_state: PostingDescriptionState::Loaded {
                         text: description_text,
@@ -270,7 +270,7 @@ impl<'a> JobPostingService<'a> {
         }
 
         if attempted_detail_capable_source {
-            Ok(JobPostingDetail {
+            Ok(JobPostingView {
                 posting,
                 description_state: PostingDescriptionState::Failed {
                     message: diagnostic_summary(
@@ -294,7 +294,7 @@ impl<'a> JobPostingService<'a> {
                     details: Some(serde_json::json!({ "postingId": id })),
                 });
             }
-            Ok(JobPostingDetail {
+            Ok(JobPostingView {
                 posting,
                 description_state: PostingDescriptionState::Unsupported {
                     message: diagnostic_summary(
@@ -473,8 +473,8 @@ fn compiler_snapshot(snapshot: &SourceProfileRegistrySnapshot) -> ProfileCompile
 fn posting_occurrence(
     posting: &JobPosting,
     posting_source: &JobPostingSource,
-) -> PostingDetailPostingOccurrence {
-    PostingDetailPostingOccurrence {
+) -> DetailPostingOccurrence {
+    DetailPostingOccurrence {
         url: posting_source.url.clone(),
         title: Some(posting.title.clone()),
         company: Some(posting.company.clone()),

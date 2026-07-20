@@ -32,9 +32,8 @@ mod templates;
 use crate::profile_dsl::documents::JsonSchemaObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
 use crate::profile_dsl::policy::{
-    PolicyPostingDetailStep, PolicyPostingDiscoveryStep, PolicySelectedAccessPath,
-    PolicySourceDocument, PolicySourceExecutionPlan, PolicySourceProfileDocument,
-    PolicySourceProfileRegistrySnapshot,
+    PolicyDetailStep, PolicyDiscoveryStep, PolicySelectedAccessPath, PolicySourceDocument,
+    PolicySourceExecutionPlan, PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot,
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 use crate::source_profile::documents::SourceProfileDocument;
@@ -53,7 +52,7 @@ pub struct CompileSourceExecutionPlanResult {
     pub diagnostics: Diagnostics,
 }
 
-/// The complete profile after direct Source fragments or legacy Source Overrides
+/// The complete profile after direct Source fragments or schema-v2 Source Overrides
 /// have been applied and the whole profile has been validated.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct EffectiveSourceProfile {
@@ -67,8 +66,8 @@ pub struct SourceOwnedAccessPath {
     pub name: String,
     pub description: Option<String>,
     pub source_config_schema: Option<JsonSchemaObject>,
-    pub posting_discovery: PolicyPostingDiscoveryStep,
-    pub posting_detail: Option<PolicyPostingDetailStep>,
+    pub discovery: PolicyDiscoveryStep,
+    pub detail: Option<PolicyDetailStep>,
     pub diagnostics: Option<Diagnostics>,
 }
 
@@ -162,11 +161,11 @@ fn compile_policy_source(
                 source.access_paths.as_deref(),
                 diagnostics,
             )?;
-            let legacy_source = legacy_source(source);
-            let legacy_registry = legacy_registry(effective_profile.legacy());
-            let plan = resolution::compile_legacy_source_execution_plan(
-                &legacy_source,
-                &legacy_registry,
+            let schema_v2_source = schema_v2_source(source);
+            let schema_v2_registry = schema_v2_registry(effective_profile.schema_v2_document());
+            let plan = resolution::compile_source_execution_plan(
+                &schema_v2_source,
+                &schema_v2_registry,
                 diagnostics,
             )?;
             let selected_path = effective_profile
@@ -174,13 +173,10 @@ fn compile_policy_source(
                 .iter()
                 .find(|path| path.key == *path_key)
                 .expect("successful plan compilation must resolve the selected final Access Path");
-            let execution_plan = PolicySourceExecutionPlan::from_legacy(
+            let execution_plan = PolicySourceExecutionPlan::from_execution_plan(
                 plan,
-                selected_path.posting_discovery.policy,
-                selected_path
-                    .posting_detail
-                    .as_ref()
-                    .map(|step| step.policy),
+                selected_path.discovery.policy,
+                selected_path.detail.as_ref().map(|step| step.policy),
             );
             Some(CompiledSource {
                 access: CompiledSourceAccess::Profile {
@@ -196,20 +192,20 @@ fn compile_policy_source(
             name,
             description,
             source_config_schema,
-            posting_discovery,
-            posting_detail,
+            discovery,
+            detail,
             diagnostics: access_diagnostics,
         } => {
-            let legacy_source = legacy_source(source);
-            let plan = resolution::compile_legacy_source_execution_plan(
-                &legacy_source,
+            let schema_v2_source = schema_v2_source(source);
+            let plan = resolution::compile_source_execution_plan(
+                &schema_v2_source,
                 &SourceProfileRegistrySnapshot::default(),
                 diagnostics,
             )?;
-            let execution_plan = PolicySourceExecutionPlan::from_legacy(
+            let execution_plan = PolicySourceExecutionPlan::from_execution_plan(
                 plan,
-                posting_discovery.policy,
-                posting_detail.as_ref().map(|step| step.policy),
+                discovery.policy,
+                detail.as_ref().map(|step| step.policy),
             );
             Some(CompiledSource {
                 access: CompiledSourceAccess::SourceOwned {
@@ -218,8 +214,8 @@ fn compile_policy_source(
                         name: name.clone(),
                         description: description.clone(),
                         source_config_schema: source_config_schema.clone(),
-                        posting_discovery: posting_discovery.clone(),
-                        posting_detail: posting_detail.clone(),
+                        discovery: discovery.clone(),
+                        detail: detail.clone(),
                         diagnostics: access_diagnostics.clone(),
                     },
                 },
@@ -229,7 +225,7 @@ fn compile_policy_source(
     }
 }
 
-fn legacy_source(source: &PolicySourceDocument) -> SourceDocument {
+fn schema_v2_source(source: &PolicySourceDocument) -> SourceDocument {
     let selected_access_path = match &source.selected_access_path {
         PolicySelectedAccessPath::ProfileAccessPath {
             profile_key,
@@ -243,16 +239,16 @@ fn legacy_source(source: &PolicySourceDocument) -> SourceDocument {
             name,
             description,
             source_config_schema,
-            posting_discovery,
-            posting_detail,
+            discovery,
+            detail,
             diagnostics,
         } => SelectedAccessPath::SourceOwnedAccessPath {
             key: key.clone(),
             name: name.clone(),
             description: description.clone(),
             source_config_schema: source_config_schema.clone(),
-            posting_discovery: posting_discovery.legacy(),
-            posting_detail: posting_detail.as_ref().map(PolicyPostingDetailStep::legacy),
+            discovery: discovery.execution_step(),
+            detail: detail.as_ref().map(PolicyDetailStep::execution_step),
             diagnostics: diagnostics.clone(),
         },
     };
@@ -270,7 +266,7 @@ fn legacy_source(source: &PolicySourceDocument) -> SourceDocument {
     }
 }
 
-fn legacy_registry(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
+fn schema_v2_registry(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
     SourceProfileRegistrySnapshot {
         profiles: vec![crate::source_profile::registry::RegistrySourceProfile {
             origin: "dormant_policy_compiler".to_string(),
@@ -338,7 +334,7 @@ pub fn compile_source_execution_plan(
             .cloned()
             .map(
                 |document| crate::source_profile::registry::RegistrySourceProfile {
-                    origin: "legacy_compiler_snapshot".to_string(),
+                    origin: "profile_compiler_snapshot".to_string(),
                     path: String::new(),
                     document,
                 },
@@ -350,7 +346,7 @@ pub fn compile_source_execution_plan(
 
     let mut diagnostics = Vec::new();
     result.execution_plan =
-        resolution::compile_legacy_source_execution_plan(source, &registry, &mut diagnostics);
+        resolution::compile_source_execution_plan(source, &registry, &mut diagnostics);
     result.diagnostics = diagnostics;
 
     result

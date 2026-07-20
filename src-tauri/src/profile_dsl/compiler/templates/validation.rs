@@ -65,7 +65,7 @@ pub(super) fn validate_variable_reference(
         "sourceConfig" => source_config_keys.contains(key),
         "captures" => captures.contains(key),
         "postingMeta" => {
-            if matches!(context, TemplateContext::PostingDiscovery) {
+            if matches!(context, TemplateContext::Discovery) {
                 push_template_diagnostic(
                     diagnostics,
                     "template_namespace_unavailable",
@@ -82,7 +82,7 @@ pub(super) fn validate_variable_reference(
             posting_meta_keys.contains(key)
         }
         "posting" => {
-            if matches!(context, TemplateContext::PostingDiscovery) {
+            if matches!(context, TemplateContext::Discovery) {
                 push_template_diagnostic(diagnostics, "template_namespace_unavailable", format!("Template namespace `{namespace}` is not available before a posting occurrence exists"), path, strategy_key, namespace, key);
                 return;
             }

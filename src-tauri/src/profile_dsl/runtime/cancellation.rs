@@ -13,13 +13,13 @@ pub trait RuntimeCancellation: Send + Sync {
     fn is_cancelled(&self) -> bool;
 }
 
-/// Caller-owned request budget for bounded `postingDiscovery` execution.
+/// Caller-owned request budget for bounded Discovery execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PostingDiscoveryExecutionBudget {
+pub struct DiscoveryExecutionBudget {
     max_requests_per_strategy: u64,
 }
 
-impl PostingDiscoveryExecutionBudget {
+impl DiscoveryExecutionBudget {
     pub const fn new(max_requests_per_strategy: u64) -> Self {
         assert!(max_requests_per_strategy > 0);
         Self {
@@ -36,37 +36,31 @@ impl PostingDiscoveryExecutionBudget {
 #[derive(Clone, Copy, Default)]
 pub struct RuntimeExecutionContext<'a> {
     cancellation: Option<&'a dyn RuntimeCancellation>,
-    posting_discovery_budget: Option<PostingDiscoveryExecutionBudget>,
+    discovery_budget: Option<DiscoveryExecutionBudget>,
 }
 
 impl<'a> RuntimeExecutionContext<'a> {
     pub const fn uncancellable() -> Self {
         Self {
             cancellation: None,
-            posting_discovery_budget: None,
+            discovery_budget: None,
         }
     }
 
     pub const fn with_cancellation(cancellation: &'a dyn RuntimeCancellation) -> Self {
         Self {
             cancellation: Some(cancellation),
-            posting_discovery_budget: None,
+            discovery_budget: None,
         }
     }
 
-    pub const fn with_posting_discovery_budget(
-        mut self,
-        budget: PostingDiscoveryExecutionBudget,
-    ) -> Self {
-        self.posting_discovery_budget = Some(budget);
+    pub const fn with_discovery_budget(mut self, budget: DiscoveryExecutionBudget) -> Self {
+        self.discovery_budget = Some(budget);
         self
     }
 
-    pub(crate) fn posting_discovery_request_limit(
-        self,
-        configured_max_requests: u64,
-    ) -> (u64, bool) {
-        let Some(budget) = self.posting_discovery_budget else {
+    pub(crate) fn discovery_request_limit(self, configured_max_requests: u64) -> (u64, bool) {
+        let Some(budget) = self.discovery_budget else {
             return (configured_max_requests, false);
         };
         let budget_max_requests = budget.max_requests_per_strategy();

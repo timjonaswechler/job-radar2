@@ -1,13 +1,11 @@
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_posting_detail_with_fetcher,
-    execute_posting_discovery_with_fetcher, DiagnosticCategory, DiagnosticSeverity,
-    PostingDetailFetchError, PostingDetailFetchRequest, PostingDetailFetchResponse,
-    PostingDetailFetcher, PostingDetailPostingOccurrence, PostingDiscoveryCandidate,
-    PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
-    PostingDiscoveryFetcher, ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument,
-    SupportLevel,
+    compile_source_execution_plan, execute_detail_with_fetcher, execute_discovery_with_fetcher,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate,
+    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
+    ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -71,14 +69,14 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         ),
     ]);
 
-    let discovery = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
     assert_eq!(discovery.diagnostics, Vec::new());
-    let expected_candidates: Vec<PostingDiscoveryCandidate> =
+    let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
     let primary_candidate = &discovery.candidates[0];
-    let primary_detail = block_on(execute_posting_detail_with_fetcher(
+    let primary_detail = block_on(execute_detail_with_fetcher(
         &plan,
         &posting_occurrence(primary_candidate),
         &fetcher,
@@ -92,7 +90,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let fallback_candidate = &discovery.candidates[1];
-    let fallback_detail = block_on(execute_posting_detail_with_fetcher(
+    let fallback_detail = block_on(execute_detail_with_fetcher(
         &plan,
         &posting_occurrence(fallback_candidate),
         &fetcher,
@@ -119,7 +117,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let schott_style_candidate = &discovery.candidates[3];
-    let schott_style_detail = block_on(execute_posting_detail_with_fetcher(
+    let schott_style_detail = block_on(execute_detail_with_fetcher(
         &plan,
         &posting_occurrence(schott_style_candidate),
         &fetcher,
@@ -185,8 +183,8 @@ fn assert_detects_named_successfactors_source_config_captures(profile: &Value) {
     }
 }
 
-fn posting_occurrence(candidate: &PostingDiscoveryCandidate) -> PostingDetailPostingOccurrence {
-    PostingDetailPostingOccurrence {
+fn posting_occurrence(candidate: &DiscoveryCandidate) -> DetailPostingOccurrence {
+    DetailPostingOccurrence {
         url: candidate.url.clone(),
         title: Some(candidate.title.clone()),
         company: Some(candidate.company.clone()),
@@ -218,16 +216,12 @@ impl OfflineFetcher {
     }
 }
 
-impl PostingDiscoveryFetcher for OfflineFetcher {
+impl DiscoveryFetcher for OfflineFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDiscoveryFetchRequest,
+        request: DiscoveryFetchRequest,
     ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
+        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
     > {
         Box::pin(async move {
             self.requested_urls
@@ -235,39 +229,34 @@ impl PostingDiscoveryFetcher for OfflineFetcher {
                 .unwrap()
                 .push(request.url.clone());
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDiscoveryFetchError::new(format!(
+                DiscoveryFetchError::new(format!(
                     "missing offline discovery fixture for {}",
                     request.url
                 ))
             })?;
-            Ok(PostingDiscoveryFetchResponse { body })
+            Ok(DiscoveryFetchResponse { body })
         })
     }
 }
 
-impl PostingDetailFetcher for OfflineFetcher {
+impl DetailFetcher for OfflineFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         Box::pin(async move {
             self.requested_urls
                 .lock()
                 .unwrap()
                 .push(request.url.clone());
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDetailFetchError::new(format!(
+                DetailFetchError::new(format!(
                     "missing offline detail fixture for {}",
                     request.url
                 ))
             })?;
-            Ok(PostingDetailFetchResponse { body })
+            Ok(DetailFetchResponse { body })
         })
     }
 }

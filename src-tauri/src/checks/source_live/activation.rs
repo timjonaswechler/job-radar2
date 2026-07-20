@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 use crate::profile_dsl::runtime::{
-    PostingDetailFetcher, PostingDiscoveryFetcher, ProfileBrowserClient,
-    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, UnavailableProfileBrowserClient,
+    DetailFetcher, DiscoveryFetcher, ProfileBrowserClient, ReqwestDetailFetcher,
+    ReqwestDiscoveryFetcher, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::{SourceDocument, SourceStatus};
 use crate::source_profile::registry::RegistrySource;
@@ -38,8 +38,8 @@ pub fn check_and_activate_source(
     check_and_activate_source_with_clients(
         app_data_dir,
         source_key,
-        &ReqwestPostingDiscoveryFetcher::new(),
-        &ReqwestPostingDetailFetcher::new(),
+        &ReqwestDiscoveryFetcher::new(),
+        &ReqwestDetailFetcher::new(),
         &UnavailableProfileBrowserClient,
     )
 }
@@ -50,7 +50,7 @@ pub fn check_and_activate_source_with_fetcher<F>(
     fetcher: &F,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + PostingDetailFetcher + Sync + ?Sized,
+    F: DiscoveryFetcher + DetailFetcher + Sync + ?Sized,
 {
     check_and_activate_source_with_clients(
         app_data_dir,
@@ -69,8 +69,8 @@ pub fn check_and_activate_source_with_clients<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: PostingDiscoveryFetcher + Sync + ?Sized,
-    T: PostingDetailFetcher + Sync + ?Sized,
+    D: DiscoveryFetcher + Sync + ?Sized,
+    T: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     check_and_set_source_active(
@@ -90,8 +90,8 @@ pub fn check_and_reactivate_source(
     check_and_reactivate_source_with_clients(
         app_data_dir,
         source_key,
-        &ReqwestPostingDiscoveryFetcher::new(),
-        &ReqwestPostingDetailFetcher::new(),
+        &ReqwestDiscoveryFetcher::new(),
+        &ReqwestDetailFetcher::new(),
         &UnavailableProfileBrowserClient,
     )
 }
@@ -102,7 +102,7 @@ pub fn check_and_reactivate_source_with_fetcher<F>(
     fetcher: &F,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + PostingDetailFetcher + Sync + ?Sized,
+    F: DiscoveryFetcher + DetailFetcher + Sync + ?Sized,
 {
     check_and_reactivate_source_with_clients(
         app_data_dir,
@@ -121,8 +121,8 @@ pub fn check_and_reactivate_source_with_clients<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: PostingDiscoveryFetcher + Sync + ?Sized,
-    T: PostingDetailFetcher + Sync + ?Sized,
+    D: DiscoveryFetcher + Sync + ?Sized,
+    T: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     check_and_set_source_active(
@@ -144,8 +144,8 @@ fn check_and_set_source_active<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: PostingDiscoveryFetcher + Sync + ?Sized,
-    T: PostingDetailFetcher + Sync + ?Sized,
+    D: DiscoveryFetcher + Sync + ?Sized,
+    T: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let app_data_dir = app_data_dir.as_ref();

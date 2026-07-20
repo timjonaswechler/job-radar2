@@ -7,7 +7,7 @@
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
-    Fetch, Pagination, PaginationLimits, PostingDetailStep, PostingDiscoveryStep,
+    DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits,
 };
 
 use super::compiler_error;
@@ -15,14 +15,14 @@ use super::compiler_error;
 const MAX_FALLBACK_STRATEGIES: usize = 50;
 
 pub(super) fn validate_boundedness(
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     base_path: String,
     diagnostics: &mut Diagnostics,
 ) {
-    validate_discovery_strategy_list(posting_discovery, &base_path, diagnostics);
+    validate_discovery_strategy_list(discovery, &base_path, diagnostics);
 
-    for (index, strategy) in posting_discovery.strategies.iter().enumerate() {
+    for (index, strategy) in discovery.strategies.iter().enumerate() {
         let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");
         validate_fetch_bounds(
             &strategy.fetch,
@@ -40,9 +40,9 @@ pub(super) fn validate_boundedness(
         }
     }
 
-    if let Some(posting_detail) = posting_detail {
-        validate_detail_strategy_list(posting_detail, &base_path, diagnostics);
-        for (index, strategy) in posting_detail.strategies.iter().enumerate() {
+    if let Some(detail) = detail {
+        validate_detail_strategy_list(detail, &base_path, diagnostics);
+        for (index, strategy) in detail.strategies.iter().enumerate() {
             let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");
             validate_fetch_bounds(
                 &strategy.fetch,
@@ -55,12 +55,12 @@ pub(super) fn validate_boundedness(
 }
 
 fn validate_discovery_strategy_list(
-    posting_discovery: &PostingDiscoveryStep,
+    discovery: &DiscoveryStep,
     base_path: &str,
     diagnostics: &mut Diagnostics,
 ) {
     validate_strategy_list_len(
-        posting_discovery.strategies.len(),
+        discovery.strategies.len(),
         &format!("{base_path}/postingDiscovery/strategies"),
         "postingDiscovery",
         diagnostics,
@@ -68,12 +68,12 @@ fn validate_discovery_strategy_list(
 }
 
 fn validate_detail_strategy_list(
-    posting_detail: &PostingDetailStep,
+    detail: &DetailStep,
     base_path: &str,
     diagnostics: &mut Diagnostics,
 ) {
     validate_strategy_list_len(
-        posting_detail.strategies.len(),
+        detail.strategies.len(),
         &format!("{base_path}/postingDetail/strategies"),
         "postingDetail",
         diagnostics,

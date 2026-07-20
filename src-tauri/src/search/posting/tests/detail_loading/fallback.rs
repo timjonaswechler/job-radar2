@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn get_posting_detail_falls_back_after_detail_capable_source_failure() {
+fn get_job_posting_falls_back_after_detail_capable_source_failure() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -59,7 +59,7 @@ fn get_posting_detail_falls_back_after_detail_capable_source_failure() {
                 ),
             ],
         );
-        let client = FixturePostingDetailHttpClient::new([
+        let client = FixtureDetailHttpClient::new([
             (
                 "https://primary.example.test/jobs/laser".to_string(),
                 Err("network unavailable".to_string()),
@@ -70,7 +70,7 @@ fn get_posting_detail_falls_back_after_detail_capable_source_failure() {
             ),
         ]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,
@@ -105,7 +105,7 @@ fn get_posting_detail_falls_back_after_detail_capable_source_failure() {
 }
 
 #[test]
-fn get_posting_detail_reports_failed_after_all_detail_capable_sources_fail() {
+fn get_job_posting_reports_failed_after_all_detail_capable_sources_fail() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -146,12 +146,12 @@ fn get_posting_detail_reports_failed_after_all_detail_capable_sources_fail() {
                 json!({}),
             )],
         );
-        let client = FixturePostingDetailHttpClient::new([(
+        let client = FixtureDetailHttpClient::new([(
             "https://detail.example.test/jobs/laser".to_string(),
             Err("HTTP 500".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,

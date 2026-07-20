@@ -1450,12 +1450,12 @@ fn read_builtin_profile_text(file_name: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
-fn fixture_profile(detect: Value) -> SourceProfileDocument {
+fn fixture_profile(detection: Value) -> SourceProfileDocument {
     fixture_profile_with_key(
         "example_jobs",
         "Example Jobs",
         SupportLevel::Experimental,
-        detect,
+        detection,
     )
 }
 
@@ -1463,7 +1463,7 @@ fn fixture_profile_with_key(
     key: &str,
     name: &str,
     support_level: SupportLevel,
-    detect: Value,
+    detection: Value,
 ) -> SourceProfileDocument {
     let support_level = serde_json::to_value(support_level)
         .unwrap()
@@ -1476,7 +1476,7 @@ fn fixture_profile_with_key(
         "name": name,
         "kind": "generic",
         "support": { "level": support_level },
-        "detect": detect,
+        "detect": detection,
         "sourceConfigSchema": {
             "type": "object",
             "properties": {

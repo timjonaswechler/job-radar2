@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn get_posting_detail_fetches_with_aligned_source_url_config_and_posting_meta() {
+fn get_job_posting_fetches_with_aligned_source_url_config_and_posting_meta() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -61,13 +61,13 @@ fn get_posting_detail_fetches_with_aligned_source_url_config_and_posting_meta() 
                 ),
             ],
         );
-        let client = FixturePostingDetailHttpClient::new([(
+        let client = FixtureDetailHttpClient::new([(
             "https://primary.example.test/jobs/laser?token=primary-token&job=primary-42"
                 .to_string(),
             Ok("<div class=\"description\">Primary aligned description</div>".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,

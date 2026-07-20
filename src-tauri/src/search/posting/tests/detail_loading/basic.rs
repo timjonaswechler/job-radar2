@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn get_posting_detail_loads_missing_description_marks_read_and_persists_text() {
+fn get_job_posting_loads_missing_description_marks_read_and_persists_text() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -42,12 +42,12 @@ fn get_posting_detail_loads_missing_description_marks_read_and_persists_text() {
                 json!({}),
             )],
         );
-        let client = FixturePostingDetailHttpClient::new([(
+        let client = FixtureDetailHttpClient::new([(
             "https://detail.example.test/jobs/laser".to_string(),
             Ok("<main><div class=\"description\">Persisted description</div></main>".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,
@@ -82,7 +82,7 @@ fn get_posting_detail_loads_missing_description_marks_read_and_persists_text() {
 }
 
 #[test]
-fn get_posting_detail_returns_existing_description_without_fetching() {
+fn get_job_posting_returns_existing_description_without_fetching() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -124,9 +124,9 @@ fn get_posting_detail_returns_existing_description_without_fetching() {
                 json!({}),
             )],
         );
-        let client = FixturePostingDetailHttpClient::new([]);
+        let client = FixtureDetailHttpClient::new([]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,
@@ -148,7 +148,7 @@ fn get_posting_detail_returns_existing_description_without_fetching() {
 }
 
 #[test]
-fn get_posting_detail_returns_unsupported_when_no_concrete_source_supports_detail() {
+fn get_job_posting_returns_unsupported_when_no_concrete_source_supports_detail() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -186,9 +186,9 @@ fn get_posting_detail_returns_unsupported_when_no_concrete_source_supports_detai
             )],
         );
         assert_eq!(snapshot.diagnostics, Vec::new());
-        let client = FixturePostingDetailHttpClient::new([]);
+        let client = FixtureDetailHttpClient::new([]);
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,

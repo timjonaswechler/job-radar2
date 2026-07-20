@@ -6,9 +6,9 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_posting_discovery_with_clients_and_context, ManagedProfileBrowserClient,
-            PostingDiscoveryCandidate, PostingDiscoveryFetcher, ProfileBrowserClient,
-            ReqwestPostingDiscoveryFetcher, RuntimeExecutionContext,
+            execute_discovery_with_clients_and_context, DiscoveryCandidate, DiscoveryFetcher,
+            ManagedProfileBrowserClient, ProfileBrowserClient, ReqwestDiscoveryFetcher,
+            RuntimeExecutionContext,
         },
     },
 };
@@ -52,7 +52,7 @@ pub type BoxedSourceExecutionFuture<'a> =
 /// `SearchRunService` resolves selected Source keys through one Source Profile
 /// registry snapshot at run start, compiles active valid Sources into immutable
 /// typed Execution Plans, and passes those plans here. Active Search Runs must
-/// execute compiled `postingDiscovery`; they must not use legacy adapter routing.
+/// execute compiled Discovery; they must not use adapter routing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SourceExecutionSource {
     pub key: String,
@@ -96,20 +96,20 @@ impl DefaultSourceExecutor {
 impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            let fetcher = ReqwestPostingDiscoveryFetcher::new();
+            let fetcher = ReqwestDiscoveryFetcher::new();
             let browser = ManagedProfileBrowserClient::new(self.browser_runtime_dir.clone());
-            execute_posting_discovery_for_source(input, &fetcher, &browser).await
+            execute_discovery_for_source(input, &fetcher, &browser).await
         })
     }
 }
 
-async fn execute_posting_discovery_for_source<F, B>(
+async fn execute_discovery_for_source<F, B>(
     input: SourceExecutionInput<'_>,
     fetcher: &F,
     browser: &B,
 ) -> Result<SourceExecutionOutput, SourceExecutionError>
 where
-    F: PostingDiscoveryFetcher + Sync + ?Sized,
+    F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if input
@@ -123,7 +123,7 @@ where
         .cancellation_token
         .map(|token| RuntimeExecutionContext::with_cancellation(token))
         .unwrap_or_else(RuntimeExecutionContext::uncancellable);
-    let result = execute_posting_discovery_with_clients_and_context(
+    let result = execute_discovery_with_clients_and_context(
         &input.source.execution_plan,
         fetcher,
         browser,
@@ -187,7 +187,7 @@ fn source_execution_cancelled_diagnostic() -> Diagnostic {
     }
 }
 
-fn source_candidate(candidate: PostingDiscoveryCandidate) -> SourceCandidate {
+fn source_candidate(candidate: DiscoveryCandidate) -> SourceCandidate {
     SourceCandidate {
         title: candidate.title,
         company: candidate.company,

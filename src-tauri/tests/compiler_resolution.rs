@@ -37,7 +37,7 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
         None,
         "Execution Plan must expose the effective plan, not raw Source Overrides"
     );
-    let discovery_strategy = &plan.posting_discovery.strategies[0];
+    let discovery_strategy = &plan.discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "json_api");
     assert_eq!(
         discovery_strategy.fetch,
@@ -63,7 +63,7 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
         Some(0),
         "Source Overrides must be applied before compiling the effective Execution Plan"
     );
-    let detail_strategy = &plan.posting_detail.as_ref().unwrap().strategies[0];
+    let detail_strategy = &plan.detail.as_ref().unwrap().strategies[0];
     assert_eq!(detail_strategy.key, "detail_api");
     assert_eq!(
         detail_strategy.fetch,
@@ -116,7 +116,7 @@ fn compiler_resolves_source_owned_access_path() {
         None,
         "Source-owned Execution Plans also must not carry raw Source Overrides"
     );
-    let discovery_strategy = &plan.posting_discovery.strategies[0];
+    let discovery_strategy = &plan.discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "html_cards");
     let ExecutionPlanFetch::Browser {
         timeout_ms,
@@ -143,7 +143,7 @@ fn compiler_resolves_source_owned_access_path() {
             wait_after_ms: Some(500),
         }]
     );
-    assert_eq!(plan.posting_detail, None);
+    assert_eq!(plan.detail, None);
     assert_eq!(
         plan.selected_access_path,
         ExecutionPlanAccessPath::SourceOwnedAccessPath {

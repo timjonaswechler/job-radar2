@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::fetch::BrowserInteraction;
-use crate::profile_dsl::documents::{Fetch, PostingDetailStep, PostingDiscoveryStep, RequestBody};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, Fetch, RequestBody};
 
 use super::compiler_error;
 
@@ -21,12 +21,12 @@ const FORBIDDEN_HEADERS: &[&str] = &[
 ];
 
 pub(super) fn validate_security(
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     base_path: String,
     diagnostics: &mut Diagnostics,
 ) {
-    for (index, strategy) in posting_discovery.strategies.iter().enumerate() {
+    for (index, strategy) in discovery.strategies.iter().enumerate() {
         validate_fetch_security(
             &strategy.fetch,
             &format!("{base_path}/postingDiscovery/strategies/{index}/fetch"),
@@ -35,8 +35,8 @@ pub(super) fn validate_security(
         );
     }
 
-    if let Some(posting_detail) = posting_detail {
-        for (index, strategy) in posting_detail.strategies.iter().enumerate() {
+    if let Some(detail) = detail {
+        for (index, strategy) in detail.strategies.iter().enumerate() {
             validate_fetch_security(
                 &strategy.fetch,
                 &format!("{base_path}/postingDetail/strategies/{index}/fetch"),

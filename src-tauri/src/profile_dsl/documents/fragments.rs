@@ -30,28 +30,30 @@ pub struct AccessPathFragment {
     )]
     pub source_config_schema: Option<JsonSchemaObject>,
     #[serde(
+        rename = "postingDiscovery",
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub posting_discovery: Option<PostingDiscoveryStepFragment>,
+    pub discovery: Option<DiscoveryStepFragment>,
     #[serde(
+        rename = "postingDetail",
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub posting_detail: Option<PostingDetailStepFragment>,
+    pub detail: Option<DetailStepFragment>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDiscoveryStepFragment {
+pub struct DiscoveryStepFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub strategies: Option<Vec<PostingDiscoveryStrategyFragment>>,
+    pub strategies: Option<Vec<DiscoveryStrategyFragment>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -62,13 +64,13 @@ pub struct PostingDiscoveryStepFragment {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDetailStepFragment {
+pub struct DetailStepFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub strategies: Option<Vec<PostingDetailStrategyFragment>>,
+    pub strategies: Option<Vec<DetailStrategyFragment>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -79,7 +81,7 @@ pub struct PostingDetailStepFragment {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDiscoveryStrategyFragment {
+pub struct DiscoveryStrategyFragment {
     pub key: String,
     #[serde(
         default,
@@ -123,7 +125,7 @@ pub struct PostingDiscoveryStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub extract: Option<PostingDiscoveryExtractionFragment>,
+    pub extract: Option<DiscoveryExtractionFragment>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -134,7 +136,7 @@ pub struct PostingDiscoveryStrategyFragment {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDetailStrategyFragment {
+pub struct DetailStrategyFragment {
     pub key: String,
     #[serde(
         default,
@@ -179,7 +181,7 @@ pub struct PostingDetailStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub extract: Option<PostingDetailExtractionFragment>,
+    pub extract: Option<DetailExtractionFragment>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -623,18 +625,18 @@ pub enum ListFieldExpressionFragment {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDiscoveryExtractionFragment {
+pub struct DiscoveryExtractionFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub fields: Option<PostingDiscoveryFieldsFragment>,
+    pub fields: Option<DiscoveryFieldsFragment>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDiscoveryFieldsFragment {
+pub struct DiscoveryFieldsFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -675,18 +677,18 @@ pub struct PostingDiscoveryFieldsFragment {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDetailExtractionFragment {
+pub struct DetailExtractionFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub fields: Option<PostingDetailFieldsFragment>,
+    pub fields: Option<DetailFieldsFragment>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostingDetailFieldsFragment {
+pub struct DetailFieldsFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -720,10 +722,10 @@ struct AccessPathFragmentInput {
     name: Option<String>,
     #[serde(default, deserialize_with = "non_null")]
     source_config_schema: Option<JsonSchemaObject>,
-    #[serde(default, deserialize_with = "non_null")]
-    posting_discovery: Option<PostingDiscoveryStepFragment>,
-    #[serde(default, deserialize_with = "non_null")]
-    posting_detail: Option<PostingDetailStepFragment>,
+    #[serde(rename = "postingDiscovery", default, deserialize_with = "non_null")]
+    discovery: Option<DiscoveryStepFragment>,
+    #[serde(rename = "postingDetail", default, deserialize_with = "non_null")]
+    detail: Option<DetailStepFragment>,
 }
 
 impl<'de> Deserialize<'de> for AccessPathFragment {
@@ -740,8 +742,8 @@ impl<'de> Deserialize<'de> for AccessPathFragment {
             key: input.key,
             name: input.name,
             source_config_schema: input.source_config_schema,
-            posting_discovery: input.posting_discovery,
-            posting_detail: input.posting_detail,
+            discovery: input.discovery,
+            detail: input.detail,
         })
     }
 }

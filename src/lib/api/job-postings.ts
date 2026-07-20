@@ -87,7 +87,7 @@ export function listJobPostingsForQueue(queueId: JobPostingQueueId) {
 }
 
 export function getPostingDetail(postingId: number) {
-  return invoke<JobPostingDetail>("get_posting_detail", { postingId })
+  return invoke<JobPostingDetail>("get_job_posting", { postingId })
 }
 
 export function getJobPostingQueueCounts() {

@@ -9,13 +9,12 @@ use std::{
 };
 
 use job_radar_lib::{
-    compile_source, execute_policy_posting_detail_with_clients_and_context,
-    execute_policy_posting_discovery_with_clients_and_context, CompileSourceOutcome,
-    PolicyPostingDiscoveryStep, PolicySourceDocument, PolicySourceExecutionPlan,
-    PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot, PostingDetailFetchError,
-    PostingDetailFetchRequest, PostingDetailFetchResponse, PostingDetailFetcher,
-    PostingDetailPostingOccurrence, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
-    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, RuntimeCancellation,
+    compile_source, execute_policy_detail_with_clients_and_context,
+    execute_policy_discovery_with_clients_and_context, CompileSourceOutcome, DetailFetchError,
+    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
+    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
+    PolicyDiscoveryStep, PolicySourceDocument, PolicySourceExecutionPlan,
+    PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot, RuntimeCancellation,
     RuntimeExecutionContext, StrategyPolicy, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
@@ -23,14 +22,14 @@ use serde_json::{json, Value};
 #[test]
 fn final_strategy_set_requires_the_closed_first_accepted_policy() {
     let strategy_set = json!({ "strategies": [] });
-    serde_json::from_value::<PolicyPostingDiscoveryStep>(strategy_set)
+    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
         .expect_err("a final Strategy Set without Policy must be rejected");
 
     let strategy_set = json!({ "policy": "unknown", "strategies": [] });
-    serde_json::from_value::<PolicyPostingDiscoveryStep>(strategy_set)
+    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
         .expect_err("an unknown Policy must be rejected");
 
-    let strategy_set: PolicyPostingDiscoveryStep = serde_json::from_value(json!({
+    let strategy_set: PolicyDiscoveryStep = serde_json::from_value(json!({
         "policy": "first_accepted",
         "strategies": []
     }))
@@ -64,7 +63,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
     );
     assert_plan_policies(&specialized);
     assert_eq!(
-        specialized.posting_discovery.execution.strategies.len(),
+        specialized.discovery.execution.strategies.len(),
         4,
         "a complete Source-added Strategy must retain the inherited Policy"
     );
@@ -143,7 +142,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         ),
     ]);
 
-    let result = block_on(execute_policy_posting_discovery_with_clients_and_context(
+    let result = block_on(execute_policy_discovery_with_clients_and_context(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -177,7 +176,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
             Ok(json!({ "description": "A complete accepted description." }).to_string()),
         ),
     ]);
-    let result = block_on(execute_policy_posting_detail_with_clients_and_context(
+    let result = block_on(execute_policy_detail_with_clients_and_context(
         &plan,
         &posting(),
         &detail,
@@ -227,7 +226,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         })
         .to_string()),
     )]);
-    let result = block_on(execute_policy_posting_discovery_with_clients_and_context(
+    let result = block_on(execute_policy_discovery_with_clients_and_context(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -242,7 +241,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         "https://example.test/detail/failed",
         Ok(json!({ "description": accepted_description }).to_string()),
     )]);
-    let result = block_on(execute_policy_posting_detail_with_clients_and_context(
+    let result = block_on(execute_policy_detail_with_clients_and_context(
         &plan,
         &posting(),
         &detail,
@@ -272,7 +271,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         ),
     ]);
 
-    let result = block_on(execute_policy_posting_discovery_with_clients_and_context(
+    let result = block_on(execute_policy_discovery_with_clients_and_context(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -313,7 +312,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
             Err("failed three".to_string()),
         ),
     ]);
-    let result = block_on(execute_policy_posting_detail_with_clients_and_context(
+    let result = block_on(execute_policy_detail_with_clients_and_context(
         &plan,
         &posting(),
         &detail,
@@ -350,7 +349,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
     };
     let signal = AtomicCancellation(cancellation);
 
-    let result = block_on(execute_policy_posting_discovery_with_clients_and_context(
+    let result = block_on(execute_policy_discovery_with_clients_and_context(
         &plan,
         &fetcher,
         &UnavailableProfileBrowserClient,
@@ -378,7 +377,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         requests: Mutex::new(Vec::new()),
     };
     let signal = AtomicCancellation(cancellation);
-    let result = block_on(execute_policy_posting_detail_with_clients_and_context(
+    let result = block_on(execute_policy_detail_with_clients_and_context(
         &plan,
         &posting(),
         &fetcher,
@@ -402,9 +401,9 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
 }
 
 fn assert_plan_policies(plan: &PolicySourceExecutionPlan) {
-    assert_eq!(plan.posting_discovery.policy, StrategyPolicy::FirstAccepted);
+    assert_eq!(plan.discovery.policy, StrategyPolicy::FirstAccepted);
     assert_eq!(
-        plan.posting_detail.as_ref().unwrap().policy,
+        plan.detail.as_ref().unwrap().policy,
         StrategyPolicy::FirstAccepted
     );
 }
@@ -527,8 +526,8 @@ fn detail_strategy(key: &str, url: &str) -> Value {
     })
 }
 
-fn posting() -> PostingDetailPostingOccurrence {
-    PostingDetailPostingOccurrence {
+fn posting() -> DetailPostingOccurrence {
+    DetailPostingOccurrence {
         url: "https://example.test/jobs/1".to_string(),
         title: None,
         company: None,
@@ -561,16 +560,12 @@ impl ScriptedDiscoveryFetcher {
     }
 }
 
-impl PostingDiscoveryFetcher for ScriptedDiscoveryFetcher {
+impl DiscoveryFetcher for ScriptedDiscoveryFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDiscoveryFetchRequest,
+        request: DiscoveryFetchRequest,
     ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
+        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
     > {
         Box::pin(async move {
             self.requests.lock().unwrap().push(request.url.clone());
@@ -580,8 +575,8 @@ impl PostingDiscoveryFetcher for ScriptedDiscoveryFetcher {
                 .cloned()
                 .unwrap_or_else(|| Err("unexpected request".to_string()))
             {
-                Ok(body) => Ok(PostingDiscoveryFetchResponse { body }),
-                Err(message) => Err(PostingDiscoveryFetchError::new(message)),
+                Ok(body) => Ok(DiscoveryFetchResponse { body }),
+                Err(message) => Err(DiscoveryFetchError::new(message)),
             }
         })
     }
@@ -610,17 +605,12 @@ impl ScriptedDetailFetcher {
     }
 }
 
-impl PostingDetailFetcher for ScriptedDetailFetcher {
+impl DetailFetcher for ScriptedDetailFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         Box::pin(async move {
             self.requests.lock().unwrap().push(request.url.clone());
             let (expected, result) = self
@@ -631,8 +621,8 @@ impl PostingDetailFetcher for ScriptedDetailFetcher {
                 .expect("unexpected detail request");
             assert_eq!(request.url, expected);
             match result {
-                Ok(body) => Ok(PostingDetailFetchResponse { body }),
-                Err(message) => Err(PostingDetailFetchError::new(message)),
+                Ok(body) => Ok(DetailFetchResponse { body }),
+                Err(message) => Err(DetailFetchError::new(message)),
             }
         })
     }
@@ -664,42 +654,33 @@ struct CancellingDetailFetcher {
     requests: Mutex<Vec<String>>,
 }
 
-impl PostingDetailFetcher for CancellingDetailFetcher {
+impl DetailFetcher for CancellingDetailFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         Box::pin(async move {
             self.requests.lock().unwrap().push(request.url);
             self.cancellation.store(true, Ordering::SeqCst);
-            Ok(PostingDetailFetchResponse {
+            Ok(DetailFetchResponse {
                 body: json!({ "description": "Discarded detail description." }).to_string(),
             })
         })
     }
 }
 
-impl PostingDiscoveryFetcher for CancellingDiscoveryFetcher {
+impl DiscoveryFetcher for CancellingDiscoveryFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDiscoveryFetchRequest,
+        request: DiscoveryFetchRequest,
     ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
+        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
     > {
         Box::pin(async move {
             self.requests.lock().unwrap().push(request.url);
             self.cancellation.store(true, Ordering::SeqCst);
-            Ok(PostingDiscoveryFetchResponse {
+            Ok(DiscoveryFetchResponse {
                 body: json!({
                     "jobs": [{
                         "title": "Discarded",

@@ -10,18 +10,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    Acceptance, JsonObject, JsonSchemaObject, PostingDetailStep, PostingDetailStrategy,
-    PostingDiscoveryStep, PostingDiscoveryStrategy, SupportMetadata,
+    Acceptance, DetailStep, DetailStrategy, DetectionDocument, DiscoveryStep, DiscoveryStrategy,
+    JsonObject, JsonSchemaObject, SupportMetadata,
 };
-use crate::profile_dsl::execution_plan::posting_detail::ExecutionPlanPostingDetailStep;
-use crate::profile_dsl::execution_plan::posting_discovery::ExecutionPlanPostingDiscoveryStep;
+use crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStep;
+use crate::profile_dsl::execution_plan::discovery::ExecutionPlanDiscoveryStep;
 use crate::profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 use crate::source::documents::{SourceConfig, SourceStatus};
-use crate::source_profile::documents::{
-    ProfileDetectionDocument, SourceProfileDocument, SourceProfileKind,
-};
+use crate::source_profile::documents::{SourceProfileDocument, SourceProfileKind};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,34 +29,34 @@ pub enum StrategyPolicy {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PolicyPostingDiscoveryStep {
+pub struct PolicyDiscoveryStep {
     pub policy: StrategyPolicy,
-    pub strategies: Vec<PostingDiscoveryStrategy>,
+    pub strategies: Vec<DiscoveryStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PolicyPostingDetailStep {
+pub struct PolicyDetailStep {
     pub policy: StrategyPolicy,
-    pub strategies: Vec<PostingDetailStrategy>,
+    pub strategies: Vec<DetailStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }
 
-impl PolicyPostingDiscoveryStep {
-    pub(crate) fn legacy(&self) -> PostingDiscoveryStep {
-        PostingDiscoveryStep {
+impl PolicyDiscoveryStep {
+    pub(crate) fn execution_step(&self) -> DiscoveryStep {
+        DiscoveryStep {
             strategies: self.strategies.clone(),
             accept_when: self.accept_when.clone(),
         }
     }
 }
 
-impl PolicyPostingDetailStep {
-    pub(crate) fn legacy(&self) -> PostingDetailStep {
-        PostingDetailStep {
+impl PolicyDetailStep {
+    pub(crate) fn execution_step(&self) -> DetailStep {
+        DetailStep {
             strategies: self.strategies.clone(),
             accept_when: self.accept_when.clone(),
         }
@@ -76,9 +74,10 @@ pub struct PolicyReusableAccessPathDocument {
     pub source_config_schema: Option<JsonSchemaObject>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub known_issues: Option<Vec<crate::profile_dsl::documents::SupportNote>>,
-    pub posting_discovery: PolicyPostingDiscoveryStep,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_detail: Option<PolicyPostingDetailStep>,
+    #[serde(rename = "postingDiscovery")]
+    pub discovery: PolicyDiscoveryStep,
+    #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
+    pub detail: Option<PolicyDetailStep>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Diagnostics>,
 }
@@ -93,8 +92,8 @@ pub struct PolicySourceProfileDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub support: SupportMetadata,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detect: Option<ProfileDetectionDocument>,
+    #[serde(rename = "detect", skip_serializing_if = "Option::is_none")]
+    pub detection: Option<DetectionDocument>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_config_schema: Option<JsonSchemaObject>,
     pub access_paths: Vec<PolicyReusableAccessPathDocument>,
@@ -103,7 +102,7 @@ pub struct PolicySourceProfileDocument {
 }
 
 impl PolicySourceProfileDocument {
-    pub(crate) fn legacy(&self) -> SourceProfileDocument {
+    pub(crate) fn schema_v2_document(&self) -> SourceProfileDocument {
         SourceProfileDocument {
             schema_version: self.schema_version,
             key: self.key.clone(),
@@ -111,7 +110,7 @@ impl PolicySourceProfileDocument {
             kind: self.kind,
             description: self.description.clone(),
             support: self.support.clone(),
-            detect: self.detect.clone(),
+            detection: self.detection.clone(),
             source_config_schema: self.source_config_schema.clone(),
             access_paths: self
                 .access_paths
@@ -123,11 +122,8 @@ impl PolicySourceProfileDocument {
                         description: path.description.clone(),
                         source_config_schema: path.source_config_schema.clone(),
                         known_issues: path.known_issues.clone(),
-                        posting_discovery: path.posting_discovery.legacy(),
-                        posting_detail: path
-                            .posting_detail
-                            .as_ref()
-                            .map(PolicyPostingDetailStep::legacy),
+                        discovery: path.discovery.execution_step(),
+                        detail: path.detail.as_ref().map(PolicyDetailStep::execution_step),
                         diagnostics: path.diagnostics.clone(),
                     },
                 )
@@ -139,22 +135,22 @@ impl PolicySourceProfileDocument {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PolicyPostingDiscoveryStepFragment {
+pub struct PolicyDiscoveryStepFragment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy: Option<StrategyPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub strategies: Option<Vec<crate::profile_dsl::documents::PostingDiscoveryStrategyFragment>>,
+    pub strategies: Option<Vec<crate::profile_dsl::documents::DiscoveryStrategyFragment>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PolicyPostingDetailStepFragment {
+pub struct PolicyDetailStepFragment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy: Option<StrategyPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub strategies: Option<Vec<crate::profile_dsl::documents::PostingDetailStrategyFragment>>,
+    pub strategies: Option<Vec<crate::profile_dsl::documents::DetailStrategyFragment>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }
@@ -167,10 +163,18 @@ pub struct PolicyAccessPathFragment {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_config_schema: Option<JsonSchemaObject>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub posting_discovery: Option<PolicyPostingDiscoveryStepFragment>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub posting_detail: Option<PolicyPostingDetailStepFragment>,
+    #[serde(
+        rename = "postingDiscovery",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub discovery: Option<PolicyDiscoveryStepFragment>,
+    #[serde(
+        rename = "postingDetail",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub detail: Option<PolicyDetailStepFragment>,
 }
 
 #[derive(Deserialize)]
@@ -181,10 +185,10 @@ struct PolicyAccessPathFragmentInput {
     name: Option<String>,
     #[serde(default)]
     source_config_schema: Option<JsonSchemaObject>,
-    #[serde(default)]
-    posting_discovery: Option<PolicyPostingDiscoveryStepFragment>,
-    #[serde(default)]
-    posting_detail: Option<PolicyPostingDetailStepFragment>,
+    #[serde(rename = "postingDiscovery", default)]
+    discovery: Option<PolicyDiscoveryStepFragment>,
+    #[serde(rename = "postingDetail", default)]
+    detail: Option<PolicyDetailStepFragment>,
 }
 
 impl<'de> Deserialize<'de> for PolicyAccessPathFragment {
@@ -216,8 +220,8 @@ impl<'de> Deserialize<'de> for PolicyAccessPathFragment {
             key: input.key,
             name: input.name,
             source_config_schema: input.source_config_schema,
-            posting_discovery: input.posting_discovery,
-            posting_detail: input.posting_detail,
+            discovery: input.discovery,
+            detail: input.detail,
         })
     }
 }
@@ -239,9 +243,9 @@ pub enum PolicySelectedAccessPath {
         #[serde(rename = "sourceConfigSchema", skip_serializing_if = "Option::is_none")]
         source_config_schema: Option<JsonSchemaObject>,
         #[serde(rename = "postingDiscovery")]
-        posting_discovery: PolicyPostingDiscoveryStep,
+        discovery: PolicyDiscoveryStep,
         #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
-        posting_detail: Option<PolicyPostingDetailStep>,
+        detail: Option<PolicyDetailStep>,
         #[serde(skip_serializing_if = "Option::is_none")]
         diagnostics: Option<Diagnostics>,
     },
@@ -272,18 +276,18 @@ pub struct PolicySourceProfileRegistrySnapshot {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PolicyExecutionPlanPostingDiscoveryStep {
+pub struct PolicyExecutionPlanDiscoveryStep {
     pub policy: StrategyPolicy,
     #[serde(flatten)]
-    pub execution: ExecutionPlanPostingDiscoveryStep,
+    pub execution: ExecutionPlanDiscoveryStep,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PolicyExecutionPlanPostingDetailStep {
+pub struct PolicyExecutionPlanDetailStep {
     pub policy: StrategyPolicy,
     #[serde(flatten)]
-    pub execution: ExecutionPlanPostingDetailStep,
+    pub execution: ExecutionPlanDetailStep,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -292,13 +296,13 @@ pub struct PolicySourceExecutionPlan {
     pub source: ExecutionPlanSource,
     pub selected_access_path: ExecutionPlanAccessPath,
     pub source_config: SourceConfig,
-    pub posting_discovery: PolicyExecutionPlanPostingDiscoveryStep,
+    pub discovery: PolicyExecutionPlanDiscoveryStep,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_detail: Option<PolicyExecutionPlanPostingDetailStep>,
+    pub detail: Option<PolicyExecutionPlanDetailStep>,
 }
 
 impl PolicySourceExecutionPlan {
-    pub(crate) fn from_legacy(
+    pub(crate) fn from_execution_plan(
         plan: SourceExecutionPlan,
         discovery_policy: StrategyPolicy,
         detail_policy: Option<StrategyPolicy>,
@@ -307,29 +311,24 @@ impl PolicySourceExecutionPlan {
             source: plan.source,
             selected_access_path: plan.selected_access_path,
             source_config: plan.source_config,
-            posting_discovery: PolicyExecutionPlanPostingDiscoveryStep {
+            discovery: PolicyExecutionPlanDiscoveryStep {
                 policy: discovery_policy,
-                execution: plan.posting_discovery,
+                execution: plan.discovery,
             },
-            posting_detail: plan.posting_detail.map(|execution| {
-                PolicyExecutionPlanPostingDetailStep {
-                    policy: detail_policy.expect("compiled detail must retain its authored policy"),
-                    execution,
-                }
+            detail: plan.detail.map(|execution| PolicyExecutionPlanDetailStep {
+                policy: detail_policy.expect("compiled detail must retain its authored policy"),
+                execution,
             }),
         }
     }
 
-    pub(crate) fn legacy(&self) -> SourceExecutionPlan {
+    pub(crate) fn execution_plan(&self) -> SourceExecutionPlan {
         SourceExecutionPlan {
             source: self.source.clone(),
             selected_access_path: self.selected_access_path.clone(),
             source_config: self.source_config.clone(),
-            posting_discovery: self.posting_discovery.execution.clone(),
-            posting_detail: self
-                .posting_detail
-                .as_ref()
-                .map(|step| step.execution.clone()),
+            discovery: self.discovery.execution.clone(),
+            detail: self.detail.as_ref().map(|step| step.execution.clone()),
         }
     }
 }

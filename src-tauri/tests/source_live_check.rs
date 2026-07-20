@@ -5,10 +5,9 @@ use job_radar_lib::{
     check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
     source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
     CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
-    DiagnosticCategory, DiagnosticSeverity, PostingDetailFetchError, PostingDetailFetchRequest,
-    PostingDetailFetchResponse, PostingDetailFetcher, PostingDiscoveryFetchError,
-    PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse, PostingDiscoveryFetcher,
-    RequestBody, SourceDocument, SourceLiveCheckReportState, SourceStatus,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher, DiagnosticCategory,
+    DiagnosticSeverity, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
+    DiscoveryFetcher, RequestBody, SourceDocument, SourceLiveCheckReportState, SourceStatus,
     SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
@@ -715,7 +714,7 @@ fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
 }
 
 #[test]
-fn check_source_leaves_detail_unchecked_when_access_path_has_no_posting_detail() {
+fn check_source_leaves_detail_unchecked_when_access_path_has_no_detail() {
     let temp_dir = tempfile::tempdir().unwrap();
     let source = simple_source_with_status("active");
     let mut profile = simple_profile_without_pagination();
@@ -1002,8 +1001,8 @@ fn assert_activation_blocked(
 
 struct FakeLiveCheckFetcher {
     responses: BTreeMap<String, String>,
-    discovery_requests: Mutex<Vec<PostingDiscoveryFetchRequest>>,
-    detail_requests: Mutex<Vec<PostingDetailFetchRequest>>,
+    discovery_requests: Mutex<Vec<DiscoveryFetchRequest>>,
+    detail_requests: Mutex<Vec<DetailFetchRequest>>,
 }
 
 impl FakeLiveCheckFetcher {
@@ -1018,7 +1017,7 @@ impl FakeLiveCheckFetcher {
         }
     }
 
-    fn discovery_requests(&self) -> Vec<PostingDiscoveryFetchRequest> {
+    fn discovery_requests(&self) -> Vec<DiscoveryFetchRequest> {
         self.discovery_requests.lock().unwrap().clone()
     }
 
@@ -1039,47 +1038,35 @@ impl FakeLiveCheckFetcher {
     }
 }
 
-impl PostingDiscoveryFetcher for FakeLiveCheckFetcher {
+impl DiscoveryFetcher for FakeLiveCheckFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDiscoveryFetchRequest,
+        request: DiscoveryFetchRequest,
     ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
+        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
     > {
         Box::pin(async move {
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDiscoveryFetchError::new(format!(
-                    "missing fake response for {}",
-                    request.url
-                ))
+                DiscoveryFetchError::new(format!("missing fake response for {}", request.url))
             })?;
             self.discovery_requests.lock().unwrap().push(request);
-            Ok(PostingDiscoveryFetchResponse { body })
+            Ok(DiscoveryFetchResponse { body })
         })
     }
 }
 
-impl PostingDetailFetcher for FakeLiveCheckFetcher {
+impl DetailFetcher for FakeLiveCheckFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         Box::pin(async move {
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDetailFetchError::new(format!("missing fake response for {}", request.url))
+                DetailFetchError::new(format!("missing fake response for {}", request.url))
             })?;
             self.detail_requests.lock().unwrap().push(request);
-            Ok(PostingDetailFetchResponse { body })
+            Ok(DetailFetchResponse { body })
         })
     }
 }

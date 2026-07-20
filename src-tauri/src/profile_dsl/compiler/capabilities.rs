@@ -1,18 +1,17 @@
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    FieldExpression, ListFieldExpression, ParseType, PostingDetailStep, PostingDiscoveryStep,
-    Select,
+    DetailStep, DiscoveryStep, FieldExpression, ListFieldExpression, ParseType, Select,
 };
 
 use super::compiler_error;
 
 pub(super) fn validate_capability_compatibility(
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     base_path: String,
     diagnostics: &mut Diagnostics,
 ) {
-    for (index, strategy) in posting_discovery.strategies.iter().enumerate() {
+    for (index, strategy) in discovery.strategies.iter().enumerate() {
         let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");
         validate_select_compatibility(
             strategy.parse.parse_type,
@@ -23,14 +22,14 @@ pub(super) fn validate_capability_compatibility(
         );
         validate_discovery_extract_compatibility(
             strategy.parse.parse_type,
-            posting_discovery,
+            discovery,
             index,
             &strategy_path,
             diagnostics,
         );
     }
-    if let Some(posting_detail) = posting_detail {
-        for (index, strategy) in posting_detail.strategies.iter().enumerate() {
+    if let Some(detail) = detail {
+        for (index, strategy) in detail.strategies.iter().enumerate() {
             let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");
             validate_select_compatibility(
                 strategy.parse.parse_type,
@@ -101,12 +100,12 @@ fn validate_select_compatibility(
 
 fn validate_discovery_extract_compatibility(
     parse_type: ParseType,
-    posting_discovery: &PostingDiscoveryStep,
+    discovery: &DiscoveryStep,
     strategy_index: usize,
     strategy_path: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    let strategy = &posting_discovery.strategies[strategy_index];
+    let strategy = &discovery.strategies[strategy_index];
     validate_field_extract_compatibility(
         parse_type,
         &strategy.extract.fields.title,

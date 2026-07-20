@@ -2,16 +2,15 @@ use std::collections::HashSet;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    Fetch, FieldExpression, JsonObject, ListFieldExpression, PostingDetailStep,
-    PostingDiscoveryStep, RequestBody,
+    DetailStep, DiscoveryStep, Fetch, FieldExpression, JsonObject, ListFieldExpression, RequestBody,
 };
 
 use super::compiler_error;
 
 #[derive(Clone, Copy)]
 enum TemplateContext {
-    PostingDiscovery,
-    PostingDetail,
+    Discovery,
+    Detail,
 }
 
 mod fetch;
@@ -20,18 +19,18 @@ mod validation;
 
 use fetch::validate_fetch_templates;
 use fields::{
-    posting_discovery_posting_meta_keys, validate_discovery_field_templates,
+    discovery_posting_meta_keys, validate_discovery_field_templates,
     validate_field_expression_templates,
 };
 pub(super) fn validate_template_variables(
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     source_config_keys: HashSet<String>,
     base_path: String,
     diagnostics: &mut Diagnostics,
 ) {
-    let posting_meta_keys = posting_discovery_posting_meta_keys(posting_discovery);
-    for (index, strategy) in posting_discovery.strategies.iter().enumerate() {
+    let posting_meta_keys = discovery_posting_meta_keys(discovery);
+    for (index, strategy) in discovery.strategies.iter().enumerate() {
         let captures = strategy
             .captures
             .as_ref()
@@ -42,17 +41,17 @@ pub(super) fn validate_template_variables(
             &strategy.fetch,
             &format!("{strategy_path}/fetch"),
             strategy.key.as_str(),
-            TemplateContext::PostingDiscovery,
+            TemplateContext::Discovery,
             &source_config_keys,
             &captures,
             &posting_meta_keys,
             diagnostics,
         );
         validate_discovery_field_templates(
-            posting_discovery,
+            discovery,
             index,
             &strategy_path,
-            TemplateContext::PostingDiscovery,
+            TemplateContext::Discovery,
             &source_config_keys,
             &captures,
             &posting_meta_keys,
@@ -60,8 +59,8 @@ pub(super) fn validate_template_variables(
         );
     }
 
-    if let Some(posting_detail) = posting_detail {
-        for (index, strategy) in posting_detail.strategies.iter().enumerate() {
+    if let Some(detail) = detail {
+        for (index, strategy) in detail.strategies.iter().enumerate() {
             let captures = strategy
                 .captures
                 .as_ref()
@@ -72,7 +71,7 @@ pub(super) fn validate_template_variables(
                 &strategy.fetch,
                 &format!("{strategy_path}/fetch"),
                 strategy.key.as_str(),
-                TemplateContext::PostingDetail,
+                TemplateContext::Detail,
                 &source_config_keys,
                 &captures,
                 &posting_meta_keys,
@@ -82,7 +81,7 @@ pub(super) fn validate_template_variables(
                 &strategy.extract.fields.description_text,
                 &format!("{strategy_path}/extract/fields/descriptionText"),
                 strategy.key.as_str(),
-                TemplateContext::PostingDetail,
+                TemplateContext::Detail,
                 &source_config_keys,
                 &captures,
                 &posting_meta_keys,
@@ -93,7 +92,7 @@ pub(super) fn validate_template_variables(
                     &field_match.left,
                     &format!("{strategy_path}/match/left"),
                     strategy.key.as_str(),
-                    TemplateContext::PostingDetail,
+                    TemplateContext::Detail,
                     &source_config_keys,
                     &captures,
                     &posting_meta_keys,
@@ -103,7 +102,7 @@ pub(super) fn validate_template_variables(
                     &field_match.right,
                     &format!("{strategy_path}/match/right"),
                     strategy.key.as_str(),
-                    TemplateContext::PostingDetail,
+                    TemplateContext::Detail,
                     &source_config_keys,
                     &captures,
                     &posting_meta_keys,

@@ -1,8 +1,8 @@
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{PostingDetailStep, PostingDiscoveryStep};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep};
 use crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBuildError;
-use crate::profile_dsl::execution_plan::posting_detail::compile_posting_detail_step;
-use crate::profile_dsl::execution_plan::posting_discovery::compile_posting_discovery_step;
+use crate::profile_dsl::execution_plan::detail::compile_detail_step;
+use crate::profile_dsl::execution_plan::discovery::compile_discovery_step;
 use crate::profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
@@ -16,8 +16,8 @@ use super::capabilities::validate_capability_compatibility;
 use super::compiler_error;
 use super::has_error_diagnostics;
 use super::keys::{
-    access_path_index, validate_posting_detail_strategy_keys,
-    validate_posting_discovery_strategy_keys, validate_reusable_access_path_keys,
+    access_path_index, validate_detail_strategy_keys, validate_discovery_strategy_keys,
+    validate_reusable_access_path_keys,
 };
 use super::overrides::apply_source_overrides;
 use super::security::validate_security;
@@ -64,14 +64,14 @@ fn validate_source_profile_document_with_contracts(
                     None
                 }
             };
-            validate_posting_discovery_strategy_keys(
-                &access_path.posting_discovery,
+            validate_discovery_strategy_keys(
+                &access_path.discovery,
                 access_path_step_path(Some(path_index), "postingDiscovery"),
                 diagnostics,
             );
-            if let Some(posting_detail) = &access_path.posting_detail {
-                validate_posting_detail_strategy_keys(
-                    posting_detail,
+            if let Some(detail) = &access_path.detail {
+                validate_detail_strategy_keys(
+                    detail,
                     access_path_step_path(Some(path_index), "postingDetail"),
                     diagnostics,
                 );
@@ -79,8 +79,8 @@ fn validate_source_profile_document_with_contracts(
 
             let access_path_base = access_path_base_path(Some(path_index));
             validate_template_variables(
-                &access_path.posting_discovery,
-                access_path.posting_detail.as_ref(),
+                &access_path.discovery,
+                access_path.detail.as_ref(),
                 contract
                     .as_ref()
                     .map(EffectiveSourceConfigContract::property_keys)
@@ -91,20 +91,20 @@ fn validate_source_profile_document_with_contracts(
                 diagnostics,
             );
             validate_capability_compatibility(
-                &access_path.posting_discovery,
-                access_path.posting_detail.as_ref(),
+                &access_path.discovery,
+                access_path.detail.as_ref(),
                 access_path_base.clone(),
                 diagnostics,
             );
             validate_boundedness(
-                &access_path.posting_discovery,
-                access_path.posting_detail.as_ref(),
+                &access_path.discovery,
+                access_path.detail.as_ref(),
                 access_path_base.clone(),
                 diagnostics,
             );
             validate_security(
-                &access_path.posting_discovery,
-                access_path.posting_detail.as_ref(),
+                &access_path.discovery,
+                access_path.detail.as_ref(),
                 access_path_base,
                 diagnostics,
             );
@@ -113,7 +113,7 @@ fn validate_source_profile_document_with_contracts(
         .collect()
 }
 
-pub(super) fn compile_legacy_source_execution_plan(
+pub(super) fn compile_source_execution_plan(
     source: &SourceDocument,
     registry: &SourceProfileRegistrySnapshot,
     diagnostics: &mut Diagnostics,
@@ -167,12 +167,12 @@ fn compile_profile_access_path(
         {
             let effective_steps = apply_source_overrides(
                 source.source_overrides.as_ref(),
-                &access_path.posting_discovery,
-                access_path.posting_detail.as_ref(),
+                &access_path.discovery,
+                access_path.detail.as_ref(),
                 diagnostics,
             );
-            access_path.posting_discovery = effective_steps.posting_discovery;
-            access_path.posting_detail = effective_steps.posting_detail;
+            access_path.discovery = effective_steps.discovery;
+            access_path.detail = effective_steps.detail;
         }
     }
 
@@ -204,20 +204,17 @@ fn compile_profile_access_path(
         return None;
     }
 
-    let posting_discovery = compile_posting_discovery_step(
-        &access_path.posting_discovery,
+    let discovery = compile_discovery_step(
+        &access_path.discovery,
         &access_path_step_path(path_index, "postingDiscovery"),
     )
     .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
     .ok()?;
-    let posting_detail = access_path
-        .posting_detail
+    let detail = access_path
+        .detail
         .as_ref()
-        .map(|posting_detail| {
-            compile_posting_detail_step(
-                posting_detail,
-                &access_path_step_path(path_index, "postingDetail"),
-            )
+        .map(|detail| {
+            compile_detail_step(detail, &access_path_step_path(path_index, "postingDetail"))
         })
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
@@ -235,8 +232,8 @@ fn compile_profile_access_path(
             path_name: access_path.name.clone(),
         },
         source_config: source.source_config.clone(),
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
     };
 
     Some(execution_plan)
@@ -304,33 +301,26 @@ fn compile_source_owned_access_path(
     let SelectedAccessPath::SourceOwnedAccessPath {
         key,
         name,
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
         ..
     } = &source.selected_access_path
     else {
         unreachable!("caller only passes Source-owned Access Paths")
     };
 
-    validate_source_owned_access_path(
-        source,
-        posting_discovery,
-        posting_detail.as_ref(),
-        diagnostics,
-    );
+    validate_source_owned_access_path(source, discovery, detail.as_ref(), diagnostics);
     if has_error_diagnostics(diagnostics) {
         return None;
     }
 
-    let compiled_posting_discovery =
-        compile_posting_discovery_step(posting_discovery, "/selectedAccessPath/postingDiscovery")
+    let compiled_discovery =
+        compile_discovery_step(discovery, "/selectedAccessPath/postingDiscovery")
             .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
             .ok()?;
-    let compiled_posting_detail = posting_detail
+    let compiled_detail = detail
         .as_ref()
-        .map(|posting_detail| {
-            compile_posting_detail_step(posting_detail, "/selectedAccessPath/postingDetail")
-        })
+        .map(|detail| compile_detail_step(detail, "/selectedAccessPath/postingDetail"))
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
@@ -345,15 +335,15 @@ fn compile_source_owned_access_path(
             name: name.clone(),
         },
         source_config: source.source_config.clone(),
-        posting_discovery: compiled_posting_discovery,
-        posting_detail: compiled_posting_detail,
+        discovery: compiled_discovery,
+        detail: compiled_detail,
     })
 }
 
 fn validate_source_owned_access_path(
     source: &SourceDocument,
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     diagnostics: &mut Diagnostics,
 ) {
     match &source.source_support {
@@ -409,40 +399,40 @@ fn validate_source_owned_access_path(
             Default::default()
         }
     };
-    validate_posting_discovery_strategy_keys(
-        posting_discovery,
+    validate_discovery_strategy_keys(
+        discovery,
         "/selectedAccessPath/postingDiscovery".to_string(),
         diagnostics,
     );
-    if let Some(posting_detail) = posting_detail {
-        validate_posting_detail_strategy_keys(
-            posting_detail,
+    if let Some(detail) = detail {
+        validate_detail_strategy_keys(
+            detail,
             "/selectedAccessPath/postingDetail".to_string(),
             diagnostics,
         );
     }
     validate_template_variables(
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
         source_config_keys,
         "/selectedAccessPath".to_string(),
         diagnostics,
     );
     validate_capability_compatibility(
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
         "/selectedAccessPath".to_string(),
         diagnostics,
     );
     validate_boundedness(
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
         "/selectedAccessPath".to_string(),
         diagnostics,
     );
     validate_security(
-        posting_discovery,
-        posting_detail,
+        discovery,
+        detail,
         "/selectedAccessPath".to_string(),
         diagnostics,
     );

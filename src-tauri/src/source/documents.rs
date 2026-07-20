@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    AccessPathFragment, JsonObject, JsonSchemaObject, PostingDetailStep, PostingDiscoveryStep,
-    SourceOverrides, SupportMetadata,
+    AccessPathFragment, DetailStep, DiscoveryStep, JsonObject, JsonSchemaObject, SourceOverrides,
+    SupportMetadata,
 };
 
 pub type SourceConfig = JsonObject;
@@ -56,9 +56,9 @@ pub enum SelectedAccessPath {
         #[serde(rename = "sourceConfigSchema", skip_serializing_if = "Option::is_none")]
         source_config_schema: Option<JsonSchemaObject>,
         #[serde(rename = "postingDiscovery")]
-        posting_discovery: PostingDiscoveryStep,
+        discovery: DiscoveryStep,
         #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
-        posting_detail: Option<PostingDetailStep>,
+        detail: Option<DetailStep>,
         #[serde(skip_serializing_if = "Option::is_none")]
         diagnostics: Option<Diagnostics>,
     },

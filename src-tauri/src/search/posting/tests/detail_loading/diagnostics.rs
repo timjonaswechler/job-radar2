@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn get_posting_detail_surfaces_missing_and_invalid_source_diagnostics_as_unsupported() {
+fn get_job_posting_surfaces_missing_and_invalid_source_diagnostics_as_unsupported() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -51,10 +51,10 @@ fn get_posting_detail_surfaces_missing_and_invalid_source_diagnostics_as_unsuppo
                 json!({ "token": 42 }),
             )],
         );
-        let client = FixturePostingDetailHttpClient::new([]);
+        let client = FixtureDetailHttpClient::new([]);
 
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,
@@ -84,7 +84,7 @@ fn get_posting_detail_surfaces_missing_and_invalid_source_diagnostics_as_unsuppo
 }
 
 #[test]
-fn get_posting_detail_reports_parse_empty_too_short_and_missing_meta_diagnostics() {
+fn get_job_posting_reports_parse_empty_too_short_and_missing_meta_diagnostics() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -188,7 +188,7 @@ fn get_posting_detail_reports_parse_empty_too_short_and_missing_meta_diagnostics
                 ),
             ],
         );
-        let client = FixturePostingDetailHttpClient::new([
+        let client = FixtureDetailHttpClient::new([
             (
                 "https://detail.example.test/bad-json".to_string(),
                 Ok("{not-json".to_string()),
@@ -208,7 +208,7 @@ fn get_posting_detail_reports_parse_empty_too_short_and_missing_meta_diagnostics
         ]);
 
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,
@@ -238,7 +238,7 @@ fn get_posting_detail_reports_parse_empty_too_short_and_missing_meta_diagnostics
 }
 
 #[test]
-fn get_posting_detail_reports_no_match_and_multiple_match_diagnostics() {
+fn get_job_posting_reports_no_match_and_multiple_match_diagnostics() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -298,7 +298,7 @@ fn get_posting_detail_reports_no_match_and_multiple_match_diagnostics() {
                 ),
             ],
         );
-        let client = FixturePostingDetailHttpClient::new([
+        let client = FixtureDetailHttpClient::new([
             (
                 "https://detail.example.test/no-match".to_string(),
                 Ok(json!({ "jobs": [{ "id": "other", "description": "Other" }] }).to_string()),
@@ -316,7 +316,7 @@ fn get_posting_detail_reports_no_match_and_multiple_match_diagnostics() {
         ]);
 
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(
+            .get_job_posting_with_clients(
                 posting_id,
                 &snapshot,
                 &client,

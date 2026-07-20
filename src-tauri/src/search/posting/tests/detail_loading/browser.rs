@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn get_posting_detail_executes_compiled_browser_detail_plan_through_browser_client() {
+fn get_job_posting_executes_compiled_browser_detail_plan_through_browser_client() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -42,7 +42,7 @@ fn get_posting_detail_executes_compiled_browser_detail_plan_through_browser_clie
                 json!({}),
             )],
         );
-        let fetcher = FixturePostingDetailHttpClient::new([]);
+        let fetcher = FixtureDetailHttpClient::new([]);
         let browser = FixtureProfileBrowserClient::new([(
             "https://browser.example.test/jobs/laser".to_string(),
             Ok(
@@ -52,7 +52,7 @@ fn get_posting_detail_executes_compiled_browser_detail_plan_through_browser_clie
         )]);
 
         let detail = JobPostingService::new(&pool)
-            .get_posting_detail_with_clients(posting_id, &snapshot, &fetcher, &browser)
+            .get_job_posting_with_clients(posting_id, &snapshot, &fetcher, &browser)
             .await
             .unwrap();
 

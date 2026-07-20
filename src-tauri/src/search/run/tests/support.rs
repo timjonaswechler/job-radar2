@@ -55,11 +55,11 @@ impl SourceExecutor for FixtureSourceExecutor {
     }
 }
 
-pub(super) struct RuntimePostingDiscoveryExecutor {
+pub(super) struct RuntimeDiscoveryExecutor {
     response_body: String,
 }
 
-impl RuntimePostingDiscoveryExecutor {
+impl RuntimeDiscoveryExecutor {
     pub(super) fn new(response_body: impl Into<String>) -> Self {
         Self {
             response_body: response_body.into(),
@@ -67,13 +67,13 @@ impl RuntimePostingDiscoveryExecutor {
     }
 }
 
-impl SourceExecutor for RuntimePostingDiscoveryExecutor {
+impl SourceExecutor for RuntimeDiscoveryExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
-            let fetcher = FixturePostingDiscoveryFetcher {
+            let fetcher = FixtureDiscoveryFetcher {
                 response_body: self.response_body.clone(),
             };
-            let result = crate::profile_dsl::runtime::execute_posting_discovery_with_fetcher(
+            let result = crate::profile_dsl::runtime::execute_discovery_with_fetcher(
                 &input.source.execution_plan,
                 &fetcher,
             )
@@ -112,27 +112,27 @@ impl SourceExecutor for RuntimePostingDiscoveryExecutor {
     }
 }
 
-pub(super) struct FixturePostingDiscoveryFetcher {
+pub(super) struct FixtureDiscoveryFetcher {
     response_body: String,
 }
 
-impl crate::profile_dsl::runtime::PostingDiscoveryFetcher for FixturePostingDiscoveryFetcher {
+impl crate::profile_dsl::runtime::DiscoveryFetcher for FixtureDiscoveryFetcher {
     fn fetch<'a>(
         &'a self,
-        _request: crate::profile_dsl::runtime::PostingDiscoveryFetchRequest,
+        _request: crate::profile_dsl::runtime::DiscoveryFetchRequest,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
                     Output = Result<
-                        crate::profile_dsl::runtime::PostingDiscoveryFetchResponse,
-                        crate::profile_dsl::runtime::PostingDiscoveryFetchError,
+                        crate::profile_dsl::runtime::DiscoveryFetchResponse,
+                        crate::profile_dsl::runtime::DiscoveryFetchError,
                     >,
                 > + Send
                 + 'a,
         >,
     > {
         Box::pin(async move {
-            Ok(crate::profile_dsl::runtime::PostingDiscoveryFetchResponse {
+            Ok(crate::profile_dsl::runtime::DiscoveryFetchResponse {
                 body: self.response_body.clone(),
             })
         })
@@ -163,7 +163,7 @@ impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
             let marker = input
                 .source
                 .execution_plan
-                .posting_discovery
+                .discovery
                 .strategies
                 .first()
                 .and_then(|strategy| strategy.description.as_deref())
@@ -238,7 +238,7 @@ pub(super) fn source_json_with_status(key: &str, name: &str, status: &str) -> St
             "type": "source_owned_access_path",
             "key": "fixture_discovery",
             "name": "Fixture Discovery",
-            "postingDiscovery": minimal_posting_discovery("fixture")
+            "postingDiscovery": minimal_discovery("fixture")
         },
         "sourceSupport": {
             "level": "experimental",
@@ -276,11 +276,11 @@ pub(super) fn mutable_profile_json(marker: &str) -> String {
         },
         "accessPaths": [
             {
-                "key": "posting_discovery",
+                "key": "discovery",
                 "name": "Posting Discovery",
                 "description": marker,
                 "sourceConfigSchema": { "type": "object" },
-                "postingDiscovery": minimal_posting_discovery(marker)
+                "postingDiscovery": minimal_discovery(marker)
             }
         ]
     })
@@ -297,13 +297,13 @@ pub(super) fn mutable_profile_source_json(key: &str, name: &str) -> String {
         "selectedAccessPath": {
             "type": "profile_access_path",
             "profileKey": "mutable_profile",
-            "pathKey": "posting_discovery"
+            "pathKey": "discovery"
         }
     })
     .to_string()
 }
 
-pub(super) fn minimal_posting_discovery(marker: &str) -> Value {
+pub(super) fn minimal_discovery(marker: &str) -> Value {
     json!({
         "strategies": [
             {

@@ -38,7 +38,7 @@ pub struct JobPostingSource {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct JobPostingDetail {
+pub struct JobPostingView {
     #[serde(flatten)]
     pub posting: JobPosting,
     pub description_state: PostingDescriptionState,

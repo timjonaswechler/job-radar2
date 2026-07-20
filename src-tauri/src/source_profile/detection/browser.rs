@@ -3,21 +3,20 @@ use std::collections::BTreeMap;
 use regex::Regex;
 use serde_json::{Map, Value};
 
+use super::{
+    detection_error, detection_warning, render_detection_template_with_source_config,
+    template_diagnostic, SourceProposalEvidence,
+};
 use crate::profile_dsl::diagnostics::{Diagnostic, Diagnostics};
+use crate::profile_dsl::documents::{
+    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionEvidenceKind,
+};
 use crate::profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
 };
 use crate::profile_dsl::runtime::{
     ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
     ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-};
-use crate::source_profile::documents::{
-    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionEvidenceKind,
-};
-
-use super::{
-    detection_error, detection_warning, render_detection_template_with_source_config,
-    template_diagnostic, SourceProposalEvidence,
 };
 
 pub(super) async fn evaluate_browser_probes(

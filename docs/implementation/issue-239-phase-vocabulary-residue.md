@@ -1,0 +1,350 @@
+# Issue #239 phase-vocabulary residue allowlist
+
+This allowlist records every remaining old phase literal after the internal/compiled hard rename. Compiled plans use only `discovery` and `detail`; no entry below is a Rust identifier, module/path, alias, or compiled serialization field.
+
+Classes are intentionally limited to the two temporary boundaries owned by A01: authored schema-v2 data and observable schema-v2 Diagnostic data. Line numbers reflect this commit.
+
+## Authored Schema-V2 Boundary
+
+- `src-tauri/src/app/commands.rs:1156` — `"detect": {`
+- `src-tauri/src/app/commands.rs:1188` — `"postingDiscovery": {`
+- `src-tauri/src/profile_dsl/compiler/specialization.rs:38` — `Self::AccessPath => &["name", "postingDiscovery"],`
+- `src-tauri/src/profile_dsl/compiler/specialization.rs:245` — `&& matches!(field.as_str(), "postingDiscovery" | "postingDetail"))`
+- `src-tauri/src/profile_dsl/compiler/specialization.rs:255` — `("postingDiscovery", KeyedEntryKind::DiscoveryStrategy),`
+- `src-tauri/src/profile_dsl/compiler/specialization.rs:256` — `("postingDetail", KeyedEntryKind::DetailStrategy),`
+- `src-tauri/src/profile_dsl/documents/access_path.rs:19` — `#[serde(rename = "postingDiscovery")]`
+- `src-tauri/src/profile_dsl/documents/access_path.rs:21` — `#[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/src/profile_dsl/documents/fragments.rs:33` — `rename = "postingDiscovery",`
+- `src-tauri/src/profile_dsl/documents/fragments.rs:40` — `rename = "postingDetail",`
+- `src-tauri/src/profile_dsl/documents/fragments.rs:725` — `#[serde(rename = "postingDiscovery", default, deserialize_with = "non_null")]`
+- `src-tauri/src/profile_dsl/documents/fragments.rs:727` — `#[serde(rename = "postingDetail", default, deserialize_with = "non_null")]`
+- `src-tauri/src/profile_dsl/documents/overrides.rs:34` — `#[serde(rename = "postingDiscovery")]`
+- `src-tauri/src/profile_dsl/documents/overrides.rs:36` — `#[serde(rename = "postingDetail")]`
+- `src-tauri/src/profile_dsl/documents/serde_tests.rs:114` — `"postingDiscovery": {`
+- `src-tauri/src/profile_dsl/documents/serde_tests.rs:151` — `"postingDiscovery": {`
+- `src-tauri/src/profile_dsl/documents/serde_tests.rs:157` — `"postingDiscovery": { "acceptWhen": { "minResults": null } }`
+- `src-tauri/src/profile_dsl/documents/serde_tests.rs:168` — `"postingDiscovery": {`
+- `src-tauri/src/profile_dsl/policy.rs:77` — `#[serde(rename = "postingDiscovery")]`
+- `src-tauri/src/profile_dsl/policy.rs:79` — `#[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/src/profile_dsl/policy.rs:95` — `#[serde(rename = "detect", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/src/profile_dsl/policy.rs:167` — `rename = "postingDiscovery",`
+- `src-tauri/src/profile_dsl/policy.rs:173` — `rename = "postingDetail",`
+- `src-tauri/src/profile_dsl/policy.rs:188` — `#[serde(rename = "postingDiscovery", default)]`
+- `src-tauri/src/profile_dsl/policy.rs:190` — `#[serde(rename = "postingDetail", default)]`
+- `src-tauri/src/profile_dsl/policy.rs:245` — `#[serde(rename = "postingDiscovery")]`
+- `src-tauri/src/profile_dsl/policy.rs:247` — `#[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/src/schema/profile-dsl/overrides.schema.json:21` — `"step": { "type": "string", "enum": ["postingDiscovery", "postingDetail"] },`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:6` — `{ "$ref": "#/$defs/postingDiscoveryStrategySet" },`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:7` — `{ "$ref": "#/$defs/postingDetailStrategySet" }`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:14` — `"postingDiscoveryStrategySet": {`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:23` — `"items": { "$ref": "strategy.schema.json#/$defs/postingDiscoveryStrategy" }`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:28` — `"postingDetailStrategySet": {`
+- `src-tauri/src/schema/profile-dsl/policy.schema.json:37` — `"items": { "$ref": "strategy.schema.json#/$defs/postingDetailStrategy" }`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:6` — `"postingDiscoveryStep": {`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:14` — `"items": { "$ref": "#/$defs/postingDiscoveryStrategy" }`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:19` — `"postingDetailStep": {`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:27` — `"items": { "$ref": "#/$defs/postingDetailStrategy" }`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:32` — `"postingDiscoveryStrategy": {`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:45` — `"extract": { "$ref": "#/$defs/postingDiscoveryExtraction" },`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:50` — `"postingDetailStrategy": {`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:63` — `"extract": { "$ref": "#/$defs/postingDetailExtraction" },`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:68` — `"postingDiscoveryExtraction": {`
+- `src-tauri/src/schema/profile-dsl/strategy.schema.json:81` — `"postingDetailExtraction": {`
+- `src-tauri/src/schema/source-profile.schema.json:18` — `"detect": { "$ref": "#/$defs/detection" },`
+- `src-tauri/src/schema/source-profile.schema.json:30` — `"required": ["key", "name", "postingDiscovery"],`
+- `src-tauri/src/schema/source-profile.schema.json:40` — `"postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },`
+- `src-tauri/src/schema/source-profile.schema.json:41` — `"postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },`
+- `src-tauri/src/schema/source.schema.json:69` — `"required": ["type", "key", "name", "postingDiscovery"],`
+- `src-tauri/src/schema/source.schema.json:76` — `"postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },`
+- `src-tauri/src/schema/source.schema.json:77` — `"postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },`
+- `src-tauri/src/search/posting/tests.rs:203` — `"postingDiscovery": {`
+- `src-tauri/src/search/posting/tests.rs:228` — `access_path["postingDetail"] = detail;`
+- `src-tauri/src/search/run/tests/support.rs:241` — `"postingDiscovery": minimal_discovery("fixture")`
+- `src-tauri/src/search/run/tests/support.rs:283` — `"postingDiscovery": minimal_discovery(marker)`
+- `src-tauri/src/source/documents.rs:58` — `#[serde(rename = "postingDiscovery")]`
+- `src-tauri/src/source/documents.rs:60` — `#[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/src/source_profile/documents.rs:18` — `#[serde(rename = "detect", skip_serializing_if = "Option::is_none")]`
+- `src-tauri/tests/compiler_security_boundedness.rs:12` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
+- `src-tauri/tests/compiler_security_boundedness.rs:30` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/compiler_security_boundedness.rs:62` — `let fetch = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"];`
+- `src-tauri/tests/compiler_security_boundedness.rs:150` — `let strategy = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0];`
+- `src-tauri/tests/compiler_security_boundedness.rs:175` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"] = json!({`
+- `src-tauri/tests/compiler_security_boundedness.rs:195` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/compiler_security_boundedness.rs:225` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"] = json!([]);`
+- `src-tauri/tests/compiler_security_boundedness.rs:226` — `profile["accessPaths"][0]["postingDetail"]["strategies"] = json!([]);`
+- `src-tauri/tests/compiler_security_boundedness.rs:246` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/detail_runtime.rs:1128` — `"postingDiscovery": {`
+- `src-tauri/tests/detail_runtime.rs:1152` — `"postingDetail": { "strategies": [strategy] }`
+- `src-tauri/tests/detail_runtime.rs:1214` — `"postingDiscovery": {`
+- `src-tauri/tests/detail_runtime.rs:1237` — `"postingDetail": detail`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:387` — `"postingDiscovery": discovery`
+- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:141` — `"postingDiscovery": {`
+- `src-tauri/tests/discovery_runtime/template_validation.rs:27` — `"postingDiscovery": {`
+- `src-tauri/tests/discovery_runtime.rs:191` — `"postingDiscovery": {`
+- `src-tauri/tests/discovery_runtime.rs:246` — `"postingDiscovery": {`
+- `src-tauri/tests/discovery_runtime.rs:327` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:98` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:107` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:190` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:197` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:253` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:264` — `"postingDiscovery": {},`
+- `src-tauri/tests/effective_profile_compiler.rs:265` — `"postingDetail": {}`
+- `src-tauri/tests/effective_profile_compiler.rs:320` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:371` — `"postingDiscovery": {`
+- `src-tauri/tests/effective_profile_compiler.rs:403` — `r#"[{"key":"json_feed","postingDiscovery":{"acceptWhen":{"minResults":0},"strategies":[{"key":"json_api","acceptWhen":{"minResults":0,"requiredFields":["url"]}}]}}]"#,`
+- `src-tauri/tests/effective_profile_compiler.rs:404` — `r#"[{"postingDiscovery":{"strategies":[{"acceptWhen":{"requiredFields":["url"],"minResults":0},"key":"json_api"}],"acceptWhen":{"minResults":0}},"key":"json_feed"}]"#,`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json:7` — `"detect": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json:29` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/forbidden-secrets.json:11` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/missing-support.json:10` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/posting-detail-pagination.json:8` — `"summary": "Invalid fixture: postingDetail must not use pagination."`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/posting-detail-pagination.json:22` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/posting-detail-pagination.json:44` — `"postingDetail": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/source-override-transforms.json:17` — `"step": "postingDiscovery",`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/template-pipe.json:7` — `"detect": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/template-pipe.json:17` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/unbounded-pagination.json:11` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/v1-adapter-key.json:12` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/v1-inventory.json:17` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/v1-source-specific-pascal.json:12` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/invalid/v1-source-specific.json:12` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/valid/simple-source-profile.json:36` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/valid/simple-source-profile.json:105` — `"postingDetail": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json:24` — `"postingDiscovery": {`
+- `src-tauri/tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json:18` — `"step": "postingDiscovery",`
+- `src-tauri/tests/schema_validation.rs:195` — `"postingDiscovery": {`
+- `src-tauri/tests/schema_validation.rs:223` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/source_live_check.rs:57` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]`
+- `src-tauri/tests/source_live_check.rs:670` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
+- `src-tauri/tests/source_live_check.rs:675` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
+- `src-tauri/tests/source_live_check.rs:677` — `profile["accessPaths"][0]["postingDetail"]["strategies"] =`
+- `src-tauri/tests/source_live_check.rs:724` — `.remove("postingDetail");`
+- `src-tauri/tests/source_profile_detection.rs:1479` — `"detect": detection,`
+- `src-tauri/tests/source_profile_detection.rs:1492` — `"postingDiscovery": {`
+- `src-tauri/tests/source_profile_registry.rs:212` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
+- `src-tauri/tests/source_profile_registry.rs:317` — `"step": "postingDiscovery",`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:51` — `"postingDiscovery": {`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:58` — `"postingDetail": { "policy": "first_accepted" }`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:74` — `"postingDiscovery": discovery_step(),`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:75` — `"postingDetail": detail_step()`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:90` — `"postingDiscovery": discovery_step(),`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:91` — `"postingDetail": detail_step()`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:446` — `"postingDiscovery": discovery_step(),`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:447` — `"postingDetail": detail_step()`
+- `src-tauri/tests/successfactors_profile_dsl.rs:171` — `let captures = profile["detect"]["inputUrlPatterns"]`
+- `src-tauri/tests/workday_profile_dsl.rs:154` — `profile_value["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"]["limits"]`
+- `src-tauri/tests/workday_profile_dsl.rs:277` — `let captures = profile["detect"]["inputUrlPatterns"]`
+- `src-tauri/resources/profiles/greenhouse.json:18` — `"detect": {`
+- `src-tauri/resources/profiles/greenhouse.json:59` — `"postingDiscovery": {`
+- `src-tauri/resources/profiles/greenhouse.json:117` — `"postingDetail": {`
+- `src-tauri/resources/profiles/successfactors.json:18` — `"detect": {`
+- `src-tauri/resources/profiles/successfactors.json:84` — `"postingDiscovery": {`
+- `src-tauri/resources/profiles/successfactors.json:202` — `"postingDetail": {`
+- `src-tauri/resources/profiles/workday.json:18` — `"detect": {`
+- `src-tauri/resources/profiles/workday.json:81` — `"postingDiscovery": {`
+- `src-tauri/resources/profiles/workday.json:165` — `"postingDetail": {`
+
+## Observable Schema-V2 Diagnostic Data
+
+- `src-tauri/src/checks/source_live/mod.rs:440` — `.unwrap_or_else(|| "posting_detail_description_text_missing".to_string())`
+- `src-tauri/src/checks/source_live/mod.rs:475` — `path: "/postingDiscovery".to_string(),`
+- `src-tauri/src/checks/source_live/mod.rs:517` — `message: "Source Live Check postingDetail failed for the selected candidate".to_string(),`
+- `src-tauri/src/checks/source_live/mod.rs:519` — `path: "/postingDetail".to_string(),`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:26` — `let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:46` — `let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:64` — `&format!("{base_path}/postingDiscovery/strategies"),`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:65` — `"postingDiscovery",`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:77` — `&format!("{base_path}/postingDetail/strategies"),`
+- `src-tauri/src/profile_dsl/compiler/boundedness.rs:78` — `"postingDetail",`
+- `src-tauri/src/profile_dsl/compiler/capabilities.rs:15` — `let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");`
+- `src-tauri/src/profile_dsl/compiler/capabilities.rs:33` — `let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");`
+- `src-tauri/src/profile_dsl/compiler/keys.rs:43` — `"postingDiscovery declares duplicate Strategy key \`{}\`",`
+- `src-tauri/src/profile_dsl/compiler/keys.rs:48` — `"step": "postingDiscovery",`
+- `src-tauri/src/profile_dsl/compiler/keys.rs:69` — `"postingDetail declares duplicate Strategy key \`{}\`",`
+- `src-tauri/src/profile_dsl/compiler/keys.rs:74` — `"step": "postingDetail",`
+- `src-tauri/src/profile_dsl/compiler/overrides.rs:229` — `OverridableStep::Discovery => "postingDiscovery",`
+- `src-tauri/src/profile_dsl/compiler/overrides.rs:230` — `OverridableStep::Detail => "postingDetail",`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:69` — `access_path_step_path(Some(path_index), "postingDiscovery"),`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:75` — `access_path_step_path(Some(path_index), "postingDetail"),`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:209` — `&access_path_step_path(path_index, "postingDiscovery"),`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:217` — `compile_detail_step(detail, &access_path_step_path(path_index, "postingDetail"))`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:318` — `compile_discovery_step(discovery, "/selectedAccessPath/postingDiscovery")`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:323` — `.map(|detail| compile_detail_step(detail, "/selectedAccessPath/postingDetail"))`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:404` — `"/selectedAccessPath/postingDiscovery".to_string(),`
+- `src-tauri/src/profile_dsl/compiler/resolution.rs:410` — `"/selectedAccessPath/postingDetail".to_string(),`
+- `src-tauri/src/profile_dsl/compiler/security.rs:32` — `&format!("{base_path}/postingDiscovery/strategies/{index}/fetch"),`
+- `src-tauri/src/profile_dsl/compiler/security.rs:42` — `&format!("{base_path}/postingDetail/strategies/{index}/fetch"),`
+- `src-tauri/src/profile_dsl/compiler/templates/validation.rs:73` — `"Template namespace \`{namespace}\` is not available in postingDiscovery"`
+- `src-tauri/src/profile_dsl/compiler/templates.rs:39` — `let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");`
+- `src-tauri/src/profile_dsl/compiler/templates.rs:69` — `let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:16` — `"acceptWhen.maxErrorRatio is not supported by the postingDetail runtime result model yet",`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:30` — `format!("postingDetail result is missing required normalized field \`{field}\`"),`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:48` — `"postingDetail descriptionText is shorter than the configured minimum of {minimum} characters"`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:71` — `.map(|ratio| (ratio, "/postingDetail".to_string()))`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:90` — `.map(|field| (field.clone(), "/postingDetail".to_string())),`
+- `src-tauri/src/profile_dsl/runtime/detail/acceptance.rs:112` — `(Some(step), Some(_)) | (Some(step), None) => Some((step, "/postingDetail".to_string())),`
+- `src-tauri/src/profile_dsl/runtime/detail/document.rs:57` — `"postingDetail runtime supports JSON, XML, and HTML parse types",`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:22` — `let base_path = format!("/postingDetail/strategies/{strategy_index}");`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:109` — `"postingDetail where filters rejected the selected detail document",`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:137` — `"postingDetail descriptionText did not resolve to non-empty text",`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:181` — `format!("postingDetail match requires missing postingMeta \`{key}\`"),`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:213` — `"postingDetail match requires a JSON array or XML element collection selected by the strategy",`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:373` — `"postingDetail match found no detail item for the selected posting",`
+- `src-tauri/src/profile_dsl/runtime/detail/strategy.rs:385` — `"postingDetail match found {count} detail items for the selected posting; expected exactly one"`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:235` — `return cancelled_detail_result("/postingDetail", None);`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:242` — `"posting_detail_missing",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:243` — `"Execution Plan does not contain compiled postingDetail",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:244` — `"/postingDetail",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:255` — `"posting_detail_strategy_missing",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:256` — `"postingDetail does not contain an executable strategy",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:257` — `"/postingDetail/strategies",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:283` — `format!("/postingDetail/strategies/{strategy_index}"),`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:303` — `"postingDetail fallback strategies were exhausted without an accepted result",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:304` — `"/postingDetail/strategies",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:329` — `"posting_detail_missing",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:330` — `"Execution Plan does not contain compiled postingDetail",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:331` — `"/postingDetail",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:356` — `return cancelled_detail_result("/postingDetail", None);`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:367` — `"posting_detail_strategy_missing",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:368` — `"postingDetail does not contain an executable strategy",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:369` — `"/postingDetail/strategies",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:395` — `format!("/postingDetail/strategies/{strategy_index}"),`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:414` — `"postingDetail fallback strategies were exhausted without an accepted result",`
+- `src-tauri/src/profile_dsl/runtime/detail.rs:415` — `"/postingDetail/strategies",`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:16` — `"acceptWhen.maxErrorRatio is not supported by the postingDiscovery runtime result model yet",`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:34` — `"postingDiscovery candidate is missing required normalized field \`{field}\`"`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:62` — `"postingDiscovery descriptionText is shorter than the configured minimum of {minimum} characters"`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:85` — `"postingDiscovery returned fewer than the required minimum of {minimum} candidates"`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:108` — `.map(|ratio| (ratio, "/postingDiscovery".to_string()))`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:127` — `.map(|field| (field.clone(), "/postingDiscovery".to_string())),`
+- `src-tauri/src/profile_dsl/runtime/discovery/acceptance.rs:166` — `(Some(step), Some(_)) | (Some(step), None) => Some((step, "/postingDiscovery".to_string())),`
+- `src-tauri/src/profile_dsl/runtime/discovery/document.rs:56` — `"postingDiscovery runtime supports JSON, XML, and HTML parse types",`
+- `src-tauri/src/profile_dsl/runtime/discovery/document.rs:156` — `"JSONPath selector must resolve to an array for postingDiscovery",`
+- `src-tauri/src/profile_dsl/runtime/discovery/extract/fields.rs:415` — `"postingDiscovery runtime supports const, template, sourceConfig, capture, itemField, JSONPath, XML, CSS, and combine field expressions",`
+- `src-tauri/src/profile_dsl/runtime/discovery/extract.rs:276` — `"Required postingDiscovery field did not resolve to a non-empty string",`
+- `src-tauri/src/profile_dsl/runtime/discovery/pagination.rs:446` — `"posting_discovery_request_budget_reached",`
+- `src-tauri/src/profile_dsl/runtime/discovery/strategy.rs:21` — `let base_path = format!("/postingDiscovery/strategies/{strategy_index}");`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:235` — `return cancelled_discovery_result("/postingDiscovery", None);`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:242` — `"posting_discovery_strategy_missing",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:243` — `"postingDiscovery does not contain an executable strategy",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:244` — `"/postingDiscovery/strategies",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:269` — `format!("/postingDiscovery/strategies/{strategy_index}"),`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:289` — `"postingDiscovery fallback strategies were exhausted without an accepted result",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:290` — `"/postingDiscovery/strategies",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:328` — `return cancelled_discovery_result("/postingDiscovery", None);`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:335` — `"posting_discovery_strategy_missing",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:336` — `"postingDiscovery does not contain an executable strategy",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:337` — `"/postingDiscovery/strategies",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:362` — `format!("/postingDiscovery/strategies/{strategy_index}"),`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:381` — `"postingDiscovery fallback strategies were exhausted without an accepted result",`
+- `src-tauri/src/profile_dsl/runtime/discovery.rs:382` — `"/postingDiscovery/strategies",`
+- `src-tauri/src/search/posting/service.rs:224` — `"posting_detail_missing",`
+- `src-tauri/src/search/posting/service.rs:226` — `"Source \`{}\` compiled successfully but does not provide postingDetail",`
+- `src-tauri/src/search/posting/service.rs:229` — `"/postingDetail",`
+- `src-tauri/src/search/posting/service.rs:287` — `code: "posting_detail_source_missing".to_string(),`
+- `src-tauri/src/search/posting/service.rs:289` — `"Job Posting {id} has no persisted posting source that can provide compiled postingDetail"`
+- `src-tauri/src/search/posting/service.rs:302` — `"job posting has no persisted posting source that can provide compiled postingDetail",`
+- `src-tauri/src/search/posting/tests/detail_loading/basic.rs:204` — `.any(|diagnostic| diagnostic.code == "posting_detail_missing")),`
+- `src-tauri/src/search/run/execution.rs:153` — `.unwrap_or_else(|| "postingDiscovery failed".to_string());`
+- `src-tauri/src/search/run/execution.rs:173` — `message: "postingDiscovery cancelled".to_string(),`
+- `src-tauri/src/search/run/execution.rs:182` — `message: "postingDiscovery cancelled".to_string(),`
+- `src-tauri/src/search/run/execution.rs:184` — `path: "/postingDiscovery".to_string(),`
+- `src-tauri/src/search/run/tests/scheduling_artifacts.rs:43` — `path: "/postingDiscovery/strategies/0".to_string(),`
+- `src-tauri/src/search/run/tests/scheduling_artifacts.rs:216` — `message: "postingDiscovery cancelled".to_string(),`
+- `src-tauri/src/search/run/tests/scheduling_artifacts.rs:220` — `message: "postingDiscovery cancelled".to_string(),`
+- `src-tauri/src/search/run/tests/scheduling_artifacts.rs:222` — `path: "/postingDiscovery".to_string(),`
+- `src-tauri/src/search/run/tests/support.rs:92` — `.unwrap_or_else(|| "postingDiscovery failed".to_string()),`
+- `src-tauri/src/source_profile/detection/mod.rs:273` — `let base_path = format!("/profiles/{profile_index}/detect");`
+- `src-tauri/src/source_profile/detection/proposal.rs:123` — `let profile_base_path = base_path.strip_suffix("/detect").unwrap_or(base_path);`
+- `src-tauri/tests/compiler_security_boundedness.rs:23` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
+- `src-tauri/tests/compiler_security_boundedness.rs:114` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/body/value/nested/apiKey",`
+- `src-tauri/tests/compiler_security_boundedness.rs:138` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
+- `src-tauri/tests/compiler_security_boundedness.rs:143` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/headers/authorization",`
+- `src-tauri/tests/compiler_security_boundedness.rs:163` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/retry/maxAttempts",`
+- `src-tauri/tests/compiler_security_boundedness.rs:168` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits",`
+- `src-tauri/tests/compiler_security_boundedness.rs:188` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits/maxDepth",`
+- `src-tauri/tests/compiler_security_boundedness.rs:213` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/waits/0/timeoutMs",`
+- `src-tauri/tests/compiler_security_boundedness.rs:218` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0/maxCount",`
+- `src-tauri/tests/compiler_security_boundedness.rs:234` — `"/accessPaths/0/postingDiscovery/strategies",`
+- `src-tauri/tests/compiler_security_boundedness.rs:239` — `"/accessPaths/0/postingDetail/strategies",`
+- `src-tauri/tests/compiler_security_boundedness.rs:271` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0",`
+- `src-tauri/tests/compiler_semantic_validation.rs:165` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"`
+- `src-tauri/tests/compiler_semantic_validation.rs:265` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/1/key"`
+- `src-tauri/tests/compiler_semantic_validation.rs:270` — `&& diagnostic.path == "/accessPaths/0/postingDetail/strategies/1/key"`
+- `src-tauri/tests/detail_runtime.rs:233` — `"/postingDetail/strategies/0/where/0/pattern"`
+- `src-tauri/tests/detail_runtime.rs:277` — `"/postingDetail/acceptWhen/minDescriptionLength"`
+- `src-tauri/tests/detail_runtime.rs:280` — `assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");`
+- `src-tauri/tests/detail_runtime.rs:320` — `"/postingDetail/strategies/0/acceptWhen/maxErrorRatio"`
+- `src-tauri/tests/detail_runtime.rs:555` — `"/postingDetail/strategies/0/extract/fields/descriptionText"`
+- `src-tauri/tests/detail_runtime.rs:801` — `"/postingDetail/strategies/0/fetch/interactions/0"`
+- `src-tauri/tests/discovery_runtime/cancellation.rs:203` — `"postingDiscovery cancelled",`
+- `src-tauri/tests/discovery_runtime/core.rs:72` — `"/postingDiscovery/strategies/0/extract/fields/title"`
+- `src-tauri/tests/discovery_runtime/core.rs:76` — `"/postingDiscovery/strategies/0/extract/fields/company"`
+- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:176` — `"/postingDiscovery/strategies/0/fetch/waits/0"`
+- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:195` — `"/postingDiscovery/strategies/0/parse"`
+- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:214` — `"/postingDiscovery/strategies/0/select/selector"`
+- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:238` — `"/postingDiscovery/strategies/0/extract/fields/title"`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:82` — `"/postingDiscovery/strategies/0/acceptWhen/minResults"`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:206` — `"/postingDiscovery/acceptWhen/minResults"`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:209` — `assert_eq!(result.diagnostics[1].path, "/postingDiscovery/strategies");`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:302` — `"/postingDiscovery/strategies/0/acceptWhen/requiredFields"`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:314` — `"/postingDiscovery/strategies/1/acceptWhen/minDescriptionLength"`
+- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:355` — `"/postingDiscovery/strategies/0/acceptWhen/maxErrorRatio"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:99` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:195` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:379` — `"/postingDiscovery/strategies/0/pagination/limits/maxDepth"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:425` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:494` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:599` — `"/postingDiscovery/strategies/0/pagination/nextCursorPath"`
+- `src-tauri/tests/discovery_runtime/pagination.rs:647` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
+- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:192` — `"/postingDiscovery/strategies/0/fetch/body"`
+- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:229` — `"/postingDiscovery/strategies/0/fetch/body"`
+- `src-tauri/tests/discovery_runtime/template_validation.rs:71` — `== "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"`
+- `src-tauri/tests/discovery_runtime/transforms_and_combine.rs:204` — `"/postingDiscovery/strategies/0/extract/fields/title/parts/1/value"`
+- `src-tauri/tests/effective_profile_compiler.rs:288` — `"/accessPaths/0/postingDiscovery/strategies/0",`
+- `src-tauri/tests/effective_profile_compiler.rs:292` — `"/accessPaths/0/postingDiscovery/strategies/1",`
+- `src-tauri/tests/effective_profile_compiler.rs:297` — `serde_json::json!(["name", "postingDiscovery"]),`
+- `src-tauri/tests/effective_profile_compiler.rs:300` — `"/accessPaths/2/postingDiscovery",`
+- `src-tauri/tests/effective_profile_compiler.rs:304` — `"/accessPaths/2/postingDetail",`
+- `src-tauri/tests/effective_profile_compiler.rs:347` — `"/accessPaths/0/postingDiscovery/strategies/1/key",`
+- `src-tauri/tests/effective_profile_compiler.rs:348` — `"/accessPaths/0/postingDiscovery/strategies/2/key",`
+- `src-tauri/tests/source_live_check.rs:164` — `.find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")`
+- `src-tauri/tests/source_live_check.rs:169` — `"/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"`
+- `src-tauri/tests/source_live_check.rs:240` — `diagnostic.code == "posting_discovery_request_budget_reached"`
+- `src-tauri/tests/source_profile_detection.rs:85` — `&& diagnostic.path == "/profiles/0/detect/keyCandidates/0"`
+- `src-tauri/tests/source_profile_detection.rs:142` — `&& diagnostic.path == "/profiles/0/detect/inputUrlPatterns/0/pattern"`
+- `src-tauri/tests/source_profile_detection.rs:169` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/timeoutMs"`
+- `src-tauri/tests/source_profile_detection.rs:201` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
+- `src-tauri/tests/source_profile_detection.rs:244` — `"/profiles/0/detect/sourceConfig/boardSlug",`
+- `src-tauri/tests/source_profile_detection.rs:249` — `"/profiles/0/detect/sourceConfig/keyword",`
+- `src-tauri/tests/source_profile_detection.rs:254` — `"/profiles/0/detect/sourceConfig/unexpected",`
+- `src-tauri/tests/source_profile_detection.rs:407` — `"/profiles/0/detect/sourceConfig/alpha"`
+- `src-tauri/tests/source_profile_detection.rs:411` — `"/profiles/0/detect/sourceConfig/bad"`
+- `src-tauri/tests/source_profile_detection.rs:415` — `"/profiles/0/detect/sourceConfig/zeta"`
+- `src-tauri/tests/source_profile_detection.rs:505` — `&& diagnostic.path == "/profiles/0/detect/sourceConfig/startUrl"`
+- `src-tauri/tests/source_profile_detection.rs:943` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/url"`
+- `src-tauri/tests/source_profile_detection.rs:1097` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0"`
+- `src-tauri/tests/source_profile_detection.rs:1109` — `"/profiles/0/detect/browserProbes/0",`
+- `src-tauri/tests/source_profile_detection.rs:1115` — `"/profiles/0/detect/browserProbes/0/url",`
+- `src-tauri/tests/source_profile_detection.rs:1123` — `"/profiles/0/detect/browserProbes/0/interactions/0",`
+- `src-tauri/tests/source_profile_detection.rs:1129` — `"/profiles/0/detect/browserProbes/0/timeoutMs",`
+- `src-tauri/tests/source_profile_detection.rs:1135` — `"/profiles/0/detect/browserProbes/0",`
+- `src-tauri/tests/source_profile_detection.rs:1210` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/htmlContains"`
+- `src-tauri/tests/source_profile_detection.rs:1243` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
+- `src-tauri/tests/source_profile_detection.rs:1278` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0/timeoutMs"`
+- `src-tauri/tests/source_profile_detection.rs:1312` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/interactions/0/maxCount"`
+- `src-tauri/tests/source_profile_detection.rs:1343` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0"`
+- `src-tauri/tests/source_profile_registry.rs:230` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:298` — `"/postingDiscovery/strategies"`
+- `src-tauri/tests/strategy_policy_first_accepted.rs:338` — `"/postingDetail/strategies"`
+- `src-tauri/tests/workday_profile_dsl.rs:227` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+
+## Verification
+
+The following internal naming checks return no matches:
+
+```bash
+rg -n '^\s*(pub(?:\([^)]*\))?\s+)?(mod|use|fn|struct|enum|type|trait)\b[^\n]*(posting_discovery|posting_detail|PostingDiscovery|PostingDetail|execute_posting_)' src-tauri/src src-tauri/tests --glob '*.rs'
+find src-tauri/src src-tauri/tests \( -name '*posting_discovery*' -o -name '*posting_detail*' \) -print
+```

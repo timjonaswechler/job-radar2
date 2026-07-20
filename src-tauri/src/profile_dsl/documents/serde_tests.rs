@@ -18,7 +18,7 @@ fn simple_reusable_source_profile_fixture_deserializes() {
     assert_eq!(profile.access_paths.len(), 1);
     assert_eq!(profile.access_paths[0].key, "json_feed");
     assert_eq!(
-        profile.access_paths[0].posting_discovery.strategies[0].key,
+        profile.access_paths[0].discovery.strategies[0].key,
         "json_api"
     );
 }
@@ -63,7 +63,7 @@ fn source_owned_access_path_fixture_deserializes() {
     let SelectedAccessPath::SourceOwnedAccessPath {
         key,
         name,
-        posting_discovery,
+        discovery,
         ..
     } = source.selected_access_path
     else {
@@ -72,7 +72,7 @@ fn source_owned_access_path_fixture_deserializes() {
 
     assert_eq!(key, "html_page");
     assert_eq!(name, "HTML page");
-    assert_eq!(posting_discovery.strategies[0].key, "html_cards");
+    assert_eq!(discovery.strategies[0].key, "html_cards");
 }
 
 #[test]
@@ -93,10 +93,7 @@ fn source_overrides_fixture_deserializes_structurally() {
         .expect("fixture should contain strategy overrides");
 
     assert_eq!(strategy_overrides.len(), 1);
-    assert_eq!(
-        strategy_overrides[0].step,
-        OverridableStep::PostingDiscovery
-    );
+    assert_eq!(strategy_overrides[0].step, OverridableStep::Discovery);
     assert_eq!(strategy_overrides[0].strategy_key, "json_api");
     assert_eq!(
         strategy_overrides[0]

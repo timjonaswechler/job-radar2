@@ -1,9 +1,9 @@
 use super::*;
 use crate::{
     profile_dsl::runtime::{
-        PostingDetailFetchError, PostingDetailFetchRequest, PostingDetailFetchResponse,
-        PostingDetailFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+        DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+        ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchRequest,
+        ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
     },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
@@ -28,7 +28,7 @@ mod listing_and_queues;
 mod state_updates;
 
 #[derive(Clone)]
-struct FixturePostingDetailHttpClient {
+struct FixtureDetailHttpClient {
     responses: Arc<Mutex<BTreeMap<String, Result<String, String>>>>,
     requested_urls: Arc<Mutex<Vec<String>>>,
 }
@@ -39,7 +39,7 @@ struct FixtureProfileBrowserClient {
     requested_urls: Arc<Mutex<Vec<String>>>,
 }
 
-impl FixturePostingDetailHttpClient {
+impl FixtureDetailHttpClient {
     fn new(responses: impl IntoIterator<Item = (String, Result<String, String>)>) -> Self {
         Self {
             responses: Arc::new(Mutex::new(responses.into_iter().collect())),
@@ -96,17 +96,12 @@ impl ProfileBrowserClient for FixtureProfileBrowserClient {
     }
 }
 
-impl PostingDetailFetcher for FixturePostingDetailHttpClient {
+impl DetailFetcher for FixtureDetailHttpClient {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         let url = request.url;
         self.requested_urls.lock().unwrap().push(url.clone());
         let result = self
@@ -118,8 +113,8 @@ impl PostingDetailFetcher for FixturePostingDetailHttpClient {
             .unwrap_or_else(|| Err(format!("unexpected detail URL: {url}")));
         Box::pin(async move {
             result
-                .map(|body| PostingDetailFetchResponse { body })
-                .map_err(PostingDetailFetchError::new)
+                .map(|body| DetailFetchResponse { body })
+                .map_err(DetailFetchError::new)
         })
     }
 }
@@ -186,18 +181,14 @@ fn profile_without_detail_json(profile_key: &str, path_key: &str) -> String {
     profile_json(profile_key, path_key, None)
 }
 
-fn profile_json(profile_key: &str, path_key: &str, posting_detail: Option<Value>) -> String {
-    profile_json_with_detail_step(
-        profile_key,
-        path_key,
-        posting_detail.map(posting_json_detail_step),
-    )
+fn profile_json(profile_key: &str, path_key: &str, detail: Option<Value>) -> String {
+    profile_json_with_detail_step(profile_key, path_key, detail.map(posting_json_detail_step))
 }
 
 fn profile_json_with_detail_step(
     profile_key: &str,
     path_key: &str,
-    posting_detail: Option<Value>,
+    detail: Option<Value>,
 ) -> String {
     let mut access_path = json!({
         "key": path_key,
@@ -233,8 +224,8 @@ fn profile_json_with_detail_step(
             }]
         }
     });
-    if let Some(posting_detail) = posting_detail {
-        access_path["postingDetail"] = posting_detail;
+    if let Some(detail) = detail {
+        access_path["postingDetail"] = detail;
     }
 
     json!({

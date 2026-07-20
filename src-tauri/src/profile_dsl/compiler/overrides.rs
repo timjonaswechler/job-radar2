@@ -2,26 +2,26 @@ use std::collections::HashSet;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    ListFieldExpression, OverridableStep, PostingDetailStep, PostingDetailStrategy,
-    PostingDiscoveryStep, PostingDiscoveryStrategy, SourceOverrides, StrategyOverride,
+    DetailStep, DetailStrategy, DiscoveryStep, DiscoveryStrategy, ListFieldExpression,
+    OverridableStep, SourceOverrides, StrategyOverride,
 };
 
 use super::compiler_error;
 
 pub(super) struct EffectiveAccessPathSteps {
-    pub posting_discovery: PostingDiscoveryStep,
-    pub posting_detail: Option<PostingDetailStep>,
+    pub discovery: DiscoveryStep,
+    pub detail: Option<DetailStep>,
 }
 
 pub(super) fn apply_source_overrides(
     source_overrides: Option<&SourceOverrides>,
-    posting_discovery: &PostingDiscoveryStep,
-    posting_detail: Option<&PostingDetailStep>,
+    discovery: &DiscoveryStep,
+    detail: Option<&DetailStep>,
     diagnostics: &mut Diagnostics,
 ) -> EffectiveAccessPathSteps {
     let mut effective = EffectiveAccessPathSteps {
-        posting_discovery: posting_discovery.clone(),
-        posting_detail: posting_detail.cloned(),
+        discovery: discovery.clone(),
+        detail: detail.cloned(),
     };
 
     let Some(source_overrides) = source_overrides else {
@@ -54,9 +54,9 @@ pub(super) fn apply_source_overrides(
         }
 
         match strategy_override.step {
-            OverridableStep::PostingDiscovery => {
+            OverridableStep::Discovery => {
                 let Some(strategy_index) = effective
-                    .posting_discovery
+                    .discovery
                     .strategies
                     .iter()
                     .position(|strategy| strategy.key == strategy_override.strategy_key)
@@ -64,19 +64,19 @@ pub(super) fn apply_source_overrides(
                     push_unknown_strategy_override(strategy_override, override_index, diagnostics);
                     continue;
                 };
-                apply_posting_discovery_strategy_override(
-                    &mut effective.posting_discovery.strategies[strategy_index],
+                apply_discovery_strategy_override(
+                    &mut effective.discovery.strategies[strategy_index],
                     strategy_override,
                     override_index,
                     diagnostics,
                 );
             }
-            OverridableStep::PostingDetail => {
-                let Some(posting_detail) = effective.posting_detail.as_mut() else {
+            OverridableStep::Detail => {
+                let Some(detail) = effective.detail.as_mut() else {
                     push_unknown_strategy_override(strategy_override, override_index, diagnostics);
                     continue;
                 };
-                let Some(strategy_index) = posting_detail
+                let Some(strategy_index) = detail
                     .strategies
                     .iter()
                     .position(|strategy| strategy.key == strategy_override.strategy_key)
@@ -84,8 +84,8 @@ pub(super) fn apply_source_overrides(
                     push_unknown_strategy_override(strategy_override, override_index, diagnostics);
                     continue;
                 };
-                apply_posting_detail_strategy_override(
-                    &mut posting_detail.strategies[strategy_index],
+                apply_detail_strategy_override(
+                    &mut detail.strategies[strategy_index],
                     strategy_override,
                     override_index,
                     diagnostics,
@@ -97,8 +97,8 @@ pub(super) fn apply_source_overrides(
     effective
 }
 
-fn apply_posting_discovery_strategy_override(
-    strategy: &mut PostingDiscoveryStrategy,
+fn apply_discovery_strategy_override(
+    strategy: &mut DiscoveryStrategy,
     strategy_override: &StrategyOverride,
     override_index: usize,
     diagnostics: &mut Diagnostics,
@@ -142,8 +142,8 @@ fn apply_posting_discovery_strategy_override(
     }
 }
 
-fn apply_posting_detail_strategy_override(
-    strategy: &mut PostingDetailStrategy,
+fn apply_detail_strategy_override(
+    strategy: &mut DetailStrategy,
     strategy_override: &StrategyOverride,
     override_index: usize,
     diagnostics: &mut Diagnostics,
@@ -226,7 +226,7 @@ fn push_unsupported_extract_override(
 
 fn step_name(step: OverridableStep) -> &'static str {
     match step {
-        OverridableStep::PostingDiscovery => "postingDiscovery",
-        OverridableStep::PostingDetail => "postingDetail",
+        OverridableStep::Discovery => "postingDiscovery",
+        OverridableStep::Detail => "postingDetail",
     }
 }

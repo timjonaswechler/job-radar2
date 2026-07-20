@@ -7,8 +7,8 @@ mod types;
 
 pub use service::JobPostingService;
 pub use types::{
-    ApplicationState, InterestState, JobPosting, JobPostingDetail, JobPostingQueueCounts,
-    JobPostingQueueId, JobPostingSource, PostingDescriptionState, PreparationState, ReadState,
+    ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
+    JobPostingSource, JobPostingView, PostingDescriptionState, PreparationState, ReadState,
     UpdateJobPostingStateInput,
 };
 

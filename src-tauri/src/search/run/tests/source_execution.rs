@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn active_valid_source_compiles_and_executes_posting_discovery_plan_through_runtime() {
+fn active_valid_source_compiles_and_executes_discovery_plan_through_runtime() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
@@ -15,7 +15,7 @@ fn active_valid_source_compiles_and_executes_posting_discovery_plan_through_runt
             vec![],
         )
         .await;
-        let executor = RuntimePostingDiscoveryExecutor::new(
+        let executor = RuntimeDiscoveryExecutor::new(
             json!({
                 "jobs": [
                     {
@@ -153,7 +153,7 @@ fn runtime_diagnostics_are_stored_on_failed_source_run() {
             vec![],
         )
         .await;
-        let executor = RuntimePostingDiscoveryExecutor::new("{");
+        let executor = RuntimeDiscoveryExecutor::new("{");
 
         let result = SearchRunService::new(
             &pool,

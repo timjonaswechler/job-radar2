@@ -14,10 +14,9 @@ use crate::profile_dsl::diagnostics::{
 use crate::profile_dsl::documents::JsonObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
 use crate::profile_dsl::runtime::{
-    execute_posting_detail_with_clients, execute_posting_discovery_with_clients_and_context,
-    PostingDetailExecutionResult, PostingDetailFetcher, PostingDetailPostingOccurrence,
-    PostingDiscoveryCandidate, PostingDiscoveryExecutionBudget, PostingDiscoveryFetcher,
-    ProfileBrowserClient, ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher,
+    execute_detail_with_clients, execute_discovery_with_clients_and_context, DetailExecutionResult,
+    DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate, DiscoveryExecutionBudget,
+    DiscoveryFetcher, ProfileBrowserClient, ReqwestDetailFetcher, ReqwestDiscoveryFetcher,
     RuntimeExecutionContext, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
@@ -65,8 +64,8 @@ pub fn check_source(
     check_source_with_clients(
         app_data_dir,
         source_key,
-        &ReqwestPostingDiscoveryFetcher::new(),
-        &ReqwestPostingDetailFetcher::new(),
+        &ReqwestDiscoveryFetcher::new(),
+        &ReqwestDetailFetcher::new(),
         &UnavailableProfileBrowserClient,
     )
 }
@@ -77,7 +76,7 @@ pub fn check_source_with_fetcher<F>(
     fetcher: &F,
 ) -> Result<CheckReport, String>
 where
-    F: PostingDiscoveryFetcher + PostingDetailFetcher + Sync + ?Sized,
+    F: DiscoveryFetcher + DetailFetcher + Sync + ?Sized,
 {
     check_source_with_clients(
         app_data_dir,
@@ -96,8 +95,8 @@ pub fn check_source_with_clients<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: PostingDiscoveryFetcher + Sync + ?Sized,
-    T: PostingDetailFetcher + Sync + ?Sized,
+    D: DiscoveryFetcher + Sync + ?Sized,
+    T: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let app_data_dir = app_data_dir.as_ref();
@@ -162,8 +161,8 @@ pub(crate) fn build_source_live_check_report<D, T, B>(
     browser: &B,
 ) -> Result<CheckReport, String>
 where
-    D: PostingDiscoveryFetcher + Sync + ?Sized,
-    T: PostingDetailFetcher + Sync + ?Sized,
+    D: DiscoveryFetcher + Sync + ?Sized,
+    T: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let compiler_snapshot = compiler_snapshot_from_registry(snapshot);
@@ -197,12 +196,13 @@ where
         if let Some(execution_plan) =
             compile_live_check_execution_plan(&compiler_snapshot, source_key)
         {
-            let discovery_context = RuntimeExecutionContext::uncancellable()
-                .with_posting_discovery_budget(PostingDiscoveryExecutionBudget::new(
+            let discovery_context = RuntimeExecutionContext::uncancellable().with_discovery_budget(
+                DiscoveryExecutionBudget::new(
                     SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY,
-                ));
+                ),
+            );
             let discovery_result =
-                tauri::async_runtime::block_on(execute_posting_discovery_with_clients_and_context(
+                tauri::async_runtime::block_on(execute_discovery_with_clients_and_context(
                     &execution_plan,
                     discovery_fetcher,
                     browser,
@@ -230,12 +230,12 @@ where
                     candidate_count,
                     acceptable_candidate_count,
                 ));
-            } else if execution_plan.posting_detail.is_some() {
+            } else if execution_plan.detail.is_some() {
                 if let Some(candidate) = first_acceptable_candidate {
                     details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
-                    let posting = posting_detail_occurrence_from_candidate(candidate);
+                    let posting = detail_occurrence_from_candidate(candidate);
                     let detail_result =
-                        tauri::async_runtime::block_on(execute_posting_detail_with_clients(
+                        tauri::async_runtime::block_on(execute_detail_with_clients(
                             &execution_plan,
                             &posting,
                             detail_fetcher,
@@ -400,16 +400,14 @@ fn compile_live_check_execution_plan(
     compile_source_execution_plan(&live_check_snapshot, source_key).execution_plan
 }
 
-fn is_acceptable_live_candidate(candidate: &PostingDiscoveryCandidate) -> bool {
+fn is_acceptable_live_candidate(candidate: &DiscoveryCandidate) -> bool {
     !candidate.title.trim().is_empty()
         && !candidate.company.trim().is_empty()
         && !candidate.url.trim().is_empty()
 }
 
-fn posting_detail_occurrence_from_candidate(
-    candidate: &PostingDiscoveryCandidate,
-) -> PostingDetailPostingOccurrence {
-    PostingDetailPostingOccurrence {
+fn detail_occurrence_from_candidate(candidate: &DiscoveryCandidate) -> DetailPostingOccurrence {
+    DetailPostingOccurrence {
         url: candidate.url.clone(),
         title: Some(candidate.title.clone()),
         company: Some(candidate.company.clone()),
@@ -419,7 +417,7 @@ fn posting_detail_occurrence_from_candidate(
     }
 }
 
-fn is_acceptable_detail_result(result: &PostingDetailExecutionResult) -> bool {
+fn is_acceptable_detail_result(result: &DetailExecutionResult) -> bool {
     result
         .description_text
         .as_ref()
@@ -433,7 +431,7 @@ fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
         .collect()
 }
 
-fn detail_failure_cause(result: &PostingDetailExecutionResult) -> String {
+fn detail_failure_cause(result: &DetailExecutionResult) -> String {
     result
         .diagnostics
         .iter()

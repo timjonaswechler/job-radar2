@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 use crate::profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
-use crate::profile_dsl::documents::ReusableAccessPathDocument;
+use crate::profile_dsl::documents::{DetectionDocument, ReusableAccessPathDocument};
 use crate::profile_dsl::source_config::{compile_contract, ContractViolation, SchemaLocation};
 use crate::profile_dsl::template::{title_case, to_technical_key, TemplateError};
-use crate::source_profile::documents::{ProfileDetectionDocument, SourceProfileDocument};
+use crate::source_profile::documents::SourceProfileDocument;
 
 use super::{
     detection_error, render_detection_template, template_diagnostic, SourceProposal,
@@ -16,12 +16,12 @@ use super::{
 pub(super) fn build_source_proposal(
     input_url: &str,
     profile: &SourceProfileDocument,
-    detect: &ProfileDetectionDocument,
+    detection: &DetectionDocument,
     captures: BTreeMap<String, String>,
     evidence: Vec<SourceProposalEvidence>,
     base_path: &str,
 ) -> Result<SourceProposal, Vec<Diagnostic>> {
-    let access_path = recommended_access_path(profile, detect).ok_or_else(|| {
+    let access_path = recommended_access_path(profile, detection).ok_or_else(|| {
         vec![detection_error(
             "recommended_access_path_not_found",
             format!(
@@ -32,13 +32,13 @@ pub(super) fn build_source_proposal(
             None,
             serde_json::json!({
                 "sourceProfileKey": profile.key,
-                "recommendedAccessPathKey": detect.recommended_access_path_key,
+                "recommendedAccessPathKey": detection.recommended_access_path_key,
             }),
         )]
     })?;
 
     let source_config =
-        build_source_config(input_url, profile, Some(access_path), detect, &captures).map_err(
+        build_source_config(input_url, profile, Some(access_path), detection, &captures).map_err(
             |error| {
                 vec![template_diagnostic(
                     error,
@@ -55,7 +55,7 @@ pub(super) fn build_source_proposal(
         ValidationCompleteness::Complete,
     )?;
     let key_candidates = render_key_candidate_templates(
-        detect.key_candidates.as_deref(),
+        detection.key_candidates.as_deref(),
         || default_key_candidates(&captures, &profile.key),
         input_url,
         &captures,
@@ -63,7 +63,7 @@ pub(super) fn build_source_proposal(
     )
     .map_err(|diagnostic| vec![diagnostic])?;
     let name_candidates = render_candidate_templates(
-        detect.name_candidates.as_deref(),
+        detection.name_candidates.as_deref(),
         || default_name_candidates(&captures, &profile.name),
         input_url,
         &captures,
@@ -87,9 +87,9 @@ pub(super) fn build_source_proposal(
 
 pub(super) fn recommended_access_path<'a>(
     profile: &'a SourceProfileDocument,
-    detect: &ProfileDetectionDocument,
+    detection: &DetectionDocument,
 ) -> Option<&'a ReusableAccessPathDocument> {
-    if let Some(key) = &detect.recommended_access_path_key {
+    if let Some(key) = &detection.recommended_access_path_key {
         profile.access_paths.iter().find(|path| path.key == *key)
     } else if profile.access_paths.len() == 1 {
         profile.access_paths.first()
@@ -183,10 +183,10 @@ pub(super) fn build_source_config(
     input_url: &str,
     profile: &SourceProfileDocument,
     access_path: Option<&ReusableAccessPathDocument>,
-    detect: &ProfileDetectionDocument,
+    detection: &DetectionDocument,
     captures: &BTreeMap<String, String>,
 ) -> Result<Value, TemplateError> {
-    let Some(template) = &detect.source_config else {
+    let Some(template) = &detection.source_config else {
         return Ok(Value::Object(default_source_config(
             profile,
             access_path,
@@ -347,9 +347,9 @@ fn default_name_candidates(captures: &BTreeMap<String, String>, profile_name: &s
 }
 
 pub(super) fn detection_document_evidence(
-    detect: &ProfileDetectionDocument,
+    detection: &DetectionDocument,
 ) -> Vec<SourceProposalEvidence> {
-    detect
+    detection
         .evidence
         .as_deref()
         .unwrap_or_default()

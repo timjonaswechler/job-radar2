@@ -32,7 +32,7 @@ pub struct StrategyOverride {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum OverridableStep {
     #[serde(rename = "postingDiscovery")]
-    PostingDiscovery,
+    Discovery,
     #[serde(rename = "postingDetail")]
-    PostingDetail,
+    Detail,
 }

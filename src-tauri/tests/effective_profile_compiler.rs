@@ -34,7 +34,7 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     assert_eq!(effective_profile.document.access_paths.len(), 1);
     assert_eq!(
         effective_profile.document.access_paths[0]
-            .posting_discovery
+            .discovery
             .strategies[0]
             .accept_when
             .as_ref()
@@ -44,11 +44,7 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     );
     assert_eq!(compiled.execution_plan.source.key, "example_source");
     assert_eq!(
-        compiled
-            .execution_plan
-            .posting_discovery
-            .execution
-            .strategies[0]
+        compiled.execution_plan.discovery.execution.strategies[0]
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
@@ -63,8 +59,7 @@ fn compiler_validates_the_complete_effective_profile_before_building_a_plan() {
     let mut invalid_unselected_path = profile.access_paths[0].clone();
     invalid_unselected_path.key = "invalid_unselected_path".to_string();
     invalid_unselected_path.name = "Invalid unselected path".to_string();
-    let Fetch::Http { timeout_ms, .. } =
-        &mut invalid_unselected_path.posting_discovery.strategies[0].fetch
+    let Fetch::Http { timeout_ms, .. } = &mut invalid_unselected_path.discovery.strategies[0].fetch
     else {
         panic!("fixture should use HTTP fetch");
     };
@@ -91,7 +86,7 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
     let mut second_path = profile.access_paths[0].clone();
     second_path.key = "second_path".to_string();
     second_path.name = "Second path".to_string();
-    second_path.posting_discovery.strategies[0].key = "second_strategy".to_string();
+    second_path.discovery.strategies[0].key = "second_strategy".to_string();
     profile.access_paths.push(second_path);
     let original_profile = profile.clone();
 
@@ -141,11 +136,11 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
         vec!["json_feed", "second_path"]
     );
     let first_strategy = &effective_profile.document.access_paths[0]
-        .posting_discovery
+        .discovery
         .strategies[0];
     assert_eq!(
         effective_profile.document.access_paths[0]
-            .posting_discovery
+            .discovery
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
@@ -184,7 +179,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
     source.source_config.remove("language");
     let base_strategy =
-        serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap();
+        serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
     let mut first_strategy = base_strategy.clone();
     first_strategy["key"] = serde_json::json!("first_new");
     let mut second_strategy = base_strategy;
@@ -202,7 +197,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
             "postingDiscovery": {
                 "policy": "first_accepted",
                 "strategies": [
-                    serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap()
+                    serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap()
                 ]
             }
         }
@@ -233,7 +228,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
     );
     assert_eq!(
         effective_profile.document.access_paths[0]
-            .posting_discovery
+            .discovery
             .strategies
             .iter()
             .map(|strategy| strategy.key.as_str())
@@ -241,12 +236,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
         vec!["json_api", "second_new", "first_new"]
     );
     assert_eq!(
-        compiled
-            .execution_plan
-            .posting_discovery
-            .execution
-            .strategies
-            .len(),
+        compiled.execution_plan.discovery.execution.strategies.len(),
         1
     );
 }
@@ -368,7 +358,7 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
     source.source_config.remove("feedUrl");
     let mut strategy =
-        serde_json::to_value(&profile.access_paths[0].posting_discovery.strategies[0]).unwrap();
+        serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
     strategy["fetch"] = serde_json::json!({
         "mode": "browser",
         "url": "https://example.test/jobs",
@@ -786,10 +776,7 @@ fn source_owned_access_is_a_distinct_complete_branch() {
     };
     assert_eq!(access_path.key, "html_page");
     assert_eq!(access_path.name, "HTML page");
-    assert_eq!(
-        access_path.posting_discovery.strategies[0].key,
-        "html_cards"
-    );
+    assert_eq!(access_path.discovery.strategies[0].key, "html_cards");
     assert_eq!(compiled.execution_plan.source.key, "owned_source");
 }
 

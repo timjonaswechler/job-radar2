@@ -11,10 +11,10 @@ fn compiler_validates_structural_capability_compatibility() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    profile.access_paths[0].posting_discovery.strategies[0].select = Select::Css {
+    profile.access_paths[0].discovery.strategies[0].select = Select::Css {
         selector: ".job".to_string(),
     };
-    profile.access_paths[0].posting_discovery.strategies[0]
+    profile.access_paths[0].discovery.strategies[0]
         .extract
         .fields
         .title = FieldExpression::CssText {
@@ -49,17 +49,11 @@ fn compiler_validates_template_variable_namespaces_keys_and_context() {
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
 
-    if let Fetch::Http { url, .. } =
-        &mut profile.access_paths[0].posting_discovery.strategies[0].fetch
-    {
+    if let Fetch::Http { url, .. } = &mut profile.access_paths[0].discovery.strategies[0].fetch {
         *url = "{{posting:url}}?q={{sourceConfig:missing}}&x={{unknown:thing}}".to_string();
     }
-    if let Fetch::Http { url, .. } = &mut profile.access_paths[0]
-        .posting_detail
-        .as_mut()
-        .unwrap()
-        .strategies[0]
-        .fetch
+    if let Fetch::Http { url, .. } =
+        &mut profile.access_paths[0].detail.as_mut().unwrap().strategies[0].fetch
     {
         *url = "{{postingMeta:missingMeta}}".to_string();
     }
@@ -244,19 +238,14 @@ fn compiler_reports_duplicate_strategy_keys_within_each_step() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    let duplicate_discovery = profile.access_paths[0].posting_discovery.strategies[0].clone();
+    let duplicate_discovery = profile.access_paths[0].discovery.strategies[0].clone();
     profile.access_paths[0]
-        .posting_discovery
+        .discovery
         .strategies
         .push(duplicate_discovery);
-    let duplicate_detail = profile.access_paths[0]
-        .posting_detail
-        .as_ref()
-        .unwrap()
-        .strategies[0]
-        .clone();
+    let duplicate_detail = profile.access_paths[0].detail.as_ref().unwrap().strategies[0].clone();
     profile.access_paths[0]
-        .posting_detail
+        .detail
         .as_mut()
         .unwrap()
         .strategies

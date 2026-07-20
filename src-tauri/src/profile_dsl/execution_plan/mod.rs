@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::source::documents::SourceConfig;
 
 pub(crate) mod capabilities;
-pub(crate) mod posting_detail;
-pub(crate) mod posting_discovery;
+pub(crate) mod detail;
+pub(crate) mod discovery;
 
-use posting_detail::ExecutionPlanPostingDetailStep;
-use posting_discovery::ExecutionPlanPostingDiscoveryStep;
+use detail::ExecutionPlanDetailStep;
+use discovery::ExecutionPlanDiscoveryStep;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,9 +15,9 @@ pub struct SourceExecutionPlan {
     pub source: ExecutionPlanSource,
     pub selected_access_path: ExecutionPlanAccessPath,
     pub source_config: SourceConfig,
-    pub posting_discovery: ExecutionPlanPostingDiscoveryStep,
+    pub discovery: ExecutionPlanDiscoveryStep,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_detail: Option<ExecutionPlanPostingDetailStep>,
+    pub detail: Option<ExecutionPlanDetailStep>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

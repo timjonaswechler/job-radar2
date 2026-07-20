@@ -2,7 +2,7 @@ use super::validation::{validate_template_string, validate_variable_reference};
 use super::*;
 
 pub(super) fn validate_discovery_field_templates(
-    posting_discovery: &PostingDiscoveryStep,
+    discovery: &DiscoveryStep,
     strategy_index: usize,
     strategy_path: &str,
     context: TemplateContext,
@@ -11,7 +11,7 @@ pub(super) fn validate_discovery_field_templates(
     posting_meta_keys: &HashSet<String>,
     diagnostics: &mut Diagnostics,
 ) {
-    let strategy = &posting_discovery.strategies[strategy_index];
+    let strategy = &discovery.strategies[strategy_index];
     let base = format!("{strategy_path}/extract/fields");
     validate_field_expression_templates(
         &strategy.extract.fields.title,
@@ -193,10 +193,8 @@ pub(super) fn validate_field_expression_templates(
     }
 }
 
-pub(super) fn posting_discovery_posting_meta_keys(
-    posting_discovery: &PostingDiscoveryStep,
-) -> HashSet<String> {
-    posting_discovery
+pub(super) fn discovery_posting_meta_keys(discovery: &DiscoveryStep) -> HashSet<String> {
+    discovery
         .strategies
         .iter()
         .filter_map(|strategy| strategy.extract.fields.posting_meta.as_ref())

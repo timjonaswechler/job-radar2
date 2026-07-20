@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
 use regex::Regex;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::source_profile::documents::{DetectionEvidenceKind, DetectionHttpCheck};
+use crate::profile_dsl::documents::{DetectionEvidenceKind, DetectionHttpCheck};
 
 use super::{
     detection_error, detection_warning, render_detection_template, template_diagnostic,

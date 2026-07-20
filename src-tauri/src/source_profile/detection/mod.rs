@@ -5,12 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
-use crate::profile_dsl::documents::SupportLevel;
+use crate::profile_dsl::documents::{DetectionDocument, DetectionEvidenceKind, SupportLevel};
 use crate::profile_dsl::runtime::ProfileBrowserClient;
 use crate::profile_dsl::source_config::{compile_contract, SchemaLocation};
-use crate::source_profile::documents::{
-    DetectionEvidenceKind, ProfileDetectionDocument, SourceProfileDocument,
-};
+use crate::source_profile::documents::SourceProfileDocument;
 
 mod browser;
 mod diagnostics;
@@ -263,7 +261,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     http_client: &C,
     browser_client: Option<&(dyn ProfileBrowserClient + Sync)>,
 ) -> Candidate {
-    let Some(detect) = &profile.detect else {
+    let Some(detection) = &profile.detection else {
         return Candidate {
             proposal: None,
             unsupported: None,
@@ -275,7 +273,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
     let base_path = format!("/profiles/{profile_index}/detect");
     let mut diagnostics = Vec::new();
     let Some((mut captures, mut evidence)) =
-        match_input_url_patterns(input_url, detect, &base_path, &mut diagnostics)
+        match_input_url_patterns(input_url, detection, &base_path, &mut diagnostics)
     else {
         let failed = diagnostics
             .iter()
@@ -290,7 +288,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
 
     if !evaluate_http_checks(
         input_url,
-        detect.http_checks.as_deref().unwrap_or_default(),
+        detection.http_checks.as_deref().unwrap_or_default(),
         &mut captures,
         &mut evidence,
         &mut diagnostics,
@@ -310,7 +308,7 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
         };
     }
 
-    if let Some(browser_probes) = detect.browser_probes.as_deref() {
+    if let Some(browser_probes) = detection.browser_probes.as_deref() {
         if !browser_probes.is_empty() {
             let Some(browser_client) = browser_client else {
                 diagnostics.extend(browser_probe_unavailable_diagnostics(
@@ -325,12 +323,12 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
                     diagnostics,
                 };
             };
-            let recommended_path = recommended_access_path(profile, detect);
+            let recommended_path = recommended_access_path(profile, detection);
             let source_config_for_probes = match build_source_config(
                 input_url,
                 profile,
                 recommended_path,
-                detect,
+                detection,
                 &captures,
             ) {
                 Ok(source_config) => source_config,
@@ -404,7 +402,9 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
         };
     }
 
-    match build_source_proposal(input_url, profile, detect, captures, evidence, &base_path) {
+    match build_source_proposal(
+        input_url, profile, detection, captures, evidence, &base_path,
+    ) {
         Ok(proposal) => Candidate {
             proposal: Some(proposal),
             unsupported: None,
@@ -425,13 +425,13 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
 
 fn match_input_url_patterns(
     input_url: &str,
-    detect: &ProfileDetectionDocument,
+    detection: &DetectionDocument,
     base_path: &str,
     diagnostics: &mut Diagnostics,
 ) -> Option<(BTreeMap<String, String>, Vec<SourceProposalEvidence>)> {
-    let patterns = detect.input_url_patterns.as_deref().unwrap_or_default();
+    let patterns = detection.input_url_patterns.as_deref().unwrap_or_default();
     if patterns.is_empty() {
-        return Some((BTreeMap::new(), detection_document_evidence(detect)));
+        return Some((BTreeMap::new(), detection_document_evidence(detection)));
     }
 
     for (index, pattern) in patterns.iter().enumerate() {
@@ -470,7 +470,7 @@ fn match_input_url_patterns(
             }
         }
 
-        let mut evidence = detection_document_evidence(detect);
+        let mut evidence = detection_document_evidence(detection);
         evidence.push(SourceProposalEvidence {
             kind: DetectionEvidenceKind::Url,
             message: format!("Input URL matched detection pattern `{}`", pattern.pattern),

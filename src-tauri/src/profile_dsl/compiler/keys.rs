@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{PostingDetailStep, PostingDiscoveryStep};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::compiler_error;
@@ -29,8 +29,8 @@ pub(super) fn validate_reusable_access_path_keys(
     }
 }
 
-pub(super) fn validate_posting_discovery_strategy_keys(
-    step: &PostingDiscoveryStep,
+pub(super) fn validate_discovery_strategy_keys(
+    step: &DiscoveryStep,
     step_path: String,
     diagnostics: &mut Diagnostics,
 ) {
@@ -55,8 +55,8 @@ pub(super) fn validate_posting_discovery_strategy_keys(
     }
 }
 
-pub(super) fn validate_posting_detail_strategy_keys(
-    step: &PostingDetailStep,
+pub(super) fn validate_detail_strategy_keys(
+    step: &DetailStep,
     step_path: String,
     diagnostics: &mut Diagnostics,
 ) {

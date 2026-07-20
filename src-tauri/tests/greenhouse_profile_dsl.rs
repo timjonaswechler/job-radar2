@@ -1,12 +1,11 @@
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_posting_detail_with_fetcher,
-    execute_posting_discovery_with_fetcher, PostingDetailFetchError, PostingDetailFetchRequest,
-    PostingDetailFetchResponse, PostingDetailFetcher, PostingDetailPostingOccurrence,
-    PostingDiscoveryCandidate, PostingDiscoveryFetchError, PostingDiscoveryFetchRequest,
-    PostingDiscoveryFetchResponse, PostingDiscoveryFetcher, ProfileCompilerSnapshot,
-    SourceDocument, SourceProfileDocument,
+    compile_source_execution_plan, execute_detail_with_fetcher, execute_discovery_with_fetcher,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
+    DiscoveryFetchResponse, DiscoveryFetcher, ProfileCompilerSnapshot, SourceDocument,
+    SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -59,16 +58,16 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
         ),
     ]);
 
-    let discovery = block_on(execute_posting_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
     assert_eq!(discovery.diagnostics, Vec::new());
-    let expected_candidates: Vec<PostingDiscoveryCandidate> =
+    let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/greenhouse/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
     let first_candidate = discovery.candidates.first().unwrap();
-    let detail = block_on(execute_posting_detail_with_fetcher(
+    let detail = block_on(execute_detail_with_fetcher(
         &plan,
-        &PostingDetailPostingOccurrence {
+        &DetailPostingOccurrence {
             url: first_candidate.url.clone(),
             title: Some(first_candidate.title.clone()),
             company: Some(first_candidate.company.clone()),
@@ -131,16 +130,12 @@ impl OfflineFetcher {
     }
 }
 
-impl PostingDiscoveryFetcher for OfflineFetcher {
+impl DiscoveryFetcher for OfflineFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDiscoveryFetchRequest,
+        request: DiscoveryFetchRequest,
     ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDiscoveryFetchResponse, PostingDiscoveryFetchError>>
-                + Send
-                + 'a,
-        >,
+        Box<dyn Future<Output = Result<DiscoveryFetchResponse, DiscoveryFetchError>> + Send + 'a>,
     > {
         Box::pin(async move {
             self.requested_urls
@@ -148,39 +143,34 @@ impl PostingDiscoveryFetcher for OfflineFetcher {
                 .unwrap()
                 .push(request.url.clone());
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDiscoveryFetchError::new(format!(
+                DiscoveryFetchError::new(format!(
                     "missing offline discovery fixture for {}",
                     request.url
                 ))
             })?;
-            Ok(PostingDiscoveryFetchResponse { body })
+            Ok(DiscoveryFetchResponse { body })
         })
     }
 }
 
-impl PostingDetailFetcher for OfflineFetcher {
+impl DetailFetcher for OfflineFetcher {
     fn fetch<'a>(
         &'a self,
-        request: PostingDetailFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<PostingDetailFetchResponse, PostingDetailFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
+        request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
         Box::pin(async move {
             self.requested_urls
                 .lock()
                 .unwrap()
                 .push(request.url.clone());
             let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                PostingDetailFetchError::new(format!(
+                DetailFetchError::new(format!(
                     "missing offline detail fixture for {}",
                     request.url
                 ))
             })?;
-            Ok(PostingDetailFetchResponse { body })
+            Ok(DetailFetchResponse { body })
         })
     }
 }

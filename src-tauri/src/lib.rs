@@ -37,9 +37,10 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    AccessPathFragment, Fetch, FieldExpression, HttpMethod, PostingDetailStepFragment,
-    PostingDetailStrategyFragment, PostingDiscoveryStepFragment, PostingDiscoveryStrategyFragment,
-    RequestBody, Select, SupportLevel,
+    AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
+    DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
+    DetectionHttpCheck, DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch, FieldExpression,
+    HttpMethod, InputUrlPattern, RequestBody, Select, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -49,28 +50,25 @@ pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::policy::{
-    PolicyAccessPathFragment, PolicyExecutionPlanPostingDetailStep,
-    PolicyExecutionPlanPostingDiscoveryStep, PolicyPostingDetailStep,
-    PolicyPostingDetailStepFragment, PolicyPostingDiscoveryStep,
-    PolicyPostingDiscoveryStepFragment, PolicyReusableAccessPathDocument, PolicySelectedAccessPath,
-    PolicySourceDocument, PolicySourceExecutionPlan, PolicySourceProfileDocument,
-    PolicySourceProfileRegistrySnapshot, StrategyPolicy,
+    PolicyAccessPathFragment, PolicyDetailStep, PolicyDetailStepFragment, PolicyDiscoveryStep,
+    PolicyDiscoveryStepFragment, PolicyExecutionPlanDetailStep, PolicyExecutionPlanDiscoveryStep,
+    PolicyReusableAccessPathDocument, PolicySelectedAccessPath, PolicySourceDocument,
+    PolicySourceExecutionPlan, PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot,
+    StrategyPolicy,
 };
 pub use profile_dsl::runtime::{
-    execute_policy_posting_detail_with_clients_and_context,
-    execute_policy_posting_discovery_with_clients_and_context, execute_posting_detail,
-    execute_posting_detail_with_clients, execute_posting_detail_with_clients_and_context,
-    execute_posting_detail_with_fetcher, execute_posting_discovery,
-    execute_posting_discovery_with_clients, execute_posting_discovery_with_clients_and_context,
-    execute_posting_discovery_with_fetcher, ManagedProfileBrowserClient,
-    PostingDetailExecutionResult, PostingDetailFetchError, PostingDetailFetchRequest,
-    PostingDetailFetchResponse, PostingDetailFetcher, PostingDetailPostingOccurrence,
-    PostingDiscoveryCandidate, PostingDiscoveryExecutionBudget, PostingDiscoveryExecutionResult,
-    PostingDiscoveryFetchError, PostingDiscoveryFetchRequest, PostingDiscoveryFetchResponse,
-    PostingDiscoveryFetcher, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ReqwestPostingDetailFetcher, ReqwestPostingDiscoveryFetcher, RuntimeCancellation,
-    RuntimeExecutionContext, UnavailableProfileBrowserClient, RUNTIME_EXECUTION_CANCELLED_CODE,
+    execute_detail, execute_detail_with_clients, execute_detail_with_clients_and_context,
+    execute_detail_with_fetcher, execute_discovery, execute_discovery_with_clients,
+    execute_discovery_with_clients_and_context, execute_discovery_with_fetcher,
+    execute_policy_detail_with_clients_and_context,
+    execute_policy_discovery_with_clients_and_context, DetailExecutionResult, DetailFetchError,
+    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
+    DiscoveryCandidate, DiscoveryExecutionBudget, DiscoveryExecutionResult, DiscoveryFetchError,
+    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, ManagedProfileBrowserClient,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ReqwestDetailFetcher,
+    ReqwestDiscoveryFetcher, RuntimeCancellation, RuntimeExecutionContext,
+    UnavailableProfileBrowserClient, RUNTIME_EXECUTION_CANCELLED_CODE,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
@@ -175,7 +173,7 @@ pub fn run() {
             app::commands::cancel_background_task,
             app::commands::list_job_postings,
             app::commands::list_job_postings_for_queue,
-            app::commands::get_posting_detail,
+            app::commands::get_job_posting,
             app::commands::get_job_posting_queue_counts,
             app::commands::update_job_posting_state,
         ])
