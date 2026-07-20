@@ -4,13 +4,14 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
+    strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination: &ExecutionPlanPagination,
     base_path: &str,
     strategy_key: Option<&str>,
-    mut diagnostics: Diagnostics,
+    diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> DiscoveryExecutionResult
+) -> Result<Vec<DiscoveryCandidate>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -30,9 +31,8 @@ where
                 context.discovery_request_limit(configured_max_requests);
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
-                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
-                {
-                    break;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let page = first_page.unwrap_or(1) + request_index;
                 let mut pagination_params = vec![(page_param.as_str(), page.to_string())];
@@ -43,6 +43,7 @@ where
                     plan,
                     fetcher,
                     browser,
+                    strategy_index,
                     strategy,
                     &pagination_params,
                     *parameter_location,
@@ -50,19 +51,12 @@ where
                     None,
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                     context,
                 )
-                .await;
-                if contains_runtime_execution_cancelled(&diagnostics)
-                    || stop_pagination_if_cancelled(
-                        context,
-                        base_path,
-                        strategy_key,
-                        &mut diagnostics,
-                    )
-                {
-                    break;
+                .await?;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let page_candidates = page_output.candidates;
                 if page_candidates.is_empty() {
@@ -75,7 +69,7 @@ where
                     "page",
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                 ) {
                     break;
                 }
@@ -89,7 +83,7 @@ where
                 }
                 if request_index + 1 == max_requests {
                     push_request_limit_diagnostic(
-                        &mut diagnostics,
+                        diagnostics,
                         base_path,
                         strategy_key,
                         "page",
@@ -99,10 +93,7 @@ where
                     );
                 }
             }
-            DiscoveryExecutionResult {
-                candidates,
-                diagnostics,
-            }
+            Ok(candidates)
         }
         ExecutionPlanPagination::OffsetLimit {
             offset_param,
@@ -119,9 +110,8 @@ where
             let mut candidates = Vec::new();
             let mut highest_total_count = None;
             for request_index in 0..max_requests {
-                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
-                {
-                    break;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let offset = start_offset.unwrap_or(0) + request_index * limit;
                 let pagination_params = [
@@ -132,6 +122,7 @@ where
                     plan,
                     fetcher,
                     browser,
+                    strategy_index,
                     strategy,
                     &pagination_params,
                     *parameter_location,
@@ -139,19 +130,12 @@ where
                     None,
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                     context,
                 )
-                .await;
-                if contains_runtime_execution_cancelled(&diagnostics)
-                    || stop_pagination_if_cancelled(
-                        context,
-                        base_path,
-                        strategy_key,
-                        &mut diagnostics,
-                    )
-                {
-                    break;
+                .await?;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let page_candidates = page_output.candidates;
                 if page_candidates.is_empty() {
@@ -164,7 +148,7 @@ where
                     "offset_limit",
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                 ) {
                     break;
                 }
@@ -174,7 +158,7 @@ where
                 }
                 if request_index + 1 == max_requests {
                     push_request_limit_diagnostic(
-                        &mut diagnostics,
+                        diagnostics,
                         base_path,
                         strategy_key,
                         "offset_limit",
@@ -184,10 +168,7 @@ where
                     );
                 }
             }
-            DiscoveryExecutionResult {
-                candidates,
-                diagnostics,
-            }
+            Ok(candidates)
         }
         ExecutionPlanPagination::Cursor {
             cursor_param,
@@ -203,9 +184,8 @@ where
             let mut cursor = None::<String>;
 
             for request_index in 0..max_requests {
-                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
-                {
-                    break;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let pagination_params = cursor
                     .as_ref()
@@ -215,6 +195,7 @@ where
                     plan,
                     fetcher,
                     browser,
+                    strategy_index,
                     strategy,
                     &pagination_params,
                     *parameter_location,
@@ -222,19 +203,12 @@ where
                     Some(next_cursor_path.as_str()),
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                     context,
                 )
-                .await;
-                if contains_runtime_execution_cancelled(&diagnostics)
-                    || stop_pagination_if_cancelled(
-                        context,
-                        base_path,
-                        strategy_key,
-                        &mut diagnostics,
-                    )
-                {
-                    break;
+                .await?;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
 
                 if append_page_candidates(
@@ -244,7 +218,7 @@ where
                     "cursor",
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                 ) {
                     break;
                 }
@@ -264,7 +238,7 @@ where
                 }
                 if request_index + 1 == max_requests {
                     push_request_limit_diagnostic(
-                        &mut diagnostics,
+                        diagnostics,
                         base_path,
                         strategy_key,
                         "cursor",
@@ -277,10 +251,7 @@ where
                 cursor = Some(next_cursor);
             }
 
-            DiscoveryExecutionResult {
-                candidates,
-                diagnostics,
-            }
+            Ok(candidates)
         }
         ExecutionPlanPagination::Sitemap {
             child_sitemap_selector,
@@ -296,13 +267,12 @@ where
             let max_depth = limits.max_depth.unwrap_or(0);
 
             while let Some((url_override, depth)) = queue.pop_front() {
-                if stop_pagination_if_cancelled(context, base_path, strategy_key, &mut diagnostics)
-                {
-                    break;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 if request_count >= max_requests {
                     push_request_limit_diagnostic(
-                        &mut diagnostics,
+                        diagnostics,
                         base_path,
                         strategy_key,
                         "sitemap",
@@ -324,10 +294,11 @@ where
                             url,
                             base_path,
                             strategy_key,
-                            &mut diagnostics,
+                            strategy_index,
+                            diagnostics,
                             context,
                         )
-                        .await
+                        .await?
                     }
                     None => {
                         fetch_strategy_document_with_query_params(
@@ -340,21 +311,15 @@ where
                             &[],
                             base_path,
                             strategy_key,
-                            &mut diagnostics,
+                            strategy_index,
+                            diagnostics,
                             context,
                         )
-                        .await
+                        .await?
                     }
                 };
-                if contains_runtime_execution_cancelled(&diagnostics)
-                    || stop_pagination_if_cancelled(
-                        context,
-                        base_path,
-                        strategy_key,
-                        &mut diagnostics,
-                    )
-                {
-                    break;
+                if context.is_cancelled() {
+                    return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
                 let Some(response) = response else { break };
                 request_count += 1;
@@ -364,7 +329,7 @@ where
                     strategy,
                     base_path,
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                 ) {
                     Some(document) => document,
                     None => break,
@@ -375,7 +340,7 @@ where
                     posting_url_selector.as_ref(),
                     &format!("{base_path}/pagination/postingUrlSelector"),
                     strategy_key,
-                    &mut diagnostics,
+                    diagnostics,
                 ) {
                     let page_candidates = extract_candidates_from_items(
                         plan,
@@ -383,7 +348,7 @@ where
                         items,
                         base_path,
                         strategy_key,
-                        &mut diagnostics,
+                        diagnostics,
                     );
                     if append_page_candidates(
                         &mut candidates,
@@ -392,7 +357,7 @@ where
                         "sitemap",
                         base_path,
                         strategy_key,
-                        &mut diagnostics,
+                        diagnostics,
                     ) {
                         break;
                     }
@@ -404,7 +369,7 @@ where
                         child_sitemap_selector.as_ref(),
                         &format!("{base_path}/pagination/childSitemapSelector"),
                         strategy_key,
-                        &mut diagnostics,
+                        diagnostics,
                     ) {
                         let child_urls = text_items_to_urls(child_items);
                         if depth < max_depth {
@@ -424,10 +389,7 @@ where
                 }
             }
 
-            DiscoveryExecutionResult {
-                candidates,
-                diagnostics,
-            }
+            Ok(candidates)
         }
     }
 }
@@ -464,17 +426,13 @@ fn push_request_limit_diagnostic(
     }
 }
 
-fn stop_pagination_if_cancelled(
-    context: RuntimeExecutionContext<'_>,
-    base_path: &str,
-    strategy_key: Option<&str>,
-    diagnostics: &mut Diagnostics,
-) -> bool {
-    if !context.is_cancelled() {
-        return false;
-    }
-    push_runtime_execution_cancelled(diagnostics, format!("{base_path}/pagination"), strategy_key);
-    true
+fn pagination_cancellation(strategy_index: usize, strategy_key: Option<&str>) -> TypedCancellation {
+    TypedCancellation::strategy(
+        RuntimePhase::Discovery,
+        strategy_index,
+        strategy_key.expect("compiled strategy has a key"),
+        CancellationOperation::Pagination,
+    )
 }
 
 fn append_page_candidates(

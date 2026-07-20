@@ -21,7 +21,7 @@ fn discovery_cancellation_interrupts_an_active_http_fetch_without_fallback_failu
         let execute = async {
             tokio::time::timeout(
                 std::time::Duration::from_secs(1),
-                execute_discovery_with_clients_and_context(&plan, &fetcher, &browser, context),
+                execute_discovery(&plan, &fetcher, &browser, context),
             )
             .await
             .expect("cancellation should stop the active HTTP fetch promptly")
@@ -71,7 +71,7 @@ fn discovery_browser_cancellation_is_distinct_from_runtime_failure() {
         let execute = async {
             tokio::time::timeout(
                 std::time::Duration::from_secs(1),
-                execute_discovery_with_clients_and_context(&plan, &fetcher, &browser, context),
+                execute_discovery(&plan, &fetcher, &browser, context),
             )
             .await
             .expect("browser cancellation should be observed promptly at a safe point")
@@ -117,7 +117,7 @@ fn discovery_cancellation_stops_page_pagination_before_the_next_request() {
         };
         let browser = FakeBrowser::new([]);
 
-        let result = execute_discovery_with_clients_and_context(
+        let result = execute_discovery(
             &plan,
             &fetcher,
             &browser,

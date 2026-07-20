@@ -112,7 +112,7 @@ impl crate::profile_dsl::runtime::RuntimeCancellation for CancellationToken {
 }
 
 impl CancellationToken {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             cancelled: Arc::new(AtomicBool::new(false)),
         }

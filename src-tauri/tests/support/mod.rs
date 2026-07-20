@@ -1,7 +1,45 @@
 use job_radar_lib::{
-    compile_source, CompileSourceOutcome, RegistrySourceProfile, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailExecutionResult,
+    DetailFetcher, DetailPostingOccurrence, DiscoveryExecutionResult, DiscoveryFetcher,
+    RegistrySourceProfile, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
 };
+
+#[allow(dead_code)]
+pub async fn execute_discovery_test<F>(
+    plan: &SourceExecutionPlan,
+    fetcher: &F,
+) -> DiscoveryExecutionResult
+where
+    F: DiscoveryFetcher + Sync + ?Sized,
+{
+    execute_discovery(
+        plan,
+        fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    )
+    .await
+}
+
+#[allow(dead_code)]
+pub async fn execute_detail_test<F>(
+    plan: &SourceExecutionPlan,
+    posting: &DetailPostingOccurrence,
+    fetcher: &F,
+) -> DetailExecutionResult
+where
+    F: DetailFetcher + Sync + ?Sized,
+{
+    execute_detail(
+        plan,
+        posting,
+        fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    )
+    .await
+}
 
 pub fn compile_test_source(
     source: &SourceDocument,

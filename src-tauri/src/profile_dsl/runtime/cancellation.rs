@@ -2,11 +2,76 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::profile_dsl::diagnostics::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
-};
+use crate::profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 
-pub const RUNTIME_EXECUTION_CANCELLED_CODE: &str = "runtime_execution_cancelled";
+const RUNTIME_EXECUTION_CANCELLED_CODE: &str = "runtime_execution_cancelled";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RuntimePhase {
+    Discovery,
+    Detail,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CancellationOperation {
+    Phase,
+    Fetch,
+    Browser,
+    Pagination,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TypedCancellation {
+    phase: RuntimePhase,
+    strategy_index: Option<usize>,
+    strategy_key: Option<String>,
+    operation: CancellationOperation,
+}
+
+impl TypedCancellation {
+    pub(crate) fn phase(phase: RuntimePhase) -> Self {
+        Self {
+            phase,
+            strategy_index: None,
+            strategy_key: None,
+            operation: CancellationOperation::Phase,
+        }
+    }
+
+    pub(crate) fn strategy(
+        phase: RuntimePhase,
+        strategy_index: usize,
+        strategy_key: &str,
+        operation: CancellationOperation,
+    ) -> Self {
+        Self {
+            phase,
+            strategy_index: Some(strategy_index),
+            strategy_key: Some(strategy_key.to_string()),
+            operation,
+        }
+    }
+
+    fn path(&self) -> String {
+        let phase = match self.phase {
+            RuntimePhase::Discovery => "discovery",
+            RuntimePhase::Detail => "detail",
+        };
+        let Some(strategy_index) = self.strategy_index else {
+            return format!("/{phase}");
+        };
+        let suffix = match self.operation {
+            CancellationOperation::Phase => "",
+            CancellationOperation::Fetch | CancellationOperation::Browser => "/fetch",
+            CancellationOperation::Pagination => "/pagination",
+        };
+        format!("/{phase}/strategies/{strategy_index}{suffix}")
+    }
+
+    fn strategy_key(&self) -> Option<&str> {
+        self.strategy_key.as_deref()
+    }
+}
 
 /// Domain-owned cooperative cancellation signal for Profile DSL runtime work.
 pub trait RuntimeCancellation: Send + Sync {
@@ -88,32 +153,15 @@ impl<'a> RuntimeExecutionContext<'a> {
 }
 
 pub(crate) fn runtime_execution_cancelled_diagnostic(
-    path: impl Into<String>,
-    strategy_key: Option<&str>,
+    cancellation: &TypedCancellation,
 ) -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Runtime,
         code: RUNTIME_EXECUTION_CANCELLED_CODE.to_string(),
         message: "Profile DSL runtime execution cancelled".to_string(),
         severity: DiagnosticSeverity::Error,
-        path: path.into(),
-        strategy_key: strategy_key.map(ToString::to_string),
+        path: cancellation.path(),
+        strategy_key: cancellation.strategy_key().map(ToString::to_string),
         details: Some(json!({ "reason": "user_cancelled" })),
-    }
-}
-
-pub(crate) fn contains_runtime_execution_cancelled(diagnostics: &Diagnostics) -> bool {
-    diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == RUNTIME_EXECUTION_CANCELLED_CODE)
-}
-
-pub(crate) fn push_runtime_execution_cancelled(
-    diagnostics: &mut Diagnostics,
-    path: impl Into<String>,
-    strategy_key: Option<&str>,
-) {
-    if !contains_runtime_execution_cancelled(diagnostics) {
-        diagnostics.push(runtime_execution_cancelled_diagnostic(path, strategy_key));
     }
 }

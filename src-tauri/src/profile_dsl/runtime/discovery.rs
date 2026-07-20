@@ -24,7 +24,6 @@ use crate::{
             discovery::{ExecutionPlanDiscoveryFields, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
-        policy::StrategyPolicy,
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -33,11 +32,14 @@ use crate::{
 use super::{
     browser::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     },
     cancellation::{
-        contains_runtime_execution_cancelled, push_runtime_execution_cancelled,
-        RuntimeExecutionContext,
+        runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
+        RuntimePhase, TypedCancellation,
+    },
+    strategy_set::{
+        execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
     transform::{apply_transform_pipeline, normalize_whitespace},
 };
@@ -189,210 +191,132 @@ impl DiscoveryFetcher for ReqwestDiscoveryFetcher {
     }
 }
 
-pub async fn execute_discovery(plan: &SourceExecutionPlan) -> DiscoveryExecutionResult {
-    execute_discovery_with_fetcher(plan, &ReqwestDiscoveryFetcher::new()).await
-}
-
-pub async fn execute_discovery_with_fetcher<F>(
-    plan: &SourceExecutionPlan,
-    fetcher: &F,
-) -> DiscoveryExecutionResult
-where
-    F: DiscoveryFetcher + Sync + ?Sized,
-{
-    execute_discovery_with_clients(plan, fetcher, &UnavailableProfileBrowserClient).await
-}
-
-pub async fn execute_discovery_with_clients<F, B>(
+pub async fn execute_discovery<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
+    context: RuntimeExecutionContext<'_>,
 ) -> DiscoveryExecutionResult
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    execute_discovery_with_clients_and_context(
-        plan,
-        fetcher,
-        browser,
-        RuntimeExecutionContext::uncancellable(),
+    if context.is_cancelled() {
+        return cancelled_discovery_result(TypedCancellation::phase(RuntimePhase::Discovery));
+    }
+
+    if plan.discovery.strategies.is_empty() {
+        return DiscoveryExecutionResult {
+            candidates: Vec::new(),
+            diagnostics: vec![runtime_error(
+                "discovery_strategy_missing",
+                "discovery does not contain an executable strategy",
+                "/discovery/strategies",
+                None,
+                json!({}),
+            )],
+        };
+    }
+
+    let execution = execute_first_accepted(
+        &plan.discovery.strategies,
+        |strategy| strategy.key.as_str(),
+        |strategy_index, strategy| {
+            context.is_cancelled().then(|| {
+                TypedCancellation::strategy(
+                    RuntimePhase::Discovery,
+                    strategy_index,
+                    &strategy.key,
+                    CancellationOperation::Phase,
+                )
+            })
+        },
+        |strategy_index, strategy| {
+            Box::pin(async move {
+                let mut execution = execute_strategy(
+                    plan,
+                    fetcher,
+                    browser,
+                    strategy_index,
+                    strategy,
+                    plan.discovery.accept_when.as_ref(),
+                    context,
+                )
+                .await;
+                if context.is_cancelled()
+                    && !matches!(
+                        execution.completion,
+                        StrategyAttemptCompletion::Cancelled(_)
+                    )
+                {
+                    execution.completion =
+                        StrategyAttemptCompletion::Cancelled(TypedCancellation::strategy(
+                            RuntimePhase::Discovery,
+                            strategy_index,
+                            &strategy.key,
+                            CancellationOperation::Phase,
+                        ));
+                }
+                execution
+            })
+        },
     )
-    .await
+    .await;
+    project_discovery_execution(execution)
 }
 
-pub async fn execute_discovery_with_clients_and_context<F, B>(
-    plan: &SourceExecutionPlan,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DiscoveryExecutionResult
-where
-    F: DiscoveryFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    if context.is_cancelled() {
-        return cancelled_discovery_result("/discovery", None);
-    }
-
-    if plan.discovery.strategies.is_empty() {
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            diagnostics: vec![runtime_error(
-                "discovery_strategy_missing",
-                "discovery does not contain an executable strategy",
-                "/discovery/strategies",
-                None,
-                json!({}),
-            )],
-        };
-    }
-
-    let mut diagnostics = Vec::new();
-    for (strategy_index, strategy) in plan.discovery.strategies.iter().enumerate() {
-        let attempt = execute_strategy(
-            plan,
-            fetcher,
-            browser,
-            strategy_index,
-            strategy,
-            plan.discovery.accept_when.as_ref(),
-            context,
-        )
-        .await;
-        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
-            || context.is_cancelled()
-        {
-            diagnostics.extend(attempt.result.diagnostics);
-            push_runtime_execution_cancelled(
-                &mut diagnostics,
-                format!("/discovery/strategies/{strategy_index}"),
-                Some(&strategy.key),
-            );
+fn project_discovery_execution(
+    execution: super::strategy_set::StrategySetExecution<Vec<DiscoveryCandidate>>,
+) -> DiscoveryExecutionResult {
+    let accepted_attempt = match execution.terminal {
+        StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
+        StrategySetTerminal::Cancelled(cancellation) => {
+            let mut diagnostics = execution
+                .attempts
+                .into_iter()
+                .flat_map(|attempt| attempt.diagnostics)
+                .collect::<Diagnostics>();
+            diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
             return DiscoveryExecutionResult {
                 candidates: Vec::new(),
                 diagnostics,
             };
         }
-        if attempt.accepted {
-            diagnostics.extend(attempt.result.diagnostics);
-            return DiscoveryExecutionResult {
-                candidates: attempt.result.candidates,
-                diagnostics,
-            };
-        }
-        diagnostics.extend(attempt.result.diagnostics);
-    }
-
-    diagnostics.push(runtime_error(
-        "fallback_exhausted",
-        "discovery fallback strategies were exhausted without an accepted result",
-        "/discovery/strategies",
-        None,
-        json!({}),
-    ));
-    DiscoveryExecutionResult {
-        candidates: Vec::new(),
-        diagnostics,
-    }
-}
-
-pub async fn execute_policy_discovery_with_clients_and_context<F, B>(
-    plan: &SourceExecutionPlan,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DiscoveryExecutionResult
-where
-    F: DiscoveryFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    match plan.discovery.policy {
-        StrategyPolicy::FirstAccepted => {
-            execute_policy_first_accepted(plan, fetcher, browser, context).await
-        }
-    }
-}
-
-async fn execute_policy_first_accepted<F, B>(
-    plan: &SourceExecutionPlan,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DiscoveryExecutionResult
-where
-    F: DiscoveryFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    if context.is_cancelled() {
-        return cancelled_discovery_result("/discovery", None);
-    }
-    if plan.discovery.strategies.is_empty() {
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            diagnostics: vec![runtime_error(
-                "discovery_strategy_missing",
-                "discovery does not contain an executable strategy",
-                "/discovery/strategies",
-                None,
-                json!({}),
-            )],
-        };
-    }
+        StrategySetTerminal::Exhausted => None,
+    };
 
     let mut diagnostics = Vec::new();
-    for (strategy_index, strategy) in plan.discovery.strategies.iter().enumerate() {
-        let attempt = execute_strategy(
-            &plan,
-            fetcher,
-            browser,
-            strategy_index,
-            strategy,
-            plan.discovery.accept_when.as_ref(),
-            context,
-        )
-        .await;
-        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
-            || context.is_cancelled()
-        {
-            diagnostics.extend(attempt.result.diagnostics);
-            push_runtime_execution_cancelled(
-                &mut diagnostics,
-                format!("/discovery/strategies/{strategy_index}"),
-                Some(&strategy.key),
-            );
-            return DiscoveryExecutionResult {
-                candidates: Vec::new(),
-                diagnostics,
+    let mut candidates = Vec::new();
+    for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
+        debug_assert_eq!(attempt.strategy_index, attempt_index);
+        debug_assert!(!attempt.strategy_key.is_empty());
+        diagnostics.extend(attempt.diagnostics);
+        if Some(attempt_index) == accepted_attempt {
+            let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
+                unreachable!("accepted terminal must reference accepted typed output");
             };
-        }
-        diagnostics.extend(attempt.result.diagnostics);
-        if attempt.accepted {
-            return DiscoveryExecutionResult {
-                candidates: attempt.result.candidates,
-                diagnostics,
-            };
+            candidates = output;
         }
     }
 
-    diagnostics.push(runtime_error(
-        "fallback_exhausted",
-        "discovery fallback strategies were exhausted without an accepted result",
-        "/discovery/strategies",
-        None,
-        json!({}),
-    ));
+    if accepted_attempt.is_none() {
+        diagnostics.push(runtime_error(
+            "fallback_exhausted",
+            "discovery fallback strategies were exhausted without an accepted result",
+            "/discovery/strategies",
+            None,
+            json!({}),
+        ));
+    }
     DiscoveryExecutionResult {
-        candidates: Vec::new(),
+        candidates,
         diagnostics,
     }
 }
 
-fn cancelled_discovery_result(path: &str, strategy_key: Option<&str>) -> DiscoveryExecutionResult {
-    let mut diagnostics = Vec::new();
-    push_runtime_execution_cancelled(&mut diagnostics, path, strategy_key);
+fn cancelled_discovery_result(cancellation: TypedCancellation) -> DiscoveryExecutionResult {
     DiscoveryExecutionResult {
         candidates: Vec::new(),
-        diagnostics,
+        diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
     }
 }

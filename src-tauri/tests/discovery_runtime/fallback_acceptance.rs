@@ -58,7 +58,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.candidates[0].title, "Fallback Engineer");
@@ -144,7 +144,7 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.candidates[0].title, "Fallback Engineer");
@@ -196,7 +196,7 @@ fn compiled_discovery_runtime_combines_step_and_strategy_acceptance() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_eq!(result.diagnostics.len(), 2);
@@ -288,7 +288,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.candidates[0].title, "Platform Engineer");
@@ -343,7 +343,7 @@ fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_eq!(

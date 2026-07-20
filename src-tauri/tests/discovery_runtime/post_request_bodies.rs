@@ -44,7 +44,7 @@ fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -107,7 +107,7 @@ fn compiled_discovery_runtime_posts_rendered_text_body() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -177,7 +177,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     let plan = unwrap_plan(compile_result);
     let fetcher = FakeFetcher::default();
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_body_template_failed");
@@ -214,7 +214,7 @@ fn compiled_discovery_runtime_reports_get_body_combination() {
     );
     let fetcher = FakeFetcher::default();
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "unsupported_http_body_for_method");
@@ -267,7 +267,7 @@ fn compiled_discovery_runtime_posts_rendered_form_body() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(

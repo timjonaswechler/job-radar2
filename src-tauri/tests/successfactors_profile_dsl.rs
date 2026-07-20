@@ -1,15 +1,14 @@
 mod support;
 
-use support::{compile_test_source, unwrap_plan};
+use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    execute_detail_with_fetcher, execute_discovery_with_fetcher, DetailFetchError,
-    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
-    DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, SourceDocument,
-    SourceProfileDocument, SupportLevel,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate,
+    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
+    SourceDocument, SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -64,14 +63,14 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
     let primary_candidate = &discovery.candidates[0];
-    let primary_detail = block_on(execute_detail_with_fetcher(
+    let primary_detail = block_on(execute_detail_test(
         &plan,
         &posting_occurrence(primary_candidate),
         &fetcher,
@@ -85,7 +84,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let fallback_candidate = &discovery.candidates[1];
-    let fallback_detail = block_on(execute_detail_with_fetcher(
+    let fallback_detail = block_on(execute_detail_test(
         &plan,
         &posting_occurrence(fallback_candidate),
         &fetcher,
@@ -112,7 +111,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let schott_style_candidate = &discovery.candidates[3];
-    let schott_style_detail = block_on(execute_detail_with_fetcher(
+    let schott_style_detail = block_on(execute_detail_test(
         &plan,
         &posting_occurrence(schott_style_candidate),
         &fetcher,

@@ -1,10 +1,5 @@
 use super::*;
 
-pub(super) struct DetailStrategyAttempt {
-    pub(super) result: DetailExecutionResult,
-    pub(super) accepted: bool,
-}
-
 pub(super) async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
@@ -14,7 +9,7 @@ pub(super) async fn execute_strategy<F, B>(
     strategy: &ExecutionPlanDetailStrategy,
     step_acceptance: Option<&Acceptance>,
     context: RuntimeExecutionContext<'_>,
-) -> DetailStrategyAttempt
+) -> StrategyExecution<String>
 where
     F: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -46,13 +41,20 @@ where
         &captures,
         &base_path,
         strategy_key.as_deref(),
+        strategy_index,
         &mut diagnostics,
         context,
     )
     .await
     {
-        Some(response) => response,
-        None => return rejected_detail_attempt(diagnostics),
+        Ok(Some(response)) => response,
+        Ok(None) => return rejected_detail_attempt(diagnostics),
+        Err(cancellation) => {
+            return StrategyExecution {
+                diagnostics,
+                completion: StrategyAttemptCompletion::Cancelled(cancellation),
+            };
+        }
     };
 
     let document = match parse_response_document(
@@ -152,12 +154,13 @@ where
         strategy_key.as_deref(),
         &mut diagnostics,
     );
-    DetailStrategyAttempt {
-        result: DetailExecutionResult {
-            description_text: accepted.then_some(description),
-            diagnostics,
+    StrategyExecution {
+        diagnostics,
+        completion: if accepted {
+            StrategyAttemptCompletion::Accepted(description)
+        } else {
+            StrategyAttemptCompletion::Rejected
         },
-        accepted,
     }
 }
 
@@ -485,12 +488,9 @@ fn missing_posting_meta_key<'a>(
     }
 }
 
-pub(super) fn rejected_detail_attempt(diagnostics: Diagnostics) -> DetailStrategyAttempt {
-    DetailStrategyAttempt {
-        result: DetailExecutionResult {
-            description_text: None,
-            diagnostics,
-        },
-        accepted: false,
+pub(super) fn rejected_detail_attempt(diagnostics: Diagnostics) -> StrategyExecution<String> {
+    StrategyExecution {
+        diagnostics,
+        completion: StrategyAttemptCompletion::Failed,
     }
 }

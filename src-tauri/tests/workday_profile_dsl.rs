@@ -1,15 +1,14 @@
 mod support;
 
-use support::{compile_test_source, unwrap_plan};
+use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    detect_source_proposal, execute_detail_with_fetcher, execute_discovery_with_fetcher,
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
-    DiscoveryFetchResponse, DiscoveryFetcher, HttpMethod, RequestBody, SourceDocument,
-    SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, DetailFetchError, DetailFetchRequest, DetailFetchResponse,
+    DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError,
+    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, HttpMethod, RequestBody,
+    SourceDocument, SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -71,7 +70,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         ],
     );
 
-    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/workday/posting-discovery-expected-candidates.json");
@@ -111,7 +110,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     );
 
     let first_candidate = discovery.candidates.first().unwrap();
-    let detail = block_on(execute_detail_with_fetcher(
+    let detail = block_on(execute_detail_test(
         &plan,
         &DetailPostingOccurrence {
             url: first_candidate.url.clone(),
@@ -199,7 +198,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(discovery.candidates.len(), 4);
     assert_eq!(fetcher.requests().len(), 2);

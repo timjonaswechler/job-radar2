@@ -32,7 +32,7 @@ Engineer </title>
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -71,7 +71,7 @@ Engineer </h2>
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -110,7 +110,12 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_clients(&plan, &fetcher, &browser));
+    let result = block_on(execute_discovery(
+        &plan,
+        &fetcher,
+        &browser,
+        RuntimeExecutionContext::uncancellable(),
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -167,7 +172,12 @@ fn compiled_discovery_runtime_reports_browser_fetch_diagnostics() {
         "selector .posting did not appear",
     ));
 
-    let result = block_on(execute_discovery_with_clients(&plan, &fetcher, &browser));
+    let result = block_on(execute_discovery(
+        &plan,
+        &fetcher,
+        &browser,
+        RuntimeExecutionContext::uncancellable(),
+    ));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "browser_wait_timeout");
@@ -185,7 +195,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
         default_xml_fields(),
         "https://example.test/jobs.xml",
     );
-    let xml_parse_failure = block_on(execute_discovery_with_fetcher(
+    let xml_parse_failure = block_on(execute_discovery_test(
         &xml_plan,
         &FakeFetcher::new([("https://example.test/jobs.xml", "<jobs><job>".to_string())]),
     ));
@@ -201,7 +211,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
         default_html_fields(),
         "https://example.test/jobs.html",
     );
-    let html_select_failure = block_on(execute_discovery_with_fetcher(
+    let html_select_failure = block_on(execute_discovery_test(
         &html_select_plan,
         &FakeFetcher::new([(
             "https://example.test/jobs.html",
@@ -222,7 +232,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
         html_fields,
         "https://example.test/jobs.html",
     );
-    let html_extract_failure = block_on(execute_discovery_with_fetcher(
+    let html_extract_failure = block_on(execute_discovery_test(
         &html_extract_plan,
         &FakeFetcher::new([(
             "https://example.test/jobs.html",

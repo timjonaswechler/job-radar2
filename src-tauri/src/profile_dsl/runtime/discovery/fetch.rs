@@ -9,9 +9,10 @@ pub(super) async fn fetch_strategy_document<F, B>(
     source_name: &str,
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -26,6 +27,7 @@ where
         &[],
         base_path,
         strategy_key,
+        strategy_index,
         diagnostics,
         context,
     )
@@ -42,9 +44,10 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -60,6 +63,7 @@ where
         json_body_params,
         base_path,
         strategy_key,
+        strategy_index,
         diagnostics,
         context,
     )
@@ -75,9 +79,10 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     url_override: &str,
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -93,6 +98,7 @@ where
         &[],
         base_path,
         strategy_key,
+        strategy_index,
         diagnostics,
         context,
     )
@@ -110,9 +116,10 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -140,6 +147,7 @@ where
                 json_body_params,
                 base_path,
                 strategy_key,
+                strategy_index,
                 diagnostics,
                 context,
             )
@@ -163,6 +171,7 @@ where
                 query_params,
                 base_path,
                 strategy_key,
+                strategy_index,
                 diagnostics,
                 context,
             )
@@ -185,9 +194,10 @@ async fn fetch_http_strategy_document<F>(
     json_body_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
 {
@@ -200,7 +210,7 @@ where
             strategy_key,
             json!({ "method": "GET" }),
         ));
-        return None;
+        return Ok(None);
     }
 
     let rendered_url =
@@ -214,7 +224,7 @@ where
                     strategy_key,
                     json!({ "template": url }),
                 ));
-                return None;
+                return Ok(None);
             }
         };
 
@@ -228,7 +238,7 @@ where
                 strategy_key,
                 json!({}),
             ));
-            return None;
+            return Ok(None);
         }
     };
 
@@ -243,7 +253,7 @@ where
                     strategy_key,
                     json!({}),
                 ));
-                return None;
+                return Ok(None);
             }
         };
 
@@ -256,8 +266,12 @@ where
     };
 
     if context.is_cancelled() {
-        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
-        return None;
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Discovery,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Fetch,
+        ));
     }
 
     let result = tokio::select! {
@@ -265,12 +279,16 @@ where
         _ = context.cancelled() => None,
     };
     let Some(result) = result else {
-        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
-        return None;
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Discovery,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Fetch,
+        ));
     };
 
     match result {
-        Ok(response) => Some(response),
+        Ok(response) => Ok(Some(response)),
         Err(error) => {
             diagnostics.push(runtime_error(
                 "fetch_failed",
@@ -283,7 +301,7 @@ where
                 strategy_key,
                 json!({ "url": rendered_url, "error": error.message }),
             ));
-            None
+            Ok(None)
         }
     }
 }
@@ -300,9 +318,10 @@ async fn fetch_browser_strategy_document<B>(
     query_params: &[(&str, String)],
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Option<DiscoveryFetchResponse>
+) -> Result<Option<DiscoveryFetchResponse>, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -317,7 +336,7 @@ where
                     strategy_key,
                     json!({ "template": url }),
                 ));
-                return None;
+                return Ok(None);
             }
         };
 
@@ -329,7 +348,15 @@ where
     };
 
     match browser.render_with_context(request, context).await {
-        Ok(ProfileBrowserFetchResponse { body }) => Some(DiscoveryFetchResponse { body }),
+        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(DiscoveryFetchResponse { body })),
+        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
+            Err(TypedCancellation::strategy(
+                RuntimePhase::Discovery,
+                strategy_index,
+                strategy_key.expect("compiled strategy has a key"),
+                CancellationOperation::Browser,
+            ))
+        }
         Err(error) => {
             push_browser_fetch_diagnostic(
                 error,
@@ -338,7 +365,7 @@ where
                 strategy_key,
                 diagnostics,
             );
-            None
+            Ok(None)
         }
     }
 }

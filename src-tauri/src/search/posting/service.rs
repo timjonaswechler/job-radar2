@@ -6,9 +6,8 @@ use crate::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_policy_detail_with_clients_and_context, DetailFetcher, DetailPostingOccurrence,
-            ManagedProfileBrowserClient, ProfileBrowserClient, ReqwestDetailFetcher,
-            RuntimeExecutionContext,
+            execute_detail, DetailFetcher, DetailPostingOccurrence, ManagedProfileBrowserClient,
+            ProfileBrowserClient, ReqwestDetailFetcher, RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -241,7 +240,7 @@ impl<'a> JobPostingService<'a> {
             }
 
             attempted_detail_capable_source = true;
-            let result = execute_policy_detail_with_clients_and_context(
+            let result = execute_detail(
                 &execution_plan,
                 &posting_occurrence(&posting, &posting_source),
                 fetcher,

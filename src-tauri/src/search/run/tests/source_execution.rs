@@ -1,6 +1,81 @@
 use super::support::*;
 
 #[test]
+fn pre_phase_cancellation_emits_only_the_source_diagnostic() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys =
+            write_test_sources(temp_dir.path(), &[("cancel_source", "Cancel Source")]);
+        let request =
+            create_test_search_request(&pool, source_keys, vec![text_rule("laser")], vec![]).await;
+        let cancellation = CancellationToken::new();
+        let executor =
+            CancellingRuntimeDiscoveryExecutor::new(RuntimeCancellationTiming::BeforePhase);
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run_with_cancellation(request.id, Some(&cancellation))
+        .await
+        .unwrap();
+
+        assert_eq!(result.source_runs[0].status, SourceRunStatus::Cancelled);
+        assert_eq!(
+            result.source_runs[0]
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec!["source_execution_cancelled"]
+        );
+    });
+}
+
+#[test]
+fn active_phase_cancellation_emits_runtime_then_source_diagnostics() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys =
+            write_test_sources(temp_dir.path(), &[("cancel_source", "Cancel Source")]);
+        let request =
+            create_test_search_request(&pool, source_keys, vec![text_rule("laser")], vec![]).await;
+        let cancellation = CancellationToken::new();
+        let executor =
+            CancellingRuntimeDiscoveryExecutor::new(RuntimeCancellationTiming::DuringFetch);
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run_with_cancellation(request.id, Some(&cancellation))
+        .await
+        .unwrap();
+
+        assert_eq!(result.source_runs[0].status, SourceRunStatus::Cancelled);
+        assert_eq!(result.source_runs[0].candidate_count, 0);
+        assert_eq!(
+            result.source_runs[0]
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec!["runtime_execution_cancelled", "source_execution_cancelled"]
+        );
+    });
+}
+
+#[test]
 fn active_valid_source_compiles_and_executes_discovery_plan_through_runtime() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

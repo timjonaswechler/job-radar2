@@ -40,7 +40,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     assert_eq!(result.candidates[0].title, "Rust Engineer");
@@ -84,7 +84,7 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
@@ -145,7 +145,7 @@ fn compiled_discovery_runtime_stops_page_pagination_when_total_path_is_exhausted
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 2);
@@ -180,7 +180,7 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     assert_eq!(result.candidates[0].title, "Rust Engineer");
@@ -227,7 +227,7 @@ fn compiled_discovery_runtime_stops_offset_limit_pagination_when_total_path_is_e
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 2);
@@ -265,7 +265,7 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -319,7 +319,7 @@ fn compiled_discovery_runtime_follows_child_sitemaps_within_max_depth() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -366,7 +366,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_depth_limit() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_eq!(fetcher.requests().len(), 1);
@@ -409,7 +409,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_eq!(fetcher.requests().len(), 1);
@@ -466,7 +466,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     assert_eq!(result.candidates[0].title, "Rust Engineer");
@@ -532,11 +532,8 @@ fn compiled_discovery_runtime_stops_cursor_pagination_when_next_cursor_is_missin
         .to_string(),
     )]);
 
-    let missing_result = block_on(execute_discovery_with_fetcher(
-        &plan,
-        &missing_cursor_fetcher,
-    ));
-    let empty_result = block_on(execute_discovery_with_fetcher(&plan, &empty_cursor_fetcher));
+    let missing_result = block_on(execute_discovery_test(&plan, &missing_cursor_fetcher));
+    let empty_result = block_on(execute_discovery_test(&plan, &empty_cursor_fetcher));
 
     assert_eq!(missing_result.diagnostics, Vec::new());
     assert_eq!(missing_result.candidates.len(), 1);
@@ -586,7 +583,7 @@ fn compiled_discovery_runtime_reports_duplicate_cursor_loop() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     assert_eq!(fetcher.requests().len(), 2);
@@ -633,7 +630,7 @@ fn compiled_discovery_runtime_reports_cursor_max_items_limit() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.candidates[0].title, "Rust Engineer");
@@ -692,7 +689,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
         ),
     ]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     assert_eq!(result.candidates[0].title, "Rust Engineer");
@@ -765,7 +762,7 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
     let requests = fetcher.requests();

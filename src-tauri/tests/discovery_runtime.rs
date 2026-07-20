@@ -1,12 +1,11 @@
 mod support;
 
-use support::{compile_test_source, unwrap_plan};
+use support::{compile_test_source, execute_discovery_test, unwrap_plan};
 
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    execute_discovery_with_clients, execute_discovery_with_clients_and_context,
-    execute_discovery_with_fetcher, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
+    execute_discovery, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
     DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
     ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,

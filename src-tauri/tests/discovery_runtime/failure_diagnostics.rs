@@ -3,10 +3,10 @@ use super::*;
 #[test]
 fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetch_failure = block_on(execute_discovery_with_fetcher(&plan, &FakeFetcher::new([])));
+    let fetch_failure = block_on(execute_discovery_test(&plan, &FakeFetcher::new([])));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
-    let parse_failure = block_on(execute_discovery_with_fetcher(
+    let parse_failure = block_on(execute_discovery_test(
         &plan,
         &FakeFetcher::new([("https://example.test/jobs.json", "{not-json".to_string())]),
     ));
@@ -16,7 +16,7 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
         default_fields(),
         json!({ "type": "json_path", "jsonPath": "$.jobs[*]" }),
     );
-    let select_failure = block_on(execute_discovery_with_fetcher(
+    let select_failure = block_on(execute_discovery_test(
         &select_plan,
         &FakeFetcher::new([(
             "https://example.test/jobs.json",
@@ -29,7 +29,7 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     fields["title"] =
         json!({ "type": "json_path", "jsonPath": "$.title[*]", "cardinality": "one" });
     let extract_plan = compiled_json_discovery_plan(fields, default_select());
-    let extract_failure = block_on(execute_discovery_with_fetcher(
+    let extract_failure = block_on(execute_discovery_test(
         &extract_plan,
         &FakeFetcher::new([(
             "https://example.test/jobs.json",

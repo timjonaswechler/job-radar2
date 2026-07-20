@@ -19,7 +19,6 @@ use crate::{
             capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
         },
-        policy::StrategyPolicy,
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -28,11 +27,14 @@ use crate::{
 use super::{
     browser::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, UnavailableProfileBrowserClient,
+        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     },
     cancellation::{
-        contains_runtime_execution_cancelled, push_runtime_execution_cancelled,
-        RuntimeExecutionContext,
+        runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
+        RuntimePhase, TypedCancellation,
+    },
+    strategy_set::{
+        execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
     transform::{apply_transform_pipeline, normalize_whitespace},
 };
@@ -182,250 +184,147 @@ impl DetailFetcher for ReqwestDetailFetcher {
     }
 }
 
-pub async fn execute_detail(
-    plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
-) -> DetailExecutionResult {
-    execute_detail_with_fetcher(plan, posting, &ReqwestDetailFetcher::new()).await
-}
-
-pub async fn execute_detail_with_fetcher<F>(
-    plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
-    fetcher: &F,
-) -> DetailExecutionResult
-where
-    F: DetailFetcher + Sync + ?Sized,
-{
-    execute_detail_with_clients(plan, posting, fetcher, &UnavailableProfileBrowserClient).await
-}
-
-pub async fn execute_detail_with_clients<F, B>(
+pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
     fetcher: &F,
     browser: &B,
+    context: RuntimeExecutionContext<'_>,
 ) -> DetailExecutionResult
 where
     F: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    execute_detail_with_clients_and_context(
-        plan,
-        posting,
-        fetcher,
-        browser,
-        RuntimeExecutionContext::uncancellable(),
+    if context.is_cancelled() {
+        return cancelled_detail_result(TypedCancellation::phase(RuntimePhase::Detail));
+    }
+
+    let Some(detail) = &plan.detail else {
+        return DetailExecutionResult {
+            description_text: None,
+            diagnostics: vec![runtime_error(
+                "detail_missing",
+                "Execution Plan does not contain compiled detail",
+                "/detail",
+                None,
+                json!({}),
+            )],
+        };
+    };
+
+    if detail.strategies.is_empty() {
+        return DetailExecutionResult {
+            description_text: None,
+            diagnostics: vec![runtime_error(
+                "detail_strategy_missing",
+                "detail does not contain an executable strategy",
+                "/detail/strategies",
+                None,
+                json!({}),
+            )],
+        };
+    }
+
+    let execution = execute_first_accepted(
+        &detail.strategies,
+        |strategy| strategy.key.as_str(),
+        |strategy_index, strategy| {
+            context.is_cancelled().then(|| {
+                TypedCancellation::strategy(
+                    RuntimePhase::Detail,
+                    strategy_index,
+                    &strategy.key,
+                    CancellationOperation::Phase,
+                )
+            })
+        },
+        |strategy_index, strategy| {
+            Box::pin(async move {
+                let mut execution = execute_strategy(
+                    plan,
+                    posting,
+                    fetcher,
+                    browser,
+                    strategy_index,
+                    strategy,
+                    detail.accept_when.as_ref(),
+                    context,
+                )
+                .await;
+                if context.is_cancelled()
+                    && !matches!(
+                        execution.completion,
+                        StrategyAttemptCompletion::Cancelled(_)
+                    )
+                {
+                    execution.completion =
+                        StrategyAttemptCompletion::Cancelled(TypedCancellation::strategy(
+                            RuntimePhase::Detail,
+                            strategy_index,
+                            &strategy.key,
+                            CancellationOperation::Phase,
+                        ));
+                }
+                execution
+            })
+        },
     )
-    .await
+    .await;
+    project_detail_execution(execution)
 }
 
-pub async fn execute_detail_with_clients_and_context<F, B>(
-    plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DetailExecutionResult
-where
-    F: DetailFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    if context.is_cancelled() {
-        return cancelled_detail_result("/detail", None);
-    }
-
-    let Some(detail) = &plan.detail else {
-        return DetailExecutionResult {
-            description_text: None,
-            diagnostics: vec![runtime_error(
-                "detail_missing",
-                "Execution Plan does not contain compiled detail",
-                "/detail",
-                None,
-                json!({}),
-            )],
-        };
-    };
-
-    if detail.strategies.is_empty() {
-        return DetailExecutionResult {
-            description_text: None,
-            diagnostics: vec![runtime_error(
-                "detail_strategy_missing",
-                "detail does not contain an executable strategy",
-                "/detail/strategies",
-                None,
-                json!({}),
-            )],
-        };
-    }
-
-    let mut diagnostics = Vec::new();
-    for (strategy_index, strategy) in detail.strategies.iter().enumerate() {
-        let attempt = execute_strategy(
-            plan,
-            posting,
-            fetcher,
-            browser,
-            strategy_index,
-            strategy,
-            detail.accept_when.as_ref(),
-            context,
-        )
-        .await;
-        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
-            || context.is_cancelled()
-        {
-            diagnostics.extend(attempt.result.diagnostics);
-            push_runtime_execution_cancelled(
-                &mut diagnostics,
-                format!("/detail/strategies/{strategy_index}"),
-                Some(&strategy.key),
-            );
+fn project_detail_execution(
+    execution: super::strategy_set::StrategySetExecution<String>,
+) -> DetailExecutionResult {
+    let accepted_attempt = match execution.terminal {
+        StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
+        StrategySetTerminal::Cancelled(cancellation) => {
+            let mut diagnostics = execution
+                .attempts
+                .into_iter()
+                .flat_map(|attempt| attempt.diagnostics)
+                .collect::<Diagnostics>();
+            diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
             return DetailExecutionResult {
                 description_text: None,
                 diagnostics,
             };
         }
-        if attempt.accepted {
-            diagnostics.extend(attempt.result.diagnostics);
-            return DetailExecutionResult {
-                description_text: attempt.result.description_text,
-                diagnostics,
-            };
-        }
-        diagnostics.extend(attempt.result.diagnostics);
-    }
-
-    diagnostics.push(runtime_error(
-        "fallback_exhausted",
-        "detail fallback strategies were exhausted without an accepted result",
-        "/detail/strategies",
-        None,
-        json!({}),
-    ));
-    DetailExecutionResult {
-        description_text: None,
-        diagnostics,
-    }
-}
-
-pub async fn execute_policy_detail_with_clients_and_context<F, B>(
-    plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DetailExecutionResult
-where
-    F: DetailFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    let Some(detail) = &plan.detail else {
-        return DetailExecutionResult {
-            description_text: None,
-            diagnostics: vec![runtime_error(
-                "detail_missing",
-                "Execution Plan does not contain compiled detail",
-                "/detail",
-                None,
-                json!({}),
-            )],
-        };
+        StrategySetTerminal::Exhausted => None,
     };
-    match detail.policy {
-        StrategyPolicy::FirstAccepted => {
-            execute_policy_first_accepted(plan, posting, fetcher, browser, context).await
-        }
-    }
-}
-
-async fn execute_policy_first_accepted<F, B>(
-    plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> DetailExecutionResult
-where
-    F: DetailFetcher + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    if context.is_cancelled() {
-        return cancelled_detail_result("/detail", None);
-    }
-    let detail = plan
-        .detail
-        .as_ref()
-        .expect("policy-bearing detail dispatch requires compiled detail");
-    if detail.strategies.is_empty() {
-        return DetailExecutionResult {
-            description_text: None,
-            diagnostics: vec![runtime_error(
-                "detail_strategy_missing",
-                "detail does not contain an executable strategy",
-                "/detail/strategies",
-                None,
-                json!({}),
-            )],
-        };
-    }
 
     let mut diagnostics = Vec::new();
-    for (strategy_index, strategy) in detail.strategies.iter().enumerate() {
-        let attempt = execute_strategy(
-            &plan,
-            posting,
-            fetcher,
-            browser,
-            strategy_index,
-            strategy,
-            detail.accept_when.as_ref(),
-            context,
-        )
-        .await;
-        if contains_runtime_execution_cancelled(&attempt.result.diagnostics)
-            || context.is_cancelled()
-        {
-            diagnostics.extend(attempt.result.diagnostics);
-            push_runtime_execution_cancelled(
-                &mut diagnostics,
-                format!("/detail/strategies/{strategy_index}"),
-                Some(&strategy.key),
-            );
-            return DetailExecutionResult {
-                description_text: None,
-                diagnostics,
+    let mut description_text = None;
+    for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
+        debug_assert_eq!(attempt.strategy_index, attempt_index);
+        debug_assert!(!attempt.strategy_key.is_empty());
+        diagnostics.extend(attempt.diagnostics);
+        if Some(attempt_index) == accepted_attempt {
+            let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
+                unreachable!("accepted terminal must reference accepted typed output");
             };
-        }
-        diagnostics.extend(attempt.result.diagnostics);
-        if attempt.accepted {
-            return DetailExecutionResult {
-                description_text: attempt.result.description_text,
-                diagnostics,
-            };
+            description_text = Some(output);
         }
     }
 
-    diagnostics.push(runtime_error(
-        "fallback_exhausted",
-        "detail fallback strategies were exhausted without an accepted result",
-        "/detail/strategies",
-        None,
-        json!({}),
-    ));
+    if accepted_attempt.is_none() {
+        diagnostics.push(runtime_error(
+            "fallback_exhausted",
+            "detail fallback strategies were exhausted without an accepted result",
+            "/detail/strategies",
+            None,
+            json!({}),
+        ));
+    }
     DetailExecutionResult {
-        description_text: None,
+        description_text,
         diagnostics,
     }
 }
 
-fn cancelled_detail_result(path: &str, strategy_key: Option<&str>) -> DetailExecutionResult {
-    let mut diagnostics = Vec::new();
-    push_runtime_execution_cancelled(&mut diagnostics, path, strategy_key);
+fn cancelled_detail_result(cancellation: TypedCancellation) -> DetailExecutionResult {
     DetailExecutionResult {
         description_text: None,
-        diagnostics,
+        diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
     }
 }

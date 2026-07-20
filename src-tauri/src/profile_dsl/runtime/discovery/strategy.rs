@@ -1,10 +1,5 @@
 use super::*;
 
-pub(super) struct DiscoveryStrategyAttempt {
-    pub(super) result: DiscoveryExecutionResult,
-    pub(super) accepted: bool,
-}
-
 pub(super) async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
@@ -13,7 +8,7 @@ pub(super) async fn execute_strategy<F, B>(
     strategy: &ExecutionPlanDiscoveryStrategy,
     step_acceptance: Option<&Acceptance>,
     context: RuntimeExecutionContext<'_>,
-) -> DiscoveryStrategyAttempt
+) -> StrategyExecution<Vec<DiscoveryCandidate>>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -22,50 +17,59 @@ where
     let strategy_key = Some(strategy.key.clone());
     let mut diagnostics = Vec::new();
 
-    if let Some(pagination) = &strategy.pagination {
-        let mut result = execute_paginated_strategy(
+    let candidates = if let Some(pagination) = &strategy.pagination {
+        match execute_paginated_strategy(
             plan,
             fetcher,
             browser,
+            strategy_index,
             strategy,
             pagination,
             &base_path,
             strategy_key.as_deref(),
-            diagnostics,
+            &mut diagnostics,
             context,
         )
-        .await;
-        let execution_failed = discovery_execution_failed(&result);
-        let accepted = !execution_failed
-            && accept_discovery_result(
-                &result.candidates,
-                step_acceptance,
-                strategy.accept_when.as_ref(),
-                &base_path,
-                strategy_key.as_deref(),
-                &mut result.diagnostics,
-            );
-        return DiscoveryStrategyAttempt { result, accepted };
-    }
-
-    let output = execute_single_strategy_fetch(
-        plan,
-        fetcher,
-        browser,
-        strategy,
-        &[],
-        PaginationParameterLocation::Query,
-        None,
-        None,
-        &base_path,
-        strategy_key.as_deref(),
-        &mut diagnostics,
-        context,
-    )
-    .await;
+        .await
+        {
+            Ok(candidates) => candidates,
+            Err(cancellation) => {
+                return StrategyExecution {
+                    diagnostics,
+                    completion: StrategyAttemptCompletion::Cancelled(cancellation),
+                };
+            }
+        }
+    } else {
+        match execute_single_strategy_fetch(
+            plan,
+            fetcher,
+            browser,
+            strategy_index,
+            strategy,
+            &[],
+            PaginationParameterLocation::Query,
+            None,
+            None,
+            &base_path,
+            strategy_key.as_deref(),
+            &mut diagnostics,
+            context,
+        )
+        .await
+        {
+            Ok(output) => output.candidates,
+            Err(cancellation) => {
+                return StrategyExecution {
+                    diagnostics,
+                    completion: StrategyAttemptCompletion::Cancelled(cancellation),
+                };
+            }
+        }
+    };
 
     let mut result = DiscoveryExecutionResult {
-        candidates: output.candidates,
+        candidates,
         diagnostics,
     };
     let execution_failed = discovery_execution_failed(&result);
@@ -78,7 +82,17 @@ where
             strategy_key.as_deref(),
             &mut result.diagnostics,
         );
-    DiscoveryStrategyAttempt { result, accepted }
+    let completion = if accepted {
+        StrategyAttemptCompletion::Accepted(result.candidates)
+    } else if execution_failed {
+        StrategyAttemptCompletion::Failed
+    } else {
+        StrategyAttemptCompletion::Rejected
+    };
+    StrategyExecution {
+        diagnostics: result.diagnostics,
+        completion,
+    }
 }
 
 fn discovery_execution_failed(result: &DiscoveryExecutionResult) -> bool {
@@ -129,6 +143,7 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
+    strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination_params: &[(&str, String)],
     parameter_location: PaginationParameterLocation,
@@ -138,7 +153,7 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> StrategyFetchOutput
+) -> Result<StrategyFetchOutput, TypedCancellation>
 where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -153,22 +168,23 @@ where
         json_body_params_for_location(pagination_params, parameter_location),
         base_path,
         strategy_key,
+        strategy_index,
         diagnostics,
         context,
     )
-    .await
+    .await?
     {
         Some(response) => response,
         None => {
-            return StrategyFetchOutput {
+            return Ok(StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count: None,
                 next_cursor: None,
-            }
+            });
         }
     };
 
-    extract_candidates_from_response(
+    Ok(extract_candidates_from_response(
         plan,
         strategy,
         &response.body,
@@ -177,7 +193,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
-    )
+    ))
 }
 
 fn extract_candidates_from_response(

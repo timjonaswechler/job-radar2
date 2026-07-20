@@ -1,19 +1,27 @@
 mod support;
 
-use support::{compile_test_source, unwrap_plan};
+use support::{compile_test_source, execute_detail_test, unwrap_plan};
 
-use std::{collections::BTreeMap, future::Future, pin::Pin};
+use std::{
+    collections::BTreeMap,
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use job_radar_lib::{
-    execute_detail_with_clients, execute_detail_with_clients_and_context,
-    execute_detail_with_fetcher, DetailFetchError, DetailFetchRequest, DetailFetchResponse,
-    DetailFetcher, DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    execute_detail, DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
     ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
     ProfileBrowserFetchResponse, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
+use tokio::sync::Notify;
 
 #[test]
 fn compiled_detail_runtime_extracts_direct_json_description_text() {
@@ -33,7 +41,7 @@ fn compiled_detail_runtime_extracts_direct_json_description_text() {
         json!({ "description": "First paragraph.\n\nSecond paragraph." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -99,7 +107,7 @@ fn compiled_detail_runtime_falls_back_to_first_accepted_strategy() {
         ),
     ]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(
         result.description_text,
@@ -180,7 +188,7 @@ fn compiled_detail_runtime_applies_where_filters_before_extraction() {
         ),
     ]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(
         result.description_text,
@@ -227,7 +235,7 @@ fn compiled_detail_runtime_reports_invalid_where_regex_diagnostic() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.description_text, None);
     assert_runtime_diagnostic(&result.diagnostics[0], "where_pattern_invalid");
@@ -270,7 +278,7 @@ fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
         json!({ "description": "Too short" }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.description_text, None);
     assert_eq!(result.diagnostics.len(), 2);
@@ -311,7 +319,7 @@ fn compiled_detail_runtime_reports_unsupported_max_error_ratio() {
         json!({ "description": "Detailed role description." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.description_text, None);
     assert_eq!(
@@ -349,7 +357,7 @@ fn compiled_detail_runtime_renders_fetch_templates_from_all_runtime_contexts() {
         json!({ "description": "Rendered from all template contexts." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -397,7 +405,7 @@ fn compiled_detail_runtime_posts_rendered_json_body() {
         json!({ "description": "Detail POST response." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -447,7 +455,7 @@ fn compiled_detail_runtime_normalizes_html_in_json_description_text() {
         json!({ "descriptionHtml": "<p>First paragraph.</p><p>Second <strong>paragraph</strong>.</p>" }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -475,7 +483,7 @@ fn compiled_detail_runtime_applies_explicit_text_transforms() {
         json!({ "descriptionSlug": "senior%20rust-engineer" }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -511,7 +519,7 @@ fn compiled_detail_runtime_combines_description_text_parts() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -532,7 +540,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
         None,
         None,
     );
-    let missing_result = block_on(execute_detail_with_fetcher(
+    let missing_result = block_on(execute_detail_test(
         &empty_plan,
         &posting_occurrence("https://example.test/jobs/missing-description.json", []),
         &FakeDetailFetcher::new([(
@@ -543,7 +551,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
     assert_eq!(missing_result.description_text, None);
     assert_runtime_diagnostic(&missing_result.diagnostics[0], "description_empty");
 
-    let empty_result = block_on(execute_detail_with_fetcher(
+    let empty_result = block_on(execute_detail_test(
         &empty_plan,
         &posting_occurrence("https://example.test/jobs/empty.json", []),
         &FakeDetailFetcher::new([(
@@ -568,7 +576,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
         None,
         Some(20),
     );
-    let too_short_result = block_on(execute_detail_with_fetcher(
+    let too_short_result = block_on(execute_detail_test(
         &too_short_plan,
         &posting_occurrence("https://example.test/jobs/short.json", []),
         &FakeDetailFetcher::new([(
@@ -603,7 +611,7 @@ Second paragraph.</description></job></jobs>"#
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -647,7 +655,7 @@ fn compiled_detail_runtime_matches_xml_detail_collection() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -688,7 +696,7 @@ fn compiled_detail_runtime_matches_one_item_xml_detail_collection() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -713,7 +721,7 @@ fn compiled_detail_runtime_extracts_html_description_text_with_css() {
         r#"<main class="job"><section class="description"><p>First paragraph.</p><p>Second paragraph.</p></section></main>"#.to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_fetcher(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -741,8 +749,12 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail_with_clients(
-        &plan, &posting, &fetcher, &browser,
+    let result = block_on(execute_detail(
+        &plan,
+        &posting,
+        &fetcher,
+        &browser,
+        RuntimeExecutionContext::uncancellable(),
     ));
 
     assert_eq!(result.diagnostics, Vec::new());
@@ -790,11 +802,12 @@ fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
         "click_until_gone reached maxCount",
     ));
 
-    let result = block_on(execute_detail_with_clients(
+    let result = block_on(execute_detail(
         &plan,
         &posting_occurrence("https://example.test/jobs/42.html", []),
         &fetcher,
         &browser,
+        RuntimeExecutionContext::uncancellable(),
     ));
 
     assert_eq!(result.description_text, None);
@@ -818,14 +831,14 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         None,
     );
 
-    let fetch_failure = block_on(execute_detail_with_fetcher(
+    let fetch_failure = block_on(execute_detail_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/missing.json", []),
         &FakeDetailFetcher::new([]),
     ));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
-    let parse_failure = block_on(execute_detail_with_fetcher(
+    let parse_failure = block_on(execute_detail_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/bad-json.json", []),
         &FakeDetailFetcher::new([(
@@ -845,7 +858,7 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         "cardinality": "one"
     }))
     .unwrap();
-    let extract_failure = block_on(execute_detail_with_fetcher(
+    let extract_failure = block_on(execute_detail_test(
         &extract_plan,
         &posting_occurrence("https://example.test/jobs/42.json", []),
         &FakeDetailFetcher::new([(
@@ -865,7 +878,7 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         None,
         None,
     );
-    let missing_context = block_on(execute_detail_with_fetcher(
+    let missing_context = block_on(execute_detail_test(
         &missing_context_plan,
         &posting_occurrence("https://example.test/jobs/42", []),
         &FakeDetailFetcher::new([]),
@@ -893,7 +906,7 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
     let browser = FakeBrowser::new([]);
     let cancellation = AlwaysCancelled;
 
-    let result = block_on(execute_detail_with_clients_and_context(
+    let result = block_on(execute_detail(
         &plan,
         &posting,
         &fetcher,
@@ -909,6 +922,178 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
         .diagnostics
         .iter()
         .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
+}
+
+#[test]
+fn detail_cancellation_interrupts_an_active_http_fetch() {
+    block_on(async {
+        let plan = compiled_json_detail_plan(
+            "{{posting:url}}",
+            json!({
+                "type": "json_path",
+                "jsonPath": "$.description",
+                "cardinality": "one"
+            }),
+            None,
+            None,
+        );
+        let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+        let fetcher = HangingDetailFetcher::default();
+        let browser = FakeBrowser::new([]);
+        let cancellation = TestCancellation::default();
+
+        let cancel = async {
+            fetcher.started.notified().await;
+            cancellation.cancel();
+        };
+        let execute = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            execute_detail(
+                &plan,
+                &posting,
+                &fetcher,
+                &browser,
+                RuntimeExecutionContext::with_cancellation(&cancellation),
+            ),
+        );
+        let (_, result) = tokio::join!(cancel, execute);
+        let result = result.expect("cancellation should interrupt the active Detail fetch");
+
+        assert_eq!(result.description_text, None);
+        assert_eq!(fetcher.request_count(), 1);
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
+    });
+}
+
+#[test]
+fn detail_browser_cancellation_is_typed_control_flow() {
+    block_on(async {
+        let plan = compiled_browser_detail_plan(
+            "{{posting:url}}",
+            json!({ "type": "html" }),
+            json!({ "type": "css", "selector": "main.job" }),
+            json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
+        );
+        let posting = posting_occurrence("https://example.test/jobs/42.html", []);
+        let fetcher = FakeDetailFetcher::default();
+        let browser = CancellationAwareDetailBrowser::default();
+        let cancellation = TestCancellation::default();
+
+        let cancel = async {
+            browser.started.notified().await;
+            cancellation.cancel();
+        };
+        let execute = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            execute_detail(
+                &plan,
+                &posting,
+                &fetcher,
+                &browser,
+                RuntimeExecutionContext::with_cancellation(&cancellation),
+            ),
+        );
+        let (_, result) = tokio::join!(cancel, execute);
+        let result = result.expect("cancellation should interrupt the active Detail browser");
+
+        assert_eq!(result.description_text, None);
+        assert_eq!(browser.render_count(), 1);
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
+    });
+}
+
+#[derive(Default)]
+struct TestCancellation {
+    cancelled: AtomicBool,
+}
+
+impl TestCancellation {
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+}
+
+impl RuntimeCancellation for TestCancellation {
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Default)]
+struct HangingDetailFetcher {
+    started: Arc<Notify>,
+    request_count: std::sync::Mutex<usize>,
+}
+
+impl HangingDetailFetcher {
+    fn request_count(&self) -> usize {
+        *self.request_count.lock().unwrap()
+    }
+}
+
+impl DetailFetcher for HangingDetailFetcher {
+    fn fetch<'a>(
+        &'a self,
+        _request: DetailFetchRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DetailFetchResponse, DetailFetchError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            *self.request_count.lock().unwrap() += 1;
+            self.started.notify_one();
+            std::future::pending().await
+        })
+    }
+}
+
+#[derive(Default)]
+struct CancellationAwareDetailBrowser {
+    started: Arc<Notify>,
+    render_count: std::sync::Mutex<usize>,
+}
+
+impl CancellationAwareDetailBrowser {
+    fn render_count(&self) -> usize {
+        *self.render_count.lock().unwrap()
+    }
+}
+
+impl ProfileBrowserClient for CancellationAwareDetailBrowser {
+    fn render<'a>(
+        &'a self,
+        _request: ProfileBrowserFetchRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move { panic!("Detail should use cancellation-aware browser rendering") })
+    }
+
+    fn render_with_context<'a>(
+        &'a self,
+        _request: ProfileBrowserFetchRequest,
+        context: RuntimeExecutionContext<'a>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            *self.render_count.lock().unwrap() += 1;
+            self.started.notify_one();
+            context.cancelled().await;
+            Err(ProfileBrowserFetchError::new(
+                ProfileBrowserFetchErrorKind::Cancelled,
+                "detail cancelled",
+            ))
+        })
+    }
 }
 
 struct AlwaysCancelled;

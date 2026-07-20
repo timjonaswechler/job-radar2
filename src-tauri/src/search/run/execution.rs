@@ -6,9 +6,8 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_policy_discovery_with_clients_and_context, DiscoveryCandidate,
-            DiscoveryFetcher, ManagedProfileBrowserClient, ProfileBrowserClient,
-            ReqwestDiscoveryFetcher, RuntimeExecutionContext,
+            execute_discovery, DiscoveryCandidate, DiscoveryFetcher, ManagedProfileBrowserClient,
+            ProfileBrowserClient, ReqwestDiscoveryFetcher, RuntimeExecutionContext,
         },
     },
 };
@@ -103,7 +102,7 @@ impl SourceExecutor for DefaultSourceExecutor {
     }
 }
 
-async fn execute_discovery_for_source<F, B>(
+pub(super) async fn execute_discovery_for_source<F, B>(
     input: SourceExecutionInput<'_>,
     fetcher: &F,
     browser: &B,
@@ -123,13 +122,7 @@ where
         .cancellation_token
         .map(|token| RuntimeExecutionContext::with_cancellation(token))
         .unwrap_or_else(RuntimeExecutionContext::uncancellable);
-    let result = execute_policy_discovery_with_clients_and_context(
-        &input.source.execution_plan,
-        fetcher,
-        browser,
-        context,
-    )
-    .await;
+    let result = execute_discovery(&input.source.execution_plan, fetcher, browser, context).await;
 
     if input
         .cancellation_token

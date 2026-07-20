@@ -55,18 +55,13 @@ pub use profile_dsl::execution_plan::{
 };
 pub use profile_dsl::policy::StrategyPolicy;
 pub use profile_dsl::runtime::{
-    execute_detail, execute_detail_with_clients, execute_detail_with_clients_and_context,
-    execute_detail_with_fetcher, execute_discovery, execute_discovery_with_clients,
-    execute_discovery_with_clients_and_context, execute_discovery_with_fetcher,
-    execute_policy_detail_with_clients_and_context,
-    execute_policy_discovery_with_clients_and_context, DetailExecutionResult, DetailFetchError,
-    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
-    DiscoveryCandidate, DiscoveryExecutionBudget, DiscoveryExecutionResult, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, ManagedProfileBrowserClient,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ReqwestDetailFetcher,
-    ReqwestDiscoveryFetcher, RuntimeCancellation, RuntimeExecutionContext,
-    UnavailableProfileBrowserClient, RUNTIME_EXECUTION_CANCELLED_CODE,
+    execute_detail, execute_discovery, DetailExecutionResult, DetailFetchError, DetailFetchRequest,
+    DetailFetchResponse, DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate,
+    DiscoveryExecutionBudget, DiscoveryExecutionResult, DiscoveryFetchError, DiscoveryFetchRequest,
+    DiscoveryFetchResponse, DiscoveryFetcher, ManagedProfileBrowserClient, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, ReqwestDetailFetcher, ReqwestDiscoveryFetcher,
+    RuntimeCancellation, RuntimeExecutionContext, UnavailableProfileBrowserClient,
 };
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};

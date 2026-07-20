@@ -15,7 +15,7 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -40,7 +40,7 @@ fn compiled_discovery_runtime_selects_multiple_json_items() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 2);
@@ -62,7 +62,7 @@ fn compiled_discovery_runtime_reports_required_field_and_cardinality_diagnostics
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "required_field_missing");
@@ -111,7 +111,7 @@ fn compiled_discovery_runtime_applies_where_filters_before_extraction() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -132,7 +132,7 @@ fn compiled_discovery_runtime_preserves_successful_items_with_partial_diagnostic
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
     assert_eq!(result.candidates[0].title, "Rust Engineer");

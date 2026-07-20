@@ -11,9 +11,10 @@ pub(super) async fn fetch_strategy_document<F, B>(
     captures: &BTreeMap<String, String>,
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Option<DetailFetchResponse>
+) -> Result<Option<DetailFetchResponse>, TypedCancellation>
 where
     F: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -45,6 +46,7 @@ where
                 &context,
                 base_path,
                 strategy_key,
+                strategy_index,
                 diagnostics,
                 execution_context,
             )
@@ -65,6 +67,7 @@ where
                 &context,
                 base_path,
                 strategy_key,
+                strategy_index,
                 diagnostics,
                 execution_context,
             )
@@ -83,9 +86,10 @@ async fn fetch_http_strategy_document<F>(
     context: &TemplateRuntimeContext<'_>,
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Option<DetailFetchResponse>
+) -> Result<Option<DetailFetchResponse>, TypedCancellation>
 where
     F: DetailFetcher + Sync + ?Sized,
 {
@@ -98,7 +102,7 @@ where
             strategy_key,
             json!({ "method": "GET" }),
         ));
-        return None;
+        return Ok(None);
     }
 
     let rendered_url = match render_template(url, context) {
@@ -111,7 +115,7 @@ where
                 strategy_key,
                 json!({ "template": url }),
             ));
-            return None;
+            return Ok(None);
         }
     };
 
@@ -125,7 +129,7 @@ where
                 strategy_key,
                 json!({}),
             ));
-            return None;
+            return Ok(None);
         }
     };
 
@@ -139,7 +143,7 @@ where
                 strategy_key,
                 json!({}),
             ));
-            return None;
+            return Ok(None);
         }
     };
 
@@ -152,8 +156,12 @@ where
     };
 
     if execution_context.is_cancelled() {
-        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
-        return None;
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Detail,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Fetch,
+        ));
     }
 
     let result = tokio::select! {
@@ -161,12 +169,16 @@ where
         _ = execution_context.cancelled() => None,
     };
     let Some(result) = result else {
-        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
-        return None;
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Detail,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Fetch,
+        ));
     };
 
     match result {
-        Ok(response) => Some(response),
+        Ok(response) => Ok(Some(response)),
         Err(error) => {
             diagnostics.push(runtime_error(
                 "fetch_failed",
@@ -179,7 +191,7 @@ where
                 strategy_key,
                 json!({ "url": rendered_url, "error": error.message }),
             ));
-            None
+            Ok(None)
         }
     }
 }
@@ -193,9 +205,10 @@ async fn fetch_browser_strategy_document<B>(
     context: &TemplateRuntimeContext<'_>,
     base_path: &str,
     strategy_key: Option<&str>,
+    strategy_index: usize,
     diagnostics: &mut Diagnostics,
     execution_context: RuntimeExecutionContext<'_>,
-) -> Option<DetailFetchResponse>
+) -> Result<Option<DetailFetchResponse>, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -209,7 +222,7 @@ where
                 strategy_key,
                 json!({ "template": url }),
             ));
-            return None;
+            return Ok(None);
         }
     };
 
@@ -224,7 +237,15 @@ where
         .render_with_context(request, execution_context)
         .await
     {
-        Ok(ProfileBrowserFetchResponse { body }) => Some(DetailFetchResponse { body }),
+        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(DetailFetchResponse { body })),
+        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
+            Err(TypedCancellation::strategy(
+                RuntimePhase::Detail,
+                strategy_index,
+                strategy_key.expect("compiled strategy has a key"),
+                CancellationOperation::Browser,
+            ))
+        }
         Err(error) => {
             push_browser_fetch_diagnostic(
                 error,
@@ -233,7 +254,7 @@ where
                 strategy_key,
                 diagnostics,
             );
-            None
+            Ok(None)
         }
     }
 }

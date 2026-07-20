@@ -1,14 +1,13 @@
 mod support;
 
-use support::{compile_test_source, unwrap_plan};
+use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    execute_detail_with_fetcher, execute_discovery_with_fetcher, DetailFetchError,
-    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
-    DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
-    DiscoveryFetcher, SourceDocument, SourceProfileDocument,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
+    DiscoveryFetchResponse, DiscoveryFetcher, SourceDocument, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -52,14 +51,14 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/greenhouse/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
     let first_candidate = discovery.candidates.first().unwrap();
-    let detail = block_on(execute_detail_with_fetcher(
+    let detail = block_on(execute_detail_test(
         &plan,
         &DetailPostingOccurrence {
             url: first_candidate.url.clone(),

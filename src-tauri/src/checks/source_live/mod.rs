@@ -13,8 +13,7 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::JsonObject;
 use crate::profile_dsl::runtime::{
-    execute_policy_detail_with_clients_and_context,
-    execute_policy_discovery_with_clients_and_context, DetailExecutionResult, DetailFetcher,
+    execute_detail, execute_discovery, DetailExecutionResult, DetailFetcher,
     DetailPostingOccurrence, DiscoveryCandidate, DiscoveryExecutionBudget, DiscoveryFetcher,
     ProfileBrowserClient, ReqwestDetailFetcher, ReqwestDiscoveryFetcher, RuntimeExecutionContext,
     UnavailableProfileBrowserClient,
@@ -188,13 +187,12 @@ where
         let discovery_context = RuntimeExecutionContext::uncancellable().with_discovery_budget(
             DiscoveryExecutionBudget::new(SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY),
         );
-        let discovery_result =
-            tauri::async_runtime::block_on(execute_policy_discovery_with_clients_and_context(
-                execution_plan,
-                discovery_fetcher,
-                browser,
-                discovery_context,
-            ));
+        let discovery_result = tauri::async_runtime::block_on(execute_discovery(
+            execution_plan,
+            discovery_fetcher,
+            browser,
+            discovery_context,
+        ));
         let candidate_count = discovery_result.candidates.len();
         let first_acceptable_candidate = discovery_result
             .candidates
@@ -221,14 +219,13 @@ where
             if let Some(candidate) = first_acceptable_candidate {
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
                 let posting = detail_occurrence_from_candidate(candidate);
-                let detail_result =
-                    tauri::async_runtime::block_on(execute_policy_detail_with_clients_and_context(
-                        execution_plan,
-                        &posting,
-                        detail_fetcher,
-                        browser,
-                        RuntimeExecutionContext::uncancellable(),
-                    ));
+                let detail_result = tauri::async_runtime::block_on(execute_detail(
+                    execution_plan,
+                    &posting,
+                    detail_fetcher,
+                    browser,
+                    RuntimeExecutionContext::uncancellable(),
+                ));
                 let detail_passed = is_acceptable_detail_result(&detail_result);
                 details.insert(
                     "detailPassed".to_string(),

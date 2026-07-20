@@ -72,13 +72,10 @@ pub(super) fn push_browser_fetch_diagnostic(
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
 ) {
-    if error.kind == ProfileBrowserFetchErrorKind::Cancelled {
-        push_runtime_execution_cancelled(diagnostics, format!("{base_path}/fetch"), strategy_key);
-        return;
-    }
-
     let (code, path) = match error.kind {
-        ProfileBrowserFetchErrorKind::Cancelled => unreachable!("handled above"),
+        ProfileBrowserFetchErrorKind::Cancelled => {
+            unreachable!("cancellation is typed control flow")
+        }
         ProfileBrowserFetchErrorKind::RuntimeUnavailable => {
             ("browser_runtime_unavailable", format!("{base_path}/fetch"))
         }

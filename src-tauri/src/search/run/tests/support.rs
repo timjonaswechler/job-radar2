@@ -1,3 +1,4 @@
+pub(super) use crate::background_tasks::CancellationToken;
 pub(super) use crate::search::request::{
     CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
     SearchRequestStatus, SearchRuleInput,
@@ -55,6 +56,83 @@ impl SourceExecutor for FixtureSourceExecutor {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum RuntimeCancellationTiming {
+    BeforePhase,
+    DuringFetch,
+}
+
+pub(super) struct CancellingRuntimeDiscoveryExecutor {
+    timing: RuntimeCancellationTiming,
+}
+
+impl CancellingRuntimeDiscoveryExecutor {
+    pub(super) fn new(timing: RuntimeCancellationTiming) -> Self {
+        Self { timing }
+    }
+}
+
+impl SourceExecutor for CancellingRuntimeDiscoveryExecutor {
+    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
+        Box::pin(async move {
+            let cancellation = input
+                .cancellation_token
+                .expect("cancellation test executor requires a token");
+            if matches!(self.timing, RuntimeCancellationTiming::BeforePhase) {
+                cancellation.cancel();
+            }
+            let fetcher = CancellingFixtureDiscoveryFetcher {
+                cancellation,
+                cancel_during_fetch: matches!(self.timing, RuntimeCancellationTiming::DuringFetch),
+            };
+            super::super::execution::execute_discovery_for_source(
+                input,
+                &fetcher,
+                &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
+            )
+            .await
+        })
+    }
+}
+
+struct CancellingFixtureDiscoveryFetcher<'a> {
+    cancellation: &'a CancellationToken,
+    cancel_during_fetch: bool,
+}
+
+impl crate::profile_dsl::runtime::DiscoveryFetcher for CancellingFixtureDiscoveryFetcher<'_> {
+    fn fetch<'a>(
+        &'a self,
+        _request: crate::profile_dsl::runtime::DiscoveryFetchRequest,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::profile_dsl::runtime::DiscoveryFetchResponse,
+                        crate::profile_dsl::runtime::DiscoveryFetchError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            if self.cancel_during_fetch {
+                self.cancellation.cancel();
+            }
+            Ok(crate::profile_dsl::runtime::DiscoveryFetchResponse {
+                body: json!({
+                    "jobs": [{
+                        "title": "Laser Engineer",
+                        "company": "ACME",
+                        "url": "https://example.test/laser"
+                    }]
+                })
+                .to_string(),
+            })
+        })
+    }
+}
+
 pub(super) struct RuntimeDiscoveryExecutor {
     response_body: String,
 }
@@ -73,9 +151,11 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
             let fetcher = FixtureDiscoveryFetcher {
                 response_body: self.response_body.clone(),
             };
-            let result = crate::profile_dsl::runtime::execute_discovery_with_fetcher(
+            let result = crate::profile_dsl::runtime::execute_discovery(
                 &input.source.execution_plan,
                 &fetcher,
+                &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
+                crate::profile_dsl::runtime::RuntimeExecutionContext::uncancellable(),
             )
             .await;
             if result.candidates.is_empty()

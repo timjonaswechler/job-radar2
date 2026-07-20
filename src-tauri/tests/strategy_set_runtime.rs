@@ -9,8 +9,7 @@ use std::{
 };
 
 use job_radar_lib::{
-    compile_source, execute_policy_detail_with_clients_and_context,
-    execute_policy_discovery_with_clients_and_context, CompileSourceOutcome, DetailFetchError,
+    compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailFetchError,
     DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
     DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
     DiscoveryStep, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
@@ -157,7 +156,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         ),
     ]);
 
-    let result = block_on(execute_policy_discovery_with_clients_and_context(
+    let result = block_on(execute_discovery(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -191,7 +190,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
             Ok(json!({ "description": "A complete accepted description." }).to_string()),
         ),
     ]);
-    let result = block_on(execute_policy_detail_with_clients_and_context(
+    let result = block_on(execute_detail(
         &plan,
         &posting(),
         &detail,
@@ -241,7 +240,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         })
         .to_string()),
     )]);
-    let result = block_on(execute_policy_discovery_with_clients_and_context(
+    let result = block_on(execute_discovery(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -256,7 +255,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         "https://example.test/detail/failed",
         Ok(json!({ "description": accepted_description }).to_string()),
     )]);
-    let result = block_on(execute_policy_detail_with_clients_and_context(
+    let result = block_on(execute_detail(
         &plan,
         &posting(),
         &detail,
@@ -286,7 +285,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         ),
     ]);
 
-    let result = block_on(execute_policy_discovery_with_clients_and_context(
+    let result = block_on(execute_discovery(
         &plan,
         &discovery,
         &UnavailableProfileBrowserClient,
@@ -327,7 +326,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
             Err("failed three".to_string()),
         ),
     ]);
-    let result = block_on(execute_policy_detail_with_clients_and_context(
+    let result = block_on(execute_detail(
         &plan,
         &posting(),
         &detail,
@@ -364,7 +363,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
     };
     let signal = AtomicCancellation(cancellation);
 
-    let result = block_on(execute_policy_discovery_with_clients_and_context(
+    let result = block_on(execute_discovery(
         &plan,
         &fetcher,
         &UnavailableProfileBrowserClient,
@@ -392,7 +391,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         requests: Mutex::new(Vec::new()),
     };
     let signal = AtomicCancellation(cancellation);
-    let result = block_on(execute_policy_detail_with_clients_and_context(
+    let result = block_on(execute_detail(
         &plan,
         &posting(),
         &fetcher,
