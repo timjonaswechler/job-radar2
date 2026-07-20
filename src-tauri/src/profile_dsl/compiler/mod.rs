@@ -30,10 +30,12 @@ mod specialization;
 mod support;
 mod templates;
 
+pub(crate) use boundedness::MAX_FALLBACK_STRATEGIES;
 pub use provenance::{
     CompiledSourceProvenance, ProvenanceEntry, ProvenanceOrigin, ProvenancePath,
     ProvenancePathSegment,
 };
+pub(crate) use security::forbidden_request_key_behavior;
 
 use crate::profile_dsl::documents::JsonSchemaObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
@@ -87,11 +89,32 @@ pub enum CompiledSourceAccess {
     },
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceRuntimeBinding {
+    Name,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SourceRuntimeBindingDependencies {
+    pub bindings: Vec<SourceRuntimeBinding>,
+}
+
+impl SourceRuntimeBindingDependencies {
+    pub(super) fn insert(&mut self, binding: SourceRuntimeBinding) {
+        if !self.bindings.contains(&binding) {
+            self.bindings.push(binding);
+            self.bindings.sort();
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct CompiledSource {
     pub access: CompiledSourceAccess,
     pub execution_plan: PolicySourceExecutionPlan,
     pub provenance: CompiledSourceProvenance,
+    pub runtime_binding_dependencies: SourceRuntimeBindingDependencies,
 }
 
 /// Closed result of compiling one authoritative Source.
@@ -171,11 +194,12 @@ fn compile_policy_source(
                 )?;
             let schema_v2_source = schema_v2_source(source);
             let schema_v2_registry = schema_v2_registry(effective_profile.schema_v2_document());
-            let plan = resolution::compile_source_execution_plan(
+            let resolved = resolution::compile_source_execution_plan(
                 &schema_v2_source,
                 &schema_v2_registry,
                 diagnostics,
             )?;
+            let plan = resolved.execution_plan;
             let selected_path = effective_profile
                 .access_paths
                 .iter()
@@ -196,6 +220,7 @@ fn compile_policy_source(
                 },
                 execution_plan,
                 provenance,
+                runtime_binding_dependencies: resolved.runtime_binding_dependencies,
             })
         }
         PolicySelectedAccessPath::SourceOwnedAccessPath {
@@ -208,11 +233,12 @@ fn compile_policy_source(
             diagnostics: access_diagnostics,
         } => {
             let schema_v2_source = schema_v2_source(source);
-            let plan = resolution::compile_source_execution_plan(
+            let resolved = resolution::compile_source_execution_plan(
                 &schema_v2_source,
                 &SourceProfileRegistrySnapshot::default(),
                 diagnostics,
             )?;
+            let plan = resolved.execution_plan;
             let execution_plan = PolicySourceExecutionPlan::from_execution_plan(
                 plan,
                 discovery.policy,
@@ -236,6 +262,7 @@ fn compile_policy_source(
                 },
                 execution_plan,
                 provenance,
+                runtime_binding_dependencies: resolved.runtime_binding_dependencies,
             })
         }
     }
@@ -378,7 +405,8 @@ pub fn compile_source_execution_plan(
 
     let mut diagnostics = Vec::new();
     result.execution_plan =
-        resolution::compile_source_execution_plan(source, &registry, &mut diagnostics);
+        resolution::compile_source_execution_plan(source, &registry, &mut diagnostics)
+            .map(|resolved| resolved.execution_plan);
     result.diagnostics = diagnostics;
 
     result

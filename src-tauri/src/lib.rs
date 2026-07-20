@@ -17,11 +17,13 @@ pub use checks::{
     check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
     check_source, check_source_with_clients, check_source_with_fetcher,
     evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
-    read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
-    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
-    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportStaleDetail,
-    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType, SourceLiveCheckReportState,
-    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    prepare_source_behavior_fingerprints, read_latest_check_report, source_live_check_report_path,
+    source_live_check_report_status, CheckFingerprint, CheckReport, CheckReportFreshness,
+    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
+    CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
+    SourceBehaviorFingerprintPreparationError, SourceBehaviorFingerprintPreparationErrorKind,
+    SourceLiveCheckReportState, SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION,
+    SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
@@ -32,7 +34,8 @@ pub use profile_dsl::compiler::{
     compile_source, compile_source_execution_plan, CompileSourceExecutionPlanResult,
     CompileSourceOutcome, CompiledSource, CompiledSourceAccess, CompiledSourceProvenance,
     EffectiveSourceProfile, ProfileCompilerSnapshot, ProvenanceEntry, ProvenanceOrigin,
-    ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath,
+    ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath, SourceRuntimeBinding,
+    SourceRuntimeBindingDependencies,
 };
 pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,

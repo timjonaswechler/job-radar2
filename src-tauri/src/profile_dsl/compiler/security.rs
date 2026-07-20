@@ -4,6 +4,7 @@
 //! execute network, browser, parser, selector, extractor, transform,
 //! pagination, or runtime behavior.
 
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
@@ -15,10 +16,30 @@ use super::compiler_error;
 const FORBIDDEN_HEADERS: &[&str] = &[
     "authorization",
     "cookie",
+    "proxy-authorization",
     "set-cookie",
     "x-api-key",
-    "proxy-authorization",
 ];
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ForbiddenRequestKeyBehavior {
+    forbidden_headers: &'static [&'static str],
+    forbidden_header_applicability: &'static str,
+    secret_like_applicability: &'static [&'static str],
+}
+
+pub(crate) fn forbidden_request_key_behavior() -> ForbiddenRequestKeyBehavior {
+    ForbiddenRequestKeyBehavior {
+        forbidden_headers: FORBIDDEN_HEADERS,
+        forbidden_header_applicability: "header_names",
+        secret_like_applicability: &[
+            "header_names",
+            "form_body_field_names",
+            "recursively_visited_json_object_keys",
+        ],
+    }
+}
 
 pub(super) fn validate_security(
     discovery: &DiscoveryStep,
