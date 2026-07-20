@@ -1,4 +1,4 @@
-use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
+use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{PostingDetailStep, PostingDiscoveryStep};
 use crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBuildError;
 use crate::profile_dsl::execution_plan::posting_detail::compile_posting_detail_step;
@@ -6,6 +6,7 @@ use crate::profile_dsl::execution_plan::posting_discovery::compile_posting_disco
 use crate::profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
+use crate::profile_dsl::source_config::EffectiveSourceConfigContract;
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
@@ -21,8 +22,8 @@ use super::keys::{
 use super::overrides::apply_source_overrides;
 use super::security::validate_security;
 use super::source_config::{
-    source_config_schema_keys, source_owned_access_path_schema, validate_source_config,
-    validate_source_config_against_validated_contract, validate_source_config_contract,
+    compile_reusable_contract, compile_source_owned_contract, push_definition_violations,
+    source_owned_access_path_schema, validate_source_config_against_contract,
 };
 use super::specialization::specialize_profile;
 use super::support::validate_support_metadata;
@@ -33,6 +34,13 @@ pub(super) fn validate_source_profile_document(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
 ) {
+    let _ = validate_source_profile_document_with_contracts(profile, diagnostics);
+}
+
+fn validate_source_profile_document_with_contracts(
+    profile: &SourceProfileDocument,
+    diagnostics: &mut Diagnostics,
+) -> Vec<Option<EffectiveSourceConfigContract>> {
     validate_support_metadata(
         &profile.support,
         "/support",
@@ -41,75 +49,69 @@ pub(super) fn validate_source_profile_document(
     );
     validate_reusable_access_path_keys(profile, diagnostics);
 
-    for (path_index, access_path) in profile.access_paths.iter().enumerate() {
-        let path_diagnostic_start = diagnostics.len();
-        validate_source_config_contract(
-            profile.source_config_schema.as_ref(),
-            access_path.source_config_schema.as_ref(),
-            Some(path_index),
-            diagnostics,
-        );
-        validate_posting_discovery_strategy_keys(
-            &access_path.posting_discovery,
-            access_path_step_path(Some(path_index), "postingDiscovery"),
-            diagnostics,
-        );
-        if let Some(posting_detail) = &access_path.posting_detail {
-            validate_posting_detail_strategy_keys(
-                posting_detail,
-                access_path_step_path(Some(path_index), "postingDetail"),
-                diagnostics,
-            );
-        }
-
-        let access_path_base = access_path_base_path(Some(path_index));
-        validate_template_variables(
-            &access_path.posting_discovery,
-            access_path.posting_detail.as_ref(),
-            source_config_schema_keys(
+    profile
+        .access_paths
+        .iter()
+        .enumerate()
+        .map(|(path_index, access_path)| {
+            let contract = match compile_reusable_contract(
                 profile.source_config_schema.as_ref(),
                 access_path.source_config_schema.as_ref(),
-            ),
-            access_path_base.clone(),
-            diagnostics,
-        );
-        validate_capability_compatibility(
-            &access_path.posting_discovery,
-            access_path.posting_detail.as_ref(),
-            access_path_base.clone(),
-            diagnostics,
-        );
-        validate_boundedness(
-            &access_path.posting_discovery,
-            access_path.posting_detail.as_ref(),
-            access_path_base.clone(),
-            diagnostics,
-        );
-        validate_security(
-            &access_path.posting_discovery,
-            access_path.posting_detail.as_ref(),
-            access_path_base.clone(),
-            diagnostics,
-        );
-
-        let path_has_error = diagnostics[path_diagnostic_start..]
-            .iter()
-            .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
-        if !path_has_error {
-            let _ = compile_posting_discovery_step(
+                path_index,
+            ) {
+                Ok(contract) => Some(contract),
+                Err(violations) => {
+                    push_definition_violations(violations, diagnostics);
+                    None
+                }
+            };
+            validate_posting_discovery_strategy_keys(
                 &access_path.posting_discovery,
-                &access_path_step_path(Some(path_index), "postingDiscovery"),
-            )
-            .map_err(|error| push_compiled_plan_invariant(error, diagnostics));
+                access_path_step_path(Some(path_index), "postingDiscovery"),
+                diagnostics,
+            );
             if let Some(posting_detail) = &access_path.posting_detail {
-                let _ = compile_posting_detail_step(
+                validate_posting_detail_strategy_keys(
                     posting_detail,
-                    &access_path_step_path(Some(path_index), "postingDetail"),
-                )
-                .map_err(|error| push_compiled_plan_invariant(error, diagnostics));
+                    access_path_step_path(Some(path_index), "postingDetail"),
+                    diagnostics,
+                );
             }
-        }
-    }
+
+            let access_path_base = access_path_base_path(Some(path_index));
+            validate_template_variables(
+                &access_path.posting_discovery,
+                access_path.posting_detail.as_ref(),
+                contract
+                    .as_ref()
+                    .map(EffectiveSourceConfigContract::property_keys)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+                access_path_base.clone(),
+                diagnostics,
+            );
+            validate_capability_compatibility(
+                &access_path.posting_discovery,
+                access_path.posting_detail.as_ref(),
+                access_path_base.clone(),
+                diagnostics,
+            );
+            validate_boundedness(
+                &access_path.posting_discovery,
+                access_path.posting_detail.as_ref(),
+                access_path_base.clone(),
+                diagnostics,
+            );
+            validate_security(
+                &access_path.posting_discovery,
+                access_path.posting_detail.as_ref(),
+                access_path_base,
+                diagnostics,
+            );
+            contract
+        })
+        .collect()
 }
 
 pub(super) fn compile_authoritative_source(
@@ -180,21 +182,22 @@ fn compile_profile_access_path(
         }
     }
 
-    validate_source_profile_document(&effective_profile, diagnostics);
+    let contracts =
+        validate_source_profile_document_with_contracts(&effective_profile, diagnostics);
     if has_error_diagnostics(diagnostics) {
         return None;
     }
 
     let path_index = access_path_index(&effective_profile, path_key);
-    let selected_source_config_schema = path_index
-        .and_then(|index| effective_profile.access_paths.get(index))
-        .and_then(|access_path| access_path.source_config_schema.as_ref());
-    validate_source_config_against_validated_contract(
-        effective_profile.source_config_schema.as_ref(),
-        selected_source_config_schema,
-        &source.source_config,
-        diagnostics,
-    );
+    if let Some(index) = path_index {
+        let contract = contracts[index]
+            .as_ref()
+            .expect("error-free whole-profile validation must retain every compiled contract");
+        validate_source_config_against_contract(contract, &source.source_config, diagnostics);
+        if has_error_diagnostics(diagnostics) {
+            return None;
+        }
+    }
 
     let access_path = resolve_access_path(
         source,
@@ -430,13 +433,20 @@ fn validate_source_owned_access_path(
             serde_json::json!({ "sourceKey": source.key }),
         ));
     }
-    validate_source_config(
-        None,
-        source_owned_access_path_schema(&source.selected_access_path),
-        &source.source_config,
-        None,
-        diagnostics,
-    );
+    let source_config_contract = compile_source_owned_contract(source_owned_access_path_schema(
+        &source.selected_access_path,
+    ));
+    let source_config_keys = match source_config_contract {
+        Ok(contract) => {
+            let keys = contract.property_keys().into_iter().collect();
+            validate_source_config_against_contract(&contract, &source.source_config, diagnostics);
+            keys
+        }
+        Err(violations) => {
+            push_definition_violations(violations, diagnostics);
+            Default::default()
+        }
+    };
     validate_posting_discovery_strategy_keys(
         posting_discovery,
         "/selectedAccessPath/postingDiscovery".to_string(),
@@ -452,10 +462,7 @@ fn validate_source_owned_access_path(
     validate_template_variables(
         posting_discovery,
         posting_detail,
-        source_config_schema_keys(
-            None,
-            source_owned_access_path_schema(&source.selected_access_path),
-        ),
+        source_config_keys,
         "/selectedAccessPath".to_string(),
         diagnostics,
     );

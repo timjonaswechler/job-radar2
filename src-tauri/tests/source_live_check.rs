@@ -500,7 +500,7 @@ fn check_source_persists_failed_report_for_unknown_source_key() {
 }
 
 #[test]
-fn check_source_includes_compiler_and_source_validation_diagnostics_for_invalid_source() {
+fn check_source_maps_invalid_values_to_source_validation_diagnostics() {
     let temp_dir = tempfile::tempdir().unwrap();
     let mut source = simple_source_with_status("active");
     source["sourceConfig"] = json!({ "language": "en" });
@@ -513,7 +513,7 @@ fn check_source_includes_compiler_and_source_validation_diagnostics_for_invalid_
     assert_eq!(report.details["sourceStatusAtCheck"], json!("active"));
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
     assert!(report.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == DiagnosticCategory::Compiler
+        diagnostic.category == DiagnosticCategory::SourceValidation
             && diagnostic.code == "missing_source_config_required_property"
             && diagnostic.severity == DiagnosticSeverity::Error
     }));

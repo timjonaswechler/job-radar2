@@ -5,8 +5,8 @@ use serde_json::Value;
 
 use crate::profile_dsl::documents::fetch::RetryPolicy;
 use crate::profile_dsl::documents::{
-    Acceptance, BrowserInteraction, BrowserWait, Cardinality, Filter, HttpMethod, PaginationLimits,
-    PaginationParameterLocation, Transform,
+    Acceptance, BrowserInteraction, BrowserWait, Cardinality, Filter, HttpMethod, JsonSchemaObject,
+    PaginationLimits, PaginationParameterLocation, Transform,
 };
 
 /// Dormant schema-v3 fragment for one reusable Access Path.
@@ -23,6 +23,12 @@ pub struct AccessPathFragment {
         deserialize_with = "non_null"
     )]
     pub name: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub source_config_schema: Option<JsonSchemaObject>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -713,6 +719,8 @@ struct AccessPathFragmentInput {
     #[serde(default, deserialize_with = "non_null")]
     name: Option<String>,
     #[serde(default, deserialize_with = "non_null")]
+    source_config_schema: Option<JsonSchemaObject>,
+    #[serde(default, deserialize_with = "non_null")]
     posting_discovery: Option<PostingDiscoveryStepFragment>,
     #[serde(default, deserialize_with = "non_null")]
     posting_detail: Option<PostingDetailStepFragment>,
@@ -725,15 +733,35 @@ impl<'de> Deserialize<'de> for AccessPathFragment {
     {
         let value = Value::deserialize(deserializer)?;
         reject_structural_null(&value, &mut Vec::new()).map_err(D::Error::custom)?;
+        reject_direct_schema_titles(&value).map_err(D::Error::custom)?;
         let input: AccessPathFragmentInput =
             serde_json::from_value(value).map_err(D::Error::custom)?;
         Ok(Self {
             key: input.key,
             name: input.name,
+            source_config_schema: input.source_config_schema,
             posting_discovery: input.posting_discovery,
             posting_detail: input.posting_detail,
         })
     }
+}
+
+fn reject_direct_schema_titles(value: &Value) -> Result<(), String> {
+    if let Some(properties) = value
+        .get("sourceConfigSchema")
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object)
+    {
+        if let Some((name, _)) = properties
+            .iter()
+            .find(|(_, property)| property.get("title").is_some())
+        {
+            return Err(format!(
+                "title is not authorable in direct Source Config schema fragments at /sourceConfigSchema/properties/{name}/title"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn reject_structural_null(value: &Value, path: &mut Vec<String>) -> Result<(), String> {

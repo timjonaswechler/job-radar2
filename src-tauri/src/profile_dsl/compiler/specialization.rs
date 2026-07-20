@@ -52,6 +52,7 @@ pub(super) fn specialize_profile(
     };
 
     let mut profile = serde_json::to_value(base).expect("Source Profile documents must serialize");
+    validate_direct_source_config_schema_fragments(fragments, diagnostics);
     let fragment_values = fragments
         .iter()
         .map(|fragment| {
@@ -88,6 +89,35 @@ pub(super) fn specialize_profile(
                 serde_json::json!({ "reason": error.to_string() }),
             ));
             None
+        }
+    }
+}
+
+fn validate_direct_source_config_schema_fragments(
+    fragments: &[AccessPathFragment],
+    diagnostics: &mut Diagnostics,
+) {
+    for (fragment_index, fragment) in fragments.iter().enumerate() {
+        let Some(properties) = fragment
+            .source_config_schema
+            .as_ref()
+            .and_then(|schema| schema.get("properties"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        for (property, schema) in properties {
+            if schema.get("title").is_some() {
+                diagnostics.push(compiler_error(
+                    "source_config_schema_title_not_allowed",
+                    format!("Direct Source Config schema fragment cannot add or replace title for `{property}`"),
+                    format!(
+                        "/accessPaths/{fragment_index}/sourceConfigSchema/properties/{}/title",
+                        crate::profile_dsl::source_config::escape_pointer_segment(property)
+                    ),
+                    serde_json::json!({ "property": property }),
+                ));
+            }
         }
     }
 }

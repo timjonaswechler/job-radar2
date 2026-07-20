@@ -72,7 +72,7 @@
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
         "description": { "$ref": "profile-dsl/common.schema.json#/$defs/description" },
-        "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonSchemaObject" },
+        "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/sourceOwnedJsonSchemaObject" },
         "postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },
         "postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },
         "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }

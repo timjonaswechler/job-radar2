@@ -34,6 +34,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls", "migrate"] }
 base64 = "0.22"
+bigdecimal = "0.4"
 chromiumoxide = "0.9.1"
 dom_query = "0.27"
 futures-util = "0.3"

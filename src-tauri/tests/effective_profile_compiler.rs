@@ -2,9 +2,9 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceAccess,
-    DiagnosticSeverity, Fetch, RegistrySource, RegistrySourceProfile, SourceDocument,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus, SourceValidationState,
-    ValidationStateKind,
+    DiagnosticCategory, DiagnosticSeverity, Fetch, RegistrySource, RegistrySourceProfile,
+    SourceDocument, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
+    SourceValidationState, ValidationStateKind,
 };
 
 #[test]
@@ -522,6 +522,251 @@ fn rejection_diagnostics_have_deterministic_key_order() {
         missing_paths,
         vec!["/sourceConfig/alpha", "/sourceConfig/zeta"]
     );
+}
+
+#[test]
+fn compiler_enforces_all_effective_source_config_value_constraints() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    profile.source_config_schema = Some(
+        serde_json::json!({
+            "type": "object",
+            "required": ["feedUrl", "region", "priority", "largeMinimum"],
+            "additionalProperties": false,
+            "properties": {
+                "feedUrl": { "type": "string", "format": "uri", "title": "Feed URL" },
+                "region": { "type": "string", "enum": ["eu", "us"], "pattern": "^[a-z]{2}$" },
+                "priority": { "type": "integer", "minimum": 1 },
+                "largeMinimum": { "type": "integer", "minimum": 9007199254740993_u64 },
+                "enabled": { "type": "boolean" },
+                "metadata": { "type": "object" },
+                "tags": { "type": "array" },
+                "nothing": { "type": "null" }
+            }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source.source_config.extend(
+        serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(serde_json::json!({
+            "region": "eu",
+            "priority": 1,
+            "largeMinimum": 9007199254740993_u64,
+            "enabled": true,
+            "metadata": {},
+            "tags": [],
+            "nothing": null
+        }))
+        .unwrap(),
+    );
+
+    assert!(matches!(
+        compile_source(&source, &registry_with_profile(profile.clone())),
+        CompileSourceOutcome::Compiled { .. }
+    ));
+
+    for (property, value, expected_code) in [
+        (
+            "feedUrl",
+            serde_json::json!("relative/jobs"),
+            "invalid_source_config_property_uri",
+        ),
+        (
+            "region",
+            serde_json::json!("ap"),
+            "invalid_source_config_property_enum",
+        ),
+        (
+            "priority",
+            serde_json::json!(0),
+            "invalid_source_config_property_minimum",
+        ),
+        (
+            "largeMinimum",
+            serde_json::json!(9007199254740992_u64),
+            "invalid_source_config_property_minimum",
+        ),
+        (
+            "enabled",
+            serde_json::json!("yes"),
+            "invalid_source_config_property_type",
+        ),
+    ] {
+        let mut invalid = source.clone();
+        invalid.source_config.insert(property.to_string(), value);
+        let CompileSourceOutcome::Rejected { diagnostics } =
+            compile_source(&invalid, &registry_with_profile(profile.clone()))
+        else {
+            panic!("invalid {property} must reject compilation");
+        };
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.category == DiagnosticCategory::SourceValidation
+                    && diagnostic.code == expected_code
+                    && diagnostic.path == format!("/sourceConfig/{property}")
+            }),
+            "missing {expected_code}: {diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn compiler_rejects_malformed_contract_definitions_deterministically() {
+    let cases = [
+        (
+            serde_json::json!({ "properties": { "feedUrl": { "type": "mystery" } } }),
+            "invalid_source_config_property_schema_type",
+            "/sourceConfigSchema/properties/feedUrl/type",
+        ),
+        (
+            serde_json::json!({ "properties": { "feedUrl": { "type": "string", "pattern": "[" } } }),
+            "invalid_source_config_schema_pattern",
+            "/sourceConfigSchema/properties/feedUrl/pattern",
+        ),
+        (
+            serde_json::json!({ "required": ["missing", "missing"], "properties": {} }),
+            "duplicate_source_config_schema_required_property",
+            "/sourceConfigSchema/required/1",
+        ),
+        (
+            serde_json::json!({ "properties": { "feedUrl": { "type": "string", "default": "x" } } }),
+            "unsupported_source_config_property_schema_keyword",
+            "/sourceConfigSchema/properties/feedUrl/default",
+        ),
+    ];
+
+    for (schema, expected_code, expected_path) in cases {
+        let mut profile: SourceProfileDocument =
+            read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+        profile.source_config_schema = Some(schema.as_object().unwrap().clone());
+        let source: SourceDocument = read_fixture(
+            "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        );
+        let CompileSourceOutcome::Rejected { diagnostics } =
+            compile_source(&source, &registry_with_profile(profile))
+        else {
+            panic!("malformed contract must reject compilation");
+        };
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.category == DiagnosticCategory::Compiler
+                    && diagnostic.code == expected_code
+                    && diagnostic.path == expected_path
+            }),
+            "missing {expected_code} at {expected_path}: {diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn direct_source_schema_specialization_replaces_arrays_and_preserves_profile_title() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    profile.access_paths[0].source_config_schema = Some(
+        serde_json::json!({
+            "type": "object",
+            "required": ["region"],
+            "properties": {
+                "language": { "type": "string" },
+                "region": { "type": "string", "enum": ["eu", "us"], "title": "Region" }
+            }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source.source_overrides = None;
+    source
+        .source_config
+        .insert("region".to_string(), serde_json::json!("eu"));
+    source.access_paths = Some(fragments(serde_json::json!([{
+        "key": "json_feed",
+        "sourceConfigSchema": {
+            "required": [],
+            "properties": { "region": { "enum": ["eu"] } }
+        }
+    }])));
+
+    let outcome = compile_source(&source, &registry_with_profile(profile.clone()));
+    let CompileSourceOutcome::Compiled {
+        source: compiled, ..
+    } = outcome
+    else {
+        panic!("same-location schema specialization should compile: {outcome:?}");
+    };
+    let CompiledSourceAccess::Profile { effective_profile } = compiled.access else {
+        panic!("expected Effective Source Profile");
+    };
+    let region = &effective_profile.document.access_paths[0]
+        .source_config_schema
+        .as_ref()
+        .unwrap()["properties"]["region"];
+    assert_eq!(region["title"], "Region");
+    assert_eq!(region["enum"], serde_json::json!(["eu"]));
+    assert_eq!(
+        effective_profile.document.access_paths[0]
+            .source_config_schema
+            .as_ref()
+            .unwrap()["required"],
+        serde_json::json!([])
+    );
+
+    source
+        .source_config
+        .insert("region".to_string(), serde_json::json!("us"));
+    let CompileSourceOutcome::Rejected { diagnostics } =
+        compile_source(&source, &registry_with_profile(profile))
+    else {
+        panic!("replaced enum must be executable");
+    };
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "invalid_source_config_property_enum"));
+}
+
+#[test]
+fn direct_and_source_owned_schema_titles_are_rejected() {
+    let direct = serde_json::from_value::<AccessPathFragment>(serde_json::json!({
+        "key": "json_feed",
+        "sourceConfigSchema": {
+            "properties": { "region": { "type": "string", "title": "Region" } }
+        }
+    }));
+    assert!(direct
+        .unwrap_err()
+        .to_string()
+        .contains("title is not authorable"));
+
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
+    let job_radar_lib::SelectedAccessPath::SourceOwnedAccessPath {
+        source_config_schema,
+        ..
+    } = &mut source.selected_access_path
+    else {
+        unreachable!()
+    };
+    source_config_schema
+        .as_mut()
+        .unwrap()
+        .get_mut("properties")
+        .unwrap()
+        .get_mut("startUrl")
+        .unwrap()["title"] = serde_json::json!("Start URL");
+    let CompileSourceOutcome::Rejected { diagnostics } =
+        compile_source(&source, &SourceProfileRegistrySnapshot::default())
+    else {
+        panic!("Source-owned title must reject compilation");
+    };
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "source_config_schema_title_not_allowed"
+            && diagnostic.path == "/selectedAccessPath/sourceConfigSchema/properties/startUrl/title"
+    }));
 }
 
 #[test]

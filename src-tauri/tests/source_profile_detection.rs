@@ -366,6 +366,154 @@ fn source_profile_detection_validates_proposed_source_config_types_enums_and_pat
 }
 
 #[test]
+fn final_detection_validation_reports_every_violation_in_deterministic_order() {
+    let mut profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/acme$" }],
+        "sourceConfig": { "zeta": 42, "bad": "value" }
+    }));
+    profile.source_config_schema = Some(
+        json!({
+            "type": "object",
+            "required": ["zeta", "alpha"],
+            "additionalProperties": false,
+            "properties": {
+                "zeta": { "type": "string" },
+                "alpha": { "type": "string" }
+            }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+
+    let result = block_on(detect_source_proposal_with_http_client(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert_eq!(
+        result
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.path.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "missing_source_config_required_property",
+                "/profiles/0/detect/sourceConfig/alpha"
+            ),
+            (
+                "unknown_source_config_property",
+                "/profiles/0/detect/sourceConfig/bad"
+            ),
+            (
+                "invalid_source_config_property_type",
+                "/profiles/0/detect/sourceConfig/zeta"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn invalid_unselected_detection_contract_stops_before_dependent_probes() {
+    let mut profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/acme$" }],
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    let mut invalid_path = profile.access_paths[0].clone();
+    invalid_path.key = "invalid_unselected".to_string();
+    invalid_path.name = "Invalid unselected".to_string();
+    invalid_path.source_config_schema = Some(
+        json!({
+            "properties": { "region": { "type": "string", "pattern": "[" } }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+    profile.access_paths.push(invalid_path);
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(result.proposal.is_none());
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Compiler
+            && diagnostic.code == "invalid_source_config_schema_pattern"
+            && diagnostic.path
+                == "/profiles/0/accessPaths/1/sourceConfigSchema/properties/region/pattern"
+    }));
+}
+
+#[test]
+fn incremental_detection_validation_stops_invalid_available_values_before_browser_io() {
+    let mut profile = fixture_profile(json!({
+        "recommendedAccessPathKey": "api",
+        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/acme$" }],
+        "sourceConfig": { "startUrl": "relative/path" },
+        "browserProbes": [{
+            "key": "rendered_jobs_page",
+            "url": "{{inputUrl}}",
+            "timeoutMs": 10000,
+            "htmlContains": "ExampleJobs"
+        }]
+    }));
+    profile.source_config_schema = Some(
+        json!({
+            "type": "object",
+            "required": ["startUrl", "laterValue"],
+            "properties": {
+                "startUrl": { "type": "string", "format": "uri" },
+                "laterValue": { "type": "string" }
+            }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+    );
+    let browser = FakeBrowser::new(std::iter::empty());
+
+    let result = block_on(detect_source_proposal_with_clients(
+        "https://jobs.example.test/acme",
+        &[profile],
+        &FakeHttpClient::default(),
+        &browser,
+    ));
+
+    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
+    assert!(browser.requests().is_empty());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == DiagnosticCategory::Detection
+            && diagnostic.code == "invalid_source_config_property_uri"
+            && diagnostic.path == "/profiles/0/detect/sourceConfig/startUrl"
+    }));
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "missing_source_config_required_property" }),
+        "incremental validation must defer missing required values"
+    );
+}
+
+#[test]
 fn source_profile_detection_http_checks_contribute_evidence_and_captures() {
     let profile = fixture_profile(json!({
         "recommendedAccessPathKey": "api",

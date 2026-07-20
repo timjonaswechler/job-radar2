@@ -159,6 +159,19 @@ fn source_schema_keeps_direct_profile_fragments_dormant_until_a01() {
 }
 
 #[test]
+fn source_schema_rejects_titles_on_source_owned_config_properties() {
+    let harness = SchemaHarness::new();
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json",
+    );
+    source["selectedAccessPath"]["sourceConfigSchema"]["properties"]["startUrl"]["title"] =
+        json!("Start URL");
+
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["title", "not"]);
+}
+
+#[test]
 fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnostics() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(

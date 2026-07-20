@@ -7,6 +7,7 @@ use serde_json::Value;
 use crate::profile_dsl::diagnostics::{DiagnosticSeverity, Diagnostics};
 use crate::profile_dsl::documents::SupportLevel;
 use crate::profile_dsl::runtime::ProfileBrowserClient;
+use crate::profile_dsl::source_config::{compile_contract, SchemaLocation};
 use crate::source_profile::documents::{
     DetectionEvidenceKind, ProfileDetectionDocument, SourceProfileDocument,
 };
@@ -28,8 +29,9 @@ pub use http::{
     NoopDetectionHttpClient, ReqwestDetectionHttpClient,
 };
 use proposal::{
-    build_source_config, build_source_proposal, detection_document_evidence,
-    recommended_access_path,
+    build_source_config, build_source_proposal, compiler_definition_diagnostic,
+    detection_document_evidence, recommended_access_path, validate_detection_source_config_values,
+    ValidationCompleteness,
 };
 use templates::{
     render_detection_template, render_detection_template_with_source_config, template_diagnostic,
@@ -141,6 +143,11 @@ async fn detect_source_proposal_internal<C: DetectionHttpClient + Sync>(
         return failed_result(diagnostics);
     }
 
+    let definition_diagnostics = validate_detection_source_config_contracts(profiles);
+    if !definition_diagnostics.is_empty() {
+        return failed_result(definition_diagnostics);
+    }
+
     let mut proposals = Vec::new();
     let mut unsupported_profiles = Vec::new();
     let mut failed = false;
@@ -201,6 +208,52 @@ pub async fn detect_source_proposal(
     profiles: &[SourceProfileDocument],
 ) -> SourceProposalDetectionResult {
     detect_source_proposal_with_http_client(input_url, profiles, &NoopDetectionHttpClient).await
+}
+
+fn validate_detection_source_config_contracts(profiles: &[SourceProfileDocument]) -> Diagnostics {
+    let mut diagnostics = Vec::new();
+    for (profile_index, profile) in profiles.iter().enumerate() {
+        let profile_path = format!("/profiles/{profile_index}/sourceConfigSchema");
+        if profile.access_paths.is_empty() {
+            if let Err(violations) = compile_contract(&[SchemaLocation {
+                schema: profile.source_config_schema.as_ref(),
+                path: &profile_path,
+                title_allowed: true,
+            }]) {
+                for violation in violations {
+                    let diagnostic = compiler_definition_diagnostic(violation);
+                    if !diagnostics.contains(&diagnostic) {
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            continue;
+        }
+        for (path_index, access_path) in profile.access_paths.iter().enumerate() {
+            let access_path_path =
+                format!("/profiles/{profile_index}/accessPaths/{path_index}/sourceConfigSchema");
+            if let Err(violations) = compile_contract(&[
+                SchemaLocation {
+                    schema: profile.source_config_schema.as_ref(),
+                    path: &profile_path,
+                    title_allowed: true,
+                },
+                SchemaLocation {
+                    schema: access_path.source_config_schema.as_ref(),
+                    path: &access_path_path,
+                    title_allowed: true,
+                },
+            ]) {
+                for violation in violations {
+                    let diagnostic = compiler_definition_diagnostic(violation);
+                    if !diagnostics.contains(&diagnostic) {
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+        }
+    }
+    diagnostics
 }
 
 async fn evaluate_profile<C: DetectionHttpClient + Sync>(
@@ -272,10 +325,11 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
                     diagnostics,
                 };
             };
+            let recommended_path = recommended_access_path(profile, detect);
             let source_config_for_probes = match build_source_config(
                 input_url,
                 profile,
-                recommended_access_path(profile, detect),
+                recommended_path,
                 detect,
                 &captures,
             ) {
@@ -293,6 +347,23 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
                     };
                 }
             };
+            if let Some(access_path) = recommended_path {
+                if let Err(value_diagnostics) = validate_detection_source_config_values(
+                    &source_config_for_probes,
+                    profile,
+                    access_path,
+                    &base_path,
+                    ValidationCompleteness::Incremental,
+                ) {
+                    diagnostics.extend(value_diagnostics);
+                    return Candidate {
+                        proposal: None,
+                        unsupported: None,
+                        failed: true,
+                        diagnostics,
+                    };
+                }
+            }
             if !evaluate_browser_probes(
                 input_url,
                 browser_probes,
@@ -340,12 +411,15 @@ async fn evaluate_profile<C: DetectionHttpClient + Sync>(
             failed: false,
             diagnostics,
         },
-        Err(diagnostic) => Candidate {
-            proposal: None,
-            unsupported: None,
-            failed: true,
-            diagnostics: vec![diagnostic],
-        },
+        Err(proposal_diagnostics) => {
+            diagnostics.extend(proposal_diagnostics);
+            Candidate {
+                proposal: None,
+                unsupported: None,
+                failed: true,
+                diagnostics,
+            }
+        }
     }
 }
 
