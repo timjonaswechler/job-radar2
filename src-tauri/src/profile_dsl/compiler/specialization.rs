@@ -16,6 +16,7 @@ use crate::profile_dsl::documents::AccessPathFragment;
 use crate::profile_dsl::policy::{PolicyAccessPathFragment, PolicySourceProfileDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 
+use super::provenance::{self, OriginTree, ProvenanceOrigin, RecordedProvenance};
 use super::{compiler_error, has_error_diagnostics};
 
 #[derive(Clone, Copy)]
@@ -48,31 +49,56 @@ pub(super) fn specialize_profile(
     fragments: Option<&[AccessPathFragment]>,
     diagnostics: &mut Diagnostics,
 ) -> Option<SourceProfileDocument> {
-    specialize_serialized_profile(base, fragments, diagnostics)
+    let (materialized, _) = materialize_serialized_profile(base, fragments, diagnostics)?;
+    deserialize_effective_profile(materialized, diagnostics)
 }
 
 pub(super) fn specialize_policy_profile(
     base: &PolicySourceProfileDocument,
     fragments: Option<&[PolicyAccessPathFragment]>,
     diagnostics: &mut Diagnostics,
-) -> Option<PolicySourceProfileDocument> {
-    specialize_serialized_profile(base, fragments, diagnostics)
+) -> Option<(PolicySourceProfileDocument, RecordedProvenance)> {
+    let (materialized, origins) = materialize_serialized_profile(base, fragments, diagnostics)?;
+    // Finalize typed paths from the merge's own materialization and origin
+    // tree before constructing the completed typed document.
+    let provenance = provenance::profile_provenance(&materialized, &origins);
+    let profile = deserialize_effective_profile(materialized, diagnostics)?;
+    Some((profile, provenance))
 }
 
-fn specialize_serialized_profile<T, F>(
+fn materialize_serialized_profile<T, F>(
     base: &T,
     fragments: Option<&[F]>,
     diagnostics: &mut Diagnostics,
-) -> Option<T>
+) -> Option<(Value, OriginTree)>
 where
-    T: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    T: serde::Serialize,
     F: serde::Serialize,
 {
+    let mut profile = serde_json::to_value(base).expect("Source Profile documents must serialize");
+    let mut profile_origins = OriginTree::for_value(&profile, ProvenanceOrigin::BaseSourceProfile);
+    let profile_origin_object = match &mut profile_origins {
+        OriginTree::Object(object) => object,
+        _ => unreachable!("Source Profile serializes as an object"),
+    };
+    let base_paths = profile
+        .get("accessPaths")
+        .and_then(Value::as_array)
+        .expect("Source Profile accessPaths must serialize as an array")
+        .clone();
+    let base_path_origins = base_paths
+        .iter()
+        .map(|value| OriginTree::for_access_path(value, ProvenanceOrigin::BaseSourceProfile))
+        .collect::<Vec<_>>();
+
     let Some(fragments) = fragments else {
-        return Some(base.clone());
+        profile_origin_object.insert(
+            "accessPaths".to_string(),
+            OriginTree::Keyed(base_path_origins),
+        );
+        return Some((profile, profile_origins));
     };
 
-    let mut profile = serde_json::to_value(base).expect("Source Profile documents must serialize");
     let fragment_values = fragments
         .iter()
         .map(|fragment| {
@@ -82,26 +108,33 @@ where
     validate_direct_source_config_schema_fragments(&fragment_values, diagnostics);
     let initial_diagnostic_count = diagnostics.len();
 
-    let base_paths = profile
-        .get("accessPaths")
-        .and_then(Value::as_array)
-        .expect("Source Profile accessPaths must serialize as an array")
-        .clone();
-    let effective_paths = merge_keyed_collection(
+    let (effective_paths, effective_origins) = merge_keyed_collection(
         &base_paths,
+        &base_path_origins,
         &fragment_values,
         KeyedEntryKind::AccessPath,
         "/accessPaths",
         diagnostics,
     );
     profile["accessPaths"] = Value::Array(effective_paths);
+    profile_origin_object.insert(
+        "accessPaths".to_string(),
+        OriginTree::Keyed(effective_origins),
+    );
 
     if diagnostics.len() != initial_diagnostic_count && has_error_diagnostics(diagnostics) {
         return None;
     }
 
-    match serde_json::from_value(profile) {
-        Ok(profile) => Some(profile),
+    Some((profile, profile_origins))
+}
+
+fn deserialize_effective_profile<T: serde::de::DeserializeOwned>(
+    materialized: Value,
+    diagnostics: &mut Diagnostics,
+) -> Option<T> {
+    match serde_json::from_value(materialized) {
+        Ok(document) => Some(document),
         Err(error) => {
             diagnostics.push(compiler_error(
                 "invalid_effective_profile_fragment",
@@ -144,11 +177,12 @@ fn validate_direct_source_config_schema_fragments(
 
 fn merge_keyed_collection(
     base: &[Value],
+    base_origins: &[OriginTree],
     fragments: &[Value],
     kind: KeyedEntryKind,
     path: &str,
     diagnostics: &mut Diagnostics,
-) -> Vec<Value> {
+) -> (Vec<Value>, Vec<OriginTree>) {
     let mut seen = HashSet::new();
     let mut unique_fragments = Vec::new();
 
@@ -175,18 +209,27 @@ fn merge_keyed_collection(
         .collect::<BTreeMap<_, _>>();
     let base_keys = base.iter().map(entry_key).collect::<HashSet<_>>();
     let mut effective = Vec::with_capacity(base.len() + fragments.len());
+    let mut effective_origins = Vec::with_capacity(base.len() + fragments.len());
 
-    for base_entry in base {
+    for (base_entry, base_origin) in base.iter().zip(base_origins) {
         let key = entry_key(base_entry);
         match fragments_by_key.get(key) {
-            Some((fragment_index, fragment)) => effective.push(merge_keyed_entry(
-                Some(base_entry),
-                fragment,
-                kind,
-                &format!("{path}/{fragment_index}"),
-                diagnostics,
-            )),
-            None => effective.push(base_entry.clone()),
+            Some((fragment_index, fragment)) => {
+                let (value, origins) = merge_keyed_entry(
+                    Some(base_entry),
+                    Some(base_origin),
+                    fragment,
+                    kind,
+                    &format!("{path}/{fragment_index}"),
+                    diagnostics,
+                );
+                effective.push(value);
+                effective_origins.push(origins);
+            }
+            None => {
+                effective.push(base_entry.clone());
+                effective_origins.push(base_origin.clone());
+            }
         }
     }
 
@@ -198,30 +241,32 @@ fn merge_keyed_collection(
         if !validate_complete_addition(fragment, kind, &fragment_path, diagnostics) {
             continue;
         }
-        effective.push(merge_keyed_entry(
-            None,
-            fragment,
-            kind,
-            &fragment_path,
-            diagnostics,
-        ));
+        let (value, origins) =
+            merge_keyed_entry(None, None, fragment, kind, &fragment_path, diagnostics);
+        effective.push(value);
+        effective_origins.push(origins);
     }
 
-    effective
+    (effective, effective_origins)
 }
 
 fn merge_keyed_entry(
     base: Option<&Value>,
+    base_origins: Option<&OriginTree>,
     fragment: &Value,
     kind: KeyedEntryKind,
     path: &str,
     diagnostics: &mut Diagnostics,
-) -> Value {
+) -> (Value, OriginTree) {
     let base_object = base.and_then(Value::as_object);
     let fragment_object = fragment
         .as_object()
         .expect("typed keyed fragments must serialize as objects");
     let mut effective = base_object.cloned().unwrap_or_default();
+    let mut effective_origins = base_origins
+        .and_then(OriginTree::object)
+        .cloned()
+        .unwrap_or_default();
 
     if matches!(kind, KeyedEntryKind::AccessPath)
         && base.is_some()
@@ -240,14 +285,20 @@ fn merge_keyed_entry(
     }
 
     for (field, fragment_value) in fragment_object {
-        if (field == "name" && matches!(kind, KeyedEntryKind::AccessPath) && base.is_some())
+        if (field == "key" && base.is_some())
+            || (field == "name" && matches!(kind, KeyedEntryKind::AccessPath) && base.is_some())
             || (matches!(kind, KeyedEntryKind::AccessPath)
                 && matches!(field.as_str(), "postingDiscovery" | "postingDetail"))
         {
             continue;
         }
-        let merged = merge_value(effective.get(field), fragment_value);
+        let (merged, origins) = merge_value(
+            effective.get(field),
+            effective_origins.get(field),
+            fragment_value,
+        );
         effective.insert(field.clone(), merged);
+        effective_origins.insert(field.clone(), origins);
     }
 
     if matches!(kind, KeyedEntryKind::AccessPath) {
@@ -258,27 +309,46 @@ fn merge_keyed_entry(
             let Some(fragment_value) = fragment_object.get(field) else {
                 continue;
             };
-            let merged = merge_phase_step(
+            let (merged, origins) = merge_phase_step(
                 base_object.and_then(|object| object.get(field)),
+                base_origins
+                    .and_then(OriginTree::object)
+                    .and_then(|object| object.get(field)),
                 fragment_value,
                 strategy_kind,
                 &format!("{path}/{field}"),
                 diagnostics,
             );
             effective.insert(field.to_string(), merged);
+            effective_origins.insert(field.to_string(), origins);
         }
     }
 
-    Value::Object(effective)
+    // Existing keyed locators remain base even when repeated by a fragment;
+    // complete additions have no base and are direct throughout.
+    if base.is_none() {
+        effective_origins = match OriginTree::for_access_path(
+            &Value::Object(effective.clone()),
+            ProvenanceOrigin::DirectSourceFragment,
+        ) {
+            OriginTree::Object(object) => object,
+            _ => unreachable!(),
+        };
+    }
+    (
+        Value::Object(effective),
+        OriginTree::Object(effective_origins),
+    )
 }
 
 fn merge_phase_step(
     base: Option<&Value>,
+    base_origins: Option<&OriginTree>,
     fragment: &Value,
     strategy_kind: KeyedEntryKind,
     path: &str,
     diagnostics: &mut Diagnostics,
-) -> Value {
+) -> (Value, OriginTree) {
     let fragment_object = fragment
         .as_object()
         .expect("typed phase fragments must serialize as objects");
@@ -294,41 +364,73 @@ fn merge_phase_step(
 
     let base_object = base.and_then(Value::as_object);
     let mut effective = base_object.cloned().unwrap_or_default();
+    let mut effective_origins = base_origins
+        .and_then(OriginTree::object)
+        .cloned()
+        .unwrap_or_default();
     for (field, fragment_value) in fragment_object {
-        let merged = if field == "strategies" {
+        let (merged, origins) = if field == "strategies" {
             let empty = Vec::new();
             let base_strategies = base_object
                 .and_then(|object| object.get(field))
                 .and_then(Value::as_array)
                 .unwrap_or(&empty);
-            Value::Array(merge_keyed_collection(
+            let empty_origins = Vec::new();
+            let base_strategy_origins = match effective_origins.get(field) {
+                Some(OriginTree::Keyed(origins)) => origins,
+                _ => &empty_origins,
+            };
+            let (values, origins) = merge_keyed_collection(
                 base_strategies,
+                base_strategy_origins,
                 fragment_value
                     .as_array()
                     .expect("typed Strategy fragments must serialize as an array"),
                 strategy_kind,
                 &format!("{path}/strategies"),
                 diagnostics,
-            ))
+            );
+            (Value::Array(values), OriginTree::Keyed(origins))
         } else {
-            merge_value(effective.get(field), fragment_value)
+            merge_value(
+                effective.get(field),
+                effective_origins.get(field),
+                fragment_value,
+            )
         };
         effective.insert(field.clone(), merged);
+        effective_origins.insert(field.clone(), origins);
     }
-    Value::Object(effective)
+    (
+        Value::Object(effective),
+        OriginTree::Object(effective_origins),
+    )
 }
 
-fn merge_value(base: Option<&Value>, fragment: &Value) -> Value {
+fn merge_value(
+    base: Option<&Value>,
+    base_origins: Option<&OriginTree>,
+    fragment: &Value,
+) -> (Value, OriginTree) {
     match (base, fragment) {
         (Some(Value::Object(base)), Value::Object(fragment)) => {
             let mut effective = base.clone();
+            let mut origins = base_origins
+                .and_then(OriginTree::object)
+                .cloned()
+                .unwrap_or_default();
             for (key, fragment_value) in fragment {
-                let merged = merge_value(effective.get(key), fragment_value);
+                let (merged, merged_origins) =
+                    merge_value(effective.get(key), origins.get(key), fragment_value);
                 effective.insert(key.clone(), merged);
+                origins.insert(key.clone(), merged_origins);
             }
-            Value::Object(effective)
+            (Value::Object(effective), OriginTree::Object(origins))
         }
-        _ => fragment.clone(),
+        _ => (
+            fragment.clone(),
+            OriginTree::for_value(fragment, ProvenanceOrigin::DirectSourceFragment),
+        ),
     }
 }
 

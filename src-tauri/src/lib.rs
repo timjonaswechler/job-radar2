@@ -30,8 +30,9 @@ pub use geo::{
 };
 pub use profile_dsl::compiler::{
     compile_source, compile_source_execution_plan, CompileSourceExecutionPlanResult,
-    CompileSourceOutcome, CompiledSource, CompiledSourceAccess, EffectiveSourceProfile,
-    ProfileCompilerSnapshot, SourceOwnedAccessPath,
+    CompileSourceOutcome, CompiledSource, CompiledSourceAccess, CompiledSourceProvenance,
+    EffectiveSourceProfile, ProfileCompilerSnapshot, ProvenanceEntry, ProvenanceOrigin,
+    ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath,
 };
 pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,

@@ -1,0 +1,18 @@
+{
+  "kind": "profile",
+  "entries": [
+    {
+      "path": {
+        "segments": [
+          { "kind": "access_path", "key": "json_feed" },
+          { "kind": "field", "name": "discovery" },
+          { "kind": "strategy", "key": "json_api" },
+          { "kind": "field", "name": "fetch" },
+          { "kind": "field", "name": "headers" },
+          { "kind": "map_key", "key": "accept" }
+        ]
+      },
+      "origin": "base_source_profile"
+    }
+  ]
+}

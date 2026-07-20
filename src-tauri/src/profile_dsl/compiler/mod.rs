@@ -22,12 +22,18 @@ mod boundedness;
 mod capabilities;
 mod keys;
 mod overrides;
+mod provenance;
 mod resolution;
 mod security;
 mod source_config;
 mod specialization;
 mod support;
 mod templates;
+
+pub use provenance::{
+    CompiledSourceProvenance, ProvenanceEntry, ProvenanceOrigin, ProvenancePath,
+    ProvenancePathSegment,
+};
 
 use crate::profile_dsl::documents::JsonSchemaObject;
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
@@ -85,6 +91,7 @@ pub enum CompiledSourceAccess {
 pub struct CompiledSource {
     pub access: CompiledSourceAccess,
     pub execution_plan: PolicySourceExecutionPlan,
+    pub provenance: CompiledSourceProvenance,
 }
 
 /// Closed result of compiling one authoritative Source.
@@ -156,11 +163,12 @@ fn compile_policy_source(
                 ));
                 return None;
             };
-            let effective_profile = specialization::specialize_policy_profile(
-                base_profile,
-                source.access_paths.as_deref(),
-                diagnostics,
-            )?;
+            let (effective_profile, recorded_provenance) =
+                specialization::specialize_policy_profile(
+                    base_profile,
+                    source.access_paths.as_deref(),
+                    diagnostics,
+                )?;
             let schema_v2_source = schema_v2_source(source);
             let schema_v2_registry = schema_v2_registry(effective_profile.schema_v2_document());
             let plan = resolution::compile_source_execution_plan(
@@ -178,6 +186,8 @@ fn compile_policy_source(
                 selected_path.discovery.policy,
                 selected_path.detail.as_ref().map(|step| step.policy),
             );
+            validate_provenance(&recorded_provenance, diagnostics)?;
+            let provenance = recorded_provenance.value;
             Some(CompiledSource {
                 access: CompiledSourceAccess::Profile {
                     effective_profile: EffectiveSourceProfile {
@@ -185,6 +195,7 @@ fn compile_policy_source(
                     },
                 },
                 execution_plan,
+                provenance,
             })
         }
         PolicySelectedAccessPath::SourceOwnedAccessPath {
@@ -207,6 +218,10 @@ fn compile_policy_source(
                 discovery.policy,
                 detail.as_ref().map(|step| step.policy),
             );
+            let recorded_provenance =
+                provenance::source_owned_provenance(&source.selected_access_path);
+            validate_provenance(&recorded_provenance, diagnostics)?;
+            let provenance = recorded_provenance.value;
             Some(CompiledSource {
                 access: CompiledSourceAccess::SourceOwned {
                     access_path: SourceOwnedAccessPath {
@@ -220,9 +235,26 @@ fn compile_policy_source(
                     },
                 },
                 execution_plan,
+                provenance,
             })
         }
     }
+}
+
+fn validate_provenance(
+    provenance: &provenance::RecordedProvenance,
+    diagnostics: &mut Diagnostics,
+) -> Option<()> {
+    if let Err((reason, path)) = provenance::validate_unique_complete(provenance) {
+        diagnostics.push(compiler_error(
+            "compiler/compiled_provenance_invariant_violation",
+            "Compiled provenance did not uniquely cover every execution-relevant terminal",
+            "",
+            serde_json::json!({ "reason": reason, "provenancePath": path }),
+        ));
+        return None;
+    }
+    Some(())
 }
 
 fn schema_v2_source(source: &PolicySourceDocument) -> SourceDocument {
@@ -372,5 +404,29 @@ pub(super) fn compiler_error(
         path: path.into(),
         strategy_key: None,
         details: Some(details),
+    }
+}
+
+#[cfg(test)]
+mod provenance_invariant_tests {
+    use super::*;
+
+    #[test]
+    fn recorder_faults_become_the_closed_invariant_diagnostic() {
+        for reason in ["duplicate_path", "missing_path"] {
+            let mut diagnostics = Vec::new();
+            assert!(
+                validate_provenance(&provenance::invariant_fault(reason), &mut diagnostics,)
+                    .is_none()
+            );
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(
+                diagnostics[0].code,
+                "compiler/compiled_provenance_invariant_violation"
+            );
+            assert_eq!(diagnostics[0].path, "");
+            assert_eq!(diagnostics[0].details.as_ref().unwrap()["reason"], reason);
+            assert!(diagnostics[0].details.as_ref().unwrap()["provenancePath"].is_object());
+        }
     }
 }
