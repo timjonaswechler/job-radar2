@@ -233,7 +233,7 @@ struct TurnCancellationInner {
 }
 
 impl TurnCancellation {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             inner: Arc::new(TurnCancellationInner {
                 cancelled: AtomicBool::new(false),
@@ -393,6 +393,10 @@ impl AgentConversation {
         &self.model
     }
 
+    pub(crate) fn provider(&self) -> &dyn ConversationProvider {
+        self.provider.as_ref()
+    }
+
     pub fn reasoning_level(&self) -> ReasoningLevel {
         self.reasoning
     }
@@ -423,29 +427,211 @@ impl AgentConversation {
         self.reasoning
     }
 
-    pub fn send(&mut self, text: String) -> Result<ConversationEventStream<'_>, AgentError> {
+    pub(crate) fn begin_attempt(
+        &self,
+        text: String,
+        cancellation: TurnCancellation,
+    ) -> ConversationAttempt {
         let user = UserMessage::new(text);
-        let mut request_messages = self.messages.clone();
-        request_messages.push(Message::User(user.clone()));
-        let cancellation = TurnCancellation::new();
+        let mut messages = self.messages.clone();
+        messages.push(Message::User(user.clone()));
         let request = ConversationRequest {
             system_prompt: self.system_prompt.clone(),
-            messages: request_messages,
+            messages,
             model: self.model.clone(),
             reasoning: self.reasoning,
             conversation_id: self.conversation_id.clone(),
             cancellation: cancellation.clone(),
         };
-        let provider_stream = self.provider.stream(request);
-        Ok(ConversationEventStream {
-            conversation: self,
-            provider_stream,
-            user,
-            state: StreamState::AwaitStarted,
+        ConversationAttempt {
+            provider_stream: self.provider.stream(request),
+            model: self.model.clone(),
+            state: AttemptState::AwaitStarted,
             blocks: Vec::new(),
             active: None,
             cancellation,
+        }
+    }
+
+    pub(crate) fn commit(&mut self, user: UserMessage, message: AssistantMessage) {
+        self.messages.push(Message::User(user));
+        self.messages.push(Message::Assistant(message));
+    }
+
+    pub(crate) fn begin_compaction(
+        &self,
+        prompt: String,
+        cancellation: TurnCancellation,
+        output_cap: u64,
+    ) -> ConversationAttempt {
+        let mut summary_model = self.model.clone();
+        let capped_output = summary_model.max_tokens().min(output_cap);
+        *summary_model.parts_mut().max_tokens = capped_output;
+        let request = ConversationRequest {
+            system_prompt: "You summarize prior conversation context. Do not answer or continue the conversation.".to_owned(),
+            messages: vec![Message::User(UserMessage::new(prompt))],
+            model: summary_model.clone(),
+            reasoning: self.reasoning,
+            conversation_id: self.conversation_id.clone(),
+            cancellation: cancellation.clone(),
+        };
+        ConversationAttempt {
+            provider_stream: self.provider.stream(request),
+            model: summary_model,
+            state: AttemptState::AwaitStarted,
+            blocks: Vec::new(),
+            active: None,
+            cancellation,
+        }
+    }
+
+    pub fn send(&mut self, text: String) -> Result<ConversationEventStream<'_>, AgentError> {
+        let user = UserMessage::new(text.clone());
+        let cancellation = TurnCancellation::new();
+        let attempt = self.begin_attempt(text, cancellation);
+        Ok(ConversationEventStream {
+            conversation: self,
+            attempt,
+            user,
         })
+    }
+}
+
+pub(crate) struct ConversationAttempt {
+    provider_stream: ProviderEventStream,
+    model: Model,
+    state: AttemptState,
+    blocks: Vec<AssistantContent>,
+    active: Option<(usize, ContentKind, String)>,
+    cancellation: TurnCancellation,
+}
+
+enum AttemptState {
+    AwaitStarted,
+    Streaming,
+    AwaitEnd(AttemptTerminal),
+    Finished,
+}
+
+enum AttemptTerminal {
+    Completed(ProviderTurnCompletion),
+    Failed(AgentError),
+    Aborted,
+}
+
+impl ConversationAttempt {
+    fn failure(&mut self) -> ConversationEvent {
+        self.state = AttemptState::Finished;
+        ConversationEvent::Failed {
+            error: AgentError::fixed(
+                AgentErrorCategory::Provider,
+                "provider stream protocol is invalid",
+            ),
+        }
+    }
+}
+
+impl Stream for ConversationAttempt {
+    type Item = ConversationEvent;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        loop {
+            self.cancellation.inner.stream_waker.register(cx.waker());
+            if self.cancellation.is_cancelled() && !matches!(self.state, AttemptState::Finished) {
+                self.state = AttemptState::Finished;
+                return Poll::Ready(Some(ConversationEvent::Aborted));
+            }
+            if matches!(self.state, AttemptState::Finished) {
+                return Poll::Ready(None);
+            }
+            if matches!(self.state, AttemptState::AwaitEnd(_)) {
+                return match self.provider_stream.as_mut().poll_next(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Some(_)) => {
+                        let event = self.failure();
+                        Poll::Ready(Some(event))
+                    }
+                    Poll::Ready(None) => {
+                        let AttemptState::AwaitEnd(terminal) =
+                            std::mem::replace(&mut self.state, AttemptState::Finished)
+                        else {
+                            unreachable!()
+                        };
+                        Poll::Ready(Some(match terminal {
+                            AttemptTerminal::Completed(completion) => {
+                                ConversationEvent::Completed {
+                                    message: AssistantMessage {
+                                        content: std::mem::take(&mut self.blocks),
+                                        model: self.model.clone(),
+                                        usage: completion.usage,
+                                        finish_reason: completion.finish_reason,
+                                        replay: completion.replay,
+                                    },
+                                }
+                            }
+                            AttemptTerminal::Failed(error) => ConversationEvent::Failed { error },
+                            AttemptTerminal::Aborted => ConversationEvent::Aborted,
+                        }))
+                    }
+                };
+            }
+            let event = match self.provider_stream.as_mut().poll_next(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => {
+                    let event = self.failure();
+                    return Poll::Ready(Some(event));
+                }
+                Poll::Ready(Some(event)) => event,
+            };
+            let public = match (&self.state, event) {
+                (AttemptState::AwaitStarted, ProviderEvent::Started) => {
+                    self.state = AttemptState::Streaming;
+                    Some(ConversationEvent::Started)
+                }
+                (AttemptState::Streaming, ProviderEvent::ContentStarted { index, kind })
+                    if self.active.is_none() && index == self.blocks.len() =>
+                {
+                    self.active = Some((index, kind, String::new()));
+                    Some(ConversationEvent::ContentStarted { index, kind })
+                }
+                (AttemptState::Streaming, ProviderEvent::ContentDelta { index, delta })
+                    if self.active.as_ref().is_some_and(|active| active.0 == index) =>
+                {
+                    self.active.as_mut().unwrap().2.push_str(&delta);
+                    Some(ConversationEvent::ContentDelta { index, delta })
+                }
+                (AttemptState::Streaming, ProviderEvent::ContentFinished { index })
+                    if self.active.as_ref().is_some_and(|active| active.0 == index) =>
+                {
+                    let (_, kind, text) = self.active.take().unwrap();
+                    self.blocks.push(match kind {
+                        ContentKind::Text => AssistantContent::Text(text),
+                        ContentKind::Reasoning => AssistantContent::Reasoning(text),
+                    });
+                    Some(ConversationEvent::ContentFinished { index })
+                }
+                (AttemptState::Streaming, ProviderEvent::Completed(completion))
+                    if self.active.is_none() =>
+                {
+                    self.state = AttemptState::AwaitEnd(AttemptTerminal::Completed(completion));
+                    None
+                }
+                (AttemptState::Streaming, ProviderEvent::Failed(error)) => {
+                    self.state = AttemptState::AwaitEnd(AttemptTerminal::Failed(error));
+                    None
+                }
+                (AttemptState::Streaming, ProviderEvent::Aborted) => {
+                    self.state = AttemptState::AwaitEnd(AttemptTerminal::Aborted);
+                    None
+                }
+                _ => {
+                    let event = self.failure();
+                    return Poll::Ready(Some(event));
+                }
+            };
+            if let Some(event) = public {
+                return Poll::Ready(Some(event));
+            }
+        }
     }
 }
 
@@ -464,112 +650,13 @@ impl AgentConversation {
 /// ```
 pub struct ConversationEventStream<'a> {
     conversation: &'a mut AgentConversation,
-    provider_stream: ProviderEventStream,
+    attempt: ConversationAttempt,
     user: UserMessage,
-    state: StreamState,
-    blocks: Vec<AssistantContent>,
-    active: Option<(usize, ContentKind, String)>,
-    cancellation: TurnCancellation,
-}
-
-enum StreamState {
-    AwaitStarted,
-    Streaming,
-    AwaitProviderEnd(Terminal),
-    Finished,
-}
-
-enum Terminal {
-    Completed(ProviderTurnCompletion),
-    Failed(AgentError),
-    Aborted,
 }
 
 impl ConversationEventStream<'_> {
     pub fn cancellation(&self) -> TurnCancellation {
-        self.cancellation.clone()
-    }
-
-    fn protocol_failure(&mut self) -> ConversationEvent {
-        self.state = StreamState::Finished;
-        ConversationEvent::Failed {
-            error: AgentError::fixed(
-                AgentErrorCategory::Provider,
-                "provider stream protocol is invalid",
-            ),
-        }
-    }
-
-    fn accept_event(&mut self, event: ProviderEvent) -> Option<ConversationEvent> {
-        match (&self.state, event) {
-            (StreamState::AwaitStarted, ProviderEvent::Started) => {
-                self.state = StreamState::Streaming;
-                Some(ConversationEvent::Started)
-            }
-            (StreamState::Streaming, ProviderEvent::ContentStarted { index, kind })
-                if self.active.is_none() && index == self.blocks.len() =>
-            {
-                self.active = Some((index, kind, String::new()));
-                Some(ConversationEvent::ContentStarted { index, kind })
-            }
-            (StreamState::Streaming, ProviderEvent::ContentDelta { index, delta })
-                if self.active.as_ref().is_some_and(|active| active.0 == index) =>
-            {
-                if let Some(active) = &mut self.active {
-                    active.2.push_str(&delta);
-                }
-                Some(ConversationEvent::ContentDelta { index, delta })
-            }
-            (StreamState::Streaming, ProviderEvent::ContentFinished { index })
-                if self.active.as_ref().is_some_and(|active| active.0 == index) =>
-            {
-                let (_, kind, content) = self.active.take().expect("active block checked");
-                self.blocks.push(match kind {
-                    ContentKind::Text => AssistantContent::Text(content),
-                    ContentKind::Reasoning => AssistantContent::Reasoning(content),
-                });
-                Some(ConversationEvent::ContentFinished { index })
-            }
-            (StreamState::Streaming, ProviderEvent::Completed(completion))
-                if self.active.is_none() =>
-            {
-                self.state = StreamState::AwaitProviderEnd(Terminal::Completed(completion));
-                None
-            }
-            (StreamState::Streaming, ProviderEvent::Failed(error)) => {
-                self.state = StreamState::AwaitProviderEnd(Terminal::Failed(error));
-                None
-            }
-            (StreamState::Streaming, ProviderEvent::Aborted) => {
-                self.state = StreamState::AwaitProviderEnd(Terminal::Aborted);
-                None
-            }
-            _ => Some(self.protocol_failure()),
-        }
-    }
-
-    fn finish_terminal(&mut self, terminal: Terminal) -> ConversationEvent {
-        self.state = StreamState::Finished;
-        match terminal {
-            Terminal::Completed(completion) => {
-                let message = AssistantMessage {
-                    content: std::mem::take(&mut self.blocks),
-                    model: self.conversation.model.clone(),
-                    usage: completion.usage,
-                    finish_reason: completion.finish_reason,
-                    replay: completion.replay,
-                };
-                self.conversation
-                    .messages
-                    .push(Message::User(self.user.clone()));
-                self.conversation
-                    .messages
-                    .push(Message::Assistant(message.clone()));
-                ConversationEvent::Completed { message }
-            }
-            Terminal::Failed(error) => ConversationEvent::Failed { error },
-            Terminal::Aborted => ConversationEvent::Aborted,
-        }
+        self.attempt.cancellation.clone()
     }
 }
 
@@ -577,49 +664,13 @@ impl Stream for ConversationEventStream<'_> {
     type Item = ConversationEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            self.cancellation
-                .inner
-                .stream_waker
-                .register(context.waker());
-            if self.cancellation.is_cancelled() && !matches!(self.state, StreamState::Finished) {
-                self.state = StreamState::Finished;
-                return Poll::Ready(Some(ConversationEvent::Aborted));
+        match Pin::new(&mut self.attempt).poll_next(context) {
+            Poll::Ready(Some(ConversationEvent::Completed { message })) => {
+                let user = self.user.clone();
+                self.conversation.commit(user, message.clone());
+                Poll::Ready(Some(ConversationEvent::Completed { message }))
             }
-            if matches!(self.state, StreamState::Finished) {
-                return Poll::Ready(None);
-            }
-            if matches!(self.state, StreamState::AwaitProviderEnd(_)) {
-                return match self.provider_stream.as_mut().poll_next(context) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Some(_)) => {
-                        let failure = self.protocol_failure();
-                        Poll::Ready(Some(failure))
-                    }
-                    Poll::Ready(None) => {
-                        let StreamState::AwaitProviderEnd(terminal) =
-                            std::mem::replace(&mut self.state, StreamState::Finished)
-                        else {
-                            unreachable!()
-                        };
-                        let event = self.finish_terminal(terminal);
-                        Poll::Ready(Some(event))
-                    }
-                };
-            }
-
-            match self.provider_stream.as_mut().poll_next(context) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(None) => {
-                    let failure = self.protocol_failure();
-                    return Poll::Ready(Some(failure));
-                }
-                Poll::Ready(Some(event)) => {
-                    if let Some(event) = self.accept_event(event) {
-                        return Poll::Ready(Some(event));
-                    }
-                }
-            }
+            other => other,
         }
     }
 }

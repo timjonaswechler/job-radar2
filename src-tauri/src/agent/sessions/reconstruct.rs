@@ -1,8 +1,8 @@
 use super::wire::{AssistantData, Document, Entry, EntryKind};
 use super::{
-    CompactionSnapshot, ContinuationAssistantBlock, ContinuationBlock, RecoveryNotice,
-    SessionAccess, SessionError, SessionErrorCode, SessionId, SessionSnapshot, VisibleBlock,
-    VisibleTurn,
+    CompactionSnapshot, ContextEntry, ContextRole, ContinuationAssistantBlock, ContinuationBlock,
+    RecoveryNotice, SessionAccess, SessionError, SessionErrorCode, SessionId, SessionSnapshot,
+    VisibleBlock, VisibleHistoryEntry, VisibleTurn,
 };
 use crate::agent::models::{ModelId, ProviderId, ReasoningLevel};
 use std::collections::HashMap;
@@ -34,6 +34,7 @@ pub(super) fn reconstruct(
         SessionAccess::Writable
     };
     let mut turns = Vec::new();
+    let mut visible_history = Vec::new();
     let mut first_user = None;
     let mut provider = None;
     let mut model = None;
@@ -55,7 +56,7 @@ pub(super) fn reconstruct(
                         ..
                     } = &next.kind
                     {
-                        turns.push(VisibleTurn {
+                        let turn = VisibleTurn {
                             user: text.clone(),
                             assistant: blocks
                                 .iter()
@@ -71,7 +72,9 @@ pub(super) fn reconstruct(
                                     }
                                 })
                                 .collect(),
-                        });
+                        };
+                        visible_history.push(VisibleHistoryEntry::Turn(turn.clone()));
+                        turns.push(turn);
                         provider = ProviderId::new(p.clone()).ok();
                         model = ModelId::new(m.clone()).ok();
                         index += 2;
@@ -94,12 +97,17 @@ pub(super) fn reconstruct(
                 first_kept,
                 tokens,
                 reason,
-            } => compactions.push(CompactionSnapshot {
-                summary: summary.clone(),
-                first_kept_entry_id: first_kept.clone(),
-                tokens_before: *tokens,
-                reason: reason.clone(),
-            }),
+            } => {
+                let compaction = CompactionSnapshot {
+                    summary: summary.clone(),
+                    first_kept_entry_id: first_kept.clone(),
+                    tokens_before: *tokens,
+                    reason: reason.clone(),
+                    path_index: index,
+                };
+                visible_history.push(VisibleHistoryEntry::Compaction(compaction.clone()));
+                compactions.push(compaction);
+            }
             EntryKind::Assistant { .. } | EntryKind::Unsupported | EntryKind::UnsupportedUser => {}
         }
         index += 1;
@@ -124,6 +132,8 @@ pub(super) fn reconstruct(
         .map(|e| e.timestamp.clone())
         .unwrap_or_else(|| doc.header.timestamp.clone());
     let continuation = continuation(&path);
+    let context_entries = context_metadata(&path);
+    let compaction_entries = raw_context_metadata(&path);
     let leaf = path.last().map(|e| e.id.clone());
     Ok((
         SessionSnapshot {
@@ -138,6 +148,9 @@ pub(super) fn reconstruct(
             reasoning_level: reasoning,
             compactions,
             recovery_notices: notice.into_iter().collect(),
+            visible_history,
+            context_entries,
+            compaction_entries,
         },
         continuation,
         leaf,
@@ -254,56 +267,196 @@ fn continuation(path: &[&Entry]) -> Vec<ContinuationBlock> {
     out.extend(context_entries(&path[compaction_index + 1..]));
     out
 }
+fn context_metadata(path: &[&Entry]) -> Vec<ContextEntry> {
+    let newest = path.iter().enumerate().rev().find_map(|(index, entry)| {
+        if let EntryKind::Compaction {
+            summary,
+            first_kept,
+            ..
+        } = &entry.kind
+        {
+            Some((index, summary, first_kept))
+        } else {
+            None
+        }
+    });
+    let mut selected: Vec<(usize, &Entry)> = Vec::new();
+    let mut output = Vec::new();
+    if let Some((compaction_index, summary, first_kept)) = newest {
+        output.push(ContextEntry {
+            id: path[compaction_index].id.clone(),
+            role: ContextRole::User,
+            text: format!("The conversation history before this point was compacted into the following summary:\n\n<summary>\n{summary}\n</summary>"),
+            authoritative_tokens: None,
+            path_index: compaction_index,
+        });
+        if let Some(first_index) = path.iter().position(|entry| entry.id == *first_kept) {
+            selected.extend(
+                path[first_index..compaction_index]
+                    .iter()
+                    .map(|entry| (0, *entry)),
+            );
+        }
+        selected.extend(
+            path[compaction_index + 1..]
+                .iter()
+                .enumerate()
+                .map(|(offset, entry)| (compaction_index + 1 + offset, *entry)),
+        );
+    } else {
+        selected.extend(
+            path.iter()
+                .enumerate()
+                .map(|(index, entry)| (index, *entry)),
+        );
+    }
+    for (index, entry) in selected {
+        match &entry.kind {
+            EntryKind::User(text) => output.push(ContextEntry {
+                id: entry.id.clone(),
+                role: ContextRole::User,
+                text: text.clone(),
+                authoritative_tokens: None,
+                path_index: index,
+            }),
+            EntryKind::Assistant {
+                blocks,
+                authoritative_tokens,
+                ..
+            } => output.push(ContextEntry {
+                id: entry.id.clone(),
+                role: ContextRole::Assistant,
+                text: blocks
+                    .iter()
+                    .filter_map(|block| match block {
+                        AssistantData::Text { text, .. } => Some(text.as_str()),
+                        AssistantData::Thinking {
+                            thinking,
+                            redacted: false,
+                            ..
+                        } => Some(thinking.as_str()),
+                        AssistantData::Thinking { redacted: true, .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                authoritative_tokens: newest
+                    .as_ref()
+                    .and_then(|(compaction_index, _, _)| {
+                        (index > *compaction_index)
+                            .then_some(*authoritative_tokens)
+                            .flatten()
+                    })
+                    .or_else(|| newest.is_none().then_some(*authoritative_tokens).flatten()),
+                path_index: index,
+            }),
+            _ => {}
+        }
+    }
+    output
+}
+
+fn raw_context_metadata(path: &[&Entry]) -> Vec<ContextEntry> {
+    let mut output = Vec::new();
+    for (path_index, entry) in path.iter().enumerate() {
+        match &entry.kind {
+            EntryKind::User(text) => output.push(ContextEntry {
+                id: entry.id.clone(),
+                role: ContextRole::User,
+                text: text.clone(),
+                authoritative_tokens: None,
+                path_index,
+            }),
+            EntryKind::Assistant { blocks, .. } => output.push(ContextEntry {
+                id: entry.id.clone(),
+                role: ContextRole::Assistant,
+                text: blocks
+                    .iter()
+                    .filter_map(|block| match block {
+                        AssistantData::Text { text, .. } => Some(text.as_str()),
+                        AssistantData::Thinking {
+                            thinking,
+                            redacted: false,
+                            ..
+                        } => Some(thinking.as_str()),
+                        AssistantData::Thinking { redacted: true, .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                authoritative_tokens: None,
+                path_index,
+            }),
+            _ => {}
+        }
+    }
+    output
+}
+
 fn context_entries(path: &[&Entry]) -> Vec<ContinuationBlock> {
     let mut out = Vec::new();
     let mut index = 0;
+    // A compaction may deliberately retain an Assistant suffix from an oversized
+    // turn. This is the only supported unpaired context entry; durable pairing is
+    // still validated on the full active path.
+    if let Some(first) = path.first().filter(|entry| entry.supported) {
+        if matches!(first.kind, EntryKind::Assistant { .. }) {
+            if let Some(block) = continuation_entry(first) {
+                out.push(block);
+            }
+            index = 1;
+        }
+    }
     while index + 1 < path.len() {
         let user = path[index];
         let assistant = path[index + 1];
-        if user.supported && assistant.supported {
-            if let (
-                EntryKind::User(text),
-                EntryKind::Assistant {
-                    blocks,
-                    provider,
-                    model,
-                    response_id,
-                },
-            ) = (&user.kind, &assistant.kind)
-            {
-                out.push(ContinuationBlock::User(text.clone()));
-                out.push(ContinuationBlock::Assistant {
-                    blocks: blocks
-                        .iter()
-                        .map(|block| match block {
-                            AssistantData::Text { text, signature } => {
-                                ContinuationAssistantBlock::Text {
-                                    text: text.clone(),
-                                    signature: signature.clone(),
-                                }
-                            }
-                            AssistantData::Thinking {
-                                thinking,
-                                signature,
-                                redacted,
-                            } => ContinuationAssistantBlock::Thinking {
-                                thinking: thinking.clone(),
-                                signature: signature.clone(),
-                                redacted: *redacted,
-                            },
-                        })
-                        .collect(),
-                    provider: provider.clone(),
-                    model: model.clone(),
-                    response_id: response_id.clone(),
-                });
-                index += 2;
-                continue;
-            }
+        if user.supported
+            && assistant.supported
+            && matches!(user.kind, EntryKind::User(_))
+            && matches!(assistant.kind, EntryKind::Assistant { .. })
+        {
+            out.push(continuation_entry(user).expect("supported user"));
+            out.push(continuation_entry(assistant).expect("supported assistant"));
+            index += 2;
+        } else {
+            index += 1;
         }
-        index += 1;
     }
     out
+}
+
+fn continuation_entry(entry: &Entry) -> Option<ContinuationBlock> {
+    match &entry.kind {
+        EntryKind::User(text) => Some(ContinuationBlock::User(text.clone())),
+        EntryKind::Assistant {
+            blocks,
+            provider,
+            model,
+            response_id,
+            ..
+        } => Some(ContinuationBlock::Assistant {
+            blocks: blocks
+                .iter()
+                .map(|block| match block {
+                    AssistantData::Text { text, signature } => ContinuationAssistantBlock::Text {
+                        text: text.clone(),
+                        signature: signature.clone(),
+                    },
+                    AssistantData::Thinking {
+                        thinking,
+                        signature,
+                        redacted,
+                    } => ContinuationAssistantBlock::Thinking {
+                        thinking: thinking.clone(),
+                        signature: signature.clone(),
+                        redacted: *redacted,
+                    },
+                })
+                .collect(),
+            provider: provider.clone(),
+            model: model.clone(),
+            response_id: response_id.clone(),
+        }),
+        _ => None,
+    }
 }
 fn parse_reasoning(s: &str) -> ReasoningLevel {
     match s {
