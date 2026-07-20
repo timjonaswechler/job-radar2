@@ -1,7 +1,7 @@
 import type { JsonValue } from "@/lib/api/sources";
 
 export const profileTemplateSnippet: JsonValue = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   key: "example_profile",
   name: "Example Profile",
   kind: "generic",
@@ -25,7 +25,8 @@ export const profileTemplateSnippet: JsonValue = {
     {
       key: "html_jobs",
       name: "HTML jobs page",
-      postingDiscovery: {
+      discovery: {
+        policy: { type: "first_accepted" },
         strategies: [
           {
             key: "jobs_html",

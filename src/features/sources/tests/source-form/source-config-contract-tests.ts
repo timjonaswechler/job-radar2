@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+
 import {
   profileDslSchemaCatalog,
   profileDslSchemaRefs,
@@ -12,9 +14,9 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import {
-  sourceOverridesFromText,
-  sourceOverridesStarterForAccessPath,
-} from "@/features/sources/source-form/source-overrides";
+  directSourceSpecializationFromText,
+  directSourceSpecializationStarterForAccessPath,
+} from "@/features/sources/source-form/direct-source-specialization";
 import type { JsonValue, ProfileAccessPathDefinition } from "@/lib/api/sources";
 
 const profileSchema: JsonValue = {
@@ -150,57 +152,53 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  sourceOverridesFromText(
-    '{"strategyOverrides":[{"step":"postingDiscovery","strategyKey":"posting_api"}]}',
+  directSourceSpecializationFromText(
+    '[{"key":"posting_api","discovery":{"strategies":[{"key":"posting_api"}]}}]',
   ),
   {
-    value: {
-      strategyOverrides: [
-        { step: "postingDiscovery", strategyKey: "posting_api" },
-      ],
-    },
+    value: [
+      {
+        key: "posting_api",
+        discovery: { strategies: [{ key: "posting_api" }] },
+      },
+    ],
     errors: [],
   },
 );
-assert.deepEqual(sourceOverridesFromText("   "), { value: null, errors: [] });
-assert.deepEqual(sourceOverridesFromText("[]").errors, [
-  "Source Overrides müssen ein JSON-Objekt sein.",
+assert.deepEqual(directSourceSpecializationFromText("   "), { value: null, errors: [] });
+assert.deepEqual(directSourceSpecializationFromText("{}").errors, [
+  "Direkte Source-Spezialisierung muss ein JSON-Array mit Access-Path-Keys sein.",
 ]);
-assert.deepEqual(sourceOverridesFromText("{not-json}").errors, [
-  "Source Overrides brauchen gültiges JSON.",
+assert.deepEqual(directSourceSpecializationFromText("{not-json}").errors, [
+  "Direkte Source-Spezialisierung braucht gültiges JSON.",
 ]);
-const sourceOverridesSchema = profileDslSchemaCatalog.resolveRef(
-  profileDslSchemaRefs.sourceOverrides,
+const directSourceSpecializationSchema = profileDslSchemaCatalog.resolveRef(
+  profileDslSchemaRefs.accessPathFragments,
 );
-assert.equal(sourceOverridesSchema?.schema.type, "object");
-assert.ok(sourceOverridesSchema?.schema.properties);
+assert.equal(directSourceSpecializationSchema?.schema.type, "array");
+assert.ok(directSourceSpecializationSchema?.schema.items);
 
 const accessPath: ProfileAccessPathDefinition = {
   key: "posting_api",
   name: "Posting API",
-  postingDiscovery: { strategies: [{ key: "posting_api" }] },
+  discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("posting_api")] },
 };
 assert.equal(
-  sourceOverridesStarterForAccessPath(accessPath),
+  directSourceSpecializationStarterForAccessPath(accessPath),
   JSON.stringify(
-    {
-      strategyOverrides: [
-        { step: "postingDiscovery", strategyKey: "posting_api" },
-      ],
-    },
+    [
+      {
+        key: "posting_api",
+        discovery: { strategies: [{ key: "posting_api" }] },
+      },
+    ],
     null,
     2,
   ),
 );
 assert.equal(
-  sourceOverridesStarterForAccessPath(null),
-  JSON.stringify(
-    {
-      strategyOverrides: [{ step: "postingDiscovery", strategyKey: "" }],
-    },
-    null,
-    2,
-  ),
+  directSourceSpecializationStarterForAccessPath(null),
+  JSON.stringify([{ key: "" }], null, 2),
 );
 
 function entry(id: string, key: string, value: string): SourceConfigEntry {

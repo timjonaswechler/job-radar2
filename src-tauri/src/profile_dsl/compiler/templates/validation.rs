@@ -72,9 +72,7 @@ pub(super) fn validate_variable_reference(
                 push_template_diagnostic(
                     diagnostics,
                     "template_namespace_unavailable",
-                    format!(
-                        "Template namespace `{namespace}` is not available in postingDiscovery"
-                    ),
+                    format!("Template namespace `{namespace}` is not available in discovery"),
                     path,
                     strategy_key,
                     namespace,

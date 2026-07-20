@@ -2,20 +2,20 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use job_radar_lib::{
     compile_source, prepare_source_behavior_fingerprints, CompileSourceOutcome,
-    PolicySelectedAccessPath, PolicySourceDocument, PolicySourceProfileDocument,
-    PolicySourceProfileRegistrySnapshot, SourceRuntimeBinding,
+    RegistrySourceProfile, ReusableAccessPathDocument, SelectedAccessPath, SourceDocument,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceRuntimeBinding,
 };
 
 #[test]
 fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
-    let mut profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let job_radar_lib::Fetch::Http { url, .. } =
         &mut profile.access_paths[0].discovery.strategies[0].fetch
     else {
         panic!("fixture uses HTTP fetch")
     };
     *url = "https://example.test/{{source:name}}".to_string();
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.name = "Fingerprint source".to_string();
     let registry = registry_with_profile(profile.clone());
     let outcome = compile_source(&source, &registry);
@@ -33,7 +33,7 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
 
     let fingerprints =
         prepare_source_behavior_fingerprints(&source, Some(&profile), &outcome).unwrap();
-    assert_eq!(fingerprints.len(), 12);
+    assert_eq!(fingerprints.len(), 13);
     assert_eq!(
         fingerprints
             .iter()
@@ -44,6 +44,7 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
             .collect::<Vec<_>>(),
         vec![
             ("source_behavior", "base_source_profile"),
+            ("source_behavior", "direct_source_specialization"),
             ("source_behavior", "effective_source_profile"),
             ("source_behavior", "compiler_provenance"),
             ("source_behavior", "source_config"),
@@ -78,8 +79,9 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
 
 #[test]
 fn all_success_and_rejection_branches_have_the_authoritative_counts() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    source.access_paths = None;
     assert_behavior_order(
         &prepare_profile(&source, &profile),
         &[
@@ -94,7 +96,7 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
     let mut direct = source.clone();
     direct.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed",
-        "postingDiscovery": { "acceptWhen": { "minResults": 1 } }
+        "discovery": { "acceptWhen": { "minResults": 1 } }
     }])));
     assert_behavior_order(
         &prepare_profile(&direct, &profile),
@@ -134,7 +136,7 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
         ],
     );
 
-    let owned: PolicySourceDocument = read_fixture("valid/source-owned-access-path.json");
+    let owned: SourceDocument = read_fixture("valid/source-owned-access-path.json");
     assert_behavior_order(
         &prepare_owned(&owned),
         &[
@@ -184,13 +186,12 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
         ],
     );
 
-    let unresolved = compile_source(&source, &PolicySourceProfileRegistrySnapshot::default());
+    let unresolved = compile_source(&source, &SourceProfileRegistrySnapshot::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&source, None, &unresolved).unwrap(),
         &["source_config", "selected_access_path"],
     );
-    let unresolved_direct =
-        compile_source(&direct, &PolicySourceProfileRegistrySnapshot::default());
+    let unresolved_direct = compile_source(&direct, &SourceProfileRegistrySnapshot::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&direct, None, &unresolved_direct).unwrap(),
         &[
@@ -203,8 +204,8 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
 
 #[test]
 fn empty_direct_behavior_is_absent_but_equal_value_replacement_is_retained() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed"
     }])));
@@ -214,7 +215,7 @@ fn empty_direct_behavior_is_absent_but_equal_value_replacement_is_retained() {
 
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed",
-        "postingDiscovery": { "acceptWhen": { "minResults": 1 } }
+        "discovery": { "acceptWhen": { "minResults": 1 } }
     }])));
     let equal_replacement = prepare_profile(&source, &profile);
     assert_eq!(equal_replacement.len(), 12);
@@ -223,12 +224,13 @@ fn empty_direct_behavior_is_absent_but_equal_value_replacement_is_retained() {
 
 #[test]
 fn executable_posting_title_provenance_is_retained() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    source.access_paths = None;
     let baseline = digest_map(&prepare_profile(&source, &profile));
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed",
-        "postingDiscovery": {
+        "discovery": {
             "strategies": [{
                 "key": "json_api",
                 "extract": {
@@ -257,8 +259,8 @@ fn executable_posting_title_provenance_is_retained() {
 
 #[test]
 fn dynamic_object_order_is_canonical_while_array_order_remains_semantic() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let mut first: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut first: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let mut second = first.clone();
     first.source_config.insert(
         "nested".into(),
@@ -290,8 +292,8 @@ fn dynamic_object_order_is_canonical_while_array_order_remains_semantic() {
 
 #[test]
 fn source_name_is_hashed_only_when_the_compiler_emits_its_binding() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let mut renamed = source.clone();
     renamed.name = "A different name".into();
     assert_eq!(
@@ -316,8 +318,8 @@ fn source_name_is_hashed_only_when_the_compiler_emits_its_binding() {
 
 #[test]
 fn preparation_rejects_a_compile_outcome_for_different_source_material() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let outcome = compile_source(&source, &registry_with_profile(profile.clone()));
     let mut different = source.clone();
     different.name = "secret source name".into();
@@ -329,8 +331,8 @@ fn preparation_rejects_a_compile_outcome_for_different_source_material() {
 
 #[test]
 fn unselected_path_binding_and_excluded_metadata_do_not_affect_digests() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let baseline = digest_map(&prepare_profile(&source, &profile));
 
     let mut changed_profile = profile.clone();
@@ -364,14 +366,14 @@ fn unselected_path_binding_and_excluded_metadata_do_not_affect_digests() {
 
 #[test]
 fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
-    let mut source: PolicySourceDocument = read_fixture("valid/source-owned-access-path.json");
-    let PolicySelectedAccessPath::SourceOwnedAccessPath { discovery, .. } =
+    let mut source: SourceDocument = read_fixture("valid/source-owned-access-path.json");
+    let SelectedAccessPath::SourceOwnedAccessPath { discovery, .. } =
         &mut source.selected_access_path
     else {
         panic!("fixture uses Source-owned access")
     };
     discovery.strategies.clear();
-    let outcome = compile_source(&source, &PolicySourceProfileRegistrySnapshot::default());
+    let outcome = compile_source(&source, &SourceProfileRegistrySnapshot::default());
     assert!(matches!(outcome, CompileSourceOutcome::Rejected { .. }));
 
     let fingerprints = prepare_source_behavior_fingerprints(&source, None, &outcome).unwrap();
@@ -389,15 +391,15 @@ fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
 }
 
 fn prepare_profile(
-    source: &PolicySourceDocument,
-    profile: &PolicySourceProfileDocument,
+    source: &SourceDocument,
+    profile: &SourceProfileDocument,
 ) -> Vec<job_radar_lib::CheckFingerprint> {
     let outcome = compile_source(source, &registry_with_profile(profile.clone()));
     prepare_source_behavior_fingerprints(source, Some(profile), &outcome).unwrap()
 }
 
-fn prepare_owned(source: &PolicySourceDocument) -> Vec<job_radar_lib::CheckFingerprint> {
-    let outcome = compile_source(source, &PolicySourceProfileRegistrySnapshot::default());
+fn prepare_owned(source: &SourceDocument) -> Vec<job_radar_lib::CheckFingerprint> {
+    let outcome = compile_source(source, &SourceProfileRegistrySnapshot::default());
     prepare_source_behavior_fingerprints(source, None, &outcome).unwrap()
 }
 
@@ -441,23 +443,23 @@ fn digest_map(
         .collect()
 }
 
-fn fragments(value: serde_json::Value) -> Vec<job_radar_lib::PolicyAccessPathFragment> {
+fn fragments(value: serde_json::Value) -> Vec<job_radar_lib::AccessPathFragment> {
     serde_json::from_value(value).unwrap()
 }
 
-fn set_selected_fetch_url(profile: &mut PolicySourceProfileDocument, url: &str) {
+fn set_selected_fetch_url(profile: &mut SourceProfileDocument, url: &str) {
     set_path_fetch_url(&mut profile.access_paths[0], url);
 }
 
-fn set_path_fetch_url(path: &mut job_radar_lib::PolicyReusableAccessPathDocument, value: &str) {
+fn set_path_fetch_url(path: &mut ReusableAccessPathDocument, value: &str) {
     let job_radar_lib::Fetch::Http { url, .. } = &mut path.discovery.strategies[0].fetch else {
         panic!("fixture uses HTTP fetch")
     };
     *url = value.into();
 }
 
-fn set_owned_fetch_url(source: &mut PolicySourceDocument, value: &str) {
-    let PolicySelectedAccessPath::SourceOwnedAccessPath { discovery, .. } =
+fn set_owned_fetch_url(source: &mut SourceDocument, value: &str) {
+    let SelectedAccessPath::SourceOwnedAccessPath { discovery, .. } =
         &mut source.selected_access_path
     else {
         panic!("fixture uses Source-owned access")
@@ -469,12 +471,15 @@ fn set_owned_fetch_url(source: &mut PolicySourceDocument, value: &str) {
     }
 }
 
-fn registry_with_profile(
-    profile: PolicySourceProfileDocument,
-) -> PolicySourceProfileRegistrySnapshot {
-    PolicySourceProfileRegistrySnapshot {
-        profiles: vec![profile],
+fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
+    SourceProfileRegistrySnapshot {
+        profiles: vec![RegistrySourceProfile {
+            origin: "test".into(),
+            path: String::new(),
+            document: profile,
+        }],
         sources: Vec::new(),
+        diagnostics: Vec::new(),
     }
 }
 
@@ -482,34 +487,5 @@ fn read_fixture<T: serde::de::DeserializeOwned>(relative: &str) -> T {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/source-profile-dsl")
         .join(relative);
-    let mut value: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
-    add_first_accepted_policy(&mut value);
-    if let Some(object) = value.as_object_mut() {
-        object.remove("sourceOverrides");
-    }
-    serde_json::from_value(value).unwrap()
-}
-
-fn add_first_accepted_policy(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(object) => {
-            if object
-                .get("strategies")
-                .is_some_and(serde_json::Value::is_array)
-            {
-                object
-                    .entry("policy")
-                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
-            }
-            for child in object.values_mut() {
-                add_first_accepted_policy(child);
-            }
-        }
-        serde_json::Value::Array(values) => {
-            for child in values {
-                add_first_accepted_policy(child);
-            }
-        }
-        _ => {}
-    }
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }

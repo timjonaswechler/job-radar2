@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "owned_source",
   "name": "Owned Source",
   "status": "draft",
@@ -16,12 +16,16 @@
     "name": "HTML page",
     "sourceConfigSchema": {
       "type": "object",
-      "required": ["startUrl"],
+      "required": [
+        "startUrl"
+      ],
       "properties": {
-        "startUrl": { "type": "string" }
+        "startUrl": {
+          "type": "string"
+        }
       }
     },
-    "postingDiscovery": {
+    "discovery": {
       "strategies": [
         {
           "key": "html_cards",
@@ -45,7 +49,9 @@
               }
             ]
           },
-          "parse": { "type": "html" },
+          "parse": {
+            "type": "html"
+          },
           "select": {
             "type": "css",
             "selector": ".job-card"
@@ -70,7 +76,10 @@
             }
           }
         }
-      ]
+      ],
+      "policy": {
+        "type": "first_accepted"
+      }
     }
   }
 }

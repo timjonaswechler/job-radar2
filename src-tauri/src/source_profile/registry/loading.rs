@@ -6,7 +6,9 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::profile_dsl::compiler::{validate_source_profile_document, ProfileCompilerSnapshot};
+use crate::profile_dsl::compiler::{
+    compile_source, validate_source_profile_document, CompileSourceOutcome, CompiledSourceAccess,
+};
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
@@ -76,27 +78,33 @@ pub fn load_snapshot_with_builtins(
 
     let profiles = load_profile_documents(profile_documents, &mut diagnostics);
     let source_documents = load_source_documents(source_documents, &mut diagnostics);
-    let compiler_snapshot = ProfileCompilerSnapshot {
-        profiles: profiles
-            .iter()
-            .map(|profile| profile.document.clone())
-            .collect(),
-        sources: source_documents
-            .iter()
-            .map(|source| source.document.clone())
-            .collect(),
+    let profile_only_registry = SourceProfileRegistrySnapshot {
+        profiles: profiles.clone(),
+        sources: Vec::new(),
+        diagnostics: Vec::new(),
     };
 
     let mut sources = Vec::new();
     for source in source_documents {
-        let validation_state =
-            derive_source_validation_state(&compiler_snapshot, &source.document.key);
+        let compile_outcome = compile_source(&source.document, &profile_only_registry);
+        let validation_state = derive_source_validation_state(&source.document, &compile_outcome);
+        let effective_profile = match &compile_outcome {
+            CompileSourceOutcome::Compiled { source, .. } => match &source.access {
+                CompiledSourceAccess::Profile { effective_profile } => {
+                    Some(effective_profile.document.clone())
+                }
+                CompiledSourceAccess::SourceOwned { .. } => None,
+            },
+            CompileSourceOutcome::Rejected { .. } => None,
+        };
         diagnostics.extend(validation_state.diagnostics.clone());
         sources.push(RegistrySource {
             origin: source.origin,
             path: source.path,
             document: source.document,
             validation_state,
+            effective_profile,
+            compile_outcome: Some(compile_outcome),
         });
     }
 
@@ -323,7 +331,7 @@ fn validate_document_basics(
     diagnostics: &mut Diagnostics,
 ) -> bool {
     let mut valid = true;
-    if schema_version != 2 {
+    if schema_version != 3 {
         diagnostics.push(registry_diagnostic(
             "unsupported_schema_version",
             format!(

@@ -1,20 +1,16 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "template_pipe",
   "name": "Template Pipe",
   "kind": "generic",
-  "support": { "level": "experimental" },
-  "detect": {
-    "inputUrlPatterns": [
-      { "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }
-    ],
-    "keyCandidates": ["{{capture:boardSlug|technicalKey}}"]
+  "support": {
+    "level": "experimental"
   },
   "accessPaths": [
     {
       "key": "api",
       "name": "API",
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "jobs_api",
@@ -24,18 +20,47 @@
               "url": "https://example.test/jobs",
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
-            "select": { "type": "json_path", "jsonPath": "$.jobs" },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
             "extract": {
               "fields": {
-                "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                "company": { "type": "const", "value": "Example" },
-                "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one"
+                },
+                "company": {
+                  "type": "const",
+                  "value": "Example"
+                },
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
               }
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
-  ]
+  ],
+  "detection": {
+    "inputUrlPatterns": [
+      {
+        "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$"
+      }
+    ],
+    "keyCandidates": [
+      "{{capture:boardSlug|technicalKey}}"
+    ]
+  }
 }

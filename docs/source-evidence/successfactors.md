@@ -1,5 +1,7 @@
 # SAP SuccessFactors Source Evidence
 
+> Historical evidence snapshot: schema-v2 and old phase references below describe the recorded pre-#242 check and are not current authoring guidance.
+
 Source Profile: `successfactors`
 
 Audit parent: GitHub issue #33

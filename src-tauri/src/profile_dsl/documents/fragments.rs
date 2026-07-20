@@ -3,16 +3,14 @@ use std::collections::BTreeMap;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::profile_dsl::documents::fetch::RetryPolicy;
 use crate::profile_dsl::documents::{
     Acceptance, BrowserInteraction, BrowserWait, Cardinality, Filter, HttpMethod, JsonSchemaObject,
     PaginationLimits, PaginationParameterLocation, Transform,
 };
+use crate::profile_dsl::policy::StrategyPolicy;
 
-/// Dormant schema-v3 fragment for one reusable Access Path.
-///
-/// `SourceDocument::access_paths` is intentionally skipped by Serde until A01
-/// activates direct Source specialization in the persisted Source format.
+/// Active schema-v3 Direct Source Specialization fragment for one reusable
+/// Access Path. `SourceDocument::access_paths` persists these typed fragments.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccessPathFragment {
@@ -30,14 +28,12 @@ pub struct AccessPathFragment {
     )]
     pub source_config_schema: Option<JsonSchemaObject>,
     #[serde(
-        rename = "postingDiscovery",
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
     pub discovery: Option<DiscoveryStepFragment>,
     #[serde(
-        rename = "postingDetail",
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
@@ -48,6 +44,12 @@ pub struct AccessPathFragment {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiscoveryStepFragment {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub policy: Option<StrategyPolicy>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -65,6 +67,12 @@ pub struct DiscoveryStepFragment {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DetailStepFragment {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub policy: Option<StrategyPolicy>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -238,12 +246,6 @@ pub struct FetchFragment {
         deserialize_with = "non_null"
     )]
     pub timeout_ms: Option<u64>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "non_null"
-    )]
-    pub retry: Option<RetryPolicy>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -722,9 +724,9 @@ struct AccessPathFragmentInput {
     name: Option<String>,
     #[serde(default, deserialize_with = "non_null")]
     source_config_schema: Option<JsonSchemaObject>,
-    #[serde(rename = "postingDiscovery", default, deserialize_with = "non_null")]
+    #[serde(default, deserialize_with = "non_null")]
     discovery: Option<DiscoveryStepFragment>,
-    #[serde(rename = "postingDetail", default, deserialize_with = "non_null")]
+    #[serde(default, deserialize_with = "non_null")]
     detail: Option<DetailStepFragment>,
 }
 

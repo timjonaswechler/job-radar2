@@ -173,7 +173,7 @@ fn compiled_discovery_runtime_reports_browser_fetch_diagnostics() {
     assert_runtime_diagnostic(&result.diagnostics[0], "browser_wait_timeout");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/fetch/waits/0"
+        "/discovery/strategies/0/fetch/waits/0"
     );
 }
 
@@ -192,7 +192,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     assert_runtime_diagnostic(&xml_parse_failure.diagnostics[0], "xml_parse_failed");
     assert_eq!(
         xml_parse_failure.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/parse"
+        "/discovery/strategies/0/parse"
     );
 
     let html_select_plan = compiled_discovery_plan(
@@ -211,7 +211,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     assert_runtime_diagnostic(&html_select_failure.diagnostics[0], "css_select_failed");
     assert_eq!(
         html_select_failure.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/select/selector"
+        "/discovery/strategies/0/select/selector"
     );
 
     let mut html_fields = default_html_fields();
@@ -235,6 +235,6 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     );
     assert_eq!(
         html_extract_failure.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/extract/fields/title"
+        "/discovery/strategies/0/extract/fields/title"
     );
 }

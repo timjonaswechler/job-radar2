@@ -19,7 +19,7 @@ use crate::{
             capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
         },
-        policy::{PolicySourceExecutionPlan, StrategyPolicy},
+        policy::StrategyPolicy,
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -232,16 +232,16 @@ where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
-        return cancelled_detail_result("/postingDetail", None);
+        return cancelled_detail_result("/detail", None);
     }
 
     let Some(detail) = &plan.detail else {
         return DetailExecutionResult {
             description_text: None,
             diagnostics: vec![runtime_error(
-                "posting_detail_missing",
-                "Execution Plan does not contain compiled postingDetail",
-                "/postingDetail",
+                "detail_missing",
+                "Execution Plan does not contain compiled detail",
+                "/detail",
                 None,
                 json!({}),
             )],
@@ -252,9 +252,9 @@ where
         return DetailExecutionResult {
             description_text: None,
             diagnostics: vec![runtime_error(
-                "posting_detail_strategy_missing",
-                "postingDetail does not contain an executable strategy",
-                "/postingDetail/strategies",
+                "detail_strategy_missing",
+                "detail does not contain an executable strategy",
+                "/detail/strategies",
                 None,
                 json!({}),
             )],
@@ -280,7 +280,7 @@ where
             diagnostics.extend(attempt.result.diagnostics);
             push_runtime_execution_cancelled(
                 &mut diagnostics,
-                format!("/postingDetail/strategies/{strategy_index}"),
+                format!("/detail/strategies/{strategy_index}"),
                 Some(&strategy.key),
             );
             return DetailExecutionResult {
@@ -300,8 +300,8 @@ where
 
     diagnostics.push(runtime_error(
         "fallback_exhausted",
-        "postingDetail fallback strategies were exhausted without an accepted result",
-        "/postingDetail/strategies",
+        "detail fallback strategies were exhausted without an accepted result",
+        "/detail/strategies",
         None,
         json!({}),
     ));
@@ -312,7 +312,7 @@ where
 }
 
 pub async fn execute_policy_detail_with_clients_and_context<F, B>(
-    plan: &PolicySourceExecutionPlan,
+    plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
     fetcher: &F,
     browser: &B,
@@ -326,9 +326,9 @@ where
         return DetailExecutionResult {
             description_text: None,
             diagnostics: vec![runtime_error(
-                "posting_detail_missing",
-                "Execution Plan does not contain compiled postingDetail",
-                "/postingDetail",
+                "detail_missing",
+                "Execution Plan does not contain compiled detail",
+                "/detail",
                 None,
                 json!({}),
             )],
@@ -342,7 +342,7 @@ where
 }
 
 async fn execute_policy_first_accepted<F, B>(
-    policy_plan: &PolicySourceExecutionPlan,
+    plan: &SourceExecutionPlan,
     posting: &DetailPostingOccurrence,
     fetcher: &F,
     browser: &B,
@@ -353,9 +353,8 @@ where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
-        return cancelled_detail_result("/postingDetail", None);
+        return cancelled_detail_result("/detail", None);
     }
-    let plan = policy_plan.execution_plan();
     let detail = plan
         .detail
         .as_ref()
@@ -364,9 +363,9 @@ where
         return DetailExecutionResult {
             description_text: None,
             diagnostics: vec![runtime_error(
-                "posting_detail_strategy_missing",
-                "postingDetail does not contain an executable strategy",
-                "/postingDetail/strategies",
+                "detail_strategy_missing",
+                "detail does not contain an executable strategy",
+                "/detail/strategies",
                 None,
                 json!({}),
             )],
@@ -392,7 +391,7 @@ where
             diagnostics.extend(attempt.result.diagnostics);
             push_runtime_execution_cancelled(
                 &mut diagnostics,
-                format!("/postingDetail/strategies/{strategy_index}"),
+                format!("/detail/strategies/{strategy_index}"),
                 Some(&strategy.key),
             );
             return DetailExecutionResult {
@@ -411,8 +410,8 @@ where
 
     diagnostics.push(runtime_error(
         "fallback_exhausted",
-        "postingDetail fallback strategies were exhausted without an accepted result",
-        "/postingDetail/strategies",
+        "detail fallback strategies were exhausted without an accepted result",
+        "/detail/strategies",
         None,
         json!({}),
     ));

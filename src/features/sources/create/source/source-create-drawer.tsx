@@ -16,7 +16,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
 import { DiscardSourceChangesDialog } from "@/features/sources/source-form/discard-source-changes-dialog";
-import { SourceOverridesEditor } from "@/features/sources/source-form/source-overrides-editor";
+import { DirectSourceSpecializationEditor } from "@/features/sources/source-form/direct-source-specialization-editor";
 import type { RegistrySource, RegistrySourceProfile } from "@/lib/api/sources";
 
 import {
@@ -134,13 +134,13 @@ export function SourceCreateDrawer({
               onChange={actions.setConfigEntries}
             />
 
-            <SourceOverridesEditor
-              value={state.sourceOverridesText}
+            <DirectSourceSpecializationEditor
+              value={state.directSourceSpecializationText}
               disabled={state.saving}
-              starterValue={data.sourceOverridesStarter}
-              errors={data.buildResult.overridesErrors}
+              starterValue={data.directSourceSpecializationStarter}
+              errors={data.buildResult.specializationErrors}
               showErrors={state.saveAttempted}
-              onChange={actions.setSourceOverridesText}
+              onChange={actions.setDirectSourceSpecializationText}
             />
 
             <div className="flex flex-col gap-2">

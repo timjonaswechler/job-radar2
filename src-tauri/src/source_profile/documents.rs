@@ -8,6 +8,7 @@ use crate::profile_dsl::documents::{
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SourceProfileDocument {
+    #[serde(deserialize_with = "deserialize_schema_version_3")]
     pub schema_version: u64,
     pub key: String,
     pub name: String,
@@ -15,7 +16,7 @@ pub struct SourceProfileDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub support: SupportMetadata,
-    #[serde(rename = "detect", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub detection: Option<DetectionDocument>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_config_schema: Option<JsonSchemaObject>,
@@ -32,4 +33,17 @@ pub enum SourceProfileKind {
     WebsiteFamily,
     CareerSite,
     Generic,
+}
+
+fn deserialize_schema_version_3<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    let version = u64::deserialize(deserializer)?;
+    if version == 3 {
+        Ok(version)
+    } else {
+        Err(D::Error::custom("schemaVersion must be 3"))
+    }
 }

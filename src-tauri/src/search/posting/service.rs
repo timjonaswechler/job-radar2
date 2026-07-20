@@ -3,11 +3,12 @@ use std::path::Path;
 
 use crate::{
     profile_dsl::{
-        compiler::{compile_source_execution_plan, ProfileCompilerSnapshot},
+        compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_detail_with_clients, DetailFetcher, DetailPostingOccurrence,
+            execute_policy_detail_with_clients_and_context, DetailFetcher, DetailPostingOccurrence,
             ManagedProfileBrowserClient, ProfileBrowserClient, ReqwestDetailFetcher,
+            RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -172,7 +173,6 @@ impl<'a> JobPostingService<'a> {
             });
         }
 
-        let compiler_snapshot = compiler_snapshot(snapshot);
         let mut diagnostics = Vec::new();
         let mut attempted_detail_capable_source = false;
 
@@ -199,45 +199,54 @@ impl<'a> JobPostingService<'a> {
                 continue;
             }
 
-            let compile_result =
-                compile_source_execution_plan(&compiler_snapshot, &source.document.key);
-            if compile_result.execution_plan.is_none()
-                || has_error_diagnostics(&compile_result.diagnostics)
-            {
-                diagnostics.extend(with_posting_source_context(
-                    compile_result.diagnostics,
-                    &posting_source,
-                ));
-                continue;
-            }
+            let (execution_plan, compile_diagnostics) =
+                match compile_source(&source.document, snapshot) {
+                    CompileSourceOutcome::Compiled {
+                        source: compiled,
+                        diagnostics,
+                    } if !has_error_diagnostics(&diagnostics) => {
+                        (compiled.execution_plan, diagnostics)
+                    }
+                    CompileSourceOutcome::Compiled {
+                        diagnostics: compile_diagnostics,
+                        ..
+                    }
+                    | CompileSourceOutcome::Rejected {
+                        diagnostics: compile_diagnostics,
+                    } => {
+                        diagnostics.extend(with_posting_source_context(
+                            compile_diagnostics,
+                            &posting_source,
+                        ));
+                        continue;
+                    }
+                };
 
             diagnostics.extend(with_posting_source_context(
-                compile_result.diagnostics,
+                compile_diagnostics,
                 &posting_source,
             ));
-            let execution_plan = compile_result
-                .execution_plan
-                .expect("compile result has an execution plan");
             if execution_plan.detail.is_none() {
                 diagnostics.push(detail_source_diagnostic(
                     &posting_source,
-                    "posting_detail_missing",
+                    "detail_missing",
                     format!(
-                        "Source `{}` compiled successfully but does not provide postingDetail",
+                        "Source `{}` compiled successfully but does not provide Detail",
                         source.document.key
                     ),
-                    "/postingDetail",
+                    "/detail",
                     serde_json::json!({ "sourceKey": source.document.key }),
                 ));
                 continue;
             }
 
             attempted_detail_capable_source = true;
-            let result = execute_detail_with_clients(
+            let result = execute_policy_detail_with_clients_and_context(
                 &execution_plan,
                 &posting_occurrence(&posting, &posting_source),
                 fetcher,
                 browser,
+                RuntimeExecutionContext::uncancellable(),
             )
             .await;
             let result_diagnostics =
@@ -284,9 +293,9 @@ impl<'a> JobPostingService<'a> {
             if diagnostics.is_empty() {
                 diagnostics.push(Diagnostic {
                     category: DiagnosticCategory::SourceValidation,
-                    code: "posting_detail_source_missing".to_string(),
+                    code: "detail_source_missing".to_string(),
                     message: format!(
-                        "Job Posting {id} has no persisted posting source that can provide compiled postingDetail"
+                        "Job Posting {id} has no persisted posting source that can provide compiled Detail"
                     ),
                     severity: DiagnosticSeverity::Error,
                     path: "".to_string(),
@@ -299,7 +308,7 @@ impl<'a> JobPostingService<'a> {
                 description_state: PostingDescriptionState::Unsupported {
                     message: diagnostic_summary(
                         &diagnostics,
-                        "job posting has no persisted posting source that can provide compiled postingDetail",
+                        "job posting has no persisted posting source that can provide compiled Detail",
                     ),
                     diagnostics,
                 },
@@ -453,21 +462,6 @@ fn ordered_posting_sources(posting: &JobPosting) -> Vec<JobPostingSource> {
     }
 
     sources
-}
-
-fn compiler_snapshot(snapshot: &SourceProfileRegistrySnapshot) -> ProfileCompilerSnapshot {
-    ProfileCompilerSnapshot {
-        profiles: snapshot
-            .profiles
-            .iter()
-            .map(|profile| profile.document.clone())
-            .collect(),
-        sources: snapshot
-            .sources
-            .iter()
-            .map(|source| source.document.clone())
-            .collect(),
-    }
 }
 
 fn posting_occurrence(

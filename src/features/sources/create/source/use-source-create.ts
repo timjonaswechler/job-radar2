@@ -7,7 +7,7 @@ import {
   sourceConfigSchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
-import { sourceOverridesStarterForAccessPath } from "@/features/sources/source-form/source-overrides";
+import { directSourceSpecializationStarterForAccessPath } from "@/features/sources/source-form/direct-source-specialization";
 import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsaved-source-changes";
 import {
   createSource,
@@ -57,7 +57,7 @@ export function useSourceCreate({
   const [form, setForm] = useState<SourceCreateFormState>(emptySourceCreateForm);
   const [keyTouched, setKeyTouched] = useState(false);
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>([]);
-  const [sourceOverridesText, setSourceOverridesText] = useState("");
+  const [directSourceSpecializationText, setDirectSourceSpecializationText] = useState("");
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,7 +94,7 @@ export function useSourceCreate({
       buildCreatedSourceDocument({
         form,
         configEntries,
-        sourceOverridesText,
+        directSourceSpecializationText,
         existingSourceKeys,
         selectedProfile,
         selectedAccessPath,
@@ -102,7 +102,7 @@ export function useSourceCreate({
       }),
     [
       configEntries,
-      sourceOverridesText,
+      directSourceSpecializationText,
       existingSourceKeys,
       form,
       schemaMetadata,
@@ -117,8 +117,8 @@ export function useSourceCreate({
         : "",
     [buildResult.document, jsonPreviewOpen],
   );
-  const sourceOverridesStarter = useMemo(
-    () => sourceOverridesStarterForAccessPath(selectedAccessPath),
+  const directSourceSpecializationStarter = useMemo(
+    () => directSourceSpecializationStarterForAccessPath(selectedAccessPath),
     [selectedAccessPath],
   );
 
@@ -129,9 +129,9 @@ export function useSourceCreate({
         url,
         form,
         configEntries,
-        sourceOverridesText,
+        directSourceSpecializationText,
       }),
-    [configEntries, form, sourceOverridesText, url],
+    [configEntries, form, directSourceSpecializationText, url],
   );
 
   const resetDrawer = useCallback(() => {
@@ -142,7 +142,7 @@ export function useSourceCreate({
     setForm(emptySourceCreateForm);
     setKeyTouched(false);
     setConfigEntries([]);
-    setSourceOverridesText("");
+    setDirectSourceSpecializationText("");
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
@@ -181,7 +181,7 @@ export function useSourceCreate({
     });
     setForm(nextDraft.form);
     setConfigEntries(nextDraft.configEntries);
-    setSourceOverridesText("");
+    setDirectSourceSpecializationText("");
   };
 
   const updateAccessPath = (pathKey: string) => {
@@ -193,7 +193,7 @@ export function useSourceCreate({
     });
     setForm(nextDraft.form);
     setConfigEntries(nextDraft.configEntries);
-    setSourceOverridesText("");
+    setDirectSourceSpecializationText("");
   };
 
   const applyDetectedSource = (detected: DetectedSourceLike) => {
@@ -203,7 +203,7 @@ export function useSourceCreate({
     setForm(nextDraft.form);
     setKeyTouched(nextDraft.keyTouched);
     setConfigEntries(nextDraft.configEntries);
-    setSourceOverridesText(nextDraft.sourceOverridesText);
+    setDirectSourceSpecializationText(nextDraft.directSourceSpecializationText);
     setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
     setSaveAttempted(nextDraft.saveAttempted);
   };
@@ -238,7 +238,7 @@ export function useSourceCreate({
             form,
             keyTouched,
             configEntries,
-            sourceOverridesText,
+            directSourceSpecializationText,
             jsonPreviewOpen,
             saveAttempted,
           },
@@ -250,7 +250,7 @@ export function useSourceCreate({
           setForm(nextDraft.form);
           setKeyTouched(nextDraft.keyTouched);
           setConfigEntries(nextDraft.configEntries);
-          setSourceOverridesText(nextDraft.sourceOverridesText);
+          setDirectSourceSpecializationText(nextDraft.directSourceSpecializationText);
           setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
           setSaveAttempted(nextDraft.saveAttempted);
           toast.success("Quelle erkannt und Formular vorausgefüllt.");
@@ -262,7 +262,7 @@ export function useSourceCreate({
               form,
               keyTouched,
               configEntries: current,
-              sourceOverridesText,
+              directSourceSpecializationText,
               jsonPreviewOpen,
               saveAttempted,
             },
@@ -327,7 +327,7 @@ export function useSourceCreate({
       detectionError,
       form,
       configEntries,
-      sourceOverridesText,
+      directSourceSpecializationText,
       jsonPreviewOpen,
       saveAttempted,
       saving,
@@ -340,12 +340,12 @@ export function useSourceCreate({
       schemaMetadata,
       buildResult,
       previewJson,
-      sourceOverridesStarter,
+      directSourceSpecializationStarter,
     },
     actions: {
       setUrl,
       setConfigEntries,
-      setSourceOverridesText,
+      setDirectSourceSpecializationText,
       requestClose: unsavedChanges.requestClose,
       confirmDiscard: unsavedChanges.confirmDiscard,
       cancelDiscard: unsavedChanges.cancelDiscard,

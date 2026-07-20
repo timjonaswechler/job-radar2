@@ -31,9 +31,8 @@ pub use geo::{
     LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use profile_dsl::compiler::{
-    compile_source, compile_source_execution_plan, CompileSourceExecutionPlanResult,
-    CompileSourceOutcome, CompiledSource, CompiledSourceAccess, CompiledSourceProvenance,
-    EffectiveSourceProfile, ProfileCompilerSnapshot, ProvenanceEntry, ProvenanceOrigin,
+    compile_source, CompileSourceOutcome, CompiledSource, CompiledSourceAccess,
+    CompiledSourceProvenance, EffectiveSourceProfile, ProvenanceEntry, ProvenanceOrigin,
     ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath, SourceRuntimeBinding,
     SourceRuntimeBindingDependencies,
 };
@@ -41,10 +40,11 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
-    DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
-    DetectionHttpCheck, DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch, FieldExpression,
-    HttpMethod, InputUrlPattern, RequestBody, Select, SupportLevel,
+    AccessPathFragment, DetailStep, DetailStepFragment, DetailStrategyFragment,
+    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
+    DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
+    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, RequestBody,
+    ReusableAccessPathDocument, Select, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -53,13 +53,7 @@ pub use profile_dsl::execution_plan::capabilities::{
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
-pub use profile_dsl::policy::{
-    PolicyAccessPathFragment, PolicyDetailStep, PolicyDetailStepFragment, PolicyDiscoveryStep,
-    PolicyDiscoveryStepFragment, PolicyExecutionPlanDetailStep, PolicyExecutionPlanDiscoveryStep,
-    PolicyReusableAccessPathDocument, PolicySelectedAccessPath, PolicySourceDocument,
-    PolicySourceExecutionPlan, PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot,
-    StrategyPolicy,
-};
+pub use profile_dsl::policy::StrategyPolicy;
 pub use profile_dsl::runtime::{
     execute_detail, execute_detail_with_clients, execute_detail_with_clients_and_context,
     execute_detail_with_fetcher, execute_discovery, execute_discovery_with_clients,

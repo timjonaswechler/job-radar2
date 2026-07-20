@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { minimalDetailStrategy, minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import {
   countOrigins,
@@ -19,7 +21,7 @@ const profile: RegistrySourceProfile = {
   origin: "built_in",
   path: "resources/profiles/greenhouse.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "greenhouse",
     name: "Greenhouse",
     kind: "recruiting_system",
@@ -33,8 +35,8 @@ const profile: RegistrySourceProfile = {
       {
         key: "boards_api",
         name: "Boards API",
-        postingDiscovery: { strategies: [{ key: "jobs_api" }] },
-        postingDetail: { strategies: [{ key: "detail_api" }] },
+        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("jobs_api")] },
+        detail: { policy: { type: "first_accepted" }, strategies: [minimalDetailStrategy("detail_api")] },
       },
     ],
   },
@@ -45,7 +47,7 @@ const source: RegistrySource = {
   origin: "custom",
   path: "sources/acme.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "acme",
     name: "ACME",
     status: "active",
@@ -69,7 +71,7 @@ const sourceOwnedSource: RegistrySource = {
   origin: "custom",
   path: "sources/one_off.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "one_off",
     name: "One Off",
     status: "draft",
@@ -80,7 +82,7 @@ const sourceOwnedSource: RegistrySource = {
       key: "html_jobs",
       name: "HTML jobs",
       sourceConfigSchema: { type: "object" },
-      postingDiscovery: { strategies: [{ key: "html" }] },
+      discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("html")] },
     },
   },
   validationState: {
@@ -189,7 +191,7 @@ assert.deepEqual(
 );
 assert.equal(rows[0]?.supportLabel, "Stabil");
 assert.equal(rows[0]?.validationStateLabel, "Valide");
-assert.equal(rows[0]?.capabilitiesSummary, "postingDiscovery, postingDetail");
+assert.equal(rows[0]?.capabilitiesSummary, "discovery, detail");
 assert.equal(rows[0]?.profileLabel, "greenhouse / boards_api");
 for (const removedTerm of removedSourceProfileTerms()) {
   assert.equal((rows[0]?.searchText ?? "").includes(removedTerm), false);
@@ -212,13 +214,13 @@ assert.deepEqual(
 const resolution = resolveSource(source, profilesByKey);
 assert.equal(resolution.profileAccessPath?.key, "boards_api");
 assert.equal(resolution.supportLevel, "stable");
-assert.deepEqual(resolution.capabilities, ["postingDiscovery", "postingDetail"]);
+assert.deepEqual(resolution.capabilities, ["discovery", "detail"]);
 const sourceOwnedResolution = resolveSource(sourceOwnedSource, profilesByKey);
 assert.equal(sourceOwnedResolution.profile, null);
 assert.equal(sourceOwnedResolution.sourceOwnedAccessPath?.key, "html_jobs");
 assert.deepEqual(sourceOwnedResolution.effectiveSourceConfigSchema, { type: "object" });
 assert.equal(sourceOwnedResolution.supportLevel, "experimental");
-assert.deepEqual(sourceOwnedResolution.capabilities, ["postingDiscovery"]);
+assert.deepEqual(sourceOwnedResolution.capabilities, ["discovery"]);
 const missingAccessPathResolution = resolveSource(
   missingAccessPathSource,
   profilesByKey,

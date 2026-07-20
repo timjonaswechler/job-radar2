@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "invalid_status_source",
   "name": "Invalid Status Source",
   "status": "invalid",

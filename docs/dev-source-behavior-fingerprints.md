@@ -1,10 +1,10 @@
-# Dormant canonical Source behavior fingerprints
+# Canonical Source behavior fingerprints
 
-Issue #241 adds the canonical schema-v3 fingerprint foundation without activating it. The productive Source Live Check still uses the legacy fingerprints in `src-tauri/src/checks/source_live/mod.rs`; A01 owns activation and deletion of that route.
+Schema-v3 Source Live Check uses this C08 preparation as its sole freshness identity path. Raw whole-document and live-check-logic fingerprints do not exist. Check, status, activate, and reactivate load one immutable registry snapshot, reuse its exact authoritative `compile_source` outcome, and prepare once. Activation persists the already checked set unchanged without reload or re-preparation.
 
 ## Preparation boundary
 
-`prepare_source_behavior_fingerprints` receives the authoritative typed Source, the optional resolved Base Source Profile, and the exact `compile_source` outcome. Exact operation-local pairing is a caller precondition: preparation checks structural coherence but does not replay compilation or reconstruct the merge. A01 must compile once and pass that same Source/Base/outcome tuple directly into its one preparation call. The operation returns the complete ordered `Vec<CheckFingerprint>` or one value-free error. It does not persist a partial set, projection material, Source Config values, or version tokens.
+`prepare_source_behavior_fingerprints` receives the authoritative typed Source, the optional resolved Base Source Profile, and the exact `compile_source` outcome. Exact operation-local pairing is a caller precondition: preparation checks structural coherence but does not replay compilation or reconstruct the merge. The registry compiles each authoritative Source once while constructing the immutable snapshot; the operation passes that same Source/Base/outcome tuple directly into its one preparation call. The operation returns the complete ordered `Vec<CheckFingerprint>` or one value-free error. It does not persist a partial set, projection material, Source Config values, or version tokens.
 
 All behavior rows use strict `(kind, reference)` identities and independently serialize and SHA-256 hash a closed projection. Dynamic JSON objects retain recursively sorted map keys through the typed `serde_json` representation; semantic array order is preserved. Source Config Schema `title` annotations and other non-executable metadata are excluded.
 

@@ -17,12 +17,12 @@ use crate::profile_dsl::compiler::{
     CompiledSourceProvenance, ProvenanceEntry, ProvenancePathSegment, SourceOwnedAccessPath,
     SourceRuntimeBinding, MAX_FALLBACK_STRATEGIES,
 };
-use crate::profile_dsl::documents::JsonSchemaObject;
-use crate::profile_dsl::execution_plan::ExecutionPlanAccessPath;
-use crate::profile_dsl::policy::{
-    PolicyAccessPathFragment, PolicyDetailStep, PolicyDiscoveryStep, PolicySelectedAccessPath,
-    PolicySourceDocument, PolicySourceProfileDocument,
+use crate::profile_dsl::documents::{
+    AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject,
 };
+use crate::profile_dsl::execution_plan::ExecutionPlanAccessPath;
+use crate::source::documents::{SelectedAccessPath, SourceDocument};
+use crate::source_profile::documents::SourceProfileDocument;
 
 use super::source_live::SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY;
 use super::CheckFingerprint;
@@ -69,10 +69,10 @@ struct ReusableAccessPathBehaviorProjection<'a> {
     key: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     source_config_schema: Option<Value>,
-    #[serde(rename = "postingDiscovery")]
-    discovery: &'a PolicyDiscoveryStep,
-    #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a PolicyDetailStep>,
+    #[serde(rename = "discovery")]
+    discovery: &'a DiscoveryStep,
+    #[serde(rename = "detail", skip_serializing_if = "Option::is_none")]
+    detail: Option<&'a DetailStep>,
 }
 
 #[derive(Serialize)]
@@ -87,10 +87,10 @@ struct DirectAccessPathBehaviorProjection<'a> {
     key: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     source_config_schema: Option<Value>,
-    #[serde(rename = "postingDiscovery", skip_serializing_if = "Option::is_none")]
-    discovery: Option<&'a crate::profile_dsl::policy::PolicyDiscoveryStepFragment>,
-    #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a crate::profile_dsl::policy::PolicyDetailStepFragment>,
+    #[serde(rename = "discovery", skip_serializing_if = "Option::is_none")]
+    discovery: Option<&'a crate::profile_dsl::documents::DiscoveryStepFragment>,
+    #[serde(rename = "detail", skip_serializing_if = "Option::is_none")]
+    detail: Option<&'a crate::profile_dsl::documents::DetailStepFragment>,
 }
 
 #[derive(Serialize)]
@@ -98,10 +98,10 @@ struct DirectAccessPathBehaviorProjection<'a> {
 struct SourceOwnedAccessPathBehaviorProjection<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     source_config_schema: Option<Value>,
-    #[serde(rename = "postingDiscovery")]
-    discovery: &'a PolicyDiscoveryStep,
-    #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a PolicyDetailStep>,
+    #[serde(rename = "discovery")]
+    discovery: &'a DiscoveryStep,
+    #[serde(rename = "detail", skip_serializing_if = "Option::is_none")]
+    detail: Option<&'a DetailStep>,
 }
 
 #[derive(Serialize)]
@@ -133,8 +133,8 @@ struct RuntimeBindingsProjection<'a> {
 /// replay compilation or reconstruct the merge to prove that precondition.
 #[doc(hidden)]
 pub fn prepare_source_behavior_fingerprints(
-    source: &PolicySourceDocument,
-    resolved_base_profile: Option<&PolicySourceProfileDocument>,
+    source: &SourceDocument,
+    resolved_base_profile: Option<&SourceProfileDocument>,
     outcome: &CompileSourceOutcome,
 ) -> Result<Vec<CheckFingerprint>, SourceBehaviorFingerprintPreparationError> {
     validate_structural_coherence(source, resolved_base_profile, outcome)?;
@@ -142,7 +142,7 @@ pub fn prepare_source_behavior_fingerprints(
 
     match (&source.selected_access_path, outcome) {
         (
-            PolicySelectedAccessPath::ProfileAccessPath { .. },
+            SelectedAccessPath::ProfileAccessPath { .. },
             CompileSourceOutcome::Compiled {
                 source: compiled, ..
             },
@@ -169,7 +169,7 @@ pub fn prepare_source_behavior_fingerprints(
             push_compiled_components(&mut fingerprints, source, compiled)?;
         }
         (
-            PolicySelectedAccessPath::SourceOwnedAccessPath { .. },
+            SelectedAccessPath::SourceOwnedAccessPath { .. },
             CompileSourceOutcome::Compiled {
                 source: compiled, ..
             },
@@ -185,10 +185,7 @@ pub fn prepare_source_behavior_fingerprints(
             )?;
             push_compiled_components(&mut fingerprints, source, compiled)?;
         }
-        (
-            PolicySelectedAccessPath::ProfileAccessPath { .. },
-            CompileSourceOutcome::Rejected { .. },
-        ) => {
+        (SelectedAccessPath::ProfileAccessPath { .. }, CompileSourceOutcome::Rejected { .. }) => {
             if let Some(base_profile) = resolved_base_profile {
                 push_component(
                     &mut fingerprints,
@@ -201,7 +198,7 @@ pub fn prepare_source_behavior_fingerprints(
             push_source_and_selector_components(&mut fingerprints, source)?;
         }
         (
-            PolicySelectedAccessPath::SourceOwnedAccessPath {
+            SelectedAccessPath::SourceOwnedAccessPath {
                 source_config_schema,
                 discovery,
                 detail,
@@ -230,12 +227,12 @@ pub fn prepare_source_behavior_fingerprints(
 }
 
 fn validate_structural_coherence(
-    source: &PolicySourceDocument,
-    resolved_base_profile: Option<&PolicySourceProfileDocument>,
+    source: &SourceDocument,
+    resolved_base_profile: Option<&SourceProfileDocument>,
     outcome: &CompileSourceOutcome,
 ) -> Result<(), SourceBehaviorFingerprintPreparationError> {
     match &source.selected_access_path {
-        PolicySelectedAccessPath::ProfileAccessPath {
+        SelectedAccessPath::ProfileAccessPath {
             profile_key,
             path_key,
         } => {
@@ -268,7 +265,7 @@ fn validate_structural_coherence(
                 }
             }
         }
-        PolicySelectedAccessPath::SourceOwnedAccessPath { key, .. } => {
+        SelectedAccessPath::SourceOwnedAccessPath { key, .. } => {
             if resolved_base_profile.is_some() {
                 return Err(inconsistent("base_source_profile"));
             }
@@ -301,7 +298,7 @@ fn validate_structural_coherence(
 
 fn push_compiled_components(
     fingerprints: &mut Vec<CheckFingerprint>,
-    source: &PolicySourceDocument,
+    source: &SourceDocument,
     compiled: &CompiledSource,
 ) -> Result<(), SourceBehaviorFingerprintPreparationError> {
     let filtered_provenance = filtered_provenance(&compiled.provenance);
@@ -329,7 +326,7 @@ fn push_compiled_components(
 
 fn push_source_and_selector_components(
     fingerprints: &mut Vec<CheckFingerprint>,
-    source: &PolicySourceDocument,
+    source: &SourceDocument,
 ) -> Result<(), SourceBehaviorFingerprintPreparationError> {
     push_component(
         fingerprints,
@@ -338,14 +335,14 @@ fn push_source_and_selector_components(
         &source.source_config,
     )?;
     let selector = match &source.selected_access_path {
-        PolicySelectedAccessPath::ProfileAccessPath {
+        SelectedAccessPath::ProfileAccessPath {
             profile_key,
             path_key,
         } => SelectedAccessPathProjection::ProfileAccessPath {
             profile_key,
             path_key,
         },
-        PolicySelectedAccessPath::SourceOwnedAccessPath { key, .. } => {
+        SelectedAccessPath::SourceOwnedAccessPath { key, .. } => {
             SelectedAccessPathProjection::SourceOwnedAccessPath { key }
         }
     };
@@ -359,7 +356,7 @@ fn push_source_and_selector_components(
 
 fn push_direct_component(
     fingerprints: &mut Vec<CheckFingerprint>,
-    source: &PolicySourceDocument,
+    source: &SourceDocument,
 ) -> Result<(), SourceBehaviorFingerprintPreparationError> {
     let Some(access_paths) = source.access_paths.as_ref() else {
         return Ok(());
@@ -385,13 +382,13 @@ fn push_direct_component(
     )
 }
 
-fn direct_fragment_has_behavior(fragment: &PolicyAccessPathFragment) -> bool {
+fn direct_fragment_has_behavior(fragment: &AccessPathFragment) -> bool {
     fragment.source_config_schema.is_some()
         || fragment.discovery.is_some()
         || fragment.detail.is_some()
 }
 
-fn profile_projection(profile: &PolicySourceProfileDocument) -> ProfileBehaviorProjection<'_> {
+fn profile_projection(profile: &SourceProfileDocument) -> ProfileBehaviorProjection<'_> {
     ProfileBehaviorProjection {
         source_config_schema: executable_schema(profile.source_config_schema.as_ref()),
         access_paths: profile
@@ -579,10 +576,8 @@ mod tests {
     }
 
     #[test]
-    fn productive_source_live_check_has_no_canonical_preparation_call() {
-        assert!(
-            !include_str!("source_live/mod.rs").contains("prepare_source_behavior_fingerprints")
-        );
+    fn productive_source_live_check_uses_canonical_preparation_without_activation_reprepare() {
+        assert!(include_str!("source_live/mod.rs").contains("prepare_source_behavior_fingerprints"));
         assert!(!include_str!("source_live/activation.rs")
             .contains("prepare_source_behavior_fingerprints"));
     }

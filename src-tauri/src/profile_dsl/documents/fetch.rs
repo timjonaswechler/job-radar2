@@ -17,8 +17,6 @@ pub enum Fetch {
         body: Option<RequestBody>,
         #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
         timeout_ms: Option<u64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        retry: Option<RetryPolicy>,
     },
     Browser {
         url: String,
@@ -45,13 +43,6 @@ pub enum RequestBody {
     Json { value: JsonObject },
     Text { value: String },
     Form { fields: BTreeMap<String, String> },
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RetryPolicy {
-    #[serde(rename = "maxAttempts", skip_serializing_if = "Option::is_none")]
-    pub max_attempts: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

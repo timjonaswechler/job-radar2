@@ -1471,12 +1471,12 @@ fn fixture_profile_with_key(
         .unwrap()
         .to_string();
     serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": key,
         "name": name,
         "kind": "generic",
         "support": { "level": support_level },
-        "detect": detection,
+        "detection": detection,
         "sourceConfigSchema": {
             "type": "object",
             "properties": {
@@ -1489,7 +1489,8 @@ fn fixture_profile_with_key(
         "accessPaths": [{
             "key": "api",
             "name": "API",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "jobs_api",
                     "fetch": {

@@ -50,7 +50,7 @@ pub(super) fn validate_security(
     for (index, strategy) in discovery.strategies.iter().enumerate() {
         validate_fetch_security(
             &strategy.fetch,
-            &format!("{base_path}/postingDiscovery/strategies/{index}/fetch"),
+            &format!("{base_path}/discovery/strategies/{index}/fetch"),
             &strategy.key,
             diagnostics,
         );
@@ -60,7 +60,7 @@ pub(super) fn validate_security(
         for (index, strategy) in detail.strategies.iter().enumerate() {
             validate_fetch_security(
                 &strategy.fetch,
-                &format!("{base_path}/postingDetail/strategies/{index}/fetch"),
+                &format!("{base_path}/detail/strategies/{index}/fetch"),
                 &strategy.key,
                 diagnostics,
             );

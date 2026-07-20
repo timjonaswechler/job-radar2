@@ -6,9 +6,9 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_discovery_with_clients_and_context, DiscoveryCandidate, DiscoveryFetcher,
-            ManagedProfileBrowserClient, ProfileBrowserClient, ReqwestDiscoveryFetcher,
-            RuntimeExecutionContext,
+            execute_policy_discovery_with_clients_and_context, DiscoveryCandidate,
+            DiscoveryFetcher, ManagedProfileBrowserClient, ProfileBrowserClient,
+            ReqwestDiscoveryFetcher, RuntimeExecutionContext,
         },
     },
 };
@@ -123,7 +123,7 @@ where
         .cancellation_token
         .map(|token| RuntimeExecutionContext::with_cancellation(token))
         .unwrap_or_else(RuntimeExecutionContext::uncancellable);
-    let result = execute_discovery_with_clients_and_context(
+    let result = execute_policy_discovery_with_clients_and_context(
         &input.source.execution_plan,
         fetcher,
         browser,
@@ -150,7 +150,7 @@ where
             .iter()
             .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
             .map(|diagnostic| diagnostic.message.clone())
-            .unwrap_or_else(|| "postingDiscovery failed".to_string());
+            .unwrap_or_else(|| "Discovery failed".to_string());
         return Err(SourceExecutionError::FailedWithDiagnostics {
             message,
             diagnostics: result.diagnostics,
@@ -170,7 +170,7 @@ where
 fn source_execution_cancelled_error(mut diagnostics: Diagnostics) -> SourceExecutionError {
     diagnostics.push(source_execution_cancelled_diagnostic());
     SourceExecutionError::CancelledWithDiagnostics {
-        message: "postingDiscovery cancelled".to_string(),
+        message: "Discovery cancelled".to_string(),
         diagnostics,
     }
 }
@@ -179,9 +179,9 @@ fn source_execution_cancelled_diagnostic() -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Runtime,
         code: "source_execution_cancelled".to_string(),
-        message: "postingDiscovery cancelled".to_string(),
+        message: "Discovery cancelled".to_string(),
         severity: DiagnosticSeverity::Error,
-        path: "/postingDiscovery".to_string(),
+        path: "/discovery".to_string(),
         strategy_key: None,
         details: Some(serde_json::json!({ "reason": "search_run_cancelled" })),
     }

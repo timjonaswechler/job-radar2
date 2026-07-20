@@ -5,41 +5,41 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
-import { sourceOverridesFromText } from "@/features/sources/source-form/source-overrides";
+import { directSourceSpecializationFromText } from "@/features/sources/source-form/direct-source-specialization";
 import type { RegistrySource, SourceDocument, SourceStatus } from "@/lib/api/sources";
 
 export type SourceEditDraftState = {
   name: string;
   status: SourceStatus;
   configEntries: SourceConfigEntry[];
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
 };
 
 export type SourceEditBuildResult = {
   document: SourceDocument | null;
   errors: string[];
   configErrors: string[];
-  overridesErrors: string[];
+  specializationErrors: string[];
 };
 
 export type SourceEditDraftSnapshot = {
   name: string;
   status: SourceStatus;
   configEntries: Array<{ key: string; value: string }>;
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
 };
 
 export function sourceEditDraftSnapshot({
   name,
   status,
   configEntries,
-  sourceOverridesText,
+  directSourceSpecializationText,
 }: SourceEditDraftState): SourceEditDraftSnapshot {
   return {
     name,
     status,
     configEntries: configEntries.map(({ key, value }) => ({ key, value })),
-    sourceOverridesText,
+    directSourceSpecializationText,
   };
 }
 
@@ -76,10 +76,10 @@ export function sourceEditDraftFromSource({
       schemaMetadata,
       createConfigEntryId,
     ),
-    sourceOverridesText:
-      source.document.sourceOverrides === undefined
+    directSourceSpecializationText:
+      source.document.accessPaths === undefined
         ? ""
-        : JSON.stringify(source.document.sourceOverrides, null, 2),
+        : JSON.stringify(source.document.accessPaths, null, 2),
   };
 }
 
@@ -88,14 +88,14 @@ export function buildUpdatedSourceDocument({
   name,
   status,
   configEntries,
-  sourceOverridesText,
+  directSourceSpecializationText,
   schemaMetadata,
 }: {
   source: RegistrySource;
   name: string;
   status: SourceStatus;
   configEntries: SourceConfigEntry[];
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
   schemaMetadata: SchemaMetadata;
 }): SourceEditBuildResult {
   const errors: string[] = [];
@@ -103,15 +103,15 @@ export function buildUpdatedSourceDocument({
   if (!name.trim()) errors.push("Name fehlt.");
 
   const configResult = sourceConfigFromEntries(configEntries, schemaMetadata);
-  const overridesResult = sourceOverridesFromText(sourceOverridesText);
-  errors.push(...configResult.errors, ...overridesResult.errors);
+  const specializationResult = directSourceSpecializationFromText(directSourceSpecializationText);
+  errors.push(...configResult.errors, ...specializationResult.errors);
 
   if (errors.length) {
     return {
       document: null,
       errors,
       configErrors: configResult.errors,
-      overridesErrors: overridesResult.errors,
+      specializationErrors: specializationResult.errors,
     };
   }
 
@@ -122,16 +122,16 @@ export function buildUpdatedSourceDocument({
     sourceConfig: configResult.value,
   };
 
-  if (overridesResult.value === null) {
-    delete document.sourceOverrides;
+  if (specializationResult.value === null) {
+    delete document.accessPaths;
   } else {
-    document.sourceOverrides = overridesResult.value;
+    document.accessPaths = specializationResult.value;
   }
 
   return {
     document,
     errors,
     configErrors: configResult.errors,
-    overridesErrors: overridesResult.errors,
+    specializationErrors: specializationResult.errors,
   };
 }

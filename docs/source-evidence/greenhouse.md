@@ -1,5 +1,7 @@
 # Greenhouse Source Evidence
 
+> Historical evidence snapshot: old fingerprint or phase wording below describes the recorded pre-#242 check and is not current authoring guidance.
+
 Source Profile: `greenhouse`
 
 Audit parent: GitHub issue #33

@@ -1073,6 +1073,8 @@ mod tests {
                 can_execute: true,
                 diagnostics: Vec::new(),
             },
+            effective_profile: None,
+            compile_outcome: None,
         };
 
         let error = validate_source_update_target(&registry_source).unwrap_err();
@@ -1089,7 +1091,7 @@ mod tests {
         source_config.insert("boardSlug".to_string(), serde_json::json!(board_slug));
 
         crate::source::documents::SourceDocument {
-            schema_version: 2,
+            schema_version: 3,
             key: key.to_string(),
             name: name.to_string(),
             status,
@@ -1098,8 +1100,18 @@ mod tests {
                 profile_key: "greenhouse".to_string(),
                 path_key: "boards_api".to_string(),
             },
-            access_paths: None,
-            source_overrides: None,
+            access_paths: Some(
+                serde_json::from_value(serde_json::json!([{
+                    "key": "boards_api",
+                    "discovery": {
+                        "strategies": [{
+                            "key": "jobs_api",
+                            "acceptWhen": { "minResults": 0 }
+                        }]
+                    }
+                }]))
+                .expect("command test direct specialization must deserialize"),
+            ),
             source_support: None,
             diagnostics: None,
         }
@@ -1148,12 +1160,12 @@ mod tests {
             std::fs::write(
                 paths.source_profiles_dir.join("browser_jobs.json"),
                 serde_json::to_string_pretty(&serde_json::json!({
-                    "schemaVersion": 2,
+                    "schemaVersion": 3,
                     "key": "browser_jobs",
                     "name": "Browser Jobs",
                     "kind": "generic",
                     "support": { "level": "experimental" },
-                    "detect": {
+                    "detection": {
                         "recommendedAccessPathKey": "rendered",
                         "inputUrlPatterns": [{
                             "pattern": "^https://careers\\.example\\.test/(?<tenant>[a-z0-9_-]+)$"
@@ -1185,7 +1197,8 @@ mod tests {
                     "accessPaths": [{
                         "key": "rendered",
                         "name": "Rendered page",
-                        "postingDiscovery": {
+                        "discovery": {
+                            "policy": { "type": "first_accepted" },
                             "strategies": [{
                                 "key": "jobs_html",
                                 "fetch": {

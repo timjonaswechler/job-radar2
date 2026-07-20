@@ -13,7 +13,6 @@ use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::AccessPathFragment;
-use crate::profile_dsl::policy::{PolicyAccessPathFragment, PolicySourceProfileDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::provenance::{self, OriginTree, ProvenanceOrigin, RecordedProvenance};
@@ -36,7 +35,7 @@ impl KeyedEntryKind {
 
     fn required_fields(self) -> &'static [&'static str] {
         match self {
-            Self::AccessPath => &["name", "postingDiscovery"],
+            Self::AccessPath => &["name", "discovery"],
             Self::DiscoveryStrategy | Self::DetailStrategy => {
                 &["extract", "fetch", "parse", "select"]
             }
@@ -44,20 +43,11 @@ impl KeyedEntryKind {
     }
 }
 
-pub(super) fn specialize_profile(
+pub(super) fn specialize_profile_with_provenance(
     base: &SourceProfileDocument,
     fragments: Option<&[AccessPathFragment]>,
     diagnostics: &mut Diagnostics,
-) -> Option<SourceProfileDocument> {
-    let (materialized, _) = materialize_serialized_profile(base, fragments, diagnostics)?;
-    deserialize_effective_profile(materialized, diagnostics)
-}
-
-pub(super) fn specialize_policy_profile(
-    base: &PolicySourceProfileDocument,
-    fragments: Option<&[PolicyAccessPathFragment]>,
-    diagnostics: &mut Diagnostics,
-) -> Option<(PolicySourceProfileDocument, RecordedProvenance)> {
+) -> Option<(SourceProfileDocument, RecordedProvenance)> {
     let (materialized, origins) = materialize_serialized_profile(base, fragments, diagnostics)?;
     // Finalize typed paths from the merge's own materialization and origin
     // tree before constructing the completed typed document.
@@ -288,7 +278,7 @@ fn merge_keyed_entry(
         if (field == "key" && base.is_some())
             || (field == "name" && matches!(kind, KeyedEntryKind::AccessPath) && base.is_some())
             || (matches!(kind, KeyedEntryKind::AccessPath)
-                && matches!(field.as_str(), "postingDiscovery" | "postingDetail"))
+                && matches!(field.as_str(), "discovery" | "detail"))
         {
             continue;
         }
@@ -303,8 +293,8 @@ fn merge_keyed_entry(
 
     if matches!(kind, KeyedEntryKind::AccessPath) {
         for (field, strategy_kind) in [
-            ("postingDiscovery", KeyedEntryKind::DiscoveryStrategy),
-            ("postingDetail", KeyedEntryKind::DetailStrategy),
+            ("discovery", KeyedEntryKind::DiscoveryStrategy),
+            ("detail", KeyedEntryKind::DetailStrategy),
         ] {
             let Some(fragment_value) = fragment_object.get(field) else {
                 continue;

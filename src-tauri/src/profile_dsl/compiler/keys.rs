@@ -40,12 +40,12 @@ pub(super) fn validate_discovery_strategy_keys(
             let mut diagnostic = compiler_error(
                 "duplicate_strategy_key",
                 format!(
-                    "postingDiscovery declares duplicate Strategy key `{}`",
+                    "discovery declares duplicate Strategy key `{}`",
                     strategy.key
                 ),
                 format!("{step_path}/strategies/{index}/key"),
                 serde_json::json!({
-                    "step": "postingDiscovery",
+                    "step": "discovery",
                     "strategyKey": strategy.key,
                 }),
             );
@@ -65,13 +65,10 @@ pub(super) fn validate_detail_strategy_keys(
         if !seen.insert(strategy.key.as_str()) {
             let mut diagnostic = compiler_error(
                 "duplicate_strategy_key",
-                format!(
-                    "postingDetail declares duplicate Strategy key `{}`",
-                    strategy.key
-                ),
+                format!("detail declares duplicate Strategy key `{}`", strategy.key),
                 format!("{step_path}/strategies/{index}/key"),
                 serde_json::json!({
-                    "step": "postingDetail",
+                    "step": "detail",
                     "strategyKey": strategy.key,
                 }),
             );

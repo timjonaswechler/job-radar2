@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::{
-    AccessPathFragment, DetailStep, DiscoveryStep, JsonObject, JsonSchemaObject, SourceOverrides,
-    SupportMetadata,
+    AccessPathFragment, DetailStep, DiscoveryStep, JsonObject, JsonSchemaObject, SupportMetadata,
 };
 
 pub type SourceConfig = JsonObject;
@@ -11,18 +10,15 @@ pub type SourceConfig = JsonObject;
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SourceDocument {
+    #[serde(deserialize_with = "deserialize_schema_version_3")]
     pub schema_version: u64,
     pub key: String,
     pub name: String,
     pub status: SourceStatus,
     pub source_config: SourceConfig,
     pub selected_access_path: SelectedAccessPath,
-    /// Dormant direct Source Profile fragments. A01 will activate their persisted
-    /// JSON representation; until then they can only be supplied in-process.
-    #[serde(skip, default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access_paths: Option<Vec<AccessPathFragment>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_overrides: Option<SourceOverrides>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_support: Option<SupportMetadata>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -35,6 +31,19 @@ pub enum SourceStatus {
     Draft,
     Active,
     Disabled,
+}
+
+fn deserialize_schema_version_3<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    let version = u64::deserialize(deserializer)?;
+    if version == 3 {
+        Ok(version)
+    } else {
+        Err(D::Error::custom("schemaVersion must be 3"))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -55,9 +64,8 @@ pub enum SelectedAccessPath {
         description: Option<String>,
         #[serde(rename = "sourceConfigSchema", skip_serializing_if = "Option::is_none")]
         source_config_schema: Option<JsonSchemaObject>,
-        #[serde(rename = "postingDiscovery")]
         discovery: DiscoveryStep,
-        #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
+        #[serde(skip_serializing_if = "Option::is_none")]
         detail: Option<DetailStep>,
         #[serde(skip_serializing_if = "Option::is_none")]
         diagnostics: Option<Diagnostics>,

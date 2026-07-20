@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://job-radar.local/schemas/profile-dsl/policy.schema.json",
-  "title": "Dormant final Strategy Policy definitions",
+  "title": "Job Radar schema-v3 Strategy Policy definitions",
   "oneOf": [
-    { "$ref": "#/$defs/postingDiscoveryStrategySet" },
-    { "$ref": "#/$defs/postingDetailStrategySet" }
+    { "$ref": "#/$defs/discoveryStrategySet" },
+    { "$ref": "#/$defs/detailStrategySet" }
   ],
   "$defs": {
     "strategyPolicy": {
@@ -15,7 +15,7 @@
         "type": { "const": "first_accepted" }
       }
     },
-    "postingDiscoveryStrategySet": {
+    "discoveryStrategySet": {
       "type": "object",
       "additionalProperties": false,
       "required": ["policy", "strategies"],
@@ -24,12 +24,12 @@
         "strategies": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "strategy.schema.json#/$defs/postingDiscoveryStrategy" }
+          "items": { "$ref": "strategy.schema.json#/$defs/discoveryStrategy" }
         },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
       }
     },
-    "postingDetailStrategySet": {
+    "detailStrategySet": {
       "type": "object",
       "additionalProperties": false,
       "required": ["policy", "strategies"],
@@ -38,7 +38,7 @@
         "strategies": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "strategy.schema.json#/$defs/postingDetailStrategy" }
+          "items": { "$ref": "strategy.schema.json#/$defs/detailStrategy" }
         },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
       }

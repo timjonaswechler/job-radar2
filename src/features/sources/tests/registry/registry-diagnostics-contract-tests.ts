@@ -60,7 +60,7 @@ function registrySource(key: string): RegistrySource {
     origin: "custom",
     path: `sources/${key}.json`,
     document: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       key,
       name: key,
       status: "active",
@@ -86,7 +86,7 @@ function registryProfile(key: string): RegistrySourceProfile {
     origin: "built_in",
     path: `profiles/${key}.json`,
     document: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       key,
       name: key,
       kind: "recruiting_system",

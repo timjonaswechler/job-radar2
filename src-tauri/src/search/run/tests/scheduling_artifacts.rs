@@ -40,7 +40,7 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                         code: "fixture_runtime_failure".to_string(),
                         message: "Fixture runtime failure".to_string(),
                         severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
-                        path: "/postingDiscovery/strategies/0".to_string(),
+                        path: "/discovery/strategies/0".to_string(),
                         strategy_key: Some("json_api".to_string()),
                         details: Some(json!({ "fixture": true })),
                     }],
@@ -213,13 +213,13 @@ impl SourceExecutor for CancellationAwareExecutor {
         Box::pin(async move {
             token.cancelled().await;
             Err(SourceExecutionError::CancelledWithDiagnostics {
-                message: "postingDiscovery cancelled".to_string(),
+                message: "Discovery cancelled".to_string(),
                 diagnostics: vec![crate::profile_dsl::diagnostics::Diagnostic {
                     category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
                     code: "source_execution_cancelled".to_string(),
-                    message: "postingDiscovery cancelled".to_string(),
+                    message: "Discovery cancelled".to_string(),
                     severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
-                    path: "/postingDiscovery".to_string(),
+                    path: "/discovery".to_string(),
                     strategy_key: None,
                     details: Some(json!({ "reason": "search_run_cancelled" })),
                 }],

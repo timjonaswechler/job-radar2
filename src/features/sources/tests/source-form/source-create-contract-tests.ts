@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { minimalDetailStrategy, minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+
 import {
   buildCreatedSourceDocument,
   detectedSourceFromProposal,
@@ -31,7 +33,7 @@ const greenhouseProfile: RegistrySourceProfile = {
   origin: "built_in",
   path: "resources/profiles/greenhouse.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "greenhouse",
     name: "Greenhouse",
     kind: "recruiting_system",
@@ -45,8 +47,8 @@ const greenhouseProfile: RegistrySourceProfile = {
       {
         key: "boards_api",
         name: "Boards API",
-        postingDiscovery: { strategies: [{ key: "jobs_api" }] },
-        postingDetail: { strategies: [{ key: "detail_api" }] },
+        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("jobs_api")] },
+        detail: { policy: { type: "first_accepted" }, strategies: [minimalDetailStrategy("detail_api")] },
       },
     ],
   },
@@ -56,7 +58,7 @@ const leverProfile: RegistrySourceProfile = {
   origin: "built_in",
   path: "resources/profiles/lever.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "lever",
     name: "Lever",
     kind: "recruiting_system",
@@ -78,7 +80,7 @@ const leverProfile: RegistrySourceProfile = {
           required: ["tenant"],
           properties: { tenant: { type: "string" } },
         },
-        postingDiscovery: { strategies: [{ key: "posting_api" }] },
+        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("posting_api")] },
       },
       {
         key: "xml_feed",
@@ -88,7 +90,7 @@ const leverProfile: RegistrySourceProfile = {
           required: ["feedUrl"],
           properties: { feedUrl: { type: "string" } },
         },
-        postingDiscovery: { strategies: [{ key: "feed" }] },
+        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("feed")] },
       },
     ],
   },
@@ -99,7 +101,7 @@ const initialDraft: SourceCreateDraftState = {
   form: emptySourceCreateForm,
   keyTouched: false,
   configEntries: [entry("manual", "manualStableAccessKey", "manual-value")],
-  sourceOverridesText: "",
+  directSourceSpecializationText: "",
   jsonPreviewOpen: true,
   saveAttempted: true,
 };
@@ -298,8 +300,8 @@ const buildResult = buildCreatedSourceDocument({
     pathKey: detected?.pathKey ?? "",
   },
   configEntries: [{ id: "boardSlug", key: "boardSlug", value: "acme" }],
-  sourceOverridesText:
-    '{"strategyOverrides":[{"step":"postingDiscovery","strategyKey":"jobs_api"}]}',
+  directSourceSpecializationText:
+    '[{"key":"boards_api","discovery":{"strategies":[{"key":"jobs_api"}]}}]',
   existingSourceKeys: new Set(),
   selectedProfile: greenhouseProfile,
   selectedAccessPath: greenhouseProfile.document.accessPaths[0] ?? null,
@@ -308,12 +310,15 @@ const buildResult = buildCreatedSourceDocument({
   ),
 });
 assert.deepEqual(buildResult.errors, []);
-assert.equal(buildResult.document?.schemaVersion, 2);
+assert.equal(buildResult.document?.schemaVersion, 3);
 assert.equal(buildResult.document?.selectedAccessPath.type, "profile_access_path");
 assert.deepEqual(buildResult.document?.sourceConfig, { boardSlug: "acme" });
-assert.deepEqual(buildResult.document?.sourceOverrides, {
-  strategyOverrides: [{ step: "postingDiscovery", strategyKey: "jobs_api" }],
-});
+assert.deepEqual(buildResult.document?.accessPaths, [
+  {
+    key: "boards_api",
+    discovery: { strategies: [{ key: "jobs_api" }] },
+  },
+]);
 assertNoV1SourceProfileFields(buildResult.document);
 
 for (const searchRequestCriterion of [
@@ -338,7 +343,7 @@ const cleanCreateDraft = {
   url: "",
   form: emptySourceCreateForm,
   configEntries: [] as SourceConfigEntry[],
-  sourceOverridesText: "",
+  directSourceSpecializationText: "",
 };
 assert.equal(isSourceCreateDraftDirty(cleanCreateDraft), false);
 
@@ -375,8 +380,8 @@ for (const [field, changedDraft] of [
     },
   ],
   [
-    "Source Overrides",
-    { ...cleanCreateDraft, sourceOverridesText: "{\"strategyOverrides\":[]}" },
+    "Source specialization",
+    { ...cleanCreateDraft, directSourceSpecializationText: "[]" },
   ],
 ] as const) {
   assert.equal(
@@ -410,7 +415,7 @@ assert.equal(
   isSourceCreateDraftDirty({
     ...cleanCreateDraft,
     configEntries: [entry("invalid", "settings", "{invalid")],
-    sourceOverridesText: "{invalid",
+    directSourceSpecializationText: "{invalid",
   }),
   true,
   "invalid raw values must stay dirty",
@@ -434,7 +439,7 @@ const createDraftWithUiState: SourceCreateDraftState = {
   form: emptySourceCreateForm,
   keyTouched: true,
   configEntries: [],
-  sourceOverridesText: "",
+  directSourceSpecializationText: "",
   jsonPreviewOpen: true,
   saveAttempted: true,
 };

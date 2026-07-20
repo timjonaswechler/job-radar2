@@ -170,8 +170,6 @@ where
         let source =
             source.ok_or_else(|| format!("Source `{source_key}` wurde nicht gefunden."))?;
         activate_custom_source(source)?;
-        let updated_snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-        report.fingerprints = super::source_live_check_fingerprints(&updated_snapshot, source_key)?;
     } else {
         report.diagnostics.push(activation_blocked_diagnostic(
             source_key,
@@ -200,10 +198,10 @@ fn activate_custom_source(source: RegistrySource) -> Result<(), String> {
 
     let mut document = source.document;
     document.status = SourceStatus::Active;
-    write_source_document(PathBuf::from(source.path), &document)
+    write_source_status_transition(PathBuf::from(source.path), &document)
 }
 
-fn write_source_document(path: PathBuf, document: &SourceDocument) -> Result<(), String> {
+fn write_source_status_transition(path: PathBuf, document: &SourceDocument) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(document)
         .map_err(|error| format!("Source konnte nicht serialisiert werden: {error}"))?;
     std::fs::write(&path, format!("{contents}\n"))

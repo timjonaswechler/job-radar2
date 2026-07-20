@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "workday",
   "name": "Workday Recruiting",
   "kind": "recruiting_system",
@@ -15,40 +15,13 @@
       }
     ]
   },
-  "detect": {
-    "recommendedAccessPathKey": "cxs_api",
-    "sourceConfig": {
-      "workdayHost": "{{capture:workdayHost}}",
-      "tenant": "{{capture:tenant}}",
-      "site": "{{capture:site}}",
-      "startUrl": "{{inputUrl}}"
-    },
-    "keyCandidates": ["workday_{{capture:tenant}}_{{capture:site}}"],
-    "nameCandidates": ["Workday {{capture:tenant}} {{capture:site}}"],
-    "inputUrlPatterns": [
-      {
-        "pattern": "(?i)^https?://(?<workdayHost>(?<tenant>[A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com)(?:/[a-z]{2}-[A-Z]{2})?/(?<site>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
-        "captures": ["workdayHost", "tenant", "site"]
-      },
-      {
-        "pattern": "(?i)^https?://(?<workdayHost>[A-Za-z0-9.-]+\\.myworkdayjobs\\.com)/wday/cxs/(?<tenant>[A-Za-z0-9_-]+)/(?<site>[A-Za-z0-9_-]+)(?:/jobs|/job/.*)?(?:[?#].*)?$",
-        "captures": ["workdayHost", "tenant", "site"]
-      }
-    ],
-    "evidence": [
-      {
-        "kind": "url",
-        "message": "Workday public career URLs expose a myworkdayjobs host and site path; common tenant-host forms expose the tenant prefix."
-      },
-      {
-        "kind": "url",
-        "message": "Workday CXS API URLs expose host, tenant, and site path segments for a source-config proposal."
-      }
-    ]
-  },
   "sourceConfigSchema": {
     "type": "object",
-    "required": ["workdayHost", "tenant", "site"],
+    "required": [
+      "workdayHost",
+      "tenant",
+      "site"
+    ],
     "additionalProperties": false,
     "properties": {
       "workdayHost": {
@@ -78,7 +51,7 @@
       "key": "cxs_api",
       "name": "Workday CXS API",
       "description": "Discover jobs from POST /wday/cxs/{tenant}/{site}/jobs and load one posting from GET /wday/cxs/{tenant}/{site}{externalPath}.",
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "cxs_jobs_api",
@@ -108,9 +81,13 @@
               "startOffset": 0,
               "limit": 20,
               "totalPath": "$.total",
-              "limits": { "maxRequests": 100 }
+              "limits": {
+                "maxRequests": 100
+              }
             },
-            "parse": { "type": "json" },
+            "parse": {
+              "type": "json"
+            },
             "select": {
               "type": "json_path",
               "jsonPath": "$.jobPostings"
@@ -121,7 +98,11 @@
                   "type": "json_path",
                   "jsonPath": "$.title",
                   "cardinality": "one",
-                  "transforms": [{ "type": "trim" }]
+                  "transforms": [
+                    {
+                      "type": "trim"
+                    }
+                  ]
                 },
                 "company": {
                   "type": "template",
@@ -133,18 +114,50 @@
                   "join": "",
                   "cardinality": "one",
                   "parts": [
-                    { "value": { "type": "const", "value": "https://" } },
-                    { "value": { "type": "source_config", "key": "workdayHost", "cardinality": "one" } },
-                    { "value": { "type": "const", "value": "/en-US/" } },
-                    { "value": { "type": "source_config", "key": "site", "cardinality": "one" } },
-                    { "value": { "type": "json_path", "jsonPath": "$.externalPath", "cardinality": "one" } }
+                    {
+                      "value": {
+                        "type": "const",
+                        "value": "https://"
+                      }
+                    },
+                    {
+                      "value": {
+                        "type": "source_config",
+                        "key": "workdayHost",
+                        "cardinality": "one"
+                      }
+                    },
+                    {
+                      "value": {
+                        "type": "const",
+                        "value": "/en-US/"
+                      }
+                    },
+                    {
+                      "value": {
+                        "type": "source_config",
+                        "key": "site",
+                        "cardinality": "one"
+                      }
+                    },
+                    {
+                      "value": {
+                        "type": "json_path",
+                        "jsonPath": "$.externalPath",
+                        "cardinality": "one"
+                      }
+                    }
                   ]
                 },
                 "locations": {
                   "type": "json_path",
                   "jsonPath": "$.locationsText",
                   "cardinality": "optional",
-                  "transforms": [{ "type": "trim" }]
+                  "transforms": [
+                    {
+                      "type": "trim"
+                    }
+                  ]
                 },
                 "postingMeta": {
                   "externalPath": {
@@ -156,13 +169,21 @@
               }
             },
             "acceptWhen": {
-              "requiredFields": ["title", "company", "url", "postingMeta.externalPath"],
+              "requiredFields": [
+                "title",
+                "company",
+                "url",
+                "postingMeta.externalPath"
+              ],
               "minResults": 1
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       },
-      "postingDetail": {
+      "detail": {
         "strategies": [
           {
             "key": "cxs_job_detail_api",
@@ -175,8 +196,12 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "document"
+            },
             "extract": {
               "fields": {
                 "descriptionText": {
@@ -184,8 +209,12 @@
                   "jsonPath": "$.jobPostingInfo.jobDescription",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "html_to_text" },
-                    { "type": "normalize_whitespace" }
+                    {
+                      "type": "html_to_text"
+                    },
+                    {
+                      "type": "normalize_whitespace"
+                    }
                   ]
                 }
               }
@@ -194,8 +223,54 @@
               "minDescriptionLength": 20
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
-  ]
+  ],
+  "detection": {
+    "recommendedAccessPathKey": "cxs_api",
+    "sourceConfig": {
+      "workdayHost": "{{capture:workdayHost}}",
+      "tenant": "{{capture:tenant}}",
+      "site": "{{capture:site}}",
+      "startUrl": "{{inputUrl}}"
+    },
+    "keyCandidates": [
+      "workday_{{capture:tenant}}_{{capture:site}}"
+    ],
+    "nameCandidates": [
+      "Workday {{capture:tenant}} {{capture:site}}"
+    ],
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?<workdayHost>(?<tenant>[A-Za-z0-9_-]+)\\.wd[0-9]+\\.myworkdayjobs\\.com)(?:/[a-z]{2}-[A-Z]{2})?/(?<site>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
+        "captures": [
+          "workdayHost",
+          "tenant",
+          "site"
+        ]
+      },
+      {
+        "pattern": "(?i)^https?://(?<workdayHost>[A-Za-z0-9.-]+\\.myworkdayjobs\\.com)/wday/cxs/(?<tenant>[A-Za-z0-9_-]+)/(?<site>[A-Za-z0-9_-]+)(?:/jobs|/job/.*)?(?:[?#].*)?$",
+        "captures": [
+          "workdayHost",
+          "tenant",
+          "site"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Workday public career URLs expose a myworkdayjobs host and site path; common tenant-host forms expose the tenant prefix."
+      },
+      {
+        "kind": "url",
+        "message": "Workday CXS API URLs expose host, tenant, and site path segments for a source-config proposal."
+      }
+    ]
+  }
 }

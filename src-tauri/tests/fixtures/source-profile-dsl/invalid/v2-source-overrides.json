@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "invalid_override_transforms",
   "name": "Invalid Override Transforms",
   "status": "active",
@@ -16,7 +16,11 @@
       {
         "step": "postingDiscovery",
         "strategyKey": "json_api",
-        "transforms": [{ "type": "trim" }]
+        "transforms": [
+          {
+            "type": "trim"
+          }
+        ]
       }
     ]
   }

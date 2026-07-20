@@ -24,8 +24,8 @@ export function ProfileAccessPathDetails({
 }: ProfileAccessPathDetailsProps) {
   const [open, setOpen] = useState(false);
   const capabilities = [
-    accessPath.postingDiscovery ? "postingDiscovery" : null,
-    accessPath.postingDetail ? "postingDetail" : null,
+    accessPath.discovery ? "discovery" : null,
+    accessPath.detail ? "detail" : null,
   ].filter(Boolean);
 
   return (
@@ -98,16 +98,16 @@ export function ProfileAccessPathDetails({
             value={accessPath.knownIssues}
           />
           <OptionalSchemaValuePreview
-            title="postingDiscovery"
+            title="discovery"
             description="Deklarative source-weite Posting Discovery."
-            value={accessPath.postingDiscovery}
-            schemaRef={profileDslSchemaRefs.postingDiscoveryStep}
+            value={accessPath.discovery}
+            schemaRef={profileDslSchemaRefs.discoveryStep}
           />
           <OptionalSchemaValuePreview
-            title="postingDetail"
+            title="detail"
             description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
-            value={accessPath.postingDetail}
-            schemaRef={profileDslSchemaRefs.postingDetailStep}
+            value={accessPath.detail}
+            schemaRef={profileDslSchemaRefs.detailStep}
           />
         </div>
       </CollapsibleContent>

@@ -9,10 +9,12 @@ use crate::profile_dsl::documents::pagination::Pagination;
 use crate::profile_dsl::documents::parse::Parse;
 use crate::profile_dsl::documents::select::{Captures, Filter, Select};
 use crate::profile_dsl::documents::strategy::Acceptance;
+use crate::profile_dsl::policy::StrategyPolicy;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiscoveryStep {
+    pub policy: StrategyPolicy,
     pub strategies: Vec<DiscoveryStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,

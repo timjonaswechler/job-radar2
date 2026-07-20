@@ -54,7 +54,7 @@ fn simple_profile() -> serde_json::Value {
 
 fn simple_profile_without_pagination() -> serde_json::Value {
     let mut profile = simple_profile();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]
+    profile["accessPaths"][0]["discovery"]["strategies"][0]
         .as_object_mut()
         .unwrap()
         .remove("pagination");
@@ -111,10 +111,10 @@ fn assert_stale_detail(
 ) {
     let freshness = status.freshness.as_ref().unwrap();
     assert!(
-        freshness
-            .stale_fingerprints
-            .iter()
-            .any(|detail| detail.kind == kind && detail.reason == reason),
+        freshness.stale_fingerprints.iter().any(|detail| {
+            (detail.kind == kind || detail.reference.as_deref() == Some(kind))
+                && detail.reason == reason
+        }),
         "missing stale detail {kind}/{reason:?}: {:?}",
         freshness.stale_fingerprints
     );
@@ -161,12 +161,12 @@ fn source_live_check_applies_a_small_pagination_budget_without_changing_the_prof
     let budget_diagnostic = report
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")
+        .find(|diagnostic| diagnostic.code == "discovery_request_budget_reached")
         .expect("bounded Source Live Check should report its execution budget");
     assert_eq!(budget_diagnostic.severity, DiagnosticSeverity::Info);
     assert_eq!(
         budget_diagnostic.path,
-        "/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"
+        "/discovery/strategies/0/executionBudget/maxRequestsPerStrategy"
     );
 }
 
@@ -176,7 +176,7 @@ fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
     write_source(
         temp_dir.path(),
         &json!({
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "key": "workday_smoke",
             "name": "Workday Smoke",
             "status": "draft",
@@ -237,7 +237,7 @@ fn workday_source_live_check_uses_one_twenty_item_page_for_its_smoke_budget() {
     );
     assert_eq!(fetcher.detail_requested_urls(), vec![detail_url]);
     assert!(report.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "posting_discovery_request_budget_reached"
+        diagnostic.code == "discovery_request_budget_reached"
             && diagnostic.severity == DiagnosticSeverity::Info
     }));
 }
@@ -287,19 +287,22 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     assert_eq!(report.details["detailChecked"], json!(true));
     assert_eq!(report.details["detailPassed"], json!(true));
 
-    for expected_kind in [
-        "live_check_logic",
-        "source_document",
-        "source_profile_document",
+    for expected_reference in [
+        "base_source_profile",
+        "direct_source_specialization",
+        "effective_source_profile",
+        "compiler_provenance",
         "source_config",
-        "source_overrides",
+        "selected_access_path",
+        "profile_compiler",
+        "profile_runtime",
+        "immutable_globals",
     ] {
         assert!(
-            report
-                .fingerprints
-                .iter()
-                .any(|fingerprint| fingerprint.kind == expected_kind),
-            "missing fingerprint kind {expected_kind}: {:?}",
+            report.fingerprints.iter().any(|fingerprint| {
+                fingerprint.reference.as_deref() == Some(expected_reference)
+            }),
+            "missing fingerprint reference {expected_reference}: {:?}",
             report.fingerprints
         );
     }
@@ -368,7 +371,7 @@ fn source_live_check_report_status_marks_persisted_report_fresh() {
 }
 
 #[test]
-fn source_live_check_report_status_marks_changed_source_document_stale() {
+fn source_live_check_report_status_excludes_source_name_metadata() {
     let temp_dir = tempfile::tempdir().unwrap();
     create_passed_source_live_check(temp_dir.path());
     let mut source = simple_source_with_status("draft");
@@ -377,19 +380,14 @@ fn source_live_check_report_status_marks_changed_source_document_stale() {
 
     let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
 
-    assert_eq!(status.state, SourceLiveCheckReportState::Stale);
+    assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
     assert_eq!(
         status.freshness.as_ref().unwrap().state,
-        CheckReportFreshnessState::Stale
+        CheckReportFreshnessState::Fresh
     );
     assert_eq!(
         status.report.as_ref().unwrap().result,
         CheckReportResult::Passed
-    );
-    assert_stale_detail(
-        &status,
-        "source_document",
-        CheckReportStaleReason::ChangedFingerprintSha256,
     );
 }
 
@@ -399,7 +397,8 @@ fn source_live_check_report_status_marks_changed_profile_document_stale_without_
     let temp_dir = tempfile::tempdir().unwrap();
     create_passed_source_live_check(temp_dir.path());
     let mut profile = simple_profile_without_pagination();
-    profile["description"] = json!("Changed profile description");
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["url"] =
+        json!("https://changed.example.test/jobs");
     write_profile(temp_dir.path(), &profile);
 
     let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
@@ -411,7 +410,7 @@ fn source_live_check_report_status_marks_changed_profile_document_stale_without_
     );
     assert_stale_detail(
         &status,
-        "source_profile_document",
+        "base_source_profile",
         CheckReportStaleReason::ChangedFingerprintSha256,
     );
     let stored_source: serde_json::Value = serde_json::from_str(
@@ -422,12 +421,12 @@ fn source_live_check_report_status_marks_changed_profile_document_stale_without_
 }
 
 #[test]
-fn source_live_check_report_status_marks_changed_source_config_and_overrides_stale() {
+fn source_live_check_report_status_marks_changed_source_config_and_direct_specialization_stale() {
     let temp_dir = tempfile::tempdir().unwrap();
     create_passed_source_live_check(temp_dir.path());
     let mut source = simple_source_with_status("draft");
     source["sourceConfig"]["language"] = json!("de");
-    source["sourceOverrides"]["strategyOverrides"][0]["acceptWhen"]["minResults"] = json!(2);
+    source["accessPaths"][0]["discovery"]["strategies"][0]["acceptWhen"]["minResults"] = json!(2);
     write_source(temp_dir.path(), &source);
 
     let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
@@ -440,7 +439,7 @@ fn source_live_check_report_status_marks_changed_source_config_and_overrides_sta
     );
     assert_stale_detail(
         &status,
-        "source_overrides",
+        "direct_source_specialization",
         CheckReportStaleReason::ChangedFingerprintSha256,
     );
     assert_eq!(
@@ -471,31 +470,15 @@ fn source_live_check_report_status_marks_changed_logic_version_stale() {
 }
 
 #[test]
-fn check_source_persists_failed_report_for_unknown_source_key() {
+fn check_source_rejects_unknown_source_without_persisting_a_report() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile());
 
-    let report = check_source(temp_dir.path(), "missing_source").unwrap();
+    let error = check_source(temp_dir.path(), "missing_source").unwrap_err();
 
-    assert_eq!(report.kind, CheckReportKind::SourceLiveCheck);
-    assert_eq!(report.subject.subject_type, CheckReportSubjectType::Source);
-    assert_eq!(report.subject.key, "missing_source");
-    assert_eq!(report.result, CheckReportResult::Failed);
-    assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
-    assert!(report.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == DiagnosticCategory::SourceValidation
-            && diagnostic.code == "source_not_found"
-            && diagnostic.severity == DiagnosticSeverity::Error
-            && diagnostic
-                .details
-                .as_ref()
-                .and_then(serde_json::Value::as_object)
-                .and_then(|details| details.get("sourceKey"))
-                == Some(&json!("missing_source"))
-    }));
-
+    assert!(error.contains("was not found in the registry snapshot"));
     let persisted_path = source_live_check_report_path(temp_dir.path(), "missing_source");
-    assert_eq!(read_latest_check_report(&persisted_path).unwrap(), report);
+    assert!(!persisted_path.exists());
 }
 
 #[test]
@@ -666,15 +649,13 @@ fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
     let temp_dir = tempfile::tempdir().unwrap();
     let source = simple_source_with_status("active");
     let mut profile = simple_profile_without_pagination();
-    let mut failing_detail_strategy =
-        profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();
+    let mut failing_detail_strategy = profile["accessPaths"][0]["detail"]["strategies"][0].clone();
     failing_detail_strategy["key"] = json!("missing_description");
     failing_detail_strategy["extract"]["fields"]["descriptionText"]["jsonPath"] =
         json!("$.missingDescriptionHtml");
-    let mut fallback_detail_strategy =
-        profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();
+    let mut fallback_detail_strategy = profile["accessPaths"][0]["detail"]["strategies"][0].clone();
     fallback_detail_strategy["key"] = json!("fallback_detail_api");
-    profile["accessPaths"][0]["postingDetail"]["strategies"] =
+    profile["accessPaths"][0]["detail"]["strategies"] =
         json!([failing_detail_strategy, fallback_detail_strategy]);
     write_profile(temp_dir.path(), &profile);
     write_source(temp_dir.path(), &source);
@@ -721,7 +702,7 @@ fn check_source_leaves_detail_unchecked_when_access_path_has_no_detail() {
     profile["accessPaths"][0]
         .as_object_mut()
         .unwrap()
-        .remove("postingDetail");
+        .remove("detail");
     write_profile(temp_dir.path(), &profile);
     write_source(temp_dir.path(), &source);
     let fetcher = FakeLiveCheckFetcher::new([(

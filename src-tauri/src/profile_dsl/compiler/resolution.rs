@@ -9,7 +9,6 @@ use crate::profile_dsl::execution_plan::{
 use crate::profile_dsl::source_config::EffectiveSourceConfigContract;
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
-use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
 use super::boundedness::validate_boundedness;
 use super::capabilities::validate_capability_compatibility;
@@ -19,13 +18,11 @@ use super::keys::{
     access_path_index, validate_detail_strategy_keys, validate_discovery_strategy_keys,
     validate_reusable_access_path_keys,
 };
-use super::overrides::apply_source_overrides;
 use super::security::validate_security;
 use super::source_config::{
     compile_reusable_contract, compile_source_owned_contract, push_definition_violations,
     source_owned_access_path_schema, validate_source_config_against_contract,
 };
-use super::specialization::specialize_profile;
 use super::support::validate_support_metadata;
 use super::templates::validate_template_variables;
 use super::SourceRuntimeBindingDependencies;
@@ -77,13 +74,13 @@ fn validate_source_profile_document_with_contracts(
             };
             validate_discovery_strategy_keys(
                 &access_path.discovery,
-                access_path_step_path(Some(path_index), "postingDiscovery"),
+                access_path_step_path(Some(path_index), "discovery"),
                 diagnostics,
             );
             if let Some(detail) = &access_path.detail {
                 validate_detail_strategy_keys(
                     detail,
-                    access_path_step_path(Some(path_index), "postingDetail"),
+                    access_path_step_path(Some(path_index), "detail"),
                     diagnostics,
                 );
             }
@@ -127,76 +124,19 @@ fn validate_source_profile_document_with_contracts(
         .collect()
 }
 
-pub(super) fn compile_source_execution_plan(
+pub(super) fn compile_materialized_profile_access_path(
     source: &SourceDocument,
-    registry: &SourceProfileRegistrySnapshot,
-    diagnostics: &mut Diagnostics,
-) -> Option<ResolvedSourceExecutionPlan> {
-    match &source.selected_access_path {
-        SelectedAccessPath::ProfileAccessPath {
-            profile_key,
-            path_key,
-        } => compile_profile_access_path(registry, source, profile_key, path_key, diagnostics),
-        SelectedAccessPath::SourceOwnedAccessPath { .. } => {
-            let execution_plan = compile_source_owned_access_path(source, diagnostics)?;
-            if has_error_diagnostics(diagnostics) {
-                return None;
-            }
-            Some(execution_plan)
-        }
-    }
-}
-
-fn compile_profile_access_path(
-    registry: &SourceProfileRegistrySnapshot,
-    source: &SourceDocument,
+    effective_profile: &SourceProfileDocument,
     profile_key: &str,
     path_key: &str,
     diagnostics: &mut Diagnostics,
 ) -> Option<ResolvedSourceExecutionPlan> {
-    let base_profile = resolve_profile(registry, source, profile_key, diagnostics)?;
-    if source.access_paths.is_some() && source.source_overrides.is_some() {
-        diagnostics.push(compiler_error(
-            "conflicting_source_specialization_models",
-            format!(
-                "Source `{}` cannot combine direct Access Path fragments with legacy sourceOverrides",
-                source.key
-            ),
-            "/accessPaths",
-            serde_json::json!({ "sourceKey": source.key }),
-        ));
-        return None;
-    }
-
-    let mut effective_profile =
-        specialize_profile(base_profile, source.access_paths.as_deref(), diagnostics)?;
-
-    // A01 owns migration and deletion of the productive schema-v2 Source
-    // Overrides route. It remains isolated from the final keyed merger.
-    if source.access_paths.is_none() {
-        if let Some(access_path) = effective_profile
-            .access_paths
-            .iter_mut()
-            .find(|access_path| access_path.key == path_key)
-        {
-            let effective_steps = apply_source_overrides(
-                source.source_overrides.as_ref(),
-                &access_path.discovery,
-                access_path.detail.as_ref(),
-                diagnostics,
-            );
-            access_path.discovery = effective_steps.discovery;
-            access_path.detail = effective_steps.detail;
-        }
-    }
-
-    let contracts =
-        validate_source_profile_document_with_contracts(&effective_profile, diagnostics);
+    let contracts = validate_source_profile_document_with_contracts(effective_profile, diagnostics);
     if has_error_diagnostics(diagnostics) {
         return None;
     }
 
-    let path_index = access_path_index(&effective_profile, path_key);
+    let path_index = access_path_index(effective_profile, path_key);
     if let Some(index) = path_index {
         let contract = contracts[index]
             .contract
@@ -210,7 +150,7 @@ fn compile_profile_access_path(
 
     let access_path = resolve_access_path(
         source,
-        &effective_profile,
+        effective_profile,
         profile_key,
         path_key,
         diagnostics,
@@ -221,16 +161,14 @@ fn compile_profile_access_path(
 
     let discovery = compile_discovery_step(
         &access_path.discovery,
-        &access_path_step_path(path_index, "postingDiscovery"),
+        &access_path_step_path(path_index, "discovery"),
     )
     .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
     .ok()?;
     let detail = access_path
         .detail
         .as_ref()
-        .map(|detail| {
-            compile_detail_step(detail, &access_path_step_path(path_index, "postingDetail"))
-        })
+        .map(|detail| compile_detail_step(detail, &access_path_step_path(path_index, "detail")))
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
@@ -258,32 +196,6 @@ fn compile_profile_access_path(
         execution_plan,
         runtime_binding_dependencies,
     })
-}
-
-fn resolve_profile<'a>(
-    registry: &'a SourceProfileRegistrySnapshot,
-    source: &SourceDocument,
-    profile_key: &str,
-    diagnostics: &mut Diagnostics,
-) -> Option<&'a SourceProfileDocument> {
-    let profile = registry
-        .profile(profile_key)
-        .map(|profile| &profile.document);
-    if profile.is_none() {
-        diagnostics.push(compiler_error(
-            "source_profile_not_found",
-            format!(
-                "Source `{}` references missing Source Profile `{profile_key}`",
-                source.key
-            ),
-            "/selectedAccessPath/profileKey",
-            serde_json::json!({
-                "sourceKey": source.key,
-                "profileKey": profile_key,
-            }),
-        ));
-    }
-    profile
 }
 
 fn resolve_access_path<'a>(
@@ -315,7 +227,7 @@ fn resolve_access_path<'a>(
     access_path
 }
 
-fn compile_source_owned_access_path(
+pub(super) fn compile_source_owned_access_path(
     source: &SourceDocument,
     diagnostics: &mut Diagnostics,
 ) -> Option<ResolvedSourceExecutionPlan> {
@@ -336,13 +248,12 @@ fn compile_source_owned_access_path(
         return None;
     }
 
-    let compiled_discovery =
-        compile_discovery_step(discovery, "/selectedAccessPath/postingDiscovery")
-            .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
-            .ok()?;
+    let compiled_discovery = compile_discovery_step(discovery, "/selectedAccessPath/discovery")
+        .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
+        .ok()?;
     let compiled_detail = detail
         .as_ref()
-        .map(|detail| compile_detail_step(detail, "/selectedAccessPath/postingDetail"))
+        .map(|detail| compile_detail_step(detail, "/selectedAccessPath/detail"))
         .transpose()
         .map_err(|error| push_compiled_plan_invariant(error, diagnostics))
         .ok()?;
@@ -399,17 +310,6 @@ fn validate_source_owned_access_path(
             serde_json::json!({ "sourceKey": source.key }),
         ));
     }
-    if source.source_overrides.is_some() {
-        diagnostics.push(compiler_error(
-            "source_overrides_not_supported_for_source_owned_access_path",
-            format!(
-                "Source `{}` uses a Source-owned Access Path, so sourceOverrides cannot be applied",
-                source.key
-            ),
-            "/sourceOverrides",
-            serde_json::json!({ "sourceKey": source.key }),
-        ));
-    }
     let source_config_contract = compile_source_owned_contract(source_owned_access_path_schema(
         &source.selected_access_path,
     ));
@@ -426,13 +326,13 @@ fn validate_source_owned_access_path(
     };
     validate_discovery_strategy_keys(
         discovery,
-        "/selectedAccessPath/postingDiscovery".to_string(),
+        "/selectedAccessPath/discovery".to_string(),
         diagnostics,
     );
     if let Some(detail) = detail {
         validate_detail_strategy_keys(
             detail,
-            "/selectedAccessPath/postingDetail".to_string(),
+            "/selectedAccessPath/detail".to_string(),
             diagnostics,
         );
     }

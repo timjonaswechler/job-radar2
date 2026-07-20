@@ -111,10 +111,10 @@ export function SourceDetails({
       />
 
       <OptionalSchemaValuePreview
-        title="sourceOverrides"
-        description="Kontrollierte Source-spezifische Verhaltensänderungen für den ausgewählten Profilpfad."
-        value={source.document.sourceOverrides}
-        schemaRef={profileDslSchemaRefs.sourceOverrides}
+        title="Authored accessPaths"
+        description="Direkt im schema-v3 Source-Dokument authorisierte Spezialisierungsfragmente."
+        value={source.document.accessPaths}
+        schemaRef={profileDslSchemaRefs.accessPathFragments}
       />
       <OptionalSchemaValuePreview
         title="sourceSupport"
@@ -145,10 +145,10 @@ function AccessPathDetails({
       <div className="grid gap-3 rounded-lg border p-3 text-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <p className="font-medium">Profil-Zugriffspfad</p>
+            <p className="font-medium">Effektiver Profil-Zugriffspfad</p>
             <p className="text-xs text-muted-foreground">
-              Die Source referenziert ein wiederverwendbares Source Profile und
-              einen dort definierten Access Path.
+              Vom Backend-Compiler aus Basisprofil und authored accessPaths
+              materialisiertes Verhalten.
             </p>
           </div>
           <Badge
@@ -262,16 +262,16 @@ function AccessPathJsonBlocks({ accessPath }: AccessPathJsonBlocksProps) {
         />
       ) : null}
       <OptionalSchemaValuePreview
-        title="postingDiscovery"
+        title="discovery"
         description="Deklarative source-weite Posting Discovery."
-        value={accessPath.postingDiscovery}
-        schemaRef={profileDslSchemaRefs.postingDiscoveryStep}
+        value={accessPath.discovery}
+        schemaRef={profileDslSchemaRefs.discoveryStep}
       />
       <OptionalSchemaValuePreview
-        title="postingDetail"
+        title="detail"
         description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
-        value={accessPath.postingDetail}
-        schemaRef={profileDslSchemaRefs.postingDetailStep}
+        value={accessPath.detail}
+        schemaRef={profileDslSchemaRefs.detailStep}
       />
     </div>
   );

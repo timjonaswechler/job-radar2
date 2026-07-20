@@ -200,7 +200,7 @@ impl ProfileBrowserClient for CancellationAwareBrowser {
             context.cancelled().await;
             Err(ProfileBrowserFetchError::new(
                 ProfileBrowserFetchErrorKind::Cancelled,
-                "postingDiscovery cancelled",
+                "discovery cancelled",
             ))
         })
     }

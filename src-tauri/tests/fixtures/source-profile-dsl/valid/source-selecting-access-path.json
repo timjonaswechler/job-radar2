@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "example_source",
   "name": "Example Source",
   "status": "active",
@@ -12,15 +12,19 @@
     "profileKey": "example_jobs",
     "pathKey": "json_feed"
   },
-  "sourceOverrides": {
-    "strategyOverrides": [
-      {
-        "step": "postingDiscovery",
-        "strategyKey": "json_api",
-        "acceptWhen": {
-          "minResults": 0
-        }
+  "accessPaths": [
+    {
+      "key": "json_feed",
+      "discovery": {
+        "strategies": [
+          {
+            "key": "json_api",
+            "acceptWhen": {
+              "minResults": 0
+            }
+          }
+        ]
       }
-    ]
-  }
+    }
+  ]
 }

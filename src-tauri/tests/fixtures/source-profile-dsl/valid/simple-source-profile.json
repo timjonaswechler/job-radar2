@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "example_jobs",
   "name": "Example Jobs",
   "kind": "generic",
@@ -17,9 +17,13 @@
   },
   "sourceConfigSchema": {
     "type": "object",
-    "required": ["feedUrl"],
+    "required": [
+      "feedUrl"
+    ],
     "properties": {
-      "feedUrl": { "type": "string" }
+      "feedUrl": {
+        "type": "string"
+      }
     },
     "additionalProperties": false
   },
@@ -30,10 +34,12 @@
       "sourceConfigSchema": {
         "type": "object",
         "properties": {
-          "language": { "type": "string" }
+          "language": {
+            "type": "string"
+          }
         }
       },
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "json_api",
@@ -46,7 +52,9 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
+            "parse": {
+              "type": "json"
+            },
             "select": {
               "type": "json_path",
               "jsonPath": "$.jobs"
@@ -66,7 +74,11 @@
                   "type": "json_path",
                   "jsonPath": "$.title",
                   "cardinality": "one",
-                  "transforms": [{ "type": "trim" }]
+                  "transforms": [
+                    {
+                      "type": "trim"
+                    }
+                  ]
                 },
                 "company": {
                   "type": "const",
@@ -82,8 +94,12 @@
                   "jsonPath": "$.locations",
                   "cardinality": "all",
                   "transforms": [
-                    { "type": "trim" },
-                    { "type": "dedupe" }
+                    {
+                      "type": "trim"
+                    },
+                    {
+                      "type": "dedupe"
+                    }
                   ]
                 },
                 "postingMeta": {
@@ -96,13 +112,20 @@
               }
             },
             "acceptWhen": {
-              "requiredFields": ["title", "company", "url"],
+              "requiredFields": [
+                "title",
+                "company",
+                "url"
+              ],
               "minResults": 1
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       },
-      "postingDetail": {
+      "detail": {
         "strategies": [
           {
             "key": "detail_api",
@@ -115,8 +138,12 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "document"
+            },
             "extract": {
               "fields": {
                 "descriptionText": {
@@ -124,8 +151,12 @@
                   "jsonPath": "$.descriptionHtml",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "html_to_text" },
-                    { "type": "normalize_whitespace" }
+                    {
+                      "type": "html_to_text"
+                    },
+                    {
+                      "type": "normalize_whitespace"
+                    }
                   ]
                 }
               }
@@ -134,7 +165,10 @@
               "minDescriptionLength": 20
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
   ]

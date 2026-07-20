@@ -16,7 +16,7 @@ const SCHEMA_FILES: &[&str] = &[
     "src/schema/profile-dsl/pagination.schema.json",
     "src/schema/profile-dsl/strategy.schema.json",
     "src/schema/profile-dsl/policy.schema.json",
-    "src/schema/profile-dsl/overrides.schema.json",
+    "src/schema/profile-dsl/fragments.schema.json",
     "src/schema/profile-dsl/diagnostics.schema.json",
 ];
 
@@ -62,6 +62,28 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
+fn direct_pagination_fragment_uses_canonical_json_body_parameter_location() {
+    let harness = SchemaHarness::new();
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    source["accessPaths"][0]["discovery"]["strategies"][0]["pagination"] = json!({
+        "type": "page",
+        "parameterLocation": "json_body"
+    });
+    harness.assert_json_valid(
+        SchemaEntrypoint::Source,
+        source.clone(),
+        "direct pagination fragment with json_body",
+    );
+
+    source["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]["parameterLocation"] =
+        json!("body");
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["body"]);
+}
+
+#[test]
 fn production_agent_document_schema_examples_match_schema_entrypoints() {
     let harness = SchemaHarness::new();
     let document = read_repo_file("docs/source-profile-production-agent.md");
@@ -99,7 +121,7 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/posting-detail-pagination.json",
+        "tests/fixtures/source-profile-dsl/invalid/detail-pagination.json",
         &["pagination"],
     );
     harness.assert_invalid(
@@ -109,8 +131,8 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
     );
     harness.assert_invalid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/invalid/source-override-transforms.json",
-        &["transforms"],
+        "tests/fixtures/source-profile-dsl/invalid/v2-source-overrides.json",
+        &["sourceOverrides"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
@@ -145,7 +167,7 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
 }
 
 #[test]
-fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
+fn final_strategy_set_schema_requires_first_accepted_policy() {
     let harness = SchemaHarness::new();
     let strategy = json!({
         "key": "json_api",
@@ -172,7 +194,7 @@ fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
             "policy": { "type": "first_accepted" },
             "strategies": [strategy.clone()]
         }),
-        "dormant final first_accepted Strategy Set",
+        "final first_accepted Strategy Set",
     );
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
@@ -200,7 +222,7 @@ fn dormant_final_strategy_set_schema_requires_first_accepted_policy() {
 }
 
 #[test]
-fn source_schema_keeps_direct_profile_fragments_dormant_until_a01() {
+fn source_schema_accepts_direct_profile_fragments() {
     let harness = SchemaHarness::new();
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
@@ -208,12 +230,16 @@ fn source_schema_keeps_direct_profile_fragments_dormant_until_a01() {
     );
     source["accessPaths"] = json!([{
         "key": "json_feed",
-        "postingDiscovery": {
+        "discovery": {
             "strategies": [{ "key": "json_api", "acceptWhen": { "minResults": 0 } }]
         }
     }]);
 
-    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["accessPaths"]);
+    harness.assert_json_valid(
+        SchemaEntrypoint::Source,
+        source,
+        "schema-v3 Source with direct Access Path fragments",
+    );
 }
 
 #[test]
@@ -236,7 +262,7 @@ fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnos
         env!("CARGO_MANIFEST_DIR"),
         "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
     );
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "browser",
         "url": "{{sourceConfig:feedUrl}}",
         "timeoutMs": 10000,

@@ -5,8 +5,8 @@ use std::{
 };
 
 use job_radar_lib::{
-    compile_source_execution_plan, load_source_profile_registry_snapshot, DiagnosticCategory,
-    DiagnosticSeverity, ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument,
+    compile_source, load_source_profile_registry_snapshot, CompileSourceOutcome,
+    DiagnosticCategory, DiagnosticSeverity, SourceDocument, SourceProfileDocument,
 };
 
 #[test]
@@ -33,7 +33,7 @@ fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_docum
                 path.display()
             )
         });
-        assert_eq!(document.schema_version, 2, "{}", path.display());
+        assert_eq!(document.schema_version, 3, "{}", path.display());
         assert!(!document.access_paths.is_empty(), "{}", path.display());
     }
 
@@ -56,7 +56,7 @@ fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_docum
                 path.display()
             )
         });
-        assert_eq!(document.schema_version, 2, "{}", path.display());
+        assert_eq!(document.schema_version, 3, "{}", path.display());
     }
 }
 
@@ -108,15 +108,9 @@ fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
     assert!(!crate_dir.join("src/source/detection").exists());
 
     let snapshot = load_source_profile_registry_snapshot(tempfile::tempdir().unwrap().path());
-    let compiler_snapshot = ProfileCompilerSnapshot {
-        profiles: snapshot
-            .profiles
-            .iter()
-            .map(|profile| profile.document.clone())
-            .collect(),
-        sources: vec![serde_json::from_str(
-            r#"{
-          "schemaVersion": 2,
+    let source: SourceDocument = serde_json::from_str(
+        r#"{
+          "schemaVersion": 3,
           "key": "greenhouse_fixture",
           "name": "Greenhouse Fixture",
           "status": "active",
@@ -129,13 +123,12 @@ fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
             "pathKey": "boards_api"
           }
         }"#,
-        )
-        .unwrap()],
+    )
+    .unwrap();
+    let CompileSourceOutcome::Compiled { source, .. } = compile_source(&source, &snapshot) else {
+        panic!("new DSL Source should compile into an Execution Plan");
     };
-    let result = compile_source_execution_plan(&compiler_snapshot, "greenhouse_fixture");
-    let plan = result
-        .execution_plan
-        .expect("new DSL Source should compile into an Execution Plan");
+    let plan = source.execution_plan;
     let serialized_plan = serde_json::to_string(&plan).unwrap();
     assert!(!serialized_plan.contains("adapterKey"));
     assert!(!serialized_plan.contains("list_adapters"));
@@ -156,7 +149,7 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
     fs::write(
         custom_source_dir.join("invalid_source.json"),
         r#"{
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "key": "invalid_source",
           "name": "Invalid Source",
           "status": "active",
@@ -209,7 +202,7 @@ fn registry_compiler_validates_unreferenced_custom_profiles() {
         .unwrap(),
     )
     .unwrap();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
         .as_object_mut()
         .unwrap()
         .remove("timeoutMs");
@@ -227,7 +220,7 @@ fn registry_compiler_validates_unreferenced_custom_profiles() {
         diagnostic.category == DiagnosticCategory::Compiler
             && diagnostic.severity == DiagnosticSeverity::Error
             && diagnostic.code == "missing_fetch_timeout"
-            && diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"
+            && diagnostic.path == "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs"
             && diagnostic.strategy_key.as_deref() == Some("json_api")
     }));
 }
@@ -247,7 +240,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     fs::write(
         custom_source_dir.join("persisted_invalid_status.json"),
         r#"{
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "key": "persisted_invalid_status",
           "name": "Persisted Invalid Status",
           "status": "invalid",
@@ -264,7 +257,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     fs::write(
         custom_source_dir.join("missing_profile.json"),
         r#"{
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "key": "missing_profile",
           "name": "Missing Profile",
           "status": "active",
@@ -281,7 +274,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     fs::write(
         custom_source_dir.join("missing_access_path.json"),
         r#"{
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "key": "missing_access_path",
           "name": "Missing Access Path",
           "status": "active",
@@ -298,7 +291,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     fs::write(
         custom_source_dir.join("invalid_overrides.json"),
         r#"{
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "key": "invalid_overrides",
           "name": "Invalid Overrides",
           "status": "active",
@@ -314,7 +307,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
           "sourceOverrides": {
             "strategyOverrides": [
               {
-                "step": "postingDiscovery",
+                "step": "discovery",
                 "strategyKey": "missing_strategy",
                 "acceptWhen": { "minResults": 0 }
               }
@@ -328,6 +321,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
 
     assert!(snapshot.source("persisted_invalid_status").is_none());
+    assert!(snapshot.source("invalid_overrides").is_none());
     assert_diagnostic(
         &snapshot.diagnostics,
         DiagnosticCategory::Schema,
@@ -342,11 +336,6 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
         &snapshot.diagnostics,
         DiagnosticCategory::Compiler,
         "access_path_not_found",
-    );
-    assert_diagnostic(
-        &snapshot.diagnostics,
-        DiagnosticCategory::Compiler,
-        "unknown_strategy_override",
     );
 }
 

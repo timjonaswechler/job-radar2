@@ -13,7 +13,7 @@ pub(super) fn accept_detail_result(
     {
         diagnostics.push(runtime_error(
             "acceptance_max_error_ratio_unsupported",
-            "acceptWhen.maxErrorRatio is not supported by the postingDetail runtime result model yet",
+            "acceptWhen.maxErrorRatio is not supported by the detail runtime result model yet",
             format!("{owner_path}/acceptWhen/maxErrorRatio"),
             strategy_key,
             json!({ "maxErrorRatio": ratio }),
@@ -27,7 +27,7 @@ pub(super) fn accept_detail_result(
         if field != "descriptionText" || description.trim().is_empty() {
             diagnostics.push(runtime_error(
                 "acceptance_required_field_missing",
-                format!("postingDetail result is missing required normalized field `{field}`"),
+                format!("detail result is missing required normalized field `{field}`"),
                 format!("{owner_path}/acceptWhen/requiredFields"),
                 strategy_key,
                 json!({ "field": field }),
@@ -45,7 +45,7 @@ pub(super) fn accept_detail_result(
             diagnostics.push(runtime_error(
                 "description_too_short",
                 format!(
-                    "postingDetail descriptionText is shorter than the configured minimum of {minimum} characters"
+                    "detail descriptionText is shorter than the configured minimum of {minimum} characters"
                 ),
                 format!("{owner_path}/acceptWhen/minDescriptionLength"),
                 strategy_key,
@@ -68,7 +68,7 @@ fn detail_first_max_error_ratio(
 ) -> Option<(f64, String)> {
     step_acceptance
         .and_then(|acceptance| acceptance.max_error_ratio)
-        .map(|ratio| (ratio, "/postingDetail".to_string()))
+        .map(|ratio| (ratio, "/detail".to_string()))
         .or_else(|| {
             strategy_acceptance
                 .and_then(|acceptance| acceptance.max_error_ratio)
@@ -87,7 +87,7 @@ fn detail_required_field_rules(
         rules.extend(
             fields
                 .iter()
-                .map(|field| (field.clone(), "/postingDetail".to_string())),
+                .map(|field| (field.clone(), "/detail".to_string())),
         );
     }
     if let Some(fields) =
@@ -109,7 +109,7 @@ fn detail_stricter_u64_acceptance(
 ) -> Option<(u64, String)> {
     match (step_value, strategy_value) {
         (Some(step), Some(strategy)) if strategy >= step => Some((strategy, base_path.to_string())),
-        (Some(step), Some(_)) | (Some(step), None) => Some((step, "/postingDetail".to_string())),
+        (Some(step), Some(_)) | (Some(step), None) => Some((step, "/detail".to_string())),
         (None, Some(strategy)) => Some((strategy, base_path.to_string())),
         (None, None) => None,
     }

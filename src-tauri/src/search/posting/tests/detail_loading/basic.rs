@@ -201,7 +201,7 @@ fn get_job_posting_returns_unsupported_when_no_concrete_source_supports_detail()
         match detail.description_state {
             PostingDescriptionState::Unsupported { diagnostics, .. } => assert!(diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == "posting_detail_missing")),
+                .any(|diagnostic| diagnostic.code == "detail_missing")),
             other => panic!("expected unsupported state, got {other:?}"),
         }
         assert_eq!(persisted_description_text(&pool, posting_id).await, None);

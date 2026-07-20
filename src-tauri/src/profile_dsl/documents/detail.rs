@@ -6,10 +6,12 @@ use crate::profile_dsl::documents::fetch::Fetch;
 use crate::profile_dsl::documents::parse::Parse;
 use crate::profile_dsl::documents::select::{Captures, Filter, Select};
 use crate::profile_dsl::documents::strategy::{Acceptance, FieldMatch};
+use crate::profile_dsl::policy::StrategyPolicy;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DetailStep {
+    pub policy: StrategyPolicy,
     pub strategies: Vec<DetailStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,

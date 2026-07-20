@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::profile_dsl::compiler::CompileSourceOutcome;
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::source::documents::SourceDocument;
 use crate::source::validation::SourceValidationState;
@@ -20,6 +21,13 @@ pub struct RegistrySource {
     pub path: String,
     pub document: SourceDocument,
     pub validation_state: SourceValidationState,
+    /// Compiler-owned effective behavior for profile-selected Sources.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_profile: Option<SourceProfileDocument>,
+    /// Exact outcome prepared while loading this immutable registry snapshot.
+    /// Productive callers reuse it instead of recompiling or reconstructing plans.
+    #[serde(skip)]
+    pub compile_outcome: Option<CompileSourceOutcome>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]

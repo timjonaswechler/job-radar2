@@ -69,11 +69,11 @@ fn compiled_discovery_runtime_reports_required_field_and_cardinality_diagnostics
     assert_runtime_diagnostic(&result.diagnostics[1], "field_cardinality_mismatch");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/extract/fields/title"
+        "/discovery/strategies/0/extract/fields/title"
     );
     assert_eq!(
         result.diagnostics[1].path,
-        "/postingDiscovery/strategies/0/extract/fields/company"
+        "/discovery/strategies/0/extract/fields/company"
     );
 }
 

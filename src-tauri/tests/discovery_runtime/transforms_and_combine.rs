@@ -201,7 +201,7 @@ fn compiled_discovery_runtime_fails_combine_when_required_part_is_missing() {
     assert_runtime_diagnostic(&result.diagnostics[0], "required_combine_part_missing");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/extract/fields/title/parts/1/value"
+        "/discovery/strategies/0/extract/fields/title/parts/1/value"
     );
 }
 

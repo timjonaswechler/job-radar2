@@ -10,7 +10,7 @@ fn compiled_discovery_rejects_template_transform_pipes() {
     });
 
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_jobs",
         "name": "Example Jobs",
         "kind": "generic",
@@ -24,7 +24,8 @@ fn compiled_discovery_rejects_template_transform_pipes() {
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "json_api",
                     "fetch": {
@@ -42,7 +43,7 @@ fn compiled_discovery_rejects_template_transform_pipes() {
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_source",
         "name": "Example Source",
         "status": "active",
@@ -55,19 +56,15 @@ fn compiled_discovery_rejects_template_transform_pipes() {
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
+    let CompileSourceOutcome::Rejected { diagnostics } = result else {
+        panic!("invalid template must reject compilation: {result:?}");
+    };
 
-    assert!(result.execution_plan.is_none());
-    assert!(result.diagnostics.iter().any(|diagnostic| {
+    assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "template_transform_pipes_unsupported"
             && diagnostic.category == DiagnosticCategory::Compiler
             && diagnostic.path
-                == "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"
+                == "/accessPaths/0/discovery/strategies/0/extract/fields/company/template"
     }));
 }

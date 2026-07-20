@@ -37,7 +37,7 @@ pub(super) fn validate_template_variables(
             .as_ref()
             .map(|captures| captures.keys().cloned().collect::<HashSet<_>>())
             .unwrap_or_default();
-        let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");
+        let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_fetch_templates(
             &strategy.fetch,
             &format!("{strategy_path}/fetch"),
@@ -69,7 +69,7 @@ pub(super) fn validate_template_variables(
                 .as_ref()
                 .map(|captures| captures.keys().cloned().collect::<HashSet<_>>())
                 .unwrap_or_default();
-            let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");
+            let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_fetch_templates(
                 &strategy.fetch,
                 &format!("{strategy_path}/fetch"),

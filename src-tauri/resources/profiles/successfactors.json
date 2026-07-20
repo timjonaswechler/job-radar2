@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "successfactors",
   "name": "SAP SuccessFactors",
   "kind": "recruiting_system",
@@ -15,48 +15,12 @@
       }
     ]
   },
-  "detect": {
-    "recommendedAccessPathKey": "rmk_sitemap_html",
-    "sourceConfig": {
-      "baseUrl": "https://{{capture:successFactorsHost}}",
-      "sitemapUrl": "https://{{capture:successFactorsHost}}/sitemap.xml"
-    },
-    "keyCandidates": ["successfactors_{{capture:successFactorsHost}}"],
-    "nameCandidates": ["SAP SuccessFactors {{capture:successFactorsHost}}"],
-    "inputUrlPatterns": [
-      {
-        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",
-        "captures": ["successFactorsHost"]
-      },
-      {
-        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/sitemap\\.xml(?:[?#].*)?$",
-        "captures": ["successFactorsHost"]
-      }
-    ],
-    "httpChecks": [
-      {
-        "key": "sitemap_contains_successfactors_job_urls",
-        "url": "https://{{capture:successFactorsHost}}/sitemap.xml",
-        "timeoutMs": 10000,
-        "expectStatus": 200,
-        "regex": "(?is)<loc>https?://[^<]+/job/[^<]+(?:-[0-9]+|/[0-9]+/?)(?:[?#][^<]*)?</loc>",
-        "evidence": "Public sitemap contains SuccessFactors/RMK-style job detail URLs."
-      }
-    ],
-    "evidence": [
-      {
-        "kind": "url",
-        "message": "Common SAP SuccessFactors/RMK career sites expose posting URLs and sitemap URLs on one public host."
-      },
-      {
-        "kind": "http",
-        "message": "Profile execution expects a public XML sitemap containing job detail URLs."
-      }
-    ]
-  },
   "sourceConfigSchema": {
     "type": "object",
-    "required": ["baseUrl", "sitemapUrl"],
+    "required": [
+      "baseUrl",
+      "sitemapUrl"
+    ],
     "additionalProperties": false,
     "properties": {
       "baseUrl": {
@@ -81,7 +45,7 @@
       "key": "rmk_sitemap_html",
       "name": "RMK sitemap and HTML detail pages",
       "description": "Discover postings from a bounded public XML sitemap and load descriptions from SuccessFactors/RMK-style HTML detail pages with fallback selectors.",
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "sitemap_job_urls",
@@ -105,8 +69,12 @@
                 "maxItems": 200
               }
             },
-            "parse": { "type": "xml" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "xml"
+            },
+            "select": {
+              "type": "document"
+            },
             "captures": {
               "location": {
                 "from": {
@@ -148,8 +116,12 @@
                   "key": "title",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "url_decode" },
-                    { "type": "slug_to_title" }
+                    {
+                      "type": "url_decode"
+                    },
+                    {
+                      "type": "slug_to_title"
+                    }
                   ]
                 },
                 "company": {
@@ -167,8 +139,12 @@
                   "key": "location",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "url_decode" },
-                    { "type": "slug_to_title" }
+                    {
+                      "type": "url_decode"
+                    },
+                    {
+                      "type": "slug_to_title"
+                    }
                   ]
                 },
                 "postingMeta": {
@@ -197,9 +173,12 @@
               "minResults": 1
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       },
-      "postingDetail": {
+      "detail": {
         "strategies": [
           {
             "key": "primary_html_description",
@@ -212,15 +191,23 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "html" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "html"
+            },
+            "select": {
+              "type": "document"
+            },
             "extract": {
               "fields": {
                 "descriptionText": {
                   "type": "css_text",
                   "selector": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description']",
                   "cardinality": "first",
-                  "transforms": [{ "type": "normalize_whitespace" }]
+                  "transforms": [
+                    {
+                      "type": "normalize_whitespace"
+                    }
+                  ]
                 }
               }
             },
@@ -239,15 +226,23 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "html" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "html"
+            },
+            "select": {
+              "type": "document"
+            },
             "extract": {
               "fields": {
                 "descriptionText": {
                   "type": "css_text",
                   "selector": ".job-description__content, .job-description, .jobdescription, .jobDescription, #job-description, main [class*='description']",
                   "cardinality": "first",
-                  "transforms": [{ "type": "normalize_whitespace" }]
+                  "transforms": [
+                    {
+                      "type": "normalize_whitespace"
+                    }
+                  ]
                 }
               }
             },
@@ -255,8 +250,58 @@
               "minDescriptionLength": 40
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
-  ]
+  ],
+  "detection": {
+    "recommendedAccessPathKey": "rmk_sitemap_html",
+    "sourceConfig": {
+      "baseUrl": "https://{{capture:successFactorsHost}}",
+      "sitemapUrl": "https://{{capture:successFactorsHost}}/sitemap.xml"
+    },
+    "keyCandidates": [
+      "successfactors_{{capture:successFactorsHost}}"
+    ],
+    "nameCandidates": [
+      "SAP SuccessFactors {{capture:successFactorsHost}}"
+    ],
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",
+        "captures": [
+          "successFactorsHost"
+        ]
+      },
+      {
+        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/sitemap\\.xml(?:[?#].*)?$",
+        "captures": [
+          "successFactorsHost"
+        ]
+      }
+    ],
+    "httpChecks": [
+      {
+        "key": "sitemap_contains_successfactors_job_urls",
+        "url": "https://{{capture:successFactorsHost}}/sitemap.xml",
+        "timeoutMs": 10000,
+        "expectStatus": 200,
+        "regex": "(?is)<loc>https?://[^<]+/job/[^<]+(?:-[0-9]+|/[0-9]+/?)(?:[?#][^<]*)?</loc>",
+        "evidence": "Public sitemap contains SuccessFactors/RMK-style job detail URLs."
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Common SAP SuccessFactors/RMK career sites expose posting URLs and sitemap URLs on one public host."
+      },
+      {
+        "kind": "http",
+        "message": "Profile execution expects a public XML sitemap containing job detail URLs."
+      }
+    ]
+  }
 }

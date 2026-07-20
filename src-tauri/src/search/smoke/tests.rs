@@ -414,7 +414,7 @@ fn write_successfactors_source_file_with_status(
 ) {
     std::fs::create_dir_all(app_data_dir.join("sources")).unwrap();
     let document = serde_json::json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": key,
         "name": name,
         "status": status,

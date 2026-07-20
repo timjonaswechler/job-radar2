@@ -443,7 +443,7 @@ fn push_request_limit_diagnostic(
 ) {
     if constrained_by_execution_budget {
         diagnostics.push(runtime_info(
-            "posting_discovery_request_budget_reached",
+            "discovery_request_budget_reached",
             "Posting discovery stopped at the caller execution budget",
             format!("{base_path}/executionBudget/maxRequestsPerStrategy"),
             strategy_key,

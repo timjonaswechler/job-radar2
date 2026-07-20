@@ -1,12 +1,63 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "detection_missing_timeouts",
   "name": "Detection Missing Timeouts",
   "kind": "generic",
-  "support": { "level": "experimental" },
-  "detect": {
+  "support": {
+    "level": "experimental"
+  },
+  "accessPaths": [
+    {
+      "key": "api",
+      "name": "API",
+      "discovery": {
+        "strategies": [
+          {
+            "key": "jobs_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "https://example.test/jobs",
+              "timeoutMs": 10000
+            },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
+            "extract": {
+              "fields": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one"
+                },
+                "company": {
+                  "type": "const",
+                  "value": "Example"
+                },
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
+              }
+            }
+          }
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
+      }
+    }
+  ],
+  "detection": {
     "inputUrlPatterns": [
-      { "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }
+      {
+        "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$"
+      }
     ],
     "httpChecks": [
       {
@@ -21,33 +72,5 @@
         "htmlContains": "ExampleJobs"
       }
     ]
-  },
-  "accessPaths": [
-    {
-      "key": "api",
-      "name": "API",
-      "postingDiscovery": {
-        "strategies": [
-          {
-            "key": "jobs_api",
-            "fetch": {
-              "mode": "http",
-              "method": "GET",
-              "url": "https://example.test/jobs",
-              "timeoutMs": 10000
-            },
-            "parse": { "type": "json" },
-            "select": { "type": "json_path", "jsonPath": "$.jobs" },
-            "extract": {
-              "fields": {
-                "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                "company": { "type": "const", "value": "Example" },
-                "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
-              }
-            }
-          }
-        ]
-      }
-    }
-  ]
+  }
 }

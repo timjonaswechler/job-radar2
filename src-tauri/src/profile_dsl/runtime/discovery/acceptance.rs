@@ -13,7 +13,7 @@ pub(super) fn accept_discovery_result(
     {
         diagnostics.push(runtime_error(
             "acceptance_max_error_ratio_unsupported",
-            "acceptWhen.maxErrorRatio is not supported by the postingDiscovery runtime result model yet",
+            "acceptWhen.maxErrorRatio is not supported by the discovery runtime result model yet",
             format!("{owner_path}/acceptWhen/maxErrorRatio"),
             strategy_key,
             json!({ "maxErrorRatio": ratio }),
@@ -30,9 +30,7 @@ pub(super) fn accept_discovery_result(
         {
             diagnostics.push(runtime_error(
                 "acceptance_required_field_missing",
-                format!(
-                    "postingDiscovery candidate is missing required normalized field `{field}`"
-                ),
+                format!("discovery candidate is missing required normalized field `{field}`"),
                 format!("{owner_path}/acceptWhen/requiredFields"),
                 strategy_key,
                 json!({ "field": field, "itemIndex": item_index }),
@@ -59,7 +57,7 @@ pub(super) fn accept_discovery_result(
             diagnostics.push(runtime_error(
                 "acceptance_min_description_length_not_met",
                 format!(
-                    "postingDiscovery descriptionText is shorter than the configured minimum of {minimum} characters"
+                    "discovery descriptionText is shorter than the configured minimum of {minimum} characters"
                 ),
                 format!("{owner_path}/acceptWhen/minDescriptionLength"),
                 strategy_key,
@@ -82,7 +80,7 @@ pub(super) fn accept_discovery_result(
             diagnostics.push(runtime_error(
                 "acceptance_min_results_not_met",
                 format!(
-                    "postingDiscovery returned fewer than the required minimum of {minimum} candidates"
+                    "discovery returned fewer than the required minimum of {minimum} candidates"
                 ),
                 format!("{owner_path}/acceptWhen/minResults"),
                 strategy_key,
@@ -105,7 +103,7 @@ fn first_max_error_ratio(
 ) -> Option<(f64, String)> {
     step_acceptance
         .and_then(|acceptance| acceptance.max_error_ratio)
-        .map(|ratio| (ratio, "/postingDiscovery".to_string()))
+        .map(|ratio| (ratio, "/discovery".to_string()))
         .or_else(|| {
             strategy_acceptance
                 .and_then(|acceptance| acceptance.max_error_ratio)
@@ -124,7 +122,7 @@ fn required_field_rules(
         rules.extend(
             fields
                 .iter()
-                .map(|field| (field.clone(), "/postingDiscovery".to_string())),
+                .map(|field| (field.clone(), "/discovery".to_string())),
         );
     }
     if let Some(fields) =
@@ -163,7 +161,7 @@ fn stricter_u64_acceptance(
 ) -> Option<(u64, String)> {
     match (step_value, strategy_value) {
         (Some(step), Some(strategy)) if strategy >= step => Some((strategy, base_path.to_string())),
-        (Some(step), Some(_)) | (Some(step), None) => Some((step, "/postingDiscovery".to_string())),
+        (Some(step), Some(_)) | (Some(step), None) => Some((step, "/discovery".to_string())),
         (None, Some(strategy)) => Some((strategy, base_path.to_string())),
         (None, None) => None,
     }

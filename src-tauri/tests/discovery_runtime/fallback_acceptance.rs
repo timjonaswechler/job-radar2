@@ -79,7 +79,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
     assert_eq!(result.diagnostics[0].code, "acceptance_min_results_not_met");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/acceptWhen/minResults"
+        "/discovery/strategies/0/acceptWhen/minResults"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -203,10 +203,10 @@ fn compiled_discovery_runtime_combines_step_and_strategy_acceptance() {
     assert_eq!(result.diagnostics[0].code, "acceptance_min_results_not_met");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/acceptWhen/minResults"
+        "/discovery/acceptWhen/minResults"
     );
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
-    assert_eq!(result.diagnostics[1].path, "/postingDiscovery/strategies");
+    assert_eq!(result.diagnostics[1].path, "/discovery/strategies");
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/acceptWhen/requiredFields"
+        "/discovery/strategies/0/acceptWhen/requiredFields"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -311,7 +311,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
     );
     assert_eq!(
         result.diagnostics[1].path,
-        "/postingDiscovery/strategies/1/acceptWhen/minDescriptionLength"
+        "/discovery/strategies/1/acceptWhen/minDescriptionLength"
     );
 }
 
@@ -352,7 +352,7 @@ fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/acceptWhen/maxErrorRatio"
+        "/discovery/strategies/0/acceptWhen/maxErrorRatio"
     );
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
 }
@@ -361,13 +361,16 @@ fn compiled_discovery_plan_with_strategies(
     step_accept_when: Option<Value>,
     strategies: Vec<Value>,
 ) -> SourceExecutionPlan {
-    let mut discovery = json!({ "strategies": strategies });
+    let mut discovery = json!({
+        "policy": { "type": "first_accepted" },
+        "strategies": strategies
+    });
     if let Some(accept_when) = step_accept_when {
         discovery["acceptWhen"] = accept_when;
     }
 
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "fallback_jobs",
         "name": "Fallback Jobs",
         "kind": "generic",
@@ -384,12 +387,12 @@ fn compiled_discovery_plan_with_strategies(
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": discovery
+            "discovery": discovery
         }]
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "fallback_source",
         "name": "Fallback Source",
         "status": "active",
@@ -402,13 +405,6 @@ fn compiled_discovery_plan_with_strategies(
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "fallback_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result.execution_plan.expect("fixture plan should compile")
+    let result = compile_test_source(&source, Some(profile));
+    unwrap_plan(result)
 }

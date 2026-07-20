@@ -8,7 +8,7 @@ import {
   type SchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
-import { sourceOverridesFromText } from "@/features/sources/source-form/source-overrides";
+import { directSourceSpecializationFromText } from "@/features/sources/source-form/direct-source-specialization";
 import type {
   JsonValue,
   ProfileAccessPathDefinition,
@@ -41,7 +41,7 @@ export type SourceCreateBuildResult = {
   document: SourceDocument | null;
   errors: string[];
   configErrors: string[];
-  overridesErrors: string[];
+  specializationErrors: string[];
 };
 
 export type DetectedSourceLike = {
@@ -79,7 +79,7 @@ export type SourceCreateDraftState = {
   form: SourceCreateFormState;
   keyTouched: boolean;
   configEntries: SourceConfigEntry[];
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
   jsonPreviewOpen: boolean;
   saveAttempted: boolean;
 };
@@ -92,7 +92,7 @@ export type SourceCreateDraftInput = {
   url: string;
   form: SourceCreateFormState;
   configEntries: readonly SourceConfigEntry[];
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
 };
 
 export type SourceCreateDraftSnapshot = {
@@ -103,7 +103,7 @@ export type SourceCreateDraftSnapshot = {
   profileKey: string;
   pathKey: string;
   configEntries: Array<{ key: string; value: string }>;
-  sourceOverridesText: string;
+  directSourceSpecializationText: string;
 };
 
 const emptySourceCreateDraftSnapshot: SourceCreateDraftSnapshot = {
@@ -114,14 +114,14 @@ const emptySourceCreateDraftSnapshot: SourceCreateDraftSnapshot = {
   profileKey: "",
   pathKey: "",
   configEntries: [],
-  sourceOverridesText: "",
+  directSourceSpecializationText: "",
 };
 
 export function sourceCreateDraftSnapshot({
   url,
   form,
   configEntries,
-  sourceOverridesText,
+  directSourceSpecializationText,
 }: SourceCreateDraftInput): SourceCreateDraftSnapshot {
   return {
     url,
@@ -131,7 +131,7 @@ export function sourceCreateDraftSnapshot({
     profileKey: form.profileKey,
     pathKey: form.pathKey,
     configEntries: configEntries.map(({ key, value }) => ({ key, value })),
-    sourceOverridesText,
+    directSourceSpecializationText,
   };
 }
 
@@ -265,7 +265,7 @@ export function sourceCreateDraftAfterDetectedSource({
       nextMetadata,
       createConfigEntryId,
     ),
-    sourceOverridesText: "",
+    directSourceSpecializationText: "",
     jsonPreviewOpen: false,
     saveAttempted: false,
   };
@@ -321,7 +321,7 @@ export function sourceCreateDraftAfterDetectionResult({
 export function buildCreatedSourceDocument({
   form,
   configEntries,
-  sourceOverridesText = "",
+  directSourceSpecializationText = "",
   existingSourceKeys,
   selectedProfile,
   selectedAccessPath,
@@ -329,7 +329,7 @@ export function buildCreatedSourceDocument({
 }: {
   form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
-  sourceOverridesText?: string;
+  directSourceSpecializationText?: string;
   existingSourceKeys: Set<string>;
   selectedProfile: RegistrySourceProfile | null;
   selectedAccessPath: ProfileAccessPathDefinition | null;
@@ -349,20 +349,20 @@ export function buildCreatedSourceDocument({
   if (!selectedAccessPath) errors.push("Zugriffspfad fehlt.");
 
   const configResult = sourceConfigFromEntries(configEntries, schemaMetadata);
-  const overridesResult = sourceOverridesFromText(sourceOverridesText);
-  errors.push(...configResult.errors, ...overridesResult.errors);
+  const specializationResult = directSourceSpecializationFromText(directSourceSpecializationText);
+  errors.push(...configResult.errors, ...specializationResult.errors);
 
   if (errors.length || !selectedProfile || !selectedAccessPath) {
     return {
       document: null,
       errors,
       configErrors: configResult.errors,
-      overridesErrors: overridesResult.errors,
+      specializationErrors: specializationResult.errors,
     };
   }
 
   const document: SourceDocument = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: form.key,
     name: form.name.trim(),
     status: form.status,
@@ -374,15 +374,15 @@ export function buildCreatedSourceDocument({
     },
   };
 
-  if (overridesResult.value !== null) {
-    document.sourceOverrides = overridesResult.value;
+  if (specializationResult.value !== null) {
+    document.accessPaths = specializationResult.value;
   }
 
   return {
     document,
     errors,
     configErrors: configResult.errors,
-    overridesErrors: overridesResult.errors,
+    specializationErrors: specializationResult.errors,
   };
 }
 

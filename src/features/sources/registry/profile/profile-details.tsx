@@ -77,7 +77,7 @@ export function ProfileDetails({
         evidence={profile.document.support.evidence ?? []}
       />
       <ProfileDetectionEvidenceSection
-        evidence={profile.document.detect?.evidence ?? []}
+        evidence={profile.document.detection?.evidence ?? []}
       />
 
       <OptionalSchemaValuePreview
@@ -94,7 +94,7 @@ export function ProfileDetails({
       <OptionalSchemaValuePreview
         title="Detection-Regeln"
         description="Regeln, wie dieses Profil bei eingereichten URLs eine Source Proposal erzeugt."
-        value={profile.document.detect}
+        value={profile.document.detection}
         schemaRef={profileDslSchemaRefs.detection}
       />
 

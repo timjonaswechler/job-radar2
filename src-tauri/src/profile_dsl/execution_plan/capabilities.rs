@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait, RetryPolicy};
+use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
     Fetch, HttpMethod, Pagination, PaginationParameterLocation, Parse, RequestBody, Select,
 };
@@ -20,8 +20,6 @@ pub enum ExecutionPlanFetch {
         body: Option<RequestBody>,
         #[serde(rename = "timeoutMs")]
         timeout_ms: u64,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        retry: Option<ExecutionPlanRetryPolicy>,
     },
     Browser {
         url: String,
@@ -32,13 +30,6 @@ pub enum ExecutionPlanFetch {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         interactions: Vec<ExecutionPlanBrowserInteraction>,
     },
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExecutionPlanRetryPolicy {
-    #[serde(rename = "maxAttempts")]
-    pub max_attempts: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -167,17 +158,12 @@ pub(crate) fn compile_fetch(
             headers,
             body,
             timeout_ms,
-            retry,
         } => Ok(ExecutionPlanFetch::Http {
             method: *method,
             url: url.clone(),
             headers: headers.clone(),
             body: body.clone(),
             timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
-            retry: retry
-                .as_ref()
-                .map(|retry| compile_retry_policy(retry, &format!("{path}/retry")))
-                .transpose()?,
         }),
         Fetch::Browser {
             url,
@@ -208,15 +194,6 @@ pub(crate) fn compile_fetch(
                 .collect::<Result<Vec<_>, _>>()?,
         }),
     }
-}
-
-fn compile_retry_policy(
-    retry: &RetryPolicy,
-    path: &str,
-) -> Result<ExecutionPlanRetryPolicy, ExecutionPlanBuildError> {
-    Ok(ExecutionPlanRetryPolicy {
-        max_attempts: require_positive(retry.max_attempts, &format!("{path}/maxAttempts"))?,
-    })
 }
 
 fn compile_browser_wait(

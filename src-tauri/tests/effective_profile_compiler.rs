@@ -1,11 +1,10 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, CompileSourceOutcome, CompiledSourceAccess, DiagnosticCategory,
-    DiagnosticSeverity, Fetch, PolicyAccessPathFragment as AccessPathFragment,
-    PolicySelectedAccessPath as SelectedAccessPath, PolicySourceDocument as SourceDocument,
-    PolicySourceProfileDocument as SourceProfileDocument,
-    PolicySourceProfileRegistrySnapshot as SourceProfileRegistrySnapshot, SourceStatus,
+    compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceAccess,
+    DiagnosticCategory, DiagnosticSeverity, Fetch, RegistrySource, RegistrySourceProfile,
+    SelectedAccessPath, SourceDocument, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    SourceStatus, SourceValidationState, ValidationStateKind,
 };
 
 #[test]
@@ -39,16 +38,16 @@ fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
-        Some(1),
-        "without specialization, the Effective Source Profile must preserve the base profile"
+        Some(0),
+        "direct specialization must be reflected in the Effective Source Profile"
     );
     assert_eq!(compiled.execution_plan.source.key, "example_source");
     assert_eq!(
-        compiled.execution_plan.discovery.execution.strategies[0]
+        compiled.execution_plan.discovery.strategies[0]
             .accept_when
             .as_ref()
             .and_then(|acceptance| acceptance.min_results),
-        Some(1)
+        Some(0)
     );
 }
 
@@ -95,7 +94,7 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "second_path",
-            "postingDiscovery": {
+            "discovery": {
                 "strategies": [{
                     "key": "second_strategy",
                     "acceptWhen": { "minResults": 0 }
@@ -104,7 +103,7 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
         },
         {
             "key": "json_feed",
-            "postingDiscovery": {
+            "discovery": {
                 "acceptWhen": { "minResults": 0 },
                 "strategies": [{
                     "key": "json_api",
@@ -187,14 +186,14 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
-            "postingDiscovery": {
+            "discovery": {
                 "strategies": [second_strategy, first_strategy]
             }
         },
         {
             "key": "new_path",
             "name": "New path",
-            "postingDiscovery": {
+            "discovery": {
                 "policy": { "type": "first_accepted" },
                 "strategies": [
                     serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap()
@@ -235,10 +234,7 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
             .collect::<Vec<_>>(),
         vec!["json_api", "second_new", "first_new"]
     );
-    assert_eq!(
-        compiled.execution_plan.discovery.execution.strategies.len(),
-        1
-    );
+    assert_eq!(compiled.execution_plan.discovery.strategies.len(), 1);
 }
 
 #[test]
@@ -250,7 +246,7 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
-            "postingDiscovery": {
+            "discovery": {
                 "strategies": [
                     { "key": "incomplete_one", "fetch": { "mode": "http" } },
                     { "key": "incomplete_two", "select": { "type": "document" } }
@@ -261,8 +257,8 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
         {
             "key": "incomplete_steps",
             "name": "Incomplete steps",
-            "postingDiscovery": {},
-            "postingDetail": {}
+            "discovery": {},
+            "detail": {}
         }
     ])));
 
@@ -285,25 +281,19 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
         completeness,
         vec![
             (
-                "/accessPaths/0/postingDiscovery/strategies/0",
+                "/accessPaths/0/discovery/strategies/0",
                 serde_json::json!(["extract", "fetch.timeoutMs", "fetch.url", "parse", "select"]),
             ),
             (
-                "/accessPaths/0/postingDiscovery/strategies/1",
+                "/accessPaths/0/discovery/strategies/1",
                 serde_json::json!(["extract", "fetch", "parse"]),
             ),
+            ("/accessPaths/1", serde_json::json!(["discovery", "name"]),),
             (
-                "/accessPaths/1",
-                serde_json::json!(["name", "postingDiscovery"]),
-            ),
-            (
-                "/accessPaths/2/postingDiscovery",
+                "/accessPaths/2/discovery",
                 serde_json::json!(["strategies"]),
             ),
-            (
-                "/accessPaths/2/postingDetail",
-                serde_json::json!(["strategies"]),
-            ),
+            ("/accessPaths/2/detail", serde_json::json!(["strategies"]),),
         ]
     );
 }
@@ -317,7 +307,7 @@ fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
-            "postingDiscovery": {
+            "discovery": {
                 "strategies": [
                     { "key": "json_api" },
                     { "key": "json_api" },
@@ -344,8 +334,8 @@ fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
         vec![
             "/accessPaths/1/key",
             "/accessPaths/2/key",
-            "/accessPaths/0/postingDiscovery/strategies/1/key",
-            "/accessPaths/0/postingDiscovery/strategies/2/key",
+            "/accessPaths/0/discovery/strategies/1/key",
+            "/accessPaths/0/discovery/strategies/2/key",
         ]
     );
 }
@@ -368,7 +358,7 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "invalid_unselected",
         "name": "Invalid unselected path",
-        "postingDiscovery": {
+        "discovery": {
             "policy": { "type": "first_accepted" },
             "strategies": [strategy]
         }
@@ -400,8 +390,8 @@ fn compiler_is_deterministic_for_equivalent_fragment_object_orders() {
     let registry = registry_with_profile(profile);
 
     let outcomes = [
-        r#"[{"key":"json_feed","postingDiscovery":{"acceptWhen":{"minResults":0},"strategies":[{"key":"json_api","acceptWhen":{"minResults":0,"requiredFields":["url"]}}]}}]"#,
-        r#"[{"postingDiscovery":{"strategies":[{"acceptWhen":{"requiredFields":["url"],"minResults":0},"key":"json_api"}],"acceptWhen":{"minResults":0}},"key":"json_feed"}]"#,
+        r#"[{"key":"json_feed","discovery":{"acceptWhen":{"minResults":0},"strategies":[{"key":"json_api","acceptWhen":{"minResults":0,"requiredFields":["url"]}}]}}]"#,
+        r#"[{"discovery":{"strategies":[{"acceptWhen":{"requiredFields":["url"],"minResults":0},"key":"json_api"}],"acceptWhen":{"minResults":0}},"key":"json_feed"}]"#,
     ]
     .map(|json| {
         let mut source = source.clone();
@@ -418,11 +408,11 @@ fn final_source_shape_rejects_the_legacy_specialization_model() {
         .join("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
     let mut source: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
-    add_first_accepted_policy(&mut source);
     source["accessPaths"] = serde_json::json!([{ "key": "json_feed" }]);
+    source["sourceOverrides"] = serde_json::json!({});
 
     let error = serde_json::from_value::<SourceDocument>(source)
-        .expect_err("the dormant final Source shape must not admit legacy sourceOverrides");
+        .expect_err("the final Source shape must not admit legacy sourceOverrides");
 
     assert!(error.to_string().contains("sourceOverrides"));
 }
@@ -804,13 +794,32 @@ fn fragments(value: serde_json::Value) -> Vec<AccessPathFragment> {
 
 fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
     SourceProfileRegistrySnapshot {
-        profiles: vec![profile],
+        profiles: vec![RegistrySourceProfile {
+            origin: "test".into(),
+            path: String::new(),
+            document: profile,
+        }],
         sources: Vec::new(),
+        diagnostics: Vec::new(),
     }
 }
 
-fn registry_source(document: SourceDocument) -> SourceDocument {
-    document
+fn registry_source(document: SourceDocument) -> RegistrySource {
+    let source_key = document.key.clone();
+    RegistrySource {
+        origin: "test".into(),
+        path: String::new(),
+        document,
+        validation_state: SourceValidationState {
+            source_key,
+            state: ValidationStateKind::Valid,
+            can_compile: true,
+            can_execute: true,
+            diagnostics: Vec::new(),
+        },
+        effective_profile: None,
+        compile_outcome: None,
+    }
 }
 
 fn read_fixture<T>(relative_path: &str) -> T
@@ -820,36 +829,6 @@ where
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
     let contents = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-    let mut value: serde_json::Value = serde_json::from_str(&contents)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-    add_first_accepted_policy(&mut value);
-    if let Some(object) = value.as_object_mut() {
-        object.remove("sourceOverrides");
-    }
-    serde_json::from_value(value)
+    serde_json::from_str(&contents)
         .unwrap_or_else(|error| panic!("failed to deserialize {}: {error}", path.display()))
-}
-
-fn add_first_accepted_policy(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(object) => {
-            if object
-                .get("strategies")
-                .is_some_and(serde_json::Value::is_array)
-            {
-                object
-                    .entry("policy")
-                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
-            }
-            for child in object.values_mut() {
-                add_first_accepted_policy(child);
-            }
-        }
-        serde_json::Value::Array(values) => {
-            for child in values {
-                add_first_accepted_policy(child);
-            }
-        }
-        _ => {}
-    }
 }

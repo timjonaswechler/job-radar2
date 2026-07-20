@@ -42,10 +42,10 @@ Use these terms exactly:
 
 - **Source Profile**: reusable declarative knowledge for a recruiting system, job board, career-site family, or website family.
 - **Source**: one saved concrete endpoint/entry point that selects one Source Profile Access Path or owns one inline Access Path.
-- **Access Path**: one executable variant inside a Source Profile. It owns `postingDiscovery` and optionally `postingDetail`.
+- **Access Path**: one executable variant inside a Source Profile. It owns `discovery` and optionally `detail`.
 - **Source Config**: stable access configuration such as `boardSlug`, `host`, `tenant`, `site`, `baseUrl`, `sitemapUrl`, or `startUrl`. It must not contain search criteria.
-- **postingDiscovery**: bulk discovery of posting candidates. It returns normalized candidates with at least `title`, `company`, and `url`.
-- **postingDetail**: lazy loading for one posting's `descriptionText`, using the posting URL, Source Config, and optional `postingMeta`.
+- **Discovery** (`discovery`): bulk discovery of posting candidates. It returns normalized candidates with at least `title`, `company`, and `url`.
+- **Detail** (`detail`): lazy loading for one posting's `descriptionText`, using the posting URL, Source Config, and optional `postingMeta`.
 - **postingMeta**: hidden technical metadata captured during discovery for later detail loading, such as `jobId`, `externalPath`, or `requisitionId`.
 - **Source Live Check**: bounded live check for one concrete Source and its current Source Config/selected Access Path.
 - **Source Live Check Report**: the latest derived Check Report for a concrete Source. It is the user-facing operational signal.
@@ -155,7 +155,7 @@ Example:
 }
 ```
 
-`detect.evidence.kind = "url"` remains valid detection evidence. Do not put `url` inside `support.evidence`.
+`detection.evidence.kind = "url"` remains valid detection evidence. Do not put `url` inside `support.evidence`.
 
 ## Source Live Check expectations
 
@@ -164,15 +164,15 @@ A Source Live Check runs against one concrete Source and the real public source 
 A Source Live Check should:
 
 - compile the concrete Source into an Execution Plan;
-- run bounded live `postingDiscovery`;
+- run bounded live `discovery`;
 - expect at least one candidate with `title`, `company`, and `url`;
-- if `postingDetail` exists, check detail extraction for at most one candidate;
+- if `detail` exists, check detail extraction for at most one candidate;
 - avoid Search Request criteria and Match Rules;
 - avoid running a full Search Run;
 - persist the latest report;
 - show `passed`, `failed`, `stale`, or `unknown` for the concrete Source.
 
-A stale Source Live Check Report means the Source, selected profile, Source Config, Source Overrides, or live-check logic changed after the report was written. Stale does not automatically disable or mutate the Source.
+A stale Source Live Check Report means canonical behavior changed after the report was written: Base Source Profile behavior, Direct Source Specialization, Effective Source Profile, compiler provenance, Source Config, selected Access Path, relevant runtime bindings, behavior versions, or immutable global behavior. Non-executable metadata is excluded. Stale does not automatically disable or mutate the Source.
 
 ## Implementation workflow
 
@@ -190,7 +190,7 @@ A stale Source Live Check Report means the Source, selected profile, Source Conf
 <!-- schema-test:source-profile -->
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "example_jobs_api",
   "name": "Example Jobs API",
   "kind": "career_site",
@@ -218,7 +218,7 @@ A stale Source Live Check Report means the Source, selected profile, Source Conf
       }
     }
   },
-  "detect": {
+  "detection": {
     "inputUrlPatterns": [
       {
         "pattern": "^https://jobs\\.example\\.com(?:/.*)?$"
@@ -239,7 +239,8 @@ A stale Source Live Check Report means the Source, selected profile, Source Conf
     {
       "key": "api",
       "name": "Public jobs API",
-      "postingDiscovery": {
+      "discovery": {
+        "policy": { "type": "first_accepted" },
         "strategies": [
           {
             "key": "jobs_api",
@@ -285,7 +286,8 @@ A stale Source Live Check Report means the Source, selected profile, Source Conf
           }
         ]
       },
-      "postingDetail": {
+      "detail": {
+        "policy": { "type": "first_accepted" },
         "strategies": [
           {
             "key": "detail_api",
@@ -323,7 +325,7 @@ A stale Source Live Check Report means the Source, selected profile, Source Conf
 <!-- schema-test:source -->
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "example_jobs",
   "name": "Example Jobs",
   "status": "draft",

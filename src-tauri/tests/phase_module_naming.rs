@@ -1,9 +1,9 @@
-use job_radar_lib::{PolicySourceExecutionPlan, StrategyPolicy};
+use job_radar_lib::{SourceExecutionPlan, StrategyPolicy};
 use serde_json::json;
 
 #[test]
 fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
-    let plan: PolicySourceExecutionPlan = serde_json::from_value(json!({
+    let plan: SourceExecutionPlan = serde_json::from_value(json!({
         "source": { "key": "source", "name": "Source" },
         "selectedAccessPath": {
             "type": "source_owned_access_path",
@@ -49,5 +49,5 @@ fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
         "policy": { "type": "first_accepted" },
         "strategies": []
     });
-    assert!(serde_json::from_value::<PolicySourceExecutionPlan>(old_names).is_err());
+    assert!(serde_json::from_value::<SourceExecutionPlan>(old_names).is_err());
 }

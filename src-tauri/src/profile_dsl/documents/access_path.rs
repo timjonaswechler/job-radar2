@@ -16,9 +16,8 @@ pub struct ReusableAccessPathDocument {
     pub source_config_schema: Option<JsonSchemaObject>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub known_issues: Option<Vec<SupportNote>>,
-    #[serde(rename = "postingDiscovery")]
     pub discovery: DiscoveryStep,
-    #[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<DetailStep>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Diagnostics>,

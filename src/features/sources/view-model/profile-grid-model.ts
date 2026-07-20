@@ -213,7 +213,7 @@ export function profileOriginEntries() {
 function profileSchemaSummary(profile: RegistrySourceProfile) {
   const parts = [
     profile.document.sourceConfigSchema ? "Profil-Schema" : null,
-    profile.document.detect ? "Detection" : null,
+    profile.document.detection ? "Detection" : null,
   ].filter(Boolean);
 
   const pathSchemaCount = profile.document.accessPaths.filter(
@@ -241,14 +241,14 @@ function profileSupportEvidenceKinds(profile: RegistrySourceProfile) {
 
 function profileDetectionEvidenceKinds(profile: RegistrySourceProfile) {
   return unique(
-    profile.document.detect?.evidence?.map((evidence) => evidence.kind) ?? [],
+    profile.document.detection?.evidence?.map((evidence) => evidence.kind) ?? [],
   );
 }
 
 function accessPathCapabilities(accessPath: ProfileAccessPathDefinition) {
   return [
-    accessPath.postingDiscovery ? "postingDiscovery" : null,
-    accessPath.postingDetail ? "postingDetail" : null,
+    accessPath.discovery ? "discovery" : null,
+    accessPath.detail ? "detail" : null,
   ].filter(Boolean) as string[];
 }
 

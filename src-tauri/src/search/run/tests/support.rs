@@ -89,7 +89,7 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
                         .diagnostics
                         .first()
                         .map(|diagnostic| diagnostic.message.clone())
-                        .unwrap_or_else(|| "postingDiscovery failed".to_string()),
+                        .unwrap_or_else(|| "Discovery failed".to_string()),
                     diagnostics: result.diagnostics,
                 });
             }
@@ -229,7 +229,7 @@ pub(super) fn source_json(key: &str, name: &str) -> String {
 
 pub(super) fn source_json_with_status(key: &str, name: &str, status: &str) -> String {
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": key,
         "name": name,
         "status": status,
@@ -238,7 +238,7 @@ pub(super) fn source_json_with_status(key: &str, name: &str, status: &str) -> St
             "type": "source_owned_access_path",
             "key": "fixture_discovery",
             "name": "Fixture Discovery",
-            "postingDiscovery": minimal_discovery("fixture")
+            "discovery": minimal_discovery("fixture")
         },
         "sourceSupport": {
             "level": "experimental",
@@ -266,7 +266,7 @@ pub(super) fn regex_rule(value: &str) -> SearchRuleInput {
 
 pub(super) fn mutable_profile_json(marker: &str) -> String {
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "mutable_profile",
         "name": "Mutable Profile",
         "kind": "generic",
@@ -280,7 +280,7 @@ pub(super) fn mutable_profile_json(marker: &str) -> String {
                 "name": "Posting Discovery",
                 "description": marker,
                 "sourceConfigSchema": { "type": "object" },
-                "postingDiscovery": minimal_discovery(marker)
+                "discovery": minimal_discovery(marker)
             }
         ]
     })
@@ -289,7 +289,7 @@ pub(super) fn mutable_profile_json(marker: &str) -> String {
 
 pub(super) fn mutable_profile_source_json(key: &str, name: &str) -> String {
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": key,
         "name": name,
         "status": "active",
@@ -305,6 +305,7 @@ pub(super) fn mutable_profile_source_json(key: &str, name: &str) -> String {
 
 pub(super) fn minimal_discovery(marker: &str) -> Value {
     json!({
+        "policy": { "type": "first_accepted" },
         "strategies": [
             {
                 "key": "json_api",

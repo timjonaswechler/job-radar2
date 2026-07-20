@@ -11,6 +11,7 @@ import type {
 export type SourceResolution = {
   profile: RegistrySourceProfile | null;
   profileAccessPath: ProfileAccessPathDefinition | null;
+  baseProfileAccessPath: ProfileAccessPathDefinition | null;
   sourceOwnedAccessPath: SourceOwnedSelectedAccessPath | null;
   effectiveSourceConfigSchema: JsonValue;
   supportLevel: SupportLevel | null;
@@ -27,6 +28,7 @@ export function resolveSource(
     return {
       profile: null,
       profileAccessPath: null,
+      baseProfileAccessPath: null,
       sourceOwnedAccessPath: selectedAccessPath,
       effectiveSourceConfigSchema: effectiveSourceConfigSchema(
         undefined,
@@ -38,14 +40,20 @@ export function resolveSource(
   }
 
   const profile = profilesByKey.get(selectedAccessPath.profileKey) ?? null;
-  const profileAccessPath =
+  const baseProfileAccessPath =
     profile?.document.accessPaths.find(
+      (accessPath) => accessPath.key === selectedAccessPath.pathKey,
+    ) ?? null;
+  const effectiveProfile = source.effectiveProfile ?? profile?.document;
+  const profileAccessPath =
+    effectiveProfile?.accessPaths.find(
       (accessPath) => accessPath.key === selectedAccessPath.pathKey,
     ) ?? null;
 
   return {
     profile,
     profileAccessPath,
+    baseProfileAccessPath,
     sourceOwnedAccessPath: null,
     effectiveSourceConfigSchema: effectiveSourceConfigSchema(
       profile?.document.sourceConfigSchema,
@@ -60,7 +68,7 @@ function accessPathCapabilities(
   accessPath: ProfileAccessPathDefinition | SourceOwnedSelectedAccessPath,
 ) {
   return [
-    accessPath.postingDiscovery ? "postingDiscovery" : null,
-    accessPath.postingDetail ? "postingDetail" : null,
+    accessPath.discovery ? "discovery" : null,
+    accessPath.detail ? "detail" : null,
   ].filter(Boolean) as string[];
 }

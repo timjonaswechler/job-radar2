@@ -18,7 +18,7 @@ where
     F: DiscoveryFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let base_path = format!("/postingDiscovery/strategies/{strategy_index}");
+    let base_path = format!("/discovery/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());
     let mut diagnostics = Vec::new();
 

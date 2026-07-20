@@ -7,7 +7,7 @@ import {
   sourceConfigSchemaMetadata,
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
-import { sourceOverridesStarterForAccessPath } from "@/features/sources/source-form/source-overrides";
+import { directSourceSpecializationStarterForAccessPath } from "@/features/sources/source-form/direct-source-specialization";
 import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsaved-source-changes";
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import {
@@ -67,8 +67,8 @@ export function useSourceEdit({
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>(
     initialDraft?.configEntries ?? [],
   );
-  const [sourceOverridesText, setSourceOverridesText] = useState(
-    initialDraft?.sourceOverridesText ?? "",
+  const [directSourceSpecializationText, setDirectSourceSpecializationText] = useState(
+    initialDraft?.directSourceSpecializationText ?? "",
   );
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
@@ -93,7 +93,7 @@ export function useSourceEdit({
     setName(initialDraft.name);
     setStatus(initialDraft.status);
     setConfigEntries(initialDraft.configEntries);
-    setSourceOverridesText(initialDraft.sourceOverridesText);
+    setDirectSourceSpecializationText(initialDraft.directSourceSpecializationText);
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
@@ -107,11 +107,11 @@ export function useSourceEdit({
             name,
             status,
             configEntries,
-            sourceOverridesText,
+            directSourceSpecializationText,
             schemaMetadata,
           })
-        : { document: null, errors: [], configErrors: [], overridesErrors: [] },
-    [configEntries, name, schemaMetadata, source, sourceOverridesText, status],
+        : { document: null, errors: [], configErrors: [], specializationErrors: [] },
+    [configEntries, name, schemaMetadata, source, directSourceSpecializationText, status],
   );
   const previewJson = useMemo(
     () =>
@@ -120,16 +120,16 @@ export function useSourceEdit({
         : "",
     [buildResult.document, jsonPreviewOpen],
   );
-  const sourceOverridesStarter = useMemo(
-    () => sourceOverridesStarterForAccessPath(resolution?.profileAccessPath ?? null),
+  const directSourceSpecializationStarter = useMemo(
+    () => directSourceSpecializationStarterForAccessPath(resolution?.profileAccessPath ?? null),
     [resolution?.profileAccessPath],
   );
   const editable = source?.origin === "custom";
   const supportsProfileOverrides =
     source?.document.selectedAccessPath.type === "profile_access_path";
   const currentDraft = useMemo<SourceEditDraftState>(
-    () => ({ name, status, configEntries, sourceOverridesText }),
-    [configEntries, name, sourceOverridesText, status],
+    () => ({ name, status, configEntries, directSourceSpecializationText }),
+    [configEntries, name, directSourceSpecializationText, status],
   );
   const isDirty = baselineDraftRef.current
     ? isSourceEditDraftDirty(currentDraft, baselineDraftRef.current)
@@ -141,7 +141,7 @@ export function useSourceEdit({
       setName(baselineDraft.name);
       setStatus(baselineDraft.status);
       setConfigEntries(baselineDraft.configEntries);
-      setSourceOverridesText(baselineDraft.sourceOverridesText);
+      setDirectSourceSpecializationText(baselineDraft.directSourceSpecializationText);
     }
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
@@ -202,7 +202,7 @@ export function useSourceEdit({
       name,
       status,
       configEntries,
-      sourceOverridesText,
+      directSourceSpecializationText,
       jsonPreviewOpen,
       saveAttempted,
       saving,
@@ -213,7 +213,7 @@ export function useSourceEdit({
       schemaMetadata,
       buildResult,
       previewJson,
-      sourceOverridesStarter,
+      directSourceSpecializationStarter,
       editable,
       supportsProfileOverrides,
     },
@@ -221,7 +221,7 @@ export function useSourceEdit({
       setName,
       setStatus,
       setConfigEntries,
-      setSourceOverridesText,
+      setDirectSourceSpecializationText,
       requestClose: unsavedChanges.requestClose,
       confirmDiscard: unsavedChanges.confirmDiscard,
       cancelDiscard: unsavedChanges.cancelDiscard,

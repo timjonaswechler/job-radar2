@@ -1,15 +1,17 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "source_specific_source",
   "name": "Source Specific Source",
   "status": "draft",
   "sourceConfig": {},
-  "sourceSupport": { "level": "experimental" },
+  "sourceSupport": {
+    "level": "experimental"
+  },
   "selectedAccessPath": {
     "type": "source_specific",
     "key": "old_inline_path",
     "name": "Old inline path",
-    "postingDiscovery": {
+    "discovery": {
       "strategies": [
         {
           "key": "json_api",
@@ -18,17 +20,34 @@
             "url": "https://example.test/jobs",
             "timeoutMs": 10000
           },
-          "parse": { "type": "json" },
-          "select": { "type": "json_path", "jsonPath": "$.jobs" },
+          "parse": {
+            "type": "json"
+          },
+          "select": {
+            "type": "json_path",
+            "jsonPath": "$.jobs"
+          },
           "extract": {
             "fields": {
-              "title": { "type": "json_path", "jsonPath": "$.title" },
-              "company": { "type": "const", "value": "Example" },
-              "url": { "type": "json_path", "jsonPath": "$.url" }
+              "title": {
+                "type": "json_path",
+                "jsonPath": "$.title"
+              },
+              "company": {
+                "type": "const",
+                "value": "Example"
+              },
+              "url": {
+                "type": "json_path",
+                "jsonPath": "$.url"
+              }
             }
           }
         }
-      ]
+      ],
+      "policy": {
+        "type": "first_accepted"
+      }
     }
   }
 }

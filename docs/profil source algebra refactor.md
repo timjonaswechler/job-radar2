@@ -1,3 +1,7 @@
+# Historischer Entwurfsstand
+
+> Diese Datei dokumentiert die damalige Herleitung und ist keine aktive Implementierungsanleitung. Das schema-v3-Zielbild wurde durch #242 aktiviert; aktuelle normative Sprache steht in `CONTEXT.md`, den ADRs und den kanonischen PRDs.
+
 Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht alle denkbaren Primitives sofort implementieren.
 
 ## Festgehaltene Namens- und Source-Entscheidungen
@@ -6,7 +10,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
 - Eine Source darf die ausführungsrelevanten Source-Profile-Bereiche direkt auf ihrer Root-Ebene in derselben verschachtelten Form partiell wiederholen. Es gibt weder eine `overrides`-/`overlay`-Zwischenebene noch eine Liste aus `operation`/`target`/`value`-Anweisungen.
 - Vorhandene Profilwerte werden rekursiv überschrieben, neue Profilbereiche, Access Paths und Strategies können vollständig eingefügt werden. Source-Identität (`schemaVersion`, `key`, `name`, `status`) und die Basisprofil-Referenz bleiben eigenständig; Profile Detection gehört nicht in die Source.
 - Access Paths und Strategies werden beim Merge über ihren stabilen `key` identifiziert. Geordnete Strategies bleiben Arrays; vorhandene Strategies behalten zunächst ihre Profile-Reihenfolge, neue Source-Strategies werden angehängt.
-- Bestehende Schema-v2-Typen und Dateinamen behalten während der Migration vorübergehend `posting_discovery`/`posting_detail`; mit dem Schema-v3-Hard-Cut werden Dokumentfelder, Rust-Typen und Zieldateien konsistent auf `detection`/`discovery`/`detail` umbenannt.
+- Historischer Übergangshinweis: Vor der Aktivierung existierten vorübergehend schema-v2-Typen und alte Dateinamen. Der schema-v3-Hard-Cut ist inzwischen abgeschlossen; aktive Dokumentfelder, Rust-Typen und Zieldateien verwenden `detection`/`discovery`/`detail`.
 
  Die drei untersuchten Varianten waren:
 

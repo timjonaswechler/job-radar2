@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "missing_support_profile",
   "name": "Missing Support Profile",
   "kind": "generic",
@@ -7,7 +7,7 @@
     {
       "key": "json_feed",
       "name": "JSON feed",
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "json_api",
@@ -16,17 +16,34 @@
               "url": "https://example.test/jobs",
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
-            "select": { "type": "json_path", "jsonPath": "$.jobs" },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
             "extract": {
               "fields": {
-                "title": { "type": "json_path", "jsonPath": "$.title" },
-                "company": { "type": "const", "value": "Example" },
-                "url": { "type": "json_path", "jsonPath": "$.url" }
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title"
+                },
+                "company": {
+                  "type": "const",
+                  "value": "Example"
+                },
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url"
+                }
               }
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
   ]

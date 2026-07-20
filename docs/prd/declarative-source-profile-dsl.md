@@ -10,7 +10,7 @@ Job Radar is not in production yet. There is no requirement to preserve the v1 p
 
 ## Solution
 
-Job Radar will replace the v1 Source Profile model with a declarative JSON Profile DSL. A Source Profile will describe reusable ATS or career-site knowledge through generic capabilities rather than profile-specific Rust code. A Source can select one reusable profile Access Path, apply controlled Source Overrides, or define a Source-owned Access Path inline when no reusable profile fits.
+Job Radar will replace the v1 Source Profile model with a declarative JSON Profile DSL. A Source Profile will describe reusable ATS or career-site knowledge through generic capabilities rather than profile-specific Rust code. A Source can select one reusable profile Access Path and author typed Direct Source Specialization fragments at its root, or define a Source-owned Access Path inline when no reusable profile fits.
 
 The DSL will be validated in layers:
 
@@ -21,7 +21,7 @@ The DSL will be validated in layers:
 
 The runtime will have one declarative profile execution path. It will not route profiles through multiple declarative adapter keys. Capabilities inside each Access Path determine how execution works.
 
-The new DSL will use `postingDiscovery` for source-wide discovery of available postings and `postingDetail` for lazy loading of details for one concrete posting source occurrence. Both steps share the same capability modules where possible, but they have different outputs and runtime semantics.
+The new DSL will use `discovery` for source-wide discovery of available postings and `detail` for lazy loading of details for one concrete posting source occurrence. Both steps share the same capability modules where possible, but they have different outputs and runtime semantics.
 
 ## DSL Primitives and Behavior
 
@@ -30,19 +30,19 @@ The Profile DSL is built from a small set of generic primitives. A new ATS shoul
 ### Profile document primitives
 
 - **Source Profile** describes reusable source knowledge: detection, profile-level support metadata, Source Config requirements, and one or more Access Paths.
-- **Access Path** is a named reusable execution variant inside a Source Profile. It owns `postingDiscovery` and optionally `postingDetail` strategies. It does not choose an adapter. It may declare Access Path-specific limitations or known issues, but it does not replace the Source Profile's required support level.
+- **Access Path** is a named reusable execution variant inside a Source Profile. It owns `discovery` and optionally `detail` strategies. It does not choose an adapter. It may declare Access Path-specific limitations or known issues, but it does not replace the Source Profile's required support level.
 - **Source-owned Access Path** is the same Access Path shape stored inline on one Source when no reusable profile fits. It is not reusable and is not used during detection. Its robustness is described by Source-level support metadata, not by reusable profile support metadata.
 - **Source Config** provides stable source access values. It is validated by profile-level and Access Path-level Source Config schemas.
-- **Source Overrides** are controlled structured behavior changes applied to a selected profile Access Path before compilation. They patch allowed DSL behavior, not the Source Config contract.
+- **Direct Source Specialization** is an optional `accessPaths` array of typed keyed fragments authored directly at a profile-selected Source root. The Profile Compiler deterministically merges the fragments with the Base Source Profile into a complete Effective Source Profile. It is not a wrapper, free-form patch, or Source Config.
 - **Support metadata** declares `stable`, `best_effort`, `experimental`, or `unsupported`, plus known issues and validation evidence where applicable. Reusable Source Profiles declare this as `support.level`; Sources with Source-owned Access Paths declare this as `sourceSupport.level`.
 
 ### Execution primitives
 
-- **Strategy** is the atomic executable branch inside `postingDiscovery`, `postingDetail`, or detection. Strategies have stable keys, run in declared order, and may act as fallbacks. A strategy succeeds only when all required sub-primitives succeed and acceptance checks pass.
+- **Strategy** is the atomic executable branch inside `discovery`, `detail`, or detection. Strategies have stable keys, run in declared order, and may act as fallbacks. A strategy succeeds only when all required sub-primitives succeed and acceptance checks pass.
 - **Fetch** retrieves one document or rendered page. It supports `http` and `browser` modes. HTTP fetch describes method, URL, public headers, body, and timeout. Browser fetch describes URL, waits, and bounded interactions. Fetch never owns pagination; it represents one request or one browser retrieval.
-- **Pagination** belongs to a `postingDiscovery` strategy and describes how repeated fetches are generated and bounded. It supports finite page, offset/limit, cursor, sitemap-style, or equivalent strategies as generic capabilities. Every pagination strategy must have an explicit stop condition such as max pages, max items, max URLs, max depth, missing cursor, or total count.
+- **Pagination** belongs to a `discovery` strategy and describes how repeated fetches are generated and bounded. It supports finite page, offset/limit, cursor, sitemap-style, or equivalent strategies as generic capabilities. Every pagination strategy must have an explicit stop condition such as max pages, max items, max URLs, max depth, missing cursor, or total count.
 - **Parse** turns the fetched response into a typed document shape: JSON, XML, HTML, text, or a future supported parse type. Parse errors stop the current strategy and produce semantic diagnostics.
-- **Select** chooses the item or items to process from the parsed document. Examples include JSONPath arrays, XML elements/text, CSS selectors, sitemap URLs, or a direct document. `postingDiscovery` usually selects many posting candidates. `postingDetail` may select one direct document or select a collection and then match exactly one item.
+- **Select** chooses the item or items to process from the parsed document. Examples include JSONPath arrays, XML elements/text, CSS selectors, sitemap URLs, or a direct document. `discovery` usually selects many posting candidates. `detail` may select one direct document or select a collection and then match exactly one item.
 - **Where / filter** optionally keeps or rejects selected items before extraction. It is used for bounded filtering such as URL regex checks or non-empty field checks. It must not encode user Search Request criteria in this PRD version.
 - **Capture** extracts named values from text using regex named groups. Named capture groups become capture variables. Unnamed groups are not part of the DSL contract. Captures may be produced during detection or per selected posting item.
 - **Match** identifies exactly one item in a fetched detail collection for a concrete posting. It compares extracted item values with rendered values such as `postingMeta.jobId`. Zero matches and multiple matches are semantic errors.
@@ -56,9 +56,9 @@ The Profile DSL is built from a small set of generic primitives. A new ATS shoul
 
 ### Step behavior
 
-`postingDiscovery` strategies discover source-wide posting candidates. They return at least `title`, `company`, and `url`; they may return `locations`, `postingMeta`, and `descriptionText` only when description text is already present in the discovery response. `postingDiscovery` must not perform one detail fetch per candidate to fill detail fields.
+`discovery` strategies discover source-wide posting candidates. They return at least `title`, `company`, and `url`; they may return `locations`, `postingMeta`, and `descriptionText` only when description text is already present in the discovery response. `discovery` must not perform one detail fetch per candidate to fill detail fields.
 
-`postingDetail` strategies run lazily for one concrete posting source occurrence. They may fetch the posting URL directly, fetch an API detail document, or fetch a collection/feed and match one item using postingMeta. The minimum required detail field for this PRD is `descriptionText`.
+`detail` strategies run lazily for one concrete posting source occurrence. They may fetch the posting URL directly, fetch an API detail document, or fetch a collection/feed and match one item using postingMeta. The minimum required detail field for this PRD is `descriptionText`.
 
 Detection strategies produce a Source Proposal rather than executing a Source. Detection may use input URL checks, HTTP checks, HTML/script/network checks, and bounded browser probes. Detection captures may feed Source Config proposals and key/name candidates.
 
@@ -97,7 +97,7 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 27. As a profile author, I want posting detail collection matching, so that XML or JSON feeds containing many jobs can be used to load details for one selected posting.
 28. As a profile author, I want stable Access Path and Strategy keys, so that diagnostics, overrides, tests, and source references remain stable.
 29. As a profile author, I want profile-level and Access Path-level Source Config schemas, so that common configuration and path-specific configuration can be expressed separately.
-30. As a profile author, I want Source Overrides to be validated structurally, so that a Source can adapt profile behavior without changing the Source Config contract.
+30. As a profile author, I want Direct Source Specialization to be validated structurally, so that a Source can adapt profile behavior without changing the Source Config contract.
 31. As a profile author, I want the final profile-plus-source plan compiled before execution, so that semantic errors are found early.
 32. As an agent, I want compiler diagnostics in machine-readable form, so that I can iteratively repair generated profiles.
 33. As an agent, I want smoke-test diagnostics in machine-readable form, so that I can use real extraction failures as feedback.
@@ -120,33 +120,36 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - New generic capabilities may require Rust implementation. Once added, a capability must be reusable across profiles rather than tied to one ATS.
 - The v1 Source Profile format is replaced with no compatibility layer, no automatic migration, no v1/v2 parallel runtime, and no legacy warnings for old profile JSON.
 - There is one declarative profile runtime. Profile execution is not selected by the removed v1 `adapterKey` concept.
-- The v1 `adapterKey` field is removed from Source Profiles and Source-owned Access Paths. The selected profile, selected Access Path, Source Config, Source Overrides, and compiled Execution Plan determine execution.
-- `Access Path` remains a core concept. It is a selectable reusable variant within a Source Profile and can define Source Config requirements, `postingDiscovery`, `postingDetail`, and Access Path-specific limitations. It does not define or replace the reusable Source Profile's required `support.level`.
+- The v1 `adapterKey` field is removed from Source Profiles and Source-owned Access Paths. The selected profile, selected Access Path, Source Config, Direct Source Specialization, and compiled Execution Plan determine execution.
+- `Access Path` remains a core concept. It is a selectable reusable variant within a Source Profile and can define Source Config requirements, `discovery`, `detail`, and Access Path-specific limitations. It does not define or replace the reusable Source Profile's required `support.level`.
 - A concrete Source selects exactly one reusable profile Access Path or contains exactly one Source-owned Access Path. It cannot do both.
 - A Source-owned Access Path is an inline Access Path stored on one Source. It uses the same DSL capabilities as profile Access Paths, is not reusable, and is not considered during profile detection.
-- Source Overrides apply only when a Source selects a reusable profile Access Path. A Source-owned Access Path is edited directly instead of overridden.
-- Source Overrides are structured JSON overlays for allowed behavior areas such as fetch, select, extract, transforms, and validation thresholds. They are not free string-path patches.
-- The compiler validates Source Overrides by compiling the final effective Execution Plan. Overrides cannot change the selected profile, selected Access Path, support level of the profile, or Source Config schema.
+- Direct Source Specialization applies only when a Source selects a reusable profile Access Path. A Source-owned Access Path is edited directly.
+- Direct Source Specialization uses keyed typed fragments for Access Paths, Discovery/Detail Strategy Sets, and Strategies. Existing entries merge deterministically; complete additions append in authored order; unkeyed arrays replace as a whole.
+- The compiler validates the complete Effective Source Profile before Source Config validation and Access Path selection. Direct fragments cannot change identity, Detection, support metadata, Search Request criteria, or profile-only Source Config titles.
 - Source Config remains stable access configuration. It must not contain search criteria such as keyword, role, location preference, country, radius, include rules, or exclude rules.
-- Source Config and Source Overrides are separate concepts. Source Config is normal per-source configuration; Source Overrides are exceptional behavior changes.
+- Source Config and Direct Source Specialization are separate concepts. Source Config is normal per-source configuration; Direct Source Specialization is typed behavior authoring.
 - Profile-level Source Config schema and Access Path-level Source Config schema are both allowed. The effective Source Config schema combines profile common fields with Access Path-specific fields.
 - Access Path Source Config schema may add fields but must not redefine profile-level fields in this first version.
-- `postingDiscovery` replaces the v1 term `inventory` in the new DSL. It means source-wide discovery of available postings.
-- `postingDiscovery` runs during Search Runs. It discovers available postings from the Source and does not encode user search criteria. Job Radar applies match and exclusion rules after discovery.
-- `postingDetail` remains a separate lazy step for loading detail fields for one concrete persisted posting source occurrence.
-- `postingDiscovery` may output `descriptionText` only when the text is already available in the discovery response. It must not fan out to every detail page just to populate descriptions.
+- `discovery` replaces the v1 term `inventory` in the new DSL. It means source-wide discovery of available postings.
+- `discovery` runs during Search Runs. It discovers available postings from the Source and does not encode user search criteria. Job Radar applies match and exclusion rules after discovery.
+- `detail` remains a separate lazy step for loading detail fields for one concrete persisted posting source occurrence.
+- `discovery` may output `descriptionText` only when the text is already available in the discovery response. It must not fan out to every detail page just to populate descriptions.
 - The required normalized posting discovery output is `title`, `company`, and `url`.
 - Optional posting discovery outputs are `locations`, `postingMeta`, and `descriptionText` when already available without detail-page fanout.
-- `postingDetail` must support `descriptionText` extraction. The model may allow additional canonical detail fields later, but they are not required for this PRD.
+- `detail` must support `descriptionText` extraction. The model may allow additional canonical detail fields later, but they are not required for this PRD.
 - `postingMeta` remains hidden technical metadata stored per posting source occurrence. It is used to re-identify or load the source-specific posting later.
 - `postingMeta` must not become a dumping ground for user-facing metadata. Department, employment type, remote mode, salary, posted date, and deadlines must become explicit canonical fields if needed later.
 - `postingMeta.jobId` remains a generic source-local re-identifier. Vendor raw names stay inside extraction rules.
-- Both `postingDiscovery` and `postingDetail` use strategies. Strategies are ordered and may act as fallbacks.
+- Source and Source Profile documents use only strict schema version 3 with `detection`, `discovery`, and `detail`; schema version 2 and old phase names are rejected without conversion.
+- Every complete Discovery or Detail Strategy Set requires the closed typed Policy `{ "type": "first_accepted" }`. Existing-set direct fragments may omit Policy only to inherit the complete Base terminal.
+- Profile-DSL Retry, pacing, rate limiting, Retry-After handling, and Bot behavior are unsupported; fallback is finite Strategy order, not request retry.
+- Both `discovery` and `detail` use strategies. Strategies are ordered and may act as fallbacks.
 - Every strategy has a stable key unique within its parent step.
 - Every Access Path has a stable key unique within its Source Profile.
 - A strategy succeeds only when fetch, parse, select/match, extraction, transforms, and acceptance validation succeed.
 - Fallback execution must preserve diagnostics from failed strategies instead of hiding them.
-- Fetch is a shared capability used by both `postingDiscovery` and `postingDetail`.
+- Fetch is a shared capability used by both `discovery` and `detail`.
 - Fetch supports HTTP mode and browser mode.
 - HTTP fetch supports method, URL, public headers, body, and timeout.
 - Browser fetch supports bounded waits and bounded interactions such as waiting for selectors, clicking if visible, and clicking up to a maximum count.
@@ -158,9 +161,9 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - Static technical request body parameters are allowed when they are public API parameters and not user search criteria.
 - Search Request criteria mapping into portal query parameters is out of scope for this PRD, but the DSL must not make that future extension impossible.
 - Pagination is a strategy capability, not part of fetch itself. Fetch describes one request; pagination describes how repeated bounded requests are produced and combined.
-- Pagination is supported for `postingDiscovery` only in this PRD version.
-- `postingDetail` may load one collection document and match a single item, but it does not paginate through detail collections in this PRD version.
-- `postingDetail` collection matching must yield exactly one item. Zero matches and multiple matches are semantic errors.
+- Pagination is supported for `discovery` only in this PRD version.
+- `detail` may load one collection document and match a single item, but it does not paginate through detail collections in this PRD version.
+- `detail` collection matching must yield exactly one item. Zero matches and multiple matches are semantic errors.
 - Detection is declarative JSON and produces a Source Proposal, not just a profile match.
 - Detection output includes the recommended profile key, Access Path key, Source Config proposal, key/name candidates, captures, evidence, support level, and diagnostics.
 - Detection may use capabilities such as input URL regex, HTTP fetch checks, HTML contains, HTML regex, script matching, network request matching, and bounded browser probes.
@@ -189,7 +192,7 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - Sources with Source-owned Access Paths require Source-level support metadata at `sourceSupport.level`.
 - Support levels are `stable`, `best_effort`, `experimental`, and `unsupported`.
 - `unsupported` is allowed for profiles that can detect a system but do not define an executable Access Path.
-- Any executable profile must have at least one Access Path with `postingDiscovery`.
+- Any executable profile must have at least one Access Path with `discovery`.
 - `stable` means intentionally maintained support for a reusable profile family; it is not a live operational status.
 - `best_effort` may exist without live-check proof but must document known limitations and compile successfully.
 - Newly agent-authored profiles default to `experimental` unless validation/live evidence justifies `best_effort`.
@@ -198,11 +201,11 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - Search Runs execute only active and valid Sources.
 - A Search Request may reference draft or disabled Sources, but runtime outcomes must report skipped or failed source-level outcomes clearly.
 - Multi-source Search Runs keep per-source outcomes and can complete with errors when only some Sources fail.
-- The JSON Schema is physically modular. Source Profile and Source schema entrypoints reference capability modules for common, fetch, parse, select, extract, transform, pagination, strategy, support, overrides, diagnostics, and related definitions.
-- Capability schema modules are reused by both `postingDiscovery` and `postingDetail` where semantics overlap.
+- The JSON Schema is physically modular. Source Profile and Source schema entrypoints reference capability modules for common, fetch, parse, select, extract, transform, pagination, strategy, support, fragments, diagnostics, and related definitions.
+- Capability schema modules are reused by both `discovery` and `detail` where semantics overlap.
 - The PRD is the primary specification for this DSL effort. Additional DSL documentation files are intentionally avoided for now to prevent multiple sources of truth.
 - The PRD defines required concepts and semantics. Exact JSON property names may be finalized during implementation as long as the documented concepts and canonical names are preserved.
-- Canonical names for this effort include Source, Source Profile, Access Path, Source Config, Source Overrides, Source-owned Access Path, Profile DSL, Profile Compiler, Execution Plan, Capability, Strategy, `postingDiscovery`, `postingDetail`, `postingMeta`, `support.level`, `sourceSupport.level`, and `validationState`.
+- Canonical names for this effort include Source, Source Profile, Base Source Profile, Effective Source Profile, Access Path, Source Config, Direct Source Specialization, Source-owned Access Path, Profile DSL, Profile Compiler, Execution Plan, Capability, Strategy, Policy, `detection`, `discovery`, `detail`, `postingMeta`, `support.level`, `sourceSupport.level`, and `validationState`.
 
 ### Removal Scope
 
@@ -211,7 +214,7 @@ Because this is a pre-production hard cut, implementation must remove or replace
 - the v1 Source Profile JSON format;
 - the v1 Source JSON shape where it depends on `adapterKey` or persistent `invalid` status;
 - v1 monolithic Source/Profile schemas;
-- v1 source registry semantic validation that is tied to the old `inventory` and `postingDetail` shape;
+- v1 source registry semantic validation that is tied to the old `inventory` and `detail` shape;
 - specialized declarative runtime routing based on endpoint, sitemap, browser inventory, and posting detail adapter keys;
 - v1 built-in profile JSON documents rewritten in the new DSL;
 - v1 tests that assert old profile shape, old adapter keys, or old inventory terminology;
@@ -224,8 +227,8 @@ Reusable implementation pieces may be kept when they fit the new architecture, s
 - Tests should verify behavior at the highest useful seam: schema/registry load, Profile Compiler, Source validation, Execution Plan execution, and Search Run source outcomes.
 - Tests should prefer external behavior over implementation details. For example, a profile regression test should assert normalized posting candidates and diagnostics, not private helper calls.
 - Profile validation tests cover schema validity, compiler validity, support metadata, forbidden capabilities, bounded execution requirements, forbidden secrets, source config schema merging, and override validation.
-- Source validation tests cover selected profile path existence, Source Config validation, Source Overrides, Source-owned Access Paths, derived validation state, and duplicate built-in/custom profile keys.
-- Execution tests cover `postingDiscovery` strategies, fallback behavior, semantic diagnostics, pagination limits, fetch modes, parse modes, extraction cardinality, transforms, combine behavior, and location normalization.
+- Source validation tests cover selected profile path existence, Source Config validation, Direct Source Specialization, Source-owned Access Paths, derived validation state, and duplicate built-in/custom profile keys.
+- Execution tests cover `discovery` strategies, fallback behavior, semantic diagnostics, pagination limits, fetch modes, parse modes, extraction cardinality, transforms, combine behavior, and location normalization.
 - Posting detail tests cover direct detail documents, collection matching, missing posting metadata, no match, multiple matches, empty descriptions, and fallback strategy diagnostics.
 - Detection tests cover Source Proposal generation, named captures, evidence, access path recommendation, source config proposals, ambiguity, unsupported profiles, and browser-assisted bounded probes where available.
 - Search Run tests cover active/valid Sources, draft and disabled source skipping, invalid source failures, per-source outcomes, and completed-with-errors aggregation.
@@ -260,8 +263,8 @@ Reusable implementation pieces may be kept when they fit the new architecture, s
 
 The new DSL should be powerful enough to describe ATS behavior entirely through JSON, but it is still intentionally declarative. If a new source requires behavior that cannot be expressed, the preferred change is to add a generic capability to the Profile DSL/runtime, not to add source-specific code.
 
-The design deliberately favors a Profile Compiler and typed Execution Plan because JSON Schema alone is the wrong tool for all semantic validation. Schema files should stay modular and readable; the compiler should own cross-field rules, override application, capability compatibility, security checks, boundedness checks, and execution-plan diagnostics.
+The design deliberately favors a Profile Compiler and typed Execution Plan because JSON Schema alone is the wrong tool for all semantic validation. Schema files should stay modular and readable; the compiler should own cross-field rules, direct specialization, capability compatibility, security checks, boundedness checks, and execution-plan diagnostics.
 
 The existing managed browser runtime decision remains compatible with this PRD. Browser is treated as a fetch mode inside the DSL, not as a separate source/profile type.
 
-The existing job posting persistence model remains compatible with this PRD. `postingDiscovery` still produces normalized posting candidates, and `postingDetail` still loads additional detail for a concrete posting source occurrence.
+The existing job posting persistence model remains compatible with this PRD. `discovery` still produces normalized posting candidates, and `detail` still loads additional detail for a concrete posting source occurrence.

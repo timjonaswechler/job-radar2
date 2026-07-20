@@ -1,6 +1,6 @@
 use crate::{
     profile_dsl::{
-        compiler::{compile_source_execution_plan, ProfileCompilerSnapshot},
+        compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
     },
     source::documents::SourceStatus,
@@ -39,19 +39,6 @@ pub(super) fn resolve_selected_sources_with_options(
     source_keys: &[String],
     options: SourceSelectionOptions,
 ) -> Vec<SelectedSearchRunSource> {
-    let compiler_snapshot = ProfileCompilerSnapshot {
-        profiles: snapshot
-            .profiles
-            .iter()
-            .map(|profile| profile.document.clone())
-            .collect(),
-        sources: snapshot
-            .sources
-            .iter()
-            .map(|source| source.document.clone())
-            .collect(),
-    };
-
     source_keys
         .iter()
         .map(|source_key| {
@@ -109,36 +96,25 @@ pub(super) fn resolve_selected_sources_with_options(
                 };
             }
 
-            let mut compiler_snapshot = compiler_snapshot.clone();
-            if allow_draft_source {
-                if let Some(source) = compiler_snapshot
-                    .sources
-                    .iter_mut()
-                    .find(|source| source.key == *source_key)
-                {
-                    source.status = SourceStatus::Active;
+            match compile_source(&source.document, snapshot) {
+                CompileSourceOutcome::Compiled {
+                    source: compiled,
+                    diagnostics,
+                } if !has_error_diagnostics(&diagnostics) => {
+                    SelectedSearchRunSource::Resolved(Box::new(compiled.execution_plan.into()))
+                }
+                CompileSourceOutcome::Compiled { diagnostics, .. }
+                | CompileSourceOutcome::Rejected { diagnostics } => {
+                    SelectedSearchRunSource::Failed {
+                        source_key: source.document.key.clone(),
+                        source_name: source.document.name.clone(),
+                        error: SourceExecutionError::FailedWithDiagnostics {
+                            message: diagnostic_summary(&diagnostics),
+                            diagnostics,
+                        },
+                    }
                 }
             }
-            let compile_result = compile_source_execution_plan(&compiler_snapshot, source_key);
-            if compile_result.execution_plan.is_none() || has_error_diagnostics(&compile_result.diagnostics)
-            {
-                let diagnostics = compile_result.diagnostics;
-                return SelectedSearchRunSource::Failed {
-                    source_key: source.document.key.clone(),
-                    source_name: source.document.name.clone(),
-                    error: SourceExecutionError::FailedWithDiagnostics {
-                        message: diagnostic_summary(&diagnostics),
-                        diagnostics,
-                    },
-                };
-            }
-
-            SelectedSearchRunSource::Resolved(Box::new(
-                compile_result
-                    .execution_plan
-                    .expect("compile result has an execution plan")
-                    .into(),
-            ))
         })
         .collect()
 }

@@ -1,12 +1,15 @@
+mod support;
+
+use support::{compile_test_source, unwrap_plan};
+
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, detect_source_proposal, execute_detail_with_fetcher,
-    execute_discovery_with_fetcher, DetailFetchError, DetailFetchRequest, DetailFetchResponse,
-    DetailFetcher, DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError,
-    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, HttpMethod,
-    ProfileCompilerSnapshot, RequestBody, SourceDocument, SourceProfileDocument,
-    SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, execute_detail_with_fetcher, execute_discovery_with_fetcher,
+    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
+    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
+    DiscoveryFetchResponse, DiscoveryFetcher, HttpMethod, RequestBody, SourceDocument,
+    SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -19,11 +22,11 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     assert_detects_named_workday_source_config_captures(&profile_value);
     let profile: SourceProfileDocument = serde_json::from_value(profile_value)
         .expect("Workday built-in profile should be a Source Profile DSL document");
-    assert_eq!(profile.schema_version, 2);
+    assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.support.level, SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "acme_robotics_workday",
         "name": "Acme Robotics",
         "status": "active",
@@ -41,17 +44,8 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     }))
     .unwrap();
 
-    let compile_result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "acme_robotics_workday",
-    );
-    assert_eq!(compile_result.diagnostics, Vec::new());
-    let plan = compile_result
-        .execution_plan
-        .expect("Workday fixture source should compile");
+    let compile_result = compile_test_source(&source, Some(profile));
+    let plan = unwrap_plan(compile_result);
 
     let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
     let fetcher = OfflineCxsFetcher::new(
@@ -151,11 +145,11 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
 fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total_is_zero() {
     let mut profile_value: Value =
         serde_json::from_str(&read_text("resources/profiles/workday.json")).unwrap();
-    profile_value["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"]["limits"]
+    profile_value["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]["limits"]
         ["maxRequests"] = json!(2);
     let profile: SourceProfileDocument = serde_json::from_value(profile_value).unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "acme_robotics_workday",
         "name": "Acme Robotics",
         "status": "active",
@@ -171,15 +165,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         }
     }))
     .unwrap();
-    let compile_result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "acme_robotics_workday",
-    );
-    assert!(compile_result.diagnostics.is_empty());
-    let plan = compile_result.execution_plan.unwrap();
+    let plan = unwrap_plan(compile_test_source(&source, Some(profile)));
 
     let discovery_url = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs";
     let fetcher = OfflineCxsFetcher::new([
@@ -224,7 +210,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
     );
     assert_eq!(
         discovery.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+        "/discovery/strategies/0/pagination/limits/maxRequests"
     );
     assert_eq!(
         discovery.diagnostics[0].strategy_key.as_deref(),
@@ -274,7 +260,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
 }
 
 fn assert_detects_named_workday_source_config_captures(profile: &Value) {
-    let captures = profile["detect"]["inputUrlPatterns"]
+    let captures = profile["detection"]["inputUrlPatterns"]
         .as_array()
         .into_iter()
         .flatten()

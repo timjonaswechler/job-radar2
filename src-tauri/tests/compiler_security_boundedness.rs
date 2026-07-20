@@ -1,15 +1,40 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source_execution_plan, CompileSourceExecutionPlanResult, DiagnosticCategory,
-    DiagnosticSeverity, ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument,
+    compile_source, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
+    RegistrySourceProfile, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceProfileRegistrySnapshot,
 };
 use serde_json::{json, Value};
+
+#[derive(Debug)]
+struct TestCompileResult {
+    execution_plan: Option<SourceExecutionPlan>,
+    diagnostics: job_radar_lib::Diagnostics,
+}
+
+impl From<CompileSourceOutcome> for TestCompileResult {
+    fn from(outcome: CompileSourceOutcome) -> Self {
+        match outcome {
+            CompileSourceOutcome::Compiled {
+                source,
+                diagnostics,
+            } => Self {
+                execution_plan: Some(source.execution_plan),
+                diagnostics,
+            },
+            CompileSourceOutcome::Rejected { diagnostics } => Self {
+                execution_plan: None,
+                diagnostics,
+            },
+        }
+    }
+}
 
 #[test]
 fn compiler_diagnoses_missing_http_fetch_timeout() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
         .as_object_mut()
         .unwrap()
         .remove("timeoutMs");
@@ -20,14 +45,14 @@ fn compiler_diagnoses_missing_http_fetch_timeout() {
     assert_compiler_error(
         &result,
         "missing_fetch_timeout",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",
+        "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs",
     );
 }
 
 #[test]
 fn compiler_allows_public_headers_and_static_technical_body_parameters() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "http",
         "method": "POST",
         "url": "{{sourceConfig:feedUrl}}",
@@ -59,7 +84,7 @@ fn compiler_allows_public_headers_and_static_technical_body_parameters() {
 #[test]
 fn compiler_diagnoses_forbidden_headers_secret_body_fields_and_collects_multiple_diagnostics() {
     let mut profile = simple_profile_value();
-    let fetch = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"];
+    let fetch = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"];
     fetch["headers"] = json!({
         "authorization": "Bearer secret",
         "cookie": "session=secret",
@@ -111,23 +136,30 @@ fn compiler_diagnoses_forbidden_headers_secret_body_fields_and_collects_multiple
     assert_compiler_error(
         &result,
         "secret_like_request_body_field",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/body/value/nested/apiKey",
+        "/accessPaths/0/discovery/strategies/0/fetch/body/value/nested/apiKey",
     );
 }
 
 #[test]
-fn compiler_validates_security_and_boundedness_after_applying_source_overrides() {
+fn compiler_validates_security_and_boundedness_after_direct_specialization() {
     let profile = simple_profile_value();
     let mut source: Value =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source["sourceOverrides"]["strategyOverrides"][0]["fetch"] = json!({
-        "mode": "http",
-        "method": "GET",
-        "url": "{{sourceConfig:feedUrl}}",
-        "headers": {
-            "authorization": "Bearer secret"
+    source["accessPaths"] = json!([{
+        "key": "json_feed",
+        "discovery": {
+            "strategies": [{
+                "key": "json_api",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "{{sourceConfig:feedUrl}}",
+                    "headers": { "authorization": "Bearer secret" },
+                    "timeoutMs": 0
+                }
+            }]
         }
-    });
+    }]);
 
     let result = compile_profile_and_source_values(profile, source);
 
@@ -135,20 +167,19 @@ fn compiler_validates_security_and_boundedness_after_applying_source_overrides()
     assert_compiler_error(
         &result,
         "missing_fetch_timeout",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",
+        "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs",
     );
     assert_compiler_error(
         &result,
         "forbidden_request_header",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/headers/authorization",
+        "/accessPaths/0/discovery/strategies/0/fetch/headers/authorization",
     );
 }
 
 #[test]
-fn compiler_diagnoses_unbounded_fetch_retry_and_pagination() {
+fn compiler_diagnoses_unbounded_pagination() {
     let mut profile = simple_profile_value();
-    let strategy = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0];
-    strategy["fetch"]["retry"] = json!({});
+    let strategy = &mut profile["accessPaths"][0]["discovery"]["strategies"][0];
     strategy["pagination"]
         .as_object_mut()
         .unwrap()
@@ -159,20 +190,15 @@ fn compiler_diagnoses_unbounded_fetch_retry_and_pagination() {
     assert_eq!(result.execution_plan, None);
     assert_compiler_error(
         &result,
-        "unbounded_fetch_retry",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/retry/maxAttempts",
-    );
-    assert_compiler_error(
-        &result,
         "unbounded_pagination",
-        "/accessPaths/0/postingDiscovery/strategies/0/pagination/limits",
+        "/accessPaths/0/discovery/strategies/0/pagination/limits",
     );
 }
 
 #[test]
 fn compiler_diagnoses_unbounded_recursive_sitemap_depth() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"] = json!({
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["pagination"] = json!({
         "type": "sitemap",
         "childSitemapSelector": { "type": "sitemap_urls" },
         "postingUrlSelector": { "type": "sitemap_urls" },
@@ -185,14 +211,14 @@ fn compiler_diagnoses_unbounded_recursive_sitemap_depth() {
     assert_compiler_error(
         &result,
         "unbounded_pagination_depth",
-        "/accessPaths/0/postingDiscovery/strategies/0/pagination/limits/maxDepth",
+        "/accessPaths/0/discovery/strategies/0/pagination/limits/maxDepth",
     );
 }
 
 #[test]
 fn compiler_diagnoses_unbounded_browser_waits_and_interactions() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "browser",
         "url": "{{sourceConfig:feedUrl}}",
         "timeoutMs": 10000,
@@ -210,20 +236,20 @@ fn compiler_diagnoses_unbounded_browser_waits_and_interactions() {
     assert_compiler_error(
         &result,
         "unbounded_browser_wait",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/waits/0/timeoutMs",
+        "/accessPaths/0/discovery/strategies/0/fetch/waits/0/timeoutMs",
     );
     assert_compiler_error(
         &result,
         "unbounded_browser_interaction",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0/maxCount",
+        "/accessPaths/0/discovery/strategies/0/fetch/interactions/0/maxCount",
     );
 }
 
 #[test]
 fn compiler_diagnoses_empty_fallback_strategy_lists() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"] = json!([]);
-    profile["accessPaths"][0]["postingDetail"]["strategies"] = json!([]);
+    profile["accessPaths"][0]["discovery"]["strategies"] = json!([]);
+    profile["accessPaths"][0]["detail"]["strategies"] = json!([]);
 
     let result = compile_profile_value(profile);
 
@@ -231,19 +257,19 @@ fn compiler_diagnoses_empty_fallback_strategy_lists() {
     assert_compiler_error(
         &result,
         "empty_fallback_strategy_list",
-        "/accessPaths/0/postingDiscovery/strategies",
+        "/accessPaths/0/discovery/strategies",
     );
     assert_compiler_error(
         &result,
         "empty_fallback_strategy_list",
-        "/accessPaths/0/postingDetail/strategies",
+        "/accessPaths/0/detail/strategies",
     );
 }
 
 #[test]
 fn compiler_diagnoses_prohibited_browser_behaviors() {
     let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "browser",
         "url": "{{sourceConfig:feedUrl}}",
         "timeoutMs": 10000,
@@ -268,39 +294,36 @@ fn compiler_diagnoses_prohibited_browser_behaviors() {
     assert_compiler_error(
         &result,
         "prohibited_browser_behavior",
-        "/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0",
+        "/accessPaths/0/discovery/strategies/0/fetch/interactions/0",
     );
 }
 
-fn compile_profile_value(profile: Value) -> CompileSourceExecutionPlanResult {
-    let source: Value =
+fn compile_profile_value(profile: Value) -> TestCompileResult {
+    let mut source: Value =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source.as_object_mut().unwrap().remove("accessPaths");
     compile_profile_and_source_values(profile, source)
 }
 
-fn compile_profile_and_source_values(
-    profile: Value,
-    source: Value,
-) -> CompileSourceExecutionPlanResult {
+fn compile_profile_and_source_values(profile: Value, source: Value) -> TestCompileResult {
     let profile: SourceProfileDocument = serde_json::from_value(profile)
         .unwrap_or_else(|error| panic!("profile should deserialize: {error}"));
     let source: SourceDocument = serde_json::from_value(source)
         .unwrap_or_else(|error| panic!("source should deserialize: {error}"));
 
-    compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    )
+    let registry = SourceProfileRegistrySnapshot {
+        profiles: vec![RegistrySourceProfile {
+            origin: "test".into(),
+            path: String::new(),
+            document: profile,
+        }],
+        sources: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    TestCompileResult::from(compile_source(&source, &registry))
 }
 
-fn assert_compiler_error(
-    result: &CompileSourceExecutionPlanResult,
-    expected_code: &str,
-    expected_path: &str,
-) {
+fn assert_compiler_error(result: &TestCompileResult, expected_code: &str, expected_path: &str) {
     let diagnostic = result
         .diagnostics
         .iter()

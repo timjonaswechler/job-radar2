@@ -1,8 +1,10 @@
 # Issue #239 phase-vocabulary residue allowlist
 
-This allowlist records every remaining old phase literal after the internal/compiled hard rename. Compiled plans use only `discovery` and `detail`; no entry below is a Rust identifier, module/path, alias, or compiled serialization field.
+> Historical C06 handoff, superseded by the #242 schema-v3 activation. File/line inventories below record the pre-activation state and are not current guidance.
 
-Classes are intentionally limited to the two temporary boundaries owned by A01: authored schema-v2 data and observable schema-v2 Diagnostic data. Line numbers reflect this commit.
+This allowlist recorded every remaining old phase literal after the internal/compiled hard rename. Compiled plans use only `discovery` and `detail`; no entry below is a Rust identifier, module/path, alias, or compiled serialization field.
+
+At that time, classes were intentionally limited to the two temporary boundaries owned by A01: authored schema-v2 data and observable schema-v2 Diagnostic data. Line numbers reflect this commit.
 
 ## Authored Schema-V2 Boundary
 

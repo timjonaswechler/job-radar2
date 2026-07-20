@@ -13,14 +13,17 @@ const source: RegistrySource = {
   origin: "custom",
   path: "sources/acme.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "acme",
     name: "ACME",
     status: "active",
     sourceConfig: { boardSlug: "acme" },
-    sourceOverrides: {
-      strategyOverrides: [{ step: "postingDiscovery", strategyKey: "jobs_api" }],
-    },
+    accessPaths: [
+      {
+        key: "boards_api",
+        discovery: { strategies: [{ key: "jobs_api" }] },
+      },
+    ],
     selectedAccessPath: {
       type: "profile_access_path",
       profileKey: "greenhouse",
@@ -73,9 +76,9 @@ assert.equal(
   true,
 );
 assert.equal(
-  isSourceEditDraftDirty({ ...draft, sourceOverridesText: "{invalid" }, draft),
+  isSourceEditDraftDirty({ ...draft, directSourceSpecializationText: "{invalid" }, draft),
   true,
-  "invalid raw Source Overrides must stay dirty",
+  "invalid raw Source specialization must stay dirty",
 );
 assert.equal(
   isSourceEditDraftDirty(
@@ -122,8 +125,8 @@ assert.equal(
   "fully reverting Edit values must restore a clean draft",
 );
 assert.equal(
-  draft.sourceOverridesText,
-  JSON.stringify(source.document.sourceOverrides, null, 2),
+  draft.directSourceSpecializationText,
+  JSON.stringify(source.document.accessPaths, null, 2),
 );
 
 const updated = buildUpdatedSourceDocument({
@@ -133,7 +136,7 @@ const updated = buildUpdatedSourceDocument({
   configEntries: [
     { id: "board", key: "boardSlug", value: "acme-updated", locked: true },
   ],
-  sourceOverridesText: "",
+  directSourceSpecializationText: "",
   schemaMetadata,
 });
 assert.deepEqual(updated.errors, []);
@@ -141,7 +144,7 @@ assert.equal(updated.document?.key, "acme");
 assert.equal(updated.document?.name, "ACME Updated");
 assert.equal(updated.document?.status, "disabled");
 assert.deepEqual(updated.document?.sourceConfig, { boardSlug: "acme-updated" });
-assert.equal(updated.document?.sourceOverrides, undefined);
+assert.equal(updated.document?.accessPaths, undefined);
 assert.deepEqual(updated.document?.selectedAccessPath, source.document.selectedAccessPath);
 
 const invalid = buildUpdatedSourceDocument({
@@ -149,18 +152,18 @@ const invalid = buildUpdatedSourceDocument({
   name: " ",
   status: "active",
   configEntries: [],
-  sourceOverridesText: "[]",
+  directSourceSpecializationText: "{}",
   schemaMetadata,
 });
 assert.equal(invalid.document, null);
 assert.deepEqual(invalid.errors, [
   "Name fehlt.",
   "Pflichtwert „boardSlug“ fehlt.",
-  "Source Overrides müssen ein JSON-Objekt sein.",
+  "Direkte Source-Spezialisierung muss ein JSON-Array mit Access-Path-Keys sein.",
 ]);
 assert.deepEqual(invalid.configErrors, ["Pflichtwert „boardSlug“ fehlt."]);
-assert.deepEqual(invalid.overridesErrors, [
-  "Source Overrides müssen ein JSON-Objekt sein.",
+assert.deepEqual(invalid.specializationErrors, [
+  "Direkte Source-Spezialisierung muss ein JSON-Array mit Access-Path-Keys sein.",
 ]);
 
 function stableEntryIds(prefix: string) {

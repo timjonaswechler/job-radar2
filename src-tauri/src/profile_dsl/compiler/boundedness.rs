@@ -23,7 +23,7 @@ pub(super) fn validate_boundedness(
     validate_discovery_strategy_list(discovery, &base_path, diagnostics);
 
     for (index, strategy) in discovery.strategies.iter().enumerate() {
-        let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");
+        let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_fetch_bounds(
             &strategy.fetch,
             &format!("{strategy_path}/fetch"),
@@ -43,7 +43,7 @@ pub(super) fn validate_boundedness(
     if let Some(detail) = detail {
         validate_detail_strategy_list(detail, &base_path, diagnostics);
         for (index, strategy) in detail.strategies.iter().enumerate() {
-            let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");
+            let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_fetch_bounds(
                 &strategy.fetch,
                 &format!("{strategy_path}/fetch"),
@@ -61,8 +61,8 @@ fn validate_discovery_strategy_list(
 ) {
     validate_strategy_list_len(
         discovery.strategies.len(),
-        &format!("{base_path}/postingDiscovery/strategies"),
-        "postingDiscovery",
+        &format!("{base_path}/discovery/strategies"),
+        "discovery",
         diagnostics,
     );
 }
@@ -74,8 +74,8 @@ fn validate_detail_strategy_list(
 ) {
     validate_strategy_list_len(
         detail.strategies.len(),
-        &format!("{base_path}/postingDetail/strategies"),
-        "postingDetail",
+        &format!("{base_path}/detail/strategies"),
+        "detail",
         diagnostics,
     );
 }
@@ -111,9 +111,7 @@ fn validate_fetch_bounds(
     diagnostics: &mut Diagnostics,
 ) {
     match fetch {
-        Fetch::Http {
-            timeout_ms, retry, ..
-        } => {
+        Fetch::Http { timeout_ms, .. } => {
             validate_timeout(
                 *timeout_ms,
                 "missing_fetch_timeout",
@@ -122,23 +120,6 @@ fn validate_fetch_bounds(
                 strategy_key,
                 diagnostics,
             );
-            if let Some(retry) = retry {
-                if retry
-                    .max_attempts
-                    .filter(|attempts| *attempts > 0)
-                    .is_none()
-                {
-                    push_bounded_diagnostic(
-                        diagnostics,
-                        "unbounded_fetch_retry",
-                        "HTTP fetch retry behavior must declare a positive maxAttempts bound"
-                            .to_string(),
-                        &format!("{path}/retry/maxAttempts"),
-                        strategy_key,
-                        serde_json::json!({ "bound": "maxAttempts" }),
-                    );
-                }
-            }
         }
         Fetch::Browser {
             timeout_ms,

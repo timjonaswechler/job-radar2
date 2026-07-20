@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+
 import { profileGridColumns } from "@/features/sources/registry/profile/profile-grid-columns";
 import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";
 import {
@@ -24,7 +26,7 @@ const stableProfile: RegistrySourceProfile = {
   origin: "built_in",
   path: "resources/profiles/greenhouse.json",
   document: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     key: "greenhouse",
     name: "Greenhouse",
     kind: "recruiting_system",
@@ -33,7 +35,7 @@ const stableProfile: RegistrySourceProfile = {
       {
         key: "boards_api",
         name: "Boards API",
-        postingDiscovery: { strategies: [{ key: "jobs_api" }] },
+        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("jobs_api")] },
       },
     ],
   },
@@ -132,7 +134,7 @@ const evidenceProfile: RegistrySourceProfile = {
         { kind: "schema_check", reference: "schema-validation" },
       ],
     },
-    detect: {
+    detection: {
       evidence: [
         { kind: "url", message: "Matched board URL" },
         { kind: "http", message: "HTTP marker matched" },

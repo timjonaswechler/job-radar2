@@ -96,7 +96,7 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+        "/discovery/strategies/0/pagination/limits/maxRequests"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -192,7 +192,7 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
     assert_eq!(result.diagnostics[0].code, "pagination_max_items_reached");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxItems"
+        "/discovery/strategies/0/pagination/limits/maxItems"
     );
 }
 
@@ -376,7 +376,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_depth_limit() {
     assert_eq!(result.diagnostics[0].code, "pagination_max_depth_reached");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxDepth"
+        "/discovery/strategies/0/pagination/limits/maxDepth"
     );
 }
 
@@ -422,7 +422,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+        "/discovery/strategies/0/pagination/limits/maxRequests"
     );
 }
 
@@ -491,7 +491,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxRequests"
+        "/discovery/strategies/0/pagination/limits/maxRequests"
     );
 }
 
@@ -596,7 +596,7 @@ fn compiled_discovery_runtime_reports_duplicate_cursor_loop() {
     assert_eq!(result.diagnostics[0].code, "pagination_duplicate_cursor");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/nextCursorPath"
+        "/discovery/strategies/0/pagination/nextCursorPath"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -644,7 +644,7 @@ fn compiled_discovery_runtime_reports_cursor_max_items_limit() {
     assert_eq!(result.diagnostics[0].code, "pagination_max_items_reached");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/pagination/limits/maxItems"
+        "/discovery/strategies/0/pagination/limits/maxItems"
     );
     assert_eq!(
         result.diagnostics[0].details.as_ref().unwrap()["paginationType"],

@@ -142,45 +142,45 @@ assert.equal(
   "Browser fetch",
 );
 
-const postingDiscoverySchema = profileDslSchemaCatalog.resolveRef(
-  profileDslSchemaRefs.postingDiscoveryStep,
+const discoverySchema = profileDslSchemaCatalog.resolveRef(
+  profileDslSchemaRefs.discoveryStep,
 );
-assert.ok(postingDiscoverySchema);
-const postingDiscoverySchemaOptions = {
+assert.ok(discoverySchema);
+const discoverySchemaOptions = {
   catalog: profileDslSchemaCatalog,
-  rootSchema: postingDiscoverySchema.rootSchema,
-  baseUri: postingDiscoverySchema.baseUri,
+  rootSchema: discoverySchema.rootSchema,
+  baseUri: discoverySchema.baseUri,
 };
 const strategiesSchema = schemaForProperty(
   "strategies",
-  postingDiscoverySchema.schema,
-  postingDiscoverySchemaOptions,
+  discoverySchema.schema,
+  discoverySchemaOptions,
 );
-const postingDiscoveryStrategySchema = schemaForArrayItem(
+const discoveryStrategySchema = schemaForArrayItem(
   strategiesSchema,
-  postingDiscoverySchemaOptions,
+  discoverySchemaOptions,
 );
 const strategyFetchSchema = schemaForProperty(
   "fetch",
-  postingDiscoveryStrategySchema,
-  postingDiscoverySchemaOptions,
+  discoveryStrategySchema,
+  discoverySchemaOptions,
 );
 const activeHttpFetchSchema = schemaForValue(
   strategyFetchSchema,
   httpFetchValue,
-  postingDiscoverySchemaOptions,
+  discoverySchemaOptions,
 );
 assert.deepEqual(
   schemaScalarOptions(
-    schemaForProperty("mode", activeHttpFetchSchema, postingDiscoverySchemaOptions),
-    postingDiscoverySchemaOptions,
+    schemaForProperty("mode", activeHttpFetchSchema, discoverySchemaOptions),
+    discoverySchemaOptions,
   ),
   [{ value: "http", label: "http" }],
 );
 assert.deepEqual(
   schemaScalarOptions(
-    schemaForProperty("method", activeHttpFetchSchema, postingDiscoverySchemaOptions),
-    postingDiscoverySchemaOptions,
+    schemaForProperty("method", activeHttpFetchSchema, discoverySchemaOptions),
+    discoverySchemaOptions,
   ),
   [
     { value: "GET", label: "GET" },
@@ -189,27 +189,27 @@ assert.deepEqual(
 );
 assert.equal(
   schemaFieldTypeFromSchema(
-    schemaForProperty("timeoutMs", activeHttpFetchSchema, postingDiscoverySchemaOptions),
-    postingDiscoverySchemaOptions,
+    schemaForProperty("timeoutMs", activeHttpFetchSchema, discoverySchemaOptions),
+    discoverySchemaOptions,
   ),
   "number",
 );
 assert.deepEqual(
   schemaConstraints(
-    schemaForProperty("timeoutMs", activeHttpFetchSchema, postingDiscoverySchemaOptions),
-    postingDiscoverySchemaOptions,
+    schemaForProperty("timeoutMs", activeHttpFetchSchema, discoverySchemaOptions),
+    discoverySchemaOptions,
   ),
   ["min 1", "max 60000"],
 );
 assert.deepEqual(
   schemaScalarRules(
-    schemaForProperty("mode", activeHttpFetchSchema, postingDiscoverySchemaOptions),
-    postingDiscoverySchemaOptions,
+    schemaForProperty("mode", activeHttpFetchSchema, discoverySchemaOptions),
+    discoverySchemaOptions,
   ),
   [{ kind: "const", value: "http", label: "http" }],
 );
 
-const postingDiscoveryRows = createSchemaValueRows({
+const discoveryRows = createSchemaValueRows({
   value: {
     strategies: [
       {
@@ -227,17 +227,17 @@ const postingDiscoveryRows = createSchemaValueRows({
       },
     ],
   },
-  schema: postingDiscoverySchema.schema,
-  schemaOptions: postingDiscoverySchemaOptions,
+  schema: discoverySchema.schema,
+  schemaOptions: discoverySchemaOptions,
   maxDepth: 6,
 });
-const fetchRow = postingDiscoveryRows.find((row) => row.key === "fetch");
+const fetchRow = discoveryRows.find((row) => row.key === "fetch");
 assert.equal(fetchRow?.variantLabel, "HTTP fetch");
 
 const httpFetchRows = createSchemaValueRows({
   value: { ...httpFetchValue, unexpected: true },
   schema: strategyFetchSchema,
-  schemaOptions: postingDiscoverySchemaOptions,
+  schemaOptions: discoverySchemaOptions,
   maxDepth: 1,
 });
 assert.equal(

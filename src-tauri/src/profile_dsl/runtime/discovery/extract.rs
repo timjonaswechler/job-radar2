@@ -273,7 +273,7 @@ fn extract_required_string_field(
         } => {
             diagnostics.push(runtime_error(
                 "required_field_missing",
-                "Required postingDiscovery field did not resolve to a non-empty string",
+                "Required discovery field did not resolve to a non-empty string",
                 path,
                 strategy_key,
                 json!({ "itemIndex": item_index }),

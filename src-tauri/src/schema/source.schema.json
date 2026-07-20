@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://job-radar.local/schemas/source.schema.json",
-  "title": "Job Radar Source DSL document",
+  "title": "Job Radar Source schema-v3 document",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "key", "name", "status", "sourceConfig", "selectedAccessPath"],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
     "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
     "status": { "$ref": "profile-dsl/common.schema.json#/$defs/sourceStatus" },
@@ -17,38 +17,29 @@
         { "$ref": "#/$defs/sourceOwnedAccessPath" }
       ]
     },
-    "sourceOverrides": { "$ref": "profile-dsl/overrides.schema.json#/$defs/sourceOverrides" },
+    "accessPaths": {
+      "type": "array",
+      "items": { "$ref": "profile-dsl/fragments.schema.json#/$defs/accessPathFragment" }
+    },
     "sourceSupport": { "$ref": "profile-dsl/common.schema.json#/$defs/supportMetadata" },
     "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }
   },
   "allOf": [
     {
       "if": {
-        "properties": {
-          "selectedAccessPath": {
-            "properties": { "type": { "const": "profile_access_path" } },
-            "required": ["type"]
-          }
-        },
+        "properties": { "selectedAccessPath": { "properties": { "type": { "const": "profile_access_path" } }, "required": ["type"] } },
         "required": ["selectedAccessPath"]
       },
-      "then": {
-        "not": { "required": ["sourceSupport"] }
-      }
+      "then": { "not": { "required": ["sourceSupport"] } }
     },
     {
       "if": {
-        "properties": {
-          "selectedAccessPath": {
-            "properties": { "type": { "const": "source_owned_access_path" } },
-            "required": ["type"]
-          }
-        },
+        "properties": { "selectedAccessPath": { "properties": { "type": { "const": "source_owned_access_path" } }, "required": ["type"] } },
         "required": ["selectedAccessPath"]
       },
       "then": {
         "required": ["sourceSupport"],
-        "not": { "required": ["sourceOverrides"] }
+        "not": { "required": ["accessPaths"] }
       }
     }
   ],
@@ -66,15 +57,15 @@
     "sourceOwnedAccessPath": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "key", "name", "postingDiscovery"],
+      "required": ["type", "key", "name", "discovery"],
       "properties": {
         "type": { "const": "source_owned_access_path" },
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
         "description": { "$ref": "profile-dsl/common.schema.json#/$defs/description" },
         "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/sourceOwnedJsonSchemaObject" },
-        "postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },
-        "postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },
+        "discovery": { "$ref": "profile-dsl/policy.schema.json#/$defs/discoveryStrategySet" },
+        "detail": { "$ref": "profile-dsl/policy.schema.json#/$defs/detailStrategySet" },
         "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }
       }
     }

@@ -8,7 +8,7 @@ For users, adding a Source should require as little integration knowledge as pos
 
 For profile authors, reusable behavior should be assembled from a common declarative vocabulary rather than implemented as ATS-specific Rust. A Source must also be able to specialize any execution-relevant part of its selected Source Profile directly in the same nested document shape. This is necessary because two Sources belonging to the same recruiting-system family can expose different feeds, selectors, bounds, or extraction behavior.
 
-The current Profile DSL already has useful generic capabilities, but Detection, `postingDiscovery`, and `postingDetail` do not yet share one consistent Strategy Set contract. Current Source Overrides are narrower than the intended source-specific specialization model. Discovery also assumes that normalized title and company data are immediately available, although some Sources initially expose only URLs or other inexpensive hints. This can cause guessed URL-derived values to be treated as canonical posting data.
+The current Profile DSL already has useful generic capabilities, but Detection, `discovery`, and `detail` now use the final Policy-bearing Strategy Set contract. Schema-v3 Direct Source Specialization now uses typed keyed fragments at the Source root. Discovery also assumes that normalized title and company data are immediately available, although some Sources initially expose only URLs or other inexpensive hints. This can cause guessed URL-derived values to be treated as canonical posting data.
 
 Without a clearer algebra and compilation model, further catalog work risks becoming a collection of increasingly specific URL patterns, selectors, and backend exceptions rather than a reusable integration system.
 

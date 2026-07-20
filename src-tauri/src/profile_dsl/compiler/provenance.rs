@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashSet};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::profile_dsl::policy::PolicySelectedAccessPath;
+use crate::source::documents::SelectedAccessPath;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -86,7 +86,7 @@ impl OriginTree {
         let Some(path) = value.as_object() else {
             return tree;
         };
-        for phase in ["postingDiscovery", "postingDetail"] {
+        for phase in ["discovery", "detail"] {
             let (Some(step), Some(Self::Object(step_origins))) = (
                 path.get(phase).and_then(Value::as_object),
                 path_origins.get_mut(phase),
@@ -174,7 +174,7 @@ pub(super) fn profile_provenance(
     recorder.finish(true, expected_profile_paths(object))
 }
 
-pub(super) fn source_owned_provenance(selected: &PolicySelectedAccessPath) -> RecordedProvenance {
+pub(super) fn source_owned_provenance(selected: &SelectedAccessPath) -> RecordedProvenance {
     let value =
         serde_json::to_value(selected).expect("typed Source-owned Access Path must serialize");
     let origins = OriginTree::for_access_path(&value, ProvenanceOrigin::SourceOwnedAccessPath);
@@ -211,11 +211,11 @@ fn collect_access_path(value: &Value, origins: &OriginTree, recorder: &mut Prove
         );
         path.pop();
     }
-    for phase in ["postingDiscovery", "postingDetail"] {
+    for phase in ["discovery", "detail"] {
         if let Some(step) = object.get(phase) {
             path.push(field(match phase {
-                "postingDiscovery" => "discovery",
-                "postingDetail" => "detail",
+                "discovery" => "discovery",
+                "detail" => "detail",
                 _ => unreachable!(),
             }));
             collect_step(step, &origin_object[phase], &mut path, recorder);
@@ -392,7 +392,6 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
             "headers",
             "body",
             "timeoutMs",
-            "retry",
             "waits",
             "interactions",
         ]
@@ -534,7 +533,6 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
             "policy",
             "strategies",
             "acceptWhen",
-            "maxAttempts",
             "fields",
             "descriptionText",
         ]
@@ -587,10 +585,7 @@ fn expected_access_path_paths(path: &Map<String, Value>) -> Vec<ProvenancePath> 
         expected_value_paths(schema, &mut segments, DynamicContext::Schema, &mut expected);
         segments.pop();
     }
-    for (authored, canonical) in [
-        ("postingDiscovery", "discovery"),
-        ("postingDetail", "detail"),
-    ] {
+    for (authored, canonical) in [("discovery", "discovery"), ("detail", "detail")] {
         let Some(step) = path.get(authored).and_then(Value::as_object) else {
             continue;
         };

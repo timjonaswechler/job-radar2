@@ -13,37 +13,37 @@ use job_radar_lib::{
     execute_policy_discovery_with_clients_and_context, CompileSourceOutcome, DetailFetchError,
     DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
     DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
-    PolicyDiscoveryStep, PolicySourceDocument, PolicySourceExecutionPlan,
-    PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot, RuntimeCancellation,
-    RuntimeExecutionContext, StrategyPolicy, UnavailableProfileBrowserClient,
+    DiscoveryStep, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    StrategyPolicy, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
 #[test]
 fn final_strategy_set_requires_the_closed_first_accepted_policy() {
     let strategy_set = json!({ "strategies": [] });
-    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+    serde_json::from_value::<DiscoveryStep>(strategy_set)
         .expect_err("a final Strategy Set without Policy must be rejected");
 
     let strategy_set = json!({ "policy": "first_accepted", "strategies": [] });
-    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+    serde_json::from_value::<DiscoveryStep>(strategy_set)
         .expect_err("a raw string Policy must be rejected");
 
     let strategy_set = json!({
         "policy": { "type": "unknown" },
         "strategies": []
     });
-    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+    serde_json::from_value::<DiscoveryStep>(strategy_set)
         .expect_err("an unknown Policy must be rejected");
 
     let strategy_set = json!({
         "policy": { "type": "first_accepted", "extra": true },
         "strategies": []
     });
-    serde_json::from_value::<PolicyDiscoveryStep>(strategy_set)
+    serde_json::from_value::<DiscoveryStep>(strategy_set)
         .expect_err("additional Policy properties must be rejected");
 
-    let strategy_set: PolicyDiscoveryStep = serde_json::from_value(json!({
+    let strategy_set: DiscoveryStep = serde_json::from_value(json!({
         "policy": { "type": "first_accepted" },
         "strategies": []
     }))
@@ -66,14 +66,14 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         profile_source(
             Some(json!([{
                 "key": "main",
-                "postingDiscovery": {
+                "discovery": {
                     "policy": { "type": "first_accepted" },
                     "strategies": [discovery_strategy(
                         "source_added",
                         "https://example.test/discovery/source-added"
                     )]
                 },
-                "postingDetail": { "policy": { "type": "first_accepted" } }
+                "detail": { "policy": { "type": "first_accepted" } }
             }])),
             "main",
         ),
@@ -81,7 +81,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
     );
     assert_plan_policies(&specialized);
     assert_eq!(
-        specialized.discovery.execution.strategies.len(),
+        specialized.discovery.strategies.len(),
         4,
         "a complete Source-added Strategy must retain the inherited Policy"
     );
@@ -89,13 +89,13 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
     let added_path = json!({
         "key": "added",
         "name": "Added path",
-        "postingDiscovery": discovery_step(),
-        "postingDetail": detail_step()
+        "discovery": discovery_step(),
+        "detail": detail_step()
     });
     let added = compile(profile_source(Some(json!([added_path])), "added"), profile);
     assert_plan_policies(&added);
 
-    let source_owned: PolicySourceDocument = serde_json::from_value(json!({
+    let source_owned: SourceDocument = serde_json::from_value(json!({
         "schemaVersion": 3,
         "key": "owned",
         "name": "Owned",
@@ -105,8 +105,8 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
             "type": "source_owned_access_path",
             "key": "owned_path",
             "name": "Owned path",
-            "postingDiscovery": discovery_step(),
-            "postingDetail": detail_step()
+            "discovery": discovery_step(),
+            "detail": detail_step()
         },
         "sourceSupport": {
             "level": "experimental",
@@ -117,10 +117,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
     let CompileSourceOutcome::Compiled {
         source,
         diagnostics,
-    } = compile_source(
-        &source_owned,
-        &PolicySourceProfileRegistrySnapshot::default(),
-    )
+    } = compile_source(&source_owned, &SourceProfileRegistrySnapshot::default())
     else {
         panic!("valid Source-owned final path must compile");
     };
@@ -313,7 +310,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     );
     assert_eq!(
         result.diagnostics.last().unwrap().path,
-        "/postingDiscovery/strategies"
+        "/discovery/strategies"
     );
 
     let detail = ScriptedDetailFetcher::new([
@@ -353,7 +350,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     );
     assert_eq!(
         result.diagnostics.last().unwrap().path,
-        "/postingDetail/strategies"
+        "/detail/strategies"
     );
 }
 
@@ -418,7 +415,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
 }
 
-fn assert_plan_policies(plan: &PolicySourceExecutionPlan) {
+fn assert_plan_policies(plan: &SourceExecutionPlan) {
     assert_eq!(plan.discovery.policy, StrategyPolicy::FirstAccepted);
     assert_eq!(
         plan.detail.as_ref().unwrap().policy,
@@ -426,15 +423,17 @@ fn assert_plan_policies(plan: &PolicySourceExecutionPlan) {
     );
 }
 
-fn compile(
-    source: PolicySourceDocument,
-    profile: PolicySourceProfileDocument,
-) -> PolicySourceExecutionPlan {
+fn compile(source: SourceDocument, profile: SourceProfileDocument) -> SourceExecutionPlan {
     let outcome = compile_source(
         &source,
-        &PolicySourceProfileRegistrySnapshot {
-            profiles: vec![profile],
+        &SourceProfileRegistrySnapshot {
+            profiles: vec![RegistrySourceProfile {
+                origin: "test".into(),
+                path: String::new(),
+                document: profile,
+            }],
             sources: Vec::new(),
+            diagnostics: Vec::new(),
         },
     );
     let CompileSourceOutcome::Compiled {
@@ -448,7 +447,7 @@ fn compile(
     source.execution_plan
 }
 
-fn profile_document() -> PolicySourceProfileDocument {
+fn profile_document() -> SourceProfileDocument {
     serde_json::from_value(json!({
         "schemaVersion": 3,
         "key": "policy_profile",
@@ -461,14 +460,14 @@ fn profile_document() -> PolicySourceProfileDocument {
         "accessPaths": [{
             "key": "main",
             "name": "Main",
-            "postingDiscovery": discovery_step(),
-            "postingDetail": detail_step()
+            "discovery": discovery_step(),
+            "detail": detail_step()
         }]
     }))
     .unwrap()
 }
 
-fn profile_source(access_paths: Option<Value>, path_key: &str) -> PolicySourceDocument {
+fn profile_source(access_paths: Option<Value>, path_key: &str) -> SourceDocument {
     let mut value = json!({
         "schemaVersion": 3,
         "key": "policy_source",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "key": "greenhouse",
   "name": "Greenhouse",
   "kind": "recruiting_system",
@@ -15,33 +15,11 @@
       }
     ]
   },
-  "detect": {
-    "recommendedAccessPathKey": "boards_api",
-    "sourceConfig": {
-      "boardSlug": "{{capture:boardSlug}}"
-    },
-    "keyCandidates": ["{{capture:boardSlug}}"],
-    "nameCandidates": ["{{capture:boardSlug}}"],
-    "inputUrlPatterns": [
-      {
-        "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
-        "captures": ["boardSlug"]
-      },
-      {
-        "pattern": "(?i)^https?://boards-api\\.greenhouse\\.io/v1/boards/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:/(?:jobs|departments|offices|sections).*)?$",
-        "captures": ["boardSlug"]
-      }
-    ],
-    "evidence": [
-      {
-        "kind": "url",
-        "message": "Greenhouse board URLs and Boards API URLs include a reusable board slug."
-      }
-    ]
-  },
   "sourceConfigSchema": {
     "type": "object",
-    "required": ["boardSlug"],
+    "required": [
+      "boardSlug"
+    ],
     "additionalProperties": false,
     "properties": {
       "boardSlug": {
@@ -56,7 +34,7 @@
       "key": "boards_api",
       "name": "Greenhouse Boards API",
       "description": "Discover jobs from GET /v1/boards/{boardSlug}/jobs and load one posting from GET /v1/boards/{boardSlug}/jobs/{jobId}.",
-      "postingDiscovery": {
+      "discovery": {
         "strategies": [
           {
             "key": "jobs_api",
@@ -69,7 +47,9 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
+            "parse": {
+              "type": "json"
+            },
             "select": {
               "type": "json_path",
               "jsonPath": "$.jobs"
@@ -80,7 +60,11 @@
                   "type": "json_path",
                   "jsonPath": "$.title",
                   "cardinality": "one",
-                  "transforms": [{ "type": "trim" }]
+                  "transforms": [
+                    {
+                      "type": "trim"
+                    }
+                  ]
                 },
                 "company": {
                   "type": "template",
@@ -102,19 +86,31 @@
                     "type": "json_path",
                     "jsonPath": "$.id",
                     "cardinality": "one",
-                    "transforms": [{ "type": "to_string" }]
+                    "transforms": [
+                      {
+                        "type": "to_string"
+                      }
+                    ]
                   }
                 }
               }
             },
             "acceptWhen": {
-              "requiredFields": ["title", "company", "url", "postingMeta.jobId"],
+              "requiredFields": [
+                "title",
+                "company",
+                "url",
+                "postingMeta.jobId"
+              ],
               "minResults": 1
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       },
-      "postingDetail": {
+      "detail": {
         "strategies": [
           {
             "key": "job_detail_api",
@@ -127,8 +123,12 @@
               },
               "timeoutMs": 10000
             },
-            "parse": { "type": "json" },
-            "select": { "type": "document" },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "document"
+            },
             "extract": {
               "fields": {
                 "descriptionText": {
@@ -136,8 +136,12 @@
                   "jsonPath": "$.content",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "html_to_text" },
-                    { "type": "normalize_whitespace" }
+                    {
+                      "type": "html_to_text"
+                    },
+                    {
+                      "type": "normalize_whitespace"
+                    }
                   ]
                 }
               }
@@ -146,8 +150,43 @@
               "minDescriptionLength": 20
             }
           }
-        ]
+        ],
+        "policy": {
+          "type": "first_accepted"
+        }
       }
     }
-  ]
+  ],
+  "detection": {
+    "recommendedAccessPathKey": "boards_api",
+    "sourceConfig": {
+      "boardSlug": "{{capture:boardSlug}}"
+    },
+    "keyCandidates": [
+      "{{capture:boardSlug}}"
+    ],
+    "nameCandidates": [
+      "{{capture:boardSlug}}"
+    ],
+    "inputUrlPatterns": [
+      {
+        "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
+        "captures": [
+          "boardSlug"
+        ]
+      },
+      {
+        "pattern": "(?i)^https?://boards-api\\.greenhouse\\.io/v1/boards/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:/(?:jobs|departments|offices|sections).*)?$",
+        "captures": [
+          "boardSlug"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Greenhouse board URLs and Boards API URLs include a reusable board slug."
+      }
+    ]
+  }
 }

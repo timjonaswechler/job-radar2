@@ -1,11 +1,14 @@
+mod support;
+
+use support::{compile_test_source, unwrap_plan};
+
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_detail_with_fetcher, execute_discovery_with_fetcher,
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest,
-    DiscoveryFetchResponse, DiscoveryFetcher, ProfileCompilerSnapshot, SourceDocument,
-    SourceProfileDocument,
+    execute_detail_with_fetcher, execute_discovery_with_fetcher, DetailFetchError,
+    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
+    DiscoveryCandidate, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
+    DiscoveryFetcher, SourceDocument, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -16,11 +19,11 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
 
     let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
         .expect("Greenhouse built-in profile should be a Source Profile DSL document");
-    assert_eq!(profile.schema_version, 2);
+    assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.support.level, job_radar_lib::SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "acme_robotics",
         "name": "Acme Robotics",
         "status": "active",
@@ -35,17 +38,8 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     }))
     .unwrap();
 
-    let compile_result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "acme_robotics",
-    );
-    assert_eq!(compile_result.diagnostics, Vec::new());
-    let plan = compile_result
-        .execution_plan
-        .expect("Greenhouse fixture source should compile");
+    let compile_result = compile_test_source(&source, Some(profile));
+    let plan = unwrap_plan(compile_result);
 
     let fetcher = OfflineFetcher::new([
         (

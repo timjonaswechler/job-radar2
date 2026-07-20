@@ -412,7 +412,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
         _ => {
             diagnostics.push(runtime_error(
                 "unsupported_field_expression",
-                "postingDiscovery runtime supports const, template, sourceConfig, capture, itemField, JSONPath, XML, CSS, and combine field expressions",
+                "discovery runtime supports const, template, sourceConfig, capture, itemField, JSONPath, XML, CSS, and combine field expressions",
                 path,
                 strategy_key,
                 json!({ "itemIndex": item_index }),

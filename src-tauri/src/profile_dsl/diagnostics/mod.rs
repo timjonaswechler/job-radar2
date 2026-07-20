@@ -17,7 +17,7 @@ pub enum DiagnosticCategory {
     Registry,
     /// Profile Compiler / Execution Plan compilation diagnostics emitted while
     /// compiling a concrete Source and its selected Source Profile, Access
-    /// Path, Source Config, and Source Overrides. This is not a Rust compiler
+    /// Path, Source Config, and Direct Source Specialization. This is not a Rust compiler
     /// diagnostic category.
     Compiler,
     Runtime,

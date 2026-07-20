@@ -200,7 +200,8 @@ fn profile_json_with_detail_step(
             },
             "additionalProperties": false
         },
-        "postingDiscovery": {
+        "discovery": {
+            "policy": { "type": "first_accepted" },
             "strategies": [{
                 "key": "fixture_discovery",
                 "fetch": {
@@ -224,12 +225,13 @@ fn profile_json_with_detail_step(
             }]
         }
     });
-    if let Some(detail) = detail {
-        access_path["postingDetail"] = detail;
+    if let Some(mut detail) = detail {
+        detail["policy"] = json!({ "type": "first_accepted" });
+        access_path["detail"] = detail;
     }
 
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": profile_key,
         "name": profile_key,
         "kind": "generic",
@@ -247,6 +249,7 @@ fn posting_json_detail_step(legacy_detail: Value) -> Value {
         .as_str()
         .expect("detail fixture has fetch.url");
     json!({
+        "policy": { "type": "first_accepted" },
         "strategies": [{
             "key": "fixture_detail",
             "fetch": {
@@ -277,7 +280,7 @@ fn profile_source_json(
     source_config: Value,
 ) -> String {
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": source_key,
         "name": source_key,
         "status": "active",

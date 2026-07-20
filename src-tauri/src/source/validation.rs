@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::compiler::{compile_source_execution_plan, ProfileCompilerSnapshot};
+use crate::profile_dsl::compiler::CompileSourceOutcome;
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::source::documents::SourceStatus;
+use crate::source::documents::{SourceDocument, SourceStatus};
 
-/// Derived Source validation state. This is prepared for compiler/registry
-/// integration and must not be persisted as `SourceStatus::Invalid`.
+/// Derived Source validation state. It is computed from the exact authoritative
+/// compiler outcome and is never persisted as a Source lifecycle status.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SourceValidationState {
@@ -28,62 +28,33 @@ pub enum ValidationStateKind {
 }
 
 pub fn derive_source_validation_state(
-    snapshot: &ProfileCompilerSnapshot,
-    source_key: &str,
+    source: &SourceDocument,
+    outcome: &CompileSourceOutcome,
 ) -> SourceValidationState {
-    let Some(source) = snapshot
-        .sources
-        .iter()
-        .find(|source| source.key == source_key)
-    else {
-        return SourceValidationState {
-            source_key: source_key.to_string(),
-            state: ValidationStateKind::Invalid,
-            can_compile: false,
-            can_execute: false,
-            diagnostics: vec![Diagnostic {
-                category: DiagnosticCategory::SourceValidation,
-                code: "source_not_found".to_string(),
-                message: format!(
-                    "Source `{source_key}` was not found while deriving validation state"
-                ),
-                severity: DiagnosticSeverity::Error,
-                path: "".to_string(),
-                strategy_key: None,
-                details: Some(serde_json::json!({ "sourceKey": source_key })),
-            }],
-        };
+    let (can_compile, mut diagnostics) = match outcome {
+        CompileSourceOutcome::Compiled { diagnostics, .. }
+            if !has_error_diagnostics(diagnostics) =>
+        {
+            (true, diagnostics.clone())
+        }
+        CompileSourceOutcome::Compiled { diagnostics, .. }
+        | CompileSourceOutcome::Rejected { diagnostics } => (false, diagnostics.clone()),
     };
-
-    let mut validation_snapshot = snapshot.clone();
-    if let Some(validation_source) = validation_snapshot
-        .sources
-        .iter_mut()
-        .find(|candidate| candidate.key == source_key)
-    {
-        validation_source.status = SourceStatus::Active;
-    }
-
-    let compile_result = compile_source_execution_plan(&validation_snapshot, source_key);
-    let has_errors = compile_result
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error);
-    let can_compile = compile_result.execution_plan.is_some() && !has_errors;
     let can_execute = source.status == SourceStatus::Active && can_compile;
-    let mut diagnostics = compile_result.diagnostics;
+
     if !can_compile {
         diagnostics.push(Diagnostic {
             category: DiagnosticCategory::SourceValidation,
             code: "source_validation_failed".to_string(),
             message: format!(
-                "Source `{source_key}` cannot currently compile into an Execution Plan"
+                "Source `{}` cannot currently compile into an Execution Plan",
+                source.key
             ),
             severity: DiagnosticSeverity::Error,
             path: "".to_string(),
             strategy_key: None,
             details: Some(serde_json::json!({
-                "sourceKey": source_key,
+                "sourceKey": source.key,
                 "diagnosticCodes": diagnostics
                     .iter()
                     .map(|diagnostic| diagnostic.code.clone())
@@ -93,7 +64,7 @@ pub fn derive_source_validation_state(
     }
 
     SourceValidationState {
-        source_key: source_key.to_string(),
+        source_key: source.key.clone(),
         state: if can_compile {
             ValidationStateKind::Valid
         } else {
@@ -103,4 +74,10 @@ pub fn derive_source_validation_state(
         can_execute,
         diagnostics,
     }
+}
+
+fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
 }

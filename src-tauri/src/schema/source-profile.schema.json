@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://job-radar.local/schemas/source-profile.schema.json",
-  "title": "Job Radar Source Profile DSL document",
+  "title": "Job Radar Source Profile schema-v3 document",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "key", "name", "kind", "support", "accessPaths"],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
     "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
     "kind": {
@@ -15,7 +15,7 @@
     },
     "description": { "$ref": "profile-dsl/common.schema.json#/$defs/description" },
     "support": { "$ref": "profile-dsl/common.schema.json#/$defs/supportMetadata" },
-    "detect": { "$ref": "#/$defs/detection" },
+    "detection": { "$ref": "#/$defs/detection" },
     "sourceConfigSchema": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonSchemaObject" },
     "accessPaths": {
       "type": "array",
@@ -27,7 +27,7 @@
     "profileAccessPath": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "name", "postingDiscovery"],
+      "required": ["key", "name", "discovery"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "name": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
@@ -37,8 +37,8 @@
           "type": "array",
           "items": { "$ref": "profile-dsl/common.schema.json#/$defs/supportNote" }
         },
-        "postingDiscovery": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDiscoveryStep" },
-        "postingDetail": { "$ref": "profile-dsl/strategy.schema.json#/$defs/postingDetailStep" },
+        "discovery": { "$ref": "profile-dsl/policy.schema.json#/$defs/discoveryStrategySet" },
+        "detail": { "$ref": "profile-dsl/policy.schema.json#/$defs/detailStrategySet" },
         "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }
       }
     },
@@ -46,50 +46,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "inputUrlPatterns": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/inputUrlPattern" }
-        },
+        "inputUrlPatterns": { "type": "array", "items": { "$ref": "#/$defs/inputUrlPattern" } },
         "recommendedAccessPathKey": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "sourceConfig": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" },
-        "keyCandidates": {
-          "type": "array",
-          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" }
-        },
-        "nameCandidates": {
-          "type": "array",
-          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" }
-        },
-        "httpChecks": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/detectionHttpCheck" }
-        },
-        "browserProbes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/detectionBrowserProbe" }
-        },
-        "evidence": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/detectionEvidence" }
-        }
+        "keyCandidates": { "type": "array", "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" } },
+        "nameCandidates": { "type": "array", "items": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" } },
+        "httpChecks": { "type": "array", "items": { "$ref": "#/$defs/detectionHttpCheck" } },
+        "browserProbes": { "type": "array", "items": { "$ref": "#/$defs/detectionBrowserProbe" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/detectionEvidence" } }
       }
     },
     "inputUrlPattern": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["pattern"],
+      "type": "object", "additionalProperties": false, "required": ["pattern"],
       "properties": {
         "pattern": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
-        "captures": {
-          "type": "array",
-          "items": { "$ref": "profile-dsl/common.schema.json#/$defs/captureKey" }
-        }
+        "captures": { "type": "array", "items": { "$ref": "profile-dsl/common.schema.json#/$defs/captureKey" } }
       }
     },
     "detectionEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "message"],
+      "type": "object", "additionalProperties": false, "required": ["kind", "message"],
       "properties": {
         "kind": { "type": "string", "enum": ["url", "http", "html", "browser"] },
         "message": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
@@ -97,9 +72,7 @@
       }
     },
     "detectionHttpCheck": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["key", "url", "timeoutMs"],
+      "type": "object", "additionalProperties": false, "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "url": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" },
@@ -111,30 +84,20 @@
       }
     },
     "detectionBrowserProbe": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["key", "url", "timeoutMs"],
+      "type": "object", "additionalProperties": false, "required": ["key", "url", "timeoutMs"],
       "properties": {
         "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
         "url": { "$ref": "profile-dsl/common.schema.json#/$defs/templateString" },
         "timeoutMs": { "type": "integer", "minimum": 1 },
-        "waits": {
-          "type": "array",
-          "items": { "$ref": "profile-dsl/fetch.schema.json#/$defs/browserWait" }
-        },
-        "interactions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/detectionBrowserInteraction" }
-        },
+        "waits": { "type": "array", "items": { "$ref": "profile-dsl/fetch.schema.json#/$defs/browserWait" } },
+        "interactions": { "type": "array", "items": { "$ref": "#/$defs/detectionBrowserInteraction" } },
         "htmlContains": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
         "htmlRegex": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
         "evidence": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" }
       }
     },
     "detectionBrowserInteraction": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "selector", "maxCount"],
+      "type": "object", "additionalProperties": false, "required": ["type", "selector", "maxCount"],
       "properties": {
         "type": { "type": "string", "enum": ["click_if_visible", "click_until_gone"] },
         "selector": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },

@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use serde_json::{json, Value};
 
-use super::{AccessPathFragment, OverridableStep, SourceOverrides, SupportLevel};
+use super::{AccessPathFragment, SupportLevel};
 use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 use crate::source_profile::documents::{SourceProfileDocument, SourceProfileKind};
 
@@ -11,7 +11,7 @@ fn simple_reusable_source_profile_fixture_deserializes() {
     let profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
 
-    assert_eq!(profile.schema_version, 2);
+    assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.key, "example_jobs");
     assert_eq!(profile.name, "Example Jobs");
     assert_eq!(profile.kind, SourceProfileKind::Generic);
@@ -28,7 +28,7 @@ fn source_selecting_reusable_access_path_fixture_deserializes() {
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
 
-    assert_eq!(source.schema_version, 2);
+    assert_eq!(source.schema_version, 3);
     assert_eq!(source.key, "example_source");
     assert_eq!(source.status, SourceStatus::Active);
     assert_eq!(
@@ -76,42 +76,10 @@ fn source_owned_access_path_fixture_deserializes() {
 }
 
 #[test]
-fn source_overrides_fixture_deserializes_structurally() {
-    let source_json = read_fixture_value(
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
-    );
-    let overrides_json = source_json
-        .get("sourceOverrides")
-        .cloned()
-        .expect("source fixture should contain overrides");
-
-    let overrides: SourceOverrides = serde_json::from_value(overrides_json.clone())
-        .expect("sourceOverrides fixture should deserialize");
-    let strategy_overrides = overrides
-        .strategy_overrides
-        .as_ref()
-        .expect("fixture should contain strategy overrides");
-
-    assert_eq!(strategy_overrides.len(), 1);
-    assert_eq!(strategy_overrides[0].step, OverridableStep::Discovery);
-    assert_eq!(strategy_overrides[0].strategy_key, "json_api");
-    assert_eq!(
-        strategy_overrides[0]
-            .accept_when
-            .as_ref()
-            .unwrap()
-            .min_results,
-        Some(0)
-    );
-
-    assert_eq!(serde_json::to_value(&overrides).unwrap(), overrides_json);
-}
-
-#[test]
-fn direct_profile_fragments_are_typed_but_dormant_in_source_json() {
+fn direct_profile_fragments_are_typed_and_persisted_in_source_json() {
     let fragments: Vec<AccessPathFragment> = serde_json::from_value(json!([{
         "key": "json_feed",
-        "postingDiscovery": {
+        "discovery": {
             "strategies": [{
                 "key": "json_api",
                 "fetch": { "timeoutMs": 5000 },
@@ -125,21 +93,15 @@ fn direct_profile_fragments_are_typed_but_dormant_in_source_json() {
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments);
-    assert!(
-        serde_json::to_value(&source)
-            .unwrap()
-            .get("accessPaths")
-            .is_none(),
-        "A01 owns activation of persisted direct fragments"
-    );
+    let serialized = serde_json::to_value(&source).unwrap();
+    assert_eq!(serialized["accessPaths"][0]["key"], "json_feed");
 
-    let mut authored = read_fixture_value(
+    let authored = read_fixture_value(
         "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
     );
-    authored["accessPaths"] = json!([{ "key": "json_feed" }]);
-    let error = serde_json::from_value::<SourceDocument>(authored)
-        .expect_err("direct fragments must remain non-authorable before A01");
-    assert!(error.to_string().contains("accessPaths"));
+    let parsed = serde_json::from_value::<SourceDocument>(authored)
+        .expect("schema-v3 direct fragments must be authorable");
+    assert!(parsed.access_paths.is_some());
 }
 
 #[test]
@@ -148,13 +110,13 @@ fn fragment_serde_rejects_structural_null_and_control_fields() {
         json!([{ "key": "json_feed", "description": null }]),
         json!([{
             "key": "json_feed",
-            "postingDiscovery": {
+            "discovery": {
                 "strategies": [{ "key": "json_api", "fetch": { "timeoutMs": null } }]
             }
         }]),
         json!([{
             "key": "json_feed",
-            "postingDiscovery": { "acceptWhen": { "minResults": null } }
+            "discovery": { "acceptWhen": { "minResults": null } }
         }]),
         json!([{ "key": "json_feed", "disabled": true }]),
         json!([{ "key": "json_feed", "placement": "first" }]),
@@ -165,7 +127,7 @@ fn fragment_serde_rejects_structural_null_and_control_fields() {
 
     serde_json::from_value::<Vec<AccessPathFragment>>(json!([{
         "key": "json_feed",
-        "postingDiscovery": {
+        "discovery": {
             "strategies": [{
                 "key": "json_api",
                 "fetch": { "body": { "value": { "literalNull": null } } }

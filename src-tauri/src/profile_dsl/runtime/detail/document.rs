@@ -54,7 +54,7 @@ pub(super) fn parse_response_document<'body>(
         ParseType::Text => {
             diagnostics.push(runtime_error(
                 "unsupported_parse_type",
-                "postingDetail runtime supports JSON, XML, and HTML parse types",
+                "detail runtime supports JSON, XML, and HTML parse types",
                 format!("{base_path}/parse/type"),
                 strategy_key,
                 json!({ "supportedTypes": ["json", "xml", "html"] }),

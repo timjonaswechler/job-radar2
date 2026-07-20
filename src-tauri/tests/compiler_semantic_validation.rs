@@ -1,9 +1,47 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source_execution_plan, Fetch, FieldExpression, ProfileCompilerSnapshot, Select,
-    SourceDocument, SourceProfileDocument, SourceStatus,
+    compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
+    RegistrySourceProfile, Select, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceProfileRegistrySnapshot, SourceStatus,
 };
+
+#[derive(Debug)]
+struct TestCompileResult {
+    execution_plan: Option<SourceExecutionPlan>,
+    diagnostics: job_radar_lib::Diagnostics,
+}
+
+fn compile_test_source(
+    source: &SourceDocument,
+    profile: Option<SourceProfileDocument>,
+) -> TestCompileResult {
+    let registry = SourceProfileRegistrySnapshot {
+        profiles: profile
+            .into_iter()
+            .map(|document| RegistrySourceProfile {
+                origin: "test".into(),
+                path: String::new(),
+                document,
+            })
+            .collect(),
+        sources: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    match compile_source(source, &registry) {
+        CompileSourceOutcome::Compiled {
+            source,
+            diagnostics,
+        } => TestCompileResult {
+            execution_plan: Some(source.execution_plan),
+            diagnostics,
+        },
+        CompileSourceOutcome::Rejected { diagnostics } => TestCompileResult {
+            execution_plan: None,
+            diagnostics,
+        },
+    }
+}
 
 #[test]
 fn compiler_validates_structural_capability_compatibility() {
@@ -23,13 +61,7 @@ fn compiler_validates_structural_capability_compatibility() {
         transforms: None,
     };
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
     assert!(result
@@ -58,13 +90,7 @@ fn compiler_validates_template_variable_namespaces_keys_and_context() {
         *url = "{{postingMeta:missingMeta}}".to_string();
     }
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
     for expected_code in [
@@ -84,87 +110,36 @@ fn compiler_validates_template_variable_namespaces_keys_and_context() {
 }
 
 #[test]
-fn compiler_structurally_validates_source_overrides() {
+fn compiler_validates_capabilities_after_direct_specialization() {
     let profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source
-        .source_overrides
-        .as_mut()
-        .unwrap()
-        .strategy_overrides
-        .as_mut()
-        .unwrap()[0]
-        .strategy_key = "missing_strategy".to_string();
-
-    let unknown_strategy = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
+    source.access_paths = Some(
+        serde_json::from_value::<Vec<AccessPathFragment>>(serde_json::json!([{
+            "key": "json_feed",
+            "discovery": {
+                "strategies": [{
+                    "key": "json_api",
+                    "parse": { "type": "html" }
+                }]
+            }
+        }]))
+        .unwrap(),
     );
 
-    assert_eq!(unknown_strategy.execution_plan, None);
-    assert!(unknown_strategy.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "unknown_strategy_override"
-            && diagnostic.path == "/sourceOverrides/strategyOverrides/0/strategyKey"
-    }));
-
-    let source_with_overrides: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    let mut owned_source: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
-    owned_source.status = SourceStatus::Active;
-    owned_source.source_overrides = source_with_overrides.source_overrides;
-
-    let source_owned_override = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![],
-            sources: vec![owned_source],
-        },
-        "owned_source",
-    );
-
-    assert_eq!(source_owned_override.execution_plan, None);
-    assert!(source_owned_override.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "source_overrides_not_supported_for_source_owned_access_path"
-            && diagnostic.path == "/sourceOverrides"
-    }));
-}
-
-#[test]
-fn compiler_validates_capabilities_after_applying_source_overrides() {
-    let profile: SourceProfileDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
-    let mut source: SourceDocument =
-        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source
-        .source_overrides
-        .as_mut()
-        .unwrap()
-        .strategy_overrides
-        .as_mut()
-        .unwrap()[0]
-        .select = Some(Select::Css {
-        selector: ".job".to_string(),
-    });
-
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
-    assert!(result.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "incompatible_parse_select_capability"
-            && diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"
-            && diagnostic.strategy_key.as_deref() == Some("json_api")
-    }));
+    assert!(
+        result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "incompatible_parse_select_capability"
+                && diagnostic.path == "/accessPaths/0/discovery/strategies/0/select"
+                && diagnostic.strategy_key.as_deref() == Some("json_api")
+        }),
+        "got diagnostics: {:?}",
+        result.diagnostics
+    );
 }
 
 #[test]
@@ -190,13 +165,7 @@ fn compiler_rejects_invalid_profile_schema_before_validating_source_config() {
             serde_json::json!({ "type": "string" }),
         );
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
     assert!(result.diagnostics.iter().any(|diagnostic| {
@@ -215,13 +184,7 @@ fn compiler_validates_required_support_metadata() {
     source.status = SourceStatus::Active;
     source.source_support = None;
 
-    let missing_source_support = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![],
-            sources: vec![source],
-        },
-        "owned_source",
-    );
+    let missing_source_support = compile_test_source(&source, None);
 
     assert_eq!(missing_source_support.execution_plan, None);
     assert!(missing_source_support.diagnostics.iter().any(|diagnostic| {
@@ -250,23 +213,17 @@ fn compiler_reports_duplicate_strategy_keys_within_each_step() {
         .strategies
         .push(duplicate_detail);
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
     assert!(result.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "duplicate_strategy_key"
-            && diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/1/key"
+            && diagnostic.path == "/accessPaths/0/discovery/strategies/1/key"
             && diagnostic.strategy_key.as_deref() == Some("json_api")
     }));
     assert!(result.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "duplicate_strategy_key"
-            && diagnostic.path == "/accessPaths/0/postingDetail/strategies/1/key"
+            && diagnostic.path == "/accessPaths/0/detail/strategies/1/key"
             && diagnostic.strategy_key.as_deref() == Some("detail_api")
     }));
 }
@@ -280,13 +237,7 @@ fn compiler_reports_duplicate_reusable_access_path_keys() {
     let duplicate = profile.access_paths[0].clone();
     profile.access_paths.push(duplicate);
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
+    let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
     let diagnostic = result

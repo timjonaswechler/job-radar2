@@ -24,7 +24,7 @@ use crate::{
             discovery::{ExecutionPlanDiscoveryFields, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
-        policy::{PolicySourceExecutionPlan, StrategyPolicy},
+        policy::StrategyPolicy,
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -232,16 +232,16 @@ where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
-        return cancelled_discovery_result("/postingDiscovery", None);
+        return cancelled_discovery_result("/discovery", None);
     }
 
     if plan.discovery.strategies.is_empty() {
         return DiscoveryExecutionResult {
             candidates: Vec::new(),
             diagnostics: vec![runtime_error(
-                "posting_discovery_strategy_missing",
-                "postingDiscovery does not contain an executable strategy",
-                "/postingDiscovery/strategies",
+                "discovery_strategy_missing",
+                "discovery does not contain an executable strategy",
+                "/discovery/strategies",
                 None,
                 json!({}),
             )],
@@ -266,7 +266,7 @@ where
             diagnostics.extend(attempt.result.diagnostics);
             push_runtime_execution_cancelled(
                 &mut diagnostics,
-                format!("/postingDiscovery/strategies/{strategy_index}"),
+                format!("/discovery/strategies/{strategy_index}"),
                 Some(&strategy.key),
             );
             return DiscoveryExecutionResult {
@@ -286,8 +286,8 @@ where
 
     diagnostics.push(runtime_error(
         "fallback_exhausted",
-        "postingDiscovery fallback strategies were exhausted without an accepted result",
-        "/postingDiscovery/strategies",
+        "discovery fallback strategies were exhausted without an accepted result",
+        "/discovery/strategies",
         None,
         json!({}),
     ));
@@ -298,7 +298,7 @@ where
 }
 
 pub async fn execute_policy_discovery_with_clients_and_context<F, B>(
-    plan: &PolicySourceExecutionPlan,
+    plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
@@ -315,7 +315,7 @@ where
 }
 
 async fn execute_policy_first_accepted<F, B>(
-    policy_plan: &PolicySourceExecutionPlan,
+    plan: &SourceExecutionPlan,
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
@@ -325,16 +325,15 @@ where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
-        return cancelled_discovery_result("/postingDiscovery", None);
+        return cancelled_discovery_result("/discovery", None);
     }
-    let plan = policy_plan.execution_plan();
     if plan.discovery.strategies.is_empty() {
         return DiscoveryExecutionResult {
             candidates: Vec::new(),
             diagnostics: vec![runtime_error(
-                "posting_discovery_strategy_missing",
-                "postingDiscovery does not contain an executable strategy",
-                "/postingDiscovery/strategies",
+                "discovery_strategy_missing",
+                "discovery does not contain an executable strategy",
+                "/discovery/strategies",
                 None,
                 json!({}),
             )],
@@ -359,7 +358,7 @@ where
             diagnostics.extend(attempt.result.diagnostics);
             push_runtime_execution_cancelled(
                 &mut diagnostics,
-                format!("/postingDiscovery/strategies/{strategy_index}"),
+                format!("/discovery/strategies/{strategy_index}"),
                 Some(&strategy.key),
             );
             return DiscoveryExecutionResult {
@@ -378,8 +377,8 @@ where
 
     diagnostics.push(runtime_error(
         "fallback_exhausted",
-        "postingDiscovery fallback strategies were exhausted without an accepted result",
-        "/postingDiscovery/strategies",
+        "discovery fallback strategies were exhausted without an accepted result",
+        "/discovery/strategies",
         None,
         json!({}),
     ));

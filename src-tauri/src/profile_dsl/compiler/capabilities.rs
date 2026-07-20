@@ -12,7 +12,7 @@ pub(super) fn validate_capability_compatibility(
     diagnostics: &mut Diagnostics,
 ) {
     for (index, strategy) in discovery.strategies.iter().enumerate() {
-        let strategy_path = format!("{base_path}/postingDiscovery/strategies/{index}");
+        let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_select_compatibility(
             strategy.parse.parse_type,
             &strategy.select,
@@ -30,7 +30,7 @@ pub(super) fn validate_capability_compatibility(
     }
     if let Some(detail) = detail {
         for (index, strategy) in detail.strategies.iter().enumerate() {
-            let strategy_path = format!("{base_path}/postingDetail/strategies/{index}");
+            let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_select_compatibility(
                 strategy.parse.parse_type,
                 &strategy.select,

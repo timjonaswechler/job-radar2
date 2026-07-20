@@ -105,7 +105,7 @@ pub(super) fn write_schott_smoke_source_file(app_data_dir: &Path) -> Result<(), 
 
 fn schott_smoke_source_json() -> Value {
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": SCHOTT_SOURCE_KEY,
         "name": SCHOTT_SOURCE_NAME,
         "status": "active",

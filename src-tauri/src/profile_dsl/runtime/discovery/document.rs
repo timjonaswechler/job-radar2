@@ -53,7 +53,7 @@ pub(super) fn parse_response_document<'body>(
         ParseType::Text => {
             diagnostics.push(runtime_error(
                 "unsupported_parse_type",
-                "postingDiscovery runtime supports JSON, XML, and HTML parse types",
+                "discovery runtime supports JSON, XML, and HTML parse types",
                 format!("{base_path}/parse/type"),
                 strategy_key,
                 json!({ "supportedTypes": ["json", "xml", "html"] }),
@@ -153,7 +153,7 @@ pub(super) fn select_items<'doc, 'body>(
                 Some(_) => {
                     diagnostics.push(runtime_error(
                         "json_path_select_not_array",
-                        "JSONPath selector must resolve to an array for postingDiscovery",
+                        "JSONPath selector must resolve to an array for discovery",
                         format!("{base_path}/select/jsonPath"),
                         strategy_key,
                         json!({ "jsonPath": json_path }),

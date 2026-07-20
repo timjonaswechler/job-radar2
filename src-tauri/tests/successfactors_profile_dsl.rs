@@ -1,11 +1,15 @@
+mod support;
+
+use support::{compile_test_source, unwrap_plan};
+
 use std::{collections::BTreeMap, fs, future::Future, path::Path, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_detail_with_fetcher, execute_discovery_with_fetcher,
-    DetailFetchError, DetailFetchRequest, DetailFetchResponse, DetailFetcher,
-    DetailPostingOccurrence, DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate,
-    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
-    ProfileCompilerSnapshot, SourceDocument, SourceProfileDocument, SupportLevel,
+    execute_detail_with_fetcher, execute_discovery_with_fetcher, DetailFetchError,
+    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence,
+    DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate, DiscoveryFetchError,
+    DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher, SourceDocument,
+    SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -18,11 +22,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     assert_detects_named_successfactors_source_config_captures(&profile_value);
     let profile: SourceProfileDocument = serde_json::from_value(profile_value)
         .expect("SAP SuccessFactors built-in profile should be a Source Profile DSL document");
-    assert_eq!(profile.schema_version, 2);
+    assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.support.level, SupportLevel::Stable);
 
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "acme_successfactors",
         "name": "Acme Robotics",
         "status": "active",
@@ -38,17 +42,8 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     }))
     .unwrap();
 
-    let compile_result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "acme_successfactors",
-    );
-    assert_eq!(compile_result.diagnostics, Vec::new());
-    let plan = compile_result
-        .execution_plan
-        .expect("SAP SuccessFactors fixture source should compile");
+    let compile_result = compile_test_source(&source, Some(profile));
+    let plan = unwrap_plan(compile_result);
 
     let fetcher = OfflineFetcher::new([
         (
@@ -168,7 +163,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
 }
 
 fn assert_detects_named_successfactors_source_config_captures(profile: &Value) {
-    let captures = profile["detect"]["inputUrlPatterns"]
+    let captures = profile["detection"]["inputUrlPatterns"]
         .as_array()
         .into_iter()
         .flatten()

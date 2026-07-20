@@ -121,7 +121,7 @@ fn compiled_discovery_runtime_posts_rendered_text_body() {
 #[test]
 fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_jobs",
         "name": "Example Jobs",
         "kind": "generic",
@@ -138,7 +138,8 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "json_api",
                     "fetch": {
@@ -160,7 +161,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_source",
         "name": "Example Source",
         "status": "active",
@@ -172,15 +173,8 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
         }
     }))
     .unwrap();
-    let compile_result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
-    assert_eq!(compile_result.diagnostics, Vec::new());
-    let plan = compile_result.execution_plan.unwrap();
+    let compile_result = compile_test_source(&source, Some(profile));
+    let plan = unwrap_plan(compile_result);
     let fetcher = FakeFetcher::default();
 
     let result = block_on(execute_discovery_with_fetcher(&plan, &fetcher));
@@ -189,7 +183,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_body_template_failed");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/fetch/body"
+        "/discovery/strategies/0/fetch/body"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -226,7 +220,7 @@ fn compiled_discovery_runtime_reports_get_body_combination() {
     assert_runtime_diagnostic(&result.diagnostics[0], "unsupported_http_body_for_method");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDiscovery/strategies/0/fetch/body"
+        "/discovery/strategies/0/fetch/body"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),

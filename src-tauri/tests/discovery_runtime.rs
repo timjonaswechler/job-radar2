@@ -1,14 +1,17 @@
+mod support;
+
+use support::{compile_test_source, unwrap_plan};
+
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_discovery_with_clients,
-    execute_discovery_with_clients_and_context, execute_discovery_with_fetcher, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse,
-    DiscoveryFetcher, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileCompilerSnapshot, RequestBody,
-    RuntimeCancellation, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument,
+    execute_discovery_with_clients, execute_discovery_with_clients_and_context,
+    execute_discovery_with_fetcher, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
+    DiscoveryFetchError, DiscoveryFetchRequest, DiscoveryFetchResponse, DiscoveryFetcher,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -171,7 +174,7 @@ fn compiled_discovery_plan_with_strategy(
     strategy.extend(extra_strategy_fields);
 
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_jobs",
         "name": "Example Jobs",
         "kind": "generic",
@@ -188,14 +191,15 @@ fn compiled_discovery_plan_with_strategy(
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [Value::Object(strategy)]
             }
         }]
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_source",
         "name": "Example Source",
         "status": "active",
@@ -208,15 +212,8 @@ fn compiled_discovery_plan_with_strategy(
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result.execution_plan.expect("fixture plan should compile")
+    let result = compile_test_source(&source, Some(profile));
+    unwrap_plan(result)
 }
 
 fn compiled_browser_discovery_plan(
@@ -226,7 +223,7 @@ fn compiled_browser_discovery_plan(
     page_url: &'static str,
 ) -> SourceExecutionPlan {
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "browser_jobs",
         "name": "Browser Jobs",
         "kind": "generic",
@@ -243,7 +240,8 @@ fn compiled_browser_discovery_plan(
         "accessPaths": [{
             "key": "browser_page",
             "name": "Browser page",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "browser_html",
                     "fetch": {
@@ -277,7 +275,7 @@ fn compiled_browser_discovery_plan(
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "browser_source",
         "name": "Browser Source",
         "status": "active",
@@ -290,22 +288,12 @@ fn compiled_browser_discovery_plan(
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "browser_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result
-        .execution_plan
-        .expect("browser fixture plan should compile")
+    unwrap_plan(compile_test_source(&source, Some(profile)))
 }
 
 fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "owned_source",
         "name": "Owned Source",
         "status": "active",
@@ -324,7 +312,8 @@ fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
                 "properties": { "feedUrl": { "type": "string" } },
                 "additionalProperties": false
             },
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "owned_json_api",
                     "fetch": {
@@ -342,17 +331,7 @@ fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: Vec::new(),
-            sources: vec![source],
-        },
-        "owned_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result
-        .execution_plan
-        .expect("source-owned fixture plan should compile")
+    unwrap_plan(compile_test_source(&source, None))
 }
 
 fn default_select() -> Value {

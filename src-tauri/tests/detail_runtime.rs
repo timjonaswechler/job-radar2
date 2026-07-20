@@ -1,13 +1,16 @@
+mod support;
+
+use support::{compile_test_source, unwrap_plan};
+
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    compile_source_execution_plan, execute_detail_with_clients,
-    execute_detail_with_clients_and_context, execute_detail_with_fetcher, DetailFetchError,
-    DetailFetchRequest, DetailFetchResponse, DetailFetcher, DetailPostingOccurrence, Diagnostic,
-    DiagnosticCategory, DiagnosticSeverity, ExecutionPlanBrowserInteraction,
-    ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ProfileCompilerSnapshot, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
+    execute_detail_with_clients, execute_detail_with_clients_and_context,
+    execute_detail_with_fetcher, DetailFetchError, DetailFetchRequest, DetailFetchResponse,
+    DetailFetcher, DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, RequestBody, RuntimeCancellation, RuntimeExecutionContext,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
@@ -230,7 +233,7 @@ fn compiled_detail_runtime_reports_invalid_where_regex_diagnostic() {
     assert_runtime_diagnostic(&result.diagnostics[0], "where_pattern_invalid");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDetail/strategies/0/where/0/pattern"
+        "/detail/strategies/0/where/0/pattern"
     );
     assert_eq!(
         result.diagnostics[0].strategy_key.as_deref(),
@@ -274,10 +277,10 @@ fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
     assert_runtime_diagnostic(&result.diagnostics[0], "description_too_short");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDetail/acceptWhen/minDescriptionLength"
+        "/detail/acceptWhen/minDescriptionLength"
     );
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
-    assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");
+    assert_eq!(result.diagnostics[1].path, "/detail/strategies");
 }
 
 #[test]
@@ -317,7 +320,7 @@ fn compiled_detail_runtime_reports_unsupported_max_error_ratio() {
     );
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDetail/strategies/0/acceptWhen/maxErrorRatio"
+        "/detail/strategies/0/acceptWhen/maxErrorRatio"
     );
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
 }
@@ -552,7 +555,7 @@ fn compiled_detail_runtime_reports_missing_empty_and_too_short_description_diagn
     assert_runtime_diagnostic(&empty_result.diagnostics[0], "description_empty");
     assert_eq!(
         empty_result.diagnostics[0].path,
-        "/postingDetail/strategies/0/extract/fields/descriptionText"
+        "/detail/strategies/0/extract/fields/descriptionText"
     );
 
     let too_short_plan = compiled_json_detail_plan(
@@ -798,7 +801,7 @@ fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
     assert_runtime_diagnostic(&result.diagnostics[0], "browser_interaction_failed");
     assert_eq!(
         result.diagnostics[0].path,
-        "/postingDetail/strategies/0/fetch/interactions/0"
+        "/detail/strategies/0/fetch/interactions/0"
     );
 }
 
@@ -1105,7 +1108,7 @@ fn compiled_detail_plan_with_fetch(
     }
 
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_jobs",
         "name": "Example Jobs",
         "kind": "generic",
@@ -1125,7 +1128,8 @@ fn compiled_detail_plan_with_fetch(
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "json_api",
                     "fetch": {
@@ -1149,12 +1153,15 @@ fn compiled_detail_plan_with_fetch(
                     }
                 }]
             },
-            "postingDetail": { "strategies": [strategy] }
+            "detail": {
+                "policy": { "type": "first_accepted" },
+                "strategies": [strategy]
+            }
         }]
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "example_source",
         "name": "Example Source",
         "status": "active",
@@ -1170,28 +1177,24 @@ fn compiled_detail_plan_with_fetch(
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "example_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result.execution_plan.expect("fixture plan should compile")
+    let result = compile_test_source(&source, Some(profile));
+    unwrap_plan(result)
 }
 
 fn compiled_detail_plan_with_strategies(
     step_accept_when: Option<Value>,
     strategies: Vec<Value>,
 ) -> SourceExecutionPlan {
-    let mut detail = json!({ "strategies": strategies });
+    let mut detail = json!({
+        "policy": { "type": "first_accepted" },
+        "strategies": strategies
+    });
     if let Some(accept_when) = step_accept_when {
         detail["acceptWhen"] = accept_when;
     }
 
     let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "fallback_detail_jobs",
         "name": "Fallback Detail Jobs",
         "kind": "generic",
@@ -1211,7 +1214,8 @@ fn compiled_detail_plan_with_strategies(
         "accessPaths": [{
             "key": "json_feed",
             "name": "JSON feed",
-            "postingDiscovery": {
+            "discovery": {
+                "policy": { "type": "first_accepted" },
                 "strategies": [{
                     "key": "json_api",
                     "fetch": {
@@ -1234,12 +1238,12 @@ fn compiled_detail_plan_with_strategies(
                     }
                 }]
             },
-            "postingDetail": detail
+            "detail": detail
         }]
     }))
     .unwrap();
     let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "key": "fallback_detail_source",
         "name": "Fallback Detail Source",
         "status": "active",
@@ -1255,15 +1259,8 @@ fn compiled_detail_plan_with_strategies(
     }))
     .unwrap();
 
-    let result = compile_source_execution_plan(
-        &ProfileCompilerSnapshot {
-            profiles: vec![profile],
-            sources: vec![source],
-        },
-        "fallback_detail_source",
-    );
-    assert_eq!(result.diagnostics, Vec::new());
-    result.execution_plan.expect("fixture plan should compile")
+    let result = compile_test_source(&source, Some(profile));
+    unwrap_plan(result)
 }
 
 fn posting_occurrence(

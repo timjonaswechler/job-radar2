@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/fragments.schema.json",
+  "title": "Job Radar direct Source specialization fragments",
+  "$defs": {
+    "accessPathFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "name": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "sourceConfigSchema": { "$ref": "common.schema.json#/$defs/sourceOwnedJsonSchemaObject" },
+        "discovery": { "$ref": "#/$defs/discoveryStepFragment" },
+        "detail": { "$ref": "#/$defs/detailStepFragment" }
+      }
+    },
+    "discoveryStepFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": { "$ref": "policy.schema.json#/$defs/strategyPolicy" },
+        "strategies": { "type": "array", "items": { "$ref": "#/$defs/discoveryStrategyFragment" } },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "detailStepFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": { "$ref": "policy.schema.json#/$defs/strategyPolicy" },
+        "strategies": { "type": "array", "items": { "$ref": "#/$defs/detailStrategyFragment" } },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "discoveryStrategyFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "fetch": { "$ref": "#/$defs/fetchFragment" },
+        "pagination": { "$ref": "#/$defs/paginationFragment" },
+        "parse": { "$ref": "#/$defs/parseFragment" },
+        "select": { "$ref": "#/$defs/selectFragment" },
+        "where": { "type": "array", "items": { "$ref": "select.schema.json#/$defs/filter" } },
+        "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
+        "extract": { "$ref": "#/$defs/discoveryExtractionFragment" },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "detailStrategyFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/technicalKey" },
+        "fetch": { "$ref": "#/$defs/fetchFragment" },
+        "parse": { "$ref": "#/$defs/parseFragment" },
+        "select": { "$ref": "#/$defs/selectFragment" },
+        "where": { "type": "array", "items": { "$ref": "select.schema.json#/$defs/filter" } },
+        "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
+        "match": { "$ref": "#/$defs/matchFragment" },
+        "extract": { "$ref": "#/$defs/detailExtractionFragment" },
+        "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "fetchFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["http", "browser"] },
+        "method": { "type": "string", "enum": ["GET", "POST"] },
+        "url": { "$ref": "common.schema.json#/$defs/templateString" },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "body": { "$ref": "#/$defs/requestBodyFragment" },
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "waits": { "type": "array", "items": { "$ref": "fetch.schema.json#/$defs/browserWait" } },
+        "interactions": { "type": "array", "items": { "$ref": "fetch.schema.json#/$defs/browserInteraction" } }
+      }
+    },
+    "requestBodyFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["json", "text", "form"] },
+        "value": {},
+        "fields": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "paginationFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["page", "offset_limit", "cursor", "sitemap"] },
+        "pageParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "parameterLocation": { "type": "string", "enum": ["query", "json_body"] },
+        "firstPage": { "type": "integer", "minimum": 0 },
+        "pageSizeParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "pageSize": { "type": "integer", "minimum": 1 },
+        "totalPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "offsetParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "limitParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "startOffset": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1 },
+        "cursorParam": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "nextCursorPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "childSitemapSelector": { "$ref": "#/$defs/selectFragment" },
+        "postingUrlSelector": { "$ref": "#/$defs/selectFragment" },
+        "limits": { "$ref": "pagination.schema.json#/$defs/limits" }
+      }
+    },
+    "parseFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["json", "xml", "html", "text"] },
+        "charset": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "selectFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["document", "json_path", "xml_element", "xml_text", "css", "sitemap_urls"] },
+        "jsonPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "element": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "textPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "urlPattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "captureRuleFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "from": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "pattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "fieldExpressionFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["const", "template", "source_config", "posting_meta", "capture", "item_field", "json_path", "xml_text", "xml_element", "css_text", "css_attribute", "combine"] },
+        "value": {},
+        "template": { "type": "string" },
+        "key": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "jsonPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "textPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "element": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "attribute": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/combinePartFragment" } },
+        "join": { "type": "string" },
+        "cardinality": { "type": "string", "enum": ["one", "first", "optional", "all"] },
+        "transforms": { "type": "array", "items": { "$ref": "transform.schema.json#/$defs/transform" } }
+      }
+    },
+    "combinePartFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "value": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "discoveryExtractionFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "fields": { "$ref": "#/$defs/discoveryFieldsFragment" } }
+    },
+    "discoveryFieldsFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "title": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "company": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "url": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "locations": { "oneOf": [{ "$ref": "#/$defs/fieldExpressionFragment" }, { "type": "array", "items": { "$ref": "#/$defs/fieldExpressionFragment" } }] },
+        "postingMeta": { "type": "object", "additionalProperties": { "$ref": "#/$defs/fieldExpressionFragment" } },
+        "descriptionText": { "$ref": "#/$defs/fieldExpressionFragment" }
+      }
+    },
+    "detailExtractionFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "fields": { "$ref": "#/$defs/detailFieldsFragment" } }
+    },
+    "detailFieldsFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "descriptionText": { "$ref": "#/$defs/fieldExpressionFragment" } }
+    },
+    "matchFragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "left": { "$ref": "#/$defs/fieldExpressionFragment" },
+        "right": { "$ref": "#/$defs/fieldExpressionFragment" }
+      }
+    }
+  }
+}

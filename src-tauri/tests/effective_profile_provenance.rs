@@ -1,14 +1,14 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, CompileSourceOutcome, CompiledSourceProvenance, PolicyAccessPathFragment,
-    PolicySourceDocument, PolicySourceProfileDocument, PolicySourceProfileRegistrySnapshot,
-    ProvenanceEntry, ProvenanceOrigin, ProvenancePathSegment,
+    compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceProvenance,
+    ProvenanceEntry, ProvenanceOrigin, ProvenancePathSegment, RegistrySourceProfile,
+    SourceDocument, SourceProfileDocument, SourceProfileRegistrySnapshot,
 };
 
 #[test]
 fn base_and_direct_terminals_have_exact_origins_without_metadata() {
-    let mut profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let job_radar_lib::Fetch::Http { method, body, .. } =
         &mut profile.access_paths[0].discovery.strategies[0].fetch
     else {
@@ -21,7 +21,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
         }))
         .unwrap(),
     );
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed",
         "sourceConfigSchema": {
@@ -31,7 +31,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
             },
             "required": ["language"]
         },
-        "postingDiscovery": {
+        "discovery": {
             "policy": { "type": "first_accepted" },
             "strategies": [{
                 "key": "json_api",
@@ -165,7 +165,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
 
 #[test]
 fn locator_only_fragment_is_a_noop_and_null_and_empty_object_are_terminals() {
-    let mut profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let job_radar_lib::Fetch::Http { headers, .. } =
         &mut profile.access_paths[0].discovery.strategies[0].fetch
     else {
@@ -177,7 +177,7 @@ fn locator_only_fragment_is_a_noop_and_null_and_empty_object_are_terminals() {
         .fields
         .company =
         serde_json::from_value(serde_json::json!({ "type": "const", "value": null })).unwrap();
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{ "key": "json_feed" }])));
 
     let provenance = compiled_provenance(&source, profile);
@@ -213,11 +213,11 @@ fn locator_only_fragment_is_a_noop_and_null_and_empty_object_are_terminals() {
 
 #[test]
 fn equivalent_dynamic_map_insertion_orders_serialize_identically() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let base_source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let base_source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let provenances = [
-        r#"[{"key":"json_feed","postingDiscovery":{"strategies":[{"key":"json_api","fetch":{"headers":{"z-last":"z","a-first":"a"}}}]}}]"#,
-        r#"[{"postingDiscovery":{"strategies":[{"fetch":{"headers":{"a-first":"a","z-last":"z"}},"key":"json_api"}]},"key":"json_feed"}]"#,
+        r#"[{"key":"json_feed","discovery":{"strategies":[{"key":"json_api","fetch":{"headers":{"z-last":"z","a-first":"a"}}}]}}]"#,
+        r#"[{"discovery":{"strategies":[{"fetch":{"headers":{"a-first":"a","z-last":"z"}},"key":"json_api"}]},"key":"json_feed"}]"#,
     ]
     .map(|json| {
         let mut source = base_source.clone();
@@ -232,7 +232,7 @@ fn equivalent_dynamic_map_insertion_orders_serialize_identically() {
 
 #[test]
 fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
-    let mut profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     profile.access_paths[0]
         .source_config_schema
         .as_mut()
@@ -260,7 +260,7 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
         }]
     }))
     .unwrap();
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let provenance = compiled_provenance(&source, profile);
     let entries = profile_entries(&provenance);
 
@@ -344,8 +344,8 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
 
 #[test]
 fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let mut source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.source_config.remove("language");
     let base_strategy =
         serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
@@ -356,12 +356,12 @@ fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
-            "postingDiscovery": { "strategies": [added_strategy] }
+            "discovery": { "strategies": [added_strategy] }
         },
         {
             "key": "unselected_added",
             "name": "Unselected added",
-            "postingDiscovery": {
+            "discovery": {
                 "policy": { "type": "first_accepted" },
                 "strategies": [path_strategy]
             }
@@ -393,10 +393,10 @@ fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
 
 #[test]
 fn source_owned_provenance_is_distinct_all_owned_and_minimized() {
-    let source: PolicySourceDocument = read_fixture("valid/source-owned-access-path.json");
+    let source: SourceDocument = read_fixture("valid/source-owned-access-path.json");
     let CompileSourceOutcome::Compiled {
         source: compiled, ..
-    } = compile_source(&source, &PolicySourceProfileRegistrySnapshot::default())
+    } = compile_source(&source, &SourceProfileRegistrySnapshot::default())
     else {
         panic!("Source-owned fixture must compile")
     };
@@ -422,8 +422,8 @@ fn provenance_serialization_is_typed_stable_and_rejects_unknown_shape() {
     let fixture: CompiledSourceProvenance = serde_json::from_value(fixture_value.clone()).unwrap();
     assert_eq!(serde_json::to_value(fixture).unwrap(), fixture_value);
 
-    let profile: PolicySourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: PolicySourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
+    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let first = compiled_provenance(&source, profile.clone());
     let second = compiled_provenance(&source, profile);
     assert_eq!(
@@ -446,12 +446,17 @@ fn provenance_serialization_is_typed_stable_and_rejects_unknown_shape() {
 }
 
 fn compiled_provenance(
-    source: &PolicySourceDocument,
-    profile: PolicySourceProfileDocument,
+    source: &SourceDocument,
+    profile: SourceProfileDocument,
 ) -> CompiledSourceProvenance {
-    let registry = PolicySourceProfileRegistrySnapshot {
-        profiles: vec![profile],
+    let registry = SourceProfileRegistrySnapshot {
+        profiles: vec![RegistrySourceProfile {
+            origin: "test".into(),
+            path: String::new(),
+            document: profile,
+        }],
         sources: vec![],
+        diagnostics: Vec::new(),
     };
     let outcome = compile_source(source, &registry);
     let CompileSourceOutcome::Compiled { source, .. } = outcome else {
@@ -492,7 +497,7 @@ fn map_key(key: &str) -> ProvenancePathSegment {
     ProvenancePathSegment::MapKey { key: key.into() }
 }
 
-fn fragments(value: serde_json::Value) -> Vec<PolicyAccessPathFragment> {
+fn fragments(value: serde_json::Value) -> Vec<AccessPathFragment> {
     serde_json::from_value(value).expect("valid direct fragments")
 }
 
@@ -500,35 +505,5 @@ fn read_fixture<T: serde::de::DeserializeOwned>(name: &str) -> T {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/source-profile-dsl")
         .join(name);
-    let mut value: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
-    add_policy(&mut value);
-    if let Some(object) = value.as_object_mut() {
-        object.remove("sourceOverrides");
-    }
-    serde_json::from_value(value).unwrap()
-}
-
-fn add_policy(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(object) => {
-            if object
-                .get("strategies")
-                .is_some_and(serde_json::Value::is_array)
-            {
-                object
-                    .entry("policy")
-                    .or_insert_with(|| serde_json::json!({ "type": "first_accepted" }));
-            }
-            for child in object.values_mut() {
-                add_policy(child);
-            }
-        }
-        serde_json::Value::Array(values) => {
-            for child in values {
-                add_policy(child);
-            }
-        }
-        _ => {}
-    }
+    serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }

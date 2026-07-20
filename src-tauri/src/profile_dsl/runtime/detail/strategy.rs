@@ -19,7 +19,7 @@ where
     F: DetailFetcher + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let base_path = format!("/postingDetail/strategies/{strategy_index}");
+    let base_path = format!("/detail/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());
     let mut diagnostics = Vec::new();
 
@@ -106,7 +106,7 @@ where
             Some(false) => {
                 diagnostics.push(runtime_error(
                     "where_condition_not_matched",
-                    "postingDetail where filters rejected the selected detail document",
+                    "detail where filters rejected the selected detail document",
                     format!("{base_path}/where"),
                     strategy_key.as_deref(),
                     json!({}),
@@ -134,7 +134,7 @@ where
         if !description.failed {
             diagnostics.push(runtime_error(
                 "description_empty",
-                "postingDetail descriptionText did not resolve to non-empty text",
+                "detail descriptionText did not resolve to non-empty text",
                 &description_path,
                 strategy_key.as_deref(),
                 json!({}),
@@ -178,7 +178,7 @@ fn match_detail_document<'doc, 'body>(
     if let Some(key) = missing_posting_meta_key(&field_match.right, posting) {
         diagnostics.push(runtime_error(
             "posting_meta_missing",
-            format!("postingDetail match requires missing postingMeta `{key}`"),
+            format!("detail match requires missing postingMeta `{key}`"),
             format!("{base_path}/match/right"),
             strategy_key,
             json!({ "postingMetaKey": key }),
@@ -210,7 +210,7 @@ fn match_detail_document<'doc, 'body>(
         _ => {
             diagnostics.push(runtime_error(
                 "detail_match_unsupported_selection",
-                "postingDetail match requires a JSON array or XML element collection selected by the strategy",
+                "detail match requires a JSON array or XML element collection selected by the strategy",
                 format!("{base_path}/match"),
                 strategy_key,
                 json!({}),
@@ -370,7 +370,7 @@ fn finish_detail_matches<'doc, 'body, T>(
         0 => {
             diagnostics.push(runtime_error(
                 "detail_match_missing",
-                "postingDetail match found no detail item for the selected posting",
+                "detail match found no detail item for the selected posting",
                 format!("{base_path}/match"),
                 strategy_key,
                 json!({}),
@@ -382,7 +382,7 @@ fn finish_detail_matches<'doc, 'body, T>(
             diagnostics.push(runtime_error(
                 "detail_match_multiple",
                 format!(
-                    "postingDetail match found {count} detail items for the selected posting; expected exactly one"
+                    "detail match found {count} detail items for the selected posting; expected exactly one"
                 ),
                 format!("{base_path}/match"),
                 strategy_key,
