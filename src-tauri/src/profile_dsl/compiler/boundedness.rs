@@ -7,7 +7,7 @@
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
-    DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits,
+    DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits, PhaseLimits,
 };
 
 use super::compiler_error;
@@ -21,6 +21,15 @@ pub(super) fn validate_boundedness(
     diagnostics: &mut Diagnostics,
 ) {
     validate_discovery_strategy_list(discovery, &base_path, diagnostics);
+    validate_phase_limits(
+        discovery.limits,
+        &format!("{base_path}/discovery/limits"),
+        diagnostics,
+        discovery
+            .strategies
+            .iter()
+            .any(|strategy| matches!(strategy.fetch, Fetch::Browser { .. })),
+    );
 
     for (index, strategy) in discovery.strategies.iter().enumerate() {
         let strategy_path = format!("{base_path}/discovery/strategies/{index}");
@@ -42,6 +51,15 @@ pub(super) fn validate_boundedness(
 
     if let Some(detail) = detail {
         validate_detail_strategy_list(detail, &base_path, diagnostics);
+        validate_phase_limits(
+            detail.limits,
+            &format!("{base_path}/detail/limits"),
+            diagnostics,
+            detail
+                .strategies
+                .iter()
+                .any(|strategy| matches!(strategy.fetch, Fetch::Browser { .. })),
+        );
         for (index, strategy) in detail.strategies.iter().enumerate() {
             let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_fetch_bounds(
@@ -51,6 +69,71 @@ pub(super) fn validate_boundedness(
                 diagnostics,
             );
         }
+    }
+}
+
+fn validate_phase_limits(
+    limits: Option<PhaseLimits>,
+    path: &str,
+    diagnostics: &mut Diagnostics,
+    has_browser: bool,
+) {
+    let Some(limits) = limits else { return };
+    let fields = [
+        (
+            "maxStrategyAttempts",
+            limits.max_strategy_attempts,
+            PhaseLimits::BACKEND.max_strategy_attempts,
+        ),
+        (
+            "maxRequests",
+            limits.max_requests,
+            PhaseLimits::BACKEND.max_requests,
+        ),
+        (
+            "maxProducedItems",
+            limits.max_produced_items,
+            PhaseLimits::BACKEND.max_produced_items,
+        ),
+        (
+            "maxDurationMs",
+            limits.max_duration_ms,
+            PhaseLimits::BACKEND.max_duration_ms,
+        ),
+        ("maxPages", limits.max_pages, PhaseLimits::BACKEND.max_pages),
+        (
+            "maxBrowserActions",
+            limits.max_browser_actions,
+            PhaseLimits::BACKEND.max_browser_actions,
+        ),
+        (
+            "maxFanOut",
+            limits.max_fan_out,
+            PhaseLimits::BACKEND.max_fan_out,
+        ),
+    ];
+    for (field, value, ceiling) in fields {
+        if value == 0 || value > ceiling {
+            diagnostics.push(compiler_error(
+                "phase_limit_out_of_bounds",
+                format!(
+                    "{field} must be positive and may not exceed the backend ceiling of {ceiling}"
+                ),
+                format!("{path}/{field}"),
+                serde_json::json!({ "value": value, "backendCeiling": ceiling }),
+            ));
+        }
+    }
+    if has_browser
+        && limits.max_duration_ms
+            < crate::profile_dsl::runtime::allowance::BROWSER_TEARDOWN_RESERVE_MS
+    {
+        diagnostics.push(compiler_error(
+            "browser_phase_duration_below_teardown_reserve",
+            format!("maxDurationMs must be at least {} when a Strategy uses Browser acquisition", crate::profile_dsl::runtime::allowance::BROWSER_TEARDOWN_RESERVE_MS),
+            format!("{path}/maxDurationMs"),
+            serde_json::json!({ "value": limits.max_duration_ms, "minimum": crate::profile_dsl::runtime::allowance::BROWSER_TEARDOWN_RESERVE_MS }),
+        ));
     }
 }
 

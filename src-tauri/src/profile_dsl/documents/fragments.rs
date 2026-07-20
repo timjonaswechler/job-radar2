@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::profile_dsl::documents::{
     Acceptance, BrowserInteraction, BrowserWait, Cardinality, Filter, HttpMethod, JsonSchemaObject,
-    PaginationLimits, PaginationParameterLocation, Transform,
+    PaginationLimits, PaginationParameterLocation, PhaseLimitsFragment, Transform,
 };
 use crate::profile_dsl::policy::StrategyPolicy;
 
@@ -61,6 +61,12 @@ pub struct DiscoveryStepFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
+    pub limits: Option<PhaseLimitsFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
     pub accept_when: Option<Acceptance>,
 }
 
@@ -79,6 +85,12 @@ pub struct DetailStepFragment {
         deserialize_with = "non_null"
     )]
     pub strategies: Option<Vec<DetailStrategyFragment>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub limits: Option<PhaseLimitsFragment>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

@@ -24,7 +24,7 @@ use crate::profile_dsl::execution_plan::ExecutionPlanAccessPath;
 use crate::source::documents::{SelectedAccessPath, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 
-use super::source_live::SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY;
+use super::source_live::SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS;
 use super::CheckFingerprint;
 
 const SOURCE_BEHAVIOR: &str = "source_behavior";
@@ -470,25 +470,25 @@ fn push_tail(
         fingerprints,
         "behavior_version",
         "profile_compiler",
-        &"profile-compiler/v1",
+        &"profile-compiler/v2",
     )?;
     push_component(
         fingerprints,
         "behavior_version",
         "profile_runtime",
-        &"profile-runtime/v1",
+        &"profile-runtime/v2",
     )?;
     push_component(
         fingerprints,
         "behavior_version",
         "immutable_globals",
-        &"immutable-globals/v1",
+        &"immutable-globals/v2",
     )?;
     push_component(
         fingerprints,
         "immutable_global_behavior",
-        "source_live_check_pagination_smoke_budget",
-        &SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY,
+        "source_live_check_cumulative_discovery_request_limit",
+        &SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
     )?;
     push_component(
         fingerprints,
@@ -565,9 +565,9 @@ mod tests {
                 .map(|fingerprint| fingerprint.sha256.as_deref().unwrap())
                 .collect::<Vec<_>>(),
             vec![
-                "62b87dac46bef72f5be2e8b667f32755afc2562424c85ff0941066688e9bdbfb",
-                "a5523ff20d04022a31586d7b0432899404581aee1ea351625a07a20972f644a3",
-                "d57a8b4d6d00d08520160c4a54f8ce9ed62a9e0521fd5e43a9c51de784eb1eba",
+                "e02bd10379e8b2c45eeba9eb4f2c009ee0005bc335ebc095a963b323dee866ef",
+                "87c21df84de6816bd31c901e0eacc2312eb87ecab4abecba966214ad09fb9f1c",
+                "abc26b6b4b33c915142507eac77fbb317fa7d8a1b583ef40d53dec8edae84bef",
                 "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
                 "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb",
                 "b22646e2d439028e428060950a29865e51636e26d33b5ee8ef8e7606df51a987",

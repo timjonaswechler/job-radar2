@@ -274,17 +274,59 @@ where
         ));
     }
 
-    let result = tokio::select! {
-        result = fetcher.fetch(request) => Some(result),
-        _ = context.cancelled() => None,
-    };
-    let Some(result) = result else {
+    if context
+        .debit(AllowanceCharge {
+            requests: 1,
+            pages: u64::from(context.page_request()),
+            ..AllowanceCharge::default()
+        })
+        .is_err()
+    {
+        return Ok(None);
+    }
+
+    if context.is_cancelled() {
         return Err(TypedCancellation::strategy(
             RuntimePhase::Discovery,
             strategy_index,
             strategy_key.expect("compiled strategy has a key"),
             CancellationOperation::Fetch,
         ));
+    }
+
+    enum FetchWait<T> {
+        Completed(T),
+        Cancelled,
+        Deadline,
+    }
+    let result = tokio::select! {
+        biased;
+        _ = context.cancelled() => FetchWait::Cancelled,
+        result = fetcher.fetch(request) => FetchWait::Completed(result),
+        _ = context.deadline_reached() => FetchWait::Deadline,
+    };
+    let result = match result {
+        FetchWait::Completed(result) => result,
+        FetchWait::Cancelled => {
+            return Err(TypedCancellation::strategy(
+                RuntimePhase::Discovery,
+                strategy_index,
+                strategy_key.expect("compiled strategy has a key"),
+                CancellationOperation::Fetch,
+            ))
+        }
+        FetchWait::Deadline => {
+            if context.is_cancelled() {
+                return Err(TypedCancellation::strategy(
+                    RuntimePhase::Discovery,
+                    strategy_index,
+                    strategy_key.expect("compiled strategy has a key"),
+                    CancellationOperation::Fetch,
+                ));
+            }
+            context.mark_deadline();
+            return Ok(None);
+        }
     };
 
     match result {
@@ -339,6 +381,34 @@ where
                 return Ok(None);
             }
         };
+
+    if context.is_cancelled() {
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Discovery,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Browser,
+        ));
+    }
+    if context
+        .debit(AllowanceCharge {
+            requests: 1,
+            pages: u64::from(context.page_request()),
+            ..AllowanceCharge::default()
+        })
+        .is_err()
+    {
+        return Ok(None);
+    }
+
+    if context.is_cancelled() {
+        return Err(TypedCancellation::strategy(
+            RuntimePhase::Discovery,
+            strategy_index,
+            strategy_key.expect("compiled strategy has a key"),
+            CancellationOperation::Browser,
+        ));
+    }
 
     let request = ProfileBrowserFetchRequest {
         url: rendered_url.clone(),

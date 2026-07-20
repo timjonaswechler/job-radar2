@@ -26,9 +26,7 @@ where
             total_path,
             limits,
         } => {
-            let configured_max_requests = limits.max_requests.unwrap_or(1);
-            let (max_requests, constrained_by_execution_budget) =
-                context.discovery_request_limit(configured_max_requests);
+            let max_requests = limits.max_requests.unwrap_or(1);
             let mut candidates = Vec::new();
             for request_index in 0..max_requests {
                 if context.is_cancelled() {
@@ -70,6 +68,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    context,
                 ) {
                     break;
                 }
@@ -87,9 +86,7 @@ where
                         base_path,
                         strategy_key,
                         "page",
-                        configured_max_requests,
                         max_requests,
-                        constrained_by_execution_budget,
                     );
                 }
             }
@@ -104,9 +101,7 @@ where
             total_path,
             limits,
         } => {
-            let configured_max_requests = limits.max_requests.unwrap_or(1);
-            let (max_requests, constrained_by_execution_budget) =
-                context.discovery_request_limit(configured_max_requests);
+            let max_requests = limits.max_requests.unwrap_or(1);
             let mut candidates = Vec::new();
             let mut highest_total_count = None;
             for request_index in 0..max_requests {
@@ -149,6 +144,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    context,
                 ) {
                     break;
                 }
@@ -162,9 +158,7 @@ where
                         base_path,
                         strategy_key,
                         "offset_limit",
-                        configured_max_requests,
                         max_requests,
-                        constrained_by_execution_budget,
                     );
                 }
             }
@@ -176,9 +170,7 @@ where
             next_cursor_path,
             limits,
         } => {
-            let configured_max_requests = limits.max_requests.unwrap_or(1);
-            let (max_requests, constrained_by_execution_budget) =
-                context.discovery_request_limit(configured_max_requests);
+            let max_requests = limits.max_requests.unwrap_or(1);
             let mut candidates = Vec::new();
             let mut seen_cursors = HashSet::new();
             let mut cursor = None::<String>;
@@ -219,6 +211,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    context,
                 ) {
                     break;
                 }
@@ -242,9 +235,7 @@ where
                         base_path,
                         strategy_key,
                         "cursor",
-                        configured_max_requests,
                         max_requests,
-                        constrained_by_execution_budget,
                     );
                     break;
                 }
@@ -260,10 +251,9 @@ where
         } => {
             let mut candidates = Vec::new();
             let mut queue = VecDeque::from([(None::<String>, 0_u64)]);
+            let mut seen_children = HashSet::new();
             let mut request_count = 0_u64;
-            let configured_max_requests = limits.max_requests.unwrap_or(1);
-            let (max_requests, constrained_by_execution_budget) =
-                context.discovery_request_limit(configured_max_requests);
+            let max_requests = limits.max_requests.unwrap_or(1);
             let max_depth = limits.max_depth.unwrap_or(0);
 
             while let Some((url_override, depth)) = queue.pop_front() {
@@ -276,13 +266,12 @@ where
                         base_path,
                         strategy_key,
                         "sitemap",
-                        configured_max_requests,
                         max_requests,
-                        constrained_by_execution_budget,
                     );
                     break;
                 }
 
+                let page_context = context.with_page_request(true);
                 let response = match &url_override {
                     Some(url) => {
                         fetch_strategy_document_at_url(
@@ -296,7 +285,7 @@ where
                             strategy_key,
                             strategy_index,
                             diagnostics,
-                            context,
+                            page_context,
                         )
                         .await?
                     }
@@ -313,7 +302,7 @@ where
                             strategy_key,
                             strategy_index,
                             diagnostics,
-                            context,
+                            page_context,
                         )
                         .await?
                     }
@@ -358,6 +347,7 @@ where
                         base_path,
                         strategy_key,
                         diagnostics,
+                        context,
                     ) {
                         break;
                     }
@@ -374,6 +364,27 @@ where
                         let child_urls = text_items_to_urls(child_items);
                         if depth < max_depth {
                             for child_url in child_urls {
+                                if context.is_cancelled() {
+                                    queue.clear();
+                                    break;
+                                }
+                                if !seen_children.insert(child_url.clone()) {
+                                    continue;
+                                }
+                                if context
+                                    .debit(AllowanceCharge {
+                                        fan_out: 1,
+                                        ..AllowanceCharge::default()
+                                    })
+                                    .is_err()
+                                {
+                                    queue.clear();
+                                    break;
+                                }
+                                if context.is_cancelled() {
+                                    queue.clear();
+                                    break;
+                                }
                                 queue.push_back((Some(child_url), depth + 1));
                             }
                         } else if !child_urls.is_empty() {
@@ -399,31 +410,15 @@ fn push_request_limit_diagnostic(
     base_path: &str,
     strategy_key: Option<&str>,
     pagination_type: &str,
-    configured_max_requests: u64,
-    effective_max_requests: u64,
-    constrained_by_execution_budget: bool,
+    max_requests: u64,
 ) {
-    if constrained_by_execution_budget {
-        diagnostics.push(runtime_info(
-            "discovery_request_budget_reached",
-            "Posting discovery stopped at the caller execution budget",
-            format!("{base_path}/executionBudget/maxRequestsPerStrategy"),
-            strategy_key,
-            json!({
-                "configuredMaxRequests": configured_max_requests,
-                "effectiveMaxRequests": effective_max_requests,
-                "paginationType": pagination_type
-            }),
-        ));
-    } else {
-        diagnostics.push(runtime_warning(
-            "pagination_max_requests_reached",
-            "Pagination stopped after reaching maxRequests",
-            format!("{base_path}/pagination/limits/maxRequests"),
-            strategy_key,
-            json!({ "maxRequests": effective_max_requests, "paginationType": pagination_type }),
-        ));
-    }
+    diagnostics.push(runtime_warning(
+        "pagination_max_requests_reached",
+        "Pagination stopped after reaching maxRequests",
+        format!("{base_path}/pagination/limits/maxRequests"),
+        strategy_key,
+        json!({ "maxRequests": max_requests, "paginationType": pagination_type }),
+    ));
 }
 
 fn pagination_cancellation(strategy_index: usize, strategy_key: Option<&str>) -> TypedCancellation {
@@ -443,26 +438,35 @@ fn append_page_candidates(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    context: RuntimeExecutionContext<'_>,
 ) -> bool {
-    let Some(max_items) = max_items else {
-        candidates.extend(page_candidates);
-        return false;
-    };
-
     for candidate in page_candidates {
-        if candidates.len() as u64 >= max_items {
-            diagnostics.push(runtime_warning(
-                "pagination_max_items_reached",
-                "Pagination stopped accumulating candidates after reaching maxItems",
-                format!("{base_path}/pagination/limits/maxItems"),
-                strategy_key,
-                json!({ "maxItems": max_items, "paginationType": pagination_type }),
-            ));
+        if context.is_cancelled() {
+            return true;
+        }
+        if let Some(max_items) = max_items {
+            if candidates.len() as u64 >= max_items {
+                diagnostics.push(runtime_warning(
+                    "pagination_max_items_reached",
+                    "Pagination stopped accumulating candidates after reaching maxItems",
+                    format!("{base_path}/pagination/limits/maxItems"),
+                    strategy_key,
+                    json!({ "maxItems": max_items, "paginationType": pagination_type }),
+                ));
+                return true;
+            }
+        }
+        if context
+            .debit(AllowanceCharge {
+                produced_items: 1,
+                ..AllowanceCharge::default()
+            })
+            .is_err()
+        {
             return true;
         }
         candidates.push(candidate);
     }
-
     false
 }
 

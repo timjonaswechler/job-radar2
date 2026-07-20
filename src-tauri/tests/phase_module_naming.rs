@@ -13,11 +13,15 @@ fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
         "sourceConfig": {},
         "discovery": {
             "policy": { "type": "first_accepted" },
-            "strategies": []
+            "strategies": [],
+            "limits": backend_limits(),
+            "limitsAuthored": false
         },
         "detail": {
             "policy": { "type": "first_accepted" },
-            "strategies": []
+            "strategies": [],
+            "limits": backend_limits(),
+            "limitsAuthored": false
         }
     }))
     .expect("a compiled plan must deserialize with final phase names");
@@ -50,4 +54,16 @@ fn compiled_plan_uses_only_final_phase_names_and_retains_policy() {
         "strategies": []
     });
     assert!(serde_json::from_value::<SourceExecutionPlan>(old_names).is_err());
+}
+
+fn backend_limits() -> serde_json::Value {
+    json!({
+        "maxStrategyAttempts": 50,
+        "maxRequests": 1000,
+        "maxProducedItems": 100000,
+        "maxDurationMs": 120000,
+        "maxPages": 1000,
+        "maxBrowserActions": 50,
+        "maxFanOut": 100000
+    })
 }

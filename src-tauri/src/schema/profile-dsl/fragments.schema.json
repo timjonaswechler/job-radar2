@@ -21,6 +21,7 @@
       "properties": {
         "policy": { "$ref": "policy.schema.json#/$defs/strategyPolicy" },
         "strategies": { "type": "array", "items": { "$ref": "#/$defs/discoveryStrategyFragment" } },
+        "limits": { "$ref": "#/$defs/phaseLimitsFragment" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
       }
     },
@@ -30,7 +31,22 @@
       "properties": {
         "policy": { "$ref": "policy.schema.json#/$defs/strategyPolicy" },
         "strategies": { "type": "array", "items": { "$ref": "#/$defs/detailStrategyFragment" } },
+        "limits": { "$ref": "#/$defs/phaseLimitsFragment" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
+      }
+    },
+    "phaseLimitsFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "maxStrategyAttempts": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "maxRequests": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "maxProducedItems": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maxDurationMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
+        "maxPages": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "maxBrowserActions": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "maxFanOut": { "type": "integer", "minimum": 1, "maximum": 100000 }
       }
     },
     "discoveryStrategyFragment": {

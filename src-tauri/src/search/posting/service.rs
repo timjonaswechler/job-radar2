@@ -7,7 +7,7 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
             execute_detail, DetailFetcher, DetailPostingOccurrence, ManagedProfileBrowserClient,
-            ProfileBrowserClient, ReqwestDetailFetcher, RuntimeExecutionContext,
+            PhaseCompletion, ProfileBrowserClient, ReqwestDetailFetcher, RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -251,7 +251,13 @@ impl<'a> JobPostingService<'a> {
             let result_diagnostics =
                 with_posting_source_context(result.diagnostics, &posting_source);
 
-            if let Some(description_text) = result.description_text {
+            if matches!(
+                result.report.as_ref().map(|report| &report.completion),
+                Some(PhaseCompletion::Accepted)
+            ) {
+                let Some(description_text) = result.description_text else {
+                    unreachable!("accepted Detail completion must carry its typed payload")
+                };
                 diagnostics.extend(result_diagnostics);
                 sqlx::query(
                     "UPDATE job_postings

@@ -32,6 +32,90 @@ impl From<CompileSourceOutcome> for TestCompileResult {
 }
 
 #[test]
+fn phase_limits_resolve_to_backend_ceiling_and_authored_values_can_only_tighten() {
+    let result = compile_profile_value(simple_profile_value());
+    let plan = result.execution_plan.expect("omitted limits compile");
+    assert_eq!(plan.discovery.limits, job_radar_lib::PhaseLimits::BACKEND);
+    assert!(!plan.discovery.limits_authored);
+
+    let mut profile = simple_profile_value();
+    profile["accessPaths"][0]["discovery"]["limits"] = phase_limits(7);
+    let result = compile_profile_value(profile);
+    let plan = result.execution_plan.expect("tightened limits compile");
+    assert_eq!(plan.discovery.limits.max_requests, 7);
+    assert!(plan.discovery.limits_authored);
+}
+
+#[test]
+fn compiler_rejects_above_ceiling_and_inherited_limit_raises() {
+    let mut profile = simple_profile_value();
+    profile["accessPaths"][0]["discovery"]["limits"] = phase_limits(1_001);
+    let result = compile_profile_value(profile);
+    assert!(result.execution_plan.is_none());
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "phase_limit_out_of_bounds"
+            && diagnostic.path.ends_with("/discovery/limits/maxRequests")));
+
+    let mut profile = simple_profile_value();
+    profile["accessPaths"][0]["discovery"]["limits"] = phase_limits(4);
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source["accessPaths"] =
+        json!([{ "key": "json_feed", "discovery": { "limits": { "maxRequests": 5 } } }]);
+    let result = compile_profile_and_source_values(profile, source);
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.code
+        == "phase_limit_cannot_raise_inherited"
+        && diagnostic.path == "/accessPaths/0/discovery/limits/maxRequests"));
+}
+
+#[test]
+fn partial_direct_limit_fragment_inherits_backend_values_and_tightens_one_dimension() {
+    let profile = simple_profile_value();
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source["accessPaths"] =
+        json!([{ "key": "json_feed", "discovery": { "limits": { "maxRequests": 3 } } }]);
+    let result = compile_profile_and_source_values(profile, source);
+    let limits = result
+        .execution_plan
+        .unwrap_or_else(|| panic!("partial tightening compiles: {:?}", result.diagnostics))
+        .discovery
+        .limits;
+    assert_eq!(limits.max_requests, 3);
+    assert_eq!(limits.max_produced_items, 100_000);
+}
+
+#[test]
+fn browser_phase_duration_must_preserve_the_two_second_teardown_reserve() {
+    let mut profile = simple_profile_value();
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
+        "mode": "browser",
+        "url": "{{sourceConfig:feedUrl}}",
+        "timeoutMs": 10000
+    });
+    profile["accessPaths"][0]["discovery"]["limits"] = json!({
+        "maxStrategyAttempts": 50,
+        "maxRequests": 1000,
+        "maxProducedItems": 100000,
+        "maxDurationMs": 1999,
+        "maxPages": 1000,
+        "maxBrowserActions": 50,
+        "maxFanOut": 100000
+    });
+
+    let result = compile_profile_value(profile);
+
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "browser_phase_duration_below_teardown_reserve"
+            && diagnostic.path.ends_with("/discovery/limits/maxDurationMs")
+    }));
+}
+
+#[test]
 fn compiler_diagnoses_missing_http_fetch_timeout() {
     let mut profile = simple_profile_value();
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
@@ -344,6 +428,18 @@ fn assert_compiler_error(result: &TestCompileResult, expected_code: &str, expect
         diagnostic.details.is_some(),
         "diagnostic should carry machine-readable details: {diagnostic:?}"
     );
+}
+
+fn phase_limits(max_requests: u64) -> Value {
+    json!({
+        "maxStrategyAttempts": 50,
+        "maxRequests": max_requests,
+        "maxProducedItems": 100000,
+        "maxDurationMs": 120000,
+        "maxPages": 1000,
+        "maxBrowserActions": 50,
+        "maxFanOut": 100000
+    })
 }
 
 fn simple_profile_value() -> Value {

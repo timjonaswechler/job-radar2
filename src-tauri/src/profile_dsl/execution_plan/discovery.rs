@@ -8,6 +8,7 @@ use crate::profile_dsl::documents::extract::{FieldExpression, ListFieldExpressio
 use crate::profile_dsl::documents::select::{Captures, Filter, Select};
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::Parse;
+use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
 
 use super::capabilities::{
@@ -20,6 +21,8 @@ use super::capabilities::{
 pub struct ExecutionPlanDiscoveryStep {
     pub policy: StrategyPolicy,
     pub strategies: Vec<ExecutionPlanDiscoveryStrategy>,
+    pub limits: PhaseLimits,
+    pub limits_authored: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
 }
@@ -80,6 +83,8 @@ pub(crate) fn compile_discovery_step(
                 compile_discovery_strategy(strategy, &format!("{path}/strategies/{index}"))
             })
             .collect::<Result<Vec<_>, _>>()?,
+        limits: step.limits.unwrap_or(PhaseLimits::BACKEND),
+        limits_authored: step.limits.is_some(),
         accept_when: step.accept_when.clone(),
     })
 }

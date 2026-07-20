@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashSet};
 use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::AccessPathFragment;
+use crate::profile_dsl::documents::{AccessPathFragment, PhaseLimits};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::provenance::{self, OriginTree, ProvenanceOrigin, RecordedProvenance};
@@ -381,6 +381,21 @@ fn merge_phase_step(
                 diagnostics,
             );
             (Value::Array(values), OriginTree::Keyed(origins))
+        } else if field == "limits" {
+            let backend =
+                serde_json::to_value(PhaseLimits::BACKEND).expect("backend limits serialize");
+            let inherited = effective.get(field).unwrap_or(&backend);
+            validate_tightened_phase_limits(
+                inherited,
+                fragment_value,
+                &format!("{path}/limits"),
+                diagnostics,
+            );
+            merge_value(
+                Some(inherited),
+                effective_origins.get(field),
+                fragment_value,
+            )
         } else {
             merge_value(
                 effective.get(field),
@@ -395,6 +410,37 @@ fn merge_phase_step(
         Value::Object(effective),
         OriginTree::Object(effective_origins),
     )
+}
+
+fn validate_tightened_phase_limits(
+    inherited: &Value,
+    fragment: &Value,
+    path: &str,
+    diagnostics: &mut Diagnostics,
+) {
+    let Some(fragment) = fragment.as_object() else {
+        return;
+    };
+    let inherited = inherited
+        .as_object()
+        .expect("complete phase limits serialize as an object");
+    for (field, value) in fragment {
+        let Some(value) = value.as_u64() else {
+            continue;
+        };
+        let inherited_value = inherited
+            .get(field)
+            .and_then(Value::as_u64)
+            .expect("inherited phase limit exists");
+        if value > inherited_value {
+            diagnostics.push(compiler_error(
+                "phase_limit_cannot_raise_inherited",
+                format!("{field} may only tighten the inherited limit of {inherited_value}"),
+                format!("{path}/{field}"),
+                serde_json::json!({ "value": value, "inheritedLimit": inherited_value }),
+            ));
+        }
+    }
 }
 
 fn merge_value(

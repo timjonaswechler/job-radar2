@@ -11,10 +11,10 @@ use crate::profile_dsl::compiler::{CompileSourceOutcome, CompiledSource};
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::profile_dsl::documents::JsonObject;
+use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
     execute_detail, execute_discovery, DetailExecutionResult, DetailFetcher,
-    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryExecutionBudget, DiscoveryFetcher,
+    DetailPostingOccurrence, DiscoveryCandidate, DiscoveryFetcher, PhaseCompletion,
     ProfileBrowserClient, ReqwestDetailFetcher, ReqwestDiscoveryFetcher, RuntimeExecutionContext,
     UnavailableProfileBrowserClient,
 };
@@ -36,7 +36,7 @@ pub use activation::{
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
-pub(crate) const SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY: u64 = 1;
+pub(crate) const SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS: u64 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -184,9 +184,10 @@ where
 
     if let Some(compiled) = prepared.compiled() {
         let execution_plan = &compiled.execution_plan;
-        let discovery_context = RuntimeExecutionContext::uncancellable().with_discovery_budget(
-            DiscoveryExecutionBudget::new(SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY),
-        );
+        let discovery_context = RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
+            max_requests: SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
+            ..execution_plan.discovery.limits
+        });
         let discovery_result = tauri::async_runtime::block_on(execute_discovery(
             execution_plan,
             discovery_fetcher,
@@ -207,6 +208,14 @@ where
             "candidateCount".to_string(),
             serde_json::json!(candidate_count),
         );
+        if let Some(report) = &discovery_result.report {
+            details.insert(
+                "discoveryExecutionReport".to_string(),
+                serde_json::to_value(report).map_err(|error| {
+                    format!("Discovery report could not be serialized: {error}")
+                })?,
+            );
+        }
         diagnostics.extend(discovery_result.diagnostics);
 
         if acceptable_candidate_count == 0 {
@@ -226,6 +235,14 @@ where
                     browser,
                     RuntimeExecutionContext::uncancellable(),
                 ));
+                if let Some(report) = &detail_result.report {
+                    details.insert(
+                        "detailExecutionReport".to_string(),
+                        serde_json::to_value(report).map_err(|error| {
+                            format!("Detail report could not be serialized: {error}")
+                        })?,
+                    );
+                }
                 let detail_passed = is_acceptable_detail_result(&detail_result);
                 details.insert(
                     "detailPassed".to_string(),
@@ -367,8 +384,8 @@ fn source_live_check_details_placeholders() -> JsonObject {
         serde_json::Value::String("bounded_smoke".to_string()),
     );
     details.insert(
-        "maxPaginationRequestsPerStrategy".to_string(),
-        serde_json::json!(SOURCE_LIVE_CHECK_MAX_PAGINATION_REQUESTS_PER_STRATEGY),
+        "maxDiscoveryRequests".to_string(),
+        serde_json::json!(SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS),
     );
     details.insert("detailChecked".to_string(), serde_json::Value::Bool(false));
     details.insert("detailPassed".to_string(), serde_json::Value::Null);
@@ -393,7 +410,10 @@ fn detail_occurrence_from_candidate(candidate: &DiscoveryCandidate) -> DetailPos
 }
 
 fn is_acceptable_detail_result(result: &DetailExecutionResult) -> bool {
-    result
+    matches!(
+        result.report.as_ref().map(|report| &report.completion),
+        Some(PhaseCompletion::Accepted)
+    ) && result
         .description_text
         .as_ref()
         .is_some_and(|description_text| !description_text.trim().is_empty())

@@ -154,13 +154,37 @@ where
         strategy_key.as_deref(),
         &mut diagnostics,
     );
+    if !accepted {
+        return StrategyExecution {
+            diagnostics,
+            completion: StrategyAttemptCompletion::Rejected,
+        };
+    }
+    if context.is_cancelled() {
+        return StrategyExecution {
+            diagnostics,
+            completion: StrategyAttemptCompletion::Cancelled(TypedCancellation::strategy(
+                RuntimePhase::Detail,
+                strategy_index,
+                strategy_key
+                    .as_deref()
+                    .expect("compiled strategy has a key"),
+                CancellationOperation::Phase,
+            )),
+        };
+    }
+    if let Err(stop) = context.debit(AllowanceCharge {
+        produced_items: 1,
+        ..AllowanceCharge::default()
+    }) {
+        return StrategyExecution {
+            diagnostics,
+            completion: StrategyAttemptCompletion::Stopped(stop),
+        };
+    }
     StrategyExecution {
         diagnostics,
-        completion: if accepted {
-            StrategyAttemptCompletion::Accepted(description)
-        } else {
-            StrategyAttemptCompletion::Rejected
-        },
+        completion: StrategyAttemptCompletion::Accepted(description),
     }
 }
 
