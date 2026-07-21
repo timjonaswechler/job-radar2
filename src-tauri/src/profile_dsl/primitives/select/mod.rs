@@ -240,21 +240,41 @@ pub struct SelectExecutionError {
     pub message: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectedDocumentType {
+    Any,
+    Json,
+    Xml,
+    Html,
+}
+
+pub const fn selected_document_is_compatible(
+    document_type: ParseType,
+    required: SelectedDocumentType,
+) -> bool {
+    matches!(
+        (document_type, required),
+        (_, SelectedDocumentType::Any)
+            | (ParseType::Json, SelectedDocumentType::Json)
+            | (ParseType::Xml, SelectedDocumentType::Xml)
+            | (ParseType::Html, SelectedDocumentType::Html)
+    )
+}
+
 pub fn compile_select(
     authored: &Select,
     context: SelectCompileContext,
 ) -> Result<CompiledSelect, CompileSelectError> {
     let kind = select_kind(authored);
-    let compatible = matches!(
-        (context.document_type, kind),
-        (_, SelectKind::Document)
-            | (ParseType::Json, SelectKind::JsonPath)
-            | (
-                ParseType::Xml,
-                SelectKind::XmlElement | SelectKind::XmlText | SelectKind::SitemapUrls
-            )
-            | (ParseType::Html, SelectKind::Css)
-    );
+    let required_document = match kind {
+        SelectKind::Document => SelectedDocumentType::Any,
+        SelectKind::JsonPath => SelectedDocumentType::Json,
+        SelectKind::XmlElement | SelectKind::XmlText | SelectKind::SitemapUrls => {
+            SelectedDocumentType::Xml
+        }
+        SelectKind::Css => SelectedDocumentType::Html,
+    };
+    let compatible = selected_document_is_compatible(context.document_type, required_document);
     if !compatible {
         return Err(error(
             CompileSelectErrorKind::DocumentIncompatible,

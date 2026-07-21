@@ -120,6 +120,14 @@ fn compile_discovery_strategy(
         posting_meta: Default::default(),
     };
     let field_descriptor = descriptor_for_placement(TemplatePlacement::DiscoveryValue, &keys);
+    let capture_descriptor = descriptor_for_placement(
+        TemplatePlacement::DiscoveryValue,
+        &TemplateAdmissionKeys {
+            source_config: keys.source_config.clone(),
+            captures: Default::default(),
+            posting_meta: Default::default(),
+        },
+    );
     Ok(ExecutionPlanDiscoveryStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
@@ -168,7 +176,7 @@ fn compile_discovery_strategy(
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
         conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
             .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
-        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor)
+        captures: compile_captures(strategy.captures.as_ref(), &capture_descriptor)
             .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
         extract: compile_discovery_extraction(&strategy.extract, &field_descriptor, path)?,
         accept_when: strategy.accept_when.clone(),

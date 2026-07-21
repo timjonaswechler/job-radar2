@@ -561,6 +561,7 @@ pub enum FieldExpressionTypeFragment {
     CssText,
     CssAttribute,
     Combine,
+    FirstNonEmpty,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -627,6 +628,12 @@ pub struct FieldExpressionFragment {
         deserialize_with = "non_null"
     )]
     pub parts: Option<Vec<CombinePartFragment>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub candidates: Option<Vec<FieldExpressionFragment>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

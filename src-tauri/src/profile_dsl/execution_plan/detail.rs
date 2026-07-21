@@ -109,6 +109,14 @@ fn compile_detail_strategy(
         posting_meta: posting_meta_keys.iter().cloned().collect(),
     };
     let field_descriptor = descriptor_for_placement(TemplatePlacement::DetailValue, &keys);
+    let capture_descriptor = descriptor_for_placement(
+        TemplatePlacement::DetailValue,
+        &TemplateAdmissionKeys {
+            source_config: keys.source_config.clone(),
+            captures: Default::default(),
+            posting_meta: keys.posting_meta.clone(),
+        },
+    );
     Ok(ExecutionPlanDetailStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
@@ -146,7 +154,7 @@ fn compile_detail_strategy(
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
         conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
             .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
-        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor)
+        captures: compile_captures(strategy.captures.as_ref(), &capture_descriptor)
             .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
         field_match: compile_field_match(strategy.field_match.as_ref(), &field_descriptor)
             .map_err(|error| field_expression_error(format!("{path}/match"), error))?,

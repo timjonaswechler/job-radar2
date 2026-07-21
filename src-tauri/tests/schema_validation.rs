@@ -64,6 +64,32 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
+fn first_non_empty_candidate_loading_limit_is_enforced_by_schema() {
+    let harness = SchemaHarness::new();
+    let mut profile = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    let candidates = (0..16)
+        .map(|index| json!({ "type": "const", "value": index }))
+        .collect::<Vec<_>>();
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"] =
+        json!({ "type": "first_non_empty", "candidates": candidates });
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        profile.clone(),
+        "first_non_empty exact candidate limit",
+    );
+
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"]
+        ["candidates"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({ "type": "const", "value": "over" }));
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["candidates"]);
+}
+
+#[test]
 fn xml_text_select_allows_empty_current_node_path() {
     SchemaHarness::new().assert_json_valid(
         SchemaEntrypoint::Select,

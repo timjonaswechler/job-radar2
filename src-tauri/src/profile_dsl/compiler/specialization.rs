@@ -700,9 +700,19 @@ fn collect_expression_missing_fields(expression: &Value, prefix: &str, missing: 
         Some("css_text") => &["selector"],
         Some("css_attribute") => &["selector", "attribute"],
         Some("combine") => &["parts"],
+        Some("first_non_empty") => &["candidates"],
         _ => &[],
     };
     require_fields(expression, prefix, required, missing);
+    if let Some(candidates) = object.get("candidates").and_then(Value::as_array) {
+        for (index, candidate) in candidates.iter().enumerate() {
+            collect_expression_missing_fields(
+                candidate,
+                &format!("{prefix}.candidates.{index}"),
+                missing,
+            );
+        }
+    }
     if let Some(parts) = object.get("parts").and_then(Value::as_array) {
         for (index, part) in parts.iter().enumerate() {
             let part_prefix = format!("{prefix}.parts.{index}");

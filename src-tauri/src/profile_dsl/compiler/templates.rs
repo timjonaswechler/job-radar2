@@ -567,58 +567,35 @@ fn validate_field_expression_templates(
     source_config_keys: &HashSet<String>,
     captures: &HashSet<String>,
     posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
+    _diagnostics: &mut Diagnostics,
     dependencies: &mut SourceRuntimeBindingDependencies,
 ) {
     match expression {
-        FieldExpression::Template { template, .. } => validate_template_string(
-            template,
-            &format!("{path}/template"),
-            strategy_key,
-            context,
-            value_placement(context),
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        FieldExpression::SourceConfig { key, .. } => validate_variable_reference(
-            "sourceConfig",
-            key,
-            path,
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        FieldExpression::PostingMeta { key, .. } => validate_variable_reference(
-            "postingMeta",
-            key,
-            path,
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        FieldExpression::Capture { key, .. } => validate_variable_reference(
-            "captures",
-            key,
-            path,
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
+        FieldExpression::Template { template, .. } => {
+            let descriptor = descriptor_for_placement(
+                value_placement(context),
+                &TemplateAdmissionKeys {
+                    source_config: source_config_keys.iter().cloned().collect(),
+                    captures: captures.iter().cloned().collect(),
+                    posting_meta: posting_meta_keys.iter().cloned().collect(),
+                },
+            );
+            if let Ok(segments) =
+                crate::profile_dsl::template::compile_template_all(template, &descriptor)
+            {
+                for segment in segments.0 {
+                    if let crate::profile_dsl::template::TemplateSegment::Reference { reference } =
+                        segment
+                    {
+                        if reference.namespace.as_deref() == Some("source")
+                            && reference.key == "name"
+                        {
+                            dependencies.insert(SourceRuntimeBinding::Name);
+                        }
+                    }
+                }
+            }
+        }
         FieldExpression::Combine { parts, .. } => {
             for (index, part) in parts.iter().enumerate() {
                 validate_field_expression_templates(
@@ -629,7 +606,22 @@ fn validate_field_expression_templates(
                     source_config_keys,
                     captures,
                     posting_meta_keys,
-                    diagnostics,
+                    _diagnostics,
+                    dependencies,
+                );
+            }
+        }
+        FieldExpression::FirstNonEmpty { candidates, .. } => {
+            for (index, candidate) in candidates.iter().enumerate() {
+                validate_field_expression_templates(
+                    candidate,
+                    &format!("{path}/candidates/{index}"),
+                    strategy_key,
+                    context,
+                    source_config_keys,
+                    captures,
+                    posting_meta_keys,
+                    _diagnostics,
                     dependencies,
                 );
             }
@@ -696,94 +688,6 @@ fn validate_template_string(
             diagnostics.push(diagnostic);
         }
     }
-}
-
-fn validate_variable_reference(
-    namespace: &str,
-    key: &str,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    let known = match namespace {
-        "sourceConfig" => source_config_keys.contains(key),
-        "captures" => captures.contains(key),
-        "postingMeta" => {
-            if matches!(context, TemplateContext::Discovery) {
-                push_template_diagnostic(
-                    diagnostics,
-                    "template_namespace_unavailable",
-                    format!("Template namespace `{namespace}` is not available in discovery"),
-                    path,
-                    strategy_key,
-                    namespace,
-                    key,
-                );
-                return;
-            }
-            posting_meta_keys.contains(key)
-        }
-        "posting" => {
-            if matches!(context, TemplateContext::Discovery) {
-                push_template_diagnostic(diagnostics, "template_namespace_unavailable", format!("Template namespace `{namespace}` is not available before a posting occurrence exists"), path, strategy_key, namespace, key);
-                return;
-            }
-            canonical_posting_keys().contains(key)
-        }
-        "source" => canonical_source_keys().contains(key),
-        _ => {
-            push_template_diagnostic(
-                diagnostics,
-                "invalid_template_namespace",
-                format!("Template namespace `{namespace}` is not supported"),
-                path,
-                strategy_key,
-                namespace,
-                key,
-            );
-            return;
-        }
-    };
-    if !known {
-        push_template_diagnostic(
-            diagnostics,
-            "unknown_template_key",
-            format!("Template reference `{namespace}:{key}` does not match a declared key"),
-            path,
-            strategy_key,
-            namespace,
-            key,
-        );
-    } else if namespace == "source" && key == "name" {
-        dependencies.insert(SourceRuntimeBinding::Name);
-    }
-}
-
-fn push_template_diagnostic(
-    diagnostics: &mut Diagnostics,
-    code: &str,
-    message: String,
-    path: &str,
-    strategy_key: &str,
-    namespace: &str,
-    key: &str,
-) {
-    let mut diagnostic = compiler_error(
-        code,
-        message,
-        path,
-        serde_json::json!({
-            "namespace": namespace,
-            "key": key,
-        }),
-    );
-    diagnostic.strategy_key = Some(strategy_key.to_string());
-    diagnostics.push(diagnostic);
 }
 
 pub(super) fn validate_detection_templates(

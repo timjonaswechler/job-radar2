@@ -359,6 +359,25 @@ fn raw_field_values<'a>(
             diagnostics,
         )
         .into_raw(*cardinality, transforms),
+        FieldExpression::FirstNonEmpty {
+            cardinality,
+            transforms,
+            ..
+        } => {
+            diagnostics.push(runtime_error(
+                "unsupported_field_expression",
+                "first_non_empty execution is not available in this runtime revision",
+                path,
+                strategy_key,
+                json!({}),
+            ));
+            RawFieldValues {
+                values: Vec::new(),
+                failed: true,
+                cardinality: *cardinality,
+                transforms,
+            }
+        }
     }
 }
 

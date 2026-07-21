@@ -2,8 +2,8 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
-    RegistrySourceProfile, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
+    ListFieldExpression, RegistrySourceProfile, ScriptedProfileHttpClient, SourceDocument,
+    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
 };
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ fn compiler_validates_structural_capability_compatibility() {
     assert!(result
         .diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.code == "incompatible_parse_extract_capability"));
+        .any(|diagnostic| diagnostic.code == "value_document_incompatible"));
 }
 
 #[test]
@@ -110,6 +110,132 @@ fn compiler_rejects_invalid_transform_plans_with_stable_context() {
         diagnostic.details,
         Some(serde_json::json!({ "transformIndex": 0 }))
     );
+}
+
+#[test]
+fn compiler_enforces_the_four_value_context_placements_recursively() {
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+
+    let mut discovery_capture_profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    discovery_capture_profile.access_paths[0]
+        .discovery
+        .strategies[0]
+        .captures = Some(
+        serde_json::from_value(serde_json::json!({
+            "slug": {
+                "from": {
+                    "type": "combine",
+                    "parts": [{ "value": { "type": "capture", "key": "slug" } }]
+                },
+                "pattern": "(.*)"
+            }
+        }))
+        .unwrap(),
+    );
+    let result = compile_test_source(&source, Some(discovery_capture_profile));
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "value_capture_unavailable"
+            && diagnostic
+                .path
+                .ends_with("/captures/slug/from/parts/0/value")
+    }));
+
+    let mut detail_capture_profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    detail_capture_profile.access_paths[0]
+        .detail
+        .as_mut()
+        .unwrap()
+        .strategies[0]
+        .captures = Some(
+        serde_json::from_value(serde_json::json!({
+            "selected": {
+                "from": { "type": "json_path", "jsonPath": "$.description" },
+                "pattern": "(.*)"
+            }
+        }))
+        .unwrap(),
+    );
+    let result = compile_test_source(&source, Some(detail_capture_profile));
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "value_selected_item_unavailable"
+            && diagnostic.path.ends_with("/captures/selected/from")
+    }));
+
+    let mut discovery_output_profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    discovery_output_profile.access_paths[0]
+        .discovery
+        .strategies[0]
+        .extract
+        .fields
+        .title = serde_json::from_value(serde_json::json!({
+        "type": "posting_meta",
+        "key": "jobId"
+    }))
+    .unwrap();
+    let result = compile_test_source(&source, Some(discovery_output_profile));
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "value_posting_meta_unavailable"
+            && diagnostic.path.ends_with("/extract/fields/title")
+    }));
+}
+
+#[test]
+fn compiler_enforces_the_complete_effective_value_node_limit_once() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    profile.access_paths[0].discovery.strategies[0]
+        .extract
+        .fields
+        .locations = Some(ListFieldExpression::Multiple(
+        (0..1_025)
+            .map(|index| FieldExpression::Const {
+                value: serde_json::json!(index),
+                cardinality: None,
+                transforms: None,
+            })
+            .collect(),
+    ));
+
+    let result = compile_test_source(&source, Some(profile));
+
+    assert!(result.execution_plan.is_none());
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "value_node_limit_exceeded")
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].strategy_key.as_deref(), Some("json_api"));
+    assert_eq!(
+        diagnostics[0].details,
+        Some(serde_json::json!({ "actual": 1025, "maximum": 1024 }))
+    );
+}
+
+#[test]
+fn source_owned_plan_uses_declared_optional_source_config_keys() {
+    let mut source_json: serde_json::Value =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
+    source_json["selectedAccessPath"]["sourceConfigSchema"]["properties"]["optionalTenant"] =
+        serde_json::json!({ "type": "string" });
+    source_json["selectedAccessPath"]["discovery"]["strategies"][0]["extract"]["fields"]["title"] = serde_json::json!({
+        "type": "template",
+        "template": "{{sourceConfig:optionalTenant}}"
+    });
+    let source: SourceDocument = serde_json::from_value(source_json).unwrap();
+
+    let result = compile_test_source(&source, None);
+
+    assert!(result.execution_plan.is_some(), "{:?}", result.diagnostics);
 }
 
 #[test]

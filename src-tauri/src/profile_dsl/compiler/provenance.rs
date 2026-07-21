@@ -501,6 +501,7 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
             "selector",
             "attribute",
             "parts",
+            "candidates",
             "join",
             "cardinality",
             "transforms",
@@ -527,6 +528,9 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
             "replacement",
             "value",
             "optional",
+            "parts",
+            "candidates",
+            "join",
         ]
     } else {
         &[

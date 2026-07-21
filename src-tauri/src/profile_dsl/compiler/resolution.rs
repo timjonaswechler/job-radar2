@@ -25,6 +25,7 @@ use super::source_config::{
 };
 use super::support::validate_support_metadata;
 use super::templates::{validate_detection_templates, validate_template_variables};
+use super::values::validate_value_context_foundation;
 use super::SourceRuntimeBindingDependencies;
 
 pub(super) struct ResolvedSourceExecutionPlan {
@@ -56,6 +57,7 @@ fn validate_source_profile_document_with_contracts(
         diagnostics,
     );
     validate_reusable_access_path_keys(profile, diagnostics);
+    let mut total_value_nodes = 0usize;
 
     profile
         .access_paths
@@ -87,16 +89,23 @@ fn validate_source_profile_document_with_contracts(
             }
 
             let access_path_base = access_path_base_path(Some(path_index));
+            let source_config_keys = contract
+                .as_ref()
+                .map(EffectiveSourceConfigContract::property_keys)
+                .unwrap_or_default();
             let runtime_binding_dependencies = validate_template_variables(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
-                contract
-                    .as_ref()
-                    .map(EffectiveSourceConfigContract::property_keys)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
+                source_config_keys.iter().cloned().collect(),
                 access_path_base.clone(),
+                diagnostics,
+            );
+            validate_value_context_foundation(
+                &access_path.discovery,
+                access_path.detail.as_ref(),
+                source_config_keys.into_iter().collect(),
+                &access_path_base,
+                &mut total_value_nodes,
                 diagnostics,
             );
             validate_capability_compatibility(
@@ -269,7 +278,13 @@ pub(super) fn compile_source_owned_access_path(
         return None;
     }
 
-    let source_config_keys = source.source_config.keys().cloned().collect::<Vec<_>>();
+    let source_config_keys = compile_source_owned_contract(source_owned_access_path_schema(
+        &source.selected_access_path,
+    ))
+    .expect("validated Source-owned Source Config contract must compile")
+    .property_keys()
+    .into_iter()
+    .collect::<Vec<_>>();
     let posting_meta_keys = posting_meta_keys(discovery);
     let compiled_discovery = compile_discovery_step(
         discovery,
@@ -349,7 +364,10 @@ fn validate_source_owned_access_path(
     ));
     let source_config_keys = match source_config_contract {
         Ok(contract) => {
-            let keys = contract.property_keys().into_iter().collect();
+            let keys = contract
+                .property_keys()
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>();
             validate_source_config_against_contract(&contract, &source.source_config, diagnostics);
             keys
         }
@@ -373,8 +391,17 @@ fn validate_source_owned_access_path(
     let runtime_binding_dependencies = validate_template_variables(
         discovery,
         detail,
-        source_config_keys,
+        source_config_keys.clone(),
         "/selectedAccessPath".to_string(),
+        diagnostics,
+    );
+    let mut total_value_nodes = 0usize;
+    validate_value_context_foundation(
+        discovery,
+        detail,
+        source_config_keys.into_iter().collect(),
+        "/selectedAccessPath",
+        &mut total_value_nodes,
         diagnostics,
     );
     validate_capability_compatibility(

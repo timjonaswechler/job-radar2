@@ -100,6 +100,45 @@ fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collis
 }
 
 #[test]
+fn registry_loading_enforces_value_depth_before_any_source_uses_the_profile() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let custom_profile_dir = temp_dir.path().join("source-profiles");
+    fs::create_dir_all(&custom_profile_dir).unwrap();
+    let mut profile: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(fixture_path(
+            "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut value = serde_json::json!({ "type": "const", "value": "leaf" });
+    for _ in 1..17 {
+        value = serde_json::json!({
+            "type": "combine",
+            "parts": [{ "value": value }]
+        });
+    }
+    profile["key"] = serde_json::json!("over_depth_profile");
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"] = value;
+    fs::write(
+        custom_profile_dir.join("over_depth_profile.json"),
+        serde_json::to_vec_pretty(&profile).unwrap(),
+    )
+    .unwrap();
+
+    let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
+
+    let diagnostic = snapshot
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "value_depth_limit_exceeded")
+        .expect("registry loading Value depth diagnostic");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Compiler);
+    assert_eq!(diagnostic.details.as_ref().unwrap()["actual"], 17);
+    assert_eq!(diagnostic.details.as_ref().unwrap()["maximum"], 16);
+}
+
+#[test]
 fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert!(!crate_dir.join("src/adapter_registry.rs").exists());

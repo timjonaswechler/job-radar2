@@ -299,6 +299,41 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
 }
 
 #[test]
+fn effective_profile_rechecks_value_nodes_after_direct_specialization_merge() {
+    let profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    let locations = (0..1_024)
+        .map(|index| serde_json::json!({ "type": "const", "value": index }))
+        .collect::<Vec<_>>();
+    source.access_paths = Some(fragments(serde_json::json!([{
+        "key": "json_feed",
+        "discovery": {
+            "strategies": [{
+                "key": "json_api",
+                "extract": { "fields": { "locations": locations } }
+            }]
+        }
+    }])));
+
+    let CompileSourceOutcome::Rejected { diagnostics } =
+        compile_source(&source, &registry_with_profile(profile))
+    else {
+        panic!("post-merge Value node overflow must reject compilation");
+    };
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "value_node_limit_exceeded")
+        .expect("post-merge Value node diagnostic");
+    assert_eq!(diagnostic.strategy_key.as_deref(), Some("json_api"));
+    assert_eq!(
+        diagnostic.details.as_ref().unwrap()["maximum"],
+        serde_json::json!(1_024)
+    );
+}
+
+#[test]
 fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
     let profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");

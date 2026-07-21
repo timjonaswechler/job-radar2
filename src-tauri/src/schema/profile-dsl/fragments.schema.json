@@ -155,7 +155,7 @@
     "fieldExpressionFragment": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "type": { "type": "string", "enum": ["const", "template", "source_config", "posting_meta", "capture", "item_field", "json_path", "xml_text", "xml_element", "css_text", "css_attribute", "combine"] },
+        "type": { "type": "string", "enum": ["const", "template", "source_config", "posting_meta", "capture", "item_field", "json_path", "xml_text", "xml_element", "css_text", "css_attribute", "combine", "first_non_empty"] },
         "value": {},
         "template": { "type": "string" },
         "key": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
@@ -165,6 +165,7 @@
         "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
         "attribute": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
         "parts": { "type": "array", "items": { "$ref": "#/$defs/combinePartFragment" } },
+        "candidates": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/fieldExpressionFragment" } },
         "join": { "type": "string" },
         "cardinality": { "type": "string", "enum": ["one", "first", "optional", "all"] },
         "transforms": { "type": "array", "items": { "$ref": "transform.schema.json#/$defs/transform" } }

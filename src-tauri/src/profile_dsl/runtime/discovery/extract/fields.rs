@@ -364,6 +364,11 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             cardinality,
             transforms,
             ..
+        }
+        | FieldExpression::FirstNonEmpty {
+            cardinality,
+            transforms,
+            ..
         } => {
             diagnostics.push(runtime_error(
                 "unsupported_field_expression",

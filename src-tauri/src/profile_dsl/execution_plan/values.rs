@@ -93,6 +93,12 @@ pub enum ExecutionPlanFieldExpression {
         #[serde(default)]
         transforms: CompiledTransformPipeline,
     },
+    FirstNonEmpty {
+        candidates: Vec<ExecutionPlanFieldExpression>,
+        cardinality: CompiledCardinality,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -288,6 +294,18 @@ pub(crate) fn compile_field_expression(
                 })
                 .collect::<Result<_, FieldExpressionCompileError>>()?,
             join: join.clone(),
+            cardinality: compile_cardinality(cardinality.unwrap_or_default()),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
+        },
+        FieldExpression::FirstNonEmpty {
+            candidates,
+            cardinality,
+            transforms,
+        } => C::FirstNonEmpty {
+            candidates: candidates
+                .iter()
+                .map(|candidate| compile_field_expression(candidate, descriptor))
+                .collect::<Result<_, FieldExpressionCompileError>>()?,
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
             transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },

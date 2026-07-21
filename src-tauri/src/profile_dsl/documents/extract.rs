@@ -95,6 +95,13 @@ pub enum FieldExpression {
         #[serde(skip_serializing_if = "Option::is_none")]
         transforms: Option<Vec<Transform>>,
     },
+    FirstNonEmpty {
+        candidates: Vec<FieldExpression>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cardinality: Option<Cardinality>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transforms: Option<Vec<Transform>>,
+    },
 }
 
 impl FieldExpression {
@@ -111,7 +118,8 @@ impl FieldExpression {
             | Self::XmlElement { transforms, .. }
             | Self::CssText { transforms, .. }
             | Self::CssAttribute { transforms, .. }
-            | Self::Combine { transforms, .. } => transforms.as_deref(),
+            | Self::Combine { transforms, .. }
+            | Self::FirstNonEmpty { transforms, .. } => transforms.as_deref(),
         }
     }
 }

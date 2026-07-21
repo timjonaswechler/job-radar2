@@ -28,6 +28,7 @@ mod source_config;
 mod specialization;
 mod support;
 mod templates;
+mod values;
 
 pub(crate) use boundedness::MAX_FALLBACK_STRATEGIES;
 pub use provenance::{

@@ -42,9 +42,10 @@ pub use profile_dsl::documents::{
     AccessPathFragment, DetailStep, DetailStepFragment, DetailStrategyFragment,
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
     DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, Parse,
-    ParseFragment, ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
-    ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
+    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
+    ListFieldExpression, Parse, ParseFragment, ParseType, ParseTypeFragment, PhaseLimits,
+    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SelectTypeFragment,
+    SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -71,16 +72,25 @@ pub use profile_dsl::primitives::parse::{
     ParseFailureKind, ParseInput, ParseInputKind, ParseRegistryError, ParsedDocument,
 };
 pub use profile_dsl::primitives::select::{
-    compile_select, select_descriptors, validate_select_registration_keys, CompileSelectError,
-    CompileSelectErrorKind, CompiledSelect, SelectCompileContext, SelectDescriptor,
-    SelectExecutionError, SelectKind, SelectPhase, SelectPlacement, SelectRegistryError,
-    SelectedItem, SelectedSequence,
+    compile_select, select_descriptors, selected_document_is_compatible,
+    validate_select_registration_keys, CompileSelectError, CompileSelectErrorKind, CompiledSelect,
+    SelectCompileContext, SelectDescriptor, SelectExecutionError, SelectKind, SelectPhase,
+    SelectPlacement, SelectRegistryError, SelectedDocumentType, SelectedItem, SelectedSequence,
 };
 pub use profile_dsl::primitives::transform::{
     compile_transform_pipeline, transform_descriptors, validate_transform_registration_keys,
     CompileTransformError, CompileTransformErrorKind, CompiledTransform, CompiledTransformPipeline,
     Transform, TransformDescriptor, TransformError, TransformErrorKind, TransformKind,
     TransformRegistryError, TransformShape, TransformValue,
+};
+pub use profile_dsl::primitives::value::{
+    compile_value_foundation, validate_value_placement_registration_keys,
+    value_placement_descriptors, CompiledValueFoundation, DetailCaptureValueContext,
+    DetailMatchFilterOutputValueContext, DiscoveryCaptureValueContext,
+    DiscoveryFilterOutputValueContext, PostingValueView, SelectedValueCarrier, SourceValueView,
+    ValueCompileContext, ValueCompileError, ValueCompileErrorKind, ValuePlacement,
+    ValuePlacementDescriptor, ValuePlacementRegistryError, ValueShape, VALUE_MAX_DEPTH,
+    VALUE_MAX_FIRST_NON_EMPTY_CANDIDATES, VALUE_MAX_NODES,
 };
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
