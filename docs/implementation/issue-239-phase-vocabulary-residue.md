@@ -66,15 +66,15 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/src/source/documents.rs:58` — `#[serde(rename = "postingDiscovery")]`
 - `src-tauri/src/source/documents.rs:60` — `#[serde(rename = "postingDetail", skip_serializing_if = "Option::is_none")]`
 - `src-tauri/src/source_profile/documents.rs:18` — `#[serde(rename = "detect", skip_serializing_if = "Option::is_none")]`
-- `src-tauri/tests/compiler_security_boundedness.rs:12` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
-- `src-tauri/tests/compiler_security_boundedness.rs:30` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
-- `src-tauri/tests/compiler_security_boundedness.rs:62` — `let fetch = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"];`
-- `src-tauri/tests/compiler_security_boundedness.rs:150` — `let strategy = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0];`
-- `src-tauri/tests/compiler_security_boundedness.rs:175` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"] = json!({`
-- `src-tauri/tests/compiler_security_boundedness.rs:195` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
-- `src-tauri/tests/compiler_security_boundedness.rs:225` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"] = json!([]);`
-- `src-tauri/tests/compiler_security_boundedness.rs:226` — `profile["accessPaths"][0]["postingDetail"]["strategies"] = json!([]);`
-- `src-tauri/tests/compiler_security_boundedness.rs:246` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:12` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:30` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:62` — `let fetch = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"];`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:150` — `let strategy = &mut profile["accessPaths"][0]["postingDiscovery"]["strategies"][0];`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:175` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"] = json!({`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:195` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:225` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"] = json!([]);`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:226` — `profile["accessPaths"][0]["postingDetail"]["strategies"] = json!([]);`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:246` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
 - `src-tauri/tests/detail_runtime.rs:1128` — `"postingDiscovery": {`
 - `src-tauri/tests/detail_runtime.rs:1152` — `"postingDetail": { "strategies": [strategy] }`
 - `src-tauri/tests/detail_runtime.rs:1214` — `"postingDiscovery": {`
@@ -85,17 +85,17 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/discovery_runtime.rs:191` — `"postingDiscovery": {`
 - `src-tauri/tests/discovery_runtime.rs:246` — `"postingDiscovery": {`
 - `src-tauri/tests/discovery_runtime.rs:327` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:98` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:107` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:190` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:197` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:253` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:264` — `"postingDiscovery": {},`
-- `src-tauri/tests/effective_profile_compiler.rs:265` — `"postingDetail": {}`
-- `src-tauri/tests/effective_profile_compiler.rs:320` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:371` — `"postingDiscovery": {`
-- `src-tauri/tests/effective_profile_compiler.rs:403` — `r#"[{"key":"json_feed","postingDiscovery":{"acceptWhen":{"minResults":0},"strategies":[{"key":"json_api","acceptWhen":{"minResults":0,"requiredFields":["url"]}}]}}]"#,`
-- `src-tauri/tests/effective_profile_compiler.rs:404` — `r#"[{"postingDiscovery":{"strategies":[{"acceptWhen":{"requiredFields":["url"],"minResults":0},"key":"json_api"}],"acceptWhen":{"minResults":0}},"key":"json_feed"}]"#,`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:98` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:107` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:190` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:197` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:253` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:264` — `"postingDiscovery": {},`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:265` — `"postingDetail": {}`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:320` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:371` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:403` — `r#"[{"key":"json_feed","postingDiscovery":{"acceptWhen":{"minResults":0},"strategies":[{"key":"json_api","acceptWhen":{"minResults":0,"requiredFields":["url"]}}]}}]"#,`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:404` — `r#"[{"postingDiscovery":{"strategies":[{"acceptWhen":{"requiredFields":["url"],"minResults":0},"key":"json_api"}],"acceptWhen":{"minResults":0}},"key":"json_feed"}]"#,`
 - `src-tauri/tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json:7` — `"detect": {`
 - `src-tauri/tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json:29` — `"postingDiscovery": {`
 - `src-tauri/tests/fixtures/source-profile-dsl/invalid/forbidden-secrets.json:11` — `"postingDiscovery": {`
@@ -259,21 +259,21 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/src/search/run/tests/support.rs:92` — `.unwrap_or_else(|| "postingDiscovery failed".to_string()),`
 - `src-tauri/src/source_profile/detection/mod.rs:273` — `let base_path = format!("/profiles/{profile_index}/detect");`
 - `src-tauri/src/source_profile/detection/proposal.rs:123` — `let profile_base_path = base_path.strip_suffix("/detect").unwrap_or(base_path);`
-- `src-tauri/tests/compiler_security_boundedness.rs:23` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
-- `src-tauri/tests/compiler_security_boundedness.rs:114` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/body/value/nested/apiKey",`
-- `src-tauri/tests/compiler_security_boundedness.rs:138` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
-- `src-tauri/tests/compiler_security_boundedness.rs:143` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/headers/authorization",`
-- `src-tauri/tests/compiler_security_boundedness.rs:163` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/retry/maxAttempts",`
-- `src-tauri/tests/compiler_security_boundedness.rs:168` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits",`
-- `src-tauri/tests/compiler_security_boundedness.rs:188` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits/maxDepth",`
-- `src-tauri/tests/compiler_security_boundedness.rs:213` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/waits/0/timeoutMs",`
-- `src-tauri/tests/compiler_security_boundedness.rs:218` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0/maxCount",`
-- `src-tauri/tests/compiler_security_boundedness.rs:234` — `"/accessPaths/0/postingDiscovery/strategies",`
-- `src-tauri/tests/compiler_security_boundedness.rs:239` — `"/accessPaths/0/postingDetail/strategies",`
-- `src-tauri/tests/compiler_security_boundedness.rs:271` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0",`
-- `src-tauri/tests/compiler_semantic_validation.rs:165` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"`
-- `src-tauri/tests/compiler_semantic_validation.rs:265` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/1/key"`
-- `src-tauri/tests/compiler_semantic_validation.rs:270` — `&& diagnostic.path == "/accessPaths/0/postingDetail/strategies/1/key"`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:23` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:114` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/body/value/nested/apiKey",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:138` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:143` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/headers/authorization",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:163` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/retry/maxAttempts",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:168` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:188` — `"/accessPaths/0/postingDiscovery/strategies/0/pagination/limits/maxDepth",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:213` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/waits/0/timeoutMs",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:218` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0/maxCount",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:234` — `"/accessPaths/0/postingDiscovery/strategies",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:239` — `"/accessPaths/0/postingDetail/strategies",`
+- `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:271` — `"/accessPaths/0/postingDiscovery/strategies/0/fetch/interactions/0",`
+- `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:165` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"`
+- `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:265` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/1/key"`
+- `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:270` — `&& diagnostic.path == "/accessPaths/0/postingDetail/strategies/1/key"`
 - `src-tauri/tests/detail_runtime.rs:233` — `"/postingDetail/strategies/0/where/0/pattern"`
 - `src-tauri/tests/detail_runtime.rs:277` — `"/postingDetail/acceptWhen/minDescriptionLength"`
 - `src-tauri/tests/detail_runtime.rs:280` — `assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");`
@@ -304,13 +304,13 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/discovery_runtime/post_request_bodies.rs:229` — `"/postingDiscovery/strategies/0/fetch/body"`
 - `src-tauri/tests/discovery_runtime/template_validation.rs:71` — `== "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"`
 - `src-tauri/tests/discovery_runtime/transforms_and_combine.rs:204` — `"/postingDiscovery/strategies/0/extract/fields/title/parts/1/value"`
-- `src-tauri/tests/effective_profile_compiler.rs:288` — `"/accessPaths/0/postingDiscovery/strategies/0",`
-- `src-tauri/tests/effective_profile_compiler.rs:292` — `"/accessPaths/0/postingDiscovery/strategies/1",`
-- `src-tauri/tests/effective_profile_compiler.rs:297` — `serde_json::json!(["name", "postingDiscovery"]),`
-- `src-tauri/tests/effective_profile_compiler.rs:300` — `"/accessPaths/2/postingDiscovery",`
-- `src-tauri/tests/effective_profile_compiler.rs:304` — `"/accessPaths/2/postingDetail",`
-- `src-tauri/tests/effective_profile_compiler.rs:347` — `"/accessPaths/0/postingDiscovery/strategies/1/key",`
-- `src-tauri/tests/effective_profile_compiler.rs:348` — `"/accessPaths/0/postingDiscovery/strategies/2/key",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:288` — `"/accessPaths/0/postingDiscovery/strategies/0",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:292` — `"/accessPaths/0/postingDiscovery/strategies/1",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:297` — `serde_json::json!(["name", "postingDiscovery"]),`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:300` — `"/accessPaths/2/postingDiscovery",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:304` — `"/accessPaths/2/postingDetail",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:347` — `"/accessPaths/0/postingDiscovery/strategies/1/key",`
+- `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:348` — `"/accessPaths/0/postingDiscovery/strategies/2/key",`
 - `src-tauri/tests/source_live_check.rs:164` — `.find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")`
 - `src-tauri/tests/source_live_check.rs:169` — `"/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"`
 - `src-tauri/tests/source_live_check.rs:240` — `diagnostic.code == "posting_discovery_request_budget_reached"`
