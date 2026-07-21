@@ -145,6 +145,27 @@ fn xml_text_select_allows_empty_current_node_path() {
 }
 
 #[test]
+fn explicit_http_fetch_fragment_uses_the_canonical_timeout_ceiling() {
+    let harness = SchemaHarness::new();
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    source["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
+        "mode": "http",
+        "timeoutMs": 60000
+    });
+    harness.assert_json_valid(
+        SchemaEntrypoint::Source,
+        source.clone(),
+        "explicit HTTP fragment exact timeout ceiling",
+    );
+
+    source["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["timeoutMs"] = json!(60001);
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["60000"]);
+}
+
+#[test]
 fn direct_pagination_fragment_uses_canonical_json_body_parameter_location() {
     let harness = SchemaHarness::new();
     let mut source = read_json(

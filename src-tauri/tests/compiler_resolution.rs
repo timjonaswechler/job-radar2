@@ -1,12 +1,13 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, compile_template, execute_discovery, CompileSourceOutcome, DiagnosticCategory,
-    DiagnosticSeverity, ExecutionPlanAccessPath, ExecutionPlanBrowserInteraction,
-    ExecutionPlanBrowserWait, ExecutionPlanFetch, ExecutionPlanPagination, RegistrySourceProfile,
-    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
-    SourceStatus, TemplateDescriptor, UnavailableProfileBrowserClient,
+    compile_source, compile_template, execute_discovery, CompileSourceOutcome, CompiledHttpFetch,
+    DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
+    ExecutionPlanPagination, RegistrySourceProfile, RuntimeExecutionContext, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus, TemplateDescriptor,
+    UnavailableProfileBrowserClient,
 };
 
 #[test]
@@ -26,20 +27,20 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
     assert_eq!(discovery_strategy.key, "json_api");
     assert_eq!(
         discovery_strategy.fetch,
-        ExecutionPlanFetch::Http {
-            method: Some(job_radar_lib::HttpMethod::Get),
+        ExecutionPlanFetch::Http(CompiledHttpFetch {
+            method: job_radar_lib::HttpMethod::Get,
             url: compile_template(
                 "{{sourceConfig:feedUrl}}",
                 &TemplateDescriptor::new().allow_namespace("sourceConfig", ["feedUrl"])
             )
             .unwrap(),
-            headers: Some(std::collections::BTreeMap::from([(
+            headers: std::collections::BTreeMap::from([(
                 "accept".to_string(),
                 compile_template("application/json", &TemplateDescriptor::new()).unwrap(),
-            )])),
+            )]),
             body: None,
             timeout_ms: 10000,
-        }
+        })
     );
     let Some(ExecutionPlanPagination::Page { limits, .. }) = &discovery_strategy.pagination else {
         panic!("expected compiled page pagination with concrete limits");

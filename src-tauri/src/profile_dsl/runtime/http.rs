@@ -9,7 +9,7 @@ use std::{
 use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
 use futures_util::{stream, Stream, StreamExt};
 
-use crate::profile_dsl::documents::{HttpMethod, RequestBody};
+use crate::profile_dsl::documents::HttpMethod;
 
 use super::cancellation::RuntimeExecutionContext;
 
@@ -23,23 +23,27 @@ pub struct SensitiveRequestBody {
 }
 
 impl SensitiveRequestBody {
-    pub(crate) fn render(body: RequestBody) -> Result<Self, ()> {
-        match body {
-            RequestBody::Json { value } => Ok(Self {
-                bytes: serde_json::to_vec(&value).map_err(|_| ())?,
-                default_content_type: Some("application/json"),
-            }),
-            RequestBody::Text { value } => Ok(Self {
-                bytes: value.into_bytes(),
-                default_content_type: None,
-            }),
-            RequestBody::Form { fields } => Ok(Self {
-                bytes: url::form_urlencoded::Serializer::new(String::new())
-                    .extend_pairs(fields)
-                    .finish()
-                    .into_bytes(),
-                default_content_type: Some("application/x-www-form-urlencoded"),
-            }),
+    pub(crate) fn json(value: &serde_json::Map<String, serde_json::Value>) -> Result<Self, ()> {
+        Ok(Self {
+            bytes: serde_json::to_vec(value).map_err(|_| ())?,
+            default_content_type: Some("application/json"),
+        })
+    }
+
+    pub(crate) fn text(value: String) -> Self {
+        Self {
+            bytes: value.into_bytes(),
+            default_content_type: None,
+        }
+    }
+
+    pub(crate) fn form(fields: &std::collections::BTreeMap<String, String>) -> Self {
+        Self {
+            bytes: url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(fields)
+                .finish()
+                .into_bytes(),
+            default_content_type: Some("application/x-www-form-urlencoded"),
         }
     }
 
@@ -49,12 +53,6 @@ impl SensitiveRequestBody {
 
     pub fn default_content_type(&self) -> Option<&str> {
         self.default_content_type
-    }
-}
-
-impl PartialEq<RequestBody> for SensitiveRequestBody {
-    fn eq(&self, other: &RequestBody) -> bool {
-        Self::render(other.clone()).is_ok_and(|rendered| rendered == *self)
     }
 }
 

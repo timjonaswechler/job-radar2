@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 use job_radar_lib::{
     execute_discovery, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch, HttpMethod,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    PhaseCompletion, ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
     ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileHttpFailureKind,
     RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,

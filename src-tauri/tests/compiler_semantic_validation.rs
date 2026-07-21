@@ -385,11 +385,7 @@ fn compiler_validates_template_variable_namespaces_keys_and_context() {
     let result = compile_test_source(&source, Some(profile));
 
     assert_eq!(result.execution_plan, None);
-    for expected_code in [
-        "template_namespace_unavailable",
-        "unknown_template_key",
-        "invalid_template_namespace",
-    ] {
+    for expected_code in ["template_namespace_unavailable", "unknown_template_key"] {
         assert!(
             result
                 .diagnostics

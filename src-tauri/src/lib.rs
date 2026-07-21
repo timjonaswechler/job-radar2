@@ -49,7 +49,7 @@ pub use profile_dsl::documents::{
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
-    ExecutionPlanJsonValue, ExecutionPlanPagination, ExecutionPlanRequestBody,
+    ExecutionPlanPagination,
 };
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
@@ -66,6 +66,10 @@ pub use profile_dsl::primitives::cardinality::{
     AllPlan, Cardinality, CardinalityDescriptor, CardinalityDiagnosticContext, CardinalityError,
     CardinalityOutcome, CardinalityRegistryError, CardinalitySequence, CompiledCardinality, First,
     FirstPlan, One, OnePlan, Optional, OptionalPlan,
+};
+pub use profile_dsl::primitives::fetch::http::{
+    http_fetch_descriptors, validate_http_fetch_descriptors, CompiledHttpFetch,
+    CompiledHttpJsonValue, CompiledHttpRequestBody, HttpFetchDescriptor, HTTP_FETCH_DESCRIPTOR,
 };
 pub use profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,

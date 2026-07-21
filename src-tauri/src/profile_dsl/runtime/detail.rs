@@ -8,10 +8,8 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{HttpMethod, RequestBody},
         execution_plan::{
-            capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
-            detail::ExecutionPlanDetailStrategy,
+            capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
         },
         primitives::{
@@ -38,7 +36,7 @@ use super::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
     },
-    http::{ProfileHttpClient, ProfileHttpFailureKind, ProfileHttpRequest, SensitiveRequestBody},
+    http::{ProfileHttpClient, ProfileHttpFailureKind},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },

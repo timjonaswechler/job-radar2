@@ -8,12 +8,9 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{HttpMethod, PaginationParameterLocation, RequestBody},
+        documents::PaginationParameterLocation,
         execution_plan::{
-            capabilities::{
-                ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanPagination,
-                ExecutionPlanRequestBody,
-            },
+            capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
             discovery::{ExecutionPlanDiscoveryFields, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
@@ -39,7 +36,7 @@ use super::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
     },
-    http::{ProfileHttpClient, ProfileHttpFailureKind, ProfileHttpRequest, SensitiveRequestBody},
+    http::{ProfileHttpClient, ProfileHttpFailureKind},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },

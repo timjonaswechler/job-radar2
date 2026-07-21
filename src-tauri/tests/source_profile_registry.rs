@@ -229,7 +229,7 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
 }
 
 #[test]
-fn registry_compiler_validates_unreferenced_custom_profiles() {
+fn registry_direct_serde_rejects_unbounded_unreferenced_custom_profiles() {
     let temp_dir = tempfile::tempdir().unwrap();
     let custom_profile_dir = temp_dir.path().join("source-profiles");
     fs::create_dir_all(&custom_profile_dir).unwrap();
@@ -253,14 +253,12 @@ fn registry_compiler_validates_unreferenced_custom_profiles() {
 
     let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
 
-    assert!(snapshot.profile("example_jobs").is_some());
+    assert!(snapshot.profile("example_jobs").is_none());
     assert!(snapshot.source("example_jobs").is_none());
     assert!(snapshot.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == DiagnosticCategory::Compiler
+        diagnostic.category == DiagnosticCategory::Schema
             && diagnostic.severity == DiagnosticSeverity::Error
-            && diagnostic.code == "missing_fetch_timeout"
-            && diagnostic.path == "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs"
-            && diagnostic.strategy_key.as_deref() == Some("json_api")
+            && diagnostic.code == "invalid_document_shape"
     }));
 }
 

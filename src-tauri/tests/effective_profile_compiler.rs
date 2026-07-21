@@ -62,7 +62,7 @@ fn compiler_validates_the_complete_effective_profile_before_building_a_plan() {
     else {
         panic!("fixture should use HTTP fetch");
     };
-    *timeout_ms = None;
+    *timeout_ms = 0;
     profile.access_paths.push(invalid_unselected_path);
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
@@ -74,7 +74,7 @@ fn compiler_validates_the_complete_effective_profile_before_building_a_plan() {
     };
 
     assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "missing_fetch_timeout" && diagnostic.path.starts_with("/accessPaths/1/")
+        diagnostic.code == "invalid_effective_profile_fragment" && diagnostic.path == "/accessPaths"
     }));
 }
 
@@ -107,7 +107,7 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
                 "acceptWhen": { "minResults": 0 },
                 "strategies": [{
                     "key": "json_api",
-                    "fetch": { "headers": { "x-source": "specialized" } },
+                    "fetch": { "headers": { "x-requested-with": "specialized" } },
                     "acceptWhen": { "requiredFields": ["url"] }
                 }]
             }
@@ -149,7 +149,7 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
         panic!("fixture should retain HTTP fetch");
     };
     assert_eq!(headers.as_ref().unwrap()["accept"], "application/json");
-    assert_eq!(headers.as_ref().unwrap()["x-source"], "specialized");
+    assert_eq!(headers.as_ref().unwrap()["x-requested-with"], "specialized");
     assert_eq!(
         first_strategy
             .accept_when

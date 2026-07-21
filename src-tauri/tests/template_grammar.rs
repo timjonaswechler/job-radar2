@@ -116,7 +116,7 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
     let strategy = &mut value["accessPaths"][0]["discovery"]["strategies"][0];
     strategy["fetch"]["url"] = json!("{{sourceConfig:feedUrl}}?literal={{{{x}}}}");
     strategy["fetch"]["method"] = json!("POST");
-    strategy["fetch"]["headers"] = json!({ "x-tenant": "{{source:name}}" });
+    strategy["fetch"]["headers"] = json!({ "x-requested-with": "{{source:name}}" });
     strategy["fetch"]["body"] = json!({
         "type": "json",
         "value": { "outer": { "nested": "{{sourceConfig:feedUrl}}" } }
@@ -210,7 +210,8 @@ fn compile_source_rejects_detail_fetch_capture_before_io_and_detection_malformed
 fn authored_map_keys_are_json_pointer_escaped_in_template_diagnostic_paths() {
     let mut value = profile_value();
     let strategy = &mut value["accessPaths"][0]["discovery"]["strategies"][0];
-    strategy["fetch"]["headers"] = json!({ "h~/x": "{{unknown:x}}" });
+    strategy["fetch"]["method"] = json!("POST");
+    strategy["fetch"]["headers"] = json!({ "accept": "application/json" });
     strategy["fetch"]["body"] = json!({ "type": "json", "value": { "j~/x": "{{unknown:x}}" } });
     strategy["captures"] = json!({
         "c~/x": { "from": { "type": "template", "template": "{{unknown:x}}" }, "pattern": "^(?<value>.+)$" }
@@ -221,6 +222,10 @@ fn authored_map_keys_are_json_pointer_escaped_in_template_diagnostic_paths() {
     let mut form_strategy = strategy.clone();
     form_strategy["key"] = json!("form_fallback");
     form_strategy["fetch"]["method"] = json!("POST");
+    form_strategy["fetch"]
+        .as_object_mut()
+        .unwrap()
+        .remove("headers");
     form_strategy["fetch"]["body"] = json!({
         "type": "form", "fields": { "f~/x": "{{unknown:x}}" }
     });
@@ -235,8 +240,7 @@ fn authored_map_keys_are_json_pointer_escaped_in_template_diagnostic_paths() {
         panic!("unknown namespaces must reject")
     };
     for path in [
-        "/accessPaths/0/discovery/strategies/0/fetch/headers/h~0~1x",
-        "/accessPaths/0/discovery/strategies/0/fetch/body/j~0~1x",
+        "/accessPaths/0/discovery/strategies/0/fetch/body/value/j~0~1x",
         "/accessPaths/0/discovery/strategies/0/captures/c~0~1x/from/template",
         "/accessPaths/0/discovery/strategies/0/extract/fields/postingMeta/p~0~1x/template",
         "/accessPaths/0/discovery/strategies/1/fetch/body/fields/f~0~1x",

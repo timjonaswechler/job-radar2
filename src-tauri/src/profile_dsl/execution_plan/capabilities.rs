@@ -1,33 +1,22 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
-    Fetch, HttpMethod, Pagination, PaginationParameterLocation, ParseType, RequestBody, Select,
+    Fetch, Pagination, PaginationParameterLocation, ParseType, Select,
 };
+use crate::profile_dsl::primitives::fetch::http::{compile_http_fetch, CompiledHttpFetch};
 use crate::profile_dsl::primitives::select::{
     compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
 use crate::profile_dsl::template::{
-    compile_template, descriptor_for_placement, json_pointer_segment, CompiledTemplate,
-    TemplateAdmissionKeys, TemplateDescriptor, TemplatePlacement,
+    compile_template, descriptor_for_placement, CompiledTemplate, TemplateAdmissionKeys,
+    TemplatePlacement,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum ExecutionPlanFetch {
-    Http {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        method: Option<HttpMethod>,
-        url: CompiledTemplate,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        headers: Option<BTreeMap<String, CompiledTemplate>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        body: Option<ExecutionPlanRequestBody>,
-        #[serde(rename = "timeoutMs")]
-        timeout_ms: u64,
-    },
+    Http(CompiledHttpFetch),
     Browser {
         url: CompiledTemplate,
         #[serde(rename = "timeoutMs")]
@@ -139,29 +128,6 @@ pub struct ExecutionPlanPaginationLimits {
     pub max_depth: Option<u64>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ExecutionPlanRequestBody {
-    Json {
-        value: BTreeMap<String, ExecutionPlanJsonValue>,
-    },
-    Text {
-        value: CompiledTemplate,
-    },
-    Form {
-        fields: BTreeMap<String, CompiledTemplate>,
-    },
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "type", content = "value", rename_all = "snake_case")]
-pub enum ExecutionPlanJsonValue {
-    Template(CompiledTemplate),
-    Array(Vec<ExecutionPlanJsonValue>),
-    Object(BTreeMap<String, ExecutionPlanJsonValue>),
-    Scalar(serde_json::Value),
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExecutionPlanBuildError {
     pub path: String,
@@ -226,35 +192,22 @@ pub(crate) fn compile_fetch(
             headers,
             body,
             timeout_ms,
-        } => Ok(ExecutionPlanFetch::Http {
-            method: *method,
-            url: compile_template(url, &descriptor).map_err(|error| {
-                ExecutionPlanBuildError::new(format!("{path}/url"), error.to_string())
-            })?,
-            headers: headers
-                .as_ref()
-                .map(|headers| {
-                    headers
-                        .iter()
-                        .map(|(name, value)| {
-                            Ok((
-                                name.clone(),
-                                compile_template(value, &header_descriptor).map_err(|error| {
-                                    ExecutionPlanBuildError::new(
-                                        format!("{path}/headers/{}", json_pointer_segment(name)),
-                                        error.to_string(),
-                                    )
-                                })?,
-                            ))
-                        })
-                        .collect::<Result<_, ExecutionPlanBuildError>>()
-                })
-                .transpose()?,
-            body: body
-                .as_ref()
-                .map(|body| compile_request_body(body, &body_descriptor, &format!("{path}/body")))
-                .transpose()?,
-            timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
+        } => compile_http_fetch(
+            *method,
+            url,
+            headers.as_ref(),
+            body.as_ref(),
+            *timeout_ms,
+            &descriptor,
+            &header_descriptor,
+            &body_descriptor,
+        )
+        .map(ExecutionPlanFetch::Http)
+        .map_err(|error| ExecutionPlanBuildError {
+            path: format!("{path}{}", error.path),
+            code: error.code,
+            message: error.message,
+            details: serde_json::json!({ "invariant": "canonical_http_fetch" }),
         }),
         Fetch::Browser {
             url,
@@ -456,88 +409,6 @@ fn compile_pagination_limits(
     }
 
     Ok(compiled)
-}
-
-fn compile_request_body(
-    body: &RequestBody,
-    descriptor: &TemplateDescriptor,
-    path: &str,
-) -> Result<ExecutionPlanRequestBody, ExecutionPlanBuildError> {
-    Ok(match body {
-        RequestBody::Text { value } => ExecutionPlanRequestBody::Text {
-            value: compile_template(value, descriptor)
-                .map_err(|error| ExecutionPlanBuildError::new(path, error.to_string()))?,
-        },
-        RequestBody::Form { fields } => ExecutionPlanRequestBody::Form {
-            fields: fields
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        compile_template(value, descriptor).map_err(|error| {
-                            ExecutionPlanBuildError::new(
-                                format!("{path}/{}", json_pointer_segment(key)),
-                                error.to_string(),
-                            )
-                        })?,
-                    ))
-                })
-                .collect::<Result<_, ExecutionPlanBuildError>>()?,
-        },
-        RequestBody::Json { value } => ExecutionPlanRequestBody::Json {
-            value: value
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        compile_json_value(
-                            value,
-                            descriptor,
-                            &format!("{path}/{}", json_pointer_segment(key)),
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, ExecutionPlanBuildError>>()?,
-        },
-    })
-}
-
-fn compile_json_value(
-    value: &serde_json::Value,
-    descriptor: &TemplateDescriptor,
-    path: &str,
-) -> Result<ExecutionPlanJsonValue, ExecutionPlanBuildError> {
-    Ok(match value {
-        serde_json::Value::String(value) => ExecutionPlanJsonValue::Template(
-            compile_template(value, descriptor)
-                .map_err(|error| ExecutionPlanBuildError::new(path, error.to_string()))?,
-        ),
-        serde_json::Value::Array(values) => ExecutionPlanJsonValue::Array(
-            values
-                .iter()
-                .enumerate()
-                .map(|(index, value)| {
-                    compile_json_value(value, descriptor, &format!("{path}/{index}"))
-                })
-                .collect::<Result<_, _>>()?,
-        ),
-        serde_json::Value::Object(values) => ExecutionPlanJsonValue::Object(
-            values
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        compile_json_value(
-                            value,
-                            descriptor,
-                            &format!("{path}/{}", json_pointer_segment(key)),
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, ExecutionPlanBuildError>>()?,
-        ),
-        _ => ExecutionPlanJsonValue::Scalar(value.clone()),
-    })
 }
 
 fn require_positive(value: Option<u64>, path: &str) -> Result<u64, ExecutionPlanBuildError> {

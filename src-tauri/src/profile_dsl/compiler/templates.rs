@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, Fetch, JsonObject, RequestBody};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, Fetch};
+use crate::profile_dsl::primitives::fetch::http::compile_http_fetch;
 use crate::profile_dsl::template::{
     descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
 };
@@ -14,28 +15,27 @@ enum TemplateContext {
     Detail,
 }
 
-fn http_url_placement(context: TemplateContext) -> TemplatePlacement {
-    match context {
-        TemplateContext::Discovery => TemplatePlacement::DiscoveryHttpUrl,
-        TemplateContext::Detail => TemplatePlacement::DetailHttpUrl,
-    }
-}
-fn http_header_placement(context: TemplateContext) -> TemplatePlacement {
-    match context {
-        TemplateContext::Discovery => TemplatePlacement::DiscoveryHttpHeader,
-        TemplateContext::Detail => TemplatePlacement::DetailHttpHeader,
-    }
-}
-fn http_body_placement(context: TemplateContext) -> TemplatePlacement {
-    match context {
-        TemplateContext::Discovery => TemplatePlacement::DiscoveryHttpBody,
-        TemplateContext::Detail => TemplatePlacement::DetailHttpBody,
-    }
-}
 fn browser_url_placement(context: TemplateContext) -> TemplatePlacement {
     match context {
         TemplateContext::Discovery => TemplatePlacement::DiscoveryBrowserUrl,
         TemplateContext::Detail => TemplatePlacement::DetailBrowserUrl,
+    }
+}
+
+fn http_placements(
+    context: TemplateContext,
+) -> (TemplatePlacement, TemplatePlacement, TemplatePlacement) {
+    match context {
+        TemplateContext::Discovery => (
+            TemplatePlacement::DiscoveryHttpUrl,
+            TemplatePlacement::DiscoveryHttpHeader,
+            TemplatePlacement::DiscoveryHttpBody,
+        ),
+        TemplateContext::Detail => (
+            TemplatePlacement::DetailHttpUrl,
+            TemplatePlacement::DetailHttpHeader,
+            TemplatePlacement::DetailHttpBody,
+        ),
     }
 }
 
@@ -49,10 +49,9 @@ pub(super) fn validate_template_variables(
     let mut dependencies = SourceRuntimeBindingDependencies::default();
     let posting_meta_keys = discovery_posting_meta_keys(discovery);
     for (index, strategy) in discovery.strategies.iter().enumerate() {
-        let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_fetch_templates(
             &strategy.fetch,
-            &format!("{strategy_path}/fetch"),
+            &format!("{base_path}/discovery/strategies/{index}/fetch"),
             strategy.key.as_str(),
             TemplateContext::Discovery,
             &source_config_keys,
@@ -62,7 +61,6 @@ pub(super) fn validate_template_variables(
             &mut dependencies,
         );
     }
-
     if let Some(detail) = detail {
         for (index, strategy) in detail.strategies.iter().enumerate() {
             let captures = strategy
@@ -70,10 +68,9 @@ pub(super) fn validate_template_variables(
                 .as_ref()
                 .map(|captures| captures.keys().cloned().collect::<HashSet<_>>())
                 .unwrap_or_default();
-            let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_fetch_templates(
                 &strategy.fetch,
-                &format!("{strategy_path}/fetch"),
+                &format!("{base_path}/detail/strategies/{index}/fetch"),
                 strategy.key.as_str(),
                 TemplateContext::Detail,
                 &source_config_keys,
@@ -87,6 +84,7 @@ pub(super) fn validate_template_variables(
     dependencies
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_fetch_templates(
     fetch: &Fetch,
     path: &str,
@@ -100,202 +98,58 @@ fn validate_fetch_templates(
 ) {
     match fetch {
         Fetch::Http {
-            url, headers, body, ..
+            method,
+            url,
+            headers,
+            body,
+            timeout_ms,
         } => {
-            validate_template_string(
+            let keys = TemplateAdmissionKeys {
+                source_config: source_config_keys.iter().cloned().collect(),
+                captures: captures.iter().cloned().collect(),
+                posting_meta: posting_meta_keys.iter().cloned().collect(),
+            };
+            let (url_placement, header_placement, body_placement) = http_placements(context);
+            let result = compile_http_fetch(
+                *method,
                 url,
-                &format!("{path}/url"),
-                strategy_key,
-                context,
-                http_url_placement(context),
-                source_config_keys,
-                captures,
-                posting_meta_keys,
-                diagnostics,
-                dependencies,
+                headers.as_ref(),
+                body.as_ref(),
+                *timeout_ms,
+                &descriptor_for_placement(url_placement, &keys),
+                &descriptor_for_placement(header_placement, &keys),
+                &descriptor_for_placement(body_placement, &keys),
             );
-            if let Some(headers) = headers {
-                for (header, value) in headers {
-                    validate_template_string(
-                        value,
-                        &format!("{path}/headers/{}", json_pointer_segment(header)),
-                        strategy_key,
-                        context,
-                        http_header_placement(context),
-                        source_config_keys,
-                        captures,
-                        posting_meta_keys,
-                        diagnostics,
-                        dependencies,
+            match result {
+                Ok(compiled) => {
+                    if compiled.references_source_name() {
+                        dependencies.insert(SourceRuntimeBinding::Name);
+                    }
+                }
+                Err(error) => {
+                    let mut diagnostic = compiler_error(
+                        error.code,
+                        error.message,
+                        format!("{path}{}", error.path),
+                        serde_json::json!({ "invariant": "canonical_http_fetch" }),
                     );
+                    diagnostic.strategy_key = Some(strategy_key.to_string());
+                    diagnostics.push(diagnostic);
                 }
             }
-            if let Some(body) = body {
-                validate_request_body_templates(
-                    body,
-                    &format!("{path}/body"),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    diagnostics,
-                    dependencies,
-                );
-            }
         }
-        Fetch::Browser { url, .. } => {
-            validate_template_string(
-                url,
-                &format!("{path}/url"),
-                strategy_key,
-                context,
-                browser_url_placement(context),
-                source_config_keys,
-                captures,
-                posting_meta_keys,
-                diagnostics,
-                dependencies,
-            );
-        }
-    }
-}
-
-fn validate_request_body_templates(
-    body: &RequestBody,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    match body {
-        RequestBody::Json { value } => validate_json_object_templates(
-            value,
-            path,
+        Fetch::Browser { url, .. } => validate_template_string(
+            url,
+            &format!("{path}/url"),
             strategy_key,
             context,
+            browser_url_placement(context),
             source_config_keys,
             captures,
             posting_meta_keys,
             diagnostics,
             dependencies,
         ),
-        RequestBody::Text { value } => validate_template_string(
-            value,
-            &format!("{path}/value"),
-            strategy_key,
-            context,
-            http_body_placement(context),
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        RequestBody::Form { fields } => {
-            for (key, value) in fields {
-                validate_template_string(
-                    value,
-                    &format!("{path}/fields/{}", json_pointer_segment(key)),
-                    strategy_key,
-                    context,
-                    http_body_placement(context),
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    diagnostics,
-                    dependencies,
-                );
-            }
-        }
-    }
-}
-
-fn validate_json_object_templates(
-    value: &JsonObject,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    for (key, value) in value {
-        validate_json_value_templates(
-            value,
-            &format!("{path}/{}", json_pointer_segment(key)),
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        );
-    }
-}
-
-fn validate_json_value_templates(
-    value: &serde_json::Value,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    match value {
-        serde_json::Value::String(value) => validate_template_string(
-            value,
-            path,
-            strategy_key,
-            context,
-            http_body_placement(context),
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        serde_json::Value::Array(values) => {
-            for (index, value) in values.iter().enumerate() {
-                validate_json_value_templates(
-                    value,
-                    &format!("{path}/{index}"),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    diagnostics,
-                    dependencies,
-                );
-            }
-        }
-        serde_json::Value::Object(values) => {
-            for (key, value) in values {
-                validate_json_value_templates(
-                    value,
-                    &format!("{path}/{}", json_pointer_segment(key)),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    diagnostics,
-                    dependencies,
-                );
-            }
-        }
-        _ => {}
     }
 }
 

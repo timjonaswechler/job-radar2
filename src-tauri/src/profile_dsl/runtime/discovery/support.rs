@@ -3,9 +3,9 @@ use crate::profile_dsl::template::{
     render_template, CompiledTemplate, TemplateReference, TemplateValueView,
 };
 
-struct DiscoveryTemplateValues<'a> {
-    source_config: &'a SourceConfig,
-    source_name: &'a str,
+pub(super) struct DiscoveryTemplateValues<'a> {
+    pub(super) source_config: &'a SourceConfig,
+    pub(super) source_name: &'a str,
 }
 impl TemplateValueView for DiscoveryTemplateValues<'_> {
     fn resolve(&self, reference: &TemplateReference) -> Option<String> {

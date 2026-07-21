@@ -206,7 +206,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
 }
 
 #[test]
-fn compiled_discovery_runtime_reports_get_body_combination() {
+fn compiler_rejects_get_body_combination_before_runtime() {
     let mut extra = serde_json::Map::new();
     extra.insert(
         "fetch".to_string(),
@@ -218,32 +218,22 @@ fn compiled_discovery_runtime_reports_get_body_combination() {
             "timeoutMs": 10000
         }),
     );
-    let plan = compiled_discovery_plan_with_strategy(
+    let CompileSourceOutcome::Rejected { diagnostics } = compile_discovery_outcome_with_strategy(
         json!({ "type": "json" }),
         default_select(),
         default_fields(),
         "https://example.test/jobs.json",
         extra,
-    );
-    let fetcher = fake_fetcher([]);
+    ) else {
+        panic!("GET with a body must reject during compilation");
+    };
 
-    let result = block_on(execute_discovery_test_with_config(
-        &plan,
-        &source_config(),
-        &fetcher,
-    ));
-
-    assert!(result.candidates.is_empty());
-    assert_runtime_diagnostic(&result.diagnostics[0], "unsupported_http_body_for_method");
+    assert_eq!(diagnostics[0].code, "unsupported_http_body_for_method");
     assert_eq!(
-        result.diagnostics[0].path,
-        "/discovery/strategies/0/fetch/body"
+        diagnostics[0].path,
+        "/accessPaths/0/discovery/strategies/0/fetch/body"
     );
-    assert_eq!(
-        result.diagnostics[0].strategy_key.as_deref(),
-        Some("json_api")
-    );
-    assert!(fetcher.requests().is_empty());
+    assert_eq!(diagnostics[0].strategy_key.as_deref(), Some("json_api"));
 }
 
 #[test]

@@ -1,5 +1,10 @@
-use super::support::{push_browser_fetch_diagnostic, render_source_config_template};
+use super::support::{
+    push_browser_fetch_diagnostic, render_source_config_template, DiscoveryTemplateValues,
+};
 use super::*;
+use crate::profile_dsl::primitives::fetch::http::{
+    execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay,
+};
 
 pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
@@ -55,7 +60,7 @@ where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    fetch_strategy_document_with_url_options(
+    fetch_strategy_document_with_options(
         fetcher,
         browser,
         fetch,
@@ -92,7 +97,7 @@ where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    fetch_strategy_document_with_url_options(
+    fetch_strategy_document_with_options(
         fetcher,
         browser,
         fetch,
@@ -111,7 +116,8 @@ where
     .await
 }
 
-async fn fetch_strategy_document_with_url_options<F, B>(
+#[allow(clippy::too_many_arguments)]
+async fn fetch_strategy_document_with_options<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
@@ -132,34 +138,72 @@ where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     match fetch {
-        ExecutionPlanFetch::Http {
-            method,
-            url,
-            headers,
-            body,
-            timeout_ms,
-            ..
-        } => {
-            fetch_http_strategy_document(
-                fetcher,
-                *method,
-                url,
-                headers.as_ref(),
-                body.as_ref(),
-                *timeout_ms,
-                authored_charset,
+        ExecutionPlanFetch::Http(fetch) => {
+            let values = DiscoveryTemplateValues {
                 source_config,
                 source_name,
-                url_override,
-                query_params,
-                json_body_params,
-                base_path,
-                strategy_key,
-                strategy_index,
-                diagnostics,
+            };
+            match execute_http_fetch(
+                fetcher,
+                fetch,
+                &values,
+                HttpFetchOverlay {
+                    url_override,
+                    query_params,
+                    json_body_params,
+                },
+                authored_charset,
                 context,
             )
             .await
+            {
+                Ok(response) => Ok(Some(CompleteParseText::DecodedHttp(response.body))),
+                Err(HttpFetchExecutionError::Cancelled) => Err(fetch_cancellation(
+                    strategy_index,
+                    strategy_key,
+                    CancellationOperation::Fetch,
+                )),
+                Err(HttpFetchExecutionError::BudgetExhausted) => Ok(None),
+                Err(HttpFetchExecutionError::NonSuccessStatus { status }) => {
+                    diagnostics.push(runtime_error(
+                        "http_fetch_non_success_status",
+                        "HTTP fetch returned a non-success status",
+                        format!("{base_path}/fetch"),
+                        strategy_key,
+                        json!({ "method": fetch.method.label(), "status": status }),
+                    ));
+                    Ok(None)
+                }
+                Err(HttpFetchExecutionError::Acquisition(error))
+                    if error.kind == ProfileHttpFailureKind::Cancelled =>
+                {
+                    Err(fetch_cancellation(
+                        strategy_index,
+                        strategy_key,
+                        CancellationOperation::Fetch,
+                    ))
+                }
+                Err(HttpFetchExecutionError::Acquisition(error)) => {
+                    diagnostics.push(runtime_error(
+                        "fetch_failed",
+                        "HTTP fetch failed",
+                        format!("{base_path}/fetch"),
+                        strategy_key,
+                        json!({ "method": fetch.method.label(), "kind": format!("{:?}", error.kind), "admittedBytes": error.admitted_bytes }),
+                    ));
+                    Ok(None)
+                }
+                Err(HttpFetchExecutionError::Render(error)) => {
+                    diagnostics.push(runtime_error(
+                        error.code,
+                        error.message,
+                        format!("{base_path}/fetch{}", error.path),
+                        strategy_key,
+                        json!({}),
+                    ));
+                    Ok(None)
+                }
+            }
         }
         ExecutionPlanFetch::Browser {
             url,
@@ -167,6 +211,16 @@ where
             waits,
             interactions,
         } => {
+            if !json_body_params.is_empty() {
+                diagnostics.push(runtime_error(
+                    "invalid_json_body_overlay",
+                    "json_body overlay is unavailable for Browser Fetch",
+                    format!("{base_path}/fetch"),
+                    strategy_key,
+                    json!({}),
+                ));
+                return Ok(None);
+            }
             fetch_browser_strategy_document(
                 browser,
                 url,
@@ -188,162 +242,7 @@ where
     }
 }
 
-async fn fetch_http_strategy_document<F>(
-    fetcher: &F,
-    method: Option<HttpMethod>,
-    url: &crate::profile_dsl::template::CompiledTemplate,
-    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
-    body: Option<&ExecutionPlanRequestBody>,
-    timeout_ms: u64,
-    authored_charset: Option<&str>,
-    source_config: &SourceConfig,
-    source_name: &str,
-    url_override: Option<&str>,
-    query_params: &[(&str, String)],
-    json_body_params: &[(&str, String)],
-    base_path: &str,
-    strategy_key: Option<&str>,
-    strategy_index: usize,
-    diagnostics: &mut Diagnostics,
-    context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-{
-    let method = method.unwrap_or(HttpMethod::Get);
-    if method == HttpMethod::Get && body.is_some() {
-        diagnostics.push(runtime_error(
-            "unsupported_http_body_for_method",
-            "HTTP GET fetch requests cannot declare a request body",
-            format!("{base_path}/fetch/body"),
-            strategy_key,
-            json!({ "method": "GET" }),
-        ));
-        return Ok(None);
-    }
-
-    let rendered_url =
-        match render_fetch_url(url, source_config, source_name, url_override, query_params) {
-            Ok(url) => url,
-            Err(message) => {
-                diagnostics.push(runtime_error(
-                    "fetch_url_template_failed",
-                    format!("Fetch URL template could not be rendered: {message}"),
-                    format!("{base_path}/fetch/url"),
-                    strategy_key,
-                    json!({}),
-                ));
-                return Ok(None);
-            }
-        };
-
-    let rendered_headers = match render_headers(headers, source_config, source_name) {
-        Ok(headers) => headers,
-        Err(message) => {
-            diagnostics.push(runtime_error(
-                "fetch_header_template_failed",
-                format!("Fetch header template could not be rendered: {message}"),
-                format!("{base_path}/fetch/headers"),
-                strategy_key,
-                json!({}),
-            ));
-            return Ok(None);
-        }
-    };
-
-    let rendered_body =
-        match render_request_body(body, source_config, source_name, json_body_params) {
-            Ok(body) => body,
-            Err(message) => {
-                diagnostics.push(runtime_error(
-                    "fetch_body_template_failed",
-                    format!("Fetch body template could not be rendered: {message}"),
-                    format!("{base_path}/fetch/body"),
-                    strategy_key,
-                    json!({}),
-                ));
-                return Ok(None);
-            }
-        };
-
-    let request = ProfileHttpRequest {
-        method,
-        url: rendered_url.clone(),
-        headers: rendered_headers
-            .into_iter()
-            .map(|(name, value)| (name, value.into_bytes()))
-            .collect(),
-        body: match rendered_body.map(SensitiveRequestBody::render).transpose() {
-            Ok(body) => body,
-            Err(()) => {
-                diagnostics.push(runtime_error(
-                    "fetch_body_render_failed",
-                    "Rendered HTTP request body could not be encoded",
-                    format!("{base_path}/fetch/body"),
-                    strategy_key,
-                    json!({}),
-                ));
-                return Ok(None);
-            }
-        },
-        timeout_ms,
-        authored_charset: authored_charset.map(ToString::to_string),
-    };
-
-    if context.is_cancelled() {
-        return Err(TypedCancellation::strategy(
-            RuntimePhase::Discovery,
-            strategy_index,
-            strategy_key.expect("compiled strategy has a key"),
-            CancellationOperation::Fetch,
-        ));
-    }
-
-    if context
-        .debit(AllowanceCharge {
-            requests: 1,
-            pages: u64::from(context.page_request()),
-            ..AllowanceCharge::default()
-        })
-        .is_err()
-    {
-        return Ok(None);
-    }
-
-    if context.is_cancelled() {
-        return Err(TypedCancellation::strategy(
-            RuntimePhase::Discovery,
-            strategy_index,
-            strategy_key.expect("compiled strategy has a key"),
-            CancellationOperation::Fetch,
-        ));
-    }
-
-    let result = fetcher.fetch(request, context).await;
-
-    match result {
-        Ok(response) => Ok(Some(CompleteParseText::DecodedHttp(response.body))),
-        Err(error) if error.kind == ProfileHttpFailureKind::Cancelled => {
-            Err(TypedCancellation::strategy(
-                RuntimePhase::Discovery,
-                strategy_index,
-                strategy_key.expect("compiled strategy has a key"),
-                CancellationOperation::Fetch,
-            ))
-        }
-        Err(error) => {
-            diagnostics.push(runtime_error(
-                "fetch_failed",
-                "HTTP fetch failed",
-                format!("{base_path}/fetch"),
-                strategy_key,
-                json!({ "method": http_method_label(method), "kind": format!("{:?}", error.kind), "admittedBytes": error.admitted_bytes }),
-            ));
-            Ok(None)
-        }
-    }
-}
-
+#[allow(clippy::too_many_arguments)]
 async fn fetch_browser_strategy_document<B>(
     browser: &B,
     url: &crate::profile_dsl::template::CompiledTemplate,
@@ -363,9 +262,10 @@ async fn fetch_browser_strategy_document<B>(
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    let rendered_url =
-        match render_fetch_url(url, source_config, source_name, url_override, query_params) {
-            Ok(url) => url,
+    let rendered_url = match url_override {
+        Some(url) => append_query_params(url.to_string(), query_params),
+        None => match render_source_config_template(url, source_config, source_name) {
+            Ok(url) => append_query_params(url, query_params),
             Err(message) => {
                 diagnostics.push(runtime_error(
                     "fetch_url_template_failed",
@@ -376,13 +276,12 @@ where
                 ));
                 return Ok(None);
             }
-        };
-
+        },
+    };
     if context.is_cancelled() {
-        return Err(TypedCancellation::strategy(
-            RuntimePhase::Discovery,
+        return Err(fetch_cancellation(
             strategy_index,
-            strategy_key.expect("compiled strategy has a key"),
+            strategy_key,
             CancellationOperation::Browser,
         ));
     }
@@ -396,35 +295,26 @@ where
     {
         return Ok(None);
     }
-
     if context.is_cancelled() {
-        return Err(TypedCancellation::strategy(
-            RuntimePhase::Discovery,
+        return Err(fetch_cancellation(
             strategy_index,
-            strategy_key.expect("compiled strategy has a key"),
+            strategy_key,
             CancellationOperation::Browser,
         ));
     }
-
     let request = ProfileBrowserFetchRequest {
         url: rendered_url.clone(),
         timeout_ms,
         waits: waits.to_vec(),
         interactions: interactions.to_vec(),
     };
-
     match browser.render_with_context(request, context).await {
         Ok(ProfileBrowserFetchResponse { body }) => {
             Ok(Some(CompleteParseText::BrowserRendered(body)))
         }
-        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
-            Err(TypedCancellation::strategy(
-                RuntimePhase::Discovery,
-                strategy_index,
-                strategy_key.expect("compiled strategy has a key"),
-                CancellationOperation::Browser,
-            ))
-        }
+        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => Err(
+            fetch_cancellation(strategy_index, strategy_key, CancellationOperation::Browser),
+        ),
         Err(error) => {
             push_browser_fetch_diagnostic(
                 error,
@@ -438,120 +328,17 @@ where
     }
 }
 
-fn render_fetch_url(
-    url: &crate::profile_dsl::template::CompiledTemplate,
-    source_config: &SourceConfig,
-    source_name: &str,
-    url_override: Option<&str>,
-    query_params: &[(&str, String)],
-) -> Result<String, String> {
-    let rendered = match url_override {
-        Some(url) => url.to_string(),
-        None => render_source_config_template(url, source_config, source_name)?,
-    };
-    Ok(append_query_params(rendered, query_params))
-}
-
-fn render_headers(
-    headers: Option<&BTreeMap<String, crate::profile_dsl::template::CompiledTemplate>>,
-    source_config: &SourceConfig,
-    source_name: &str,
-) -> Result<BTreeMap<String, String>, String> {
-    let mut rendered = BTreeMap::new();
-    for (name, value) in headers.into_iter().flatten() {
-        rendered.insert(
-            name.clone(),
-            render_source_config_template(value, source_config, source_name)?,
-        );
-    }
-    Ok(rendered)
-}
-
-fn render_request_body(
-    body: Option<&ExecutionPlanRequestBody>,
-    source_config: &SourceConfig,
-    source_name: &str,
-    json_body_params: &[(&str, String)],
-) -> Result<Option<RequestBody>, String> {
-    let Some(body) = body else {
-        return Ok(None);
-    };
-    match body {
-        ExecutionPlanRequestBody::Json { value } => {
-            let mut rendered = value
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        render_json_body_value(value, source_config, source_name)?,
-                    ))
-                })
-                .collect::<Result<serde_json::Map<String, Value>, String>>()?;
-            for (key, value) in json_body_params {
-                rendered.insert((*key).to_string(), render_pagination_json_value(value));
-            }
-            Ok(Some(RequestBody::Json { value: rendered }))
-        }
-        ExecutionPlanRequestBody::Text { value } => Ok(Some(RequestBody::Text {
-            value: render_source_config_template(value, source_config, source_name)?,
-        })),
-        ExecutionPlanRequestBody::Form { fields } => Ok(Some(RequestBody::Form {
-            fields: fields
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        render_source_config_template(value, source_config, source_name)?,
-                    ))
-                })
-                .collect::<Result<BTreeMap<String, String>, String>>()?,
-        })),
-    }
-}
-
-fn render_pagination_json_value(value: &str) -> Value {
-    value
-        .parse::<u64>()
-        .map(serde_json::Number::from)
-        .map(Value::Number)
-        .unwrap_or_else(|_| Value::String(value.to_string()))
-}
-
-fn render_json_body_value(
-    value: &ExecutionPlanJsonValue,
-    source_config: &SourceConfig,
-    source_name: &str,
-) -> Result<Value, String> {
-    match value {
-        ExecutionPlanJsonValue::Template(value) => Ok(Value::String(
-            render_source_config_template(value, source_config, source_name)?,
-        )),
-        ExecutionPlanJsonValue::Array(values) => Ok(Value::Array(
-            values
-                .iter()
-                .map(|value| render_json_body_value(value, source_config, source_name))
-                .collect::<Result<Vec<_>, _>>()?,
-        )),
-        ExecutionPlanJsonValue::Object(values) => Ok(Value::Object(
-            values
-                .iter()
-                .map(|(key, value)| {
-                    Ok((
-                        key.clone(),
-                        render_json_body_value(value, source_config, source_name)?,
-                    ))
-                })
-                .collect::<Result<serde_json::Map<String, Value>, String>>()?,
-        )),
-        ExecutionPlanJsonValue::Scalar(value) => Ok(value.clone()),
-    }
-}
-
-fn http_method_label(method: HttpMethod) -> &'static str {
-    match method {
-        HttpMethod::Get => "GET",
-        HttpMethod::Post => "POST",
-    }
+fn fetch_cancellation(
+    strategy_index: usize,
+    strategy_key: Option<&str>,
+    operation: CancellationOperation,
+) -> TypedCancellation {
+    TypedCancellation::strategy(
+        RuntimePhase::Discovery,
+        strategy_index,
+        strategy_key.expect("compiled strategy has a key"),
+        operation,
+    )
 }
 
 fn append_query_params(url: String, query_params: &[(&str, String)]) -> String {

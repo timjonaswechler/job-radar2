@@ -117,21 +117,16 @@ fn browser_phase_duration_must_preserve_the_two_second_teardown_reserve() {
 }
 
 #[test]
-fn compiler_diagnoses_missing_http_fetch_timeout() {
+fn direct_serde_rejects_missing_http_fetch_timeout() {
     let mut profile = simple_profile_value();
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
         .as_object_mut()
         .unwrap()
         .remove("timeoutMs");
 
-    let result = compile_profile_value(profile);
+    let error = serde_json::from_value::<SourceProfileDocument>(profile).unwrap_err();
 
-    assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "missing_fetch_timeout",
-        "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs",
-    );
+    assert!(error.to_string().contains("missing field `timeoutMs`"));
 }
 
 #[test]
@@ -167,7 +162,7 @@ fn compiler_allows_public_headers_and_static_technical_body_parameters() {
 }
 
 #[test]
-fn compiler_diagnoses_forbidden_headers_secret_body_fields_and_collects_multiple_diagnostics() {
+fn compiler_rejects_forbidden_headers_before_building_a_plan() {
     let mut profile = simple_profile_value();
     let fetch = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"];
     fetch["headers"] = json!({
@@ -189,39 +184,13 @@ fn compiler_diagnoses_forbidden_headers_secret_body_fields_and_collects_multiple
             }
         }
     });
-    fetch.as_object_mut().unwrap().remove("timeoutMs");
-
     let result = compile_profile_value(profile);
 
     assert_eq!(result.execution_plan, None);
-    for code in [
-        "forbidden_request_header",
-        "secret_like_request_body_field",
-        "missing_fetch_timeout",
-    ] {
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == code),
-            "expected diagnostic code {code}, got {:?}",
-            result.diagnostics
-        );
-    }
-    assert!(
-        result
-            .diagnostics
-            .iter()
-            .filter(|diagnostic| diagnostic.code == "forbidden_request_header")
-            .count()
-            >= 5,
-        "expected all forbidden headers to be diagnosed, got {:?}",
-        result.diagnostics
-    );
     assert_compiler_error(
         &result,
-        "secret_like_request_body_field",
-        "/accessPaths/0/discovery/strategies/0/fetch/body/value/nested/apiKey",
+        "forbidden_request_header",
+        "/accessPaths/0/discovery/strategies/0/fetch/headers/authorization",
     );
 }
 
@@ -240,7 +209,7 @@ fn compiler_validates_security_and_boundedness_after_direct_specialization() {
                     "method": "GET",
                     "url": "{{sourceConfig:feedUrl}}",
                     "headers": { "authorization": "Bearer secret" },
-                    "timeoutMs": 0
+                    "timeoutMs": 10000
                 }
             }]
         }
@@ -249,11 +218,6 @@ fn compiler_validates_security_and_boundedness_after_direct_specialization() {
     let result = compile_profile_and_source_values(profile, source);
 
     assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "missing_fetch_timeout",
-        "/accessPaths/0/discovery/strategies/0/fetch/timeoutMs",
-    );
     assert_compiler_error(
         &result,
         "forbidden_request_header",

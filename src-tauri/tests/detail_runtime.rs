@@ -21,11 +21,11 @@ use std::{
 
 use job_radar_lib::{
     execute_detail, DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, ProfileBrowserClient,
-    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, RuntimeCancellation, RuntimeExecutionContext,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PhaseCompletion,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, RuntimeCancellation,
+    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 use tokio::sync::Notify;
@@ -924,14 +924,57 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         &posting_occurrence("https://example.test/jobs/42", []),
         &fake_profile_http_client([]),
     ));
-    assert_runtime_diagnostic(
-        &missing_context.diagnostics[0],
-        "runtime_template_context_missing",
-    );
+    assert_runtime_diagnostic(&missing_context.diagnostics[0], "fetch_url_template_failed");
     let diagnostic = &missing_context.diagnostics[0];
     let serialized = serde_json::to_string(diagnostic).unwrap();
     assert!(!serialized.contains(AUTHORED_URL_SECRET));
     assert_eq!(diagnostic.details, Some(json!({})));
+}
+
+#[test]
+fn non_success_http_status_exposes_no_detail_patch_or_parse_result() {
+    let plan = compiled_json_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        None,
+        None,
+    );
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 500,
+        final_url: "https://example.test/jobs/failed.json".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(
+            json!({ "description": "Must not escape" })
+                .to_string()
+                .into_bytes(),
+        )],
+        content_length: None,
+    }]);
+
+    let result = block_on(execute_detail_test(
+        &plan,
+        &posting_occurrence("https://example.test/jobs/failed.json", []),
+        &fetcher,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_eq!(fetcher.request_count(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "http_fetch_non_success_status");
+    assert_eq!(
+        result.diagnostics[0].details,
+        Some(json!({ "method": "GET", "status": 500 }))
+    );
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
+    let report = result.report.expect("work-started terminal has a report");
+    assert_eq!(report.completion, PhaseCompletion::PolicyUnsatisfied);
+    assert_eq!(report.usage.requests, 1);
 }
 
 #[test]

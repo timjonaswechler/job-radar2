@@ -89,12 +89,25 @@
         "mode": { "type": "string", "enum": ["http", "browser"] },
         "method": { "type": "string", "enum": ["GET", "POST"] },
         "url": { "$ref": "common.schema.json#/$defs/templateString" },
-        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "headers": { "$ref": "fetch.schema.json#/$defs/publicHeaders" },
         "body": { "$ref": "#/$defs/requestBodyFragment" },
-        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
         "waits": { "type": "array", "items": { "$ref": "fetch.schema.json#/$defs/browserWait" } },
         "interactions": { "type": "array", "items": { "$ref": "fetch.schema.json#/$defs/browserInteraction" } }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["mode"],
+            "properties": { "mode": { "const": "http" } }
+          },
+          "then": {
+            "properties": {
+              "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+            }
+          }
+        }
+      ]
     },
     "requestBodyFragment": {
       "type": "object",

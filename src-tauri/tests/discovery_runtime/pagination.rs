@@ -837,3 +837,36 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
     );
     assert_eq!(second_body.default_content_type(), Some("application/json"));
 }
+
+#[test]
+fn json_body_pagination_overlay_rejects_non_post_json_fetch_before_io() {
+    let mut extra = serde_json::Map::new();
+    extra.insert(
+        "pagination".to_string(),
+        json!({
+            "type": "offset_limit",
+            "offsetParam": "offset",
+            "limitParam": "limit",
+            "parameterLocation": "json_body",
+            "limit": 2,
+            "limits": { "maxRequests": 1 }
+        }),
+    );
+    let plan = compiled_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        extra,
+    );
+    let fetcher = fake_fetcher([]);
+
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
+
+    assert!(result.candidates.is_empty());
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "invalid_json_body_overlay"));
+    assert!(fetcher.requests().is_empty());
+}

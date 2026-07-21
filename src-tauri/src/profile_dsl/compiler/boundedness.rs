@@ -198,51 +198,41 @@ fn validate_fetch_bounds(
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    match fetch {
-        Fetch::Http { timeout_ms, .. } => {
-            validate_timeout(
-                *timeout_ms,
-                "missing_fetch_timeout",
-                "HTTP fetch must declare an explicit timeoutMs bound",
-                &format!("{path}/timeoutMs"),
+    let Fetch::Browser {
+        timeout_ms,
+        waits,
+        interactions,
+        ..
+    } = fetch
+    else {
+        return;
+    };
+    validate_timeout(
+        *timeout_ms,
+        "missing_fetch_timeout",
+        "Browser fetch must declare an explicit timeoutMs bound",
+        &format!("{path}/timeoutMs"),
+        strategy_key,
+        diagnostics,
+    );
+    if let Some(waits) = waits {
+        for (index, wait) in waits.iter().enumerate() {
+            validate_browser_wait_bounds(
+                wait,
+                &format!("{path}/waits/{index}"),
                 strategy_key,
                 diagnostics,
             );
         }
-        Fetch::Browser {
-            timeout_ms,
-            waits,
-            interactions,
-            ..
-        } => {
-            validate_timeout(
-                *timeout_ms,
-                "missing_fetch_timeout",
-                "Browser fetch must declare an explicit timeoutMs bound",
-                &format!("{path}/timeoutMs"),
+    }
+    if let Some(interactions) = interactions {
+        for (index, interaction) in interactions.iter().enumerate() {
+            validate_browser_interaction_bounds(
+                interaction,
+                &format!("{path}/interactions/{index}"),
                 strategy_key,
                 diagnostics,
             );
-            if let Some(waits) = waits {
-                for (index, wait) in waits.iter().enumerate() {
-                    validate_browser_wait_bounds(
-                        wait,
-                        &format!("{path}/waits/{index}"),
-                        strategy_key,
-                        diagnostics,
-                    );
-                }
-            }
-            if let Some(interactions) = interactions {
-                for (index, interaction) in interactions.iter().enumerate() {
-                    validate_browser_interaction_bounds(
-                        interaction,
-                        &format!("{path}/interactions/{index}"),
-                        strategy_key,
-                        diagnostics,
-                    );
-                }
-            }
         }
     }
 }

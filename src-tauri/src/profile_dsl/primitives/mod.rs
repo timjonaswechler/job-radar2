@@ -1,5 +1,6 @@
 pub mod capture;
 pub mod cardinality;
+pub mod fetch;
 pub mod parse;
 pub mod predicate;
 pub mod select;

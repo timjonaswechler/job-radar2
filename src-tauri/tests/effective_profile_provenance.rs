@@ -35,7 +35,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
             "policy": { "type": "first_accepted" },
             "strategies": [{
                 "key": "json_api",
-                "fetch": { "headers": { "x-source": "direct" } },
+                "fetch": { "headers": { "x-requested-with": "direct" } },
                 "acceptWhen": { "minResults": 1 }
             }]
         }
@@ -74,7 +74,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
             strategy("json_api"),
             field("fetch"),
             field("headers"),
-            map_key("x-source"),
+            map_key("x-requested-with"),
         ],
         ProvenanceOrigin::DirectSourceFragment,
     );
@@ -216,8 +216,8 @@ fn equivalent_dynamic_map_insertion_orders_serialize_identically() {
     let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let base_source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     let provenances = [
-        r#"[{"key":"json_feed","discovery":{"strategies":[{"key":"json_api","fetch":{"headers":{"z-last":"z","a-first":"a"}}}]}}]"#,
-        r#"[{"discovery":{"strategies":[{"fetch":{"headers":{"a-first":"a","z-last":"z"}},"key":"json_api"}]},"key":"json_feed"}]"#,
+        r#"[{"key":"json_feed","discovery":{"strategies":[{"key":"json_api","fetch":{"headers":{"user-agent":"z","accept-language":"a"}}}]}}]"#,
+        r#"[{"discovery":{"strategies":[{"fetch":{"headers":{"accept-language":"a","user-agent":"z"}},"key":"json_api"}]},"key":"json_feed"}]"#,
     ]
     .map(|json| {
         let mut source = base_source.clone();

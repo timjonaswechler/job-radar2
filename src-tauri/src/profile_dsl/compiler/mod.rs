@@ -30,12 +30,12 @@ mod support;
 mod templates;
 mod values;
 
+pub(crate) use crate::profile_dsl::primitives::fetch::http::http_fetch_security_behavior as forbidden_request_key_behavior;
 pub(crate) use boundedness::MAX_FALLBACK_STRATEGIES;
 pub use provenance::{
     CompiledSourceProvenance, ProvenanceEntry, ProvenanceOrigin, ProvenancePath,
     ProvenancePathSegment,
 };
-pub(crate) use security::forbidden_request_key_behavior;
 
 use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, JsonSchemaObject};
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;

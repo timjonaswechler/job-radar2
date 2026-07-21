@@ -15,8 +15,8 @@ pub enum Fetch {
         headers: Option<BTreeMap<String, String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<RequestBody>,
-        #[serde(rename = "timeoutMs", skip_serializing_if = "Option::is_none")]
-        timeout_ms: Option<u64>,
+        #[serde(rename = "timeoutMs", deserialize_with = "deserialize_http_timeout")]
+        timeout_ms: u64,
     },
     Browser {
         url: String,
@@ -29,12 +29,35 @@ pub enum Fetch {
     },
 }
 
+fn deserialize_http_timeout<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = u64::deserialize(deserializer)?;
+    if (1..=60_000).contains(&value) {
+        Ok(value)
+    } else {
+        Err(serde::de::Error::custom(
+            "HTTP timeoutMs must be between 1 and 60000",
+        ))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum HttpMethod {
     #[serde(rename = "GET")]
     Get,
     #[serde(rename = "POST")]
     Post,
+}
+
+impl HttpMethod {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
