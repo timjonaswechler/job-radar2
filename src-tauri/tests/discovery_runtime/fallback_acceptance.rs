@@ -15,7 +15,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() },
+                "extract": discovery_extract(default_fields()),
                 "acceptWhen": { "minResults": 1 }
             }),
             json!({
@@ -28,7 +28,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() },
+                "extract": discovery_extract(default_fields()),
                 "acceptWhen": { "minResults": 1 }
             }),
             json!({
@@ -41,7 +41,7 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() }
+                "extract": discovery_extract(default_fields())
             }),
         ],
     );
@@ -61,7 +61,14 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Fallback Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Fallback Engineer"
+    );
     assert_eq!(
         fetcher
             .requests()
@@ -107,7 +114,7 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() }
+                "extract": discovery_extract(default_fields())
             }),
             json!({
                 "key": "fallback_api",
@@ -119,7 +126,7 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() }
+                "extract": discovery_extract(default_fields())
             }),
         ],
     );
@@ -168,7 +175,14 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Fallback Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Fallback Engineer"
+    );
     assert_eq!(result.diagnostics.len(), 1);
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
     assert_eq!(
@@ -203,7 +217,7 @@ fn compiled_discovery_runtime_combines_step_and_strategy_acceptance() {
             },
             "parse": { "type": "json" },
             "select": default_select(),
-            "extract": { "fields": default_fields() },
+            "extract": discovery_extract(default_fields()),
             "acceptWhen": { "minResults": 1 }
         })],
     );
@@ -248,7 +262,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": default_fields() },
+                "extract": discovery_extract(default_fields()),
                 "acceptWhen": { "requiredFields": ["descriptionText"] }
             }),
             json!({
@@ -261,7 +275,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": fields_with_description.clone() },
+                "extract": discovery_extract(fields_with_description.clone()),
                 "acceptWhen": { "minDescriptionLength": 20 }
             }),
             json!({
@@ -274,7 +288,7 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
                 },
                 "parse": { "type": "json" },
                 "select": default_select(),
-                "extract": { "fields": fields_with_description },
+                "extract": discovery_extract(fields_with_description),
                 "acceptWhen": { "requiredFields": ["descriptionText"], "minDescriptionLength": 20 }
             }),
         ],
@@ -312,7 +326,14 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Platform Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Platform Engineer"
+    );
     assert_eq!(result.diagnostics.len(), 2);
     assert_eq!(
         result.diagnostics[0].code,
@@ -350,7 +371,7 @@ fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
             },
             "parse": { "type": "json" },
             "select": default_select(),
-            "extract": { "fields": default_fields() },
+            "extract": discovery_extract(default_fields()),
             "acceptWhen": { "maxErrorRatio": 0.25 }
         })],
     );

@@ -8,9 +8,9 @@ use support::{
 use std::{fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    DetailPostingOccurrence, DiagnosticCategory, DiagnosticSeverity, DiscoveryCandidate,
-    PhaseCompletion, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SourceDocument, SourceProfileDocument, SupportLevel,
+    DiagnosticCategory, DiagnosticSeverity, PhaseCompletion, PostingOccurrence,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -79,7 +79,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         &fetcher,
     ));
     assert_eq!(discovery.diagnostics, Vec::new());
-    let expected_candidates: Vec<DiscoveryCandidate> =
+    let expected_candidates: Vec<PostingOccurrence> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
     let discovery_report = discovery.report.as_ref().expect("Discovery report");
@@ -96,7 +96,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let primary_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        &posting_occurrence(primary_candidate),
+        primary_candidate,
         &fetcher,
     ));
     assert_eq!(primary_detail.diagnostics, Vec::new());
@@ -116,7 +116,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let fallback_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        &posting_occurrence(fallback_candidate),
+        fallback_candidate,
         &fetcher,
     ));
     let expected_fallback_detail: Value =
@@ -152,7 +152,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let schott_style_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        &posting_occurrence(schott_style_candidate),
+        schott_style_candidate,
         &fetcher,
     ));
     let expected_schott_style_detail: Value =
@@ -213,17 +213,6 @@ fn assert_detects_named_successfactors_source_config_captures(profile: &Value) {
             captures.contains(&expected),
             "SAP SuccessFactors profile should declare detection capture `{expected}`"
         );
-    }
-}
-
-fn posting_occurrence(candidate: &DiscoveryCandidate) -> DetailPostingOccurrence {
-    DetailPostingOccurrence {
-        url: candidate.url.clone(),
-        title: Some(candidate.title.clone()),
-        company: Some(candidate.company.clone()),
-        locations: candidate.locations.clone(),
-        description_text: candidate.description_text.clone(),
-        posting_meta: candidate.posting_meta.clone(),
     }
 }
 

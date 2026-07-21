@@ -20,12 +20,12 @@ use std::{
 };
 
 use job_radar_lib::{
-    execute_detail, DetailPostingOccurrence, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    execute_detail, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PhaseCompletion,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, RuntimeCancellation,
-    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    PostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 use tokio::sync::Notify;
@@ -366,8 +366,12 @@ fn compiled_detail_runtime_renders_fetch_templates_from_pre_fetch_contexts() {
         })),
         None,
     );
-    let posting = posting_occurrence("job-42", [("jobId", "REQ-42"), ("tenant", "acme_jobs")]);
-    let expected_url = "https://api.example.test/acme_jobs/REQ-42?u=job-42";
+    let posting = posting_occurrence(
+        "https://example.test/jobs/job-42",
+        [("jobId", "REQ-42"), ("tenant", "acme_jobs")],
+    );
+    let expected_url =
+        "https://api.example.test/acme_jobs/REQ-42?u=https://example.test/jobs/job-42";
     let fetcher = fake_profile_http_client([(
         expected_url,
         json!({ "description": "Rendered from all template contexts." }).to_string(),
@@ -1033,7 +1037,10 @@ fn detail_capture_failure_is_atomic_and_prevents_fetch() {
         })),
         None,
     );
-    let posting = posting_occurrence("job-42", [("tenant", "acme"), ("jobId", "REQ-42")]);
+    let posting = posting_occurrence(
+        "https://example.test/jobs/job-42",
+        [("tenant", "acme"), ("jobId", "REQ-42")],
+    );
     let fetcher = fake_profile_http_client([]);
 
     let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
@@ -1446,14 +1453,16 @@ fn compiled_detail_plan_with_fetch(
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
                     "extract": {
-                        "fields": {
+                        "reference": {
+                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                        },
+                        "providerValues": {
                             "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
-                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" },
-                            "postingMeta": {
-                                "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "one" },
-                                "tenant": { "type": "json_path", "jsonPath": "$.tenant", "cardinality": "one" }
-                            }
+                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" }
+                        },
+                        "postingMeta": {
+                            "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "one" },
+                            "tenant": { "type": "json_path", "jsonPath": "$.tenant", "cardinality": "one" }
                         }
                     }
                 }]
@@ -1532,13 +1541,15 @@ fn compiled_detail_plan_with_strategies(
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
                     "extract": {
-                        "fields": {
+                        "reference": {
+                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                        },
+                        "providerValues": {
                             "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
-                            "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" },
-                            "postingMeta": {
-                                "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "one" }
-                            }
+                            "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" }
+                        },
+                        "postingMeta": {
+                            "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "one" }
                         }
                     }
                 }]
@@ -1571,13 +1582,19 @@ fn compiled_detail_plan_with_strategies(
 fn posting_occurrence(
     url: &str,
     posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
-) -> DetailPostingOccurrence {
-    DetailPostingOccurrence {
-        url: url.to_string(),
-        title: Some("Fixture title".to_string()),
-        company: Some("Fixture GmbH".to_string()),
-        locations: Vec::new(),
-        description_text: None,
+) -> PostingOccurrence {
+    let (reference, identity) =
+        job_radar_lib::validate_posting_reference("fixture", url, None).unwrap();
+    PostingOccurrence {
+        identity,
+        reference,
+        provider_values: job_radar_lib::ProviderValues {
+            title: Some("Fixture title".to_string()),
+            company: Some("Fixture GmbH".to_string()),
+            locations: Vec::new(),
+            description_text: None,
+        },
+        hints: Default::default(),
         posting_meta: posting_meta
             .into_iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))

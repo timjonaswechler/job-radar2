@@ -119,7 +119,7 @@ fn first_non_empty_candidate_loading_limit_is_enforced_by_schema() {
     let candidates = (0..16)
         .map(|index| json!({ "type": "const", "value": index }))
         .collect::<Vec<_>>();
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"] =
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["providerValues"]["title"] =
         json!({ "type": "first_non_empty", "candidates": candidates });
     harness.assert_json_valid(
         SchemaEntrypoint::SourceProfile,
@@ -127,7 +127,7 @@ fn first_non_empty_candidate_loading_limit_is_enforced_by_schema() {
         "first_non_empty exact candidate limit",
     );
 
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"]
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["providerValues"]["title"]
         ["candidates"]
         .as_array_mut()
         .unwrap()
@@ -290,6 +290,47 @@ fn schema_rejects_removed_text_parse_in_profiles_and_direct_fragments() {
 }
 
 #[test]
+fn discovery_occurrence_sections_are_disjoint_and_hint_use_is_closed() {
+    let harness = SchemaHarness::new();
+    let mut profile = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    let extract = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"];
+    extract["reference"]["providerPostingId"] =
+        json!({ "type": "json_path", "jsonPath": "$.id", "cardinality": "optional" });
+    extract["hints"] = json!({
+        "title": {
+            "value": { "type": "json_path", "jsonPath": "$.label", "cardinality": "optional" },
+            "hintUse": "search_prefilter"
+        }
+    });
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        profile.clone(),
+        "disjoint Discovery occurrence output",
+    );
+
+    let mut invalid_use = profile.clone();
+    invalid_use["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["hints"]["title"]
+        ["hintUse"] = json!("canonical_value");
+    harness.assert_json_invalid(
+        SchemaEntrypoint::SourceProfile,
+        invalid_use,
+        &["search_prefilter"],
+    );
+
+    let mut unknown = profile.clone();
+    unknown["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["providerValues"]["url"] =
+        json!({ "type": "const", "value": "https://example.test" });
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, unknown, &["Additional"]);
+
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["hints"]["title"]["value"] =
+        Value::Null;
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["null"]);
+}
+
+#[test]
 fn final_strategy_set_schema_requires_first_accepted_policy() {
     let harness = SchemaHarness::new();
     let strategy = json!({
@@ -303,10 +344,12 @@ fn final_strategy_set_schema_requires_first_accepted_policy() {
         "parse": { "type": "json" },
         "select": { "type": "json_path", "jsonPath": "$.jobs" },
         "extract": {
-            "fields": {
-                "title": { "type": "json_path", "jsonPath": "$.title" },
-                "company": { "type": "json_path", "jsonPath": "$.company" },
+            "reference": {
                 "url": { "type": "json_path", "jsonPath": "$.url" }
+            },
+            "providerValues": {
+                "title": { "type": "json_path", "jsonPath": "$.title" },
+                "company": { "type": "json_path", "jsonPath": "$.company" }
             }
         }
     });

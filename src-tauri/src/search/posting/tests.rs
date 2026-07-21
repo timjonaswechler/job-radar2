@@ -209,13 +209,15 @@ fn profile_json_with_detail_step(
                 "parse": { "type": "json" },
                 "select": { "type": "json_path", "jsonPath": "$.jobs" },
                 "extract": {
-                    "fields": {
+                    "reference": {
+                        "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                    },
+                    "providerValues": {
                         "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                        "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
-                        "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" },
-                        "postingMeta": {
-                            "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "optional" }
-                        }
+                        "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" }
+                    },
+                    "postingMeta": {
+                        "jobId": { "type": "json_path", "jsonPath": "$.id", "cardinality": "optional" }
                     }
                 }
             }]

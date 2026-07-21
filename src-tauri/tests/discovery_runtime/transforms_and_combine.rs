@@ -25,7 +25,14 @@ fn compiled_discovery_runtime_applies_explicit_whitespace_transforms() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Staff Platform Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Staff Platform Engineer"
+    );
 }
 
 #[test]
@@ -53,7 +60,14 @@ fn compiled_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
 }
 
 #[test]
@@ -81,7 +95,14 @@ fn compiled_discovery_runtime_dedupes_string_arrays_after_all_cardinality() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
 }
 
 #[test]
@@ -109,7 +130,14 @@ fn compiled_discovery_runtime_joins_arrays_after_all_cardinality() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
 }
 
 #[test]
@@ -137,7 +165,14 @@ fn compiled_discovery_runtime_applies_regex_replace_transforms() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
 }
 
 #[test]
@@ -168,7 +203,14 @@ fn compiled_discovery_runtime_combines_parts_in_declared_order() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Senior / Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior / Rust Engineer"
+    );
 }
 
 #[test]
@@ -197,11 +239,12 @@ fn compiled_discovery_runtime_fails_combine_when_required_part_is_missing() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].provider_values.title, None);
     assert_runtime_diagnostic(&result.diagnostics[0], "required_combine_part_missing");
     assert_eq!(
         result.diagnostics[0].path,
-        "/discovery/strategies/0/extract/fields/title/parts/1/value"
+        "/discovery/strategies/0/extract/providerValues/title/parts/1/value"
     );
 }
 
@@ -232,7 +275,14 @@ fn compiled_discovery_runtime_allows_missing_optional_combine_part() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
 }
 
 #[test]
@@ -263,7 +313,14 @@ fn compiled_discovery_runtime_preserves_empty_combine_join() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "DataEngineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "DataEngineer"
+    );
 }
 
 #[test]
@@ -295,7 +352,14 @@ fn compiled_discovery_runtime_applies_final_transforms_after_combine() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
 }
 
 #[test]
@@ -326,7 +390,14 @@ fn source_owned_discovery_runtime_uses_same_combine_behavior() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Staff Platform Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Staff Platform Engineer"
+    );
 }
 
 #[test]
@@ -355,8 +426,8 @@ fn compiled_discovery_runtime_normalizes_single_location_expression_without_impl
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].locations,
-        vec!["Berlin", "Remote, München"]
+        result.candidates[0].provider_values.locations,
+        vec!["Berlin", "Berlin", "Remote, München", "Remote, München"]
     );
 }
 
@@ -386,8 +457,8 @@ fn compiled_discovery_runtime_normalizes_list_style_locations_in_order() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].locations,
-        vec!["Remote", "Berlin", "München"]
+        result.candidates[0].provider_values.locations,
+        vec!["Remote", "Berlin", "Remote", "München"]
     );
 }
 
@@ -422,7 +493,7 @@ fn compiled_discovery_runtime_splits_and_dedupes_location_arrays_in_order() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].locations,
+        result.candidates[0].provider_values.locations,
         vec!["Berlin", "Remote", "München"]
     );
 }

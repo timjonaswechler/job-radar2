@@ -20,7 +20,7 @@ use crate::source_profile::documents::SourceProfileDocument;
 use super::provenance::{self, OriginTree, ProvenanceOrigin, RecordedProvenance};
 use super::{compiler_error, has_error_diagnostics};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 enum KeyedEntryKind {
     AccessPath,
     DiscoveryStrategy,
@@ -742,52 +742,84 @@ fn collect_extract_missing_fields(
     kind: KeyedEntryKind,
     missing: &mut Vec<String>,
 ) {
-    require_fields(extract, "extract", &["fields"], missing);
-    let Some(fields) = extract.get("fields") else {
+    if kind == KeyedEntryKind::DetailStrategy {
+        require_fields(extract, "extract", &["fields"], missing);
+        if let Some(fields) = extract.get("fields") {
+            require_fields(fields, "extract.fields", &["descriptionText"], missing);
+            if let Some(expression) = fields.get("descriptionText") {
+                collect_expression_missing_fields(
+                    expression,
+                    "extract.fields.descriptionText",
+                    missing,
+                );
+            }
+        }
+        return;
+    }
+
+    require_fields(extract, "extract", &["reference"], missing);
+    let Some(object) = extract.as_object() else {
         return;
     };
-    let required: &[&str] = match kind {
-        KeyedEntryKind::DiscoveryStrategy => &["title", "company", "url"],
-        KeyedEntryKind::DetailStrategy => &["descriptionText"],
-        KeyedEntryKind::AccessPath => unreachable!(),
-    };
-    require_fields(fields, "extract.fields", required, missing);
-    if let Some(object) = fields.as_object() {
-        for (field, expression) in object {
-            if field == "postingMeta" {
-                if let Some(values) = expression.as_object() {
-                    for (key, expression) in values {
-                        collect_expression_missing_fields(
-                            expression,
-                            &format!("extract.fields.postingMeta.{key}"),
-                            missing,
-                        );
-                    }
-                }
-            } else if field == "locations" {
+    if let Some(reference) = object.get("reference") {
+        require_fields(reference, "extract.reference", &["url"], missing);
+        if let Some(reference) = reference.as_object() {
+            for (field, expression) in reference {
+                collect_expression_missing_fields(
+                    expression,
+                    &format!("extract.reference.{field}"),
+                    missing,
+                );
+            }
+        }
+    }
+    if let Some(values) = object.get("providerValues").and_then(Value::as_object) {
+        for (field, expression) in values {
+            if field == "locations" {
                 match expression {
                     Value::Array(expressions) => {
                         for (index, expression) in expressions.iter().enumerate() {
                             collect_expression_missing_fields(
                                 expression,
-                                &format!("extract.fields.locations.{index}"),
+                                &format!("extract.providerValues.locations.{index}"),
                                 missing,
                             );
                         }
                     }
                     _ => collect_expression_missing_fields(
                         expression,
-                        "extract.fields.locations",
+                        "extract.providerValues.locations",
                         missing,
                     ),
                 }
             } else {
                 collect_expression_missing_fields(
                     expression,
-                    &format!("extract.fields.{field}"),
+                    &format!("extract.providerValues.{field}"),
                     missing,
                 );
             }
+        }
+    }
+    if let Some(hints) = object.get("hints").and_then(Value::as_object) {
+        for (key, hint) in hints {
+            require_fields(hint, &format!("extract.hints.{key}"), &["value"], missing);
+            if let Some(expression) = hint.get("value") {
+                collect_expression_missing_fields(
+                    expression,
+                    &format!("extract.hints.{key}.value"),
+                    missing,
+                );
+            }
+        }
+    }
+    if let Some(meta) = object.get("postingMeta").and_then(Value::as_object) {
+        for (key, expression) in meta {
+            collect_expression_missing_fields(
+                expression,
+                &format!("extract.postingMeta.{key}"),
+                missing,
+            );
         }
     }
 }

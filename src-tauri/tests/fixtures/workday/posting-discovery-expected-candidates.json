@@ -1,27 +1,63 @@
 [
   {
-    "title": "Senior Platform Engineer",
-    "company": "Acme Robotics",
-    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001",
-    "locations": ["Berlin, Germany"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_robotics_workday",
+      "providerPostingId": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+    },
+    "reference": {
+      "providerUrl": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001",
+      "providerPostingId": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
+    },
+    "providerValues": {
+      "title": "Senior Platform Engineer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Berlin, Germany"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/Germany-Berlin/Senior-Platform-Engineer_JR-1001"
     }
   },
   {
-    "title": "Frontend Product Engineer",
-    "company": "Acme Robotics",
-    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Remote/Frontend-Product-Engineer_JR-1002",
-    "locations": ["Remote - Germany"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_robotics_workday",
+      "providerPostingId": "/job/Germany-Remote/Frontend-Product-Engineer_JR-1002"
+    },
+    "reference": {
+      "providerUrl": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Remote/Frontend-Product-Engineer_JR-1002",
+      "providerPostingId": "/job/Germany-Remote/Frontend-Product-Engineer_JR-1002"
+    },
+    "providerValues": {
+      "title": "Frontend Product Engineer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Remote - Germany"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/Germany-Remote/Frontend-Product-Engineer_JR-1002"
     }
   },
   {
-    "title": "Data Integration Engineer",
-    "company": "Acme Robotics",
-    "url": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Munich/Data-Integration-Engineer_JR-1003",
-    "locations": ["Munich, Germany"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_robotics_workday",
+      "providerPostingId": "/job/Germany-Munich/Data-Integration-Engineer_JR-1003"
+    },
+    "reference": {
+      "providerUrl": "https://acme.wd3.myworkdayjobs.com/en-US/External/job/Germany-Munich/Data-Integration-Engineer_JR-1003",
+      "providerPostingId": "/job/Germany-Munich/Data-Integration-Engineer_JR-1003"
+    },
+    "providerValues": {
+      "title": "Data Integration Engineer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Munich, Germany"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/Germany-Munich/Data-Integration-Engineer_JR-1003"
     }

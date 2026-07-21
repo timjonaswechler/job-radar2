@@ -6,6 +6,10 @@ pub(crate) mod discovery;
 pub mod http;
 pub(crate) mod strategy_set;
 
+pub use crate::profile_dsl::occurrence::{
+    validate_posting_reference, DiscoveryHint, HintUse, OccurrenceReferenceError,
+    PostingOccurrence, PostingOccurrenceIdentity, PostingReference, ProviderValues,
+};
 pub use allowance::{
     AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, PhaseCancellationReason,
     PhaseCompletion, PhaseExecutionReport, PhaseUsage,
@@ -16,8 +20,8 @@ pub use browser::{
     UnavailableProfileBrowserClient,
 };
 pub use cancellation::{RuntimeCancellation, RuntimeExecutionContext};
-pub use detail::{execute_detail, DetailExecutionResult, DetailPostingOccurrence};
-pub use discovery::{execute_discovery, DiscoveryCandidate, DiscoveryExecutionResult};
+pub use detail::{execute_detail, DetailExecutionResult};
+pub use discovery::{execute_discovery, DiscoveryExecutionResult};
 pub use http::{
     ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
     ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient, ScriptedHttpBodyEvent,

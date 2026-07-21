@@ -1648,10 +1648,12 @@ fn fixture_profile_with_key(
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
                     "extract": {
-                        "fields": {
-                            "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
-                            "company": { "type": "const", "value": "Example" },
+                        "reference": {
                             "url": { "type": "json_path", "jsonPath": "$.url", "cardinality": "one" }
+                        },
+                        "providerValues": {
+                            "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
+                            "company": { "type": "const", "value": "Example" }
                         }
                     }
                 }]

@@ -79,15 +79,31 @@ The actionable result of Profile Detection. It includes the detected profile key
 _Avoid_: profile match only, unsupported guess
 
 **discovery**:
-The DSL step that discovers available postings from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies and returns normalized posting candidates with at least title, company, and URL. It may return locations, postingMeta, and descriptionText only when already available from discovery responses. It must not fetch every detail page just to populate descriptions.
-_Avoid_: inventory, crawling, Detail, Search Request criteria
+The DSL step that discovers Posting Occurrences from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies. Every occurrence has a valid provider URL; provider posting ID, Provider Values, Discovery Hints, and postingMeta are optional. Discovery must not fetch every detail page just to populate descriptions.
+_Avoid_: inventory, crawling, Detail, Search Request criteria, normalized posting candidate
 
 **detail**:
 The lazy DSL step that loads detail fields for one concrete posting source occurrence. It can use the posting URL, Source Config, and postingMeta and may try multiple fallback strategies. In this DSL version it must support descriptionText extraction; additional canonical detail fields may be added later.
 _Avoid_: Discovery, bulk detail fanout, inventory fields
 
+**Posting Occurrence**:
+One Source-local sighting of a posting flowing from Discovery into Detail and Candidate Resolution. It contains four disjoint sections: a required provider reference, optional Provider Values, keyed Discovery Hints, and keyed postingMeta. Its identity is the concrete Source key plus a case-sensitive provider posting ID when present, otherwise the Source key plus a conservatively normalized absolute HTTP(S) provider URL. ID and URL-fallback identities never correlate merely by URL.
+_Avoid_: Job Posting, Match, normalized candidate, persisted posting
+
+**Provider Value**:
+Provider-supplied title, company, location strings, or description text carried by a Posting Occurrence. Provider Values are inputs to backend normalization and final matching; Discovery Hints and postingMeta cannot satisfy them.
+_Avoid_: normalized field, hint, postingMeta, final value
+
+**Discovery Hint**:
+Noncanonical, keyed text discovered cheaply alongside a Posting Occurrence. A canonical-looking key remains a hint and cannot populate provider fields, identity, final matching values, or persistence.
+_Avoid_: Provider Value, canonical field, postingMeta
+
+**Hint Use**:
+The explicit authorization for how a Discovery Hint may be consumed. The only current use is `search_prefilter`, which may later reject a candidate early but can never finalize or populate a canonical value. An omitted Hint Use is observable but inert.
+_Avoid_: match result, canonicalization, persistence policy
+
 **postingMeta**:
-Hidden technical metadata captured during Discovery for one posting source occurrence and used later by lazy Detail. It is for source-local re-identifiers or detail-loading helpers such as jobId, externalPath, requisitionId, or detail API IDs. It is not user-facing metadata.
+Hidden technical metadata captured during Discovery for one Posting Occurrence and used later by lazy Detail. It is for Source-local re-identifiers or detail-loading helpers such as jobId, externalPath, requisitionId, or detail API IDs. It is not a Provider Value or Discovery Hint and cannot participate in matching or finalization.
 _Avoid_: department, employment type, salary, remote mode, posted date, generic metadata
 
 **Support Level**:

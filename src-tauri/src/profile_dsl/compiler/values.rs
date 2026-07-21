@@ -79,38 +79,20 @@ pub(super) fn validate_value_context_foundation(
             diagnostics,
             &mut &mut references_source_name,
         );
-        let fields_path = format!("{strategy_path}/extract/fields");
+        let extract_path = format!("{strategy_path}/extract");
         validate_expression(
-            &strategy.extract.fields.title,
-            &format!("{fields_path}/title"),
+            &strategy.extract.reference.url,
+            &format!("{extract_path}/reference/url"),
             &strategy.key,
             &output_context,
             total_nodes,
             diagnostics,
             &mut &mut references_source_name,
         );
-        validate_expression(
-            &strategy.extract.fields.company,
-            &format!("{fields_path}/company"),
-            &strategy.key,
-            &output_context,
-            total_nodes,
-            diagnostics,
-            &mut &mut references_source_name,
-        );
-        validate_expression(
-            &strategy.extract.fields.url,
-            &format!("{fields_path}/url"),
-            &strategy.key,
-            &output_context,
-            total_nodes,
-            diagnostics,
-            &mut &mut references_source_name,
-        );
-        if let Some(locations) = &strategy.extract.fields.locations {
-            validate_list(
-                locations,
-                &format!("{fields_path}/locations"),
+        if let Some(expression) = &strategy.extract.reference.provider_posting_id {
+            validate_expression(
+                expression,
+                &format!("{extract_path}/reference/providerPostingId"),
                 &strategy.key,
                 &output_context,
                 total_nodes,
@@ -118,11 +100,41 @@ pub(super) fn validate_value_context_foundation(
                 &mut &mut references_source_name,
             );
         }
-        for (key, expression) in strategy.extract.fields.posting_meta.iter().flatten() {
+        if let Some(values) = &strategy.extract.provider_values {
+            for (name, expression) in [
+                ("title", values.title.as_ref()),
+                ("company", values.company.as_ref()),
+                ("descriptionText", values.description_text.as_ref()),
+            ] {
+                if let Some(expression) = expression {
+                    validate_expression(
+                        expression,
+                        &format!("{extract_path}/providerValues/{name}"),
+                        &strategy.key,
+                        &output_context,
+                        total_nodes,
+                        diagnostics,
+                        &mut &mut references_source_name,
+                    );
+                }
+            }
+            if let Some(locations) = &values.locations {
+                validate_list(
+                    locations,
+                    &format!("{extract_path}/providerValues/locations"),
+                    &strategy.key,
+                    &output_context,
+                    total_nodes,
+                    diagnostics,
+                    &mut &mut references_source_name,
+                );
+            }
+        }
+        for (key, hint) in strategy.extract.hints.iter().flatten() {
             validate_expression(
-                expression,
+                &hint.value,
                 &format!(
-                    "{fields_path}/postingMeta/{}",
+                    "{extract_path}/hints/{}/value",
                     crate::profile_dsl::template::json_pointer_segment(key)
                 ),
                 &strategy.key,
@@ -132,10 +144,13 @@ pub(super) fn validate_value_context_foundation(
                 &mut &mut references_source_name,
             );
         }
-        if let Some(expression) = &strategy.extract.fields.description_text {
+        for (key, expression) in strategy.extract.posting_meta.iter().flatten() {
             validate_expression(
                 expression,
-                &format!("{fields_path}/descriptionText"),
+                &format!(
+                    "{extract_path}/postingMeta/{}",
+                    crate::profile_dsl::template::json_pointer_segment(key)
+                ),
                 &strategy.key,
                 &output_context,
                 total_nodes,

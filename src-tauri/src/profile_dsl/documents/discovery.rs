@@ -10,6 +10,7 @@ use crate::profile_dsl::documents::pagination::Pagination;
 use crate::profile_dsl::documents::parse::Parse;
 use crate::profile_dsl::documents::select::{Captures, Select};
 use crate::profile_dsl::documents::strategy::Acceptance;
+use crate::profile_dsl::occurrence::HintUse;
 use crate::profile_dsl::policy::StrategyPolicy;
 use crate::profile_dsl::primitives::predicate::Predicate;
 
@@ -49,19 +50,40 @@ pub struct DiscoveryStrategy {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiscoveryExtraction {
-    pub fields: DiscoveryFields,
+    pub reference: DiscoveryReference,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_values: Option<DiscoveryProviderValues>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hints: Option<BTreeMap<String, DiscoveryHintExpression>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub posting_meta: Option<BTreeMap<String, FieldExpression>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DiscoveryFields {
-    pub title: FieldExpression,
-    pub company: FieldExpression,
+pub struct DiscoveryReference {
     pub url: FieldExpression,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_posting_id: Option<FieldExpression>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryProviderValues {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<FieldExpression>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company: Option<FieldExpression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locations: Option<ListFieldExpression>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_meta: Option<BTreeMap<String, FieldExpression>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub description_text: Option<FieldExpression>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryHintExpression {
+    pub value: FieldExpression,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint_use: Option<HintUse>,
 }

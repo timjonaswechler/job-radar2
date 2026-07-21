@@ -7,7 +7,7 @@ use crate::profile_dsl::template::{
 pub(super) struct TemplateRuntimeContext<'a> {
     pub(super) source_config: &'a SourceConfig,
     pub(super) source_name: &'a str,
-    pub(super) posting: &'a DetailPostingOccurrence,
+    pub(super) posting: &'a PostingOccurrence,
     pub(super) posting_meta: &'a BTreeMap<String, String>,
     pub(super) captures: &'a BTreeMap<String, String>,
 }
@@ -18,12 +18,12 @@ impl TemplateValueView for TemplateRuntimeContext<'_> {
             Some("captures") => self.captures.get(&reference.key).cloned(),
             Some("postingMeta") => self.posting_meta.get(&reference.key).cloned(),
             Some("posting") => match reference.key.as_str() {
-                "url" => Some(self.posting.url.clone()),
-                "title" => self.posting.title.clone(),
-                "company" => self.posting.company.clone(),
-                "descriptionText" => self.posting.description_text.clone(),
-                "locations" if !self.posting.locations.is_empty() => {
-                    Some(self.posting.locations.join(", "))
+                "url" => Some(self.posting.reference.provider_url.clone()),
+                "title" => self.posting.provider_values.title.clone(),
+                "company" => self.posting.provider_values.company.clone(),
+                "descriptionText" => self.posting.provider_values.description_text.clone(),
+                "locations" if !self.posting.provider_values.locations.is_empty() => {
+                    Some(self.posting.provider_values.locations.join(", "))
                 }
                 _ => None,
             },

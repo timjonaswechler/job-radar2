@@ -1,39 +1,87 @@
 [
   {
-    "title": "Senior Platform Engineer",
-    "company": "Acme Robotics",
-    "url": "https://jobs.example-successfactors.test/job/berlin-senior-platform-engineer-1001",
-    "locations": ["Berlin"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_successfactors",
+      "providerPostingId": "1001"
+    },
+    "reference": {
+      "providerUrl": "https://jobs.example-successfactors.test/job/berlin-senior-platform-engineer-1001",
+      "providerPostingId": "1001"
+    },
+    "providerValues": {
+      "title": "Senior Platform Engineer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Berlin"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/berlin-senior-platform-engineer-1001",
       "jobId": "1001"
     }
   },
   {
-    "title": "Data Product Manager",
-    "company": "Acme Robotics",
-    "url": "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002",
-    "locations": ["Munich"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_successfactors",
+      "providerPostingId": "2002"
+    },
+    "reference": {
+      "providerUrl": "https://jobs.example-successfactors.test/job/munich-data-product-manager-2002",
+      "providerPostingId": "2002"
+    },
+    "providerValues": {
+      "title": "Data Product Manager",
+      "company": "Acme Robotics",
+      "locations": [
+        "Munich"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/munich-data-product-manager-2002",
       "jobId": "2002"
     }
   },
   {
-    "title": "Laser Physicist Mfd RP",
-    "company": "Acme Robotics",
-    "url": "https://jobs.example-successfactors.test/job/mainz-laser-physicist-mfd-RP/3003/",
-    "locations": ["Mainz"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_successfactors",
+      "providerPostingId": "3003"
+    },
+    "reference": {
+      "providerUrl": "https://jobs.example-successfactors.test/job/mainz-laser-physicist-mfd-RP/3003/",
+      "providerPostingId": "3003"
+    },
+    "providerValues": {
+      "title": "Laser Physicist Mfd RP",
+      "company": "Acme Robotics",
+      "locations": [
+        "Mainz"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/mainz-laser-physicist-mfd-RP/3003/",
       "jobId": "3003"
     }
   },
   {
-    "title": "Product Engineer (mwd) SG",
-    "company": "Acme Robotics",
-    "url": "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
-    "locations": ["St Gallen"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_successfactors",
+      "providerPostingId": "1405371733"
+    },
+    "reference": {
+      "providerUrl": "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
+      "providerPostingId": "1405371733"
+    },
+    "providerValues": {
+      "title": "Product Engineer (mwd) SG",
+      "company": "Acme Robotics",
+      "locations": [
+        "St Gallen"
+      ]
+    },
     "postingMeta": {
       "externalPath": "/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
       "jobId": "1405371733"

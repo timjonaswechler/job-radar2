@@ -23,7 +23,10 @@ pub use detection::{
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
     DetectionEvidenceKind, DetectionHttpCheck, InputUrlPattern,
 };
-pub use discovery::{DiscoveryExtraction, DiscoveryFields, DiscoveryStep, DiscoveryStrategy};
+pub use discovery::{
+    DiscoveryExtraction, DiscoveryHintExpression, DiscoveryProviderValues, DiscoveryReference,
+    DiscoveryStep, DiscoveryStrategy,
+};
 pub use extract::{AuthoredScalar, CombinePart, FieldExpression, ListFieldExpression};
 pub use fetch::{BrowserInteraction, BrowserWait, Fetch, HttpMethod, RequestBody};
 pub use fragments::{

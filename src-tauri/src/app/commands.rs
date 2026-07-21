@@ -1210,10 +1210,12 @@ mod tests {
                                 "parse": { "type": "html" },
                                 "select": { "type": "css", "selector": ".job" },
                                 "extract": {
-                                    "fields": {
-                                        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
-                                        "company": { "type": "const", "value": "Example" },
+                                    "reference": {
                                         "url": { "type": "css_attribute", "selector": "a", "attribute": "href", "cardinality": "one" }
+                                    },
+                                    "providerValues": {
+                                        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
+                                        "company": { "type": "const", "value": "Example" }
                                     }
                                 }
                             }]

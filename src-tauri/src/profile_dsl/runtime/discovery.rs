@@ -11,9 +11,10 @@ use crate::{
         documents::PaginationParameterLocation,
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
-            discovery::{ExecutionPlanDiscoveryFields, ExecutionPlanDiscoveryStrategy},
+            discovery::{ExecutionPlanDiscoveryOutput, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
+        occurrence::PostingOccurrence,
         primitives::{
             parse::{CompleteParseText, ParseDiagnosticContext},
             value::{CompiledListValue, CompiledValue},
@@ -62,24 +63,10 @@ use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidat
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryExecutionResult {
-    pub candidates: Vec<DiscoveryCandidate>,
+    pub candidates: Vec<PostingOccurrence>,
     pub diagnostics: Diagnostics,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<PhaseExecutionReport>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiscoveryCandidate {
-    pub title: String,
-    pub company: String,
-    pub url: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub locations: Vec<String>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub posting_meta: BTreeMap<String, String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description_text: Option<String>,
 }
 
 pub async fn execute_discovery<F, B>(
@@ -222,7 +209,7 @@ where
 }
 
 fn project_discovery_execution(
-    execution: super::strategy_set::StrategySetExecution<Vec<DiscoveryCandidate>>,
+    execution: super::strategy_set::StrategySetExecution<Vec<PostingOccurrence>>,
     allowance: &InvocationAllowance,
 ) -> DiscoveryExecutionResult {
     let accepted_attempt = match execution.terminal {

@@ -453,7 +453,7 @@ fn posting_meta_keys(discovery: &DiscoveryStep) -> Vec<String> {
     discovery
         .strategies
         .iter()
-        .filter_map(|strategy| strategy.extract.fields.posting_meta.as_ref())
+        .filter_map(|strategy| strategy.extract.posting_meta.as_ref())
         .flat_map(|values| values.keys().cloned())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()

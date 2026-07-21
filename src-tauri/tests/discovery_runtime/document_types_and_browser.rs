@@ -36,10 +36,30 @@ Engineer </title>
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
-    assert_eq!(result.candidates[0].company, "Example GmbH");
-    assert_eq!(result.candidates[0].url, "https://example.test/jobs/42");
-    assert_eq!(result.candidates[0].locations, vec!["Berlin", "Remote"]);
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .company
+            .as_deref()
+            .unwrap(),
+        "Example GmbH"
+    );
+    assert_eq!(
+        result.candidates[0].reference.provider_url,
+        "https://example.test/jobs/42"
+    );
+    assert_eq!(
+        result.candidates[0].provider_values.locations,
+        vec!["Berlin", "Berlin", "Remote"]
+    );
     assert_eq!(result.candidates[0].posting_meta["jobId"], "42");
 }
 
@@ -75,13 +95,30 @@ Engineer </h2>
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Staff Frontend Engineer");
-    assert_eq!(result.candidates[0].company, "Example GmbH");
     assert_eq!(
-        result.candidates[0].url,
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Staff Frontend Engineer"
+    );
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .company
+            .as_deref()
+            .unwrap(),
+        "Example GmbH"
+    );
+    assert_eq!(
+        result.candidates[0].reference.provider_url,
         "https://example.test/jobs/frontend"
     );
-    assert_eq!(result.candidates[0].locations, vec!["Berlin", "Remote"]);
+    assert_eq!(
+        result.candidates[0].provider_values.locations,
+        vec!["Berlin", "Remote"]
+    );
 }
 
 #[test]
@@ -120,10 +157,24 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Browser Rendered Engineer");
-    assert_eq!(result.candidates[0].company, "Example GmbH");
     assert_eq!(
-        result.candidates[0].url,
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Browser Rendered Engineer"
+    );
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .company
+            .as_deref()
+            .unwrap(),
+        "Example GmbH"
+    );
+    assert_eq!(
+        result.candidates[0].reference.provider_url,
         "https://example.test/jobs/browser"
     );
     assert!(fetcher.requests().is_empty());
@@ -238,6 +289,6 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
     assert_eq!(diagnostics[0].code, "value_selector_syntax_invalid");
     assert_eq!(
         diagnostics[0].path,
-        "/accessPaths/0/discovery/strategies/0/extract/fields/title/selector"
+        "/accessPaths/0/discovery/strategies/0/extract/providerValues/title/selector"
     );
 }

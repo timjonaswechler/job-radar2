@@ -40,6 +40,40 @@ pub(in crate::profile_dsl::runtime::discovery) fn evaluate_value_scalar(
     )
 }
 
+pub(in crate::profile_dsl::runtime::discovery) fn evaluate_value_scalar_preserving_empty(
+    item: &RuntimeItem<'_, '_>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    captures: &BTreeMap<String, String>,
+    expression: &CompiledValue,
+    path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> FieldEvaluation {
+    let context = DiscoveryFilterOutputValueContext {
+        source: SourceValueView {
+            source_name,
+            source_config,
+        },
+        selected: item,
+        captures,
+    };
+    match evaluate_discovery_output_value(expression, &context) {
+        Ok(result) => FieldEvaluation {
+            value: result.first().map(str::to_string),
+            failed: false,
+        },
+        Err(error) => {
+            push_value_error(error, path, strategy_key, item_index, diagnostics);
+            FieldEvaluation {
+                value: None,
+                failed: true,
+            }
+        }
+    }
+}
+
 pub(in crate::profile_dsl::runtime::discovery) fn evaluate_predicate(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,

@@ -121,7 +121,7 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
         "type": "json",
         "value": { "outer": { "nested": "{{sourceConfig:feedUrl}}" } }
     });
-    strategy["extract"]["fields"]["title"] = json!({
+    strategy["extract"]["providerValues"]["title"] = json!({
         "type": "template", "template": "{{source:name}} {{{{role}}}}"
     });
     let mut browser = strategy.clone();
@@ -157,10 +157,13 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
     assert!(serialized.contains("reference"));
     assert!(serialized.contains("sourceConfig"));
     assert!(!serialized.contains("{{sourceConfig"));
-    let CompiledValue::Template { template, .. } = &source.execution_plan.discovery.strategies[0]
+    let CompiledValue::Template { template, .. } = source.execution_plan.discovery.strategies[0]
         .extract
-        .fields
-        .title
+        .output
+        .provider_values
+        .as_ref()
+        .and_then(|values| values.title.as_ref())
+        .expect("compiled title")
     else {
         panic!("Value template must be compiled")
     };
@@ -216,7 +219,7 @@ fn authored_map_keys_are_json_pointer_escaped_in_template_diagnostic_paths() {
     strategy["captures"] = json!({
         "c~/x": { "from": { "type": "template", "template": "{{unknown:x}}" }, "pattern": "^(?<value>.+)$" }
     });
-    strategy["extract"]["fields"]["postingMeta"] = json!({
+    strategy["extract"]["postingMeta"] = json!({
         "p~/x": { "type": "template", "template": "{{unknown:x}}" }
     });
     let mut form_strategy = strategy.clone();
@@ -242,7 +245,7 @@ fn authored_map_keys_are_json_pointer_escaped_in_template_diagnostic_paths() {
     for path in [
         "/accessPaths/0/discovery/strategies/0/fetch/body/value/j~0~1x",
         "/accessPaths/0/discovery/strategies/0/captures/c~0~1x/from/template",
-        "/accessPaths/0/discovery/strategies/0/extract/fields/postingMeta/p~0~1x/template",
+        "/accessPaths/0/discovery/strategies/0/extract/postingMeta/p~0~1x/template",
         "/accessPaths/0/discovery/strategies/1/fetch/body/fields/f~0~1x",
     ] {
         assert!(

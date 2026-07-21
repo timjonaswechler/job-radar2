@@ -12,6 +12,7 @@ use crate::{
             capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
         },
+        occurrence::PostingOccurrence,
         primitives::{
             parse::{CompleteParseText, ParseDiagnosticContext},
             predicate::CompiledPredicate,
@@ -67,26 +68,10 @@ pub struct DetailExecutionResult {
     pub report: Option<PhaseExecutionReport>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DetailPostingOccurrence {
-    pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub locations: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description_text: Option<String>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub posting_meta: BTreeMap<String, String>,
-}
-
 pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,

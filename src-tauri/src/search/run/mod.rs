@@ -5,6 +5,8 @@ mod tests;
 mod types;
 
 #[allow(unused_imports)]
+pub(crate) use execution::source_candidate;
+#[allow(unused_imports)]
 pub use execution::{
     BoxedSourceExecutionFuture, DefaultSourceExecutor, SourceExecutionInput, SourceExecutionOutput,
     SourceExecutionSource, SourceExecutor,

@@ -54,7 +54,13 @@ impl SourceExecutor for FixtureSourceExecutor {
                         input.source.key
                     )))
                 })
-                .map(Into::into)
+                .map(|candidates| crate::search::run::SourceExecutionOutput {
+                    occurrences: candidates
+                        .into_iter()
+                        .map(|candidate| occurrence(&input.source.key, candidate))
+                        .collect(),
+                    diagnostics: Vec::new(),
+                })
         })
     }
 }
@@ -170,17 +176,7 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
             }
 
             Ok(crate::search::run::SourceExecutionOutput {
-                candidates: result
-                    .candidates
-                    .into_iter()
-                    .map(|candidate| SourceCandidate {
-                        title: candidate.title,
-                        company: candidate.company,
-                        url: candidate.url,
-                        locations: candidate.locations,
-                        posting_meta: candidate.posting_meta,
-                    })
-                    .collect(),
+                occurrences: result.candidates,
                 diagnostics: result.diagnostics,
             })
         })
@@ -227,13 +223,18 @@ impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
                     .map_err(|error| SourceExecutionError::Failed(error.to_string()))?;
             }
 
-            Ok(vec![candidate(
-                "Laser Engineer",
-                input.source.name.as_str(),
-                &format!("https://example.test/{}/laser", input.source.key),
-                &[],
-            )]
-            .into())
+            Ok(crate::search::run::SourceExecutionOutput {
+                occurrences: vec![occurrence(
+                    &input.source.key,
+                    candidate(
+                        "Laser Engineer",
+                        input.source.name.as_str(),
+                        &format!("https://example.test/{}/laser", input.source.key),
+                        &[],
+                    ),
+                )],
+                diagnostics: Vec::new(),
+            })
         })
     }
 }
@@ -370,7 +371,14 @@ pub(super) fn minimal_discovery(marker: &str) -> Value {
                     "jsonPath": "$.jobs"
                 },
                 "extract": {
-                    "fields": {
+                    "reference": {
+                        "url": {
+                            "type": "json_path",
+                            "jsonPath": "$.url",
+                            "cardinality": "one"
+                        }
+                    },
+                    "providerValues": {
                         "title": {
                             "type": "json_path",
                             "jsonPath": "$.title",
@@ -381,22 +389,17 @@ pub(super) fn minimal_discovery(marker: &str) -> Value {
                             "jsonPath": "$.company",
                             "cardinality": "one"
                         },
-                        "url": {
-                            "type": "json_path",
-                            "jsonPath": "$.url",
-                            "cardinality": "one"
-                        },
                         "locations": {
                             "type": "json_path",
                             "jsonPath": "$.locations",
                             "cardinality": "all"
-                        },
-                        "postingMeta": {
-                            "jobId": {
-                                "type": "json_path",
-                                "jsonPath": "$.jobId",
-                                "cardinality": "one"
-                            }
+                        }
+                    },
+                    "postingMeta": {
+                        "jobId": {
+                            "type": "json_path",
+                            "jsonPath": "$.jobId",
+                            "cardinality": "one"
                         }
                     }
                 }
@@ -456,6 +459,30 @@ pub(super) fn candidate_with_meta(
             .into_iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect(),
+    }
+}
+
+fn occurrence(
+    source_key: &str,
+    candidate: SourceCandidate,
+) -> crate::profile_dsl::occurrence::PostingOccurrence {
+    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
+        source_key,
+        &candidate.url,
+        None,
+    )
+    .unwrap();
+    crate::profile_dsl::occurrence::PostingOccurrence {
+        identity,
+        reference,
+        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+            title: Some(candidate.title),
+            company: Some(candidate.company),
+            locations: candidate.locations,
+            description_text: None,
+        },
+        hints: Default::default(),
+        posting_meta: candidate.posting_meta,
     }
 }
 

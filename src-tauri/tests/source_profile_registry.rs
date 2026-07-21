@@ -119,7 +119,8 @@ fn registry_loading_enforces_value_depth_before_any_source_uses_the_profile() {
         });
     }
     profile["key"] = serde_json::json!("over_depth_profile");
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["fields"]["title"] = value;
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["providerValues"]["title"] =
+        value;
     fs::write(
         custom_profile_dir.join("over_depth_profile.json"),
         serde_json::to_vec_pretty(&profile).unwrap(),

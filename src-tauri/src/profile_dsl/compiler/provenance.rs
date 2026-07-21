@@ -357,7 +357,7 @@ fn dynamic_context(field_name: &str) -> DynamicContext {
     match field_name {
         "headers" | "captures" | "postingMeta" => DynamicContext::DynamicMap,
         // Request-body JSON values and form fields are both dynamic maps. The
-        // typed `extract.fields` object is deliberately not classified here.
+        // Typed extraction-output objects are deliberately not classified here.
         "value" => DynamicContext::RecursiveMap,
         "properties" => DynamicContext::DynamicMap,
         _ => DynamicContext::Typed,

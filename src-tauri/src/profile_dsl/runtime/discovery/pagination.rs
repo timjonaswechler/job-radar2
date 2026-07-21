@@ -12,7 +12,7 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Vec<DiscoveryCandidate>, TypedCancellation>
+) -> Result<Vec<PostingOccurrence>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -439,8 +439,8 @@ fn pagination_cancellation(strategy_index: usize, strategy_key: Option<&str>) ->
 }
 
 fn append_page_candidates(
-    candidates: &mut Vec<DiscoveryCandidate>,
-    page_candidates: Vec<DiscoveryCandidate>,
+    candidates: &mut Vec<PostingOccurrence>,
+    page_candidates: Vec<PostingOccurrence>,
     max_items: Option<u64>,
     pagination_type: &str,
     base_path: &str,

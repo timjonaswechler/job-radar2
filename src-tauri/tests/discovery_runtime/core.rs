@@ -19,9 +19,26 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Senior Rust Engineer");
-    assert_eq!(result.candidates[0].company, "Example GmbH");
-    assert_eq!(result.candidates[0].url, "https://example.test/jobs/1");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Senior Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .company
+            .as_deref()
+            .unwrap(),
+        "Example GmbH"
+    );
+    assert_eq!(
+        result.candidates[0].reference.provider_url,
+        "https://example.test/jobs/1"
+    );
     assert_eq!(fetcher.requests()[0].url, "https://example.test/jobs.json");
     assert_eq!(fetcher.requests()[0].timeout_ms, 10_000);
 }
@@ -62,7 +79,14 @@ fn compiled_discovery_runtime_uses_the_canonical_named_capture_output() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
 }
 
 #[test]
@@ -83,8 +107,22 @@ fn compiled_discovery_runtime_selects_multiple_json_items() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 2);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[1]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Frontend Engineer"
+    );
 }
 
 #[test]
@@ -103,16 +141,13 @@ fn compiled_discovery_runtime_reports_required_field_and_cardinality_diagnostics
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
-    assert_runtime_diagnostic(&result.diagnostics[0], "required_field_missing");
-    assert_runtime_diagnostic(&result.diagnostics[1], "field_cardinality_mismatch");
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.candidates[0].provider_values.title, None);
+    assert_eq!(result.candidates[0].provider_values.company, None);
+    assert_runtime_diagnostic(&result.diagnostics[0], "field_cardinality_mismatch");
     assert_eq!(
         result.diagnostics[0].path,
-        "/discovery/strategies/0/extract/fields/title"
-    );
-    assert_eq!(
-        result.diagnostics[1].path,
-        "/discovery/strategies/0/extract/fields/company"
+        "/discovery/strategies/0/extract/providerValues/company"
     );
 }
 
@@ -154,7 +189,14 @@ fn compiled_discovery_runtime_applies_where_filters_before_extraction() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
 }
 
 #[test]
@@ -173,11 +215,11 @@ fn compiled_discovery_runtime_preserves_successful_items_with_partial_diagnostic
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_runtime_diagnostic(&result.diagnostics[0], "required_field_missing");
+    assert_eq!(result.candidates.len(), 2);
     assert_eq!(
-        result.diagnostics[0].details.as_ref().unwrap()["itemIndex"],
-        1
+        result.candidates[0].provider_values.title.as_deref(),
+        Some("Rust Engineer")
     );
+    assert_eq!(result.candidates[1].provider_values.title, None);
+    assert!(result.diagnostics.is_empty());
 }

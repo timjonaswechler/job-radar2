@@ -43,8 +43,22 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[1]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Frontend Engineer"
+    );
     assert_eq!(
         fetcher
             .requests()
@@ -183,8 +197,22 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[1]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Frontend Engineer"
+    );
     assert_eq!(fetcher.requests().len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
@@ -272,7 +300,7 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
         result
             .candidates
             .into_iter()
-            .map(|candidate| candidate.url)
+            .map(|candidate| candidate.reference.provider_url)
             .collect::<Vec<_>>(),
         vec![
             "https://example.test/jobs/1".to_string(),
@@ -317,7 +345,7 @@ fn compiled_discovery_runtime_uses_all_root_locations_without_omitted_child_trav
         result
             .candidates
             .into_iter()
-            .map(|candidate| candidate.url)
+            .map(|candidate| candidate.reference.provider_url)
             .collect::<Vec<_>>(),
         vec![
             "https://example.test/jobs-sitemap.xml".to_string(),
@@ -369,7 +397,10 @@ fn compiled_discovery_runtime_follows_child_sitemaps_within_max_depth() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].url, "https://example.test/jobs/1");
+    assert_eq!(
+        result.candidates[0].reference.provider_url,
+        "https://example.test/jobs/1"
+    );
     assert_eq!(
         fetcher
             .requests()
@@ -515,8 +546,22 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[1]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Frontend Engineer"
+    );
     assert_eq!(
         fetcher
             .requests()
@@ -679,7 +724,14 @@ fn compiled_discovery_runtime_reports_cursor_max_items_limit() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
     assert_eq!(fetcher.requests().len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
@@ -738,8 +790,22 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.candidates.len(), 2);
-    assert_eq!(result.candidates[0].title, "Rust Engineer");
-    assert_eq!(result.candidates[1].title, "Frontend Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Rust Engineer"
+    );
+    assert_eq!(
+        result.candidates[1]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Frontend Engineer"
+    );
     assert_eq!(
         fetcher
             .requests()

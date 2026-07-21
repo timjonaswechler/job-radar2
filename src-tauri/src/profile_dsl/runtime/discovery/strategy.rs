@@ -9,7 +9,7 @@ pub(super) async fn execute_strategy<F, B>(
     strategy: &ExecutionPlanDiscoveryStrategy,
     step_acceptance: Option<&Acceptance>,
     context: RuntimeExecutionContext<'_>,
-) -> StrategyExecution<Vec<DiscoveryCandidate>>
+) -> StrategyExecution<Vec<PostingOccurrence>>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -145,7 +145,7 @@ fn is_strategy_level_error(diagnostic: &Diagnostic) -> bool {
 }
 
 pub(super) struct StrategyFetchOutput {
-    pub(super) candidates: Vec<DiscoveryCandidate>,
+    pub(super) candidates: Vec<PostingOccurrence>,
     pub(super) total_count: Option<u64>,
     pub(super) next_cursor: Option<String>,
 }
@@ -315,15 +315,16 @@ pub(super) fn extract_candidates_from_items(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
-) -> Vec<DiscoveryCandidate> {
+) -> Vec<PostingOccurrence> {
     let mut candidates = Vec::new();
     for (item_index, item) in items.into_iter().enumerate() {
         if let Some(candidate) = extract_candidate(
             &item,
             strategy.captures.as_ref(),
             strategy.conditions.as_ref(),
-            &strategy.extract.fields,
+            &strategy.extract.output,
             source_config,
+            &plan.source.key,
             &plan.source.name,
             base_path,
             strategy_key,

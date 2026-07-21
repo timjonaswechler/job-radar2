@@ -18,7 +18,7 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_value_scalar(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     captures: &BTreeMap<String, String>,
     expression: &CompiledValue,
     path: &str,
@@ -59,7 +59,7 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_predicate(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
     source_name: &str,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     captures: &BTreeMap<String, String>,
     predicate: &CompiledPredicate,
     path: &str,
@@ -112,14 +112,18 @@ fn selected_item<'doc, 'body>(
 }
 
 pub(in crate::profile_dsl::runtime::detail) fn posting_view(
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
 ) -> PostingValueView<'_> {
     PostingValueView {
-        title: posting.title.as_deref().unwrap_or_default(),
-        company: posting.company.as_deref().unwrap_or_default(),
-        url: &posting.url,
-        locations: &posting.locations,
-        description_text: posting.description_text.as_deref(),
+        title: posting.provider_values.title.as_deref().unwrap_or_default(),
+        company: posting
+            .provider_values
+            .company
+            .as_deref()
+            .unwrap_or_default(),
+        url: &posting.reference.provider_url,
+        locations: &posting.provider_values.locations,
+        description_text: posting.provider_values.description_text.as_deref(),
         posting_meta: &posting.posting_meta,
     }
 }

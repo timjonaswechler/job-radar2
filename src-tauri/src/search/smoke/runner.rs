@@ -78,7 +78,12 @@ impl SourceExecutor for RecordingSourceExecutor<'_> {
                 .push(SmokeSourceCandidates {
                     source_key,
                     source_name,
-                    candidates: output.candidates.clone(),
+                    candidates: output
+                        .occurrences
+                        .iter()
+                        .cloned()
+                        .filter_map(crate::search::run::source_candidate)
+                        .collect(),
                 });
             Ok(output)
         })

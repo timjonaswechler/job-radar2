@@ -99,22 +99,68 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "fields"
+        "reference"
       ],
       "properties": {
-        "fields": {
-          "allOf": [
-            {
-              "$ref": "common.schema.json#/$defs/canonicalPostingFields"
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
             },
-            {
-              "required": [
-                "title",
-                "company",
-                "url"
-              ]
+            "providerPostingId": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
             }
-          ]
+          }
+        },
+        "providerValues": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "company": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "locations": {
+              "$ref": "extract.schema.json#/$defs/listFieldExpression"
+            },
+            "descriptionText": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            }
+          }
+        },
+        "hints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "extract.schema.json#/$defs/fieldExpression"
+              },
+              "hintUse": {
+                "type": "string",
+                "enum": [
+                  "search_prefilter"
+                ]
+              }
+            }
+          }
+        },
+        "postingMeta": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "extract.schema.json#/$defs/fieldExpression"
+          }
         }
       }
     },

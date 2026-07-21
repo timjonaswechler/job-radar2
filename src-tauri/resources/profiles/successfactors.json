@@ -110,13 +110,27 @@
               }
             },
             "extract": {
-              "fields": {
+              "reference": {
+                "url": {
+                  "type": "item_field",
+                  "key": "value",
+                  "cardinality": "one"
+                },
+                "providerPostingId": {
+                  "type": "capture",
+                  "key": "jobId",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
                 "title": {
                   "type": "capture",
                   "key": "title",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "url_decode"
                     },
@@ -130,17 +144,14 @@
                   "template": "{{source:name}}",
                   "cardinality": "one"
                 },
-                "url": {
-                  "type": "item_field",
-                  "key": "value",
-                  "cardinality": "one"
-                },
                 "locations": {
                   "type": "capture",
                   "key": "location",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "url_decode"
                     },
@@ -148,18 +159,18 @@
                       "type": "slug_to_title"
                     }
                   ]
+                }
+              },
+              "postingMeta": {
+                "jobId": {
+                  "type": "capture",
+                  "key": "jobId",
+                  "cardinality": "one"
                 },
-                "postingMeta": {
-                  "jobId": {
-                    "type": "capture",
-                    "key": "jobId",
-                    "cardinality": "one"
-                  },
-                  "externalPath": {
-                    "type": "capture",
-                    "key": "externalPath",
-                    "cardinality": "one"
-                  }
+                "externalPath": {
+                  "type": "capture",
+                  "key": "externalPath",
+                  "cardinality": "one"
                 }
               }
             },
@@ -206,7 +217,9 @@
                   "selector": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description']",
                   "cardinality": "first",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "normalize_whitespace"
                     }
@@ -242,7 +255,9 @@
                   "selector": ".job-description__content, .job-description, .jobdescription, .jobDescription, #job-description, main [class*='description']",
                   "cardinality": "first",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "normalize_whitespace"
                     }

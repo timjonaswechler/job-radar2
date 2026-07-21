@@ -6,7 +6,7 @@ use crate::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_detail, DetailPostingOccurrence, ManagedProfileBrowserClient, PhaseCompletion,
+            execute_detail, ManagedProfileBrowserClient, PhaseCompletion, PostingOccurrence,
             ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
             RuntimeExecutionContext,
         },
@@ -241,10 +241,11 @@ impl<'a> JobPostingService<'a> {
             }
 
             attempted_detail_capable_source = true;
+            let occurrence = posting_occurrence(&posting, &posting_source)?;
             let result = execute_detail(
                 &execution_plan,
                 &source.document.source_config,
-                &posting_occurrence(&posting, &posting_source),
+                &occurrence,
                 fetcher,
                 browser,
                 RuntimeExecutionContext::uncancellable(),
@@ -474,15 +475,25 @@ fn ordered_posting_sources(posting: &JobPosting) -> Vec<JobPostingSource> {
 fn posting_occurrence(
     posting: &JobPosting,
     posting_source: &JobPostingSource,
-) -> DetailPostingOccurrence {
-    DetailPostingOccurrence {
-        url: posting_source.url.clone(),
-        title: Some(posting.title.clone()),
-        company: Some(posting.company.clone()),
-        locations: posting.locations.clone(),
-        description_text: posting.description_text.clone(),
+) -> Result<PostingOccurrence, String> {
+    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
+        &posting_source.source_key,
+        &posting_source.url,
+        None,
+    )
+    .map_err(|_| "persisted posting source has an invalid provider URL".to_string())?;
+    Ok(PostingOccurrence {
+        identity,
+        reference,
+        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+            title: Some(posting.title.clone()),
+            company: Some(posting.company.clone()),
+            locations: posting.locations.clone(),
+            description_text: posting.description_text.clone(),
+        },
+        hints: Default::default(),
         posting_meta: posting_source.posting_meta.clone(),
-    }
+    })
 }
 
 fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {

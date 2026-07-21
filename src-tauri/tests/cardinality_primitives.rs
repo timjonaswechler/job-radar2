@@ -134,7 +134,7 @@ fn cardinality_failure_has_bounded_phase_context() {
         .execute(vec!["alpha", "beta"])
         .unwrap_err()
         .into_diagnostic(CardinalityDiagnosticContext {
-            path: "/discovery/strategies/0/extract/fields/title",
+            path: "/discovery/strategies/0/extract/providerValues/title",
             strategy_key: Some("api"),
             item_index: Some(7),
         });
@@ -144,7 +144,7 @@ fn cardinality_failure_has_bounded_phase_context() {
     assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
     assert_eq!(
         diagnostic.path,
-        "/discovery/strategies/0/extract/fields/title"
+        "/discovery/strategies/0/extract/providerValues/title"
     );
     assert_eq!(diagnostic.strategy_key.as_deref(), Some("api"));
     assert_eq!(

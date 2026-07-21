@@ -10,22 +10,23 @@ use crate::profile_dsl::template::json_pointer_segment;
 mod fields;
 
 use fields::{
-    evaluate_list_field, evaluate_predicate, evaluate_value_scalar, push_value_error,
-    FieldEvaluation,
+    evaluate_list_field, evaluate_predicate, evaluate_value_scalar,
+    evaluate_value_scalar_preserving_empty, push_value_error, FieldEvaluation,
 };
 
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
     capture_rules: Option<&CompiledCapturePlan>,
     conditions: Option<&Vec<CompiledPredicate>>,
-    fields: &ExecutionPlanDiscoveryFields,
+    output: &ExecutionPlanDiscoveryOutput,
     source_config: &SourceConfig,
+    source_key: &str,
     source_name: &str,
     base_path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
     diagnostics: &mut Diagnostics,
-) -> Option<DiscoveryCandidate> {
+) -> Option<PostingOccurrence> {
     let captures = evaluate_strategy_captures(
         item,
         capture_rules,
@@ -36,7 +37,6 @@ pub(super) fn extract_candidate(
         item_index,
         diagnostics,
     )?;
-
     if !item_matches_conditions(
         item,
         conditions,
@@ -51,43 +51,101 @@ pub(super) fn extract_candidate(
         return None;
     }
 
-    let title = extract_required_string_field(
+    let url_path = format!("{base_path}/extract/reference/url");
+    let provider_url = match evaluate_value_scalar_preserving_empty(
         item,
         source_config,
         source_name,
         &captures,
-        &fields.title,
-        &format!("{base_path}/extract/fields/title"),
+        &output.reference.url,
+        &url_path,
         strategy_key,
         item_index,
         diagnostics,
-    );
-    let company = extract_required_string_field(
-        item,
-        source_config,
-        source_name,
-        &captures,
-        &fields.company,
-        &format!("{base_path}/extract/fields/company"),
-        strategy_key,
-        item_index,
-        diagnostics,
-    );
-    let url = extract_required_string_field(
-        item,
-        source_config,
-        source_name,
-        &captures,
-        &fields.url,
-        &format!("{base_path}/extract/fields/url"),
-        strategy_key,
-        item_index,
-        diagnostics,
-    );
+    ) {
+        FieldEvaluation {
+            value: Some(value),
+            failed: false,
+        } if !value.is_empty() => value,
+        FieldEvaluation { failed: true, .. } => return None,
+        _ => {
+            diagnostics.push(runtime_error(
+                "occurrence_reference_invalid",
+                "Discovery item has an invalid posting reference",
+                &url_path,
+                strategy_key,
+                json!({ "itemIndex": item_index, "reason": "empty_provider_url" }),
+            ));
+            return None;
+        }
+    };
+    let provider_posting_id = match output.reference.provider_posting_id.as_ref() {
+        Some(expression) => match evaluate_value_scalar_preserving_empty(
+            item,
+            source_config,
+            source_name,
+            &captures,
+            expression,
+            &format!("{base_path}/extract/reference/providerPostingId"),
+            strategy_key,
+            item_index,
+            diagnostics,
+        ) {
+            FieldEvaluation {
+                value,
+                failed: false,
+            } => value,
+            FieldEvaluation { failed: true, .. } => return None,
+        },
+        None => None,
+    };
+    let (reference, identity) = match crate::profile_dsl::occurrence::validate_posting_reference(
+        source_key,
+        &provider_url,
+        provider_posting_id,
+    ) {
+        Ok(reference) => reference,
+        Err(error) => {
+            let (code, path, reason) = match error {
+                crate::profile_dsl::occurrence::OccurrenceReferenceError::InvalidUrl =>
+                    ("occurrence_reference_invalid", url_path, "invalid_absolute_http_url"),
+                crate::profile_dsl::occurrence::OccurrenceReferenceError::UserInfo =>
+                    ("occurrence_reference_invalid", url_path, "userinfo_forbidden"),
+                crate::profile_dsl::occurrence::OccurrenceReferenceError::EmptyProviderPostingId =>
+                    ("occurrence_provider_id_empty", format!("{base_path}/extract/reference/providerPostingId"), "empty_provider_posting_id"),
+                crate::profile_dsl::occurrence::OccurrenceReferenceError::FragmentWithoutProviderPostingId =>
+                    ("occurrence_url_identity_unsupported", url_path, "fragment_without_provider_posting_id"),
+            };
+            diagnostics.push(runtime_error(
+                code,
+                "Discovery item has an invalid posting reference",
+                path,
+                strategy_key,
+                json!({ "itemIndex": item_index, "reason": reason }),
+            ));
+            return None;
+        }
+    };
 
-    let locations = fields
-        .locations
-        .as_ref()
+    let provider_values = output.provider_values.as_ref();
+    let scalar =
+        |expression: Option<&CompiledValue>, field: &str, diagnostics: &mut Diagnostics| {
+            expression.and_then(|expression| {
+                optional_scalar(
+                    item,
+                    source_config,
+                    source_name,
+                    &captures,
+                    expression,
+                    &format!("{base_path}/extract/providerValues/{field}"),
+                    strategy_key,
+                    item_index,
+                    diagnostics,
+                )
+            })
+        };
+    let locations = provider_values
+        .and_then(|values| values.locations.as_ref())
         .map(|expression| {
             extract_locations_field(
                 item,
@@ -95,70 +153,112 @@ pub(super) fn extract_candidate(
                 source_name,
                 &captures,
                 expression,
-                &format!("{base_path}/extract/fields/locations"),
+                &format!("{base_path}/extract/providerValues/locations"),
                 strategy_key,
                 item_index,
                 diagnostics,
             )
         })
         .unwrap_or_default();
+    let provider_values = crate::profile_dsl::occurrence::ProviderValues {
+        title: scalar(
+            provider_values.and_then(|values| values.title.as_ref()),
+            "title",
+            diagnostics,
+        ),
+        company: scalar(
+            provider_values.and_then(|values| values.company.as_ref()),
+            "company",
+            diagnostics,
+        ),
+        locations,
+        description_text: scalar(
+            provider_values.and_then(|values| values.description_text.as_ref()),
+            "descriptionText",
+            diagnostics,
+        ),
+    };
 
-    let posting_meta = fields
-        .posting_meta
-        .as_ref()
-        .map(|meta_fields| {
-            let mut meta = BTreeMap::new();
-            for (key, expression) in meta_fields {
-                if let FieldEvaluation {
-                    value: Some(value),
-                    failed: false,
-                } = evaluate_value_scalar(
-                    item,
-                    source_config,
-                    source_name,
-                    &captures,
-                    expression,
-                    &format!("{base_path}/extract/fields/postingMeta/{key}"),
-                    strategy_key,
-                    item_index,
-                    diagnostics,
-                ) {
-                    meta.insert(key.clone(), value);
-                }
-            }
-            meta
-        })
-        .unwrap_or_default();
-
-    let description_text = fields.description_text.as_ref().and_then(|expression| {
-        match evaluate_value_scalar(
+    let mut hints = BTreeMap::new();
+    for (key, hint) in output.hints.iter().flatten() {
+        if let Some(value) = optional_scalar(
+            item,
+            source_config,
+            source_name,
+            &captures,
+            &hint.value,
+            &format!(
+                "{base_path}/extract/hints/{}/value",
+                json_pointer_segment(key)
+            ),
+            strategy_key,
+            item_index,
+            diagnostics,
+        ) {
+            hints.insert(
+                key.clone(),
+                crate::profile_dsl::occurrence::DiscoveryHint {
+                    value,
+                    hint_use: hint.hint_use,
+                },
+            );
+        }
+    }
+    let mut posting_meta = BTreeMap::new();
+    for (key, expression) in output.posting_meta.iter().flatten() {
+        if let Some(value) = optional_scalar(
             item,
             source_config,
             source_name,
             &captures,
             expression,
-            &format!("{base_path}/extract/fields/descriptionText"),
+            &format!(
+                "{base_path}/extract/postingMeta/{}",
+                json_pointer_segment(key)
+            ),
             strategy_key,
             item_index,
             diagnostics,
         ) {
-            FieldEvaluation {
-                value: Some(value),
-                failed: false,
-            } => Some(value),
-            _ => None,
+            posting_meta.insert(key.clone(), value);
         }
-    });
+    }
 
-    match (title, company, url) {
-        (Some(title), Some(company), Some(url)) => Some(DiscoveryCandidate {
-            title,
-            company,
-            url,
-            locations,
-            posting_meta,
-            description_text,
-        }),
+    Some(PostingOccurrence {
+        identity,
+        reference,
+        provider_values,
+        hints,
+        posting_meta,
+    })
+}
+
+fn optional_scalar(
+    item: &RuntimeItem<'_, '_>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    captures: &BTreeMap<String, String>,
+    expression: &CompiledValue,
+    path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> Option<String> {
+    match evaluate_value_scalar(
+        item,
+        source_config,
+        source_name,
+        captures,
+        expression,
+        path,
+        strategy_key,
+        item_index,
+        diagnostics,
+    ) {
+        FieldEvaluation {
+            value: Some(value),
+            failed: false,
+        } => Some(value),
         _ => None,
     }
 }
@@ -257,49 +357,6 @@ fn item_matches_conditions(
     Some(true)
 }
 
-fn extract_required_string_field(
-    item: &RuntimeItem<'_, '_>,
-    source_config: &SourceConfig,
-    source_name: &str,
-    captures: &BTreeMap<String, String>,
-    expression: &CompiledValue,
-    path: &str,
-    strategy_key: Option<&str>,
-    item_index: usize,
-    diagnostics: &mut Diagnostics,
-) -> Option<String> {
-    match evaluate_value_scalar(
-        item,
-        source_config,
-        source_name,
-        captures,
-        expression,
-        path,
-        strategy_key,
-        item_index,
-        diagnostics,
-    ) {
-        FieldEvaluation {
-            value: Some(value),
-            failed: false,
-        } => Some(value),
-        FieldEvaluation {
-            value: None,
-            failed: false,
-        } => {
-            diagnostics.push(runtime_error(
-                "required_field_missing",
-                "Required discovery field did not resolve to a non-empty string",
-                path,
-                strategy_key,
-                json!({ "itemIndex": item_index }),
-            ));
-            None
-        }
-        FieldEvaluation { failed: true, .. } => None,
-    }
-}
-
 fn extract_locations_field(
     item: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,
@@ -336,11 +393,7 @@ fn extract_locations_field(
         ) else {
             continue;
         };
-        for value in values {
-            if !locations.contains(&value) {
-                locations.push(value);
-            }
-        }
+        locations.extend(values);
     }
     locations
 }

@@ -157,7 +157,7 @@ pub(super) fn discovery_posting_meta_keys(discovery: &DiscoveryStep) -> HashSet<
     discovery
         .strategies
         .iter()
-        .filter_map(|strategy| strategy.extract.fields.posting_meta.as_ref())
+        .filter_map(|strategy| strategy.extract.posting_meta.as_ref())
         .flat_map(|posting_meta| posting_meta.keys().cloned())
         .collect()
 }

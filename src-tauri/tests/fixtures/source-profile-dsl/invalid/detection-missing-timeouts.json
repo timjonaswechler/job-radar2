@@ -28,7 +28,14 @@
               "jsonPath": "$.jobs"
             },
             "extract": {
-              "fields": {
+              "reference": {
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
                 "title": {
                   "type": "json_path",
                   "jsonPath": "$.title",
@@ -37,11 +44,6 @@
                 "company": {
                   "type": "const",
                   "value": "Example"
-                },
-                "url": {
-                  "type": "json_path",
-                  "jsonPath": "$.url",
-                  "cardinality": "one"
                 }
               }
             }

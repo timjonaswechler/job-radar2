@@ -53,7 +53,13 @@ impl SourceExecutor for FixtureSourceExecutor {
                         input.source.key
                     )))
                 })
-                .map(Into::into)
+                .map(|candidates| crate::search::run::SourceExecutionOutput {
+                    occurrences: candidates
+                        .into_iter()
+                        .map(|candidate| occurrence(&input.source.key, candidate))
+                        .collect(),
+                    diagnostics: Vec::new(),
+                })
         })
     }
 }
@@ -444,6 +450,30 @@ fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {
             value: (*value).to_string(),
         })
         .collect()
+}
+
+fn occurrence(
+    source_key: &str,
+    candidate: SourceCandidate,
+) -> crate::profile_dsl::occurrence::PostingOccurrence {
+    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
+        source_key,
+        &candidate.url,
+        None,
+    )
+    .unwrap();
+    crate::profile_dsl::occurrence::PostingOccurrence {
+        identity,
+        reference,
+        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+            title: Some(candidate.title),
+            company: Some(candidate.company),
+            locations: candidate.locations,
+            description_text: None,
+        },
+        hints: Default::default(),
+        posting_meta: candidate.posting_meta,
+    }
 }
 
 fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {

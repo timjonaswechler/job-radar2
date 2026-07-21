@@ -8,9 +8,9 @@ use support::{
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    detect_source_proposal, DetailPostingOccurrence, DiscoveryCandidate, HttpMethod,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceProfileDocument, SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, HttpMethod, PostingOccurrence, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
+    SourceProposalDetectionStatus, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -78,7 +78,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         &fetcher,
     ));
     assert_eq!(discovery.diagnostics, Vec::new());
-    let expected_candidates: Vec<DiscoveryCandidate> =
+    let expected_candidates: Vec<PostingOccurrence> =
         read_json("tests/fixtures/workday/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
@@ -111,14 +111,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        &DetailPostingOccurrence {
-            url: first_candidate.url.clone(),
-            title: Some(first_candidate.title.clone()),
-            company: Some(first_candidate.company.clone()),
-            locations: first_candidate.locations.clone(),
-            description_text: first_candidate.description_text.clone(),
-            posting_meta: first_candidate.posting_meta.clone(),
-        },
+        first_candidate,
         &fetcher,
     ));
     assert_eq!(detail.diagnostics, Vec::new());

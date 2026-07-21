@@ -23,14 +23,20 @@
     },
     "sourceOwnedJsonSchemaObject": {
       "allOf": [
-        { "$ref": "#/$defs/jsonSchemaObject" },
+        {
+          "$ref": "#/$defs/jsonSchemaObject"
+        },
         {
           "properties": {
             "properties": {
               "type": "object",
               "additionalProperties": {
                 "type": "object",
-                "not": { "required": ["title"] }
+                "not": {
+                  "required": [
+                    "title"
+                  ]
+                }
               }
             }
           }
@@ -40,7 +46,9 @@
     "templateString": {
       "type": "string",
       "minLength": 1,
-      "not": { "pattern": "\\{\\{[^}]*\\|" }
+      "not": {
+        "pattern": "\\{\\{[^}]*\\|"
+      }
     },
     "nonEmptyString": {
       "type": "string",
@@ -52,64 +60,85 @@
     },
     "sourceStatus": {
       "type": "string",
-      "enum": ["draft", "active", "disabled"]
+      "enum": [
+        "draft",
+        "active",
+        "disabled"
+      ]
     },
     "supportLevel": {
       "type": "string",
-      "enum": ["stable", "best_effort", "experimental", "unsupported"]
+      "enum": [
+        "stable",
+        "best_effort",
+        "experimental",
+        "unsupported"
+      ]
     },
     "supportMetadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["level"],
+      "required": [
+        "level"
+      ],
       "properties": {
-        "level": { "$ref": "#/$defs/supportLevel" },
-        "summary": { "$ref": "#/$defs/description" },
+        "level": {
+          "$ref": "#/$defs/supportLevel"
+        },
+        "summary": {
+          "$ref": "#/$defs/description"
+        },
         "knownIssues": {
           "type": "array",
-          "items": { "$ref": "#/$defs/supportNote" }
+          "items": {
+            "$ref": "#/$defs/supportNote"
+          }
         },
         "evidence": {
           "type": "array",
-          "items": { "$ref": "#/$defs/supportEvidence" }
+          "items": {
+            "$ref": "#/$defs/supportEvidence"
+          }
         }
       }
     },
     "supportNote": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["message"],
+      "required": [
+        "message"
+      ],
       "properties": {
-        "message": { "$ref": "#/$defs/description" },
-        "scope": { "$ref": "#/$defs/nonEmptyString" }
+        "message": {
+          "$ref": "#/$defs/description"
+        },
+        "scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
       }
     },
     "supportEvidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "reference"],
+      "required": [
+        "kind",
+        "reference"
+      ],
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["smoke", "manual_review", "schema_check"]
+          "enum": [
+            "smoke",
+            "manual_review",
+            "schema_check"
+          ]
         },
-        "reference": { "$ref": "#/$defs/nonEmptyString" },
-        "summary": { "$ref": "#/$defs/description" }
-      }
-    },
-    "canonicalPostingFields": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "title": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
-        "company": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
-        "url": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
-        "locations": { "$ref": "extract.schema.json#/$defs/listFieldExpression" },
-        "postingMeta": {
-          "type": "object",
-          "additionalProperties": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+        "reference": {
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "descriptionText": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+        "summary": {
+          "$ref": "#/$defs/description"
+        }
       }
     }
   }

@@ -7,7 +7,7 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
 }
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
-    DetailPostingOccurrence, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits,
+    DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits, PostingOccurrence,
     ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
     SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
@@ -161,7 +161,14 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         RuntimeExecutionContext::uncancellable(),
     ));
 
-    assert_eq!(result.candidates[0].title, "Platform Engineer");
+    assert_eq!(
+        result.candidates[0]
+            .provider_values
+            .title
+            .as_deref()
+            .unwrap(),
+        "Platform Engineer"
+    );
     let report = result
         .report
         .as_ref()
@@ -643,10 +650,12 @@ fn discovery_strategy(key: &str, url: &str) -> Value {
         "parse": { "type": "json" },
         "select": { "type": "json_path", "jsonPath": "$.jobs" },
         "extract": {
-            "fields": {
-                "title": { "type": "json_path", "jsonPath": "$.title" },
-                "company": { "type": "json_path", "jsonPath": "$.company" },
+            "reference": {
                 "url": { "type": "json_path", "jsonPath": "$.url" }
+            },
+            "providerValues": {
+                "title": { "type": "json_path", "jsonPath": "$.title" },
+                "company": { "type": "json_path", "jsonPath": "$.company" }
             }
         }
     })
@@ -679,13 +688,15 @@ fn detail_strategy(key: &str, url: &str) -> Value {
     })
 }
 
-fn posting() -> DetailPostingOccurrence {
-    DetailPostingOccurrence {
-        url: "https://example.test/jobs/1".to_string(),
-        title: None,
-        company: None,
-        locations: Vec::new(),
-        description_text: None,
+fn posting() -> PostingOccurrence {
+    let (reference, identity) =
+        job_radar_lib::validate_posting_reference("example", "https://example.test/jobs/1", None)
+            .unwrap();
+    PostingOccurrence {
+        identity,
+        reference,
+        provider_values: Default::default(),
+        hints: Default::default(),
         posting_meta: BTreeMap::new(),
     }
 }

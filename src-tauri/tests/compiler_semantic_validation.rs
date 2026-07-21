@@ -54,12 +54,14 @@ fn compiler_validates_structural_capability_compatibility() {
         serde_json::from_value(serde_json::json!({ "type": "css", "selector": ".job" })).unwrap();
     profile.access_paths[0].discovery.strategies[0]
         .extract
-        .fields
-        .title = FieldExpression::CssText {
+        .provider_values
+        .as_mut()
+        .unwrap()
+        .title = Some(FieldExpression::CssText {
         selector: ".title".to_string(),
         cardinality: None,
         transforms: None,
-    };
+    });
 
     let result = compile_test_source(&source, Some(profile));
 
@@ -210,7 +212,12 @@ fn compiler_rejects_invalid_transform_plans_with_stable_context() {
     let mut unselected_path = profile.access_paths[0].clone();
     unselected_path.key = "invalid_unselected_path".to_string();
     unselected_path.name = "Invalid unselected path".to_string();
-    unselected_path.discovery.strategies[0].extract.fields.title =
+    unselected_path.discovery.strategies[0]
+        .extract
+        .provider_values
+        .as_mut()
+        .unwrap()
+        .title = Some(
         serde_json::from_value(serde_json::json!({
             "type": "json_path",
             "jsonPath": "$.title",
@@ -220,7 +227,8 @@ fn compiler_rejects_invalid_transform_plans_with_stable_context() {
                 "replacement": "x"
             }]
         }))
-        .unwrap();
+        .unwrap(),
+    );
     profile.access_paths.push(unselected_path);
 
     let result = compile_test_source(&source, Some(profile));
@@ -231,9 +239,9 @@ fn compiler_rejects_invalid_transform_plans_with_stable_context() {
         .iter()
         .find(|diagnostic| diagnostic.code == "transform_invalid_regex")
         .expect("transform compile diagnostic");
-    assert!(diagnostic
-        .path
-        .ends_with("/accessPaths/1/discovery/strategies/0/extract/fields/title/transforms/0"));
+    assert!(diagnostic.path.ends_with(
+        "/accessPaths/1/discovery/strategies/0/extract/providerValues/title/transforms/0"
+    ));
     assert_eq!(
         diagnostic.details,
         Some(serde_json::json!({ "transformIndex": 0 }))
@@ -300,17 +308,21 @@ fn compiler_enforces_the_four_value_context_placements_recursively() {
         .discovery
         .strategies[0]
         .extract
-        .fields
-        .title = serde_json::from_value(serde_json::json!({
-        "type": "posting_meta",
-        "key": "jobId"
-    }))
-    .unwrap();
+        .provider_values
+        .as_mut()
+        .unwrap()
+        .title = Some(
+        serde_json::from_value(serde_json::json!({
+            "type": "posting_meta",
+            "key": "jobId"
+        }))
+        .unwrap(),
+    );
     let result = compile_test_source(&source, Some(discovery_output_profile));
     assert!(result.execution_plan.is_none());
     assert!(result.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "value_posting_meta_unavailable"
-            && diagnostic.path.ends_with("/extract/fields/title")
+            && diagnostic.path.ends_with("/extract/providerValues/title")
     }));
 }
 
@@ -322,7 +334,9 @@ fn compiler_enforces_the_complete_effective_value_node_limit_once() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
     profile.access_paths[0].discovery.strategies[0]
         .extract
-        .fields
+        .provider_values
+        .as_mut()
+        .unwrap()
         .locations = Some(ListFieldExpression::Multiple(
         (0..1_025)
             .map(|index| FieldExpression::Const {
@@ -355,7 +369,8 @@ fn source_owned_plan_uses_declared_optional_source_config_keys() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
     source_json["selectedAccessPath"]["sourceConfigSchema"]["properties"]["optionalTenant"] =
         serde_json::json!({ "type": "string" });
-    source_json["selectedAccessPath"]["discovery"]["strategies"][0]["extract"]["fields"]["title"] = serde_json::json!({
+    source_json["selectedAccessPath"]["discovery"]["strategies"][0]["extract"]["providerValues"]
+        ["title"] = serde_json::json!({
         "type": "template",
         "template": "{{sourceConfig:optionalTenant}}"
     });
@@ -482,10 +497,14 @@ fn compiler_rejects_invalid_sitemap_select_in_unselected_access_path() {
         "postingUrlSelector": { "type": "sitemap_urls", "urlPattern": "[" },
         "limits": { "maxRequests": 1, "maxItems": 10 }
     });
-    strategy["extract"]["fields"] = serde_json::json!({
-        "title": { "type": "const", "value": "Sitemap posting" },
-        "company": { "type": "const", "value": "Example" },
-        "url": { "type": "item_field", "key": "value", "cardinality": "one" }
+    strategy["extract"] = serde_json::json!({
+        "reference": {
+            "url": { "type": "item_field", "key": "value", "cardinality": "one" }
+        },
+        "providerValues": {
+            "title": { "type": "const", "value": "Sitemap posting" },
+            "company": { "type": "const", "value": "Example" }
+        }
     });
     profile["accessPaths"]
         .as_array_mut()

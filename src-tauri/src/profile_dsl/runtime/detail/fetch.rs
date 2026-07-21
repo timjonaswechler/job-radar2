@@ -11,7 +11,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     captures: &BTreeMap<String, String>,
     base_path: &str,
     strategy_key: Option<&str>,

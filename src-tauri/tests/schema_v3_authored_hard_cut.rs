@@ -31,6 +31,16 @@ fn serde_rejects_v2_old_phase_override_and_retry_shapes_without_conversion() {
     old_override_source["sourceOverrides"] = json!({});
     assert_rejected::<SourceDocument>(old_override_source, "sourceOverrides");
 
+    let mut legacy_discovery_output = profile_document();
+    legacy_discovery_output["accessPaths"][0]["discovery"]["strategies"][0]["extract"] = json!({
+        "fields": {
+            "title": { "type": "json_path", "jsonPath": "$.title" },
+            "company": { "type": "json_path", "jsonPath": "$.company" },
+            "url": { "type": "json_path", "jsonPath": "$.url" }
+        }
+    });
+    assert_rejected::<SourceProfileDocument>(legacy_discovery_output, "extract.fields");
+
     let mut retry_profile = profile_document();
     retry_profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["retry"] =
         json!({ "maxAttempts": 2 });
@@ -111,10 +121,12 @@ fn discovery_step() -> Value {
             "parse": { "type": "json" },
             "select": { "type": "json_path", "jsonPath": "$.jobs" },
             "extract": {
-                "fields": {
-                    "title": { "type": "json_path", "jsonPath": "$.title" },
-                    "company": { "type": "json_path", "jsonPath": "$.company" },
+                "reference": {
                     "url": { "type": "json_path", "jsonPath": "$.url" }
+                },
+                "providerValues": {
+                    "title": { "type": "json_path", "jsonPath": "$.title" },
+                    "company": { "type": "json_path", "jsonPath": "$.company" }
                 }
             }
         }]

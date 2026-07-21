@@ -1,18 +1,42 @@
 [
   {
-    "title": "Staff Platform Engineer",
-    "company": "Acme Robotics",
-    "url": "https://job-boards.greenhouse.io/acmejobs/jobs/9001",
-    "locations": ["Berlin, Germany"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_robotics",
+      "providerPostingId": "9001"
+    },
+    "reference": {
+      "providerUrl": "https://job-boards.greenhouse.io/acmejobs/jobs/9001",
+      "providerPostingId": "9001"
+    },
+    "providerValues": {
+      "title": "Staff Platform Engineer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Berlin, Germany"
+      ]
+    },
     "postingMeta": {
       "jobId": "9001"
     }
   },
   {
-    "title": "Product Designer",
-    "company": "Acme Robotics",
-    "url": "https://job-boards.greenhouse.io/acmejobs/jobs/9002",
-    "locations": ["Remote"],
+    "identity": {
+      "type": "provider_posting_id",
+      "sourceKey": "acme_robotics",
+      "providerPostingId": "9002"
+    },
+    "reference": {
+      "providerUrl": "https://job-boards.greenhouse.io/acmejobs/jobs/9002",
+      "providerPostingId": "9002"
+    },
+    "providerValues": {
+      "title": "Product Designer",
+      "company": "Acme Robotics",
+      "locations": [
+        "Remote"
+      ]
+    },
     "postingMeta": {
       "jobId": "9002"
     }

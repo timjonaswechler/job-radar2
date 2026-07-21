@@ -4,6 +4,7 @@ pub(crate) mod compiler;
 pub(crate) mod diagnostics;
 pub(crate) mod documents;
 pub(crate) mod execution_plan;
+pub(crate) mod occurrence;
 pub(crate) mod policy;
 pub(crate) mod primitives;
 pub(crate) mod runtime;

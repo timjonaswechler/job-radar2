@@ -161,8 +161,13 @@ impl<'a> SearchRunService<'a> {
                     source_runs.push(source_run_cancelled_for_source(&source.key, &source.name));
                 }
                 Ok(output) => {
-                    let candidate_count = output.candidates.len();
-                    candidates.extend(output.candidates.into_iter().filter_map(|candidate| {
+                    let admitted = output
+                        .occurrences
+                        .into_iter()
+                        .filter_map(super::super::execution::source_candidate)
+                        .collect::<Vec<_>>();
+                    let candidate_count = admitted.len();
+                    candidates.extend(admitted.into_iter().filter_map(|candidate| {
                         normalize_source_candidate(candidate).map(|candidate| Treffer {
                             candidate,
                             source: posting_source(source, None),

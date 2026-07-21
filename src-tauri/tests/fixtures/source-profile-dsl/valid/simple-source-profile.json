@@ -69,13 +69,22 @@
               }
             },
             "extract": {
-              "fields": {
+              "reference": {
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
                 "title": {
                   "type": "json_path",
                   "jsonPath": "$.title",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "trim"
                     }
@@ -85,17 +94,14 @@
                   "type": "const",
                   "value": "Example GmbH"
                 },
-                "url": {
-                  "type": "json_path",
-                  "jsonPath": "$.url",
-                  "cardinality": "one"
-                },
                 "locations": {
                   "type": "json_path",
                   "jsonPath": "$.locations",
                   "cardinality": "all",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "trim"
                     },
@@ -103,13 +109,13 @@
                       "type": "dedupe"
                     }
                   ]
-                },
-                "postingMeta": {
-                  "jobId": {
-                    "type": "json_path",
-                    "jsonPath": "$.id",
-                    "cardinality": "one"
-                  }
+                }
+              },
+              "postingMeta": {
+                "jobId": {
+                  "type": "json_path",
+                  "jsonPath": "$.id",
+                  "cardinality": "one"
                 }
               }
             },
@@ -153,7 +159,9 @@
                   "jsonPath": "$.descriptionHtml",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "html_to_text"
                     },

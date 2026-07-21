@@ -55,13 +55,32 @@
               "jsonPath": "$.jobs"
             },
             "extract": {
-              "fields": {
+              "reference": {
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.absolute_url",
+                  "cardinality": "one"
+                },
+                "providerPostingId": {
+                  "type": "json_path",
+                  "jsonPath": "$.id",
+                  "cardinality": "one",
+                  "transforms": [
+                    {
+                      "type": "to_string"
+                    }
+                  ]
+                }
+              },
+              "providerValues": {
                 "title": {
                   "type": "json_path",
                   "jsonPath": "$.title",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "trim"
                     }
@@ -72,27 +91,22 @@
                   "template": "{{source:name}}",
                   "cardinality": "one"
                 },
-                "url": {
-                  "type": "json_path",
-                  "jsonPath": "$.absolute_url",
-                  "cardinality": "one"
-                },
                 "locations": {
                   "type": "json_path",
                   "jsonPath": "$.location.name",
                   "cardinality": "optional"
-                },
-                "postingMeta": {
-                  "jobId": {
-                    "type": "json_path",
-                    "jsonPath": "$.id",
-                    "cardinality": "one",
-                    "transforms": [
-                      {
-                        "type": "to_string"
-                      }
-                    ]
-                  }
+                }
+              },
+              "postingMeta": {
+                "jobId": {
+                  "type": "json_path",
+                  "jsonPath": "$.id",
+                  "cardinality": "one",
+                  "transforms": [
+                    {
+                      "type": "to_string"
+                    }
+                  ]
                 }
               }
             },
@@ -137,7 +151,9 @@
                   "jsonPath": "$.content",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "html_to_text"
                     },

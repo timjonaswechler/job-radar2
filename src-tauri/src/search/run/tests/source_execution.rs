@@ -143,6 +143,58 @@ fn active_valid_source_compiles_and_executes_discovery_plan_through_runtime() {
 }
 
 #[test]
+fn incomplete_occurrences_stay_out_of_the_legacy_candidate_path_while_later_complete_items_continue(
+) {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys =
+            write_test_sources(temp_dir.path(), &[("runtime_source", "Runtime Source")]);
+        let search_request =
+            create_test_search_request(&pool, source_keys, vec![text_rule("laser")], vec![]).await;
+        let executor = RuntimeDiscoveryExecutor::new(
+            json!({ "jobs": [
+                {
+                    "url": "https://example.test/incomplete",
+                    "locations": ["Mainz"],
+                    "jobId": "incomplete-1"
+                },
+                {
+                    "title": "Laser Engineer",
+                    "company": "ACME",
+                    "url": "https://example.test/complete",
+                    "locations": ["Mainz"],
+                    "jobId": "complete-2"
+                }
+            ]})
+            .to_string(),
+        );
+
+        let result = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &executor,
+            temp_dir.path().join("search-run-result.json"),
+            temp_dir.path(),
+        )
+        .run(search_request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Completed);
+        assert_eq!(result.source_runs[0].candidate_count, 1);
+        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.postings[0].title, "Laser Engineer");
+        let persisted: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(persisted, 1);
+    });
+}
+
+#[test]
 fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

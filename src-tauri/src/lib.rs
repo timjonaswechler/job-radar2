@@ -110,13 +110,14 @@ pub use profile_dsl::primitives::value::{
     VALUE_MAX_DEPTH, VALUE_MAX_FIRST_NON_EMPTY_CANDIDATES, VALUE_MAX_NODES,
 };
 pub use profile_dsl::runtime::{
-    execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
-    AllowanceLimitSource, DetailExecutionResult, DetailPostingOccurrence, DiscoveryCandidate,
-    DiscoveryExecutionResult, ManagedProfileBrowserClient, PhaseCancellationReason,
-    PhaseCompletion, PhaseExecutionReport, PhaseUsage, ProfileBrowserClient,
-    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
-    ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient,
+    execute_detail, execute_discovery, validate_posting_reference, AllowanceDimension,
+    AllowanceExhaustion, AllowanceLimitSource, DetailExecutionResult, DiscoveryExecutionResult,
+    DiscoveryHint, HintUse, ManagedProfileBrowserClient, OccurrenceReferenceError,
+    PhaseCancellationReason, PhaseCompletion, PhaseExecutionReport, PhaseUsage, PostingOccurrence,
+    PostingOccurrenceIdentity, PostingReference, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
+    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, ReqwestProfileHttpClient,
     RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SensitiveRequestBody, UnavailableProfileBrowserClient,
 };

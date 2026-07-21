@@ -36,7 +36,7 @@ fn compiled_discovery_rejects_template_transform_pipes() {
                     },
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
-                    "extract": { "fields": fields }
+                    "extract": discovery_extract(fields)
                 }]
             }
         }]
@@ -65,6 +65,6 @@ fn compiled_discovery_rejects_template_transform_pipes() {
         diagnostic.code == "template_transform_pipes_unsupported"
             && diagnostic.category == DiagnosticCategory::Compiler
             && diagnostic.path
-                == "/accessPaths/0/discovery/strategies/0/extract/fields/company/template"
+                == "/accessPaths/0/discovery/strategies/0/extract/providerValues/company/template"
     }));
 }

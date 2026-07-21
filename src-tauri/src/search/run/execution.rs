@@ -6,7 +6,7 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_discovery, DiscoveryCandidate, ManagedProfileBrowserClient, PhaseCompletion,
+            execute_discovery, ManagedProfileBrowserClient, PhaseCompletion, PostingOccurrence,
             ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
             RuntimeExecutionContext,
         },
@@ -18,31 +18,8 @@ use super::{SourceCandidate, SourceExecutionError};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SourceExecutionOutput {
-    pub candidates: Vec<SourceCandidate>,
+    pub occurrences: Vec<PostingOccurrence>,
     pub diagnostics: crate::profile_dsl::diagnostics::Diagnostics,
-}
-
-impl From<Vec<SourceCandidate>> for SourceExecutionOutput {
-    fn from(candidates: Vec<SourceCandidate>) -> Self {
-        Self {
-            candidates,
-            diagnostics: Vec::new(),
-        }
-    }
-}
-
-impl std::ops::Deref for SourceExecutionOutput {
-    type Target = Vec<SourceCandidate>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.candidates
-    }
-}
-
-impl PartialEq<Vec<SourceCandidate>> for SourceExecutionOutput {
-    fn eq(&self, other: &Vec<SourceCandidate>) -> bool {
-        &self.candidates == other
-    }
 }
 
 pub type BoxedSourceExecutionFuture<'a> =
@@ -176,11 +153,7 @@ where
     }
 
     Ok(SourceExecutionOutput {
-        candidates: result
-            .candidates
-            .into_iter()
-            .map(source_candidate)
-            .collect(),
+        occurrences: result.candidates,
         diagnostics: result.diagnostics,
     })
 }
@@ -205,12 +178,12 @@ fn source_execution_cancelled_diagnostic() -> Diagnostic {
     }
 }
 
-fn source_candidate(candidate: DiscoveryCandidate) -> SourceCandidate {
-    SourceCandidate {
-        title: candidate.title,
-        company: candidate.company,
-        url: candidate.url,
-        locations: candidate.locations,
-        posting_meta: candidate.posting_meta,
-    }
+pub(crate) fn source_candidate(occurrence: PostingOccurrence) -> Option<SourceCandidate> {
+    Some(SourceCandidate {
+        title: occurrence.provider_values.title?,
+        company: occurrence.provider_values.company?,
+        url: occurrence.reference.provider_url,
+        locations: occurrence.provider_values.locations,
+        posting_meta: occurrence.posting_meta,
+    })
 }

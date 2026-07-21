@@ -174,9 +174,12 @@ fn locator_only_fragment_is_a_noop_and_scalar_and_empty_object_are_terminals() {
     *headers = Some(Default::default());
     profile.access_paths[0].discovery.strategies[0]
         .extract
-        .fields
-        .company =
-        serde_json::from_value(serde_json::json!({ "type": "const", "value": false })).unwrap();
+        .provider_values
+        .as_mut()
+        .unwrap()
+        .company = Some(
+        serde_json::from_value(serde_json::json!({ "type": "const", "value": false })).unwrap(),
+    );
     let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{ "key": "json_feed" }])));
 
@@ -203,7 +206,7 @@ fn locator_only_fragment_is_a_noop_and_scalar_and_empty_object_are_terminals() {
             field("discovery"),
             strategy("json_api"),
             field("extract"),
-            field("fields"),
+            field("providerValues"),
             field("company"),
             field("value"),
         ],
@@ -281,7 +284,7 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
             field("discovery"),
             strategy("json_api"),
             field("extract"),
-            field("fields"),
+            field("providerValues"),
             field("title"),
             field("transforms"),
         ],
@@ -294,7 +297,6 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
             field("discovery"),
             strategy("json_api"),
             field("extract"),
-            field("fields"),
             field("postingMeta"),
             map_key("jobId"),
             field("jsonPath"),

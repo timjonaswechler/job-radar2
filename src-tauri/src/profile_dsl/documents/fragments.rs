@@ -689,12 +689,47 @@ pub struct DiscoveryExtractionFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub fields: Option<DiscoveryFieldsFragment>,
+    pub reference: Option<DiscoveryReferenceFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub provider_values: Option<DiscoveryProviderValuesFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub hints: Option<BTreeMap<String, DiscoveryHintExpressionFragment>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub posting_meta: Option<BTreeMap<String, FieldExpressionFragment>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DiscoveryFieldsFragment {
+pub struct DiscoveryReferenceFragment {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub url: Option<FieldExpressionFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub provider_posting_id: Option<FieldExpressionFragment>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryProviderValuesFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -712,25 +747,30 @@ pub struct DiscoveryFieldsFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub url: Option<FieldExpressionFragment>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "non_null"
-    )]
     pub locations: Option<ListFieldExpressionFragment>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub posting_meta: Option<BTreeMap<String, FieldExpressionFragment>>,
+    pub description_text: Option<FieldExpressionFragment>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryHintExpressionFragment {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub description_text: Option<FieldExpressionFragment>,
+    pub value: Option<FieldExpressionFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub hint_use: Option<crate::profile_dsl::occurrence::HintUse>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

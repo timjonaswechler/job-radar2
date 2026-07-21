@@ -15,7 +15,7 @@ pub(super) fn evaluate_strategy_captures(
     strategy: &ExecutionPlanDetailStrategy,
     source_config: &SourceConfig,
     source_name: &str,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,

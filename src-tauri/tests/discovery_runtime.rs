@@ -26,6 +26,8 @@ mod document_types_and_browser;
 mod failure_diagnostics;
 #[path = "discovery_runtime/fallback_acceptance.rs"]
 mod fallback_acceptance;
+#[path = "discovery_runtime/occurrence.rs"]
+mod occurrence;
 #[path = "discovery_runtime/pagination.rs"]
 mod pagination;
 #[path = "discovery_runtime/post_request_bodies.rs"]
@@ -170,7 +172,7 @@ fn compile_discovery_outcome_with_strategy(
         ),
         ("parse".to_string(), parse),
         ("select".to_string(), select),
-        ("extract".to_string(), json!({ "fields": fields })),
+        ("extract".to_string(), discovery_extract(fields)),
     ]);
     strategy.extend(extra_strategy_fields);
 
@@ -268,7 +270,7 @@ fn compiled_browser_discovery_plan(
                     },
                     "parse": parse,
                     "select": select,
-                    "extract": { "fields": fields }
+                    "extract": discovery_extract(fields)
                 }]
             }
         }]
@@ -324,7 +326,7 @@ fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
                     },
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
-                    "extract": { "fields": fields }
+                    "extract": discovery_extract(fields)
                 }]
             }
         }
@@ -336,6 +338,36 @@ fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
 
 fn default_select() -> Value {
     json!({ "type": "json_path", "jsonPath": "$.jobs" })
+}
+
+fn discovery_extract(fields: Value) -> Value {
+    let mut fields = fields
+        .as_object()
+        .cloned()
+        .expect("Discovery fields object");
+    let url = fields.remove("url").expect("Discovery URL expression");
+    let mut provider_values = serde_json::Map::new();
+    for key in ["title", "company", "locations", "descriptionText"] {
+        if let Some(value) = fields.remove(key) {
+            provider_values.insert(key.to_string(), value);
+        }
+    }
+    let mut reference = serde_json::Map::from_iter([("url".to_string(), url)]);
+    if let Some(provider_posting_id) = fields.remove("providerPostingId") {
+        reference.insert("providerPostingId".to_string(), provider_posting_id);
+    }
+    let mut extract =
+        serde_json::Map::from_iter([("reference".to_string(), Value::Object(reference))]);
+    if !provider_values.is_empty() {
+        extract.insert("providerValues".to_string(), Value::Object(provider_values));
+    }
+    if let Some(hints) = fields.remove("hints") {
+        extract.insert("hints".to_string(), hints);
+    }
+    if let Some(posting_meta) = fields.remove("postingMeta") {
+        extract.insert("postingMeta".to_string(), posting_meta);
+    }
+    Value::Object(extract)
 }
 
 fn default_fields() -> Value {

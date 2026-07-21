@@ -234,7 +234,7 @@ fn executable_posting_title_provenance_is_retained() {
             "strategies": [{
                 "key": "json_api",
                 "extract": {
-                    "fields": {
+                    "providerValues": {
                         "title": {
                             "type": "json_path",
                             "jsonPath": "$.title",

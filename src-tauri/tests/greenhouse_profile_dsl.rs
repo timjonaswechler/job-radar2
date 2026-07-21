@@ -8,8 +8,8 @@ use support::{
 use std::{fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    DetailPostingOccurrence, DiscoveryCandidate, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
+    PostingOccurrence, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
@@ -59,7 +59,7 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
         &fetcher,
     ));
     assert_eq!(discovery.diagnostics, Vec::new());
-    let expected_candidates: Vec<DiscoveryCandidate> =
+    let expected_candidates: Vec<PostingOccurrence> =
         read_json("tests/fixtures/greenhouse/posting-discovery-expected-candidates.json");
     assert_eq!(discovery.candidates, expected_candidates);
 
@@ -67,14 +67,7 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     let detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        &DetailPostingOccurrence {
-            url: first_candidate.url.clone(),
-            title: Some(first_candidate.title.clone()),
-            company: Some(first_candidate.company.clone()),
-            locations: first_candidate.locations.clone(),
-            description_text: first_candidate.description_text.clone(),
-            posting_meta: first_candidate.posting_meta.clone(),
-        },
+        first_candidate,
         &fetcher,
     ));
     assert_eq!(detail.diagnostics, Vec::new());

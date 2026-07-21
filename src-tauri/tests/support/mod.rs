@@ -1,6 +1,6 @@
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailExecutionResult,
-    DetailPostingOccurrence, DiscoveryExecutionResult, ProfileHttpClient, RegistrySourceProfile,
+    DiscoveryExecutionResult, PostingOccurrence, ProfileHttpClient, RegistrySourceProfile,
     RuntimeExecutionContext, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
     SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
 };
@@ -38,7 +38,7 @@ where
 #[allow(dead_code)]
 pub async fn execute_detail_test<F>(
     plan: &SourceExecutionPlan,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     fetcher: &F,
 ) -> DetailExecutionResult
 where
@@ -51,7 +51,7 @@ where
 pub async fn execute_detail_test_with_config<F>(
     plan: &SourceExecutionPlan,
     source_config: &serde_json::Map<String, serde_json::Value>,
-    posting: &DetailPostingOccurrence,
+    posting: &PostingOccurrence,
     fetcher: &F,
 ) -> DetailExecutionResult
 where

@@ -56,7 +56,7 @@ The Profile DSL is built from a small set of generic primitives. A new ATS shoul
 
 ### Step behavior
 
-`discovery` strategies discover source-wide posting candidates. They return at least `title`, `company`, and `url`; they may return `locations`, `postingMeta`, and `descriptionText` only when description text is already present in the discovery response. `discovery` must not perform one detail fetch per candidate to fill detail fields.
+`discovery` strategies discover Source-local Posting Occurrences. A valid `reference.url` is sufficient; `reference.providerPostingId`, `providerValues`, `hints`, and `postingMeta` are optional and structurally disjoint. `providerValues` may contain title, company, locations, and description text already present in the discovery response. `discovery` must not perform one detail fetch per occurrence to fill missing provider fields.
 
 `detail` strategies run lazily for one concrete posting source occurrence. They may fetch the posting URL directly, fetch an API detail document, or fetch a collection/feed and match one item using postingMeta. The minimum required detail field for this PRD is `descriptionText`.
 
@@ -135,8 +135,9 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - `discovery` runs during Search Runs. It discovers available postings from the Source and does not encode user search criteria. Job Radar applies match and exclusion rules after discovery.
 - `detail` remains a separate lazy step for loading detail fields for one concrete persisted posting source occurrence.
 - `discovery` may output `descriptionText` only when the text is already available in the discovery response. It must not fan out to every detail page just to populate descriptions.
-- The required normalized posting discovery output is `title`, `company`, and `url`.
-- Optional posting discovery outputs are `locations`, `postingMeta`, and `descriptionText` when already available without detail-page fanout.
+- Discovery extraction has four disjoint sections: required `reference`, optional `providerValues`, keyed `hints`, and keyed `postingMeta`. `reference.url` is required; `reference.providerPostingId` is optional.
+- `providerValues` may contain `title`, `company`, `locations`, and `descriptionText` when available without detail-page fanout. A valid reference alone emits a Posting Occurrence.
+- Each Discovery Hint has a scalar `value` and optional `hintUse: search_prefilter`. Hint keys are technical identifiers; even `title`, `company`, or `locations` remain noncanonical under `hints`.
 - `detail` must support `descriptionText` extraction. The model may allow additional canonical detail fields later, but they are not required for this PRD.
 - `postingMeta` remains hidden technical metadata stored per posting source occurrence. It is used to re-identify or load the source-specific posting later.
 - `postingMeta` must not become a dumping ground for user-facing metadata. Department, employment type, remote mode, salary, posted date, and deadlines must become explicit canonical fields if needed later.
@@ -225,7 +226,7 @@ Reusable implementation pieces may be kept when they fit the new architecture, s
 ## Testing Decisions
 
 - Tests should verify behavior at the highest useful seam: schema/registry load, Profile Compiler, Source validation, Execution Plan execution, and Search Run source outcomes.
-- Tests should prefer external behavior over implementation details. For example, a profile regression test should assert normalized posting candidates and diagnostics, not private helper calls.
+- Tests should prefer external behavior over implementation details. For example, a profile regression test should assert typed Posting Occurrences and diagnostics, not private helper calls.
 - Profile validation tests cover schema validity, compiler validity, support metadata, forbidden capabilities, bounded execution requirements, forbidden secrets, source config schema merging, and override validation.
 - Source validation tests cover selected profile path existence, Source Config validation, Direct Source Specialization, Source-owned Access Paths, derived validation state, and duplicate built-in/custom profile keys.
 - Execution tests cover `discovery` strategies, fallback behavior, semantic diagnostics, pagination limits, fetch modes, parse modes, extraction cardinality, transforms, combine behavior, and location normalization.
@@ -267,4 +268,4 @@ The design deliberately favors a Profile Compiler and typed Execution Plan becau
 
 The existing managed browser runtime decision remains compatible with this PRD. Browser is treated as a fetch mode inside the DSL, not as a separate source/profile type.
 
-The existing job posting persistence model remains compatible with this PRD. `discovery` still produces normalized posting candidates, and `detail` still loads additional detail for a concrete posting source occurrence.
+`discovery` produces Source-local Posting Occurrences. The current pre-Candidate-Resolution Search Run bridge admits only occurrences with provider title and company into the existing normalized matching and persistence path; incomplete occurrences remain uncounted and unpersisted. `detail` receives the same occurrence type and may load additional fields lazily.

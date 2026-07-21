@@ -13,9 +13,9 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
-    execute_detail, execute_discovery, DetailExecutionResult, DetailPostingOccurrence,
-    DiscoveryCandidate, PhaseCompletion, ProfileBrowserClient, ProfileHttpClient,
-    ReqwestProfileHttpClient, RuntimeExecutionContext, UnavailableProfileBrowserClient,
+    execute_detail, execute_discovery, DetailExecutionResult, PhaseCompletion, PostingOccurrence,
+    ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient, RuntimeExecutionContext,
+    UnavailableProfileBrowserClient,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -227,11 +227,10 @@ where
         } else if execution_plan.detail.is_some() {
             if let Some(candidate) = first_acceptable_candidate {
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
-                let posting = detail_occurrence_from_candidate(candidate);
                 let detail_result = tauri::async_runtime::block_on(execute_detail(
                     execution_plan,
                     &document.source_config,
-                    &posting,
+                    candidate,
                     detail_fetcher,
                     browser,
                     RuntimeExecutionContext::uncancellable(),
@@ -259,7 +258,7 @@ where
                 if let Some(cause) = detail_failure_cause {
                     diagnostics.push(detail_failed_diagnostic(
                         Some(&live_check_subject),
-                        &candidate.url,
+                        &candidate.reference.provider_url,
                         &cause,
                     ));
                 }
@@ -393,21 +392,17 @@ fn source_live_check_details_placeholders() -> JsonObject {
     details
 }
 
-fn is_acceptable_live_candidate(candidate: &DiscoveryCandidate) -> bool {
-    !candidate.title.trim().is_empty()
-        && !candidate.company.trim().is_empty()
-        && !candidate.url.trim().is_empty()
-}
-
-fn detail_occurrence_from_candidate(candidate: &DiscoveryCandidate) -> DetailPostingOccurrence {
-    DetailPostingOccurrence {
-        url: candidate.url.clone(),
-        title: Some(candidate.title.clone()),
-        company: Some(candidate.company.clone()),
-        locations: candidate.locations.clone(),
-        description_text: candidate.description_text.clone(),
-        posting_meta: candidate.posting_meta.clone(),
-    }
+fn is_acceptable_live_candidate(candidate: &PostingOccurrence) -> bool {
+    candidate
+        .provider_values
+        .title
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && candidate
+            .provider_values
+            .company
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn is_acceptable_detail_result(result: &DetailExecutionResult) -> bool {

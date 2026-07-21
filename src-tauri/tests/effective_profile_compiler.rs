@@ -312,7 +312,7 @@ fn effective_profile_rechecks_value_nodes_after_direct_specialization_merge() {
         "discovery": {
             "strategies": [{
                 "key": "json_api",
-                "extract": { "fields": { "locations": locations } }
+                "extract": { "providerValues": { "locations": locations } }
             }]
         }
     }])));

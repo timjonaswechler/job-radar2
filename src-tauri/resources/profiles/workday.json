@@ -93,23 +93,7 @@
               "jsonPath": "$.jobPostings"
             },
             "extract": {
-              "fields": {
-                "title": {
-                  "type": "json_path",
-                  "jsonPath": "$.title",
-                  "cardinality": "one",
-                  "transforms": [
-                    { "type": "to_string" },
-                    {
-                      "type": "trim"
-                    }
-                  ]
-                },
-                "company": {
-                  "type": "template",
-                  "template": "{{source:name}}",
-                  "cardinality": "one"
-                },
+              "reference": {
                 "url": {
                   "type": "combine",
                   "join": "",
@@ -150,23 +134,50 @@
                     }
                   ]
                 },
-                "locations": {
+                "providerPostingId": {
                   "type": "json_path",
-                  "jsonPath": "$.locationsText",
-                  "cardinality": "optional",
+                  "jsonPath": "$.externalPath",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "trim"
                     }
                   ]
                 },
-                "postingMeta": {
-                  "externalPath": {
-                    "type": "json_path",
-                    "jsonPath": "$.externalPath",
-                    "cardinality": "one"
-                  }
+                "company": {
+                  "type": "template",
+                  "template": "{{source:name}}",
+                  "cardinality": "one"
+                },
+                "locations": {
+                  "type": "json_path",
+                  "jsonPath": "$.locationsText",
+                  "cardinality": "optional",
+                  "transforms": [
+                    {
+                      "type": "to_string"
+                    },
+                    {
+                      "type": "trim"
+                    }
+                  ]
+                }
+              },
+              "postingMeta": {
+                "externalPath": {
+                  "type": "json_path",
+                  "jsonPath": "$.externalPath",
+                  "cardinality": "one"
                 }
               }
             },
@@ -211,7 +222,9 @@
                   "jsonPath": "$.jobPostingInfo.jobDescription",
                   "cardinality": "one",
                   "transforms": [
-                    { "type": "to_string" },
+                    {
+                      "type": "to_string"
+                    },
                     {
                       "type": "html_to_text"
                     },

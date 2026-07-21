@@ -163,7 +163,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
                     },
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
-                    "extract": { "fields": default_fields() }
+                    "extract": discovery_extract(default_fields())
                 }]
             }
         }]

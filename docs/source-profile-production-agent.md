@@ -210,7 +210,9 @@ A stale Source Live Check Report means canonical behavior changed after the repo
   "sourceConfigSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["apiBaseUrl"],
+    "required": [
+      "apiBaseUrl"
+    ],
     "properties": {
       "apiBaseUrl": {
         "type": "string",
@@ -241,7 +243,9 @@ A stale Source Live Check Report means canonical behavior changed after the repo
       "key": "api",
       "name": "Public jobs API",
       "discovery": {
-        "policy": { "type": "first_accepted" },
+        "policy": {
+          "type": "first_accepted"
+        },
         "strategies": [
           {
             "key": "jobs_api",
@@ -259,7 +263,14 @@ A stale Source Live Check Report means canonical behavior changed after the repo
               "jsonPath": "$.jobs"
             },
             "extract": {
-              "fields": {
+              "reference": {
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
                 "title": {
                   "type": "json_path",
                   "jsonPath": "$.title",
@@ -269,18 +280,13 @@ A stale Source Live Check Report means canonical behavior changed after the repo
                   "type": "json_path",
                   "jsonPath": "$.company",
                   "cardinality": "one"
-                },
-                "url": {
+                }
+              },
+              "postingMeta": {
+                "jobId": {
                   "type": "json_path",
-                  "jsonPath": "$.url",
+                  "jsonPath": "$.id",
                   "cardinality": "one"
-                },
-                "postingMeta": {
-                  "jobId": {
-                    "type": "json_path",
-                    "jsonPath": "$.id",
-                    "cardinality": "one"
-                  }
                 }
               }
             }
@@ -288,7 +294,9 @@ A stale Source Live Check Report means canonical behavior changed after the repo
         ]
       },
       "detail": {
-        "policy": { "type": "first_accepted" },
+        "policy": {
+          "type": "first_accepted"
+        },
         "strategies": [
           {
             "key": "detail_api",

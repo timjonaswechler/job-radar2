@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn accept_discovery_result(
-    candidates: &[DiscoveryCandidate],
+    candidates: &[PostingOccurrence],
     step_acceptance: Option<&Acceptance>,
     strategy_acceptance: Option<&Acceptance>,
     base_path: &str,
@@ -49,7 +49,7 @@ pub(super) fn accept_discovery_result(
                 .iter()
                 .enumerate()
                 .find_map(|(item_index, candidate)| {
-                    let description = candidate.description_text.as_ref()?;
+                    let description = candidate.provider_values.description_text.as_ref()?;
                     let actual_length = description.chars().count() as u64;
                     (actual_length < minimum).then_some((item_index, actual_length))
                 })
@@ -137,16 +137,25 @@ fn required_field_rules(
     rules
 }
 
-fn discovery_field_present(candidate: &DiscoveryCandidate, field: &str) -> bool {
+fn discovery_field_present(candidate: &PostingOccurrence, field: &str) -> bool {
     match field {
-        "title" => !candidate.title.trim().is_empty(),
-        "company" => !candidate.company.trim().is_empty(),
-        "url" => !candidate.url.trim().is_empty(),
+        "title" => candidate
+            .provider_values
+            .title
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty()),
+        "company" => candidate
+            .provider_values
+            .company
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty()),
+        "url" => !candidate.reference.provider_url.is_empty(),
         "descriptionText" => candidate
+            .provider_values
             .description_text
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty()),
-        "locations" => !candidate.locations.is_empty(),
+        "locations" => !candidate.provider_values.locations.is_empty(),
         field => field
             .strip_prefix("postingMeta.")
             .and_then(|key| candidate.posting_meta.get(key))
