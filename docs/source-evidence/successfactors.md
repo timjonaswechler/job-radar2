@@ -52,13 +52,13 @@ Covered behavior:
 Focused commands run on 2026-07-11:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test successfactors_profile_dsl
+cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles successfactors::
 cargo test --manifest-path src-tauri/Cargo.toml --test source_profile_detection successfactors
 ```
 
 Results:
 
-- `successfactors_profile_dsl`: `1 passed; 0 failed`
+- `profile_dsl_profiles::successfactors`: `1 passed; 0 failed`
 - focused SuccessFactors detection: `2 passed; 0 failed`
 
 Missing deterministic slices include multi-token locations, prefixed `/job/` paths, RSS feeds, sitemap indexes, non-root sitemap filenames, malformed XML, request failures, item-bound diagnostics, both detail strategies failing, and detection coverage for every declared input path family.

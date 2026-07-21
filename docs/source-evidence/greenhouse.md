@@ -44,7 +44,7 @@ The documentation describes public unauthenticated GET endpoints for listing a b
   - [`posting-discovery-response.json`](../../src-tauri/tests/fixtures/greenhouse/posting-discovery-response.json)
   - [`posting-discovery-expected-candidates.json`](../../src-tauri/tests/fixtures/greenhouse/posting-discovery-expected-candidates.json)
   - [`posting-detail-9001-response.json`](../../src-tauri/tests/fixtures/greenhouse/posting-detail-9001-response.json)
-  - [`greenhouse_profile_dsl.rs`](../../src-tauri/tests/greenhouse_profile_dsl.rs)
+  - [`profile_dsl_profiles/greenhouse.rs`](../../src-tauri/tests/profile_dsl_profiles/greenhouse.rs)
 
 Issue #105 explicitly required local synthetic or anonymized fixtures. `Acme Robotics`, `acmejobs`, job IDs `9001` and `9002`, and their job data are test data created in this repository. These values prove current parser/runtime behavior only; they are not evidence that a real Greenhouse board emitted the same formats.
 
@@ -56,7 +56,7 @@ Issue #105 explicitly required local synthetic or anonymized fixtures. `Acme Rob
 Focused deterministic validation:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test greenhouse_profile_dsl
+cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles greenhouse::
 ```
 
 Last audit result on 2026-07-10: `1 passed; 0 failed`.

@@ -24,7 +24,7 @@ Current evidence covers synthetic deterministic fixtures, five dated public Work
   - [`posting-discovery-page-20-response.json`](../../src-tauri/tests/fixtures/workday/posting-discovery-page-20-response.json)
   - [`posting-discovery-expected-candidates.json`](../../src-tauri/tests/fixtures/workday/posting-discovery-expected-candidates.json)
   - [`posting-detail-jr-1001-response.json`](../../src-tauri/tests/fixtures/workday/posting-detail-jr-1001-response.json)
-  - [`workday_profile_dsl.rs`](../../src-tauri/tests/workday_profile_dsl.rs)
+  - [`profile_dsl_profiles/workday.rs`](../../src-tauri/tests/profile_dsl_profiles/workday.rs)
 
 The `Acme Robotics` tenant and posting data are synthetic test data. They prove detection, compilation, JSON-body offset pagination with `limit: 20`, discovery extraction, `postingMeta.externalPath`, and lazy detail behavior only. A separate inline regression temporarily lowers the compiled profile bound to two requests and proves that an initial `total: 373` remains authoritative when a successful follow-up page contains items but reports `total: 0`; the bounded run returns four synthetic candidates and emits `pagination_max_requests_reached`.
 
@@ -37,7 +37,7 @@ The `Acme Robotics` tenant and posting data are synthetic test data. They prove 
 Focused deterministic validation:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test workday_profile_dsl
+cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles workday::
 ```
 
 Post-fix result on 2026-07-10: `3 passed; 0 failed`.

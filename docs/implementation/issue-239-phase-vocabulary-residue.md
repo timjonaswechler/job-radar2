@@ -115,8 +115,8 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/fixtures/source-profile-dsl/valid/simple-source-profile.json:105` — `"postingDetail": {`
 - `src-tauri/tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json:24` — `"postingDiscovery": {`
 - `src-tauri/tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json:18` — `"step": "postingDiscovery",`
-- `src-tauri/tests/schema_validation.rs:195` — `"postingDiscovery": {`
-- `src-tauri/tests/schema_validation.rs:223` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
+- `src-tauri/tests/profile_dsl_profiles/schema.rs:195` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_profiles/schema.rs:223` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
 - `src-tauri/tests/source_live_check.rs:57` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]`
 - `src-tauri/tests/source_live_check.rs:670` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
 - `src-tauri/tests/source_live_check.rs:675` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
@@ -134,9 +134,9 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/strategy_policy_first_accepted.rs:91` — `"postingDetail": detail_step()`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:446` — `"postingDiscovery": discovery_step(),`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:447` — `"postingDetail": detail_step()`
-- `src-tauri/tests/successfactors_profile_dsl.rs:171` — `let captures = profile["detect"]["inputUrlPatterns"]`
-- `src-tauri/tests/workday_profile_dsl.rs:154` — `profile_value["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"]["limits"]`
-- `src-tauri/tests/workday_profile_dsl.rs:277` — `let captures = profile["detect"]["inputUrlPatterns"]`
+- `src-tauri/tests/profile_dsl_profiles/successfactors.rs:169` — `let captures = profile["detect"]["inputUrlPatterns"]`
+- `src-tauri/tests/profile_dsl_profiles/workday.rs:152` — `profile_value["accessPaths"][0]["postingDiscovery"]["strategies"][0]["pagination"]["limits"]`
+- `src-tauri/tests/profile_dsl_profiles/workday.rs:275` — `let captures = profile["detect"]["inputUrlPatterns"]`
 - `src-tauri/resources/profiles/greenhouse.json:18` — `"detect": {`
 - `src-tauri/resources/profiles/greenhouse.json:59` — `"postingDiscovery": {`
 - `src-tauri/resources/profiles/greenhouse.json:117` — `"postingDetail": {`
@@ -340,7 +340,7 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/source_profile_registry.rs:230` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:298` — `"/postingDiscovery/strategies"`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:338` — `"/postingDetail/strategies"`
-- `src-tauri/tests/workday_profile_dsl.rs:227` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/profile_dsl_profiles/workday.rs:225` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
 
 ## Verification
 

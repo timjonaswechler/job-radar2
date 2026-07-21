@@ -1314,7 +1314,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
    src-tauri/src/profile_dsl/runtime/posting_detail.rs
 
    src-tauri/src/profile_dsl/documents/serde_tests.rs
-   src-tauri/tests/schema_validation.rs
+   src-tauri/tests/profile_dsl_profiles/schema.rs
  ```
 
  Migration:
@@ -1578,11 +1578,11 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
  Bestehende Tests erweitern:
 
  ```text
-   src-tauri/tests/schema_validation.rs
+   src-tauri/tests/profile_dsl_profiles/schema.rs
    src-tauri/tests/source_profile_detection.rs
-   src-tauri/tests/greenhouse_profile_dsl.rs
-   src-tauri/tests/workday_profile_dsl.rs
-   src-tauri/tests/successfactors_profile_dsl.rs
+   src-tauri/tests/profile_dsl_profiles/greenhouse.rs
+   src-tauri/tests/profile_dsl_profiles/workday.rs
+   src-tauri/tests/profile_dsl_profiles/successfactors.rs
    src-tauri/tests/source_live_check.rs
  ```
 
