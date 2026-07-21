@@ -43,8 +43,9 @@ pub use profile_dsl::documents::{
     AccessPathFragment, DetailStep, DetailStepFragment, DetailStrategyFragment,
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
     DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, PhaseLimits,
-    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SupportLevel,
+    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, Parse,
+    ParseFragment, ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
+    ReusableAccessPathDocument, Select, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -59,6 +60,11 @@ pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::policy::StrategyPolicy;
+pub use profile_dsl::primitives::parse::{
+    compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,
+    CompileParseError, CompiledParse, DecodedHttpText, ParseDescriptor, ParseFailure,
+    ParseFailureKind, ParseInput, ParseInputKind, ParseRegistryError, ParsedDocument,
+};
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
     AllowanceLimitSource, DetailExecutionResult, DetailPostingOccurrence, DiscoveryCandidate,

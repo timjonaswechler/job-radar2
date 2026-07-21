@@ -203,7 +203,7 @@ where
         fetcher,
         browser,
         &strategy.fetch,
-        strategy.parse.charset.as_deref(),
+        strategy.parse.authored_charset(),
         &plan.source_config,
         &plan.source.name,
         query_params_for_location(pagination_params, parameter_location),
@@ -241,24 +241,30 @@ where
 fn extract_candidates_from_response(
     plan: &SourceExecutionPlan,
     strategy: &ExecutionPlanDiscoveryStrategy,
-    body: &str,
+    response: &CompleteParseText,
     total_path: Option<&str>,
     next_cursor_path: Option<&str>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
 ) -> StrategyFetchOutput {
-    let document =
-        match parse_response_document(body, strategy, base_path, strategy_key, diagnostics) {
-            Some(document) => document,
-            None => {
-                return StrategyFetchOutput {
-                    candidates: Vec::new(),
-                    total_count: None,
-                    next_cursor: None,
-                }
+    let document = match strategy.parse.parse_with_diagnostics(
+        response.as_input(),
+        ParseDiagnosticContext {
+            base_path,
+            strategy_key,
+        },
+        diagnostics,
+    ) {
+        Some(document) => document,
+        None => {
+            return StrategyFetchOutput {
+                candidates: Vec::new(),
+                total_count: None,
+                next_cursor: None,
             }
-        };
+        }
+    };
     let total_count = total_path.and_then(|path| extract_total_count(&document, path));
     let next_cursor = next_cursor_path.and_then(|path| extract_next_cursor(&document, path));
 

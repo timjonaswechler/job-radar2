@@ -278,7 +278,7 @@ where
                             fetcher,
                             browser,
                             &strategy.fetch,
-                            strategy.parse.charset.as_deref(),
+                            strategy.parse.authored_charset(),
                             &plan.source_config,
                             &plan.source.name,
                             url,
@@ -295,7 +295,7 @@ where
                             fetcher,
                             browser,
                             &strategy.fetch,
-                            strategy.parse.charset.as_deref(),
+                            strategy.parse.authored_charset(),
                             &plan.source_config,
                             &plan.source.name,
                             &[],
@@ -315,11 +315,12 @@ where
                 let Some(response) = response else { break };
                 request_count += 1;
 
-                let document = match parse_response_document(
-                    &response,
-                    strategy,
-                    base_path,
-                    strategy_key,
+                let document = match strategy.parse.parse_with_diagnostics(
+                    response.as_input(),
+                    ParseDiagnosticContext {
+                        base_path,
+                        strategy_key,
+                    },
                     diagnostics,
                 ) {
                     Some(document) => document,

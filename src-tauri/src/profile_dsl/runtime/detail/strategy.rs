@@ -35,7 +35,7 @@ where
         fetcher,
         browser,
         &strategy.fetch,
-        strategy.parse.charset.as_deref(),
+        strategy.parse.authored_charset(),
         &plan.source_config,
         &plan.source.name,
         posting,
@@ -58,11 +58,12 @@ where
         }
     };
 
-    let document = match parse_response_document(
-        &response,
-        strategy,
-        &base_path,
-        strategy_key.as_deref(),
+    let document = match strategy.parse.parse_with_diagnostics(
+        response.as_input(),
+        ParseDiagnosticContext {
+            base_path: &base_path,
+            strategy_key: strategy_key.as_deref(),
+        },
         &mut diagnostics,
     ) {
         Some(document) => document,

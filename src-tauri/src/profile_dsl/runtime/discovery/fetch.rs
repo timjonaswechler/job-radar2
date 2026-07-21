@@ -13,7 +13,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -50,7 +50,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -87,7 +87,7 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -126,7 +126,7 @@ async fn fetch_strategy_document_with_url_options<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -206,7 +206,7 @@ async fn fetch_http_strategy_document<F>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -322,7 +322,7 @@ where
     let result = fetcher.fetch(request, context).await;
 
     match result {
-        Ok(response) => Ok(Some(response.body)),
+        Ok(response) => Ok(Some(CompleteParseText::DecodedHttp(response.body))),
         Err(error) if error.kind == ProfileHttpFailureKind::Cancelled => {
             Err(TypedCancellation::strategy(
                 RuntimePhase::Discovery,
@@ -359,7 +359,7 @@ async fn fetch_browser_strategy_document<B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<String>, TypedCancellation>
+) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -414,7 +414,9 @@ where
     };
 
     match browser.render_with_context(request, context).await {
-        Ok(ProfileBrowserFetchResponse { body }) => Ok(Some(body)),
+        Ok(ProfileBrowserFetchResponse { body }) => {
+            Ok(Some(CompleteParseText::BrowserRendered(body)))
+        }
         Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
             Err(TypedCancellation::strategy(
                 RuntimePhase::Discovery,

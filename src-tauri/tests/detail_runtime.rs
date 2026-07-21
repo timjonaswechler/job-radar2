@@ -887,6 +887,41 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
 }
 
 #[test]
+fn detail_strict_decode_terminal_exposes_no_document_or_parse_diagnostic() {
+    let plan = compiled_json_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        None,
+        None,
+    );
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs/bad-text.json".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(vec![0xff])],
+        content_length: None,
+    }]);
+
+    let result = block_on(execute_detail_test(
+        &plan,
+        &posting_occurrence("https://example.test/jobs/bad-text.json", []),
+        &fetcher,
+    ));
+
+    assert_eq!(result.description_text, None);
+    assert_eq!(fetcher.requests().len(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
+}
+
+#[test]
 fn detail_accepts_the_shared_runtime_cancellation_context() {
     let plan = compiled_json_detail_plan(
         "{{posting:url}}",

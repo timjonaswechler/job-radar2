@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
-    Fetch, HttpMethod, Pagination, PaginationParameterLocation, Parse, RequestBody, Select,
+    Fetch, HttpMethod, Pagination, PaginationParameterLocation, RequestBody, Select,
 };
 use crate::profile_dsl::template::{
     compile_template, descriptor_for_placement, json_pointer_segment, CompiledTemplate,
@@ -166,7 +166,7 @@ pub(crate) struct ExecutionPlanBuildError {
 }
 
 impl ExecutionPlanBuildError {
-    fn new(path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub(super) fn new(path: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             path: path.into(),
             message: message.into(),
@@ -405,10 +405,6 @@ fn compile_pagination_limits(
     }
 
     Ok(compiled)
-}
-
-pub(crate) fn clone_parse(parse: &Parse) -> Parse {
-    parse.clone()
 }
 
 pub(crate) fn clone_select(select: &Select) -> Select {

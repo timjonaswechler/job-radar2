@@ -55,6 +55,10 @@ fn discovery_cancellation_interrupts_an_active_http_fetch_without_fallback_failu
             .diagnostics
             .iter()
             .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
+        assert!(result
+            .diagnostics
+            .iter()
+            .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
     });
 }
 
@@ -93,6 +97,10 @@ fn discovery_browser_cancellation_is_distinct_from_runtime_failure() {
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.code == "runtime_execution_cancelled"));
+        assert!(result
+            .diagnostics
+            .iter()
+            .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
         assert!(result.diagnostics.iter().all(|diagnostic| {
             diagnostic.code != "browser_runtime_unavailable"
                 && diagnostic.code != "fallback_exhausted"

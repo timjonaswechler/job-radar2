@@ -421,7 +421,18 @@ pub enum ParseTypeFragment {
     Json,
     Xml,
     Html,
-    Text,
+}
+
+impl ParseTypeFragment {
+    pub const ALL: [Self; 3] = [Self::Json, Self::Xml, Self::Html];
+
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Xml => "xml",
+            Self::Html => "html",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
+use dom_query::{Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -9,9 +9,7 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{
-            extract::Cardinality, transform::Transform, HttpMethod, ParseType, RequestBody, Select,
-        },
+        documents::{extract::Cardinality, transform::Transform, HttpMethod, RequestBody, Select},
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
@@ -21,6 +19,7 @@ use crate::{
             },
             SourceExecutionPlan,
         },
+        primitives::parse::{CompleteParseText, ParseDiagnosticContext},
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -58,7 +57,7 @@ mod values;
 
 use acceptance::accept_detail_result;
 use diagnostics::runtime_error;
-use document::{parse_response_document, select_detail_document, RuntimeItem};
+use document::{select_detail_document, RuntimeItem};
 use extract::{evaluate_strategy_captures, evaluate_string_field};
 use fetch::fetch_strategy_document;
 use strategy::execute_strategy;

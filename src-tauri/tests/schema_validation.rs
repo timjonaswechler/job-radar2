@@ -167,6 +167,25 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
 }
 
 #[test]
+fn schema_rejects_removed_text_parse_in_profiles_and_direct_fragments() {
+    let harness = SchemaHarness::new();
+
+    let mut profile = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["parse"]["type"] = json!("text");
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["text"]);
+
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    source["accessPaths"][0]["discovery"]["strategies"][0]["parse"] = json!({ "type": "text" });
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["text"]);
+}
+
+#[test]
 fn final_strategy_set_schema_requires_first_accepted_policy() {
     let harness = SchemaHarness::new();
     let strategy = json!({

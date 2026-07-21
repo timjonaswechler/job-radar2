@@ -11,17 +11,17 @@ use crate::profile_dsl::documents::discovery::{
 };
 use crate::profile_dsl::documents::select::Select;
 use crate::profile_dsl::documents::strategy::Acceptance;
-use crate::profile_dsl::documents::Parse;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
 use crate::profile_dsl::template::{
     descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplateDescriptor,
     TemplatePlacement,
 };
 
 use super::capabilities::{
-    clone_parse, clone_select, compile_fetch, compile_pagination, ExecutionPlanBuildError,
-    ExecutionPlanFetch, ExecutionPlanPagination,
+    clone_select, compile_fetch, compile_pagination, ExecutionPlanBuildError, ExecutionPlanFetch,
+    ExecutionPlanPagination,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -44,7 +44,7 @@ pub struct ExecutionPlanDiscoveryStrategy {
     pub fetch: ExecutionPlanFetch,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pagination: Option<ExecutionPlanPagination>,
-    pub parse: Parse,
+    pub parse: CompiledParse,
     pub select: Select,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<ExecutionPlanFilter>>,
@@ -139,7 +139,16 @@ fn compile_discovery_strategy(
             .as_ref()
             .map(|pagination| compile_pagination(pagination, &format!("{path}/pagination")))
             .transpose()?,
-        parse: clone_parse(&strategy.parse),
+        parse: compile_parse(
+            &strategy.parse,
+            match strategy.fetch {
+                crate::profile_dsl::documents::Fetch::Http { .. } => ParseInputKind::DecodedHttp,
+                crate::profile_dsl::documents::Fetch::Browser { .. } => {
+                    ParseInputKind::BrowserRendered
+                }
+            },
+        )
+        .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/parse"), error.message))?,
         select: clone_select(&strategy.select),
         conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
             |error| ExecutionPlanBuildError {

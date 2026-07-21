@@ -14,14 +14,14 @@ pub(super) fn validate_capability_compatibility(
     for (index, strategy) in discovery.strategies.iter().enumerate() {
         let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_select_compatibility(
-            strategy.parse.parse_type,
+            strategy.parse.parse_type(),
             &strategy.select,
             &format!("{strategy_path}/select"),
             &strategy.key,
             diagnostics,
         );
         validate_discovery_extract_compatibility(
-            strategy.parse.parse_type,
+            strategy.parse.parse_type(),
             discovery,
             index,
             &strategy_path,
@@ -32,14 +32,14 @@ pub(super) fn validate_capability_compatibility(
         for (index, strategy) in detail.strategies.iter().enumerate() {
             let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_select_compatibility(
-                strategy.parse.parse_type,
+                strategy.parse.parse_type(),
                 &strategy.select,
                 &format!("{strategy_path}/select"),
                 &strategy.key,
                 diagnostics,
             );
             validate_field_extract_compatibility(
-                strategy.parse.parse_type,
+                strategy.parse.parse_type(),
                 &strategy.extract.fields.description_text,
                 &format!("{strategy_path}/extract/fields/descriptionText"),
                 &strategy.key,
@@ -47,14 +47,14 @@ pub(super) fn validate_capability_compatibility(
             );
             if let Some(field_match) = &strategy.field_match {
                 validate_field_extract_compatibility(
-                    strategy.parse.parse_type,
+                    strategy.parse.parse_type(),
                     &field_match.left,
                     &format!("{strategy_path}/match/left"),
                     &strategy.key,
                     diagnostics,
                 );
                 validate_field_extract_compatibility(
-                    strategy.parse.parse_type,
+                    strategy.parse.parse_type(),
                     &field_match.right,
                     &format!("{strategy_path}/match/right"),
                     &strategy.key,
@@ -279,12 +279,7 @@ fn push_capability_diagnostic(
 }
 
 fn parse_type_name(parse_type: ParseType) -> &'static str {
-    match parse_type {
-        ParseType::Json => "json",
-        ParseType::Xml => "xml",
-        ParseType::Html => "html",
-        ParseType::Text => "text",
-    }
+    parse_type.key()
 }
 
 fn select_type_name(select: &Select) -> &'static str {

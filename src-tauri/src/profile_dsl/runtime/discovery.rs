@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
 
-use dom_query::{Document as HtmlDocument, Matcher, NodeRef, Selection as HtmlSelection};
+use dom_query::{Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -11,7 +11,7 @@ use crate::{
         documents::strategy::Acceptance,
         documents::{
             extract::Cardinality, transform::Transform, HttpMethod, PaginationParameterLocation,
-            ParseType, RequestBody, Select,
+            RequestBody, Select,
         },
         execution_plan::{
             capabilities::{
@@ -26,6 +26,7 @@ use crate::{
             },
             SourceExecutionPlan,
         },
+        primitives::parse::{CompleteParseText, ParseDiagnosticContext},
     },
     simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
@@ -64,7 +65,7 @@ mod values;
 
 use acceptance::accept_discovery_result;
 use diagnostics::{runtime_error, runtime_warning};
-use document::{parse_response_document, select_items, select_sitemap_url_items};
+use document::{select_items, select_sitemap_url_items};
 use extract::extract_candidate;
 use fetch::{fetch_strategy_document_at_url, fetch_strategy_document_with_query_params};
 use pagination::execute_paginated_strategy;

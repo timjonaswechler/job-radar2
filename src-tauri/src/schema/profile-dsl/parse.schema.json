@@ -8,7 +8,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "enum": ["json", "xml", "html", "text"] },
+        "type": { "type": "string", "enum": ["json", "xml", "html"] },
         "charset": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
       }
     }

@@ -1,11 +1,6 @@
 use super::values::{xml_descendant_elements, xml_path_texts};
 use super::*;
-
-pub(super) enum ParsedDocument<'body> {
-    Json(Value),
-    Xml(roxmltree::Document<'body>),
-    Html(HtmlDocument),
-}
+use crate::profile_dsl::primitives::parse::ParsedDocument;
 
 #[derive(Clone)]
 pub(super) enum RuntimeItem<'doc, 'body> {
@@ -14,54 +9,6 @@ pub(super) enum RuntimeItem<'doc, 'body> {
     XmlCollection(Vec<roxmltree::Node<'doc, 'body>>),
     Html(NodeRef<'doc>),
     Text(String),
-}
-
-pub(super) fn parse_response_document<'body>(
-    body: &'body str,
-    strategy: &ExecutionPlanDetailStrategy,
-    base_path: &str,
-    strategy_key: Option<&str>,
-    diagnostics: &mut Diagnostics,
-) -> Option<ParsedDocument<'body>> {
-    match strategy.parse.parse_type {
-        ParseType::Json => match serde_json::from_str(body) {
-            Ok(document) => Some(ParsedDocument::Json(document)),
-            Err(error) => {
-                diagnostics.push(runtime_error(
-                    "json_parse_failed",
-                    format!("Fetched response could not be parsed as JSON: {error}"),
-                    format!("{base_path}/parse"),
-                    strategy_key,
-                    json!({ "error": error.to_string() }),
-                ));
-                None
-            }
-        },
-        ParseType::Xml => match roxmltree::Document::parse(body) {
-            Ok(document) => Some(ParsedDocument::Xml(document)),
-            Err(error) => {
-                diagnostics.push(runtime_error(
-                    "xml_parse_failed",
-                    format!("Fetched response could not be parsed as XML: {error}"),
-                    format!("{base_path}/parse"),
-                    strategy_key,
-                    json!({ "error": error.to_string() }),
-                ));
-                None
-            }
-        },
-        ParseType::Html => Some(ParsedDocument::Html(HtmlDocument::from(body))),
-        ParseType::Text => {
-            diagnostics.push(runtime_error(
-                "unsupported_parse_type",
-                "detail runtime supports JSON, XML, and HTML parse types",
-                format!("{base_path}/parse/type"),
-                strategy_key,
-                json!({ "supportedTypes": ["json", "xml", "html"] }),
-            ));
-            None
-        }
-    }
 }
 
 pub(super) fn select_detail_document<'doc, 'body>(

@@ -48,6 +48,28 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
 }
 
 #[test]
+fn strict_decode_terminal_exposes_no_document_or_parse_diagnostic() {
+    let plan = compiled_json_discovery_plan(default_fields(), default_select());
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/jobs.json".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(vec![0xff])],
+        content_length: None,
+    }]);
+
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
+
+    assert!(result.candidates.is_empty());
+    assert_eq!(fetcher.requests().len(), 1);
+    assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
+}
+
+#[test]
 fn discovery_url_render_failure_does_not_expose_authored_template() {
     const SECRET: &str = "raw-authored-discovery-secret";
     let mut plan = compiled_json_discovery_plan(default_fields(), default_select());
