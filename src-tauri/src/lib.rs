@@ -7,7 +7,6 @@ mod db;
 mod geo;
 mod profile_dsl;
 mod search;
-mod simple_json_path;
 mod source;
 mod source_profile;
 
@@ -45,7 +44,7 @@ pub use profile_dsl::documents::{
     DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
     DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern, Parse,
     ParseFragment, ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
-    ReusableAccessPathDocument, Select, SupportLevel,
+    ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -64,6 +63,12 @@ pub use profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,
     CompileParseError, CompiledParse, DecodedHttpText, ParseDescriptor, ParseFailure,
     ParseFailureKind, ParseInput, ParseInputKind, ParseRegistryError, ParsedDocument,
+};
+pub use profile_dsl::primitives::select::{
+    compile_select, select_descriptors, validate_select_registration_keys, CompileSelectError,
+    CompileSelectErrorKind, CompiledSelect, SelectCompileContext, SelectDescriptor,
+    SelectExecutionError, SelectKind, SelectPhase, SelectPlacement, SelectRegistryError,
+    SelectedItem, SelectedSequence,
 };
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,

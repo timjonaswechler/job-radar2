@@ -1,6 +1,8 @@
-use super::values::{xml_descendant_elements, xml_path_texts};
 use super::*;
-use crate::profile_dsl::primitives::parse::ParsedDocument;
+use crate::profile_dsl::primitives::{
+    parse::ParsedDocument,
+    select::{CompiledSelect, SelectKind, SelectedItem},
+};
 
 #[derive(Clone)]
 pub(super) enum RuntimeItem<'doc, 'body> {
@@ -13,149 +15,104 @@ pub(super) enum RuntimeItem<'doc, 'body> {
 
 pub(super) fn select_detail_document<'doc, 'body>(
     document: &'doc ParsedDocument<'body>,
-    select: &Select,
+    select: &CompiledSelect,
     allow_collection: bool,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
 ) -> Option<RuntimeItem<'doc, 'body>> {
-    match (document, select) {
-        (ParsedDocument::Json(document), Select::Document) => Some(RuntimeItem::Json(document)),
-        (ParsedDocument::Json(document), Select::JsonPath { json_path }) => {
-            match resolve_simple_json_path(document, json_path) {
-                Ok(Some(value)) => Some(RuntimeItem::Json(value)),
-                Ok(None) => {
-                    diagnostics.push(runtime_error(
-                        "json_path_select_missing",
-                        "JSONPath selector did not match a posting detail document",
-                        format!("{base_path}/select/jsonPath"),
-                        strategy_key,
-                        json!({ "jsonPath": json_path }),
-                    ));
-                    None
-                }
-                Err(error) => {
-                    diagnostics.push(runtime_error(
-                        "json_path_select_failed",
-                        format!("JSONPath selector is invalid: {error}"),
-                        format!("{base_path}/select/jsonPath"),
-                        strategy_key,
-                        json!({ "jsonPath": json_path, "error": error.to_string() }),
-                    ));
-                    None
-                }
-            }
-        }
-        (ParsedDocument::Xml(document), Select::Document) => {
-            Some(RuntimeItem::Xml(document.root_element()))
-        }
-        (ParsedDocument::Xml(document), Select::XmlElement { element }) => {
-            let mut items = xml_descendant_elements(document.root_element(), element);
-            match items.len() {
-                0 => {
-                    diagnostics.push(runtime_error(
-                        "xml_select_missing",
-                        "XML element selector did not match a posting detail document",
-                        format!("{base_path}/select/element"),
-                        strategy_key,
-                        json!({ "element": element }),
-                    ));
-                    None
-                }
-                _ if allow_collection => Some(RuntimeItem::XmlCollection(items)),
-                1 => Some(RuntimeItem::Xml(items.remove(0))),
-                count => {
-                    diagnostics.push(runtime_error(
-                        "xml_select_multiple",
-                        "XML element selector matched multiple posting detail documents",
-                        format!("{base_path}/select/element"),
-                        strategy_key,
-                        json!({ "element": element, "actualCount": count }),
-                    ));
-                    None
-                }
-            }
-        }
-        (ParsedDocument::Xml(document), Select::XmlText { text_path }) => {
-            let texts = xml_path_texts(document.root_element(), text_path);
-            match texts.len() {
-                0 => {
-                    diagnostics.push(runtime_error(
-                        "xml_text_select_missing",
-                        "XML text selector did not match posting detail text",
-                        format!("{base_path}/select/textPath"),
-                        strategy_key,
-                        json!({ "textPath": text_path }),
-                    ));
-                    None
-                }
-                1 => Some(RuntimeItem::Text(texts.into_iter().next().unwrap())),
-                count => {
-                    diagnostics.push(runtime_error(
-                        "xml_text_select_multiple",
-                        "XML text selector matched multiple posting detail text values",
-                        format!("{base_path}/select/textPath"),
-                        strategy_key,
-                        json!({ "textPath": text_path, "actualCount": count }),
-                    ));
-                    None
-                }
-            }
-        }
-        (ParsedDocument::Html(document), Select::Document) => {
-            Some(RuntimeItem::Html(document.tree.root()))
-        }
-        (ParsedDocument::Html(document), Select::Css { selector }) => {
-            let matcher = match Matcher::new(selector) {
-                Ok(matcher) => matcher,
-                Err(error) => {
-                    diagnostics.push(runtime_error(
-                        "css_select_failed",
-                        format!("CSS selector is invalid: {error:?}"),
-                        format!("{base_path}/select/selector"),
-                        strategy_key,
-                        json!({ "selector": selector, "error": format!("{error:?}") }),
-                    ));
-                    return None;
-                }
-            };
-            let mut nodes = document
-                .select_matcher(&matcher)
-                .nodes()
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
-            match nodes.len() {
-                0 => {
-                    diagnostics.push(runtime_error(
-                        "css_select_missing",
-                        "CSS selector did not match a posting detail document",
-                        format!("{base_path}/select/selector"),
-                        strategy_key,
-                        json!({ "selector": selector }),
-                    ));
-                    None
-                }
-                1 => Some(RuntimeItem::Html(nodes.remove(0))),
-                count => {
-                    diagnostics.push(runtime_error(
-                        "css_select_multiple",
-                        "CSS selector matched multiple posting detail documents",
-                        format!("{base_path}/select/selector"),
-                        strategy_key,
-                        json!({ "selector": selector, "actualCount": count }),
-                    ));
-                    None
-                }
-            }
-        }
-        _ => {
+    let sequence = match select.select(document) {
+        Ok(sequence) => sequence,
+        Err(error) => {
             diagnostics.push(runtime_error(
-                "unsupported_select_type",
-                "Select type is not compatible with the parsed response document",
+                "compiled_select_context_mismatch",
+                error.message,
                 format!("{base_path}/select"),
                 strategy_key,
-                json!({}),
+                json!({ "selectType": select.kind().key() }),
+            ));
+            return None;
+        }
+    };
+    let mut items = sequence.into_vec();
+    if allow_collection && select.kind() == SelectKind::XmlElement && !items.is_empty() {
+        let nodes = items
+            .into_iter()
+            .filter_map(|item| match item {
+                SelectedItem::Xml(node) => Some(node),
+                _ => None,
+            })
+            .collect();
+        return Some(RuntimeItem::XmlCollection(nodes));
+    }
+    match items.len() {
+        0 => {
+            let (code, message) = match select.kind() {
+                SelectKind::JsonPath => (
+                    "json_path_select_missing",
+                    "JSONPath selector did not match a posting detail document",
+                ),
+                SelectKind::XmlElement => (
+                    "xml_select_missing",
+                    "XML element selector did not match a posting detail document",
+                ),
+                SelectKind::XmlText => (
+                    "xml_text_select_missing",
+                    "XML text selector did not match posting detail text",
+                ),
+                SelectKind::Css => (
+                    "css_select_missing",
+                    "CSS selector did not match a posting detail document",
+                ),
+                SelectKind::Document => (
+                    "document_select_missing",
+                    "Document selector produced no posting detail document",
+                ),
+                SelectKind::SitemapUrls => (
+                    "sitemap_select_invalid",
+                    "Sitemap selection is unavailable in Detail",
+                ),
+            };
+            diagnostics.push(runtime_error(
+                code,
+                message,
+                format!("{base_path}/select"),
+                strategy_key,
+                json!({ "selectType": select.kind().key() }),
+            ));
+            None
+        }
+        1 => match items.remove(0) {
+            SelectedItem::Json(value) => Some(RuntimeItem::Json(value)),
+            SelectedItem::Xml(value) => Some(RuntimeItem::Xml(value)),
+            SelectedItem::Html(value) => Some(RuntimeItem::Html(value)),
+            SelectedItem::Text(value) => Some(RuntimeItem::Text(value)),
+        },
+        count => {
+            let (code, message) = match select.kind() {
+                SelectKind::XmlElement => (
+                    "xml_select_multiple",
+                    "XML element selector matched multiple posting detail documents",
+                ),
+                SelectKind::XmlText => (
+                    "xml_text_select_multiple",
+                    "XML text selector matched multiple posting detail text values",
+                ),
+                SelectKind::Css => (
+                    "css_select_multiple",
+                    "CSS selector matched multiple posting detail documents",
+                ),
+                _ => (
+                    "select_multiple",
+                    "Selector matched multiple posting detail documents",
+                ),
+            };
+            diagnostics.push(runtime_error(
+                code,
+                message,
+                format!("{base_path}/select"),
+                strategy_key,
+                json!({ "selectType": select.kind().key(), "actualCount": count }),
             ));
             None
         }

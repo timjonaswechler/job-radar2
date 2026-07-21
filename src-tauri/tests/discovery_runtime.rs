@@ -130,6 +130,31 @@ fn compiled_discovery_plan_with_strategy(
     feed_url: &'static str,
     extra_strategy_fields: serde_json::Map<String, Value>,
 ) -> SourceExecutionPlan {
+    unwrap_plan(compile_discovery_outcome_with_strategy(
+        parse,
+        select,
+        fields,
+        feed_url,
+        extra_strategy_fields,
+    ))
+}
+
+fn compile_discovery_outcome(
+    parse: Value,
+    select: Value,
+    fields: Value,
+    feed_url: &'static str,
+) -> CompileSourceOutcome {
+    compile_discovery_outcome_with_strategy(parse, select, fields, feed_url, serde_json::Map::new())
+}
+
+fn compile_discovery_outcome_with_strategy(
+    parse: Value,
+    select: Value,
+    fields: Value,
+    feed_url: &'static str,
+    extra_strategy_fields: serde_json::Map<String, Value>,
+) -> CompileSourceOutcome {
     let mut strategy = serde_json::Map::from_iter([
         ("key".to_string(), json!("json_api")),
         (
@@ -186,8 +211,7 @@ fn compiled_discovery_plan_with_strategy(
     }))
     .unwrap();
 
-    let result = compile_test_source(&source, Some(profile));
-    unwrap_plan(result)
+    compile_test_source(&source, Some(profile))
 }
 
 fn compiled_browser_discovery_plan(

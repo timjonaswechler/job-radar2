@@ -205,24 +205,22 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
         "/discovery/strategies/0/parse"
     );
 
-    let html_select_plan = compiled_discovery_plan(
+    let fetcher = fake_fetcher([(
+        "https://example.test/jobs.html",
+        "<article></article>".to_string(),
+    )]);
+    let html_select_failure = compile_discovery_outcome(
         json!({ "type": "html" }),
         json!({ "type": "css", "selector": "[" }),
         default_html_fields(),
         "https://example.test/jobs.html",
     );
-    let html_select_failure = block_on(execute_discovery_test(
-        &html_select_plan,
-        &fake_fetcher([(
-            "https://example.test/jobs.html",
-            "<article></article>".to_string(),
-        )]),
-    ));
-    assert_runtime_diagnostic(&html_select_failure.diagnostics[0], "css_select_failed");
-    assert_eq!(
-        html_select_failure.diagnostics[0].path,
-        "/discovery/strategies/0/select/selector"
-    );
+    let CompileSourceOutcome::Rejected { diagnostics } = html_select_failure else {
+        panic!("invalid CSS Select should be rejected before execution");
+    };
+    assert_eq!(diagnostics[0].category, DiagnosticCategory::Compiler);
+    assert_eq!(diagnostics[0].code, "invalid_select_syntax");
+    assert_eq!(fetcher.request_count(), 0);
 
     let mut html_fields = default_html_fields();
     html_fields["title"] = json!({ "type": "css_text", "selector": "[", "cardinality": "one" });

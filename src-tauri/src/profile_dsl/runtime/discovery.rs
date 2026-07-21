@@ -6,12 +6,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
+    profile_dsl::primitives::select::resolve_authored_json_path as resolve_simple_json_path,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
         documents::{
             extract::Cardinality, transform::Transform, HttpMethod, PaginationParameterLocation,
-            RequestBody, Select,
+            RequestBody,
         },
         execution_plan::{
             capabilities::{
@@ -28,7 +29,6 @@ use crate::{
         },
         primitives::parse::{CompleteParseText, ParseDiagnosticContext},
     },
-    simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
 };
 
@@ -65,7 +65,7 @@ mod values;
 
 use acceptance::accept_discovery_result;
 use diagnostics::{runtime_error, runtime_warning};
-use document::{select_items, select_sitemap_url_items};
+use document::select_items;
 use extract::extract_candidate;
 use fetch::{fetch_strategy_document_at_url, fetch_strategy_document_with_query_params};
 use pagination::execute_paginated_strategy;

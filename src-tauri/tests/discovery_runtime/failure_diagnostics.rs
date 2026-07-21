@@ -12,18 +12,22 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     ));
     assert_runtime_diagnostic(&parse_failure.diagnostics[0], "json_parse_failed");
 
-    let select_plan = compiled_json_discovery_plan(
-        default_fields(),
+    let fetcher = fake_fetcher([(
+        "https://example.test/jobs.json",
+        json!({ "jobs": [] }).to_string(),
+    )]);
+    let select_failure = compile_discovery_outcome(
+        json!({ "type": "json" }),
         json!({ "type": "json_path", "jsonPath": "$.jobs[*]" }),
+        default_fields(),
+        "https://example.test/jobs.json",
     );
-    let select_failure = block_on(execute_discovery_test(
-        &select_plan,
-        &fake_fetcher([(
-            "https://example.test/jobs.json",
-            json!({ "jobs": [] }).to_string(),
-        )]),
-    ));
-    assert_runtime_diagnostic(&select_failure.diagnostics[0], "json_path_select_failed");
+    let CompileSourceOutcome::Rejected { diagnostics } = select_failure else {
+        panic!("invalid JSONPath Select should be rejected before execution");
+    };
+    assert_eq!(diagnostics[0].category, DiagnosticCategory::Compiler);
+    assert_eq!(diagnostics[0].code, "invalid_select_syntax");
+    assert_eq!(fetcher.request_count(), 0);
 
     let mut fields = default_fields();
     fields["title"] =

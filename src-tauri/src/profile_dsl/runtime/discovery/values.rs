@@ -1,5 +1,8 @@
 use super::extract::RawFieldValues;
 use super::*;
+pub(super) use crate::profile_dsl::primitives::select::{
+    xml_descendant_elements, xml_node_text, xml_path_texts,
+};
 
 pub(super) fn css_text_values(
     node: &NodeRef<'_>,
@@ -78,72 +81,6 @@ fn select_relative_html<'a>(
         }
     };
     Some(HtmlSelection::from(node.clone()).select_matcher(&matcher))
-}
-
-pub(super) fn xml_descendant_elements<'a, 'input>(
-    node: roxmltree::Node<'a, 'input>,
-    element: &str,
-) -> Vec<roxmltree::Node<'a, 'input>> {
-    node.descendants()
-        .filter(|candidate| candidate.is_element() && candidate.tag_name().name() == element)
-        .collect()
-}
-
-pub(super) fn xml_path_texts(node: roxmltree::Node<'_, '_>, text_path: &str) -> Vec<String> {
-    xml_path_nodes(node, text_path)
-        .into_iter()
-        .map(xml_node_text)
-        .collect()
-}
-
-fn xml_path_nodes<'a, 'input>(
-    node: roxmltree::Node<'a, 'input>,
-    path: &str,
-) -> Vec<roxmltree::Node<'a, 'input>> {
-    let trimmed = path.trim();
-    if trimmed == "." || trimmed.is_empty() {
-        return vec![node];
-    }
-
-    let parts = trimmed
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    if parts.is_empty() {
-        return vec![node];
-    }
-
-    if parts.len() == 1 {
-        return xml_descendant_elements(node, parts[0]);
-    }
-
-    let mut current = vec![node];
-    for (index, part) in parts.into_iter().enumerate() {
-        let mut next = Vec::new();
-        for candidate in current {
-            if index == 0 && candidate.is_element() && candidate.tag_name().name() == part {
-                next.push(candidate);
-            }
-            next.extend(
-                candidate
-                    .children()
-                    .filter(|child| child.is_element() && child.tag_name().name() == part),
-            );
-        }
-        current = next;
-        if current.is_empty() {
-            break;
-        }
-    }
-    current
-}
-
-pub(super) fn xml_node_text(node: roxmltree::Node<'_, '_>) -> String {
-    node.descendants()
-        .filter(|descendant| descendant.is_text())
-        .filter_map(|descendant| descendant.text())
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 pub(super) struct JsonStringsResult {

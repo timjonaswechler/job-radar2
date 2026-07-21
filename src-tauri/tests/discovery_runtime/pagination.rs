@@ -282,6 +282,52 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
 }
 
 #[test]
+fn compiled_discovery_runtime_uses_all_root_locations_without_omitted_child_traversal() {
+    let plan = compiled_discovery_plan_with_strategy(
+        json!({ "type": "xml" }),
+        json!({ "type": "document" }),
+        json!({
+            "title": { "type": "const", "value": "Discovered from sitemap" },
+            "company": { "type": "const", "value": "Example GmbH" },
+            "url": { "type": "item_field", "key": "value", "cardinality": "one" }
+        }),
+        "https://example.test/root-sitemap.xml",
+        serde_json::Map::from_iter([(
+            "pagination".to_string(),
+            json!({
+                "type": "sitemap",
+                "limits": { "maxRequests": 2, "maxItems": 10, "maxDepth": 1 }
+            }),
+        )]),
+    );
+    let fetcher = fake_fetcher([(
+        "https://example.test/root-sitemap.xml",
+        r#"<sitemapindex>
+            <sitemap><loc> https://example.test/jobs-sitemap.xml </loc></sitemap>
+            <url><loc>https://example.test/jobs/1</loc></url>
+            <url><loc>   </loc></url>
+        </sitemapindex>"#
+            .to_string(),
+    )]);
+
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(
+        result
+            .candidates
+            .into_iter()
+            .map(|candidate| candidate.url)
+            .collect::<Vec<_>>(),
+        vec![
+            "https://example.test/jobs-sitemap.xml".to_string(),
+            "https://example.test/jobs/1".to_string(),
+        ]
+    );
+    assert_eq!(fetcher.request_count(), 1);
+}
+
+#[test]
 fn compiled_discovery_runtime_follows_child_sitemaps_within_max_depth() {
     let plan = compiled_discovery_plan_with_strategy(
         json!({ "type": "xml" }),

@@ -327,9 +327,9 @@ where
                     None => break,
                 };
 
-                if let Some(items) = select_sitemap_url_items(
+                if let Some(items) = document::select_items_raw(
                     &document,
-                    posting_url_selector.as_ref(),
+                    posting_url_selector,
                     &format!("{base_path}/pagination/postingUrlSelector"),
                     strategy_key,
                     diagnostics,
@@ -356,10 +356,10 @@ where
                     }
                 }
 
-                if child_sitemap_selector.is_some() {
-                    if let Some(child_items) = select_sitemap_url_items(
+                if let Some(child_sitemap_selector) = child_sitemap_selector {
+                    if let Some(child_items) = document::select_items_raw(
                         &document,
-                        child_sitemap_selector.as_ref(),
+                        child_sitemap_selector,
                         &format!("{base_path}/pagination/childSitemapSelector"),
                         strategy_key,
                         diagnostics,

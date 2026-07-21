@@ -9,18 +9,20 @@ use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::discovery::{
     DiscoveryExtraction, DiscoveryStep, DiscoveryStrategy,
 };
-use crate::profile_dsl::documents::select::Select;
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
 use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
+use crate::profile_dsl::primitives::select::{
+    compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
+};
 use crate::profile_dsl::template::{
     descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplateDescriptor,
     TemplatePlacement,
 };
 
 use super::capabilities::{
-    clone_select, compile_fetch, compile_pagination, ExecutionPlanBuildError, ExecutionPlanFetch,
+    compile_fetch, compile_pagination, ExecutionPlanBuildError, ExecutionPlanFetch,
     ExecutionPlanPagination,
 };
 
@@ -45,7 +47,7 @@ pub struct ExecutionPlanDiscoveryStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pagination: Option<ExecutionPlanPagination>,
     pub parse: CompiledParse,
-    pub select: Select,
+    pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<ExecutionPlanFilter>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,7 +139,13 @@ fn compile_discovery_strategy(
         pagination: strategy
             .pagination
             .as_ref()
-            .map(|pagination| compile_pagination(pagination, &format!("{path}/pagination")))
+            .map(|pagination| {
+                compile_pagination(
+                    pagination,
+                    &format!("{path}/pagination"),
+                    strategy.parse.parse_type(),
+                )
+            })
             .transpose()?,
         parse: compile_parse(
             &strategy.parse,
@@ -149,7 +157,15 @@ fn compile_discovery_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/parse"), error.message))?,
-        select: clone_select(&strategy.select),
+        select: compile_select(
+            &strategy.select,
+            SelectCompileContext {
+                document_type: strategy.parse.parse_type(),
+                phase: SelectPhase::Discovery,
+                placement: SelectPlacement::Strategy,
+            },
+        )
+        .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
         conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
             |error| ExecutionPlanBuildError {
                 path: format!("{path}/where"),

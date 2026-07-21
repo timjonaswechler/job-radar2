@@ -24,6 +24,7 @@ const SCHEMA_FILES: &[&str] = &[
 enum SchemaEntrypoint {
     CheckReport,
     PolicyStrategySet,
+    Select,
     SourceProfile,
     Source,
 }
@@ -33,6 +34,7 @@ impl SchemaEntrypoint {
         match self {
             Self::CheckReport => "src/schema/check-report.schema.json",
             Self::PolicyStrategySet => "src/schema/profile-dsl/policy.schema.json",
+            Self::Select => "src/schema/profile-dsl/select.schema.json",
             Self::SourceProfile => "src/schema/source-profile.schema.json",
             Self::Source => "src/schema/source.schema.json",
         }
@@ -58,6 +60,15 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
     harness.assert_valid(
         SchemaEntrypoint::SourceProfile,
         "resources/profiles/greenhouse.json",
+    );
+}
+
+#[test]
+fn xml_text_select_allows_empty_current_node_path() {
+    SchemaHarness::new().assert_json_valid(
+        SchemaEntrypoint::Select,
+        json!({ "type": "xml_text", "textPath": "" }),
+        "xml_text current-node selector",
     );
 }
 

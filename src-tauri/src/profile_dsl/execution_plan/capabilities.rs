@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
-    Fetch, HttpMethod, Pagination, PaginationParameterLocation, RequestBody, Select,
+    Fetch, HttpMethod, Pagination, PaginationParameterLocation, ParseType, RequestBody, Select,
+};
+use crate::profile_dsl::primitives::select::{
+    compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
 use crate::profile_dsl::template::{
     compile_template, descriptor_for_placement, json_pointer_segment, CompiledTemplate,
@@ -118,9 +121,9 @@ pub enum ExecutionPlanPagination {
             rename = "childSitemapSelector",
             skip_serializing_if = "Option::is_none"
         )]
-        child_sitemap_selector: Option<Select>,
-        #[serde(rename = "postingUrlSelector", skip_serializing_if = "Option::is_none")]
-        posting_url_selector: Option<Select>,
+        child_sitemap_selector: Option<CompiledSelect>,
+        #[serde(rename = "postingUrlSelector")]
+        posting_url_selector: CompiledSelect,
         limits: ExecutionPlanPaginationLimits,
     },
 }
@@ -321,6 +324,7 @@ fn compile_browser_interaction(
 pub(crate) fn compile_pagination(
     pagination: &Pagination,
     path: &str,
+    document_type: ParseType,
 ) -> Result<ExecutionPlanPagination, ExecutionPlanBuildError> {
     match pagination {
         Pagination::Page {
@@ -372,11 +376,34 @@ pub(crate) fn compile_pagination(
             child_sitemap_selector,
             posting_url_selector,
             limits,
-        } => Ok(ExecutionPlanPagination::Sitemap {
-            child_sitemap_selector: child_sitemap_selector.clone(),
-            posting_url_selector: posting_url_selector.clone(),
-            limits: compile_pagination_limits(limits.as_ref(), &format!("{path}/limits"))?,
-        }),
+        } => {
+            let compile_sitemap_select = |select: &Select, placement| {
+                compile_select(
+                    select,
+                    SelectCompileContext {
+                        document_type,
+                        phase: SelectPhase::Discovery,
+                        placement,
+                    },
+                )
+                .map_err(|error| ExecutionPlanBuildError::new(path, error.message))
+            };
+            Ok(ExecutionPlanPagination::Sitemap {
+                child_sitemap_selector: child_sitemap_selector
+                    .as_ref()
+                    .map(|select| compile_sitemap_select(select, SelectPlacement::SitemapChild))
+                    .transpose()?,
+                posting_url_selector: compile_sitemap_select(
+                    posting_url_selector
+                        .as_ref()
+                        .unwrap_or(&Select::SitemapUrls(
+                            crate::profile_dsl::primitives::select::SitemapUrlsSelect::default(),
+                        )),
+                    SelectPlacement::SitemapPosting,
+                )?,
+                limits: compile_pagination_limits(limits.as_ref(), &format!("{path}/limits"))?,
+            })
+        }
     }
 }
 
@@ -405,10 +432,6 @@ fn compile_pagination_limits(
     }
 
     Ok(compiled)
-}
-
-pub(crate) fn clone_select(select: &Select) -> Select {
-    select.clone()
 }
 
 fn compile_request_body(

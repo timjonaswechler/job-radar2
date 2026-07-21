@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
+    profile_dsl::primitives::select::resolve_authored_json_path as resolve_simple_json_path,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{extract::Cardinality, transform::Transform, HttpMethod, RequestBody, Select},
+        documents::{extract::Cardinality, transform::Transform, HttpMethod, RequestBody},
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
@@ -21,7 +22,6 @@ use crate::{
         },
         primitives::parse::{CompleteParseText, ParseDiagnosticContext},
     },
-    simple_json_path::resolve_simple_json_path,
     source::documents::SourceConfig,
 };
 

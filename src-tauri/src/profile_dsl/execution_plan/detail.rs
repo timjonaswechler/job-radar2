@@ -7,18 +7,18 @@ use super::values::{
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
-use crate::profile_dsl::documents::select::Select;
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
 use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
+use crate::profile_dsl::primitives::select::{
+    compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
+};
 use crate::profile_dsl::template::{
     descriptor_for_placement, TemplateAdmissionKeys, TemplateDescriptor, TemplatePlacement,
 };
 
-use super::capabilities::{
-    clone_select, compile_fetch, ExecutionPlanBuildError, ExecutionPlanFetch,
-};
+use super::capabilities::{compile_fetch, ExecutionPlanBuildError, ExecutionPlanFetch};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +39,7 @@ pub struct ExecutionPlanDetailStrategy {
     pub description: Option<String>,
     pub fetch: ExecutionPlanFetch,
     pub parse: CompiledParse,
-    pub select: Select,
+    pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<ExecutionPlanFilter>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -135,7 +135,15 @@ fn compile_detail_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/parse"), error.message))?,
-        select: clone_select(&strategy.select),
+        select: compile_select(
+            &strategy.select,
+            SelectCompileContext {
+                document_type: strategy.parse.parse_type(),
+                phase: SelectPhase::Detail,
+                placement: SelectPlacement::Strategy,
+            },
+        )
+        .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
         conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
             |error| ExecutionPlanBuildError {
                 path: format!("{path}/where"),

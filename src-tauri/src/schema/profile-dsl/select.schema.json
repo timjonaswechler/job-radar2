@@ -45,7 +45,7 @@
       "required": ["type", "textPath"],
       "properties": {
         "type": { "const": "xml_text" },
-        "textPath": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        "textPath": { "type": "string" }
       }
     },
     "cssSelect": {

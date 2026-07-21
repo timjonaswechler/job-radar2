@@ -29,7 +29,7 @@ pub use extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression
 pub use fetch::{BrowserInteraction, BrowserWait, Fetch, HttpMethod, RequestBody};
 pub use fragments::{
     AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, ParseFragment, ParseTypeFragment,
+    DiscoveryStrategyFragment, ParseFragment, ParseTypeFragment, SelectTypeFragment,
 };
 pub use limits::{PhaseLimits, PhaseLimitsFragment};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};

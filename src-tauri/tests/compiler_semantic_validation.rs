@@ -2,8 +2,8 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
-    RegistrySourceProfile, Select, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
-    SourceProfileRegistrySnapshot, SourceStatus,
+    RegistrySourceProfile, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
 };
 
 #[derive(Debug)]
@@ -49,9 +49,8 @@ fn compiler_validates_structural_capability_compatibility() {
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
     let source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    profile.access_paths[0].discovery.strategies[0].select = Select::Css {
-        selector: ".job".to_string(),
-    };
+    profile.access_paths[0].discovery.strategies[0].select =
+        serde_json::from_value(serde_json::json!({ "type": "css", "selector": ".job" })).unwrap();
     profile.access_paths[0].discovery.strategies[0]
         .extract
         .fields
@@ -175,6 +174,61 @@ fn compiler_rejects_invalid_profile_schema_before_validating_source_config() {
         diagnostic.code != "missing_source_config_required_property"
             && diagnostic.code != "forbidden_search_criteria_in_source_config"
     }));
+}
+
+#[test]
+fn compiler_rejects_invalid_sitemap_select_in_unselected_access_path() {
+    let profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    let mut profile = serde_json::to_value(profile).unwrap();
+    let mut access_path = profile["accessPaths"][0].clone();
+    access_path["key"] = serde_json::json!("invalid_unselected_sitemap");
+    let strategy = &mut access_path["discovery"]["strategies"][0];
+    strategy["parse"] = serde_json::json!({ "type": "xml" });
+    strategy["select"] = serde_json::json!({ "type": "document" });
+    strategy["pagination"] = serde_json::json!({
+        "type": "sitemap",
+        "postingUrlSelector": { "type": "sitemap_urls", "urlPattern": "[" },
+        "limits": { "maxRequests": 1, "maxItems": 10 }
+    });
+    strategy["extract"]["fields"] = serde_json::json!({
+        "title": { "type": "const", "value": "Sitemap posting" },
+        "company": { "type": "const", "value": "Example" },
+        "url": { "type": "item_field", "key": "value", "cardinality": "one" }
+    });
+    profile["accessPaths"]
+        .as_array_mut()
+        .unwrap()
+        .push(access_path);
+    let profile: SourceProfileDocument = serde_json::from_value(profile).unwrap();
+    let fetcher = ScriptedProfileHttpClient::new([]);
+
+    let unselected = compile_test_source(&source, Some(profile.clone()));
+    assert_invalid_sitemap_diagnostic(&unselected);
+
+    let mut selected_source = serde_json::to_value(source).unwrap();
+    selected_source["selectedAccessPath"]["pathKey"] =
+        serde_json::json!("invalid_unselected_sitemap");
+    let selected_source: SourceDocument = serde_json::from_value(selected_source).unwrap();
+    let selected = compile_test_source(&selected_source, Some(profile));
+    assert_invalid_sitemap_diagnostic(&selected);
+
+    assert_eq!(fetcher.request_count(), 0);
+}
+
+fn assert_invalid_sitemap_diagnostic(result: &TestCompileResult) {
+    assert!(result.execution_plan.is_none());
+    assert!(
+        result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "invalid_select_syntax"
+                && diagnostic.path
+                    == "/accessPaths/1/discovery/strategies/0/pagination/postingUrlSelector/urlPattern"
+        }),
+        "got diagnostics: {:?}",
+        result.diagnostics
+    );
 }
 
 #[test]

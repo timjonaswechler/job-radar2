@@ -464,6 +464,28 @@ pub enum SelectTypeFragment {
     SitemapUrls,
 }
 
+impl SelectTypeFragment {
+    pub const ALL: [Self; 6] = [
+        Self::Document,
+        Self::JsonPath,
+        Self::XmlElement,
+        Self::XmlText,
+        Self::Css,
+        Self::SitemapUrls,
+    ];
+
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::JsonPath => "json_path",
+            Self::XmlElement => "xml_element",
+            Self::XmlText => "xml_text",
+            Self::Css => "css",
+            Self::SitemapUrls => "sitemap_urls",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SelectFragment {
