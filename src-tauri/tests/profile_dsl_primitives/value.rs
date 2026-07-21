@@ -356,7 +356,7 @@ fn thirteen_value_keys_have_exact_cross_layer_registration_parity() {
         .map(|entry| entry.key.to_string())
         .collect::<Vec<_>>();
     let schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/extract.schema.json"
+        "../../src/schema/profile-dsl/extract.schema.json"
     ))
     .unwrap();
     let schema_keys = schema["$defs"]["fieldExpression"]["oneOf"]

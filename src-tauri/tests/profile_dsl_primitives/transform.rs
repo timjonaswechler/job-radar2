@@ -279,7 +279,7 @@ fn invalid_configuration_is_rejected_during_compilation() {
 
 fn transform_schema_keys() -> Vec<String> {
     let schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/transform.schema.json"
+        "../../src/schema/profile-dsl/transform.schema.json"
     ))
     .unwrap();
     let mut keys = schema["$defs"]["simpleTransform"]["properties"]["type"]["enum"]

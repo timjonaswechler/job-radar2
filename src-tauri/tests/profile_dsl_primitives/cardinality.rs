@@ -223,7 +223,7 @@ fn cardinality(value: &str) -> Cardinality {
 
 fn cardinality_schema_keys() -> Vec<String> {
     let schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/extract.schema.json"
+        "../../src/schema/profile-dsl/extract.schema.json"
     ))
     .unwrap();
     schema["$defs"]["cardinality"]["enum"]

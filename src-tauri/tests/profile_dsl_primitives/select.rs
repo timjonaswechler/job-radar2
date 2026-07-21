@@ -301,8 +301,10 @@ fn authored_parse(parse_type: &str) -> job_radar_lib::Parse {
 }
 
 fn select_schema_keys() -> Vec<String> {
-    let schema: serde_json::Value =
-        serde_json::from_str(include_str!("../src/schema/profile-dsl/select.schema.json")).unwrap();
+    let schema: serde_json::Value = serde_json::from_str(include_str!(
+        "../../src/schema/profile-dsl/select.schema.json"
+    ))
+    .unwrap();
     schema["$defs"]["select"]["oneOf"]
         .as_array()
         .unwrap()

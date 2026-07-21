@@ -212,14 +212,14 @@ fn compiled_parse_plan_rejects_the_wrong_typed_input_kind() {
 
 fn parse_schema_keys() -> Vec<String> {
     enum_keys(
-        include_str!("../src/schema/profile-dsl/parse.schema.json"),
+        include_str!("../../src/schema/profile-dsl/parse.schema.json"),
         &["$defs", "parse", "properties", "type", "enum"],
     )
 }
 
 fn parse_fragment_schema_keys() -> Vec<String> {
     enum_keys(
-        include_str!("../src/schema/profile-dsl/fragments.schema.json"),
+        include_str!("../../src/schema/profile-dsl/fragments.schema.json"),
         &["$defs", "parseFragment", "properties", "type", "enum"],
     )
 }

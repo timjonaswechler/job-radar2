@@ -204,7 +204,7 @@ fn detection_strategy_options_can_reuse_unregistered_predicate_behaviors() {
 
 fn predicate_schema_keys() -> Vec<String> {
     let schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/predicate.schema.json"
+        "../../src/schema/profile-dsl/predicate.schema.json"
     ))
     .unwrap();
     schema["$defs"]["predicate"]["oneOf"]
