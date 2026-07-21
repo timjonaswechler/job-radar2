@@ -17,7 +17,8 @@ use crate::{
         },
         primitives::{
             acceptance::{
-                evaluate_detail_acceptance, validate_detail_acceptance_request, CompiledAcceptance,
+                evaluate_detail_final_acceptance, evaluate_detail_strategy_acceptance,
+                validate_detail_acceptance_request, CompiledAcceptance,
             },
             parse::{CompleteParseText, ParseDiagnosticContext},
             predicate::CompiledPredicate,
@@ -273,6 +274,7 @@ where
         posting,
         &requested_fields,
         detail.accept_when.as_ref(),
+        context,
         &allowance,
     )
 }
@@ -282,6 +284,7 @@ fn project_detail_execution(
     posting: &PostingOccurrence,
     requested_fields: &RequestedDetailFields,
     phase_acceptance: Option<&CompiledAcceptance>,
+    context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
 ) -> DetailExecutionResult {
     let accepted_attempt = match execution.terminal {
@@ -354,18 +357,35 @@ fn project_detail_execution(
             None,
             json!({}),
         ));
+        return DetailExecutionResult {
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
+            diagnostics,
+            report: Some(allowance.report(PhaseCompletion::PolicyUnsatisfied)),
+        };
     }
     let reduced = reduce_detail(&posting.identity, requested_fields, contributions);
     diagnostics.extend(reduced.diagnostics);
-    let final_accepted = accepted_attempt.is_some()
-        && evaluate_detail_acceptance(
-            &reduced.patch,
-            phase_acceptance,
-            None,
-            "/detail",
-            None,
-            &mut diagnostics,
-        );
+    let final_accepted =
+        evaluate_detail_final_acceptance(&reduced.patch, phase_acceptance, &mut diagnostics)
+            .is_satisfied();
+    if context.is_cancelled() {
+        diagnostics.push(runtime_execution_cancelled_diagnostic(
+            &TypedCancellation::phase(RuntimePhase::Detail),
+        ));
+        return DetailExecutionResult {
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
+            diagnostics,
+            report: Some(allowance.report(PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            })),
+        };
+    }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
@@ -408,5 +428,90 @@ fn cancelled_detail_result(
         rejections: Vec::new(),
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
         report: Some(report),
+    }
+}
+
+#[cfg(test)]
+mod acceptance_projection_tests {
+    use super::*;
+    use crate::profile_dsl::{
+        documents::PhaseLimits,
+        primitives::acceptance::{AcceptanceField, CompiledAcceptance},
+        runtime::{
+            cancellation::RuntimeCancellation,
+            strategy_set::{StrategyAttempt, StrategySetExecution},
+        },
+    };
+
+    struct Cancelled;
+
+    impl RuntimeCancellation for Cancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn final_acceptance_is_evaluated_before_cancellation_discards_detail_payload() {
+        let execution = StrategySetExecution {
+            attempts: vec![StrategyAttempt {
+                strategy_index: 0,
+                strategy_key: "accepted".into(),
+                diagnostics: Vec::new(),
+                completion: StrategyAttemptCompletion::Accepted(DetailPatch::default()),
+            }],
+            terminal: StrategySetTerminal::Accepted { attempt_index: 0 },
+        };
+        let acceptance = CompiledAcceptance {
+            required_fields: vec![AcceptanceField::Title],
+            min_description_length: None,
+            min_results: None,
+        };
+        let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
+        let cancellation = Cancelled;
+        let context = RuntimeExecutionContext::with_cancellation(&cancellation);
+        let posting = PostingOccurrence {
+            identity:
+                crate::profile_dsl::occurrence::PostingOccurrenceIdentity::ProviderPostingId {
+                    source_key: "source".into(),
+                    provider_posting_id: "id".into(),
+                },
+            reference: crate::profile_dsl::occurrence::PostingReference {
+                provider_url: "https://example.com/jobs/1".into(),
+                provider_posting_id: Some("id".into()),
+            },
+            provider_values: Default::default(),
+            hints: Default::default(),
+            posting_meta: Default::default(),
+        };
+        let requested_fields = RequestedDetailFields::new([DetailField::Title]).unwrap();
+
+        let result = project_detail_execution(
+            execution,
+            &posting,
+            &requested_fields,
+            Some(&acceptance),
+            context,
+            &allowance,
+        );
+
+        assert_eq!(result.patch, DetailPatch::default());
+        assert_eq!(
+            result.report.unwrap().completion,
+            PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            }
+        );
+        assert_eq!(
+            result
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "acceptance_required_field_missing",
+                "runtime_execution_cancelled"
+            ]
+        );
     }
 }

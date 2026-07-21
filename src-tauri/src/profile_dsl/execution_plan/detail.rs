@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::values::{compile_field_expression, compile_list_field_expression, compile_predicates};
+use super::{
+    acceptance_error,
+    values::{compile_field_expression, compile_list_field_expression, compile_predicates},
+};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
 use crate::profile_dsl::documents::PhaseLimits;
@@ -220,13 +223,6 @@ fn compile_detail_strategy(
             .transpose()?,
         diagnostics: strategy.diagnostics.clone(),
     })
-}
-
-fn acceptance_error(
-    path: &str,
-    error: crate::profile_dsl::primitives::acceptance::AcceptanceCompileError,
-) -> ExecutionPlanBuildError {
-    ExecutionPlanBuildError::new(format!("{path}/acceptWhen/{}", error.key), error.message)
 }
 
 fn capture_error(path: String, error: CaptureCompileError) -> ExecutionPlanBuildError {

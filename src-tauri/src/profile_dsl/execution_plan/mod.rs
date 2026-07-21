@@ -8,6 +8,13 @@ pub(crate) mod values;
 use detail::ExecutionPlanDetailStep;
 use discovery::ExecutionPlanDiscoveryStep;
 
+use crate::profile_dsl::primitives::acceptance::AcceptanceCompileError;
+use capabilities::ExecutionPlanBuildError;
+
+fn acceptance_error(path: &str, error: AcceptanceCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}/acceptWhen/{}", error.key), error.message)
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceExecutionPlan {

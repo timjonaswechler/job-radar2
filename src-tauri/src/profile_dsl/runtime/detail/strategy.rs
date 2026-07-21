@@ -208,14 +208,15 @@ where
             },
         }],
     );
-    let accepted = evaluate_detail_acceptance(
+    let accepted = evaluate_detail_strategy_acceptance(
         &reduced.patch,
         step_acceptance,
         strategy.accept_when.as_ref(),
         &base_path,
         strategy_key.as_deref(),
         &mut diagnostics,
-    );
+    )
+    .is_satisfied();
     if !accepted {
         diagnostics.extend(reduced.diagnostics);
         return StrategyExecution {

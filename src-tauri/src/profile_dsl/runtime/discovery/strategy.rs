@@ -122,14 +122,15 @@ where
     };
     let execution_failed = discovery_execution_failed(&result);
     let accepted = !execution_failed
-        && evaluate_discovery_acceptance(
+        && evaluate_discovery_strategy_acceptance(
             &reduced.candidates,
             step_acceptance,
             strategy.accept_when.as_ref(),
             &base_path,
             strategy_key.as_deref(),
             &mut result.diagnostics,
-        );
+        )
+        .is_satisfied();
     if !accepted {
         result.diagnostics.extend(reduced.diagnostics);
     }

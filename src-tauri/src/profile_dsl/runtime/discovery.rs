@@ -18,7 +18,10 @@ use crate::{
             PostingOccurrence,
         },
         primitives::{
-            acceptance::{evaluate_discovery_acceptance, CompiledAcceptance},
+            acceptance::{
+                evaluate_discovery_final_acceptance, evaluate_discovery_strategy_acceptance,
+                CompiledAcceptance,
+            },
             parse::{CompleteParseText, ParseDiagnosticContext},
             value::{CompiledListValue, CompiledValue},
         },
@@ -222,12 +225,18 @@ where
         },
     )
     .await;
-    project_discovery_execution(execution, plan.discovery.accept_when.as_ref(), &allowance)
+    project_discovery_execution(
+        execution,
+        plan.discovery.accept_when.as_ref(),
+        context,
+        &allowance,
+    )
 }
 
 fn project_discovery_execution(
     execution: super::strategy_set::StrategySetExecution<Vec<PostingOccurrence>>,
     phase_acceptance: Option<&CompiledAcceptance>,
+    context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
 ) -> DiscoveryExecutionResult {
     let accepted_attempt = match execution.terminal {
@@ -304,18 +313,38 @@ fn project_discovery_execution(
             None,
             json!({}),
         ));
+        return DiscoveryExecutionResult {
+            candidates: Vec::new(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
+            diagnostics,
+            report: Some(allowance.report(PhaseCompletion::PolicyUnsatisfied)),
+        };
     }
-    let reduced = reduced.unwrap_or_else(|| reduce_discovery(Vec::new()));
+    let reduced = reduced.expect("accepted policy terminal must carry selected output");
     diagnostics.extend(reduced.diagnostics);
-    let final_accepted = accepted_attempt.is_some()
-        && evaluate_discovery_acceptance(
-            &reduced.candidates,
-            phase_acceptance,
-            None,
-            "/discovery",
-            None,
-            &mut diagnostics,
-        );
+    let final_accepted = evaluate_discovery_final_acceptance(
+        &reduced.candidates,
+        phase_acceptance,
+        &mut diagnostics,
+    )
+    .is_satisfied();
+    if context.is_cancelled() {
+        diagnostics.push(runtime_execution_cancelled_diagnostic(
+            &TypedCancellation::phase(RuntimePhase::Discovery),
+        ));
+        return DiscoveryExecutionResult {
+            candidates: Vec::new(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
+            diagnostics,
+            report: Some(allowance.report(PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            })),
+        };
+    }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
@@ -358,5 +387,68 @@ fn cancelled_discovery_result(
         rejections: Vec::new(),
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
         report: Some(report),
+    }
+}
+
+#[cfg(test)]
+mod acceptance_projection_tests {
+    use super::*;
+    use crate::profile_dsl::{
+        documents::PhaseLimits,
+        primitives::acceptance::CompiledAcceptance,
+        runtime::{
+            cancellation::RuntimeCancellation,
+            strategy_set::{StrategyAttempt, StrategySetExecution},
+        },
+    };
+
+    struct Cancelled;
+
+    impl RuntimeCancellation for Cancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn final_acceptance_is_evaluated_before_cancellation_discards_discovery_payload() {
+        let execution = StrategySetExecution {
+            attempts: vec![StrategyAttempt {
+                strategy_index: 0,
+                strategy_key: "accepted".into(),
+                diagnostics: Vec::new(),
+                completion: StrategyAttemptCompletion::Accepted(Vec::new()),
+            }],
+            terminal: StrategySetTerminal::Accepted { attempt_index: 0 },
+        };
+        let acceptance = CompiledAcceptance {
+            required_fields: Vec::new(),
+            min_description_length: None,
+            min_results: Some(1),
+        };
+        let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
+        let cancellation = Cancelled;
+        let context = RuntimeExecutionContext::with_cancellation(&cancellation);
+
+        let result = project_discovery_execution(execution, Some(&acceptance), context, &allowance);
+
+        assert!(result.candidates.is_empty());
+        assert_eq!(
+            result.report.unwrap().completion,
+            PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            }
+        );
+        assert_eq!(
+            result
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "acceptance_min_results_not_met",
+                "runtime_execution_cancelled"
+            ]
+        );
     }
 }

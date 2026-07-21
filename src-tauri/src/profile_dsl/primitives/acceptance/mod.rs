@@ -310,7 +310,66 @@ fn stricter<'a>(
     }
 }
 
-pub(crate) fn evaluate_discovery_acceptance(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct StrategyAcceptanceFact {
+    satisfied: bool,
+}
+
+impl StrategyAcceptanceFact {
+    pub(crate) const fn is_satisfied(self) -> bool {
+        self.satisfied
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FinalPhaseAcceptanceFact {
+    satisfied: bool,
+}
+
+impl FinalPhaseAcceptanceFact {
+    pub(crate) const fn is_satisfied(self) -> bool {
+        self.satisfied
+    }
+}
+
+pub(crate) fn evaluate_discovery_strategy_acceptance(
+    candidates: &[PostingOccurrence],
+    phase: Option<&CompiledAcceptance>,
+    strategy: Option<&CompiledAcceptance>,
+    strategy_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> StrategyAcceptanceFact {
+    StrategyAcceptanceFact {
+        satisfied: discovery_acceptance_satisfied(
+            candidates,
+            phase,
+            strategy,
+            strategy_path,
+            strategy_key,
+            diagnostics,
+        ),
+    }
+}
+
+pub(crate) fn evaluate_discovery_final_acceptance(
+    candidates: &[PostingOccurrence],
+    phase: Option<&CompiledAcceptance>,
+    diagnostics: &mut Diagnostics,
+) -> FinalPhaseAcceptanceFact {
+    FinalPhaseAcceptanceFact {
+        satisfied: discovery_acceptance_satisfied(
+            candidates,
+            phase,
+            None,
+            "/discovery",
+            None,
+            diagnostics,
+        ),
+    }
+}
+
+fn discovery_acceptance_satisfied(
     candidates: &[PostingOccurrence],
     phase: Option<&CompiledAcceptance>,
     strategy: Option<&CompiledAcceptance>,
@@ -342,7 +401,37 @@ pub(crate) fn evaluate_discovery_acceptance(
     )
 }
 
-pub(crate) fn evaluate_detail_acceptance(
+pub(crate) fn evaluate_detail_strategy_acceptance(
+    patch: &DetailPatch,
+    phase: Option<&CompiledAcceptance>,
+    strategy: Option<&CompiledAcceptance>,
+    strategy_path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> StrategyAcceptanceFact {
+    StrategyAcceptanceFact {
+        satisfied: detail_acceptance_satisfied(
+            patch,
+            phase,
+            strategy,
+            strategy_path,
+            strategy_key,
+            diagnostics,
+        ),
+    }
+}
+
+pub(crate) fn evaluate_detail_final_acceptance(
+    patch: &DetailPatch,
+    phase: Option<&CompiledAcceptance>,
+    diagnostics: &mut Diagnostics,
+) -> FinalPhaseAcceptanceFact {
+    FinalPhaseAcceptanceFact {
+        satisfied: detail_acceptance_satisfied(patch, phase, None, "/detail", None, diagnostics),
+    }
+}
+
+fn detail_acceptance_satisfied(
     patch: &DetailPatch,
     phase: Option<&CompiledAcceptance>,
     strategy: Option<&CompiledAcceptance>,
