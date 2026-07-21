@@ -1,9 +1,7 @@
-name: CI
+name: CI (manual)
 
+# Automatic CI is temporarily disabled; run this workflow manually when needed.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
