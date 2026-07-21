@@ -9,6 +9,18 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct CompiledTemplate(pub(crate) Vec<TemplateSegment>);
 
+impl CompiledTemplate {
+    pub(crate) fn references(&self, namespace: Option<&str>, key: &str) -> bool {
+        self.0.iter().any(|segment| {
+            matches!(
+                segment,
+                TemplateSegment::Reference { reference }
+                    if reference.namespace.as_deref() == namespace && reference.key == key
+            )
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TemplateSegment {

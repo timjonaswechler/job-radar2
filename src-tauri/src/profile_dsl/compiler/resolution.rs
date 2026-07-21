@@ -26,7 +26,7 @@ use super::source_config::{
 use super::support::validate_support_metadata;
 use super::templates::{validate_detection_templates, validate_template_variables};
 use super::values::validate_value_context_foundation;
-use super::SourceRuntimeBindingDependencies;
+use super::{SourceRuntimeBinding, SourceRuntimeBindingDependencies};
 
 pub(super) struct ResolvedSourceExecutionPlan {
     pub(super) execution_plan: SourceExecutionPlan,
@@ -93,21 +93,23 @@ fn validate_source_profile_document_with_contracts(
                 .as_ref()
                 .map(EffectiveSourceConfigContract::property_keys)
                 .unwrap_or_default();
-            let runtime_binding_dependencies = validate_template_variables(
+            let mut runtime_binding_dependencies = validate_template_variables(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
                 source_config_keys.iter().cloned().collect(),
                 access_path_base.clone(),
                 diagnostics,
             );
-            validate_value_context_foundation(
+            if validate_value_context_foundation(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
                 source_config_keys.into_iter().collect(),
                 &access_path_base,
                 &mut total_value_nodes,
                 diagnostics,
-            );
+            ) {
+                runtime_binding_dependencies.insert(SourceRuntimeBinding::Name);
+            }
             validate_capability_compatibility(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
@@ -214,7 +216,6 @@ pub(super) fn compile_materialized_profile_access_path(
             path_key: access_path.key.clone(),
             path_name: access_path.name.clone(),
         },
-        source_config: source.source_config.clone(),
         discovery,
         detail,
     };
@@ -317,7 +318,6 @@ pub(super) fn compile_source_owned_access_path(
                 key: key.clone(),
                 name: name.clone(),
             },
-            source_config: source.source_config.clone(),
             discovery: compiled_discovery,
             detail: compiled_detail,
         },
@@ -388,7 +388,7 @@ fn validate_source_owned_access_path(
             diagnostics,
         );
     }
-    let runtime_binding_dependencies = validate_template_variables(
+    let mut runtime_binding_dependencies = validate_template_variables(
         discovery,
         detail,
         source_config_keys.clone(),
@@ -396,14 +396,16 @@ fn validate_source_owned_access_path(
         diagnostics,
     );
     let mut total_value_nodes = 0usize;
-    validate_value_context_foundation(
+    if validate_value_context_foundation(
         discovery,
         detail,
         source_config_keys.into_iter().collect(),
         "/selectedAccessPath",
         &mut total_value_nodes,
         diagnostics,
-    );
+    ) {
+        runtime_binding_dependencies.insert(SourceRuntimeBinding::Name);
+    }
     validate_capability_compatibility(
         discovery,
         detail,

@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{
-    DetailStep, DiscoveryStep, Fetch, FieldExpression, JsonObject, ListFieldExpression, RequestBody,
-};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, Fetch, JsonObject, RequestBody};
 use crate::profile_dsl::template::{
     descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
 };
@@ -16,12 +14,6 @@ enum TemplateContext {
     Detail,
 }
 
-fn value_placement(context: TemplateContext) -> TemplatePlacement {
-    match context {
-        TemplateContext::Discovery => TemplatePlacement::DiscoveryValue,
-        TemplateContext::Detail => TemplatePlacement::DetailValue,
-    }
-}
 fn http_url_placement(context: TemplateContext) -> TemplatePlacement {
     match context {
         TemplateContext::Discovery => TemplatePlacement::DiscoveryHttpUrl,
@@ -57,11 +49,6 @@ pub(super) fn validate_template_variables(
     let mut dependencies = SourceRuntimeBindingDependencies::default();
     let posting_meta_keys = discovery_posting_meta_keys(discovery);
     for (index, strategy) in discovery.strategies.iter().enumerate() {
-        let captures = strategy
-            .captures
-            .as_ref()
-            .map(|captures| captures.keys().cloned().collect::<HashSet<_>>())
-            .unwrap_or_default();
         let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_fetch_templates(
             &strategy.fetch,
@@ -70,29 +57,6 @@ pub(super) fn validate_template_variables(
             TemplateContext::Discovery,
             &source_config_keys,
             &HashSet::new(),
-            &posting_meta_keys,
-            diagnostics,
-            &mut dependencies,
-        );
-        validate_strategy_value_templates(
-            strategy.conditions.as_ref(),
-            strategy.captures.as_ref(),
-            &strategy_path,
-            strategy.key.as_str(),
-            TemplateContext::Discovery,
-            &source_config_keys,
-            &captures,
-            &posting_meta_keys,
-            diagnostics,
-            &mut dependencies,
-        );
-        validate_discovery_field_templates(
-            discovery,
-            index,
-            &strategy_path,
-            TemplateContext::Discovery,
-            &source_config_keys,
-            &captures,
             &posting_meta_keys,
             diagnostics,
             &mut dependencies,
@@ -118,103 +82,9 @@ pub(super) fn validate_template_variables(
                 diagnostics,
                 &mut dependencies,
             );
-            validate_strategy_value_templates(
-                strategy.conditions.as_ref(),
-                strategy.captures.as_ref(),
-                &strategy_path,
-                strategy.key.as_str(),
-                TemplateContext::Detail,
-                &source_config_keys,
-                &captures,
-                &posting_meta_keys,
-                diagnostics,
-                &mut dependencies,
-            );
-            validate_field_expression_templates(
-                &strategy.extract.fields.description_text,
-                &format!("{strategy_path}/extract/fields/descriptionText"),
-                strategy.key.as_str(),
-                TemplateContext::Detail,
-                &source_config_keys,
-                &captures,
-                &posting_meta_keys,
-                diagnostics,
-                &mut dependencies,
-            );
-            if let Some(field_match) = &strategy.field_match {
-                validate_field_expression_templates(
-                    &field_match.left,
-                    &format!("{strategy_path}/match/left"),
-                    strategy.key.as_str(),
-                    TemplateContext::Detail,
-                    &source_config_keys,
-                    &captures,
-                    &posting_meta_keys,
-                    diagnostics,
-                    &mut dependencies,
-                );
-                validate_field_expression_templates(
-                    &field_match.right,
-                    &format!("{strategy_path}/match/right"),
-                    strategy.key.as_str(),
-                    TemplateContext::Detail,
-                    &source_config_keys,
-                    &captures,
-                    &posting_meta_keys,
-                    diagnostics,
-                    &mut dependencies,
-                );
-            }
         }
     }
     dependencies
-}
-
-fn validate_strategy_value_templates(
-    conditions: Option<&Vec<crate::profile_dsl::documents::select::Filter>>,
-    captures_rules: Option<&crate::profile_dsl::documents::select::Captures>,
-    strategy_path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    for (index, condition) in conditions.into_iter().flatten().enumerate() {
-        let field = match condition {
-            crate::profile_dsl::documents::select::Filter::NonEmpty { field }
-            | crate::profile_dsl::documents::select::Filter::Regex { field, .. } => field,
-        };
-        validate_field_expression_templates(
-            field,
-            &format!("{strategy_path}/where/{index}/field"),
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        );
-    }
-    for (key, rule) in captures_rules.into_iter().flatten() {
-        validate_field_expression_templates(
-            &rule.from,
-            &format!(
-                "{strategy_path}/captures/{}/from",
-                json_pointer_segment(key)
-            ),
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        );
-    }
 }
 
 fn validate_fetch_templates(
@@ -421,207 +291,6 @@ fn validate_json_value_templates(
                     captures,
                     posting_meta_keys,
                     diagnostics,
-                    dependencies,
-                );
-            }
-        }
-        _ => {}
-    }
-}
-
-fn validate_discovery_field_templates(
-    discovery: &DiscoveryStep,
-    strategy_index: usize,
-    strategy_path: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    let strategy = &discovery.strategies[strategy_index];
-    let base = format!("{strategy_path}/extract/fields");
-    validate_field_expression_templates(
-        &strategy.extract.fields.title,
-        &format!("{base}/title"),
-        strategy.key.as_str(),
-        context,
-        source_config_keys,
-        captures,
-        posting_meta_keys,
-        diagnostics,
-        dependencies,
-    );
-    validate_field_expression_templates(
-        &strategy.extract.fields.company,
-        &format!("{base}/company"),
-        strategy.key.as_str(),
-        context,
-        source_config_keys,
-        captures,
-        posting_meta_keys,
-        diagnostics,
-        dependencies,
-    );
-    validate_field_expression_templates(
-        &strategy.extract.fields.url,
-        &format!("{base}/url"),
-        strategy.key.as_str(),
-        context,
-        source_config_keys,
-        captures,
-        posting_meta_keys,
-        diagnostics,
-        dependencies,
-    );
-    if let Some(locations) = &strategy.extract.fields.locations {
-        validate_list_field_expression_templates(
-            locations,
-            &format!("{base}/locations"),
-            strategy.key.as_str(),
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        );
-    }
-    if let Some(posting_meta) = &strategy.extract.fields.posting_meta {
-        for (key, expression) in posting_meta {
-            validate_field_expression_templates(
-                expression,
-                &format!("{base}/postingMeta/{}", json_pointer_segment(key)),
-                strategy.key.as_str(),
-                context,
-                source_config_keys,
-                captures,
-                posting_meta_keys,
-                diagnostics,
-                dependencies,
-            );
-        }
-    }
-    if let Some(description_text) = &strategy.extract.fields.description_text {
-        validate_field_expression_templates(
-            description_text,
-            &format!("{base}/descriptionText"),
-            strategy.key.as_str(),
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        );
-    }
-}
-
-fn validate_list_field_expression_templates(
-    expression: &ListFieldExpression,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    match expression {
-        ListFieldExpression::Single(expression) => validate_field_expression_templates(
-            expression,
-            path,
-            strategy_key,
-            context,
-            source_config_keys,
-            captures,
-            posting_meta_keys,
-            diagnostics,
-            dependencies,
-        ),
-        ListFieldExpression::Multiple(expressions) => {
-            for (index, expression) in expressions.iter().enumerate() {
-                validate_field_expression_templates(
-                    expression,
-                    &format!("{path}/{index}"),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    diagnostics,
-                    dependencies,
-                );
-            }
-        }
-    }
-}
-
-fn validate_field_expression_templates(
-    expression: &FieldExpression,
-    path: &str,
-    strategy_key: &str,
-    context: TemplateContext,
-    source_config_keys: &HashSet<String>,
-    captures: &HashSet<String>,
-    posting_meta_keys: &HashSet<String>,
-    _diagnostics: &mut Diagnostics,
-    dependencies: &mut SourceRuntimeBindingDependencies,
-) {
-    match expression {
-        FieldExpression::Template { template, .. } => {
-            let descriptor = descriptor_for_placement(
-                value_placement(context),
-                &TemplateAdmissionKeys {
-                    source_config: source_config_keys.iter().cloned().collect(),
-                    captures: captures.iter().cloned().collect(),
-                    posting_meta: posting_meta_keys.iter().cloned().collect(),
-                },
-            );
-            if let Ok(segments) =
-                crate::profile_dsl::template::compile_template_all(template, &descriptor)
-            {
-                for segment in segments.0 {
-                    if let crate::profile_dsl::template::TemplateSegment::Reference { reference } =
-                        segment
-                    {
-                        if reference.namespace.as_deref() == Some("source")
-                            && reference.key == "name"
-                        {
-                            dependencies.insert(SourceRuntimeBinding::Name);
-                        }
-                    }
-                }
-            }
-        }
-        FieldExpression::Combine { parts, .. } => {
-            for (index, part) in parts.iter().enumerate() {
-                validate_field_expression_templates(
-                    &part.value,
-                    &format!("{path}/parts/{index}/value"),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    _diagnostics,
-                    dependencies,
-                );
-            }
-        }
-        FieldExpression::FirstNonEmpty { candidates, .. } => {
-            for (index, candidate) in candidates.iter().enumerate() {
-                validate_field_expression_templates(
-                    candidate,
-                    &format!("{path}/candidates/{index}"),
-                    strategy_key,
-                    context,
-                    source_config_keys,
-                    captures,
-                    posting_meta_keys,
-                    _diagnostics,
                     dependencies,
                 );
             }

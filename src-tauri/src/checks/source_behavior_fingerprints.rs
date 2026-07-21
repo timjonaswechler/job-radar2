@@ -256,7 +256,6 @@ fn validate_structural_coherence(
                 };
                 if compiled.execution_plan.source.key != source.key
                     || compiled.execution_plan.source.name != source.name
-                    || compiled.execution_plan.source_config != source.source_config
                     || effective_profile.document.key != *profile_key
                     || compiled_profile_key != profile_key
                     || compiled_path_key != path_key
@@ -284,7 +283,6 @@ fn validate_structural_coherence(
                 };
                 if compiled.execution_plan.source.key != source.key
                     || compiled.execution_plan.source.name != source.name
-                    || compiled.execution_plan.source_config != source.source_config
                     || access_path.key != *key
                     || compiled_key != key
                 {

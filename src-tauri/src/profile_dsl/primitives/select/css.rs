@@ -54,7 +54,7 @@ impl<'de> Deserialize<'de> for CssSelectPlan {
     }
 }
 
-pub(super) fn compile(selector: &str) -> Result<CssSelectPlan, String> {
+pub(crate) fn compile(selector: &str) -> Result<CssSelectPlan, String> {
     let matcher =
         Matcher::new(selector).map_err(|error| format!("CSS selector is invalid: {error:?}"))?;
     Ok(CssSelectPlan {
@@ -63,12 +63,27 @@ pub(super) fn compile(selector: &str) -> Result<CssSelectPlan, String> {
     })
 }
 
-pub(super) fn execute<'doc>(
+pub(crate) fn execute<'doc>(
     plan: &CssSelectPlan,
     document: &'doc dom_query::Document,
 ) -> SelectedSequence<'doc, 'static> {
     SelectedSequence::new(
         document
+            .select_matcher(&plan.matcher)
+            .nodes()
+            .iter()
+            .cloned()
+            .map(SelectedItem::Html)
+            .collect(),
+    )
+}
+
+pub(crate) fn execute_relative<'doc>(
+    plan: &CssSelectPlan,
+    node: &dom_query::NodeRef<'doc>,
+) -> SelectedSequence<'doc, 'static> {
+    SelectedSequence::new(
+        dom_query::Selection::from(node.clone())
             .select_matcher(&plan.matcher)
             .nodes()
             .iter()

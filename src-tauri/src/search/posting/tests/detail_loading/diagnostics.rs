@@ -84,7 +84,7 @@ fn get_job_posting_surfaces_missing_and_invalid_source_diagnostics_as_unsupporte
 }
 
 #[test]
-fn get_job_posting_reports_parse_empty_too_short_and_missing_meta_diagnostics() {
+fn get_job_posting_reports_parse_empty_too_short_and_admitted_absent_meta_diagnostics() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let posting_id = insert_existing_posting(
@@ -223,13 +223,19 @@ fn get_job_posting_reports_parse_empty_too_short_and_missing_meta_diagnostics() 
                     "json_parse_failed",
                     "description_empty",
                     "description_too_short",
-                    "posting_meta_missing",
+                    "detail_match_missing",
                 ] {
                     assert!(
                         diagnostics.iter().any(|diagnostic| diagnostic.code == code),
                         "missing diagnostic code {code}; diagnostics: {diagnostics:?}"
                     );
                 }
+                assert!(
+                    diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostic.code != "posting_meta_missing"),
+                    "an admitted but absent postingMeta value must remain an empty Value result"
+                );
             }
             other => panic!("expected failed state, got {other:?}"),
         }

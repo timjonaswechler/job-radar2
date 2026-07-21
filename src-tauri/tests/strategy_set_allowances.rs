@@ -1,5 +1,17 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
+    static CONFIG: std::sync::OnceLock<serde_json::Map<String, serde_json::Value>> =
+        std::sync::OnceLock::new();
+    CONFIG.get_or_init(|| {
+        serde_json::from_value(json!({
+            "feedUrl": "https://example.test/jobs.json",
+            "baseUrl": "https://example.test",
+            "sitemapUrl": "https://example.test/sitemap.xml"
+        }))
+        .unwrap()
+    })
+}
 use job_radar_lib::{
     execute_discovery, AllowanceDimension, CompileSourceOutcome, ExecutionPlanFetch,
     PhaseCancellationReason, PhaseCompletion, PhaseLimits, PhaseLimitsFragment,
@@ -86,6 +98,7 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
@@ -122,6 +135,7 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -156,6 +170,7 @@ async fn accepted_discovery_has_one_complete_exact_eight_dimension_report() {
     };
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(equality_limits),
@@ -196,6 +211,7 @@ async fn attempt_one_over_is_denied_before_second_strategy() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -222,6 +238,7 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -250,6 +267,7 @@ async fn exact_response_byte_allowance_followed_by_eof_succeeds() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -275,6 +293,7 @@ async fn response_byte_one_over_commits_only_the_admitted_prefix_and_hides_paylo
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -305,6 +324,7 @@ async fn response_byte_allowance_is_cumulative_across_pages() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -333,6 +353,7 @@ async fn atomic_request_page_one_over_does_not_charge_the_fitting_request() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -361,6 +382,7 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&cancellation),
@@ -395,6 +417,7 @@ async fn produced_item_prefix_is_charged_and_denial_exposes_no_payload() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -431,6 +454,7 @@ async fn fan_out_one_over_charges_only_the_fitting_nonduplicate_prefix() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -473,6 +497,7 @@ async fn exact_duration_boundary_may_complete_before_deadline_exhaustion() {
     };
     let execute = execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -506,6 +531,7 @@ async fn admitted_response_prefix_is_committed_after_deadline_stop_is_recorded()
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -549,6 +575,7 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
 
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&cancellation).with_limits(caller),
@@ -585,6 +612,7 @@ async fn invocation_deadline_stops_active_effect_and_reports_duration_exhaustion
     };
     let result = execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -612,6 +640,7 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
 
     let result = tauri::async_runtime::block_on(execute_discovery(
         &plan,
+        empty_source_config(),
         fetcher.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),

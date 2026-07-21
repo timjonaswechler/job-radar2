@@ -1,4 +1,4 @@
-use super::fields::evaluate_string_field;
+use super::fields::evaluate_capture_source;
 use super::*;
 
 pub(in crate::profile_dsl::runtime::detail) fn evaluate_strategy_captures(
@@ -11,21 +11,16 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_strategy_captures(
     diagnostics: &mut Diagnostics,
 ) -> Option<BTreeMap<String, String>> {
     let mut captures = BTreeMap::new();
-    let empty_document = Value::Null;
-    let empty_item = RuntimeItem::Json(&empty_document);
     let Some(capture_rules) = &strategy.captures else {
         return Some(captures);
     };
 
     for (key, rule) in capture_rules {
         let path = format!("{base_path}/captures/{key}");
-        let context_captures = captures.clone();
-        let evaluation = evaluate_string_field(
-            &empty_item,
+        let evaluation = evaluate_capture_source(
             source_config,
             source_name,
             posting,
-            &context_captures,
             &rule.from,
             &format!("{path}/from"),
             strategy_key,

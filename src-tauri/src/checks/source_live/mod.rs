@@ -189,6 +189,7 @@ where
         });
         let discovery_result = tauri::async_runtime::block_on(execute_discovery(
             execution_plan,
+            &document.source_config,
             discovery_fetcher,
             browser,
             discovery_context,
@@ -229,6 +230,7 @@ where
                 let posting = detail_occurrence_from_candidate(candidate);
                 let detail_result = tauri::async_runtime::block_on(execute_detail(
                     execution_plan,
+                    &document.source_config,
                     &posting,
                     detail_fetcher,
                     browser,

@@ -13,8 +13,21 @@ pub async fn execute_discovery_test<F>(
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
+    execute_discovery_test_with_config(plan, &Default::default(), fetcher).await
+}
+
+#[allow(dead_code)]
+pub async fn execute_discovery_test_with_config<F>(
+    plan: &SourceExecutionPlan,
+    source_config: &serde_json::Map<String, serde_json::Value>,
+    fetcher: &F,
+) -> DiscoveryExecutionResult
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+{
     execute_discovery(
         plan,
+        source_config,
         fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
@@ -31,8 +44,22 @@ pub async fn execute_detail_test<F>(
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
+    execute_detail_test_with_config(plan, &Default::default(), posting, fetcher).await
+}
+
+#[allow(dead_code)]
+pub async fn execute_detail_test_with_config<F>(
+    plan: &SourceExecutionPlan,
+    source_config: &serde_json::Map<String, serde_json::Value>,
+    posting: &DetailPostingOccurrence,
+    fetcher: &F,
+) -> DetailExecutionResult
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+{
     execute_detail(
         plan,
+        source_config,
         posting,
         fetcher,
         &UnavailableProfileBrowserClient,

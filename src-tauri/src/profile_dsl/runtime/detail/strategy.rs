@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     fetcher: &F,
     browser: &B,
@@ -20,7 +21,7 @@ where
 
     let captures = match evaluate_strategy_captures(
         strategy,
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         posting,
         &base_path,
@@ -36,7 +37,7 @@ where
         browser,
         &strategy.fetch,
         strategy.parse.authored_charset(),
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         posting,
         &captures,
@@ -84,6 +85,7 @@ where
     let selected_document = match match_detail_document(
         selected_document,
         plan,
+        source_config,
         posting,
         &captures,
         strategy,
@@ -99,6 +101,7 @@ where
         match detail_document_matches_conditions(
             &selected_document,
             plan,
+            source_config,
             posting,
             &captures,
             strategy.conditions.as_ref(),
@@ -122,9 +125,9 @@ where
     }
 
     let description_path = format!("{base_path}/extract/fields/descriptionText");
-    let description = evaluate_string_field(
+    let description = evaluate_value_scalar(
         &selected_document,
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         posting,
         &captures,
@@ -193,6 +196,7 @@ where
 fn match_detail_document<'doc, 'body>(
     selected_document: RuntimeItem<'doc, 'body>,
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     strategy: &ExecutionPlanDetailStrategy,
@@ -200,25 +204,15 @@ fn match_detail_document<'doc, 'body>(
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
 ) -> Option<RuntimeItem<'doc, 'body>> {
-    let Some(field_match) = &strategy.field_match else {
+    if strategy.field_match.is_none() {
         return Some(selected_document);
-    };
-
-    if let Some(key) = missing_posting_meta_key(&field_match.right, posting) {
-        diagnostics.push(runtime_error(
-            "posting_meta_missing",
-            format!("detail match requires missing postingMeta `{key}`"),
-            format!("{base_path}/match/right"),
-            strategy_key,
-            json!({ "postingMetaKey": key }),
-        ));
-        return None;
     }
 
     match selected_document {
         RuntimeItem::Json(Value::Array(items)) => match_json_detail_collection(
             items,
             plan,
+            source_config,
             posting,
             captures,
             strategy,
@@ -229,6 +223,7 @@ fn match_detail_document<'doc, 'body>(
         RuntimeItem::XmlCollection(items) => match_xml_detail_collection(
             items,
             plan,
+            source_config,
             posting,
             captures,
             strategy,
@@ -252,6 +247,7 @@ fn match_detail_document<'doc, 'body>(
 fn match_json_detail_collection<'doc, 'body>(
     items: &'doc [Value],
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     strategy: &ExecutionPlanDetailStrategy,
@@ -266,6 +262,7 @@ fn match_json_detail_collection<'doc, 'body>(
         if !detail_document_matches_conditions(
             &item_document,
             plan,
+            source_config,
             posting,
             captures,
             strategy.conditions.as_ref(),
@@ -279,6 +276,7 @@ fn match_json_detail_collection<'doc, 'body>(
             &item_document,
             field_match,
             plan,
+            source_config,
             posting,
             captures,
             base_path,
@@ -301,6 +299,7 @@ fn match_json_detail_collection<'doc, 'body>(
 fn match_xml_detail_collection<'doc, 'body>(
     items: Vec<roxmltree::Node<'doc, 'body>>,
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     strategy: &ExecutionPlanDetailStrategy,
@@ -315,6 +314,7 @@ fn match_xml_detail_collection<'doc, 'body>(
         if !detail_document_matches_conditions(
             &item_document,
             plan,
+            source_config,
             posting,
             captures,
             strategy.conditions.as_ref(),
@@ -328,6 +328,7 @@ fn match_xml_detail_collection<'doc, 'body>(
             &item_document,
             field_match,
             plan,
+            source_config,
             posting,
             captures,
             base_path,
@@ -349,8 +350,9 @@ fn match_xml_detail_collection<'doc, 'body>(
 
 fn detail_document_matches_field(
     item_document: &RuntimeItem<'_, '_>,
-    field_match: &crate::profile_dsl::execution_plan::values::ExecutionPlanFieldMatch,
+    field_match: &crate::profile_dsl::execution_plan::values::CompiledValueMatch,
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     base_path: &str,
@@ -359,9 +361,9 @@ fn detail_document_matches_field(
 ) -> Option<bool> {
     let left_path = format!("{base_path}/match/left");
     let right_path = format!("{base_path}/match/right");
-    let left = evaluate_string_field(
+    let left = evaluate_value_scalar(
         item_document,
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         posting,
         captures,
@@ -370,9 +372,9 @@ fn detail_document_matches_field(
         strategy_key,
         diagnostics,
     );
-    let right = evaluate_string_field(
+    let right = evaluate_value_scalar(
         item_document,
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         posting,
         captures,
@@ -425,6 +427,7 @@ fn finish_detail_matches<'doc, 'body, T>(
 fn detail_document_matches_conditions(
     item_document: &RuntimeItem<'_, '_>,
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
     conditions: Option<&Vec<Filter>>,
@@ -440,9 +443,9 @@ fn detail_document_matches_conditions(
         let condition_path = format!("{base_path}/where/{condition_index}");
         match condition {
             Filter::NonEmpty { field } => {
-                let evaluation = evaluate_string_field(
+                let evaluation = evaluate_value_scalar(
                     item_document,
-                    &plan.source_config,
+                    source_config,
                     &plan.source.name,
                     posting,
                     captures,
@@ -472,9 +475,9 @@ fn detail_document_matches_conditions(
                         return None;
                     }
                 };
-                let evaluation = evaluate_string_field(
+                let evaluation = evaluate_value_scalar(
                     item_document,
-                    &plan.source_config,
+                    source_config,
                     &plan.source.name,
                     posting,
                     captures,
@@ -497,21 +500,6 @@ fn detail_document_matches_conditions(
     }
 
     Some(true)
-}
-
-fn missing_posting_meta_key<'a>(
-    expression: &'a FieldExpression,
-    posting: &DetailPostingOccurrence,
-) -> Option<&'a str> {
-    match expression {
-        FieldExpression::PostingMeta { key, .. } if !posting.posting_meta.contains_key(key) => {
-            Some(key.as_str())
-        }
-        FieldExpression::Combine { parts, .. } => parts
-            .iter()
-            .find_map(|part| missing_posting_meta_key(&part.value, posting)),
-        _ => None,
-    }
 }
 
 pub(super) fn rejected_detail_attempt(diagnostics: Diagnostics) -> StrategyExecution<String> {

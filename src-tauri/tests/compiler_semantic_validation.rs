@@ -198,7 +198,7 @@ fn compiler_enforces_the_complete_effective_value_node_limit_once() {
         .locations = Some(ListFieldExpression::Multiple(
         (0..1_025)
             .map(|index| FieldExpression::Const {
-                value: serde_json::json!(index),
+                value: serde_json::from_value(serde_json::json!(index)).unwrap(),
                 cardinality: None,
                 transforms: None,
             })

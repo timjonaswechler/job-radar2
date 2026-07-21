@@ -1,11 +1,12 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, compile_template, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanAccessPath, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    ExecutionPlanFetch, ExecutionPlanPagination, RegistrySourceProfile, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
-    TemplateDescriptor,
+    compile_source, compile_template, execute_discovery, CompileSourceOutcome, DiagnosticCategory,
+    DiagnosticSeverity, ExecutionPlanAccessPath, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, ExecutionPlanFetch, ExecutionPlanPagination, RegistrySourceProfile,
+    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    SourceStatus, TemplateDescriptor, UnavailableProfileBrowserClient,
 };
 
 #[test]
@@ -19,10 +20,8 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
 
     assert_eq!(plan.source.key, "example_source");
     assert_eq!(plan.source.name, "Example Source");
-    assert_eq!(
-        plan.source_config["feedUrl"],
-        "https://example.test/jobs.json"
-    );
+    let serialized_plan = serde_json::to_string(&plan).unwrap();
+    assert!(!serialized_plan.contains("https://example.test/jobs.json"));
     let discovery_strategy = &plan.discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "json_api");
     assert_eq!(
@@ -68,6 +67,44 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
 }
 
 #[test]
+fn resolved_source_config_is_ephemeral_runtime_input_and_absent_from_the_plan() {
+    const SENTINEL: &str = "https://resolved-source-config-sentinel.invalid/jobs";
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    profile.access_paths[0].discovery.strategies[0].pagination = None;
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    source
+        .source_config
+        .insert("feedUrl".to_string(), serde_json::json!(SENTINEL));
+    let plan = compiled_plan(&source, Some(profile));
+
+    let serialized_plan = serde_json::to_string(&plan).unwrap();
+    assert!(!serialized_plan.contains(SENTINEL));
+
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: SENTINEL.to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(
+            br#"{"jobs":[{"id":"42","title":"Rust Engineer","url":"https://example.test/jobs/42","locations":[]}] }"#.to_vec(),
+        )],
+        content_length: None,
+    }]);
+    let result = tauri::async_runtime::block_on(execute_discovery(
+        &plan,
+        &source.source_config,
+        &fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+
+    assert_eq!(result.candidates.len(), 1);
+    assert!(!serde_json::to_string(&result).unwrap().contains(SENTINEL));
+    assert_eq!(fetcher.requests()[0].url, SENTINEL);
+}
+
+#[test]
 fn compiler_resolves_source_owned_access_path() {
     let mut source: SourceDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json");
@@ -76,10 +113,8 @@ fn compiler_resolves_source_owned_access_path() {
     let plan = compiled_plan(&source, None);
 
     assert_eq!(plan.source.key, "owned_source");
-    assert_eq!(
-        plan.source_config["startUrl"],
-        "https://example.test/careers"
-    );
+    let serialized_plan = serde_json::to_string(&plan).unwrap();
+    assert!(!serialized_plan.contains("https://example.test/careers"));
     let discovery_strategy = &plan.discovery.strategies[0];
     assert_eq!(discovery_strategy.key, "html_cards");
     let ExecutionPlanFetch::Browser {

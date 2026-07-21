@@ -39,13 +39,13 @@ impl<'de> Deserialize<'de> for JsonPathSelectPlan {
     }
 }
 
-pub(super) fn compile(json_path: &str) -> Result<JsonPathSelectPlan, String> {
+pub(crate) fn compile(json_path: &str) -> Result<JsonPathSelectPlan, String> {
     Ok(JsonPathSelectPlan {
         segments: parse_simple_json_path(json_path)?,
     })
 }
 
-pub(super) fn execute<'doc>(
+pub(crate) fn execute<'doc>(
     plan: &JsonPathSelectPlan,
     root: &'doc Value,
 ) -> SelectedSequence<'doc, 'static> {

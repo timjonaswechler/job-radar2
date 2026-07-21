@@ -1,7 +1,14 @@
 mod support;
 
-use support::{compile_test_source, execute_detail_test, unwrap_plan};
+use support::{
+    compile_test_source, execute_detail_test, execute_detail_test_with_config, unwrap_plan,
+};
 
+fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
+    static EMPTY: std::sync::OnceLock<serde_json::Map<String, serde_json::Value>> =
+        std::sync::OnceLock::new();
+    EMPTY.get_or_init(serde_json::Map::new)
+}
 use std::{
     collections::BTreeMap,
     future::Future,
@@ -414,7 +421,14 @@ fn compiled_detail_runtime_renders_fetch_templates_from_pre_fetch_contexts() {
         json!({ "description": "Rendered from all template contexts." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let source_config =
+        serde_json::from_value(json!({ "apiBase": "https://api.example.test" })).unwrap();
+    let result = block_on(execute_detail_test_with_config(
+        &plan,
+        &source_config,
+        &posting,
+        &fetcher,
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -462,7 +476,14 @@ fn compiled_detail_runtime_posts_rendered_json_body() {
         json!({ "description": "Detail POST response." }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let source_config =
+        serde_json::from_value(json!({ "apiBase": "https://api.example.test" })).unwrap();
+    let result = block_on(execute_detail_test_with_config(
+        &plan,
+        &source_config,
+        &posting,
+        &fetcher,
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
@@ -834,6 +855,7 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
 
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting,
         &fetcher,
         &browser,
@@ -887,6 +909,7 @@ fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
 
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting_occurrence("https://example.test/jobs/42.html", []),
         &fetcher,
         &browser,
@@ -930,26 +953,6 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         )]),
     ));
     assert_runtime_diagnostic(&parse_failure.diagnostics[0], "json_parse_failed");
-
-    let mut extract_plan = plan.clone();
-    extract_plan.detail.as_mut().unwrap().strategies[0]
-        .extract
-        .fields
-        .description_text = serde_json::from_value(json!({
-        "type": "json_path",
-        "jsonPath": "$.description[*]",
-        "cardinality": "one"
-    }))
-    .unwrap();
-    let extract_failure = block_on(execute_detail_test(
-        &extract_plan,
-        &posting_occurrence("https://example.test/jobs/42.json", []),
-        &fake_profile_http_client([(
-            "https://example.test/jobs/42.json",
-            json!({ "description": "Text" }).to_string(),
-        )]),
-    ));
-    assert_runtime_diagnostic(&extract_failure.diagnostics[0], "field_json_path_failed");
 
     const AUTHORED_URL_SECRET: &str = "raw-authored-detail-secret";
     let missing_context_plan = compiled_json_detail_plan(
@@ -1031,6 +1034,7 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
 
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting,
         &fetcher,
         &browser,
@@ -1081,6 +1085,7 @@ fn detail_cancellation_interrupts_an_active_http_fetch() {
             std::time::Duration::from_secs(1),
             execute_detail(
                 &plan,
+                empty_source_config(),
                 &posting,
                 &fetcher,
                 &browser,
@@ -1119,6 +1124,7 @@ fn detail_browser_cancellation_is_typed_control_flow() {
             std::time::Duration::from_secs(1),
             execute_detail(
                 &plan,
+                empty_source_config(),
                 &posting,
                 &fetcher,
                 &browser,

@@ -11,6 +11,7 @@ use crate::{
             RuntimeExecutionContext,
         },
     },
+    source::documents::SourceConfig,
 };
 
 use super::{SourceCandidate, SourceExecutionError};
@@ -53,20 +54,37 @@ pub type BoxedSourceExecutionFuture<'a> =
 /// registry snapshot at run start, compiles active valid Sources into immutable
 /// typed Execution Plans, and passes those plans here. Active Search Runs must
 /// execute compiled Discovery; they must not use adapter routing.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct SourceExecutionSource {
     pub key: String,
     pub name: String,
+    source_config: SourceConfig,
     pub execution_plan: SourceExecutionPlan,
 }
 
-impl From<SourceExecutionPlan> for SourceExecutionSource {
-    fn from(execution_plan: SourceExecutionPlan) -> Self {
+impl std::fmt::Debug for SourceExecutionSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SourceExecutionSource")
+            .field("key", &self.key)
+            .field("name", &self.name)
+            .field("execution_plan", &self.execution_plan)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SourceExecutionSource {
+    pub fn new(execution_plan: SourceExecutionPlan, source_config: SourceConfig) -> Self {
         Self {
             key: execution_plan.source.key.clone(),
             name: execution_plan.source.name.clone(),
+            source_config,
             execution_plan,
         }
+    }
+
+    pub(crate) fn source_config(&self) -> &SourceConfig {
+        &self.source_config
     }
 }
 
@@ -123,7 +141,14 @@ where
         .cancellation_token
         .map(|token| RuntimeExecutionContext::with_cancellation(token))
         .unwrap_or_else(RuntimeExecutionContext::uncancellable);
-    let result = execute_discovery(&input.source.execution_plan, fetcher, browser, context).await;
+    let result = execute_discovery(
+        &input.source.execution_plan,
+        input.source.source_config(),
+        fetcher,
+        browser,
+        context,
+    )
+    .await;
 
     if input
         .cancellation_token

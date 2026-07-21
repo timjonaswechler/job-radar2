@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::values::{
     compile_captures, compile_field_expression, compile_field_match, compile_filters,
-    ExecutionPlanCaptures, ExecutionPlanFieldExpression, ExecutionPlanFieldMatch,
-    ExecutionPlanFilter, FieldExpressionCompileError,
+    CompiledValueCaptures, CompiledValueFilter, CompiledValueMatch,
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
@@ -14,9 +13,10 @@ use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseI
 use crate::profile_dsl::primitives::select::{
     compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
-use crate::profile_dsl::template::{
-    descriptor_for_placement, TemplateAdmissionKeys, TemplateDescriptor, TemplatePlacement,
+use crate::profile_dsl::primitives::value::{
+    CompiledValue, ValueCompileContext, ValueCompileError, ValuePlacement,
 };
+use crate::profile_dsl::template::{TemplateAdmissionKeys, TemplatePlacement};
 
 use super::capabilities::{compile_fetch, ExecutionPlanBuildError, ExecutionPlanFetch};
 
@@ -41,11 +41,11 @@ pub struct ExecutionPlanDetailStrategy {
     pub parse: CompiledParse,
     pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<ExecutionPlanFilter>>,
+    pub conditions: Option<Vec<CompiledValueFilter>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub captures: Option<ExecutionPlanCaptures>,
+    pub captures: Option<CompiledValueCaptures>,
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
-    pub field_match: Option<ExecutionPlanFieldMatch>,
+    pub field_match: Option<CompiledValueMatch>,
     pub extract: ExecutionPlanDetailExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
@@ -62,7 +62,7 @@ pub struct ExecutionPlanDetailExtraction {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPlanDetailFields {
-    pub description_text: ExecutionPlanFieldExpression,
+    pub description_text: CompiledValue,
 }
 
 pub(crate) fn compile_detail_step(
@@ -108,15 +108,20 @@ fn compile_detail_strategy(
             .collect(),
         posting_meta: posting_meta_keys.iter().cloned().collect(),
     };
-    let field_descriptor = descriptor_for_placement(TemplatePlacement::DetailValue, &keys);
-    let capture_descriptor = descriptor_for_placement(
-        TemplatePlacement::DetailValue,
-        &TemplateAdmissionKeys {
-            source_config: keys.source_config.clone(),
-            captures: Default::default(),
-            posting_meta: keys.posting_meta.clone(),
-        },
-    );
+    let field_context = ValueCompileContext {
+        placement: ValuePlacement::DetailMatchFilterOutput,
+        document_type: Some(strategy.parse.parse_type()),
+        source_config_keys: keys.source_config.clone(),
+        posting_meta_keys: keys.posting_meta.clone(),
+        capture_keys: keys.captures.clone(),
+    };
+    let capture_context = ValueCompileContext {
+        placement: ValuePlacement::DetailCaptureSource,
+        document_type: None,
+        source_config_keys: keys.source_config.clone(),
+        posting_meta_keys: keys.posting_meta.clone(),
+        capture_keys: Default::default(),
+    };
     Ok(ExecutionPlanDetailStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
@@ -152,42 +157,32 @@ fn compile_detail_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
-        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
+        conditions: compile_filters(strategy.conditions.as_ref(), &field_context)
             .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
-        captures: compile_captures(strategy.captures.as_ref(), &capture_descriptor)
+        captures: compile_captures(strategy.captures.as_ref(), &capture_context)
             .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
-        field_match: compile_field_match(strategy.field_match.as_ref(), &field_descriptor)
+        field_match: compile_field_match(strategy.field_match.as_ref(), &field_context)
             .map_err(|error| field_expression_error(format!("{path}/match"), error))?,
-        extract: compile_detail_extraction(&strategy.extract, &field_descriptor, path)?,
+        extract: compile_detail_extraction(&strategy.extract, &field_context, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
 }
 
-fn field_expression_error(
-    path: String,
-    error: FieldExpressionCompileError,
-) -> ExecutionPlanBuildError {
-    match error {
-        FieldExpressionCompileError::Template(error) => {
-            ExecutionPlanBuildError::new(path, error.to_string())
-        }
-        FieldExpressionCompileError::Transform(error) => {
-            ExecutionPlanBuildError::transform(path, error)
-        }
-    }
+fn field_expression_error(path: String, error: ValueCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}{}", error.path), error.message)
 }
 
 fn compile_detail_extraction(
     extraction: &DetailExtraction,
-    descriptor: &TemplateDescriptor,
+    context: &ValueCompileContext,
     path: &str,
 ) -> Result<ExecutionPlanDetailExtraction, ExecutionPlanBuildError> {
     Ok(ExecutionPlanDetailExtraction {
         fields: ExecutionPlanDetailFields {
             description_text: compile_field_expression(
                 &extraction.fields.description_text,
-                descriptor,
+                context,
             )
             .map_err(|error| {
                 field_expression_error(format!("{path}/extract/fields/descriptionText"), error)

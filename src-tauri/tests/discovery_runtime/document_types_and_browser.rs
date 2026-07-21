@@ -112,6 +112,7 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
 
     let result = block_on(execute_discovery(
         &plan,
+        &Default::default(),
         &fetcher,
         &browser,
         RuntimeExecutionContext::uncancellable(),
@@ -174,6 +175,7 @@ fn compiled_discovery_runtime_reports_browser_fetch_diagnostics() {
 
     let result = block_on(execute_discovery(
         &plan,
+        &Default::default(),
         &fetcher,
         &browser,
         RuntimeExecutionContext::uncancellable(),
@@ -224,25 +226,18 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
 
     let mut html_fields = default_html_fields();
     html_fields["title"] = json!({ "type": "css_text", "selector": "[", "cardinality": "one" });
-    let html_extract_plan = compiled_discovery_plan(
+    let html_extract_failure = compile_discovery_outcome(
         json!({ "type": "html" }),
         json!({ "type": "css", "selector": "article" }),
         html_fields,
         "https://example.test/jobs.html",
     );
-    let html_extract_failure = block_on(execute_discovery_test(
-        &html_extract_plan,
-        &fake_fetcher([(
-            "https://example.test/jobs.html",
-            "<article><a class='apply' href='https://example.test/jobs/1'></a><span class='company'>Example GmbH</span></article>".to_string(),
-        )]),
-    ));
-    assert_runtime_diagnostic(
-        &html_extract_failure.diagnostics[0],
-        "field_css_selector_failed",
-    );
+    let CompileSourceOutcome::Rejected { diagnostics } = html_extract_failure else {
+        panic!("invalid CSS Value selector should be rejected before execution");
+    };
+    assert_eq!(diagnostics[0].code, "value_selector_syntax_invalid");
     assert_eq!(
-        html_extract_failure.diagnostics[0].path,
-        "/discovery/strategies/0/extract/fields/title"
+        diagnostics[0].path,
+        "/accessPaths/0/discovery/strategies/0/extract/fields/title/selector"
     );
 }

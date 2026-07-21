@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::values::{
     compile_captures, compile_field_expression, compile_filters, compile_list_field_expression,
-    ExecutionPlanCaptures, ExecutionPlanFieldExpression, ExecutionPlanFilter,
-    ExecutionPlanListFieldExpression, FieldExpressionCompileError,
+    CompiledValueCaptures, CompiledValueFilter,
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::discovery::{
@@ -16,9 +15,11 @@ use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseI
 use crate::profile_dsl::primitives::select::{
     compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
+use crate::profile_dsl::primitives::value::{
+    CompiledListValue, CompiledValue, ValueCompileContext, ValueCompileError, ValuePlacement,
+};
 use crate::profile_dsl::template::{
-    descriptor_for_placement, json_pointer_segment, TemplateAdmissionKeys, TemplateDescriptor,
-    TemplatePlacement,
+    json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
 };
 
 use super::capabilities::{
@@ -49,9 +50,9 @@ pub struct ExecutionPlanDiscoveryStrategy {
     pub parse: CompiledParse,
     pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<ExecutionPlanFilter>>,
+    pub conditions: Option<Vec<CompiledValueFilter>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub captures: Option<ExecutionPlanCaptures>,
+    pub captures: Option<CompiledValueCaptures>,
     pub extract: ExecutionPlanDiscoveryExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
@@ -68,15 +69,15 @@ pub struct ExecutionPlanDiscoveryExtraction {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPlanDiscoveryFields {
-    pub title: ExecutionPlanFieldExpression,
-    pub company: ExecutionPlanFieldExpression,
-    pub url: ExecutionPlanFieldExpression,
+    pub title: CompiledValue,
+    pub company: CompiledValue,
+    pub url: CompiledValue,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub locations: Option<ExecutionPlanListFieldExpression>,
+    pub locations: Option<CompiledListValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub posting_meta: Option<std::collections::BTreeMap<String, ExecutionPlanFieldExpression>>,
+    pub posting_meta: Option<std::collections::BTreeMap<String, CompiledValue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description_text: Option<ExecutionPlanFieldExpression>,
+    pub description_text: Option<CompiledValue>,
 }
 
 pub(crate) fn compile_discovery_step(
@@ -119,15 +120,20 @@ fn compile_discovery_strategy(
             .collect(),
         posting_meta: Default::default(),
     };
-    let field_descriptor = descriptor_for_placement(TemplatePlacement::DiscoveryValue, &keys);
-    let capture_descriptor = descriptor_for_placement(
-        TemplatePlacement::DiscoveryValue,
-        &TemplateAdmissionKeys {
-            source_config: keys.source_config.clone(),
-            captures: Default::default(),
-            posting_meta: Default::default(),
-        },
-    );
+    let field_context = ValueCompileContext {
+        placement: ValuePlacement::DiscoveryFilterOutput,
+        document_type: Some(strategy.parse.parse_type()),
+        source_config_keys: keys.source_config.clone(),
+        posting_meta_keys: Default::default(),
+        capture_keys: keys.captures.clone(),
+    };
+    let capture_context = ValueCompileContext {
+        placement: ValuePlacement::DiscoveryCaptureSource,
+        document_type: Some(strategy.parse.parse_type()),
+        source_config_keys: keys.source_config.clone(),
+        posting_meta_keys: Default::default(),
+        capture_keys: Default::default(),
+    };
     Ok(ExecutionPlanDiscoveryStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
@@ -174,44 +180,34 @@ fn compile_discovery_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
-        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
+        conditions: compile_filters(strategy.conditions.as_ref(), &field_context)
             .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
-        captures: compile_captures(strategy.captures.as_ref(), &capture_descriptor)
+        captures: compile_captures(strategy.captures.as_ref(), &capture_context)
             .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
-        extract: compile_discovery_extraction(&strategy.extract, &field_descriptor, path)?,
+        extract: compile_discovery_extraction(&strategy.extract, &field_context, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
 }
 
-fn field_expression_error(
-    path: String,
-    error: FieldExpressionCompileError,
-) -> ExecutionPlanBuildError {
-    match error {
-        FieldExpressionCompileError::Template(error) => {
-            ExecutionPlanBuildError::new(path, error.to_string())
-        }
-        FieldExpressionCompileError::Transform(error) => {
-            ExecutionPlanBuildError::transform(path, error)
-        }
-    }
+fn field_expression_error(path: String, error: ValueCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}{}", error.path), error.message)
 }
 
 fn compile_discovery_extraction(
     extraction: &DiscoveryExtraction,
-    descriptor: &TemplateDescriptor,
+    context: &ValueCompileContext,
     path: &str,
 ) -> Result<ExecutionPlanDiscoveryExtraction, ExecutionPlanBuildError> {
     Ok(ExecutionPlanDiscoveryExtraction {
         fields: ExecutionPlanDiscoveryFields {
-            title: compile_field_expression(&extraction.fields.title, descriptor).map_err(
+            title: compile_field_expression(&extraction.fields.title, context).map_err(
                 |error| field_expression_error(format!("{path}/extract/fields/title"), error),
             )?,
-            company: compile_field_expression(&extraction.fields.company, descriptor).map_err(
+            company: compile_field_expression(&extraction.fields.company, context).map_err(
                 |error| field_expression_error(format!("{path}/extract/fields/company"), error),
             )?,
-            url: compile_field_expression(&extraction.fields.url, descriptor).map_err(|error| {
+            url: compile_field_expression(&extraction.fields.url, context).map_err(|error| {
                 field_expression_error(format!("{path}/extract/fields/url"), error)
             })?,
             locations: extraction
@@ -219,7 +215,7 @@ fn compile_discovery_extraction(
                 .locations
                 .as_ref()
                 .map(|value| {
-                    compile_list_field_expression(value, descriptor).map_err(|error| {
+                    compile_list_field_expression(value, context).map_err(|error| {
                         field_expression_error(format!("{path}/extract/fields/locations"), error)
                     })
                 })
@@ -234,7 +230,7 @@ fn compile_discovery_extraction(
                         .map(|(key, value)| {
                             Ok((
                                 key.clone(),
-                                compile_field_expression(value, descriptor).map_err(|error| {
+                                compile_field_expression(value, context).map_err(|error| {
                                     field_expression_error(
                                         format!(
                                             "{path}/extract/fields/postingMeta/{}",
@@ -253,7 +249,7 @@ fn compile_discovery_extraction(
                 .description_text
                 .as_ref()
                 .map(|value| {
-                    compile_field_expression(value, descriptor).map_err(|error| {
+                    compile_field_expression(value, context).map_err(|error| {
                         field_expression_error(
                             format!("{path}/extract/fields/descriptionText"),
                             error,

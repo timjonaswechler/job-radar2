@@ -809,7 +809,13 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         ("https://example.test/jobs.json", page),
     ]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let source_config =
+        serde_json::from_value(json!({ "feedUrl": "https://example.test/jobs.json" })).unwrap();
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config,
+        &fetcher,
+    ));
 
     assert_eq!(result.candidates.len(), 2);
     let requests = fetcher.requests();

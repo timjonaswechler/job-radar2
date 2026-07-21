@@ -6,7 +6,6 @@ use crate::profile_dsl::template::{
 struct DiscoveryTemplateValues<'a> {
     source_config: &'a SourceConfig,
     source_name: &'a str,
-    captures: Option<&'a BTreeMap<String, String>>,
 }
 impl TemplateValueView for DiscoveryTemplateValues<'_> {
     fn resolve(&self, reference: &TemplateReference) -> Option<String> {
@@ -16,10 +15,6 @@ impl TemplateValueView for DiscoveryTemplateValues<'_> {
                 .get(&reference.key)
                 .and_then(json_scalar_as_string),
             Some("source") if reference.key == "name" => Some(self.source_name.to_string()),
-            Some("captures") => self
-                .captures
-                .and_then(|captures| captures.get(&reference.key))
-                .cloned(),
             _ => None,
         }
     }
@@ -34,23 +29,6 @@ pub(super) fn render_source_config_template(
         &DiscoveryTemplateValues {
             source_config,
             source_name,
-            captures: None,
-        },
-    )
-    .map_err(|error| error.to_string())
-}
-pub(super) fn render_template_with_captures(
-    template: &CompiledTemplate,
-    source_config: &SourceConfig,
-    source_name: &str,
-    captures: &BTreeMap<String, String>,
-) -> Result<String, String> {
-    render_template(
-        template,
-        &DiscoveryTemplateValues {
-            source_config,
-            source_name,
-            captures: Some(captures),
         },
     )
     .map_err(|error| error.to_string())

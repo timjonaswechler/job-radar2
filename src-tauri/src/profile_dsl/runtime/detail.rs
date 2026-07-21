@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
-use dom_query::{Matcher, NodeRef, Selection as HtmlSelection};
+use dom_query::NodeRef;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    profile_dsl::primitives::select::resolve_authored_json_path as resolve_simple_json_path,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
@@ -14,19 +13,13 @@ use crate::{
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
-            values::{
-                ExecutionPlanCaptureRule as CaptureRule, ExecutionPlanCombinePart as CombinePart,
-                ExecutionPlanFieldExpression as FieldExpression, ExecutionPlanFilter as Filter,
-            },
+            values::{CompiledValueCaptureRule as CaptureRule, CompiledValueFilter as Filter},
             SourceExecutionPlan,
         },
         primitives::{
-            cardinality::{CardinalityDiagnosticContext, CardinalityOutcome, CompiledCardinality},
             parse::{CompleteParseText, ParseDiagnosticContext},
-            transform::{
-                normalize_whitespace_text, CompiledTransformPipeline, TransformErrorKind,
-                TransformShape, TransformValue,
-            },
+            transform::normalize_whitespace_text,
+            value::CompiledValue,
         },
     },
     source::documents::SourceConfig,
@@ -59,12 +52,11 @@ mod extract;
 mod fetch;
 mod strategy;
 mod support;
-mod values;
 
 use acceptance::accept_detail_result;
 use diagnostics::runtime_error;
 use document::{select_detail_document, RuntimeItem};
-use extract::{evaluate_strategy_captures, evaluate_string_field};
+use extract::{evaluate_strategy_captures, evaluate_value_scalar};
 use fetch::fetch_strategy_document;
 use strategy::execute_strategy;
 
@@ -96,6 +88,7 @@ pub struct DetailPostingOccurrence {
 
 pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     fetcher: &F,
     browser: &B,
@@ -208,6 +201,7 @@ where
                 }
                 let mut execution = execute_strategy(
                     plan,
+                    source_config,
                     posting,
                     fetcher,
                     browser,

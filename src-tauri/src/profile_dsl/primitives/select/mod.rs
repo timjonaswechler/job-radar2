@@ -5,21 +5,19 @@ use serde_json::Value;
 
 use crate::profile_dsl::{documents::ParseType, primitives::parse::ParsedDocument};
 
-mod css;
+pub(crate) mod css;
 mod document;
-mod json_path;
+pub(crate) mod json_path;
 mod sitemap_urls;
-mod xml_element;
-mod xml_text;
+pub(crate) mod xml_element;
+pub(crate) mod xml_text;
 
 pub use css::{CssSelect, CssSelectPlan};
 pub use document::{DocumentSelect, DocumentSelectPlan};
 pub(crate) use json_path::resolve_authored_json_path;
 pub use json_path::{JsonPathSelect, JsonPathSelectPlan};
 pub use sitemap_urls::{SitemapUrlsSelect, SitemapUrlsSelectPlan};
-pub(crate) use xml_element::descendant_elements as xml_descendant_elements;
 pub use xml_element::{XmlElementSelect, XmlElementSelectPlan};
-pub(crate) use xml_text::{node_text as xml_node_text, path_texts as xml_path_texts};
 pub use xml_text::{XmlTextSelect, XmlTextSelectPlan};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

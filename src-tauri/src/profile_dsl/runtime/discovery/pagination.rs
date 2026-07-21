@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) async fn execute_paginated_strategy<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     fetcher: &F,
     browser: &B,
     strategy_index: usize,
@@ -39,6 +40,7 @@ where
                 }
                 let page_output = execute_single_strategy_fetch(
                     plan,
+                    source_config,
                     fetcher,
                     browser,
                     strategy_index,
@@ -115,6 +117,7 @@ where
                 ];
                 let page_output = execute_single_strategy_fetch(
                     plan,
+                    source_config,
                     fetcher,
                     browser,
                     strategy_index,
@@ -185,6 +188,7 @@ where
                     .unwrap_or_default();
                 let page_output = execute_single_strategy_fetch(
                     plan,
+                    source_config,
                     fetcher,
                     browser,
                     strategy_index,
@@ -279,7 +283,7 @@ where
                             browser,
                             &strategy.fetch,
                             strategy.parse.authored_charset(),
-                            &plan.source_config,
+                            source_config,
                             &plan.source.name,
                             url,
                             base_path,
@@ -296,7 +300,7 @@ where
                             browser,
                             &strategy.fetch,
                             strategy.parse.authored_charset(),
-                            &plan.source_config,
+                            source_config,
                             &plan.source.name,
                             &[],
                             &[],
@@ -336,6 +340,7 @@ where
                 ) {
                     let page_candidates = extract_candidates_from_items(
                         plan,
+                        source_config,
                         strategy,
                         items,
                         base_path,

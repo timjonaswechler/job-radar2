@@ -222,6 +222,12 @@ impl CompiledTransform {
 pub struct CompiledTransformPipeline(Vec<CompiledTransform>);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransformShapeKind {
+    Scalar,
+    Sequence,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompileTransformErrorKind {
     EmptySeparator,
     InvalidRegex,
@@ -349,6 +355,17 @@ pub struct TransformError {
 }
 
 impl CompiledTransformPipeline {
+    pub fn output_shape(&self, mut shape: TransformShapeKind) -> TransformShapeKind {
+        for transform in &self.0 {
+            shape = match transform {
+                CompiledTransform::Split(_) => TransformShapeKind::Sequence,
+                CompiledTransform::Join(_) => TransformShapeKind::Scalar,
+                _ => shape,
+            };
+        }
+        shape
+    }
+
     pub fn execute<'doc, 'body>(
         &self,
         mut shape: TransformShape<'doc, 'body>,

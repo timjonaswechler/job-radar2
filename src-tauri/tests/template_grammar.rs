@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, compile_template, render_template, CompileSourceOutcome, DiagnosticCategory,
-    ExecutionPlanFieldExpression, RegistrySourceProfile, SourceDocument, SourceProfileDocument,
+    compile_source, compile_template, render_template, CompileSourceOutcome, CompiledValue,
+    DiagnosticCategory, RegistrySourceProfile, SourceDocument, SourceProfileDocument,
     SourceProfileRegistrySnapshot, TemplateCompileErrorKind, TemplateDescriptor, TemplateReference,
     TemplateValueView,
 };
@@ -157,11 +157,10 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
     assert!(serialized.contains("reference"));
     assert!(serialized.contains("sourceConfig"));
     assert!(!serialized.contains("{{sourceConfig"));
-    let ExecutionPlanFieldExpression::Template { template, .. } =
-        &source.execution_plan.discovery.strategies[0]
-            .extract
-            .fields
-            .title
+    let CompiledValue::Template { template, .. } = &source.execution_plan.discovery.strategies[0]
+        .extract
+        .fields
+        .title
     else {
         panic!("Value template must be compiled")
     };

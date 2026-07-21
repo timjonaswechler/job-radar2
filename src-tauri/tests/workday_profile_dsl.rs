@@ -1,6 +1,9 @@
 mod support;
 
-use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
+use support::{
+    compile_test_source, execute_detail_test_with_config, execute_discovery_test_with_config,
+    unwrap_plan,
+};
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
@@ -69,7 +72,11 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         ],
     );
 
-    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source.source_config,
+        &fetcher,
+    ));
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/workday/posting-discovery-expected-candidates.json");
@@ -101,8 +108,9 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     );
 
     let first_candidate = discovery.candidates.first().unwrap();
-    let detail = block_on(execute_detail_test(
+    let detail = block_on(execute_detail_test_with_config(
         &plan,
+        &source.source_config,
         &DetailPostingOccurrence {
             url: first_candidate.url.clone(),
             title: Some(first_candidate.title.clone()),
@@ -189,7 +197,11 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source.source_config,
+        &fetcher,
+    ));
 
     assert_eq!(discovery.candidates.len(), 4);
     assert_eq!(fetcher.requests().len(), 2);

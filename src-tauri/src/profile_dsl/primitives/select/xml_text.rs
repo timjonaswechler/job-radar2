@@ -16,7 +16,7 @@ pub struct XmlTextSelectPlan {
     segments: Vec<String>,
 }
 
-pub(super) fn compile(text_path: &str) -> Result<XmlTextSelectPlan, String> {
+pub(crate) fn compile(text_path: &str) -> Result<XmlTextSelectPlan, String> {
     let trimmed = text_path.trim();
     let segments = trimmed
         .split('/')
@@ -29,7 +29,7 @@ pub(super) fn compile(text_path: &str) -> Result<XmlTextSelectPlan, String> {
     })
 }
 
-pub(super) fn execute<'doc, 'body>(
+pub(crate) fn execute<'doc, 'body>(
     plan: &XmlTextSelectPlan,
     root: roxmltree::Node<'doc, 'body>,
 ) -> SelectedSequence<'doc, 'body> {

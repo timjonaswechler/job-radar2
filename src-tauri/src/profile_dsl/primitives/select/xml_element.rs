@@ -16,7 +16,7 @@ pub struct XmlElementSelectPlan {
     element: String,
 }
 
-pub(super) fn compile(element: &str) -> Result<XmlElementSelectPlan, String> {
+pub(crate) fn compile(element: &str) -> Result<XmlElementSelectPlan, String> {
     if element.is_empty() {
         return Err("XML element local name must not be empty".to_string());
     }
@@ -25,7 +25,7 @@ pub(super) fn compile(element: &str) -> Result<XmlElementSelectPlan, String> {
     })
 }
 
-pub(super) fn execute<'doc, 'body>(
+pub(crate) fn execute<'doc, 'body>(
     plan: &XmlElementSelectPlan,
     root: roxmltree::Node<'doc, 'body>,
 ) -> SelectedSequence<'doc, 'body> {

@@ -475,10 +475,9 @@ fn directly_supplied_source_is_authoritative_over_same_key_registry_source() {
     };
 
     assert_eq!(compiled.execution_plan.source.name, "Example Source");
-    assert_eq!(
-        compiled.execution_plan.source_config["feedUrl"],
-        "https://example.test/jobs.json"
-    );
+    let serialized_plan = serde_json::to_string(&compiled.execution_plan).unwrap();
+    assert!(!serialized_plan.contains("https://wrong.example/jobs.json"));
+    assert!(!serialized_plan.contains("https://example.test/jobs.json"));
 }
 
 #[test]

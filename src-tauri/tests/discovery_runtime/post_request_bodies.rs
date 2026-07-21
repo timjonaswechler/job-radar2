@@ -1,5 +1,9 @@
 use super::*;
 
+fn source_config() -> serde_json::Map<String, Value> {
+    serde_json::from_value(json!({ "feedUrl": "https://example.test/jobs.json" })).unwrap()
+}
+
 #[test]
 fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
     let mut extra = serde_json::Map::new();
@@ -44,7 +48,11 @@ fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config(),
+        &fetcher,
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(result.candidates.len(), 1);
@@ -103,7 +111,11 @@ fn compiled_discovery_runtime_posts_rendered_text_body() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config(),
+        &fetcher,
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     let requests = fetcher.requests();
@@ -174,7 +186,11 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     let plan = unwrap_plan(compile_result);
     let fetcher = fake_fetcher([]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config(),
+        &fetcher,
+    ));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_body_template_failed");
@@ -211,7 +227,11 @@ fn compiled_discovery_runtime_reports_get_body_combination() {
     );
     let fetcher = fake_fetcher([]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config(),
+        &fetcher,
+    ));
 
     assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "unsupported_http_body_for_method");
@@ -264,7 +284,11 @@ fn compiled_discovery_runtime_posts_rendered_form_body() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source_config(),
+        &fetcher,
+    ));
 
     assert_eq!(result.diagnostics, Vec::new());
     let requests = fetcher.requests();

@@ -1,4 +1,4 @@
-use super::fields::evaluate_string_field;
+use super::fields::evaluate_capture_source;
 use super::*;
 
 pub(in crate::profile_dsl::runtime::discovery) fn evaluate_strategy_captures(
@@ -18,12 +18,10 @@ pub(in crate::profile_dsl::runtime::discovery) fn evaluate_strategy_captures(
 
     for (key, rule) in capture_rules {
         let path = format!("{base_path}/captures/{key}");
-        let context_captures = captures.clone();
-        let evaluation = evaluate_string_field(
+        let evaluation = evaluate_capture_source(
             item,
             source_config,
             source_name,
-            &context_captures,
             &rule.from,
             &format!("{path}/from"),
             strategy_key,

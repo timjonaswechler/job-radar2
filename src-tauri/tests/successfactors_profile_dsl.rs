@@ -1,6 +1,9 @@
 mod support;
 
-use support::{compile_test_source, execute_detail_test, execute_discovery_test, unwrap_plan};
+use support::{
+    compile_test_source, execute_detail_test_with_config, execute_discovery_test_with_config,
+    unwrap_plan,
+};
 
 use std::{fs, future::Future, path::Path};
 
@@ -70,7 +73,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_test(&plan, &fetcher));
+    let discovery = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source.source_config,
+        &fetcher,
+    ));
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<DiscoveryCandidate> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
@@ -86,8 +93,9 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let primary_candidate = &discovery.candidates[0];
-    let primary_detail = block_on(execute_detail_test(
+    let primary_detail = block_on(execute_detail_test_with_config(
         &plan,
+        &source.source_config,
         &posting_occurrence(primary_candidate),
         &fetcher,
     ));
@@ -105,8 +113,9 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let fallback_candidate = &discovery.candidates[1];
-    let fallback_detail = block_on(execute_detail_test(
+    let fallback_detail = block_on(execute_detail_test_with_config(
         &plan,
+        &source.source_config,
         &posting_occurrence(fallback_candidate),
         &fetcher,
     ));
@@ -140,8 +149,9 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     );
 
     let schott_style_candidate = &discovery.candidates[3];
-    let schott_style_detail = block_on(execute_detail_test(
+    let schott_style_detail = block_on(execute_detail_test_with_config(
         &plan,
+        &source.source_config,
         &posting_occurrence(schott_style_candidate),
         &fetcher,
     ));

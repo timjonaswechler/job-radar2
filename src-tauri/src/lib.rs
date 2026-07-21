@@ -39,7 +39,7 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    AccessPathFragment, DetailStep, DetailStepFragment, DetailStrategyFragment,
+    AccessPathFragment, AuthoredScalar, DetailStep, DetailStepFragment, DetailStrategyFragment,
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
     DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
     DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
@@ -52,9 +52,7 @@ pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanJsonValue, ExecutionPlanPagination, ExecutionPlanRequestBody,
 };
 pub use profile_dsl::execution_plan::values::{
-    ExecutionPlanCaptureRule, ExecutionPlanCaptures, ExecutionPlanCombinePart,
-    ExecutionPlanFieldExpression, ExecutionPlanFieldMatch, ExecutionPlanFilter,
-    ExecutionPlanListFieldExpression,
+    CompiledValueCaptureRule, CompiledValueCaptures, CompiledValueFilter, CompiledValueMatch,
 };
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
@@ -81,16 +79,20 @@ pub use profile_dsl::primitives::transform::{
     compile_transform_pipeline, transform_descriptors, validate_transform_registration_keys,
     CompileTransformError, CompileTransformErrorKind, CompiledTransform, CompiledTransformPipeline,
     Transform, TransformDescriptor, TransformError, TransformErrorKind, TransformKind,
-    TransformRegistryError, TransformShape, TransformValue,
+    TransformRegistryError, TransformShape, TransformShapeKind, TransformValue,
 };
 pub use profile_dsl::primitives::value::{
-    compile_value_foundation, validate_value_placement_registration_keys,
-    value_placement_descriptors, CompiledValueFoundation, DetailCaptureValueContext,
+    compile_list_value, compile_value, evaluate_detail_capture_value, evaluate_detail_output_value,
+    evaluate_discovery_capture_value, evaluate_discovery_output_value,
+    validate_value_placement_registration_keys, validate_value_registration_keys,
+    value_descriptors, value_placement_descriptors, CompiledCombinePart, CompiledListValue,
+    CompiledValue, CompiledValueResult, DetailCaptureValueContext,
     DetailMatchFilterOutputValueContext, DiscoveryCaptureValueContext,
     DiscoveryFilterOutputValueContext, PostingValueView, SelectedValueCarrier, SourceValueView,
-    ValueCompileContext, ValueCompileError, ValueCompileErrorKind, ValuePlacement,
-    ValuePlacementDescriptor, ValuePlacementRegistryError, ValueShape, VALUE_MAX_DEPTH,
-    VALUE_MAX_FIRST_NON_EMPTY_CANDIDATES, VALUE_MAX_NODES,
+    ValueCompileContext, ValueCompileError, ValueCompileErrorKind, ValueDescriptor,
+    ValueEvaluationError, ValueEvaluationErrorKind, ValueKind, ValuePlacement,
+    ValuePlacementDescriptor, ValuePlacementRegistryError, ValueRegistryError, ValueShape,
+    VALUE_MAX_DEPTH, VALUE_MAX_FIRST_NON_EMPTY_CANDIDATES, VALUE_MAX_NODES,
 };
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,

@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     fetcher: &F,
     browser: &B,
     strategy_index: usize,
@@ -20,6 +21,7 @@ where
     let candidates = if let Some(pagination) = &strategy.pagination {
         match execute_paginated_strategy(
             plan,
+            source_config,
             fetcher,
             browser,
             strategy_index,
@@ -43,6 +45,7 @@ where
     } else {
         match execute_single_strategy_fetch(
             plan,
+            source_config,
             fetcher,
             browser,
             strategy_index,
@@ -169,6 +172,7 @@ fn json_body_params_for_location<'a>(
 
 pub(super) async fn execute_single_strategy_fetch<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     fetcher: &F,
     browser: &B,
     strategy_index: usize,
@@ -204,7 +208,7 @@ where
         browser,
         &strategy.fetch,
         strategy.parse.authored_charset(),
-        &plan.source_config,
+        source_config,
         &plan.source.name,
         query_params_for_location(pagination_params, parameter_location),
         json_body_params_for_location(pagination_params, parameter_location),
@@ -228,6 +232,7 @@ where
 
     Ok(extract_candidates_from_response(
         plan,
+        source_config,
         strategy,
         &response,
         total_path,
@@ -240,6 +245,7 @@ where
 
 fn extract_candidates_from_response(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     strategy: &ExecutionPlanDiscoveryStrategy,
     response: &CompleteParseText,
     total_path: Option<&str>,
@@ -285,8 +291,15 @@ fn extract_candidates_from_response(
         }
     };
 
-    let candidates =
-        extract_candidates_from_items(plan, strategy, items, base_path, strategy_key, diagnostics);
+    let candidates = extract_candidates_from_items(
+        plan,
+        source_config,
+        strategy,
+        items,
+        base_path,
+        strategy_key,
+        diagnostics,
+    );
     StrategyFetchOutput {
         candidates,
         total_count,
@@ -296,6 +309,7 @@ fn extract_candidates_from_response(
 
 pub(super) fn extract_candidates_from_items(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     strategy: &ExecutionPlanDiscoveryStrategy,
     items: Vec<document::RuntimeItem<'_, '_>>,
     base_path: &str,
@@ -309,7 +323,7 @@ pub(super) fn extract_candidates_from_items(
             strategy.captures.as_ref(),
             strategy.conditions.as_ref(),
             &strategy.extract.fields,
-            &plan.source_config,
+            source_config,
             &plan.source.name,
             base_path,
             strategy_key,

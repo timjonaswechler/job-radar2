@@ -1,6 +1,8 @@
 mod support;
 
-use support::{compile_test_source, execute_discovery_test, unwrap_plan};
+use support::{
+    compile_test_source, execute_discovery_test, execute_discovery_test_with_config, unwrap_plan,
+};
 
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
@@ -162,7 +164,7 @@ fn compile_discovery_outcome_with_strategy(
             json!({
                 "mode": "http",
                 "method": "GET",
-                "url": "{{sourceConfig:feedUrl}}",
+                "url": feed_url,
                 "timeoutMs": 10000
             }),
         ),
@@ -244,7 +246,7 @@ fn compiled_browser_discovery_plan(
                     "key": "browser_html",
                     "fetch": {
                         "mode": "browser",
-                        "url": "{{sourceConfig:pageUrl}}",
+                        "url": page_url,
                         "timeoutMs": 30000,
                         "waits": [
                             {
@@ -317,7 +319,7 @@ fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
                     "fetch": {
                         "mode": "http",
                         "method": "GET",
-                        "url": "{{sourceConfig:feedUrl}}",
+                        "url": "https://example.test/source-owned.json",
                         "timeoutMs": 10000
                     },
                     "parse": { "type": "json" },

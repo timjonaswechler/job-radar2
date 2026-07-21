@@ -32,23 +32,16 @@ fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() 
     let mut fields = default_fields();
     fields["title"] =
         json!({ "type": "json_path", "jsonPath": "$.title[*]", "cardinality": "one" });
-    let extract_plan = compiled_json_discovery_plan(fields, default_select());
-    let extract_failure = block_on(execute_discovery_test(
-        &extract_plan,
-        &fake_fetcher([(
-            "https://example.test/jobs.json",
-            json!({
-                "jobs": [{
-                    "title": "Rust Engineer",
-                    "company": "Example GmbH",
-                    "url": "https://example.test/jobs/1"
-                }]
-            })
-            .to_string(),
-        )]),
-    ));
-    assert_runtime_diagnostic(&extract_failure.diagnostics[0], "field_json_path_failed");
-    assert!(extract_failure.candidates.is_empty());
+    let extract_failure = compile_discovery_outcome(
+        json!({ "type": "json" }),
+        default_select(),
+        fields,
+        "https://example.test/jobs.json",
+    );
+    let CompileSourceOutcome::Rejected { diagnostics } = extract_failure else {
+        panic!("invalid Value selector should be rejected before execution");
+    };
+    assert_eq!(diagnostics[0].code, "value_selector_syntax_invalid");
 }
 
 #[test]

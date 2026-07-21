@@ -57,12 +57,12 @@ fn compiled_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in
 }
 
 #[test]
-fn compiled_discovery_runtime_dedupes_string_arrays_before_cardinality() {
+fn compiled_discovery_runtime_dedupes_string_arrays_after_all_cardinality() {
     let mut fields = default_fields();
     fields["title"] = json!({
         "type": "json_path",
         "jsonPath": "$.titles",
-        "cardinality": "one",
+        "cardinality": "all",
         "transforms": [{ "type": "to_string" }, { "type": "dedupe" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
@@ -85,12 +85,12 @@ fn compiled_discovery_runtime_dedupes_string_arrays_before_cardinality() {
 }
 
 #[test]
-fn compiled_discovery_runtime_joins_arrays_before_cardinality() {
+fn compiled_discovery_runtime_joins_arrays_after_all_cardinality() {
     let mut fields = default_fields();
     fields["title"] = json!({
         "type": "json_path",
         "jsonPath": "$.titleParts",
-        "cardinality": "one",
+        "cardinality": "all",
         "transforms": [{ "type": "to_string" }, { "type": "join", "separator": " " }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());

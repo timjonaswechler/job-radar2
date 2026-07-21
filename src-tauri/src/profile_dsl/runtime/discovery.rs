@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
 
-use dom_query::{Matcher, NodeRef, Selection as HtmlSelection};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,20 +16,11 @@ use crate::{
                 ExecutionPlanRequestBody,
             },
             discovery::{ExecutionPlanDiscoveryFields, ExecutionPlanDiscoveryStrategy},
-            values::{
-                ExecutionPlanCombinePart as CombinePart,
-                ExecutionPlanFieldExpression as FieldExpression,
-                ExecutionPlanListFieldExpression as ListFieldExpression,
-            },
             SourceExecutionPlan,
         },
         primitives::{
-            cardinality::{CardinalityDiagnosticContext, CardinalityOutcome, CompiledCardinality},
             parse::{CompleteParseText, ParseDiagnosticContext},
-            transform::{
-                normalize_whitespace_text, CompiledTransformPipeline, TransformErrorKind,
-                TransformShape, TransformValue,
-            },
+            value::{CompiledListValue, CompiledValue},
         },
     },
     source::documents::SourceConfig,
@@ -64,7 +54,6 @@ mod fetch;
 mod pagination;
 mod strategy;
 mod support;
-mod values;
 
 use acceptance::accept_discovery_result;
 use diagnostics::{runtime_error, runtime_warning};
@@ -99,6 +88,7 @@ pub struct DiscoveryCandidate {
 
 pub async fn execute_discovery<F, B>(
     plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
@@ -199,6 +189,7 @@ where
                 }
                 let mut execution = execute_strategy(
                     plan,
+                    source_config,
                     fetcher,
                     browser,
                     strategy_index,

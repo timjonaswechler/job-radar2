@@ -1,13 +1,23 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::Number;
 
 use crate::profile_dsl::primitives::{cardinality::Cardinality, transform::Transform};
+
+/// Scalar literals admitted by the Value catalogue. Structured JSON belongs to
+/// Parse/Select and is deliberately not retained by compiled Value plans.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum AuthoredScalar {
+    String(String),
+    Number(Number),
+    Boolean(bool),
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum FieldExpression {
     Const {
-        value: Value,
+        value: AuthoredScalar,
         #[serde(skip_serializing_if = "Option::is_none")]
         cardinality: Option<Cardinality>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -98,8 +108,6 @@ pub enum FieldExpression {
     FirstNonEmpty {
         candidates: Vec<FieldExpression>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        cardinality: Option<Cardinality>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         transforms: Option<Vec<Transform>>,
     },
 }
@@ -120,6 +128,24 @@ impl FieldExpression {
             | Self::CssAttribute { transforms, .. }
             | Self::Combine { transforms, .. }
             | Self::FirstNonEmpty { transforms, .. } => transforms.as_deref(),
+        }
+    }
+
+    pub(crate) fn cardinality(&self) -> Cardinality {
+        match self {
+            Self::Const { cardinality, .. }
+            | Self::Template { cardinality, .. }
+            | Self::SourceConfig { cardinality, .. }
+            | Self::PostingMeta { cardinality, .. }
+            | Self::Capture { cardinality, .. }
+            | Self::ItemField { cardinality, .. }
+            | Self::JsonPath { cardinality, .. }
+            | Self::XmlText { cardinality, .. }
+            | Self::XmlElement { cardinality, .. }
+            | Self::CssText { cardinality, .. }
+            | Self::CssAttribute { cardinality, .. }
+            | Self::Combine { cardinality, .. } => cardinality.unwrap_or_default(),
+            Self::FirstNonEmpty { .. } => Cardinality::default(),
         }
     }
 }

@@ -147,6 +147,7 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
             }]);
             let result = crate::profile_dsl::runtime::execute_discovery(
                 &input.source.execution_plan,
+                input.source.source_config(),
                 &fetcher,
                 &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
                 crate::profile_dsl::runtime::RuntimeExecutionContext::uncancellable(),

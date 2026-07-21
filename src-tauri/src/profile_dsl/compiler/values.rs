@@ -4,8 +4,8 @@ use crate::profile_dsl::{
     diagnostics::Diagnostics,
     documents::{DetailStep, DiscoveryStep, FieldExpression, ListFieldExpression, ParseType},
     primitives::value::{
-        compile_value_foundation, value_expression_node_count, ValueCompileContext,
-        ValueCompileError, ValueCompileErrorKind, ValuePlacement, VALUE_MAX_NODES,
+        compile_value, value_expression_node_count, ValueCompileContext, ValueCompileError,
+        ValueCompileErrorKind, ValuePlacement, VALUE_MAX_NODES,
     },
 };
 
@@ -18,7 +18,8 @@ pub(super) fn validate_value_context_foundation(
     base_path: &str,
     total_nodes: &mut usize,
     diagnostics: &mut Diagnostics,
-) {
+) -> bool {
+    let mut references_source_name = false;
     let posting_meta_keys = discovery_posting_meta_keys(discovery)
         .into_iter()
         .collect::<BTreeSet<_>>();
@@ -48,6 +49,7 @@ pub(super) fn validate_value_context_foundation(
                 &capture_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
         }
 
@@ -65,6 +67,7 @@ pub(super) fn validate_value_context_foundation(
             &output_context,
             total_nodes,
             diagnostics,
+            &mut &mut references_source_name,
         );
         let fields_path = format!("{strategy_path}/extract/fields");
         validate_expression(
@@ -74,6 +77,7 @@ pub(super) fn validate_value_context_foundation(
             &output_context,
             total_nodes,
             diagnostics,
+            &mut &mut references_source_name,
         );
         validate_expression(
             &strategy.extract.fields.company,
@@ -82,6 +86,7 @@ pub(super) fn validate_value_context_foundation(
             &output_context,
             total_nodes,
             diagnostics,
+            &mut &mut references_source_name,
         );
         validate_expression(
             &strategy.extract.fields.url,
@@ -90,6 +95,7 @@ pub(super) fn validate_value_context_foundation(
             &output_context,
             total_nodes,
             diagnostics,
+            &mut &mut references_source_name,
         );
         if let Some(locations) = &strategy.extract.fields.locations {
             validate_list(
@@ -99,6 +105,7 @@ pub(super) fn validate_value_context_foundation(
                 &output_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
         }
         for (key, expression) in strategy.extract.fields.posting_meta.iter().flatten() {
@@ -112,6 +119,7 @@ pub(super) fn validate_value_context_foundation(
                 &output_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
         }
         if let Some(expression) = &strategy.extract.fields.description_text {
@@ -122,6 +130,7 @@ pub(super) fn validate_value_context_foundation(
                 &output_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
         }
     }
@@ -153,6 +162,7 @@ pub(super) fn validate_value_context_foundation(
                     &capture_context,
                     total_nodes,
                     diagnostics,
+                    &mut &mut references_source_name,
                 );
             }
             let output_context = context(
@@ -169,6 +179,7 @@ pub(super) fn validate_value_context_foundation(
                 &output_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
             if let Some(field_match) = &strategy.field_match {
                 validate_expression(
@@ -178,6 +189,7 @@ pub(super) fn validate_value_context_foundation(
                     &output_context,
                     total_nodes,
                     diagnostics,
+                    &mut &mut references_source_name,
                 );
                 validate_expression(
                     &field_match.right,
@@ -186,6 +198,7 @@ pub(super) fn validate_value_context_foundation(
                     &output_context,
                     total_nodes,
                     diagnostics,
+                    &mut &mut references_source_name,
                 );
             }
             validate_expression(
@@ -195,9 +208,11 @@ pub(super) fn validate_value_context_foundation(
                 &output_context,
                 total_nodes,
                 diagnostics,
+                &mut &mut references_source_name,
             );
         }
     }
+    references_source_name
 }
 
 fn context(
@@ -223,6 +238,7 @@ fn validate_filters(
     context: &ValueCompileContext,
     total_nodes: &mut usize,
     diagnostics: &mut Diagnostics,
+    references_source_name: &mut bool,
 ) {
     for (index, filter) in filters.into_iter().flatten().enumerate() {
         let field = match filter {
@@ -236,6 +252,7 @@ fn validate_filters(
             context,
             total_nodes,
             diagnostics,
+            references_source_name,
         );
     }
 }
@@ -247,6 +264,7 @@ fn validate_list(
     context: &ValueCompileContext,
     total_nodes: &mut usize,
     diagnostics: &mut Diagnostics,
+    references_source_name: &mut bool,
 ) {
     match list {
         ListFieldExpression::Single(expression) => validate_expression(
@@ -256,6 +274,7 @@ fn validate_list(
             context,
             total_nodes,
             diagnostics,
+            references_source_name,
         ),
         ListFieldExpression::Multiple(expressions) => {
             for (index, expression) in expressions.iter().enumerate() {
@@ -266,6 +285,7 @@ fn validate_list(
                     context,
                     total_nodes,
                     diagnostics,
+                    references_source_name,
                 );
             }
         }
@@ -279,6 +299,7 @@ fn validate_expression(
     context: &ValueCompileContext,
     total_nodes: &mut usize,
     diagnostics: &mut Diagnostics,
+    references_source_name: &mut bool,
 ) {
     let nodes = value_expression_node_count(expression);
     let previous_total = *total_nodes;
@@ -297,8 +318,9 @@ fn validate_expression(
         diagnostics.push(diagnostic);
         return;
     }
-    if let Err(error) = compile_value_foundation(expression, context) {
-        push_error(path, strategy_key, error, diagnostics);
+    match compile_value(expression, context) {
+        Ok(value) => *references_source_name |= value.references_source_name(),
+        Err(error) => push_error(path, strategy_key, error, diagnostics),
     }
 }
 
@@ -322,6 +344,10 @@ fn push_error(
         ValueCompileErrorKind::NodeLimitExceeded => "value_node_limit_exceeded",
         ValueCompileErrorKind::EmptyCandidates => "value_empty_candidates",
         ValueCompileErrorKind::CandidateLimitExceeded => "value_candidate_limit_exceeded",
+        ValueCompileErrorKind::EmptyCombineParts => "value_empty_combine_parts",
+        ValueCompileErrorKind::CandidateSequence => "value_fallback_candidate_sequence",
+        ValueCompileErrorKind::NestedFallback => "value_nested_fallback",
+        ValueCompileErrorKind::SelectorSyntax => "value_selector_syntax_invalid",
         ValueCompileErrorKind::TransformEmptySeparator => "transform_empty_separator",
         ValueCompileErrorKind::TransformInvalidRegex => "transform_invalid_regex",
     };

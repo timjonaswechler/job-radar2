@@ -1,20 +1,15 @@
 use super::document::RuntimeItem;
-use super::values::{
-    css_attribute_values, css_text_values, json_value_to_transform_values, xml_descendant_elements,
-    xml_node_text, xml_path_texts, JsonStringsResult,
-};
 use super::*;
 use crate::profile_dsl::execution_plan::values::{
-    ExecutionPlanCaptureRule as CaptureRule, ExecutionPlanCaptures as Captures,
-    ExecutionPlanFilter as Filter,
+    CompiledValueCaptureRule as CaptureRule, CompiledValueCaptures as Captures,
+    CompiledValueFilter as Filter,
 };
 
 mod captures;
 mod fields;
 
 use captures::evaluate_strategy_captures;
-pub(super) use fields::RawFieldValues;
-use fields::{apply_transforms, evaluate_string_field, raw_field_values, FieldEvaluation};
+use fields::{evaluate_list_field, evaluate_value_scalar, FieldEvaluation};
 
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
@@ -114,7 +109,7 @@ pub(super) fn extract_candidate(
                 if let FieldEvaluation {
                     value: Some(value),
                     failed: false,
-                } = evaluate_string_field(
+                } = evaluate_value_scalar(
                     item,
                     source_config,
                     source_name,
@@ -133,7 +128,7 @@ pub(super) fn extract_candidate(
         .unwrap_or_default();
 
     let description_text = fields.description_text.as_ref().and_then(|expression| {
-        match evaluate_string_field(
+        match evaluate_value_scalar(
             item,
             source_config,
             source_name,
@@ -184,7 +179,7 @@ fn item_matches_conditions(
         let condition_path = format!("{base_path}/where/{condition_index}");
         match condition {
             Filter::NonEmpty { field } => {
-                let evaluation = evaluate_string_field(
+                let evaluation = evaluate_value_scalar(
                     item,
                     source_config,
                     source_name,
@@ -216,7 +211,7 @@ fn item_matches_conditions(
                         return None;
                     }
                 };
-                let evaluation = evaluate_string_field(
+                let evaluation = evaluate_value_scalar(
                     item,
                     source_config,
                     source_name,
@@ -248,13 +243,13 @@ fn extract_required_string_field(
     source_config: &SourceConfig,
     source_name: &str,
     captures: &BTreeMap<String, String>,
-    expression: &FieldExpression,
+    expression: &CompiledValue,
     path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
     diagnostics: &mut Diagnostics,
 ) -> Option<String> {
-    match evaluate_string_field(
+    match evaluate_value_scalar(
         item,
         source_config,
         source_name,
@@ -291,15 +286,15 @@ fn extract_locations_field(
     source_config: &SourceConfig,
     source_name: &str,
     captures: &BTreeMap<String, String>,
-    expression: &ListFieldExpression,
+    expression: &CompiledListValue,
     path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
     diagnostics: &mut Diagnostics,
 ) -> Vec<String> {
-    let (expressions, is_single): (Vec<&FieldExpression>, bool) = match expression {
-        ListFieldExpression::Single(expression) => (vec![expression], true),
-        ListFieldExpression::Multiple(expressions) => (expressions.iter().collect(), false),
+    let (expressions, is_single): (Vec<&CompiledValue>, bool) = match expression {
+        CompiledListValue::Single(expression) => (vec![expression], true),
+        CompiledListValue::Multiple(expressions) => (expressions.iter().collect(), false),
     };
 
     let mut locations = Vec::new();
@@ -309,12 +304,7 @@ fn extract_locations_field(
         } else {
             format!("{path}/{index}")
         };
-        let RawFieldValues {
-            values,
-            failed,
-            transforms,
-            ..
-        } = raw_field_values(
+        let Some(values) = evaluate_list_field(
             item,
             source_config,
             source_name,
@@ -324,23 +314,11 @@ fn extract_locations_field(
             strategy_key,
             item_index,
             diagnostics,
-        );
-        if failed {
-            continue;
-        }
-        let Some(values) = apply_transforms(
-            values,
-            transforms,
-            &expression_path,
-            strategy_key,
-            item_index,
-            diagnostics,
         ) else {
             continue;
         };
         for value in values {
-            let value = normalize_whitespace_text(value.trim());
-            if !value.is_empty() && !locations.contains(&value) {
+            if !locations.contains(&value) {
                 locations.push(value);
             }
         }

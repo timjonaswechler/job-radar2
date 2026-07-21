@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::source::documents::SourceConfig;
-
 pub(crate) mod capabilities;
 pub(crate) mod detail;
 pub(crate) mod discovery;
@@ -15,7 +13,6 @@ use discovery::ExecutionPlanDiscoveryStep;
 pub struct SourceExecutionPlan {
     pub source: ExecutionPlanSource,
     pub selected_access_path: ExecutionPlanAccessPath,
-    pub source_config: SourceConfig,
     pub discovery: ExecutionPlanDiscoveryStep,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<ExecutionPlanDetailStep>,

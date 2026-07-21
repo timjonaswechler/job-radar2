@@ -164,7 +164,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
 }
 
 #[test]
-fn locator_only_fragment_is_a_noop_and_null_and_empty_object_are_terminals() {
+fn locator_only_fragment_is_a_noop_and_scalar_and_empty_object_are_terminals() {
     let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let job_radar_lib::Fetch::Http { headers, .. } =
         &mut profile.access_paths[0].discovery.strategies[0].fetch
@@ -176,7 +176,7 @@ fn locator_only_fragment_is_a_noop_and_null_and_empty_object_are_terminals() {
         .extract
         .fields
         .company =
-        serde_json::from_value(serde_json::json!({ "type": "const", "value": null })).unwrap();
+        serde_json::from_value(serde_json::json!({ "type": "const", "value": false })).unwrap();
     let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{ "key": "json_feed" }])));
 

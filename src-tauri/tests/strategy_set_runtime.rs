@@ -1,5 +1,10 @@
 use std::{collections::BTreeMap, future::Future};
 
+fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
+    static EMPTY: std::sync::OnceLock<serde_json::Map<String, serde_json::Value>> =
+        std::sync::OnceLock::new();
+    EMPTY.get_or_init(serde_json::Map::new)
+}
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
     DetailPostingOccurrence, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits,
@@ -150,6 +155,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
 
     let result = block_on(execute_discovery(
         &plan,
+        empty_source_config(),
         discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
@@ -192,6 +198,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
     ]);
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -250,6 +257,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
     )]);
     let result = block_on(execute_discovery(
         &plan,
+        empty_source_config(),
         discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
@@ -265,6 +273,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
     )]);
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -295,6 +304,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
 
     let result = block_on(execute_discovery(
         &plan,
+        empty_source_config(),
         discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
@@ -341,6 +351,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
     ]);
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -386,6 +397,7 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
 
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -427,6 +439,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
 
     let invalid_plan_result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -447,6 +460,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     };
     let caller_result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         detail.client(),
         &UnavailableProfileBrowserClient,
@@ -480,6 +494,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
 
     let result = block_on(execute_discovery(
         &plan,
+        empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&signal),
@@ -514,6 +529,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
     let signal = RequestObservedCancellation { client: &fetcher };
     let result = block_on(execute_detail(
         &plan,
+        empty_source_config(),
         &posting(),
         &fetcher,
         &UnavailableProfileBrowserClient,

@@ -100,9 +100,12 @@ pub(super) fn resolve_selected_sources_with_options(
                 CompileSourceOutcome::Compiled {
                     source: compiled,
                     diagnostics,
-                } if !has_error_diagnostics(&diagnostics) => {
-                    SelectedSearchRunSource::Resolved(Box::new(compiled.execution_plan.into()))
-                }
+                } if !has_error_diagnostics(&diagnostics) => SelectedSearchRunSource::Resolved(
+                    Box::new(crate::search::run::SourceExecutionSource::new(
+                        compiled.execution_plan,
+                        source.document.source_config.clone(),
+                    )),
+                ),
                 CompileSourceOutcome::Compiled { diagnostics, .. }
                 | CompileSourceOutcome::Rejected { diagnostics } => {
                     SelectedSearchRunSource::Failed {

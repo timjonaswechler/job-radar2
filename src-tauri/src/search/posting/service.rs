@@ -243,6 +243,7 @@ impl<'a> JobPostingService<'a> {
             attempted_detail_capable_source = true;
             let result = execute_detail(
                 &execution_plan,
+                &source.document.source_config,
                 &posting_occurrence(&posting, &posting_source),
                 fetcher,
                 browser,
