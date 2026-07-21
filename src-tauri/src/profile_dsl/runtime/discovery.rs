@@ -14,7 +14,10 @@ use crate::{
             discovery::{ExecutionPlanDiscoveryOutput, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
-        occurrence::PostingOccurrence,
+        occurrence::{
+            ContributionOrigin, DiscoveryContributionEvidence, DiscoveryRejection,
+            PostingOccurrence,
+        },
         primitives::{
             parse::{CompleteParseText, ParseDiagnosticContext},
             value::{CompiledListValue, CompiledValue},
@@ -38,6 +41,7 @@ use super::{
         RuntimePhase, TypedCancellation,
     },
     http::{ProfileHttpClient, ProfileHttpFailureKind},
+    reducers::{reduce_discovery, DiscoveryContribution},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
@@ -64,6 +68,12 @@ use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidat
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryExecutionResult {
     pub candidates: Vec<PostingOccurrence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provenance: Vec<DiscoveryContributionEvidence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<DiscoveryContributionEvidence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejections: Vec<DiscoveryRejection>,
     pub diagnostics: Diagnostics,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<PhaseExecutionReport>,
@@ -83,6 +93,9 @@ where
     if plan.discovery.strategies.is_empty() {
         return DiscoveryExecutionResult {
             candidates: Vec::new(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
             diagnostics: vec![runtime_error(
                 "discovery_strategy_missing",
                 "discovery does not contain an executable strategy",
@@ -103,6 +116,9 @@ where
     {
         return DiscoveryExecutionResult {
             candidates: Vec::new(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
             diagnostics: vec![runtime_error(
                 "invalid_compiled_browser_phase_duration",
                 "Compiled Discovery Browser duration does not preserve the teardown reserve",
@@ -120,6 +136,9 @@ where
         {
             return DiscoveryExecutionResult {
                 candidates: Vec::new(),
+                provenance: Vec::new(),
+                conflicts: Vec::new(),
+                rejections: Vec::new(),
                 diagnostics: vec![runtime_error(
                     "invalid_caller_phase_limits",
                     "Caller phase limits must be positive, may only tighten compiled limits, and must preserve the Browser teardown reserve",
@@ -223,6 +242,9 @@ fn project_discovery_execution(
             diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
             return DiscoveryExecutionResult {
                 candidates: Vec::new(),
+                provenance: Vec::new(),
+                conflicts: Vec::new(),
+                rejections: Vec::new(),
                 diagnostics,
                 report: Some(allowance.report(PhaseCompletion::Cancelled {
                     reason: PhaseCancellationReason::UserCancelled,
@@ -239,6 +261,9 @@ fn project_discovery_execution(
             let completion = completion_for_stop(stop);
             return DiscoveryExecutionResult {
                 candidates: Vec::new(),
+                provenance: Vec::new(),
+                conflicts: Vec::new(),
+                rejections: Vec::new(),
                 diagnostics,
                 report: Some(allowance.report(completion)),
             };
@@ -247,7 +272,7 @@ fn project_discovery_execution(
     };
 
     let mut diagnostics = Vec::new();
-    let mut candidates = Vec::new();
+    let mut reduced = None;
     for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
@@ -256,7 +281,19 @@ fn project_discovery_execution(
             let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
                 unreachable!("accepted terminal must reference accepted typed output");
             };
-            candidates = output;
+            let contributions = output
+                .into_iter()
+                .enumerate()
+                .map(|(item_index, occurrence)| DiscoveryContribution {
+                    occurrence,
+                    origin: ContributionOrigin {
+                        strategy_key: attempt.strategy_key.clone(),
+                        attempt_index,
+                        provider_item_index: Some(item_index),
+                    },
+                })
+                .collect();
+            reduced = Some(reduce_discovery(contributions));
         }
     }
 
@@ -274,8 +311,13 @@ fn project_discovery_execution(
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
+    let reduced = reduced.unwrap_or_else(|| reduce_discovery(Vec::new()));
+    diagnostics.extend(reduced.diagnostics);
     DiscoveryExecutionResult {
-        candidates,
+        candidates: reduced.candidates,
+        provenance: reduced.provenance,
+        conflicts: reduced.conflicts,
+        rejections: reduced.rejections,
         diagnostics,
         report: Some(allowance.report(completion)),
     }
@@ -287,6 +329,9 @@ fn cancelled_discovery_result(
 ) -> DiscoveryExecutionResult {
     DiscoveryExecutionResult {
         candidates: Vec::new(),
+        provenance: Vec::new(),
+        conflicts: Vec::new(),
+        rejections: Vec::new(),
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
         report: Some(report),
     }

@@ -174,10 +174,17 @@
         "fields": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "descriptionText"
-          ],
+          "minProperties": 1,
           "properties": {
+            "title": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "company": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "locations": {
+              "$ref": "extract.schema.json#/$defs/listFieldExpression"
+            },
             "descriptionText": {
               "$ref": "extract.schema.json#/$defs/fieldExpression"
             }

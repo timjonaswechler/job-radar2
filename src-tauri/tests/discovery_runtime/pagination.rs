@@ -883,7 +883,20 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         &fetcher,
     ));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(
+        result
+            .provenance
+            .iter()
+            .find(|evidence| matches!(
+                evidence.responsibility,
+                job_radar_lib::DiscoveryResponsibility::Url
+            ))
+            .expect("duplicate occurrence URL provenance")
+            .contributors
+            .len(),
+        2
+    );
     let requests = fetcher.requests();
     assert_eq!(requests[0].url, "https://example.test/jobs.json");
     assert_eq!(requests[1].url, "https://example.test/jobs.json");

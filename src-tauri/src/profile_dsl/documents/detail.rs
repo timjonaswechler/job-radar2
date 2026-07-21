@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::extract::FieldExpression;
+use crate::profile_dsl::documents::extract::{FieldExpression, ListFieldExpression};
 use crate::profile_dsl::documents::fetch::Fetch;
 use crate::profile_dsl::documents::limits::PhaseLimits;
 use crate::profile_dsl::documents::parse::Parse;
@@ -52,5 +52,36 @@ pub struct DetailExtraction {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DetailFields {
-    pub description_text: FieldExpression,
+    #[serde(
+        default,
+        deserialize_with = "non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub title: Option<FieldExpression>,
+    #[serde(
+        default,
+        deserialize_with = "non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub company: Option<FieldExpression>,
+    #[serde(
+        default,
+        deserialize_with = "non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub locations: Option<ListFieldExpression>,
+    #[serde(
+        default,
+        deserialize_with = "non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub description_text: Option<FieldExpression>,
+}
+
+fn non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }

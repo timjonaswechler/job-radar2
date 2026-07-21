@@ -8,10 +8,10 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
     DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits, PostingOccurrence,
-    ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
-    UnavailableProfileBrowserClient,
+    ProfileHttpFailureKind, RegistrySourceProfile, RequestedDetailFields, RuntimeCancellation,
+    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    StrategyPolicy, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
@@ -207,13 +207,14 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
 
     assert_eq!(
-        result.description_text.as_deref(),
+        result.patch.description_text.as_deref(),
         Some("A complete accepted description.")
     );
     let report = result
@@ -282,11 +283,12 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
-    assert!(result.description_text.is_some());
+    assert!(result.patch.description_text.is_some());
     assert_eq!(detail.requests().len(), 1);
     assert!(result.diagnostics.is_empty());
 }
@@ -360,11 +362,12 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
-    assert!(result.description_text.is_none());
+    assert!(result.patch.description_text.is_none());
     assert_eq!(
         result.report.as_ref().unwrap().completion,
         PhaseCompletion::PolicyUnsatisfied
@@ -406,12 +409,13 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     ));
 
-    assert!(result.description_text.is_none());
+    assert!(result.patch.description_text.is_none());
     let report = result.report.expect("Detail budget terminal report");
     let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
         panic!("expected Detail budget exhaustion")
@@ -448,13 +452,14 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
 
     assert!(invalid_plan_result.report.is_none());
-    assert!(invalid_plan_result.description_text.is_none());
+    assert!(invalid_plan_result.patch.description_text.is_none());
     assert!(invalid_plan_result.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "invalid_compiled_browser_phase_duration"
             && diagnostic.path == "/detail/limits/maxDurationMs"
@@ -469,6 +474,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
@@ -477,7 +483,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     let report = caller_result.report.expect("caller mismatch has a report");
     assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
     assert_eq!(report.usage, Default::default());
-    assert!(caller_result.description_text.is_none());
+    assert!(caller_result.patch.description_text.is_none());
     assert!(caller_result
         .diagnostics
         .iter()
@@ -538,11 +544,12 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         &plan,
         empty_source_config(),
         &posting(),
+        RequestedDetailFields::description_text(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&signal),
     ));
-    assert!(result.description_text.is_none());
+    assert!(result.patch.description_text.is_none());
     assert_eq!(fetcher.request_count(), 1);
     assert_eq!(
         result

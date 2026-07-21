@@ -8,7 +8,7 @@ use crate::profile_dsl::template::json_pointer_segment;
 
 mod fields;
 
-pub(super) use fields::{evaluate_predicate, evaluate_value_scalar};
+pub(super) use fields::{evaluate_predicate, evaluate_value_list, evaluate_value_scalar};
 use fields::{posting_view, push_value_error};
 
 pub(super) fn evaluate_strategy_captures(

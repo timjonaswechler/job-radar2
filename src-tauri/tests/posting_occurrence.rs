@@ -1,6 +1,8 @@
 use job_radar_lib::{
-    validate_posting_reference, OccurrenceReferenceError, PostingOccurrenceIdentity,
+    validate_posting_reference, ContributionOrigin, DetailField, DetailPatch,
+    OccurrenceReferenceError, PostingOccurrenceIdentity, RequestedDetailFields,
 };
+use serde_json::json;
 
 #[test]
 fn provider_id_identity_is_source_local_case_sensitive_and_independent_of_url() {
@@ -114,4 +116,48 @@ fn id_and_url_fallback_identities_never_correlate_by_url() {
         validate_posting_reference("source", "https://example.test/jobs/42", None).unwrap();
 
     assert_ne!(by_id, by_url);
+}
+
+#[test]
+fn requested_detail_fields_are_non_empty_typed_and_deduplicated() {
+    let requested: RequestedDetailFields =
+        serde_json::from_value(json!(["descriptionText", "title", "descriptionText"])).unwrap();
+
+    assert_eq!(
+        requested.iter().collect::<Vec<_>>(),
+        vec![DetailField::Title, DetailField::DescriptionText]
+    );
+    assert!(serde_json::from_value::<RequestedDetailFields>(json!([])).is_err());
+    assert!(serde_json::from_value::<RequestedDetailFields>(json!(["url"])).is_err());
+    assert!(serde_json::from_value::<RequestedDetailFields>(json!(null)).is_err());
+    assert!(serde_json::from_value::<ContributionOrigin>(json!({
+        "strategyKey": "",
+        "attemptIndex": 0
+    }))
+    .is_err());
+}
+
+#[test]
+fn detail_patch_has_exactly_four_non_null_non_empty_fields() {
+    let patch: DetailPatch = serde_json::from_value(json!({
+        "title": "Engineer",
+        "company": "Example",
+        "locations": ["Berlin ", "Berlin"],
+        "descriptionText": "Build things"
+    }))
+    .unwrap();
+    assert_eq!(patch.locations.unwrap(), vec!["Berlin ", "Berlin"]);
+
+    for invalid in [
+        json!({ "url": "https://example.test/1" }),
+        json!({ "title": null }),
+        json!({ "title": "" }),
+        json!({ "locations": [] }),
+        json!({ "postingMeta": {} }),
+    ] {
+        assert!(
+            serde_json::from_value::<DetailPatch>(invalid).is_err(),
+            "invalid patch shape was accepted"
+        );
+    }
 }

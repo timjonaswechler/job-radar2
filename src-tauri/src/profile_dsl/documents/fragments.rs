@@ -792,6 +792,24 @@ pub struct DetailFieldsFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
+    pub title: Option<FieldExpressionFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub company: Option<FieldExpressionFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
+    pub locations: Option<ListFieldExpressionFragment>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null"
+    )]
     pub description_text: Option<FieldExpressionFragment>,
 }
 

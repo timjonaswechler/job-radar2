@@ -219,15 +219,37 @@ pub(super) fn validate_value_context_foundation(
                     &mut references_source_name,
                 );
             }
-            validate_expression(
-                &strategy.extract.fields.description_text,
-                &format!("{strategy_path}/extract/fields/descriptionText"),
-                &strategy.key,
-                &output_context,
-                total_nodes,
-                diagnostics,
-                &mut &mut references_source_name,
-            );
+            for (name, expression) in [
+                ("title", strategy.extract.fields.title.as_ref()),
+                ("company", strategy.extract.fields.company.as_ref()),
+                (
+                    "descriptionText",
+                    strategy.extract.fields.description_text.as_ref(),
+                ),
+            ] {
+                if let Some(expression) = expression {
+                    validate_expression(
+                        expression,
+                        &format!("{strategy_path}/extract/fields/{name}"),
+                        &strategy.key,
+                        &output_context,
+                        total_nodes,
+                        diagnostics,
+                        &mut &mut references_source_name,
+                    );
+                }
+            }
+            if let Some(locations) = &strategy.extract.fields.locations {
+                validate_list(
+                    locations,
+                    &format!("{strategy_path}/extract/fields/locations"),
+                    &strategy.key,
+                    &output_context,
+                    total_nodes,
+                    diagnostics,
+                    &mut &mut references_source_name,
+                );
+            }
         }
     }
     references_source_name

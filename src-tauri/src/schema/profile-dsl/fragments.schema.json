@@ -598,6 +598,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "title": {
+          "$ref": "#/$defs/fieldExpressionFragment"
+        },
+        "company": {
+          "$ref": "#/$defs/fieldExpressionFragment"
+        },
+        "locations": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fieldExpressionFragment"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/fieldExpressionFragment"
+              }
+            }
+          ]
+        },
         "descriptionText": {
           "$ref": "#/$defs/fieldExpressionFragment"
         }

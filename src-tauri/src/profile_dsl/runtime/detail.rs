@@ -12,12 +12,15 @@ use crate::{
             capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
         },
-        occurrence::PostingOccurrence,
+        occurrence::{
+            ContributionOrigin, DetailContributionEvidence, DetailField, DetailPatch,
+            DetailRejection, PostingOccurrence, RequestedDetailFields,
+        },
         primitives::{
             parse::{CompleteParseText, ParseDiagnosticContext},
             predicate::CompiledPredicate,
             transform::normalize_whitespace_text,
-            value::CompiledValue,
+            value::{CompiledListValue, CompiledValue},
         },
     },
     source::documents::SourceConfig,
@@ -38,6 +41,7 @@ use super::{
         RuntimePhase, TypedCancellation,
     },
     http::{ProfileHttpClient, ProfileHttpFailureKind},
+    reducers::{reduce_detail, DetailContribution},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
@@ -54,15 +58,22 @@ mod support;
 use acceptance::accept_detail_result;
 use diagnostics::runtime_error;
 use document::{select_detail_document, RuntimeItem};
-use extract::{evaluate_predicate, evaluate_strategy_captures, evaluate_value_scalar};
+use extract::{
+    evaluate_predicate, evaluate_strategy_captures, evaluate_value_list, evaluate_value_scalar,
+};
 use fetch::fetch_strategy_document;
 use strategy::execute_strategy;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailExecutionResult {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description_text: Option<String>,
+    pub patch: DetailPatch,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provenance: Vec<DetailContributionEvidence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<DetailContributionEvidence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejections: Vec<DetailRejection>,
     pub diagnostics: Diagnostics,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<PhaseExecutionReport>,
@@ -72,6 +83,7 @@ pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     posting: &PostingOccurrence,
+    requested_fields: RequestedDetailFields,
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
@@ -82,7 +94,10 @@ where
 {
     let Some(detail) = &plan.detail else {
         return DetailExecutionResult {
-            description_text: None,
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
             diagnostics: vec![runtime_error(
                 "detail_missing",
                 "Execution Plan does not contain compiled detail",
@@ -96,7 +111,10 @@ where
 
     if detail.strategies.is_empty() {
         return DetailExecutionResult {
-            description_text: None,
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
             diagnostics: vec![runtime_error(
                 "detail_strategy_missing",
                 "detail does not contain an executable strategy",
@@ -113,7 +131,10 @@ where
         .any(|strategy| uses_browser(&strategy.fetch));
     if browser_requires_reserve && detail.limits.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS {
         return DetailExecutionResult {
-            description_text: None,
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
             diagnostics: vec![runtime_error(
                 "invalid_compiled_browser_phase_duration",
                 "Compiled Detail Browser duration does not preserve the teardown reserve",
@@ -130,7 +151,10 @@ where
             || (browser_requires_reserve && caller.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS)
         {
             return DetailExecutionResult {
-                description_text: None,
+                patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
                 diagnostics: vec![runtime_error(
                     "invalid_caller_phase_limits",
                     "Caller phase limits must be positive, may only tighten compiled limits, and must preserve the Browser teardown reserve",
@@ -171,6 +195,7 @@ where
             })
         },
         |strategy_index, strategy| {
+            let requested_fields = requested_fields.clone();
             Box::pin(async move {
                 if let Err(stop) = context.debit(AllowanceCharge {
                     strategy_attempts: 1,
@@ -185,6 +210,7 @@ where
                     plan,
                     source_config,
                     posting,
+                    &requested_fields,
                     fetcher,
                     browser,
                     strategy_index,
@@ -217,11 +243,13 @@ where
         },
     )
     .await;
-    project_detail_execution(execution, &allowance)
+    project_detail_execution(execution, posting, &requested_fields, &allowance)
 }
 
 fn project_detail_execution(
-    execution: super::strategy_set::StrategySetExecution<String>,
+    execution: super::strategy_set::StrategySetExecution<DetailPatch>,
+    posting: &PostingOccurrence,
+    requested_fields: &RequestedDetailFields,
     allowance: &InvocationAllowance,
 ) -> DetailExecutionResult {
     let accepted_attempt = match execution.terminal {
@@ -234,7 +262,10 @@ fn project_detail_execution(
                 .collect::<Diagnostics>();
             diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
             return DetailExecutionResult {
-                description_text: None,
+                patch: DetailPatch::default(),
+                provenance: Vec::new(),
+                conflicts: Vec::new(),
+                rejections: Vec::new(),
                 diagnostics,
                 report: Some(allowance.report(PhaseCompletion::Cancelled {
                     reason: PhaseCancellationReason::UserCancelled,
@@ -250,7 +281,10 @@ fn project_detail_execution(
                 .collect();
             let completion = completion_for_stop(stop);
             return DetailExecutionResult {
-                description_text: None,
+                patch: DetailPatch::default(),
+                provenance: Vec::new(),
+                conflicts: Vec::new(),
+                rejections: Vec::new(),
                 diagnostics,
                 report: Some(allowance.report(completion)),
             };
@@ -259,16 +293,24 @@ fn project_detail_execution(
     };
 
     let mut diagnostics = Vec::new();
-    let mut description_text = None;
+    let mut contributions = Vec::new();
     for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
         diagnostics.extend(attempt.diagnostics);
         if Some(attempt_index) == accepted_attempt {
-            let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
+            let StrategyAttemptCompletion::Accepted(patch) = attempt.completion else {
                 unreachable!("accepted terminal must reference accepted typed output");
             };
-            description_text = Some(output);
+            contributions.push(DetailContribution {
+                identity: posting.identity.clone(),
+                patch,
+                origin: ContributionOrigin {
+                    strategy_key: attempt.strategy_key,
+                    attempt_index,
+                    provider_item_index: None,
+                },
+            });
         }
     }
 
@@ -286,8 +328,13 @@ fn project_detail_execution(
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
+    let reduced = reduce_detail(&posting.identity, requested_fields, contributions);
+    diagnostics.extend(reduced.diagnostics);
     DetailExecutionResult {
-        description_text,
+        patch: reduced.patch,
+        provenance: reduced.provenance,
+        conflicts: reduced.conflicts,
+        rejections: reduced.rejections,
         diagnostics,
         report: Some(allowance.report(completion)),
     }
@@ -298,7 +345,10 @@ fn cancelled_detail_result(
     report: PhaseExecutionReport,
 ) -> DetailExecutionResult {
     DetailExecutionResult {
-        description_text: None,
+        patch: DetailPatch::default(),
+        provenance: Vec::new(),
+        conflicts: Vec::new(),
+        rejections: Vec::new(),
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
         report: Some(report),
     }

@@ -1,8 +1,8 @@
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, CompileSourceOutcome, DetailExecutionResult,
     DiscoveryExecutionResult, PostingOccurrence, ProfileHttpClient, RegistrySourceProfile,
-    RuntimeExecutionContext, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
-    SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
+    RequestedDetailFields, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
 };
 
 #[allow(dead_code)]
@@ -61,6 +61,7 @@ where
         plan,
         source_config,
         posting,
+        RequestedDetailFields::description_text(),
         fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),

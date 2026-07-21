@@ -100,6 +100,9 @@ where
 
     let mut result = DiscoveryExecutionResult {
         candidates,
+        provenance: Vec::new(),
+        conflicts: Vec::new(),
+        rejections: Vec::new(),
         diagnostics,
         report: None,
     };

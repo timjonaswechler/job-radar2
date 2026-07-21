@@ -108,7 +108,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_primary_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1001-expected.json");
     assert_eq!(
-        primary_detail.description_text.as_deref(),
+        primary_detail.patch.description_text.as_deref(),
         expected_primary_detail["descriptionText"].as_str()
     );
 
@@ -122,7 +122,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_fallback_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-2002-expected.json");
     assert_eq!(
-        fallback_detail.description_text.as_deref(),
+        fallback_detail.patch.description_text.as_deref(),
         expected_fallback_detail["descriptionText"].as_str()
     );
     let fallback_report = fallback_detail
@@ -142,7 +142,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         fallback_detail.diagnostics[0].severity,
         DiagnosticSeverity::Error
     );
-    assert_eq!(fallback_detail.diagnostics[0].code, "description_empty");
+    assert_eq!(fallback_detail.diagnostics[0].code, "description_too_short");
     assert_eq!(
         fallback_detail.diagnostics[0].strategy_key.as_deref(),
         Some("primary_html_description")
@@ -158,11 +158,14 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_schott_style_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1405371733-expected.json");
     assert_eq!(
-        schott_style_detail.description_text.as_deref(),
+        schott_style_detail.patch.description_text.as_deref(),
         expected_schott_style_detail["descriptionText"].as_str()
     );
     assert_eq!(schott_style_detail.diagnostics.len(), 1);
-    assert_eq!(schott_style_detail.diagnostics[0].code, "description_empty");
+    assert_eq!(
+        schott_style_detail.diagnostics[0].code,
+        "description_too_short"
+    );
     assert_eq!(
         schott_style_detail.diagnostics[0].strategy_key.as_deref(),
         Some("primary_html_description")

@@ -744,12 +744,14 @@ fn collect_extract_missing_fields(
 ) {
     if kind == KeyedEntryKind::DetailStrategy {
         require_fields(extract, "extract", &["fields"], missing);
-        if let Some(fields) = extract.get("fields") {
-            require_fields(fields, "extract.fields", &["descriptionText"], missing);
-            if let Some(expression) = fields.get("descriptionText") {
+        if let Some(fields) = extract.get("fields").and_then(Value::as_object) {
+            if fields.is_empty() {
+                missing.push("extract.fields".to_string());
+            }
+            for (field, expression) in fields {
                 collect_expression_missing_fields(
                     expression,
-                    "extract.fields.descriptionText",
+                    &format!("extract.fields.{field}"),
                     missing,
                 );
             }

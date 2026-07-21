@@ -14,8 +14,8 @@ use crate::profile_dsl::diagnostics::{
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
     execute_detail, execute_discovery, DetailExecutionResult, PhaseCompletion, PostingOccurrence,
-    ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient, RuntimeExecutionContext,
-    UnavailableProfileBrowserClient,
+    ProfileBrowserClient, ProfileHttpClient, RequestedDetailFields, ReqwestProfileHttpClient,
+    RuntimeExecutionContext, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -231,6 +231,7 @@ where
                     execution_plan,
                     &document.source_config,
                     candidate,
+                    RequestedDetailFields::description_text(),
                     detail_fetcher,
                     browser,
                     RuntimeExecutionContext::uncancellable(),
@@ -410,6 +411,7 @@ fn is_acceptable_detail_result(result: &DetailExecutionResult) -> bool {
         result.report.as_ref().map(|report| &report.completion),
         Some(PhaseCompletion::Accepted)
     ) && result
+        .patch
         .description_text
         .as_ref()
         .is_some_and(|description_text| !description_text.trim().is_empty())

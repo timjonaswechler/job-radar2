@@ -58,7 +58,7 @@ The Profile DSL is built from a small set of generic primitives. A new ATS shoul
 
 `discovery` strategies discover Source-local Posting Occurrences. A valid `reference.url` is sufficient; `reference.providerPostingId`, `providerValues`, `hints`, and `postingMeta` are optional and structurally disjoint. `providerValues` may contain title, company, locations, and description text already present in the discovery response. `discovery` must not perform one detail fetch per occurrence to fill missing provider fields.
 
-`detail` strategies run lazily for one concrete posting source occurrence. They may fetch the posting URL directly, fetch an API detail document, or fetch a collection/feed and match one item using postingMeta. The minimum required detail field for this PRD is `descriptionText`.
+`detail` strategies run lazily for one concrete Posting Occurrence. They may fetch the posting URL directly, fetch an API detail document, or fetch a collection/feed and match one item using postingMeta. A Detail invocation carries a typed, non-empty requested-field set and returns a requested-only patch over exactly `title`, `company`, raw provider `locations`, and `descriptionText`; the posting URL remains the required reference and is never patchable.
 
 Detection strategies produce a Source Proposal rather than executing a Source. Detection may use input URL checks, HTTP checks, HTML/script/network checks, and bounded browser probes. Detection captures may feed Source Config proposals and key/name candidates.
 
@@ -138,7 +138,7 @@ All primitives must be safe for user- and agent-authored JSON. Profiles must not
 - Discovery extraction has four disjoint sections: required `reference`, optional `providerValues`, keyed `hints`, and keyed `postingMeta`. `reference.url` is required; `reference.providerPostingId` is optional.
 - `providerValues` may contain `title`, `company`, `locations`, and `descriptionText` when available without detail-page fanout. A valid reference alone emits a Posting Occurrence.
 - Each Discovery Hint has a scalar `value` and optional `hintUse: search_prefilter`. Hint keys are technical identifiers; even `title`, `company`, or `locations` remain noncanonical under `hints`.
-- `detail` must support `descriptionText` extraction. The model may allow additional canonical detail fields later, but they are not required for this PRD.
+- `detail` extraction may define exactly `title`, `company`, raw provider `locations`, and `descriptionText`. Runtime requests are typed and non-empty, and accepted patches contain only requested, available fields.
 - `postingMeta` remains hidden technical metadata stored per posting source occurrence. It is used to re-identify or load the source-specific posting later.
 - `postingMeta` must not become a dumping ground for user-facing metadata. Department, employment type, remote mode, salary, posted date, and deadlines must become explicit canonical fields if needed later.
 - `postingMeta.jobId` remains a generic source-local re-identifier. Vendor raw names stay inside extraction rules.
@@ -268,4 +268,4 @@ The design deliberately favors a Profile Compiler and typed Execution Plan becau
 
 The existing managed browser runtime decision remains compatible with this PRD. Browser is treated as a fetch mode inside the DSL, not as a separate source/profile type.
 
-`discovery` produces Source-local Posting Occurrences. The current pre-Candidate-Resolution Search Run bridge admits only occurrences with provider title and company into the existing normalized matching and persistence path; incomplete occurrences remain uncounted and unpersisted. `detail` receives the same occurrence type and may load additional fields lazily.
+`discovery` produces Source-local Posting Occurrences. Equal contributions merge by exact occurrence identity with coordinate-only provenance; conflicting field, hint, postingMeta, or required provider-URL responsibilities are quarantined deterministically rather than resolved by first/last write. The current pre-Candidate-Resolution Search Run bridge admits only occurrences with provider title and company into the existing normalized matching and persistence path; incomplete occurrences remain uncounted and unpersisted. `detail` receives the same occurrence type plus requested fields and reduces its four patch fields independently. Public reducer evidence carries only strategy/attempt/item coordinates and logical responsibility paths—never provider values, URLs, bodies, foreign identities, or Attempt History.

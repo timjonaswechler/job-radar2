@@ -111,15 +111,18 @@ pub use profile_dsl::primitives::value::{
 };
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, validate_posting_reference, AllowanceDimension,
-    AllowanceExhaustion, AllowanceLimitSource, DetailExecutionResult, DiscoveryExecutionResult,
-    DiscoveryHint, HintUse, ManagedProfileBrowserClient, OccurrenceReferenceError,
+    AllowanceExhaustion, AllowanceLimitSource, ContributionOrigin, DetailContributionEvidence,
+    DetailExecutionResult, DetailField, DetailPatch, DetailRejection,
+    DiscoveryContributionEvidence, DiscoveryExecutionResult, DiscoveryHint, DiscoveryRejection,
+    DiscoveryResponsibility, HintUse, ManagedProfileBrowserClient, OccurrenceReferenceError,
     PhaseCancellationReason, PhaseCompletion, PhaseExecutionReport, PhaseUsage, PostingOccurrence,
     PostingOccurrenceIdentity, PostingReference, ProfileBrowserClient, ProfileBrowserFetchError,
     ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
-    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, ReqwestProfileHttpClient,
-    RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SensitiveRequestBody, UnavailableProfileBrowserClient,
+    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
+    ReqwestProfileHttpClient, RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SensitiveRequestBody,
+    UnavailableProfileBrowserClient,
 };
 pub use profile_dsl::template::{
     compile_template, render_template, CompiledTemplate, TemplateCompileError,

@@ -55,6 +55,42 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_value_scalar(
     )
 }
 
+pub(in crate::profile_dsl::runtime::detail) fn evaluate_value_list(
+    document: &RuntimeItem<'_, '_>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    posting: &PostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    expression: &CompiledValue,
+    path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<Vec<String>> {
+    let selected = selected_item(document)?;
+    let context = DetailMatchFilterOutputValueContext {
+        source: SourceValueView {
+            source_name,
+            source_config,
+        },
+        posting: posting_view(posting),
+        selected: &selected,
+        captures,
+    };
+    match evaluate_detail_output_value(expression, &context) {
+        Ok(result) => Some(
+            result
+                .into_values()
+                .into_iter()
+                .filter(|value| !value.is_empty())
+                .collect(),
+        ),
+        Err(error) => {
+            push_value_error(error, path, strategy_key, diagnostics);
+            None
+        }
+    }
+}
+
 pub(in crate::profile_dsl::runtime::detail) fn evaluate_predicate(
     document: &RuntimeItem<'_, '_>,
     source_config: &SourceConfig,

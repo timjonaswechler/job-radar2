@@ -4,13 +4,14 @@ pub(super) async fn execute_strategy<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     posting: &PostingOccurrence,
+    requested_fields: &RequestedDetailFields,
     fetcher: &F,
     browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanDetailStrategy,
     step_acceptance: Option<&Acceptance>,
     context: RuntimeExecutionContext<'_>,
-) -> StrategyExecution<String>
+) -> StrategyExecution<DetailPatch>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -124,35 +125,79 @@ where
         }
     }
 
-    let description_path = format!("{base_path}/extract/fields/descriptionText");
-    let description = evaluate_value_scalar(
-        &selected_document,
-        source_config,
-        &plan.source.name,
-        posting,
-        &captures,
-        &strategy.extract.fields.description_text,
-        &description_path,
-        strategy_key.as_deref(),
-        &mut diagnostics,
-    );
-
-    let Some(description) = description.value.filter(|value| !value.trim().is_empty()) else {
-        if !description.failed {
-            diagnostics.push(runtime_error(
-                "description_empty",
-                "detail descriptionText did not resolve to non-empty text",
-                &description_path,
-                strategy_key.as_deref(),
-                json!({}),
-            ));
-        }
-        return rejected_detail_attempt(diagnostics);
+    let mut patch = DetailPatch::default();
+    let mut failed = false;
+    let mut scalar = |field: &str, expression: Option<&CompiledValue>| {
+        let expression = expression?;
+        let evaluated = evaluate_value_scalar(
+            &selected_document,
+            source_config,
+            &plan.source.name,
+            posting,
+            &captures,
+            expression,
+            &format!("{base_path}/extract/fields/{field}"),
+            strategy_key.as_deref(),
+            &mut diagnostics,
+        );
+        failed |= evaluated.failed;
+        evaluated
+            .value
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| normalize_whitespace_text(value.trim()))
     };
+    if requested_fields.contains(DetailField::Title) {
+        patch.title = scalar("title", strategy.extract.fields.title.as_ref());
+    }
+    if requested_fields.contains(DetailField::Company) {
+        patch.company = scalar("company", strategy.extract.fields.company.as_ref());
+    }
+    if requested_fields.contains(DetailField::DescriptionText) {
+        patch.description_text = scalar(
+            "descriptionText",
+            strategy.extract.fields.description_text.as_ref(),
+        );
+    }
+    if requested_fields.contains(DetailField::Locations) {
+        if let Some(locations) = &strategy.extract.fields.locations {
+            let (expressions, single): (Vec<&CompiledValue>, bool) = match locations {
+                CompiledListValue::Single(expression) => (vec![expression], true),
+                CompiledListValue::Multiple(expressions) => (expressions.iter().collect(), false),
+            };
+            let mut values = Vec::new();
+            for (index, expression) in expressions.into_iter().enumerate() {
+                let path = if single {
+                    format!("{base_path}/extract/fields/locations")
+                } else {
+                    format!("{base_path}/extract/fields/locations/{index}")
+                };
+                match evaluate_value_list(
+                    &selected_document,
+                    source_config,
+                    &plan.source.name,
+                    posting,
+                    &captures,
+                    expression,
+                    &path,
+                    strategy_key.as_deref(),
+                    &mut diagnostics,
+                ) {
+                    Some(extracted) => values.extend(extracted),
+                    None => failed = true,
+                }
+            }
+            if !values.is_empty() {
+                patch.locations = Some(values);
+            }
+        }
+    }
+    if failed {
+        return rejected_detail_attempt(diagnostics);
+    }
 
-    let description = normalize_whitespace_text(description.trim());
     let accepted = accept_detail_result(
-        &description,
+        &patch,
+        requested_fields,
         step_acceptance,
         strategy.accept_when.as_ref(),
         &base_path,
@@ -189,7 +234,7 @@ where
     }
     StrategyExecution {
         diagnostics,
-        completion: StrategyAttemptCompletion::Accepted(description),
+        completion: StrategyAttemptCompletion::Accepted(patch),
     }
 }
 
@@ -417,7 +462,7 @@ fn detail_document_matches_conditions(
     Some(true)
 }
 
-pub(super) fn rejected_detail_attempt(diagnostics: Diagnostics) -> StrategyExecution<String> {
+pub(super) fn rejected_detail_attempt(diagnostics: Diagnostics) -> StrategyExecution<DetailPatch> {
     StrategyExecution {
         diagnostics,
         completion: StrategyAttemptCompletion::Failed,

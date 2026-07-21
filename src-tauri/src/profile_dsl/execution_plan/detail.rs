@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::values::{compile_field_expression, compile_predicates};
+use super::values::{compile_field_expression, compile_list_field_expression, compile_predicates};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
 use crate::profile_dsl::documents::strategy::Acceptance;
@@ -18,7 +18,7 @@ use crate::profile_dsl::primitives::select::{
     compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
 use crate::profile_dsl::primitives::value::{
-    CompiledValue, ValueCompileContext, ValueCompileError, ValuePlacement,
+    CompiledListValue, CompiledValue, ValueCompileContext, ValueCompileError, ValuePlacement,
 };
 use crate::profile_dsl::template::{
     json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
@@ -68,7 +68,14 @@ pub struct ExecutionPlanDetailExtraction {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPlanDetailFields {
-    pub description_text: CompiledValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<CompiledValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company: Option<CompiledValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locations: Option<CompiledListValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_text: Option<CompiledValue>,
 }
 
 pub(crate) fn compile_detail_step(
@@ -223,15 +230,42 @@ fn compile_detail_extraction(
     context: &ValueCompileContext,
     path: &str,
 ) -> Result<ExecutionPlanDetailExtraction, ExecutionPlanBuildError> {
+    if extraction.fields.title.is_none()
+        && extraction.fields.company.is_none()
+        && extraction.fields.locations.is_none()
+        && extraction.fields.description_text.is_none()
+    {
+        return Err(ExecutionPlanBuildError::new(
+            format!("{path}/extract/fields"),
+            "Detail extraction must define at least one canonical field",
+        ));
+    }
+    let compile_optional = |expression: Option<
+        &crate::profile_dsl::documents::extract::FieldExpression,
+    >,
+                            name: &str| {
+        expression
+            .map(|expression| compile_field_expression(expression, context))
+            .transpose()
+            .map_err(|error| field_expression_error(format!("{path}/extract/fields/{name}"), error))
+    };
     Ok(ExecutionPlanDetailExtraction {
         fields: ExecutionPlanDetailFields {
-            description_text: compile_field_expression(
-                &extraction.fields.description_text,
-                context,
-            )
-            .map_err(|error| {
-                field_expression_error(format!("{path}/extract/fields/descriptionText"), error)
-            })?,
+            title: compile_optional(extraction.fields.title.as_ref(), "title")?,
+            company: compile_optional(extraction.fields.company.as_ref(), "company")?,
+            locations: extraction
+                .fields
+                .locations
+                .as_ref()
+                .map(|expression| compile_list_field_expression(expression, context))
+                .transpose()
+                .map_err(|error| {
+                    field_expression_error(format!("{path}/extract/fields/locations"), error)
+                })?,
+            description_text: compile_optional(
+                extraction.fields.description_text.as_ref(),
+                "descriptionText",
+            )?,
         },
     })
 }

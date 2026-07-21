@@ -74,7 +74,7 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     let expected_detail: Value =
         read_json("tests/fixtures/greenhouse/posting-detail-9001-expected.json");
     assert_eq!(
-        detail.description_text.as_deref(),
+        detail.patch.description_text.as_deref(),
         expected_detail["descriptionText"].as_str()
     );
 

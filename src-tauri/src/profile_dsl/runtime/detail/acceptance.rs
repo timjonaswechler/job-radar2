@@ -1,7 +1,8 @@
 use super::*;
 
 pub(super) fn accept_detail_result(
-    description: &str,
+    patch: &crate::profile_dsl::occurrence::DetailPatch,
+    requested_fields: &RequestedDetailFields,
     step_acceptance: Option<&Acceptance>,
     strategy_acceptance: Option<&Acceptance>,
     base_path: &str,
@@ -24,7 +25,33 @@ pub(super) fn accept_detail_result(
     for (field, owner_path) in
         detail_required_field_rules(step_acceptance, strategy_acceptance, base_path)
     {
-        if field != "descriptionText" || description.trim().is_empty() {
+        let requested_field = match field.as_str() {
+            "title" => Some(DetailField::Title),
+            "company" => Some(DetailField::Company),
+            "locations" => Some(DetailField::Locations),
+            "descriptionText" => Some(DetailField::DescriptionText),
+            _ => None,
+        };
+        if requested_field.is_some_and(|field| !requested_fields.contains(field)) {
+            continue;
+        }
+        let present = match field.as_str() {
+            "title" => patch.title.as_ref().is_some_and(|value| !value.is_empty()),
+            "company" => patch
+                .company
+                .as_ref()
+                .is_some_and(|value| !value.is_empty()),
+            "locations" => patch
+                .locations
+                .as_ref()
+                .is_some_and(|value| !value.is_empty()),
+            "descriptionText" => patch
+                .description_text
+                .as_ref()
+                .is_some_and(|value| !value.is_empty()),
+            _ => false,
+        };
+        if !present {
             diagnostics.push(runtime_error(
                 "acceptance_required_field_missing",
                 format!("detail result is missing required normalized field `{field}`"),
@@ -36,13 +63,20 @@ pub(super) fn accept_detail_result(
         }
     }
 
-    if let Some((minimum, owner_path)) = detail_stricter_u64_acceptance(
-        step_acceptance.and_then(|acceptance| acceptance.min_description_length),
-        strategy_acceptance.and_then(|acceptance| acceptance.min_description_length),
-        base_path,
-    ) {
-        if description.chars().count() < minimum as usize {
-            diagnostics.push(runtime_error(
+    if requested_fields.contains(DetailField::DescriptionText) {
+        if let Some((minimum, owner_path)) = detail_stricter_u64_acceptance(
+            step_acceptance.and_then(|acceptance| acceptance.min_description_length),
+            strategy_acceptance.and_then(|acceptance| acceptance.min_description_length),
+            base_path,
+        ) {
+            let actual_length = patch
+                .description_text
+                .as_deref()
+                .unwrap_or_default()
+                .chars()
+                .count();
+            if actual_length < minimum as usize {
+                diagnostics.push(runtime_error(
                 "description_too_short",
                 format!(
                     "detail descriptionText is shorter than the configured minimum of {minimum} characters"
@@ -51,10 +85,11 @@ pub(super) fn accept_detail_result(
                 strategy_key,
                 json!({
                     "minDescriptionLength": minimum,
-                    "actualLength": description.chars().count(),
+                    "actualLength": actual_length,
                 }),
             ));
-            return false;
+                return false;
+            }
         }
     }
 

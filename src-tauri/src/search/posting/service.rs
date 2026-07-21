@@ -7,8 +7,8 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
             execute_detail, ManagedProfileBrowserClient, PhaseCompletion, PostingOccurrence,
-            ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
-            RuntimeExecutionContext,
+            ProfileBrowserClient, ProfileHttpClient, RequestedDetailFields,
+            ReqwestProfileHttpClient, RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -246,6 +246,7 @@ impl<'a> JobPostingService<'a> {
                 &execution_plan,
                 &source.document.source_config,
                 &occurrence,
+                RequestedDetailFields::description_text(),
                 fetcher,
                 browser,
                 RuntimeExecutionContext::uncancellable(),
@@ -258,8 +259,16 @@ impl<'a> JobPostingService<'a> {
                 result.report.as_ref().map(|report| &report.completion),
                 Some(PhaseCompletion::Accepted)
             ) {
-                let Some(description_text) = result.description_text else {
-                    unreachable!("accepted Detail completion must carry its typed payload")
+                let Some(description_text) = result.patch.description_text else {
+                    diagnostics.extend(result_diagnostics);
+                    diagnostics.push(detail_source_diagnostic(
+                        &posting_source,
+                        "description_empty",
+                        "Accepted Detail response did not provide the requested descriptionText",
+                        "/detail/fields/descriptionText",
+                        serde_json::json!({}),
+                    ));
+                    continue;
                 };
                 diagnostics.extend(result_diagnostics);
                 sqlx::query(

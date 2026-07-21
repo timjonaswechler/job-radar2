@@ -118,7 +118,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let expected_detail: Value =
         read_json("tests/fixtures/workday/posting-detail-jr-1001-expected.json");
     assert_eq!(
-        detail.description_text.as_deref(),
+        detail.patch.description_text.as_deref(),
         expected_detail["descriptionText"].as_str()
     );
 

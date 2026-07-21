@@ -538,6 +538,9 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
             "strategies",
             "acceptWhen",
             "fields",
+            "title",
+            "company",
+            "locations",
             "descriptionText",
         ]
     };

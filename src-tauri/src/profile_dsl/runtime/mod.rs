@@ -4,11 +4,14 @@ pub(crate) mod cancellation;
 pub(crate) mod detail;
 pub(crate) mod discovery;
 pub mod http;
+pub(crate) mod reducers;
 pub(crate) mod strategy_set;
 
 pub use crate::profile_dsl::occurrence::{
-    validate_posting_reference, DiscoveryHint, HintUse, OccurrenceReferenceError,
-    PostingOccurrence, PostingOccurrenceIdentity, PostingReference, ProviderValues,
+    validate_posting_reference, ContributionOrigin, DetailContributionEvidence, DetailField,
+    DetailPatch, DetailRejection, DiscoveryContributionEvidence, DiscoveryHint, DiscoveryRejection,
+    DiscoveryResponsibility, HintUse, OccurrenceReferenceError, PostingOccurrence,
+    PostingOccurrenceIdentity, PostingReference, ProviderValues, RequestedDetailFields,
 };
 pub use allowance::{
     AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, PhaseCancellationReason,
