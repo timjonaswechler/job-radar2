@@ -33,8 +33,8 @@ pub use fragments::{
 pub use limits::{PhaseLimits, PhaseLimitsFragment};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};
 pub use parse::{Parse, ParseType};
-pub use select::{CaptureRule, Captures, Filter, Select};
-pub use strategy::{Acceptance, FieldMatch};
+pub use select::{CaptureRule, Captures, Select};
+pub use strategy::Acceptance;
 pub use support::{
     JsonObject, JsonSchemaObject, SupportEvidence, SupportEvidenceKind, SupportLevel,
     SupportMetadata, SupportNote,

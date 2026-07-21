@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use dom_query::NodeRef;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -13,11 +12,12 @@ use crate::{
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
-            values::{CompiledValueCaptureRule as CaptureRule, CompiledValueFilter as Filter},
+            values::CompiledValueCaptureRule as CaptureRule,
             SourceExecutionPlan,
         },
         primitives::{
             parse::{CompleteParseText, ParseDiagnosticContext},
+            predicate::CompiledPredicate,
             transform::normalize_whitespace_text,
             value::CompiledValue,
         },
@@ -56,7 +56,7 @@ mod support;
 use acceptance::accept_detail_result;
 use diagnostics::runtime_error;
 use document::{select_detail_document, RuntimeItem};
-use extract::{evaluate_strategy_captures, evaluate_value_scalar};
+use extract::{evaluate_predicate, evaluate_strategy_captures, evaluate_value_scalar};
 use fetch::fetch_strategy_document;
 use strategy::execute_strategy;
 

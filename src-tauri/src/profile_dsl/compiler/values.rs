@@ -3,9 +3,15 @@ use std::collections::BTreeSet;
 use crate::profile_dsl::{
     diagnostics::Diagnostics,
     documents::{DetailStep, DiscoveryStep, FieldExpression, ListFieldExpression, ParseType},
-    primitives::value::{
-        compile_value, value_expression_node_count, ValueCompileContext, ValueCompileError,
-        ValueCompileErrorKind, ValuePlacement, VALUE_MAX_NODES,
+    primitives::{
+        predicate::{
+            compile_predicate, Predicate, PredicateCompileContext, PredicateCompileError,
+            PredicateCompileErrorKind, PredicatePlacement,
+        },
+        value::{
+            compile_value, value_expression_node_count, ValueCompileContext, ValueCompileError,
+            ValueCompileErrorKind, ValuePlacement, VALUE_MAX_NODES,
+        },
     },
 };
 
@@ -60,7 +66,7 @@ pub(super) fn validate_value_context_foundation(
             &posting_meta_keys,
             &capture_keys,
         );
-        validate_filters(
+        validate_predicates(
             strategy.conditions.as_ref(),
             &format!("{strategy_path}/where"),
             &strategy.key,
@@ -172,7 +178,7 @@ pub(super) fn validate_value_context_foundation(
                 &posting_meta_keys,
                 &capture_keys,
             );
-            validate_filters(
+            validate_predicates(
                 strategy.conditions.as_ref(),
                 &format!("{strategy_path}/where"),
                 &strategy.key,
@@ -182,23 +188,15 @@ pub(super) fn validate_value_context_foundation(
                 &mut &mut references_source_name,
             );
             if let Some(field_match) = &strategy.field_match {
-                validate_expression(
-                    &field_match.left,
-                    &format!("{strategy_path}/match/left"),
+                validate_predicate(
+                    field_match,
+                    PredicatePlacement::DetailMatch,
+                    &format!("{strategy_path}/match"),
                     &strategy.key,
                     &output_context,
                     total_nodes,
                     diagnostics,
-                    &mut &mut references_source_name,
-                );
-                validate_expression(
-                    &field_match.right,
-                    &format!("{strategy_path}/match/right"),
-                    &strategy.key,
-                    &output_context,
-                    total_nodes,
-                    diagnostics,
-                    &mut &mut references_source_name,
+                    &mut references_source_name,
                 );
             }
             validate_expression(
@@ -231,8 +229,8 @@ fn context(
     }
 }
 
-fn validate_filters(
-    filters: Option<&Vec<crate::profile_dsl::documents::select::Filter>>,
+fn validate_predicates(
+    predicates: Option<&Vec<Predicate>>,
     path: &str,
     strategy_key: &str,
     context: &ValueCompileContext,
@@ -240,14 +238,11 @@ fn validate_filters(
     diagnostics: &mut Diagnostics,
     references_source_name: &mut bool,
 ) {
-    for (index, filter) in filters.into_iter().flatten().enumerate() {
-        let field = match filter {
-            crate::profile_dsl::documents::select::Filter::NonEmpty { field }
-            | crate::profile_dsl::documents::select::Filter::Regex { field, .. } => field,
-        };
-        validate_expression(
-            field,
-            &format!("{path}/{index}/field"),
+    for (index, predicate) in predicates.into_iter().flatten().enumerate() {
+        validate_predicate(
+            predicate,
+            PredicatePlacement::Where,
+            &format!("{path}/{index}"),
             strategy_key,
             context,
             total_nodes,
@@ -255,6 +250,83 @@ fn validate_filters(
             references_source_name,
         );
     }
+}
+
+fn validate_predicate(
+    predicate: &Predicate,
+    placement: PredicatePlacement,
+    path: &str,
+    strategy_key: &str,
+    context: &ValueCompileContext,
+    total_nodes: &mut usize,
+    diagnostics: &mut Diagnostics,
+    references_source_name: &mut bool,
+) {
+    let nodes = predicate
+        .operands()
+        .into_iter()
+        .map(|(_, expression)| value_expression_node_count(expression))
+        .sum::<usize>();
+    let previous_total = *total_nodes;
+    *total_nodes = total_nodes.saturating_add(nodes);
+    if *total_nodes > VALUE_MAX_NODES {
+        if previous_total <= VALUE_MAX_NODES {
+            let mut diagnostic = compiler_error(
+                "value_node_limit_exceeded",
+                "Complete Effective Source behavior exceeds the immutable Value expression node maximum",
+                path,
+                serde_json::json!({ "actual": *total_nodes, "maximum": VALUE_MAX_NODES }),
+            );
+            diagnostic.strategy_key = Some(strategy_key.to_string());
+            diagnostics.push(diagnostic);
+        }
+        return;
+    }
+    match compile_predicate(
+        predicate,
+        &PredicateCompileContext {
+            placement,
+            value: context.clone(),
+        },
+    ) {
+        Ok(compiled) => *references_source_name |= compiled.references_source_name(),
+        Err(error) => push_predicate_error(path, strategy_key, error, diagnostics),
+    }
+}
+
+fn push_predicate_error(
+    base_path: &str,
+    strategy_key: &str,
+    error: PredicateCompileError,
+    diagnostics: &mut Diagnostics,
+) {
+    if let Some(value_error) = error.value_error {
+        let operand_base = error
+            .path
+            .strip_suffix(&value_error.path)
+            .unwrap_or(error.path.as_str());
+        push_error(
+            &format!("{base_path}{operand_base}"),
+            strategy_key,
+            value_error,
+            diagnostics,
+        );
+        return;
+    }
+    let code = match error.kind {
+        PredicateCompileErrorKind::Placement => "predicate_context_unavailable",
+        PredicateCompileErrorKind::OperandShape => "predicate_operand_shape_invalid",
+        PredicateCompileErrorKind::InvalidRegex => "predicate_regex_invalid",
+        PredicateCompileErrorKind::Value => "predicate_value_invalid",
+    };
+    let mut diagnostic = compiler_error(
+        code,
+        error.message,
+        format!("{base_path}{}", error.path),
+        serde_json::json!({}),
+    );
+    diagnostic.strategy_key = Some(strategy_key.to_string());
+    diagnostics.push(diagnostic);
 }
 
 fn validate_list(

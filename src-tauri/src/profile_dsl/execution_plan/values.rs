@@ -3,24 +3,18 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::{
-    documents::{CaptureRule, Captures, FieldExpression, FieldMatch, Filter, ListFieldExpression},
-    primitives::value::{
-        compile_list_value, compile_value, CompiledListValue, CompiledValue, ValueCompileContext,
-        ValueCompileError,
+    documents::{CaptureRule, Captures, FieldExpression, ListFieldExpression},
+    primitives::{
+        predicate::{
+            compile_predicate, CompiledPredicate, Predicate, PredicateCompileContext,
+            PredicateCompileError,
+        },
+        value::{
+            compile_list_value, compile_value, CompiledListValue, CompiledValue,
+            ValueCompileContext, ValueCompileError,
+        },
     },
 };
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum CompiledValueFilter {
-    NonEmpty {
-        field: CompiledValue,
-    },
-    Regex {
-        field: CompiledValue,
-        pattern: String,
-    },
-}
 
 pub type CompiledValueCaptures = BTreeMap<String, CompiledValueCaptureRule>;
 
@@ -29,13 +23,6 @@ pub type CompiledValueCaptures = BTreeMap<String, CompiledValueCaptureRule>;
 pub struct CompiledValueCaptureRule {
     pub from: CompiledValue,
     pub pattern: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompiledValueMatch {
-    pub left: CompiledValue,
-    pub right: CompiledValue,
 }
 
 pub(crate) fn compile_field_expression(
@@ -52,24 +39,23 @@ pub(crate) fn compile_list_field_expression(
     compile_list_value(value, context)
 }
 
-pub(crate) fn compile_filters(
-    values: Option<&Vec<Filter>>,
-    context: &ValueCompileContext,
-) -> Result<Option<Vec<CompiledValueFilter>>, ValueCompileError> {
-    values
-        .map(|values| {
-            values
+pub(crate) struct IndexedPredicateCompileError {
+    pub index: usize,
+    pub source: PredicateCompileError,
+}
+
+pub(crate) fn compile_predicates(
+    predicates: Option<&[Predicate]>,
+    context: &PredicateCompileContext,
+) -> Result<Option<Vec<CompiledPredicate>>, IndexedPredicateCompileError> {
+    predicates
+        .map(|predicates| {
+            predicates
                 .iter()
-                .map(|value| {
-                    Ok(match value {
-                        Filter::NonEmpty { field } => CompiledValueFilter::NonEmpty {
-                            field: compile_value(field, context)?,
-                        },
-                        Filter::Regex { field, pattern } => CompiledValueFilter::Regex {
-                            field: compile_value(field, context)?,
-                            pattern: pattern.clone(),
-                        },
-                    })
+                .enumerate()
+                .map(|(index, predicate)| {
+                    compile_predicate(predicate, context)
+                        .map_err(|source| IndexedPredicateCompileError { index, source })
                 })
                 .collect()
         })
@@ -94,20 +80,6 @@ pub(crate) fn compile_captures(
                     ))
                 })
                 .collect()
-        })
-        .transpose()
-}
-
-pub(crate) fn compile_field_match(
-    value: Option<&FieldMatch>,
-    context: &ValueCompileContext,
-) -> Result<Option<CompiledValueMatch>, ValueCompileError> {
-    value
-        .map(|value| {
-            Ok(CompiledValueMatch {
-                left: compile_value(&value.left, context)?,
-                right: compile_value(&value.right, context)?,
-            })
         })
         .transpose()
 }

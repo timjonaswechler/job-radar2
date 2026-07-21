@@ -2,8 +2,9 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
-    ListFieldExpression, RegistrySourceProfile, ScriptedProfileHttpClient, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus,
+    ListFieldExpression, Predicate, RegistrySourceProfile, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    SourceStatus,
 };
 
 #[derive(Debug)]
@@ -71,6 +72,35 @@ fn compiler_validates_structural_capability_compatibility() {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == "value_document_incompatible"));
+}
+
+#[test]
+fn compiler_rejects_invalid_predicate_regex_during_plan_compilation() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    profile.access_paths[0].discovery.strategies[0].conditions =
+        Some(vec![serde_json::from_value::<Predicate>(
+            serde_json::json!({
+                "type": "regex",
+                "field": { "type": "json_path", "jsonPath": "$.title" },
+                "pattern": "["
+            }),
+        )
+        .unwrap()]);
+    let result = compile_test_source(&source, Some(profile));
+
+    assert_eq!(result.execution_plan, None);
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "predicate_regex_invalid")
+        .expect("predicate compile diagnostic");
+    assert!(diagnostic
+        .path
+        .ends_with("/accessPaths/0/discovery/strategies/0/where/0/pattern"));
+    assert_eq!(diagnostic.strategy_key.as_deref(), Some("json_api"));
 }
 
 #[test]

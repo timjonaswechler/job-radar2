@@ -1,5 +1,6 @@
 use super::*;
 use crate::profile_dsl::primitives::{
+    predicate::{evaluate_detail_predicate, CompiledPredicate},
     select::SelectedItem,
     value::{
         evaluate_detail_capture_value, evaluate_detail_output_value, DetailCaptureValueContext,
@@ -77,6 +78,50 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_value_scalar(
         strategy_key,
         diagnostics,
     )
+}
+
+pub(in crate::profile_dsl::runtime::detail) fn evaluate_predicate(
+    document: &RuntimeItem<'_, '_>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    posting: &DetailPostingOccurrence,
+    captures: &BTreeMap<String, String>,
+    predicate: &CompiledPredicate,
+    path: &str,
+    strategy_key: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<bool> {
+    let Some(selected) = selected_item(document) else {
+        diagnostics.push(runtime_error(
+            "compiled_value_context_missing",
+            "compiled Predicate cannot execute against an XML collection",
+            path,
+            strategy_key,
+            json!({}),
+        ));
+        return None;
+    };
+    let context = DetailMatchFilterOutputValueContext {
+        source: SourceValueView {
+            source_name,
+            source_config,
+        },
+        posting: posting_view(posting),
+        selected: &selected,
+        captures,
+    };
+    match evaluate_detail_predicate(predicate, &context) {
+        Ok(result) => Some(result),
+        Err(error) => {
+            push_value_error(
+                error.source,
+                &format!("{path}{}", error.operand_path),
+                strategy_key,
+                diagnostics,
+            );
+            None
+        }
+    }
 }
 
 fn selected_item<'doc, 'body>(

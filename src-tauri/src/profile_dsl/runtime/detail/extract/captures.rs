@@ -1,5 +1,6 @@
 use super::fields::evaluate_capture_source;
 use super::*;
+use regex::Regex;
 
 pub(in crate::profile_dsl::runtime::detail) fn evaluate_strategy_captures(
     strategy: &ExecutionPlanDetailStrategy,

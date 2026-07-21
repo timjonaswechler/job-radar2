@@ -4,11 +4,13 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::profile_dsl::documents::{
-    Acceptance, BrowserInteraction, BrowserWait, Filter, HttpMethod, JsonSchemaObject,
-    PaginationLimits, PaginationParameterLocation, PhaseLimitsFragment,
+    Acceptance, BrowserInteraction, BrowserWait, HttpMethod, JsonSchemaObject, PaginationLimits,
+    PaginationParameterLocation, PhaseLimitsFragment,
 };
 use crate::profile_dsl::policy::StrategyPolicy;
-use crate::profile_dsl::primitives::{cardinality::Cardinality, transform::Transform};
+use crate::profile_dsl::primitives::{
+    cardinality::Cardinality, predicate::Predicate, transform::Transform,
+};
 
 /// Active schema-v3 Direct Source Specialization fragment for one reusable
 /// Access Path. `SourceDocument::access_paths` persists these typed fragments.
@@ -134,7 +136,7 @@ pub struct DiscoveryStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub conditions: Option<Vec<Filter>>,
+    pub conditions: Option<Vec<Predicate>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -183,7 +185,7 @@ pub struct DetailStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub conditions: Option<Vec<Filter>>,
+    pub conditions: Option<Vec<Predicate>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -196,7 +198,7 @@ pub struct DetailStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub field_match: Option<FieldMatchFragment>,
+    pub field_match: Option<PredicateFragment>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -753,20 +755,22 @@ pub struct DetailFieldsFragment {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct FieldMatchFragment {
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "non_null"
-    )]
-    pub left: Option<FieldExpressionFragment>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "non_null"
-    )]
-    pub right: Option<FieldExpressionFragment>,
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PredicateFragment {
+    Equal {
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "non_null"
+        )]
+        left: Option<FieldExpressionFragment>,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "non_null"
+        )]
+        right: Option<FieldExpressionFragment>,
+    },
 }
 
 #[derive(Deserialize)]

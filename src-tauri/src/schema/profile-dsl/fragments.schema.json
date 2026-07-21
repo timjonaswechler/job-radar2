@@ -60,7 +60,7 @@
         "pagination": { "$ref": "#/$defs/paginationFragment" },
         "parse": { "$ref": "#/$defs/parseFragment" },
         "select": { "$ref": "#/$defs/selectFragment" },
-        "where": { "type": "array", "items": { "$ref": "select.schema.json#/$defs/filter" } },
+        "where": { "type": "array", "items": { "$ref": "predicate.schema.json#/$defs/where" } },
         "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
         "extract": { "$ref": "#/$defs/discoveryExtractionFragment" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
@@ -75,7 +75,7 @@
         "fetch": { "$ref": "#/$defs/fetchFragment" },
         "parse": { "$ref": "#/$defs/parseFragment" },
         "select": { "$ref": "#/$defs/selectFragment" },
-        "where": { "type": "array", "items": { "$ref": "select.schema.json#/$defs/filter" } },
+        "where": { "type": "array", "items": { "$ref": "predicate.schema.json#/$defs/where" } },
         "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
         "match": { "$ref": "#/$defs/matchFragment" },
         "extract": { "$ref": "#/$defs/detailExtractionFragment" },
@@ -203,7 +203,9 @@
     },
     "matchFragment": {
       "type": "object", "additionalProperties": false,
+      "required": ["type"],
       "properties": {
+        "type": { "const": "equal" },
         "left": { "$ref": "#/$defs/fieldExpressionFragment" },
         "right": { "$ref": "#/$defs/fieldExpressionFragment" }
       }

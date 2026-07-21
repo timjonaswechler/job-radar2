@@ -2,19 +2,19 @@ use super::document::RuntimeItem;
 use super::*;
 use crate::profile_dsl::execution_plan::values::{
     CompiledValueCaptureRule as CaptureRule, CompiledValueCaptures as Captures,
-    CompiledValueFilter as Filter,
 };
+use crate::profile_dsl::primitives::predicate::CompiledPredicate;
 
 mod captures;
 mod fields;
 
 use captures::evaluate_strategy_captures;
-use fields::{evaluate_list_field, evaluate_value_scalar, FieldEvaluation};
+use fields::{evaluate_list_field, evaluate_predicate, evaluate_value_scalar, FieldEvaluation};
 
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
     capture_rules: Option<&Captures>,
-    conditions: Option<&Vec<Filter>>,
+    conditions: Option<&Vec<CompiledPredicate>>,
     fields: &ExecutionPlanDiscoveryFields,
     source_config: &SourceConfig,
     source_name: &str,
@@ -162,7 +162,7 @@ pub(super) fn extract_candidate(
 
 fn item_matches_conditions(
     item: &RuntimeItem<'_, '_>,
-    conditions: Option<&Vec<Filter>>,
+    conditions: Option<&Vec<CompiledPredicate>>,
     source_config: &SourceConfig,
     source_name: &str,
     captures: &BTreeMap<String, String>,
@@ -177,61 +177,18 @@ fn item_matches_conditions(
 
     for (condition_index, condition) in conditions.iter().enumerate() {
         let condition_path = format!("{base_path}/where/{condition_index}");
-        match condition {
-            Filter::NonEmpty { field } => {
-                let evaluation = evaluate_value_scalar(
-                    item,
-                    source_config,
-                    source_name,
-                    captures,
-                    field,
-                    &format!("{condition_path}/field"),
-                    strategy_key,
-                    item_index,
-                    diagnostics,
-                );
-                if evaluation.failed {
-                    return None;
-                }
-                if evaluation.value.is_none() {
-                    return Some(false);
-                }
-            }
-            Filter::Regex { field, pattern } => {
-                let regex = match Regex::new(pattern) {
-                    Ok(regex) => regex,
-                    Err(error) => {
-                        diagnostics.push(runtime_error(
-                            "where_pattern_invalid",
-                            format!("Where filter regex pattern is invalid: {error}"),
-                            format!("{condition_path}/pattern"),
-                            strategy_key,
-                            json!({ "pattern": pattern, "error": error.to_string() }),
-                        ));
-                        return None;
-                    }
-                };
-                let evaluation = evaluate_value_scalar(
-                    item,
-                    source_config,
-                    source_name,
-                    captures,
-                    field,
-                    &format!("{condition_path}/field"),
-                    strategy_key,
-                    item_index,
-                    diagnostics,
-                );
-                if evaluation.failed {
-                    return None;
-                }
-                let Some(value) = evaluation.value else {
-                    return Some(false);
-                };
-                if !regex.is_match(&value) {
-                    return Some(false);
-                }
-            }
+        if !evaluate_predicate(
+            item,
+            source_config,
+            source_name,
+            captures,
+            condition,
+            &condition_path,
+            strategy_key,
+            item_index,
+            diagnostics,
+        )? {
+            return Some(false);
         }
     }
 

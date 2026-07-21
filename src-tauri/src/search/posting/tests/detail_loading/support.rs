@@ -40,6 +40,7 @@ pub(super) fn collection_json_detail_step(fetch_url: &str) -> Value {
             "parse": { "type": "json" },
             "select": { "type": "json_path", "jsonPath": "$.jobs" },
             "match": {
+                "type": "equal",
                 "left": {
                     "type": "json_path",
                     "jsonPath": "$.id",

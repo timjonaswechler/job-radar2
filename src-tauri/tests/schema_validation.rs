@@ -10,6 +10,7 @@ const SCHEMA_FILES: &[&str] = &[
     "src/schema/profile-dsl/common.schema.json",
     "src/schema/profile-dsl/fetch.schema.json",
     "src/schema/profile-dsl/parse.schema.json",
+    "src/schema/profile-dsl/predicate.schema.json",
     "src/schema/profile-dsl/select.schema.json",
     "src/schema/profile-dsl/extract.schema.json",
     "src/schema/profile-dsl/transform.schema.json",

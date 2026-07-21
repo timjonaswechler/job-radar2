@@ -51,9 +51,7 @@ pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
     ExecutionPlanJsonValue, ExecutionPlanPagination, ExecutionPlanRequestBody,
 };
-pub use profile_dsl::execution_plan::values::{
-    CompiledValueCaptureRule, CompiledValueCaptures, CompiledValueFilter, CompiledValueMatch,
-};
+pub use profile_dsl::execution_plan::values::{CompiledValueCaptureRule, CompiledValueCaptures};
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
@@ -68,6 +66,14 @@ pub use profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,
     CompileParseError, CompiledParse, DecodedHttpText, ParseDescriptor, ParseFailure,
     ParseFailureKind, ParseInput, ParseInputKind, ParseRegistryError, ParsedDocument,
+};
+pub use profile_dsl::primitives::predicate::{
+    compile_predicate, evaluate_compiled_predicate, evaluate_detail_predicate,
+    evaluate_discovery_predicate, literal_contains, predicate_descriptors,
+    validate_predicate_registration_keys, values_equal, CompiledPredicate, Equal, EqualPlan,
+    NonEmpty, NonEmptyPlan, Predicate, PredicateCompileContext, PredicateCompileError,
+    PredicateCompileErrorKind, PredicateDescriptor, PredicateEvaluationError, PredicateKind,
+    PredicatePlacement, PredicateRegistryError, RegexPredicate, RegexPredicatePlan,
 };
 pub use profile_dsl::primitives::select::{
     compile_select, select_descriptors, selected_document_is_compatible,

@@ -267,54 +267,6 @@ fn compiled_detail_runtime_applies_where_filters_before_extraction() {
 }
 
 #[test]
-fn compiled_detail_runtime_reports_invalid_where_regex_diagnostic() {
-    let plan = compiled_detail_plan_with_strategies(
-        None,
-        vec![json!({
-            "key": "invalid_where_detail_api",
-            "fetch": {
-                "mode": "http",
-                "method": "GET",
-                "url": "https://example.test/jobs/invalid-where.json",
-                "timeoutMs": 10000
-            },
-            "parse": { "type": "json" },
-            "select": { "type": "document" },
-            "where": [{
-                "type": "regex",
-                "field": { "type": "json_path", "jsonPath": "$.status", "cardinality": "one" },
-                "pattern": "["
-            }],
-            "extract": {
-                "fields": {
-                    "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
-                }
-            }
-        })],
-    );
-    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = fake_profile_http_client([(
-        "https://example.test/jobs/invalid-where.json",
-        json!({ "status": "published", "description": "This description is not extracted." })
-            .to_string(),
-    )]);
-
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
-
-    assert_eq!(result.description_text, None);
-    assert_runtime_diagnostic(&result.diagnostics[0], "where_pattern_invalid");
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/detail/strategies/0/where/0/pattern"
-    );
-    assert_eq!(
-        result.diagnostics[0].strategy_key.as_deref(),
-        Some("invalid_where_detail_api")
-    );
-    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
-}
-
-#[test]
 fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
     let plan = compiled_detail_plan_with_strategies(
         Some(json!({ "minDescriptionLength": 20 })),
@@ -739,6 +691,7 @@ fn compiled_detail_runtime_matches_xml_detail_collection() {
             "parse": { "type": "xml" },
             "select": { "type": "xml_element", "element": "job" },
             "match": {
+                "type": "equal",
                 "left": { "type": "xml_text", "textPath": "id", "cardinality": "one" },
                 "right": { "type": "posting_meta", "key": "jobId", "cardinality": "one" }
             },
@@ -783,6 +736,7 @@ fn compiled_detail_runtime_matches_one_item_xml_detail_collection() {
             "parse": { "type": "xml" },
             "select": { "type": "xml_element", "element": "job" },
             "match": {
+                "type": "equal",
                 "left": { "type": "xml_text", "textPath": "id", "cardinality": "one" },
                 "right": { "type": "posting_meta", "key": "jobId", "cardinality": "one" }
             },

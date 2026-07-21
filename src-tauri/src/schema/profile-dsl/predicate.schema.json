@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/profile-dsl/predicate.schema.json",
+  "title": "Job Radar Profile DSL Predicate definitions",
+  "$defs": {
+    "predicate": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonEmpty" },
+        { "$ref": "#/$defs/regex" },
+        { "$ref": "#/$defs/equal" }
+      ]
+    },
+    "where": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonEmpty" },
+        { "$ref": "#/$defs/regex" }
+      ]
+    },
+    "nonEmpty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "field"],
+      "properties": {
+        "type": { "const": "non_empty" },
+        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+      }
+    },
+    "regex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "field", "pattern"],
+      "properties": {
+        "type": { "const": "regex" },
+        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "pattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+    "equal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "left", "right"],
+      "properties": {
+        "type": { "const": "equal" },
+        "left": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
+        "right": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
+      }
+    }
+  }
+}

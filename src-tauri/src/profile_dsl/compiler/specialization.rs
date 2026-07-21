@@ -559,7 +559,7 @@ fn collect_strategy_missing_fields(
         }
     }
     if let Some(field_match) = object.get("match") {
-        require_fields(field_match, "match", &["left", "right"], missing);
+        require_fields(field_match, "match", &["type", "left", "right"], missing);
         if let Some(left) = field_match.get("left") {
             collect_expression_missing_fields(left, "match.left", missing);
         }

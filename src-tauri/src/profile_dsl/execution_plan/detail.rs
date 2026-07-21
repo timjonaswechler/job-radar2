@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::values::{
-    compile_captures, compile_field_expression, compile_field_match, compile_filters,
-    CompiledValueCaptures, CompiledValueFilter, CompiledValueMatch,
+    compile_captures, compile_field_expression, compile_predicates, CompiledValueCaptures,
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
@@ -10,6 +9,10 @@ use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
 use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
+use crate::profile_dsl::primitives::predicate::{
+    compile_predicate, CompiledPredicate, PredicateCompileContext, PredicateCompileError,
+    PredicatePlacement,
+};
 use crate::profile_dsl::primitives::select::{
     compile_select, CompiledSelect, SelectCompileContext, SelectPhase, SelectPlacement,
 };
@@ -41,11 +44,11 @@ pub struct ExecutionPlanDetailStrategy {
     pub parse: CompiledParse,
     pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<CompiledValueFilter>>,
+    pub conditions: Option<Vec<CompiledPredicate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub captures: Option<CompiledValueCaptures>,
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
-    pub field_match: Option<CompiledValueMatch>,
+    pub field_match: Option<CompiledPredicate>,
     pub extract: ExecutionPlanDetailExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accept_when: Option<Acceptance>,
@@ -157,12 +160,32 @@ fn compile_detail_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
-        conditions: compile_filters(strategy.conditions.as_ref(), &field_context)
-            .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
+        conditions: compile_predicates(
+            strategy.conditions.as_deref(),
+            &PredicateCompileContext {
+                placement: PredicatePlacement::Where,
+                value: field_context.clone(),
+            },
+        )
+        .map_err(|error| predicate_error(format!("{path}/where/{}", error.index), error.source))?,
+
         captures: compile_captures(strategy.captures.as_ref(), &capture_context)
             .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
-        field_match: compile_field_match(strategy.field_match.as_ref(), &field_context)
-            .map_err(|error| field_expression_error(format!("{path}/match"), error))?,
+        field_match: strategy
+            .field_match
+            .as_ref()
+            .map(|predicate| {
+                compile_predicate(
+                    predicate,
+                    &PredicateCompileContext {
+                        placement: PredicatePlacement::DetailMatch,
+                        value: field_context.clone(),
+                    },
+                )
+                .map_err(|error| predicate_error(format!("{path}/match"), error))
+            })
+            .transpose()?,
+
         extract: compile_detail_extraction(&strategy.extract, &field_context, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
@@ -170,6 +193,10 @@ fn compile_detail_strategy(
 }
 
 fn field_expression_error(path: String, error: ValueCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}{}", error.path), error.message)
+}
+
+fn predicate_error(path: String, error: PredicateCompileError) -> ExecutionPlanBuildError {
     ExecutionPlanBuildError::new(format!("{path}{}", error.path), error.message)
 }
 

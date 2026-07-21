@@ -38,6 +38,30 @@ fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
     .unwrap();
 }
 
+#[test]
+fn invalid_predicate_regex_stops_source_live_check_before_http() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mut profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
+    let source: serde_json::Value = serde_json::from_str(SIMPLE_SOURCE).unwrap();
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["where"] = json!([{
+        "type": "regex",
+        "field": { "type": "json_path", "jsonPath": "$.title" },
+        "pattern": "["
+    }]);
+    write_profile(temp_dir.path(), &profile);
+    write_source(temp_dir.path(), &source);
+    let client = ScriptedProfileHttpClient::new([]);
+
+    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &client).unwrap();
+
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert!(report
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "predicate_regex_invalid"));
+    assert!(client.requests().is_empty());
+}
+
 fn read_source_status(app_data_dir: &Path, source_key: &str) -> SourceStatus {
     let path = app_data_dir
         .join("sources")

@@ -68,32 +68,7 @@
     },
     "where": {
       "type": "array",
-      "items": { "$ref": "#/$defs/filter" }
-    },
-    "filter": {
-      "oneOf": [
-        { "$ref": "#/$defs/nonEmptyFilter" },
-        { "$ref": "#/$defs/regexFilter" }
-      ]
-    },
-    "nonEmptyFilter": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "field"],
-      "properties": {
-        "type": { "const": "non_empty" },
-        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" }
-      }
-    },
-    "regexFilter": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "field", "pattern"],
-      "properties": {
-        "type": { "const": "regex" },
-        "field": { "$ref": "extract.schema.json#/$defs/fieldExpression" },
-        "pattern": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
-      }
+      "items": { "$ref": "predicate.schema.json#/$defs/where" }
     },
     "captures": {
       "type": "object",

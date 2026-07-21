@@ -272,14 +272,14 @@ fn match_json_detail_collection<'doc, 'body>(
         )? {
             continue;
         }
-        if detail_document_matches_field(
+        if evaluate_predicate(
             &item_document,
-            field_match,
-            plan,
             source_config,
+            &plan.source.name,
             posting,
             captures,
-            base_path,
+            field_match,
+            &format!("{base_path}/match"),
             strategy_key,
             diagnostics,
         )? {
@@ -324,14 +324,14 @@ fn match_xml_detail_collection<'doc, 'body>(
         )? {
             continue;
         }
-        if detail_document_matches_field(
+        if evaluate_predicate(
             &item_document,
-            field_match,
-            plan,
             source_config,
+            &plan.source.name,
             posting,
             captures,
-            base_path,
+            field_match,
+            &format!("{base_path}/match"),
             strategy_key,
             diagnostics,
         )? {
@@ -346,48 +346,6 @@ fn match_xml_detail_collection<'doc, 'body>(
         strategy_key,
         diagnostics,
     )
-}
-
-fn detail_document_matches_field(
-    item_document: &RuntimeItem<'_, '_>,
-    field_match: &crate::profile_dsl::execution_plan::values::CompiledValueMatch,
-    plan: &SourceExecutionPlan,
-    source_config: &SourceConfig,
-    posting: &DetailPostingOccurrence,
-    captures: &BTreeMap<String, String>,
-    base_path: &str,
-    strategy_key: Option<&str>,
-    diagnostics: &mut Diagnostics,
-) -> Option<bool> {
-    let left_path = format!("{base_path}/match/left");
-    let right_path = format!("{base_path}/match/right");
-    let left = evaluate_value_scalar(
-        item_document,
-        source_config,
-        &plan.source.name,
-        posting,
-        captures,
-        &field_match.left,
-        &left_path,
-        strategy_key,
-        diagnostics,
-    );
-    let right = evaluate_value_scalar(
-        item_document,
-        source_config,
-        &plan.source.name,
-        posting,
-        captures,
-        &field_match.right,
-        &right_path,
-        strategy_key,
-        diagnostics,
-    );
-    if left.failed || right.failed {
-        return None;
-    }
-
-    Some(left.value.is_some() && left.value == right.value)
 }
 
 fn finish_detail_matches<'doc, 'body, T>(
@@ -430,7 +388,7 @@ fn detail_document_matches_conditions(
     source_config: &SourceConfig,
     posting: &DetailPostingOccurrence,
     captures: &BTreeMap<String, String>,
-    conditions: Option<&Vec<Filter>>,
+    conditions: Option<&Vec<CompiledPredicate>>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -441,61 +399,18 @@ fn detail_document_matches_conditions(
 
     for (condition_index, condition) in conditions.iter().enumerate() {
         let condition_path = format!("{base_path}/where/{condition_index}");
-        match condition {
-            Filter::NonEmpty { field } => {
-                let evaluation = evaluate_value_scalar(
-                    item_document,
-                    source_config,
-                    &plan.source.name,
-                    posting,
-                    captures,
-                    field,
-                    &format!("{condition_path}/field"),
-                    strategy_key,
-                    diagnostics,
-                );
-                if evaluation.failed {
-                    return None;
-                }
-                if evaluation.value.is_none() {
-                    return Some(false);
-                }
-            }
-            Filter::Regex { field, pattern } => {
-                let regex = match Regex::new(pattern) {
-                    Ok(regex) => regex,
-                    Err(error) => {
-                        diagnostics.push(runtime_error(
-                            "where_pattern_invalid",
-                            format!("Where filter regex pattern is invalid: {error}"),
-                            format!("{condition_path}/pattern"),
-                            strategy_key,
-                            json!({ "pattern": pattern, "error": error.to_string() }),
-                        ));
-                        return None;
-                    }
-                };
-                let evaluation = evaluate_value_scalar(
-                    item_document,
-                    source_config,
-                    &plan.source.name,
-                    posting,
-                    captures,
-                    field,
-                    &format!("{condition_path}/field"),
-                    strategy_key,
-                    diagnostics,
-                );
-                if evaluation.failed {
-                    return None;
-                }
-                let Some(value) = evaluation.value else {
-                    return Some(false);
-                };
-                if !regex.is_match(&value) {
-                    return Some(false);
-                }
-            }
+        if !evaluate_predicate(
+            item_document,
+            source_config,
+            &plan.source.name,
+            posting,
+            captures,
+            condition,
+            &condition_path,
+            strategy_key,
+            diagnostics,
+        )? {
+            return Some(false);
         }
     }
 

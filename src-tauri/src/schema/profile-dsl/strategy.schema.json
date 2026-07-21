@@ -82,7 +82,7 @@
           "$ref": "select.schema.json#/$defs/captures"
         },
         "match": {
-          "$ref": "#/$defs/match"
+          "$ref": "predicate.schema.json#/$defs/equal"
         },
         "extract": {
           "$ref": "#/$defs/detailExtraction"
@@ -136,22 +136,6 @@
               "$ref": "extract.schema.json#/$defs/fieldExpression"
             }
           }
-        }
-      }
-    },
-    "match": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "left",
-        "right"
-      ],
-      "properties": {
-        "left": {
-          "$ref": "extract.schema.json#/$defs/fieldExpression"
-        },
-        "right": {
-          "$ref": "extract.schema.json#/$defs/fieldExpression"
         }
       }
     },
