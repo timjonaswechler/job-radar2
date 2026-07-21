@@ -20,6 +20,6 @@ Issue [#186](https://github.com/timjonaswechler/job-radar2/issues/186) implement
 External integration tests cover lifecycle order, completed commits, failed/aborted rollback, multi-turn replay, stable conversation identity, model and Reasoning Level changes, malformed provider streams, and scripted-provider mismatch handling. A compile-fail doctest verifies that the stream's mutable borrow prevents concurrent mutation.
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_conversation
+cargo test --manifest-path src-tauri/Cargo.toml --test agent conversation::
 cargo test --manifest-path src-tauri/Cargo.toml --doc
 ```

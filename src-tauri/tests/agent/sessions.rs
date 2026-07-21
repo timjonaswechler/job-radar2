@@ -896,7 +896,7 @@ fn spawn_worker(
 ) -> Worker {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
-        .args(["--exact", "subprocess_worker", "--nocapture"])
+        .args(["--exact", "sessions::subprocess_worker", "--nocapture"])
         .env("JOB_RADAR_SUBPROCESS_MODE", mode)
         .env("JOB_RADAR_SUBPROCESS_ROOT", agents_root)
         .stdin(Stdio::piped())

@@ -35,6 +35,6 @@ Run:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml agent::auth::tests
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_data_root
+cargo test --manifest-path src-tauri/Cargo.toml --test agent data_root::
 npm run test:agent-credential-safety
 ```

@@ -27,12 +27,12 @@ Synthetic fixtures are allowed only when values are conspicuously marked as synt
 | Expiry is checked after lock acquisition; rotated credentials persist before use | `expiry_clock_is_evaluated_after_waiting_for_the_storage_lock`, `exact_expiry_refresh_rotates_and_persists_before_returning`, and the concurrent refresh test |
 | Refresh/storage/provider failures do not expose source values, paths, or bodies | `refresh_failure_keeps_expired_credential_and_returns_only_redacted_diagnostics`, `malformed_token_and_provider_failures_return_fixed_redacted_errors`, streaming redaction tests, and debug-harness category rendering tests |
 | Credentials stay behind authentication/provider implementation | `OpenAiCodexProvider` resolves authentication per turn; private credential-bearing transport structures have no public accessor or `Debug`; streaming tests inspect only synthetic boolean matches |
-| Provider-neutral callers and deterministic tests share one seam | External `src-tauri/tests/agent_conversation.rs` tests exercise `AgentConversation` with the regularly compiled `ScriptedProvider`; production Codex tests drive the same conversation interface |
+| Provider-neutral callers and deterministic tests share one seam | External `src-tauri/tests/agent/conversation.rs` tests exercise `AgentConversation` with the regularly compiled `ScriptedProvider`; production Codex tests drive the same conversation interface |
 | Debug harness does not echo secret manual input or raw errors | `secret_authorization_input_is_not_written_back_or_logged` and `event_renderer_distinguishes_reasoning_and_never_prints_error_payloads` |
-| Legacy migration is no-loss, private, and conflict-safe | `src-tauri/tests/agent_data_root.rs` covers migration, verified `0700`/`0600` modes, redacted conflict handling, canonical-root validation, and symlink rejection |
-| Direct keys and exact environment references remain value-free at registry boundaries | `availability_resolves_direct_and_environment_references_without_exposing_values` in `src-tauri/tests/agent_model_registry.rs`; auth resolution is covered by `api_keys_resolve_direct_values_and_exact_environment_references_deterministically` |
+| Legacy migration is no-loss, private, and conflict-safe | `src-tauri/tests/agent/data_root.rs` covers migration, verified `0700`/`0600` modes, redacted conflict handling, canonical-root validation, and symlink rejection |
+| Direct keys and exact environment references remain value-free at registry boundaries | `availability_resolves_direct_and_environment_references_without_exposing_values` in `src-tauri/tests/agent/model_registry.rs`; auth resolution is covered by `api_keys_resolve_direct_values_and_exact_environment_references_deterministically` |
 | Invalid files have the specified asymmetric behavior | `explicit_reload_publishes_valid_edits_and_fails_closed_as_one_snapshot` makes authentication unavailable; `explicit_reload_is_transactional_and_preserves_old_immutable_snapshots` retains the last-known-good model registry |
-| Configuration and Tauri-facing results are redacted | `src-tauri/tests/agent_configuration_api.rs` serializes status, mutations, invalid-file diagnostics, and login progress and proves synthetic secret/account values are absent; `SecretApiKeyInput` is deserialize-only and non-debuggable |
+| Configuration and Tauri-facing results are redacted | `src-tauri/tests/agent/configuration_api.rs` serializes status, mutations, invalid-file diagnostics, and login progress and proves synthetic secret/account values are absent; `SecretApiKeyInput` is deserialize-only and non-debuggable |
 | Settings UI does not retain or render credential/error payloads | `npm run test:agent-settings-ui` checks password input, clearing before submission, code-based errors/diagnostics, and absence of raw backend message rendering |
 | In-flight Codex turns pin configuration while later turns observe reloads | `request_generation_is_pinned_in_flight_and_reloaded_for_the_next_turn`; the remaining OpenAI Codex and Agent Conversation suites preserve login, refresh, streaming, and conversation behavior |
 
@@ -41,8 +41,10 @@ Focused verification:
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml agent::auth::tests
 cargo test --manifest-path src-tauri/Cargo.toml agent::openai_codex --no-fail-fast
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_conversation
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_configuration_api --test agent_data_root --test agent_model_registry
+cargo test --manifest-path src-tauri/Cargo.toml --test agent conversation::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent configuration_api::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent data_root::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent model_registry::
 cargo test --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug
 npm run test:agent-settings-ui
 ```

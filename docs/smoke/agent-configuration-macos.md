@@ -25,8 +25,10 @@ npm run test:agent-settings-ui
 npm run build
 cargo test --manifest-path src-tauri/Cargo.toml agent::auth::tests
 cargo test --manifest-path src-tauri/Cargo.toml agent::openai_codex --no-fail-fast
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_conversation
-cargo test --manifest-path src-tauri/Cargo.toml --test agent_configuration_api --test agent_data_root --test agent_model_registry
+cargo test --manifest-path src-tauri/Cargo.toml --test agent conversation::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent configuration_api::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent data_root::
+cargo test --manifest-path src-tauri/Cargo.toml --test agent model_registry::
 cargo test --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug
 ```
 
