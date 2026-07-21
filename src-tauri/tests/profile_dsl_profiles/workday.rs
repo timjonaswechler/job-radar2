@@ -78,7 +78,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<PostingOccurrence> =
         read_json("tests/fixtures/workday/posting-discovery-expected-candidates.json");
-    assert_eq!(discovery.candidates, expected_candidates);
+    assert_eq!(discovery.payload.candidates, expected_candidates);
 
     let requests = fetcher.requests();
     assert_eq!(requests.len(), 2);
@@ -105,7 +105,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
         Some(br#"{"appliedFacets":{},"limit":20,"offset":20}"#.as_slice())
     );
 
-    let first_candidate = discovery.candidates.first().unwrap();
+    let first_candidate = discovery.payload.candidates.first().unwrap();
     let detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
@@ -116,7 +116,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let expected_detail: Value =
         read_json("tests/fixtures/workday/posting-detail-jr-1001-expected.json");
     assert_eq!(
-        detail.patch.description_text.as_deref(),
+        detail.payload.patch.description_text.as_deref(),
         expected_detail["descriptionText"].as_str()
     );
 
@@ -194,7 +194,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         &fetcher,
     ));
 
-    assert_eq!(discovery.candidates.len(), 4);
+    assert_eq!(discovery.payload.candidates.len(), 4);
     assert_eq!(fetcher.requests().len(), 2);
     assert_eq!(discovery.diagnostics.len(), 1);
     assert_eq!(

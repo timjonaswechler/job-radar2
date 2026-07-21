@@ -18,3 +18,6 @@ mod security_boundedness;
 
 #[path = "profile_dsl_compiler/semantic_validation.rs"]
 mod semantic_validation;
+
+#[path = "support/mod.rs"]
+mod support;

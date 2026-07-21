@@ -1,5 +1,7 @@
 use crate::support::{
-    compile_test_source, execute_detail_test, execute_detail_test_with_config, unwrap_plan,
+    accepted_phase, cancelled, compile_test_source, execute_detail_failed_test,
+    execute_detail_rejected_test, execute_detail_test, execute_detail_test_with_config,
+    not_started, policy_unsatisfied, unwrap_plan,
 };
 
 fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
@@ -51,7 +53,7 @@ fn compiled_detail_runtime_extracts_direct_json_description_text() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("First paragraph. Second paragraph.".to_string())
     );
     assert_eq!(
@@ -98,9 +100,8 @@ fn compiled_detail_runtime_projects_canonical_cardinality_failures() {
         json!({ "description": ["first", "second"] }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_failed_test(&plan, &posting, &fetcher));
 
-    assert_eq!(result.patch.description_text, None);
     let diagnostic = result
         .diagnostics
         .iter()
@@ -152,7 +153,7 @@ fn compiled_detail_runtime_extracts_only_requested_available_fields() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_detail(
+    let result = accepted_phase(block_on(execute_detail(
         &plan,
         &Default::default(),
         &posting,
@@ -160,16 +161,15 @@ fn compiled_detail_runtime_extracts_only_requested_available_fields() {
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
-    ));
+    )));
 
-    assert_eq!(result.patch.title.as_deref(), Some("Engineer"));
+    assert_eq!(result.payload.patch.title.as_deref(), Some("Engineer"));
     assert_eq!(
-        result.patch.locations,
+        result.payload.patch.locations,
         Some(vec!["Berlin".to_string(), "Remote".to_string()])
     );
-    assert_eq!(result.patch.company, None);
-    assert_eq!(result.patch.description_text, None);
-    assert!(result.rejections.is_empty());
+    assert_eq!(result.payload.patch.company, None);
+    assert!(result.payload.rejections.is_empty());
     assert!(result.diagnostics.is_empty());
 }
 
@@ -202,26 +202,25 @@ fn detail_acceptance_rejects_unrequested_fields_before_io() {
         json!({ "title": "Engineer", "locations": ["Berlin"] }).to_string(),
     )]);
 
-    let result = block_on(execute_detail(
-        &plan,
-        &Default::default(),
-        &posting,
-        RequestedDetailFields::new([DetailField::Locations]).unwrap(),
-        &fetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable(),
-    ));
+    let diagnostics = not_started(
+        block_on(execute_detail(
+            &plan,
+            &Default::default(),
+            &posting,
+            RequestedDetailFields::new([DetailField::Locations]).unwrap(),
+            &fetcher,
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable(),
+        )),
+        job_radar_lib::PhasePreStartFailure::RequestMismatch,
+    );
 
-    assert!(result.patch.is_empty());
-    assert_eq!(result.diagnostics[0].code, "acceptance_field_not_requested");
+    assert_eq!(diagnostics[0].code, "acceptance_field_not_requested");
     assert_eq!(
-        result.diagnostics[0].path,
+        diagnostics[0].path,
         "/detail/strategies/0/acceptWhen/requiredFields"
     );
-    assert_eq!(
-        result.diagnostics[0].strategy_key.as_deref(),
-        Some("detail_api")
-    );
+    assert_eq!(diagnostics[0].strategy_key.as_deref(), Some("detail_api"));
     assert!(fetcher.requests().is_empty());
 }
 
@@ -280,7 +279,7 @@ fn compiled_detail_runtime_falls_back_to_first_accepted_strategy() {
     let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Fallback detail description.".to_string())
     );
     assert_eq!(
@@ -361,7 +360,7 @@ fn compiled_detail_runtime_applies_where_filters_before_extraction() {
     let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
 
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Fallback detail description.".to_string())
     );
     assert_eq!(result.diagnostics.len(), 1);
@@ -400,9 +399,8 @@ fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
         json!({ "description": "Too short" }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_rejected_test(&plan, &posting, &fetcher));
 
-    assert_eq!(result.patch.description_text, None);
     assert_eq!(result.diagnostics.len(), 2);
     assert_runtime_diagnostic(&result.diagnostics[0], "description_too_short");
     assert_eq!(
@@ -452,7 +450,7 @@ fn compiled_detail_runtime_renders_fetch_templates_from_pre_fetch_contexts() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Rendered from all template contexts.".to_string())
     );
     assert_eq!(fetcher.requests()[0].url, expected_url);
@@ -507,7 +505,7 @@ fn compiled_detail_runtime_posts_rendered_json_body() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Detail POST response.".to_string())
     );
     let request = &fetcher.requests()[0];
@@ -549,7 +547,7 @@ fn compiled_detail_runtime_normalizes_html_in_json_description_text() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("First paragraph. Second paragraph.".to_string())
     );
 }
@@ -577,7 +575,7 @@ fn compiled_detail_runtime_applies_explicit_text_transforms() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Senior Rust Engineer".to_string())
     );
 }
@@ -601,9 +599,8 @@ fn compiled_detail_runtime_to_string_rejects_json_null_without_partial_output() 
         json!({ "description": null }).to_string(),
     )]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_failed_test(&plan, &posting, &fetcher));
 
-    assert_eq!(result.patch.description_text, None);
     let diagnostic = result
         .diagnostics
         .iter()
@@ -647,7 +644,7 @@ fn compiled_detail_runtime_combines_description_text_parts() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("About the role. Build reliable DSL runtimes.".to_string())
     );
 }
@@ -673,12 +670,9 @@ fn compiled_detail_runtime_accepts_empty_requested_contributions_and_rejects_too
             json!({ "title": "Engineer" }).to_string(),
         )]),
     ));
-    assert_eq!(missing_result.patch.description_text, None);
+    assert_eq!(missing_result.payload.patch.description_text, None);
     assert!(missing_result.diagnostics.is_empty());
-    assert_eq!(
-        missing_result.report.unwrap().completion,
-        PhaseCompletion::Accepted
-    );
+    assert_eq!(missing_result.report.completion, PhaseCompletion::Accepted);
 
     let empty_result = block_on(execute_detail_test(
         &empty_plan,
@@ -688,12 +682,9 @@ fn compiled_detail_runtime_accepts_empty_requested_contributions_and_rejects_too
             json!({ "description": " \n \t " }).to_string(),
         )]),
     ));
-    assert_eq!(empty_result.patch.description_text, None);
+    assert_eq!(empty_result.payload.patch.description_text, None);
     assert!(empty_result.diagnostics.is_empty());
-    assert_eq!(
-        empty_result.report.unwrap().completion,
-        PhaseCompletion::Accepted
-    );
+    assert_eq!(empty_result.report.completion, PhaseCompletion::Accepted);
 
     let too_short_plan = compiled_json_detail_plan(
         "{{posting:url}}",
@@ -705,7 +696,7 @@ fn compiled_detail_runtime_accepts_empty_requested_contributions_and_rejects_too
         None,
         Some(20),
     );
-    let too_short_result = block_on(execute_detail_test(
+    let too_short_result = block_on(execute_detail_rejected_test(
         &too_short_plan,
         &posting_occurrence("https://example.test/jobs/short.json", []),
         &fake_profile_http_client([(
@@ -713,7 +704,6 @@ fn compiled_detail_runtime_accepts_empty_requested_contributions_and_rejects_too
             json!({ "description": "Too short" }).to_string(),
         )]),
     ));
-    assert_eq!(too_short_result.patch.description_text, None);
     assert_runtime_diagnostic(&too_short_result.diagnostics[0], "description_too_short");
     assert_eq!(
         too_short_result.diagnostics[0].details.as_ref().unwrap()["minDescriptionLength"],
@@ -744,7 +734,7 @@ Second paragraph.</description></job></jobs>"#
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("First paragraph. Second paragraph.".to_string())
     );
 }
@@ -789,7 +779,7 @@ fn compiled_detail_runtime_matches_xml_detail_collection() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Matched XML detail description.".to_string())
     );
 }
@@ -831,7 +821,7 @@ fn compiled_detail_runtime_matches_one_item_xml_detail_collection() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Single XML detail description.".to_string())
     );
 }
@@ -856,7 +846,7 @@ fn compiled_detail_runtime_extracts_html_description_text_with_css() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("First paragraph. Second paragraph.".to_string())
     );
 }
@@ -880,7 +870,7 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_detail(
+    let result = accepted_phase(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting,
@@ -888,11 +878,11 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
         &fetcher,
         &browser,
         RuntimeExecutionContext::uncancellable(),
-    ));
+    )));
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.patch.description_text,
+        result.payload.patch.description_text,
         Some("Rendered browser detail.".to_string())
     );
     assert!(fetcher.requests().is_empty());
@@ -935,17 +925,19 @@ fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
         "click_until_gone reached maxCount",
     ));
 
-    let result = block_on(execute_detail(
-        &plan,
-        empty_source_config(),
-        &posting_occurrence("https://example.test/jobs/42.html", []),
-        RequestedDetailFields::description_text(),
-        &fetcher,
-        &browser,
-        RuntimeExecutionContext::uncancellable(),
-    ));
+    let result = policy_unsatisfied(
+        block_on(execute_detail(
+            &plan,
+            empty_source_config(),
+            &posting_occurrence("https://example.test/jobs/42.html", []),
+            RequestedDetailFields::description_text(),
+            &fetcher,
+            &browser,
+            RuntimeExecutionContext::uncancellable(),
+        )),
+        job_radar_lib::PolicyUnsatisfiedCause::IncludesExecutionFailure,
+    );
 
-    assert_eq!(result.patch.description_text, None);
     assert_runtime_diagnostic(&result.diagnostics[0], "browser_interaction_failed");
     assert_eq!(
         result.diagnostics[0].path,
@@ -966,14 +958,14 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         None,
     );
 
-    let fetch_failure = block_on(execute_detail_test(
+    let fetch_failure = block_on(execute_detail_failed_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/missing.json", []),
         &fake_profile_http_client([]),
     ));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
-    let parse_failure = block_on(execute_detail_test(
+    let parse_failure = block_on(execute_detail_failed_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/bad-json.json", []),
         &fake_profile_http_client([(
@@ -994,7 +986,7 @@ fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failu
         None,
         None,
     );
-    let missing_context = block_on(execute_detail_test(
+    let missing_context = block_on(execute_detail_failed_test(
         &missing_context_plan,
         &posting_occurrence("https://example.test/jobs/42", []),
         &fake_profile_http_client([]),
@@ -1030,13 +1022,12 @@ fn non_success_http_status_exposes_no_detail_patch_or_parse_result() {
         content_length: None,
     }]);
 
-    let result = block_on(execute_detail_test(
+    let result = block_on(execute_detail_failed_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/failed.json", []),
         &fetcher,
     ));
 
-    assert_eq!(result.patch.description_text, None);
     assert_eq!(fetcher.request_count(), 1);
     assert_runtime_diagnostic(&result.diagnostics[0], "http_fetch_non_success_status");
     assert_eq!(
@@ -1047,7 +1038,7 @@ fn non_success_http_status_exposes_no_detail_patch_or_parse_result() {
         .diagnostics
         .iter()
         .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
-    let report = result.report.expect("work-started terminal has a report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::PolicyUnsatisfied);
     assert_eq!(report.usage.requests, 1);
 }
@@ -1072,13 +1063,12 @@ fn detail_strict_decode_terminal_exposes_no_document_or_parse_diagnostic() {
         content_length: None,
     }]);
 
-    let result = block_on(execute_detail_test(
+    let result = block_on(execute_detail_failed_test(
         &plan,
         &posting_occurrence("https://example.test/jobs/bad-text.json", []),
         &fetcher,
     ));
 
-    assert_eq!(result.patch.description_text, None);
     assert_eq!(fetcher.requests().len(), 1);
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
     assert!(result
@@ -1114,9 +1104,8 @@ fn detail_capture_failure_is_atomic_and_prevents_fetch() {
     );
     let fetcher = fake_profile_http_client([]);
 
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+    let result = block_on(execute_detail_failed_test(&plan, &posting, &fetcher));
 
-    assert_eq!(result.patch.description_text, None);
     assert!(fetcher.requests().is_empty());
     assert_eq!(result.diagnostics[0].code, "capture_named_group_unmatched");
     assert_eq!(
@@ -1143,7 +1132,7 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
     let browser = FakeBrowser::new([]);
     let cancellation = AlwaysCancelled;
 
-    let result = block_on(execute_detail(
+    let result = cancelled(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting,
@@ -1151,9 +1140,8 @@ fn detail_accepts_the_shared_runtime_cancellation_context() {
         &fetcher,
         &browser,
         RuntimeExecutionContext::with_cancellation(&cancellation),
-    ));
+    )));
 
-    assert_eq!(result.patch.description_text, None);
     assert!(fetcher.requests().is_empty());
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
@@ -1206,9 +1194,9 @@ fn detail_cancellation_interrupts_an_active_http_fetch() {
             ),
         );
         let (_, result) = tokio::join!(cancel, execute);
-        let result = result.expect("cancellation should interrupt the active Detail fetch");
+        let result =
+            cancelled(result.expect("cancellation should interrupt the active Detail fetch"));
 
-        assert_eq!(result.patch.description_text, None);
         assert_eq!(fetcher.request_count(), 1);
         assert_eq!(result.diagnostics.len(), 1);
         assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
@@ -1246,9 +1234,9 @@ fn detail_browser_cancellation_is_typed_control_flow() {
             ),
         );
         let (_, result) = tokio::join!(cancel, execute);
-        let result = result.expect("cancellation should interrupt the active Detail browser");
+        let result =
+            cancelled(result.expect("cancellation should interrupt the active Detail browser"));
 
-        assert_eq!(result.patch.description_text, None);
         assert_eq!(browser.render_count(), 1);
         assert_eq!(result.diagnostics.len(), 1);
         assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");

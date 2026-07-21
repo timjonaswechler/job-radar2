@@ -42,9 +42,9 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -52,7 +52,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
         "Rust Engineer"
     );
     assert_eq!(
-        result.candidates[1]
+        result.payload.candidates[1]
             .provider_values
             .title
             .as_deref()
@@ -100,7 +100,7 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
     assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
@@ -162,7 +162,7 @@ fn compiled_discovery_runtime_stops_page_pagination_when_total_path_is_exhausted
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(fetcher.requests().len(), 2);
 }
 
@@ -196,9 +196,9 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -206,7 +206,7 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
         "Rust Engineer"
     );
     assert_eq!(
-        result.candidates[1]
+        result.payload.candidates[1]
             .provider_values
             .title
             .as_deref()
@@ -258,7 +258,7 @@ fn compiled_discovery_runtime_stops_offset_limit_pagination_when_total_path_is_e
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(fetcher.requests().len(), 1);
 }
 
@@ -298,6 +298,7 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
         result
+            .payload
             .candidates
             .into_iter()
             .map(|candidate| candidate.reference.provider_url)
@@ -343,6 +344,7 @@ fn compiled_discovery_runtime_uses_all_root_locations_without_omitted_child_trav
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
         result
+            .payload
             .candidates
             .into_iter()
             .map(|candidate| candidate.reference.provider_url)
@@ -396,9 +398,9 @@ fn compiled_discovery_runtime_follows_child_sitemaps_within_max_depth() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0].reference.provider_url,
+        result.payload.candidates[0].reference.provider_url,
         "https://example.test/jobs/1"
     );
     assert_eq!(
@@ -445,7 +447,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_depth_limit() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
+    assert!(result.payload.candidates.is_empty());
     assert_eq!(fetcher.requests().len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
@@ -488,7 +490,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
+    assert!(result.payload.candidates.is_empty());
     assert_eq!(fetcher.requests().len(), 1);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
@@ -545,9 +547,9 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -555,7 +557,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
         "Rust Engineer"
     );
     assert_eq!(
-        result.candidates[1]
+        result.payload.candidates[1]
             .provider_values
             .title
             .as_deref()
@@ -627,10 +629,10 @@ fn compiled_discovery_runtime_stops_cursor_pagination_when_next_cursor_is_missin
     let empty_result = block_on(execute_discovery_test(&plan, &empty_cursor_fetcher));
 
     assert_eq!(missing_result.diagnostics, Vec::new());
-    assert_eq!(missing_result.candidates.len(), 1);
+    assert_eq!(missing_result.payload.candidates.len(), 1);
     assert_eq!(missing_cursor_fetcher.requests().len(), 1);
     assert_eq!(empty_result.diagnostics, Vec::new());
-    assert_eq!(empty_result.candidates.len(), 1);
+    assert_eq!(empty_result.payload.candidates.len(), 1);
     assert_eq!(empty_cursor_fetcher.requests().len(), 1);
 }
 
@@ -676,7 +678,7 @@ fn compiled_discovery_runtime_reports_duplicate_cursor_loop() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(fetcher.requests().len(), 2);
     assert_eq!(result.diagnostics.len(), 1);
     assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
@@ -723,9 +725,9 @@ fn compiled_discovery_runtime_reports_cursor_max_items_limit() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -789,9 +791,9 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -799,7 +801,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
         "Rust Engineer"
     );
     assert_eq!(
-        result.candidates[1]
+        result.payload.candidates[1]
             .provider_values
             .title
             .as_deref()
@@ -883,9 +885,10 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         &fetcher,
     ));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
         result
+            .payload
             .provenance
             .iter()
             .find(|evidence| matches!(
@@ -940,9 +943,8 @@ fn json_body_pagination_overlay_rejects_non_post_json_fetch_before_io() {
     );
     let fetcher = fake_fetcher([]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_failed_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
     assert!(result
         .diagnostics
         .iter()

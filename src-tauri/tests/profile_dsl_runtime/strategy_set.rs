@@ -1,3 +1,4 @@
+use crate::support::{accepted_phase, budget_exhausted, cancelled, execution_failed, not_started};
 use std::{collections::BTreeMap, future::Future};
 
 fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
@@ -7,11 +8,12 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
 }
 use job_radar_lib::{
     compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
-    DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits, PostingOccurrence,
-    ProfileHttpFailureKind, RegistrySourceProfile, RequestedDetailFields, RuntimeCancellation,
-    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
-    StrategyPolicy, UnavailableProfileBrowserClient,
+    DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits, PhaseOutcome, PolicyOutcome,
+    PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpFailureKind, RegistrySourceProfile,
+    RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
+    UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
@@ -153,26 +155,23 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         ),
     ]);
 
-    let result = block_on(execute_discovery(
+    let result = accepted_phase(block_on(execute_discovery(
         &plan,
         empty_source_config(),
         discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
-    ));
+    )));
 
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
             .unwrap(),
         "Platform Engineer"
     );
-    let report = result
-        .report
-        .as_ref()
-        .expect("started Discovery carries a report");
+    let report = &result.report;
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.strategy_attempts, 2);
     assert_eq!(report.usage.requests, 2);
@@ -203,7 +202,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
             Ok(json!({ "description": "A complete accepted description." }).to_string()),
         ),
     ]);
-    let result = block_on(execute_detail(
+    let result = accepted_phase(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting(),
@@ -211,16 +210,13 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
-    ));
+    )));
 
     assert_eq!(
-        result.patch.description_text.as_deref(),
+        result.payload.patch.description_text.as_deref(),
         Some("A complete accepted description.")
     );
-    let report = result
-        .report
-        .as_ref()
-        .expect("started Detail carries a report");
+    let report = &result.report;
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.strategy_attempts, 2);
     assert_eq!(report.usage.requests, 2);
@@ -263,14 +259,14 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         })
         .to_string()),
     )]);
-    let result = block_on(execute_discovery(
+    let result = accepted_phase(block_on(execute_discovery(
         &plan,
         empty_source_config(),
         discovery.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
-    ));
-    assert_eq!(result.candidates.len(), 2);
+    )));
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(discovery.requests().len(), 1);
     assert!(result.diagnostics.is_empty());
 
@@ -279,7 +275,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         "https://example.test/detail/failed",
         Ok(json!({ "description": accepted_description }).to_string()),
     )]);
-    let result = block_on(execute_detail(
+    let result = accepted_phase(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting(),
@@ -287,8 +283,8 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
-    ));
-    assert!(result.patch.description_text.is_some());
+    )));
+    assert!(result.payload.patch.description_text.is_some());
     assert_eq!(detail.requests().len(), 1);
     assert!(result.diagnostics.is_empty());
 }
@@ -318,15 +314,29 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
+    let PhaseOutcome::Completed {
+        policy_outcome: PolicyOutcome::PolicyUnsatisfied { cause },
+        complete_budget_report,
+        diagnostics,
+    } = result.expect("phase completes without control-flow error")
+    else {
+        panic!("expected payload-free PolicyUnsatisfied completion")
+    };
 
-    assert!(result.candidates.is_empty());
+    assert_eq!(cause, PolicyUnsatisfiedCause::RejectedOnly);
     assert_eq!(
-        result.report.as_ref().unwrap().completion,
+        complete_budget_report.completion,
         PhaseCompletion::PolicyUnsatisfied
     );
-    assert_eq!(result.report.as_ref().unwrap().usage.strategy_attempts, 3);
-    let codes = result
-        .diagnostics
+    assert_eq!(complete_budget_report.usage.strategy_attempts, 3);
+    assert!(!serde_json::to_string(
+        &PolicyOutcome::<job_radar_lib::DiscoveryPhasePayload>::PolicyUnsatisfied {
+            cause: cause.clone()
+        }
+    )
+    .unwrap()
+    .contains("candidates"));
+    let codes = diagnostics
         .iter()
         .map(|d| d.code.as_str())
         .collect::<Vec<_>>();
@@ -339,10 +349,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
             "fallback_exhausted",
         ]
     );
-    assert_eq!(
-        result.diagnostics.last().unwrap().path,
-        "/discovery/strategies"
-    );
+    assert_eq!(diagnostics.last().unwrap().path, "/discovery/strategies");
 
     let detail = DetailScriptedClient::new([
         (
@@ -367,16 +374,23 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
-    assert!(result.patch.description_text.is_none());
+    let PhaseOutcome::Completed {
+        policy_outcome: PolicyOutcome::PolicyUnsatisfied { cause },
+        complete_budget_report,
+        diagnostics,
+    } = result.expect("phase completes without control-flow error")
+    else {
+        panic!("expected payload-free PolicyUnsatisfied completion")
+    };
+    assert_eq!(cause, PolicyUnsatisfiedCause::IncludesExecutionFailure);
     assert_eq!(
-        result.report.as_ref().unwrap().completion,
+        complete_budget_report.completion,
         PhaseCompletion::PolicyUnsatisfied
     );
-    assert_eq!(result.report.as_ref().unwrap().usage.strategy_attempts, 3);
-    assert_eq!(result.report.as_ref().unwrap().usage.produced_items, 0);
+    assert_eq!(complete_budget_report.usage.strategy_attempts, 3);
+    assert_eq!(complete_budget_report.usage.produced_items, 0);
     assert_eq!(
-        result
-            .diagnostics
+        diagnostics
             .iter()
             .map(|diagnostic| diagnostic.code.as_str())
             .collect::<Vec<_>>(),
@@ -387,10 +401,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
             "fallback_exhausted"
         ]
     );
-    assert_eq!(
-        result.diagnostics.last().unwrap().path,
-        "/detail/strategies"
-    );
+    assert_eq!(diagnostics.last().unwrap().path, "/detail/strategies");
 }
 
 #[test]
@@ -405,7 +416,7 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = block_on(execute_detail(
+    let result = budget_exhausted(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting(),
@@ -413,10 +424,9 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
         detail.client(),
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
-    ));
+    )));
 
-    assert!(result.patch.description_text.is_none());
-    let report = result.report.expect("Detail budget terminal report");
+    let report = result.report;
     let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
         panic!("expected Detail budget exhaustion")
     };
@@ -448,19 +458,20 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     detail_plan.limits.max_duration_ms = 1_999;
     let detail = DetailScriptedClient::new([]);
 
-    let invalid_plan_result = block_on(execute_detail(
-        &plan,
-        empty_source_config(),
-        &posting(),
-        RequestedDetailFields::description_text(),
-        detail.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable(),
-    ));
+    let invalid_plan_diagnostics = not_started(
+        block_on(execute_detail(
+            &plan,
+            empty_source_config(),
+            &posting(),
+            RequestedDetailFields::description_text(),
+            detail.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable(),
+        )),
+        job_radar_lib::PhasePreStartFailure::PlanMismatch,
+    );
 
-    assert!(invalid_plan_result.report.is_none());
-    assert!(invalid_plan_result.patch.description_text.is_none());
-    assert!(invalid_plan_result.diagnostics.iter().any(|diagnostic| {
+    assert!(invalid_plan_diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "invalid_compiled_browser_phase_duration"
             && diagnostic.path == "/detail/limits/maxDurationMs"
     }));
@@ -470,20 +481,22 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
         max_duration_ms: 1_999,
         ..PhaseLimits::BACKEND
     };
-    let caller_result = block_on(execute_detail(
-        &plan,
-        empty_source_config(),
-        &posting(),
-        RequestedDetailFields::description_text(),
-        detail.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    ));
+    let caller_result = execution_failed(
+        block_on(execute_detail(
+            &plan,
+            empty_source_config(),
+            &posting(),
+            RequestedDetailFields::description_text(),
+            detail.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )),
+        job_radar_lib::PhaseExecutionFailure::InvalidCallerLimits,
+    );
 
-    let report = caller_result.report.expect("caller mismatch has a report");
+    let report = caller_result.report;
     assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
     assert_eq!(report.usage, Default::default());
-    assert!(caller_result.patch.description_text.is_none());
     assert!(caller_result
         .diagnostics
         .iter()
@@ -505,15 +518,14 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
     }]);
     let signal = RequestObservedCancellation { client: &fetcher };
 
-    let result = block_on(execute_discovery(
+    let result = cancelled(block_on(execute_discovery(
         &plan,
         empty_source_config(),
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&signal),
-    ));
+    )));
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.request_count(), 1);
     assert_eq!(
         result
@@ -540,7 +552,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         content_length: None,
     }]);
     let signal = RequestObservedCancellation { client: &fetcher };
-    let result = block_on(execute_detail(
+    let result = cancelled(block_on(execute_detail(
         &plan,
         empty_source_config(),
         &posting(),
@@ -548,8 +560,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::with_cancellation(&signal),
-    ));
-    assert!(result.patch.description_text.is_none());
+    )));
     assert_eq!(fetcher.request_count(), 1);
     assert_eq!(
         result

@@ -55,7 +55,7 @@ fn compiled_discovery_runtime_posts_rendered_json_body_and_public_headers() {
     ));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     let request = &fetcher.requests()[0];
     assert_eq!(request.method, HttpMethod::Post);
     assert_eq!(request.url, "https://example.test/jobs.json");
@@ -186,13 +186,17 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
     let plan = unwrap_plan(compile_result);
     let fetcher = fake_fetcher([]);
 
-    let result = block_on(execute_discovery_test_with_config(
-        &plan,
-        &source_config(),
-        &fetcher,
-    ));
+    let result = policy_unsatisfied(
+        block_on(execute_discovery(
+            &plan,
+            &source_config(),
+            &fetcher,
+            &FakeBrowser::new([]),
+            RuntimeExecutionContext::uncancellable(),
+        )),
+        job_radar_lib::PolicyUnsatisfiedCause::IncludesExecutionFailure,
+    );
 
-    assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_body_template_failed");
     assert_eq!(
         result.diagnostics[0].path,

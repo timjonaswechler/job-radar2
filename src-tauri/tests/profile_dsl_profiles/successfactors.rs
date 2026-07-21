@@ -79,18 +79,18 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     assert_eq!(discovery.diagnostics, Vec::new());
     let expected_candidates: Vec<PostingOccurrence> =
         read_json("tests/fixtures/successfactors/posting-discovery-expected-candidates.json");
-    assert_eq!(discovery.candidates, expected_candidates);
-    let discovery_report = discovery.report.as_ref().expect("Discovery report");
+    assert_eq!(discovery.payload.candidates, expected_candidates);
+    let discovery_report = &discovery.report;
     assert_eq!(discovery_report.completion, PhaseCompletion::Accepted);
     assert_eq!(discovery_report.usage.strategy_attempts, 1);
     assert_eq!(discovery_report.usage.requests, 1);
     assert_eq!(discovery_report.usage.pages, 1);
     assert_eq!(
         discovery_report.usage.produced_items,
-        discovery.candidates.len() as u64
+        discovery.payload.candidates.len() as u64
     );
 
-    let primary_candidate = &discovery.candidates[0];
+    let primary_candidate = &discovery.payload.candidates[0];
     let primary_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
@@ -98,7 +98,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         &fetcher,
     ));
     assert_eq!(primary_detail.diagnostics, Vec::new());
-    let primary_report = primary_detail.report.as_ref().expect("Detail report");
+    let primary_report = &primary_detail.report;
     assert_eq!(primary_report.completion, PhaseCompletion::Accepted);
     assert_eq!(primary_report.usage.strategy_attempts, 1);
     assert_eq!(primary_report.usage.requests, 1);
@@ -106,11 +106,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_primary_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1001-expected.json");
     assert_eq!(
-        primary_detail.patch.description_text.as_deref(),
+        primary_detail.payload.patch.description_text.as_deref(),
         expected_primary_detail["descriptionText"].as_str()
     );
 
-    let fallback_candidate = &discovery.candidates[1];
+    let fallback_candidate = &discovery.payload.candidates[1];
     let fallback_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
@@ -120,13 +120,10 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_fallback_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-2002-expected.json");
     assert_eq!(
-        fallback_detail.patch.description_text.as_deref(),
+        fallback_detail.payload.patch.description_text.as_deref(),
         expected_fallback_detail["descriptionText"].as_str()
     );
-    let fallback_report = fallback_detail
-        .report
-        .as_ref()
-        .expect("fallback Detail report");
+    let fallback_report = &fallback_detail.report;
     assert_eq!(fallback_report.completion, PhaseCompletion::Accepted);
     assert_eq!(fallback_report.usage.strategy_attempts, 2);
     assert_eq!(fallback_report.usage.requests, 2);
@@ -146,7 +143,7 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         Some("primary_html_description")
     );
 
-    let schott_style_candidate = &discovery.candidates[3];
+    let schott_style_candidate = &discovery.payload.candidates[3];
     let schott_style_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
@@ -156,7 +153,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
     let expected_schott_style_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1405371733-expected.json");
     assert_eq!(
-        schott_style_detail.patch.description_text.as_deref(),
+        schott_style_detail
+            .payload
+            .patch
+            .description_text
+            .as_deref(),
         expected_schott_style_detail["descriptionText"].as_str()
     );
     assert_eq!(schott_style_detail.diagnostics.len(), 1);

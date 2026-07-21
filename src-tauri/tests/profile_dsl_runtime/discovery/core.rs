@@ -18,9 +18,9 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -28,7 +28,7 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
         "Senior Rust Engineer"
     );
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .company
             .as_deref()
@@ -36,7 +36,7 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
         "Example GmbH"
     );
     assert_eq!(
-        result.candidates[0].reference.provider_url,
+        result.payload.candidates[0].reference.provider_url,
         "https://example.test/jobs/1"
     );
     assert_eq!(fetcher.requests()[0].url, "https://example.test/jobs.json");
@@ -80,7 +80,7 @@ fn compiled_discovery_runtime_uses_the_canonical_named_capture_output() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -106,9 +106,9 @@ fn compiled_discovery_runtime_selects_multiple_json_items() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -116,7 +116,7 @@ fn compiled_discovery_runtime_selects_multiple_json_items() {
         "Rust Engineer"
     );
     assert_eq!(
-        result.candidates[1]
+        result.payload.candidates[1]
             .provider_values
             .title
             .as_deref()
@@ -141,9 +141,9 @@ fn compiled_discovery_runtime_reports_required_field_and_cardinality_diagnostics
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].provider_values.title, None);
-    assert_eq!(result.candidates[0].provider_values.company, None);
+    assert_eq!(result.payload.candidates.len(), 1);
+    assert_eq!(result.payload.candidates[0].provider_values.title, None);
+    assert_eq!(result.payload.candidates[0].provider_values.company, None);
     assert_runtime_diagnostic(&result.diagnostics[0], "field_cardinality_mismatch");
     assert_eq!(
         result.diagnostics[0].path,
@@ -188,9 +188,9 @@ fn compiled_discovery_runtime_applies_where_filters_before_extraction() {
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -215,11 +215,14 @@ fn compiled_discovery_runtime_preserves_successful_items_with_partial_diagnostic
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0].provider_values.title.as_deref(),
+        result.payload.candidates[0]
+            .provider_values
+            .title
+            .as_deref(),
         Some("Rust Engineer")
     );
-    assert_eq!(result.candidates[1].provider_values.title, None);
+    assert_eq!(result.payload.candidates[1].provider_values.title, None);
     assert!(result.diagnostics.is_empty());
 }

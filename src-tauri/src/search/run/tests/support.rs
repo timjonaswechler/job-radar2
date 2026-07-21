@@ -159,26 +159,25 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
                 crate::profile_dsl::runtime::RuntimeExecutionContext::uncancellable(),
             )
             .await;
-            if result.candidates.is_empty()
-                && result.diagnostics.iter().any(|diagnostic| {
-                    diagnostic.severity
-                        == crate::profile_dsl::diagnostics::DiagnosticSeverity::Error
-                })
-            {
-                return Err(SourceExecutionError::FailedWithDiagnostics {
-                    message: result
-                        .diagnostics
-                        .first()
-                        .map(|diagnostic| diagnostic.message.clone())
-                        .unwrap_or_else(|| "Discovery failed".to_string()),
-                    diagnostics: result.diagnostics,
-                });
+            use crate::profile_dsl::runtime::{PhaseOutcome, PolicyOutcome};
+            match result {
+                Ok(PhaseOutcome::Completed {
+                    policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+                    diagnostics,
+                    ..
+                }) => Ok(crate::search::run::SourceExecutionOutput {
+                    occurrences: reduced_payload.candidates,
+                    diagnostics,
+                }),
+                Ok(outcome) => Err(SourceExecutionError::FailedWithDiagnostics {
+                    message: "Discovery failed".to_string(),
+                    diagnostics: outcome.diagnostics().clone(),
+                }),
+                Err(error) => Err(SourceExecutionError::FailedWithDiagnostics {
+                    message: "Discovery failed".to_string(),
+                    diagnostics: error.diagnostics().clone(),
+                }),
             }
-
-            Ok(crate::search::run::SourceExecutionOutput {
-                occurrences: result.candidates,
-                diagnostics: result.diagnostics,
-            })
         })
     }
 }

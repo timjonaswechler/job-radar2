@@ -35,9 +35,9 @@ Engineer </title>
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -45,7 +45,7 @@ Engineer </title>
         "Senior Rust Engineer"
     );
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .company
             .as_deref()
@@ -53,14 +53,14 @@ Engineer </title>
         "Example GmbH"
     );
     assert_eq!(
-        result.candidates[0].reference.provider_url,
+        result.payload.candidates[0].reference.provider_url,
         "https://example.test/jobs/42"
     );
     assert_eq!(
-        result.candidates[0].provider_values.locations,
+        result.payload.candidates[0].provider_values.locations,
         vec!["Berlin", "Berlin", "Remote"]
     );
-    assert_eq!(result.candidates[0].posting_meta["jobId"], "42");
+    assert_eq!(result.payload.candidates[0].posting_meta["jobId"], "42");
 }
 
 #[test]
@@ -94,9 +94,9 @@ Engineer </h2>
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -104,7 +104,7 @@ Engineer </h2>
         "Staff Frontend Engineer"
     );
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .company
             .as_deref()
@@ -112,11 +112,11 @@ Engineer </h2>
         "Example GmbH"
     );
     assert_eq!(
-        result.candidates[0].reference.provider_url,
+        result.payload.candidates[0].reference.provider_url,
         "https://example.test/jobs/frontend"
     );
     assert_eq!(
-        result.candidates[0].provider_values.locations,
+        result.payload.candidates[0].provider_values.locations,
         vec!["Berlin", "Remote"]
     );
 }
@@ -147,18 +147,18 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery(
+    let result = accepted_phase(block_on(execute_discovery(
         &plan,
         &Default::default(),
         &fetcher,
         &browser,
         RuntimeExecutionContext::uncancellable(),
-    ));
+    )));
 
     assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -166,7 +166,7 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
         "Browser Rendered Engineer"
     );
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .company
             .as_deref()
@@ -174,7 +174,7 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
         "Example GmbH"
     );
     assert_eq!(
-        result.candidates[0].reference.provider_url,
+        result.payload.candidates[0].reference.provider_url,
         "https://example.test/jobs/browser"
     );
     assert!(fetcher.requests().is_empty());
@@ -224,15 +224,17 @@ fn compiled_discovery_runtime_reports_browser_fetch_diagnostics() {
         "selector .posting did not appear",
     ));
 
-    let result = block_on(execute_discovery(
-        &plan,
-        &Default::default(),
-        &fetcher,
-        &browser,
-        RuntimeExecutionContext::uncancellable(),
-    ));
+    let result = policy_unsatisfied(
+        block_on(execute_discovery(
+            &plan,
+            &Default::default(),
+            &fetcher,
+            &browser,
+            RuntimeExecutionContext::uncancellable(),
+        )),
+        job_radar_lib::PolicyUnsatisfiedCause::IncludesExecutionFailure,
+    );
 
-    assert!(result.candidates.is_empty());
     assert_runtime_diagnostic(&result.diagnostics[0], "browser_wait_timeout");
     assert_eq!(
         result.diagnostics[0].path,
@@ -248,7 +250,7 @@ fn compiled_discovery_runtime_reports_xml_and_html_diagnostics() {
         default_xml_fields(),
         "https://example.test/jobs.xml",
     );
-    let xml_parse_failure = block_on(execute_discovery_test(
+    let xml_parse_failure = block_on(execute_discovery_failed_test(
         &xml_plan,
         &fake_fetcher([("https://example.test/jobs.xml", "<jobs><job>".to_string())]),
     ));

@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use dom_query::NodeRef;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
@@ -12,8 +11,7 @@ use crate::{
             SourceExecutionPlan,
         },
         occurrence::{
-            ContributionOrigin, DetailContributionEvidence, DetailField, DetailPatch,
-            DetailRejection, PostingOccurrence, RequestedDetailFields,
+            ContributionOrigin, DetailField, DetailPatch, PostingOccurrence, RequestedDetailFields,
         },
         primitives::{
             acceptance::{
@@ -44,6 +42,10 @@ use super::{
         RuntimePhase, TypedCancellation,
     },
     http::{ProfileHttpClient, ProfileHttpFailureKind},
+    outcome::{
+        DetailPhasePayload, PhaseCancelled, PhaseExecutionFailure, PhaseOutcome,
+        PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome, PolicyUnsatisfiedCause,
+    },
     reducers::{reduce_detail, DetailContribution},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
@@ -65,21 +67,6 @@ use extract::{
 use fetch::fetch_strategy_document;
 use strategy::execute_strategy;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DetailExecutionResult {
-    pub patch: DetailPatch,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub provenance: Vec<DetailContributionEvidence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub conflicts: Vec<DetailContributionEvidence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub rejections: Vec<DetailRejection>,
-    pub diagnostics: Diagnostics,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub report: Option<PhaseExecutionReport>,
-}
-
 pub async fn execute_detail<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
@@ -88,17 +75,14 @@ pub async fn execute_detail<F, B>(
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
-) -> DetailExecutionResult
+) -> PhaseRunResult<DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     let Some(detail) = &plan.detail else {
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::PlanMismatch,
             diagnostics: vec![runtime_error(
                 "detail_missing",
                 "Execution Plan does not contain compiled detail",
@@ -106,8 +90,7 @@ where
                 None,
                 json!({}),
             )],
-            report: None,
-        };
+        });
     };
 
     if let Some(diagnostic) = validate_detail_acceptance_request(
@@ -125,22 +108,15 @@ where
             }),
         &requested_fields,
     ) {
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::RequestMismatch,
             diagnostics: vec![diagnostic],
-            report: Some(InvocationAllowance::prestart_failure_report()),
-        };
+        });
     }
 
     if detail.strategies.is_empty() {
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::PlanMismatch,
             diagnostics: vec![runtime_error(
                 "detail_strategy_missing",
                 "detail does not contain an executable strategy",
@@ -148,19 +124,15 @@ where
                 None,
                 json!({}),
             )],
-            report: None,
-        };
+        });
     }
     let browser_requires_reserve = detail
         .strategies
         .iter()
         .any(|strategy| uses_browser(&strategy.fetch));
     if browser_requires_reserve && detail.limits.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS {
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::PlanMismatch,
             diagnostics: vec![runtime_error(
                 "invalid_compiled_browser_phase_duration",
                 "Compiled Detail Browser duration does not preserve the teardown reserve",
@@ -168,28 +140,25 @@ where
                 None,
                 json!({}),
             )],
-            report: None,
-        };
+        });
     }
     if let Some(caller) = context.caller_limits() {
         if !caller.all_positive()
             || !caller.within(detail.limits)
             || (browser_requires_reserve && caller.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS)
         {
-            return DetailExecutionResult {
-                patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
-                diagnostics: vec![runtime_error(
+            let diagnostics = vec![runtime_error(
                     "invalid_caller_phase_limits",
                     "Caller phase limits must be positive, may only tighten compiled limits, and must preserve the Browser teardown reserve",
                     "/detail/limits",
                     None,
                     json!({}),
-                )],
-                report: Some(InvocationAllowance::prestart_failure_report()),
-            };
+                )];
+            return Ok(PhaseOutcome::ExecutionFailed {
+                typed_failure: PhaseExecutionFailure::InvalidCallerLimits,
+                complete_budget_report: InvocationAllowance::prestart_failure_report(),
+                diagnostics,
+            });
         }
     }
     let allowance = InvocationAllowance::new(
@@ -286,7 +255,7 @@ fn project_detail_execution(
     phase_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
-) -> DetailExecutionResult {
+) -> PhaseRunResult<DetailPhasePayload> {
     let accepted_attempt = match execution.terminal {
         StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
         StrategySetTerminal::Cancelled(cancellation) => {
@@ -296,16 +265,12 @@ fn project_detail_execution(
                 .flat_map(|attempt| attempt.diagnostics)
                 .collect::<Diagnostics>();
             diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
-            return DetailExecutionResult {
-                patch: DetailPatch::default(),
-                provenance: Vec::new(),
-                conflicts: Vec::new(),
-                rejections: Vec::new(),
-                diagnostics,
-                report: Some(allowance.report(PhaseCompletion::Cancelled {
+            return Err(PhaseRunError::Cancelled(PhaseCancelled {
+                complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
                     reason: PhaseCancellationReason::UserCancelled,
-                })),
-            };
+                }),
+                diagnostics,
+            }));
         }
         StrategySetTerminal::Stopped(stop) => {
             let diagnostics = execution
@@ -315,24 +280,32 @@ fn project_detail_execution(
                 .chain(std::iter::once(diagnostic_for_stop(&stop, "/detail")))
                 .collect();
             let completion = completion_for_stop(stop);
-            return DetailExecutionResult {
-                patch: DetailPatch::default(),
-                provenance: Vec::new(),
-                conflicts: Vec::new(),
-                rejections: Vec::new(),
-                diagnostics,
-                report: Some(allowance.report(completion)),
-            };
+            let report = allowance.report(completion.clone());
+            return Ok(match completion {
+                PhaseCompletion::BudgetExhausted { .. } => PhaseOutcome::BudgetExhausted {
+                    complete_budget_report: report,
+                    diagnostics,
+                },
+                PhaseCompletion::ExecutionFailed => PhaseOutcome::ExecutionFailed {
+                    typed_failure: PhaseExecutionFailure::Internal,
+                    complete_budget_report: report,
+                    diagnostics,
+                },
+                _ => unreachable!("stopped phase has budget or execution-failure completion"),
+            });
         }
         StrategySetTerminal::Exhausted => None,
     };
 
     let mut diagnostics = Vec::new();
     let mut contributions = Vec::new();
+    let mut includes_execution_failure = false;
     for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
         diagnostics.extend(attempt.diagnostics);
+        includes_execution_failure |=
+            matches!(attempt.completion, StrategyAttemptCompletion::Failed);
         if Some(attempt_index) == accepted_attempt {
             let StrategyAttemptCompletion::Accepted(patch) = attempt.completion else {
                 unreachable!("accepted terminal must reference accepted typed output");
@@ -350,6 +323,17 @@ fn project_detail_execution(
     }
 
     if accepted_attempt.is_none() {
+        if context.is_cancelled() {
+            diagnostics.push(runtime_execution_cancelled_diagnostic(
+                &TypedCancellation::phase(RuntimePhase::Detail),
+            ));
+            return Err(PhaseRunError::Cancelled(PhaseCancelled {
+                complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
+                    reason: PhaseCancellationReason::UserCancelled,
+                }),
+                diagnostics,
+            }));
+        }
         diagnostics.push(runtime_error(
             "fallback_exhausted",
             "detail fallback strategies were exhausted without an accepted result",
@@ -357,14 +341,17 @@ fn project_detail_execution(
             None,
             json!({}),
         ));
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Ok(PhaseOutcome::Completed {
+            policy_outcome: PolicyOutcome::PolicyUnsatisfied {
+                cause: if includes_execution_failure {
+                    PolicyUnsatisfiedCause::IncludesExecutionFailure
+                } else {
+                    PolicyUnsatisfiedCause::RejectedOnly
+                },
+            },
+            complete_budget_report: allowance.report(PhaseCompletion::PolicyUnsatisfied),
             diagnostics,
-            report: Some(allowance.report(PhaseCompletion::PolicyUnsatisfied)),
-        };
+        });
     }
     let reduced = reduce_detail(&posting.identity, requested_fields, contributions);
     diagnostics.extend(reduced.diagnostics);
@@ -375,60 +362,47 @@ fn project_detail_execution(
         diagnostics.push(runtime_execution_cancelled_diagnostic(
             &TypedCancellation::phase(RuntimePhase::Detail),
         ));
-        return DetailExecutionResult {
-            patch: DetailPatch::default(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
-            diagnostics,
-            report: Some(allowance.report(PhaseCompletion::Cancelled {
+        return Err(PhaseRunError::Cancelled(PhaseCancelled {
+            complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
                 reason: PhaseCancellationReason::UserCancelled,
-            })),
-        };
+            }),
+            diagnostics,
+        }));
     }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
-    DetailExecutionResult {
-        patch: if final_accepted {
-            reduced.patch
-        } else {
-            DetailPatch::default()
-        },
-        provenance: if final_accepted {
-            reduced.provenance
-        } else {
-            Vec::new()
-        },
-        conflicts: if final_accepted {
-            reduced.conflicts
-        } else {
-            Vec::new()
-        },
-        rejections: if final_accepted {
-            reduced.rejections
-        } else {
-            Vec::new()
-        },
+    let policy_outcome = if final_accepted {
+        PolicyOutcome::Accepted {
+            reduced_payload: DetailPhasePayload {
+                patch: reduced.patch,
+                provenance: reduced.provenance,
+                conflicts: reduced.conflicts,
+                rejections: reduced.rejections,
+            },
+        }
+    } else {
+        PolicyOutcome::PolicyUnsatisfied {
+            cause: PolicyUnsatisfiedCause::RejectedOnly,
+        }
+    };
+    Ok(PhaseOutcome::Completed {
+        policy_outcome,
+        complete_budget_report: allowance.report(completion),
         diagnostics,
-        report: Some(allowance.report(completion)),
-    }
+    })
 }
 
 fn cancelled_detail_result(
     cancellation: TypedCancellation,
     report: PhaseExecutionReport,
-) -> DetailExecutionResult {
-    DetailExecutionResult {
-        patch: DetailPatch::default(),
-        provenance: Vec::new(),
-        conflicts: Vec::new(),
-        rejections: Vec::new(),
+) -> PhaseRunResult<DetailPhasePayload> {
+    Err(PhaseRunError::Cancelled(PhaseCancelled {
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
-        report: Some(report),
-    }
+        complete_budget_report: report,
+    }))
 }
 
 #[cfg(test)]
@@ -449,6 +423,59 @@ mod acceptance_projection_tests {
         fn is_cancelled(&self) -> bool {
             true
         }
+    }
+
+    #[test]
+    fn cancellation_after_policy_exhaustion_wins_without_fallback_summary() {
+        let execution = StrategySetExecution::<DetailPatch> {
+            attempts: Vec::new(),
+            terminal: StrategySetTerminal::Exhausted,
+        };
+        let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
+        let cancellation = Cancelled;
+        let context = RuntimeExecutionContext::with_cancellation(&cancellation);
+        let posting = PostingOccurrence {
+            identity:
+                crate::profile_dsl::occurrence::PostingOccurrenceIdentity::ProviderPostingId {
+                    source_key: "source".into(),
+                    provider_posting_id: "id".into(),
+                },
+            reference: crate::profile_dsl::occurrence::PostingReference {
+                provider_url: "https://example.com/jobs/1".into(),
+                provider_posting_id: Some("id".into()),
+            },
+            provider_values: Default::default(),
+            hints: Default::default(),
+            posting_meta: Default::default(),
+        };
+        let requested_fields = RequestedDetailFields::new([DetailField::Title]).unwrap();
+
+        let result = project_detail_execution(
+            execution,
+            &posting,
+            &requested_fields,
+            None,
+            context,
+            &allowance,
+        );
+
+        let PhaseRunError::Cancelled(cancelled) = result.unwrap_err() else {
+            panic!("expected typed cancellation")
+        };
+        assert_eq!(
+            cancelled.complete_budget_report.completion,
+            PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            }
+        );
+        assert_eq!(
+            cancelled
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec!["runtime_execution_cancelled"]
+        );
     }
 
     #[test]
@@ -495,9 +522,11 @@ mod acceptance_projection_tests {
             &allowance,
         );
 
-        assert_eq!(result.patch, DetailPatch::default());
+        let PhaseRunError::Cancelled(result) = result.unwrap_err() else {
+            panic!("expected typed cancellation")
+        };
         assert_eq!(
-            result.report.unwrap().completion,
+            result.complete_budget_report.completion,
             PhaseCompletion::Cancelled {
                 reason: PhaseCancellationReason::UserCancelled,
             }

@@ -6,6 +6,11 @@ use crate::profile_dsl::primitives::fetch::http::{
     execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay,
 };
 
+pub(super) enum DiscoveryFetchOutcome {
+    Complete(CompleteParseText),
+    ExecutionFailed,
+}
+
 pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
     browser: &B,
@@ -18,7 +23,7 @@ pub(super) async fn fetch_strategy_document<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
+) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -55,7 +60,7 @@ pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
+) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -92,7 +97,7 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
+) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -132,7 +137,7 @@ async fn fetch_strategy_document_with_options<F, B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
+) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
@@ -157,13 +162,17 @@ where
             )
             .await
             {
-                Ok(response) => Ok(Some(CompleteParseText::DecodedHttp(response.body))),
+                Ok(response) => Ok(DiscoveryFetchOutcome::Complete(
+                    CompleteParseText::DecodedHttp(response.body),
+                )),
                 Err(HttpFetchExecutionError::Cancelled) => Err(fetch_cancellation(
                     strategy_index,
                     strategy_key,
                     CancellationOperation::Fetch,
                 )),
-                Err(HttpFetchExecutionError::BudgetExhausted) => Ok(None),
+                Err(HttpFetchExecutionError::BudgetExhausted) => {
+                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
+                }
                 Err(HttpFetchExecutionError::NonSuccessStatus { status }) => {
                     diagnostics.push(runtime_error(
                         "http_fetch_non_success_status",
@@ -172,7 +181,7 @@ where
                         strategy_key,
                         json!({ "method": fetch.method.label(), "status": status }),
                     ));
-                    Ok(None)
+                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
                 }
                 Err(HttpFetchExecutionError::Acquisition(error))
                     if error.kind == ProfileHttpFailureKind::Cancelled =>
@@ -191,7 +200,7 @@ where
                         strategy_key,
                         json!({ "method": fetch.method.label(), "kind": format!("{:?}", error.kind), "admittedBytes": error.admitted_bytes }),
                     ));
-                    Ok(None)
+                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
                 }
                 Err(HttpFetchExecutionError::Render(error)) => {
                     diagnostics.push(runtime_error(
@@ -201,7 +210,7 @@ where
                         strategy_key,
                         json!({}),
                     ));
-                    Ok(None)
+                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
                 }
             }
         }
@@ -219,7 +228,7 @@ where
                     strategy_key,
                     json!({}),
                 ));
-                return Ok(None);
+                return Ok(DiscoveryFetchOutcome::ExecutionFailed);
             }
             fetch_browser_strategy_document(
                 browser,
@@ -258,7 +267,7 @@ async fn fetch_browser_strategy_document<B>(
     strategy_index: usize,
     diagnostics: &mut Diagnostics,
     context: RuntimeExecutionContext<'_>,
-) -> Result<Option<CompleteParseText>, TypedCancellation>
+) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     B: ProfileBrowserClient + Sync + ?Sized,
 {
@@ -274,7 +283,7 @@ where
                     strategy_key,
                     json!({}),
                 ));
-                return Ok(None);
+                return Ok(DiscoveryFetchOutcome::ExecutionFailed);
             }
         },
     };
@@ -293,7 +302,7 @@ where
         })
         .is_err()
     {
-        return Ok(None);
+        return Ok(DiscoveryFetchOutcome::ExecutionFailed);
     }
     if context.is_cancelled() {
         return Err(fetch_cancellation(
@@ -309,9 +318,9 @@ where
         interactions: interactions.to_vec(),
     };
     match browser.render_with_context(request, context).await {
-        Ok(ProfileBrowserFetchResponse { body }) => {
-            Ok(Some(CompleteParseText::BrowserRendered(body)))
-        }
+        Ok(ProfileBrowserFetchResponse { body }) => Ok(DiscoveryFetchOutcome::Complete(
+            CompleteParseText::BrowserRendered(body),
+        )),
         Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => Err(
             fetch_cancellation(strategy_index, strategy_key, CancellationOperation::Browser),
         ),
@@ -323,7 +332,7 @@ where
                 strategy_key,
                 diagnostics,
             );
-            Ok(None)
+            Ok(DiscoveryFetchOutcome::ExecutionFailed)
         }
     }
 }

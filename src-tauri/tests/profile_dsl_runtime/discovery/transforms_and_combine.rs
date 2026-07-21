@@ -26,7 +26,7 @@ fn compiled_discovery_runtime_applies_explicit_whitespace_transforms() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -61,7 +61,7 @@ fn compiled_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -96,7 +96,7 @@ fn compiled_discovery_runtime_dedupes_string_arrays_after_all_cardinality() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -131,7 +131,7 @@ fn compiled_discovery_runtime_joins_arrays_after_all_cardinality() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -166,7 +166,7 @@ fn compiled_discovery_runtime_applies_regex_replace_transforms() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -204,7 +204,7 @@ fn compiled_discovery_runtime_combines_parts_in_declared_order() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -239,8 +239,8 @@ fn compiled_discovery_runtime_fails_combine_when_required_part_is_missing() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
-    assert_eq!(result.candidates[0].provider_values.title, None);
+    assert_eq!(result.payload.candidates.len(), 1);
+    assert_eq!(result.payload.candidates[0].provider_values.title, None);
     assert_runtime_diagnostic(&result.diagnostics[0], "required_combine_part_missing");
     assert_eq!(
         result.diagnostics[0].path,
@@ -276,7 +276,7 @@ fn compiled_discovery_runtime_allows_missing_optional_combine_part() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -314,7 +314,7 @@ fn compiled_discovery_runtime_preserves_empty_combine_join() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -353,7 +353,7 @@ fn compiled_discovery_runtime_applies_final_transforms_after_combine() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -391,7 +391,7 @@ fn source_owned_discovery_runtime_uses_same_combine_behavior() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -426,7 +426,7 @@ fn compiled_discovery_runtime_normalizes_single_location_expression_without_impl
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].provider_values.locations,
+        result.payload.candidates[0].provider_values.locations,
         vec!["Berlin", "Berlin", "Remote, München", "Remote, München"]
     );
 }
@@ -457,7 +457,7 @@ fn compiled_discovery_runtime_normalizes_list_style_locations_in_order() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].provider_values.locations,
+        result.payload.candidates[0].provider_values.locations,
         vec!["Remote", "Berlin", "Remote", "München"]
     );
 }
@@ -493,7 +493,7 @@ fn compiled_discovery_runtime_splits_and_dedupes_location_arrays_in_order() {
 
     assert_eq!(result.diagnostics, Vec::new());
     assert_eq!(
-        result.candidates[0].provider_values.locations,
+        result.payload.candidates[0].provider_values.locations,
         vec!["Berlin", "Remote", "München"]
     );
 }

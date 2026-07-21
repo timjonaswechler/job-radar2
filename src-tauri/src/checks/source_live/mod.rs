@@ -13,9 +13,10 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
-    execute_detail, execute_discovery, DetailExecutionResult, PhaseCompletion, PostingOccurrence,
-    ProfileBrowserClient, ProfileHttpClient, RequestedDetailFields, ReqwestProfileHttpClient,
-    RuntimeExecutionContext, UnavailableProfileBrowserClient,
+    execute_detail, execute_discovery, DetailPhasePayload, PhaseOutcome, PhaseRunResult,
+    PolicyOutcome, PostingOccurrence, ProfileBrowserClient, ProfileHttpClient,
+    RequestedDetailFields, ReqwestProfileHttpClient, RuntimeExecutionContext,
+    UnavailableProfileBrowserClient,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -194,13 +195,36 @@ where
             browser,
             discovery_context,
         ));
-        let candidate_count = discovery_result.candidates.len();
-        let first_acceptable_candidate = discovery_result
-            .candidates
+        let (discovery_candidates, discovery_report, discovery_diagnostics) = match discovery_result
+        {
+            Ok(PhaseOutcome::Completed {
+                policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+                complete_budget_report,
+                diagnostics,
+            }) => (
+                reduced_payload.candidates,
+                Some(complete_budget_report),
+                diagnostics,
+            ),
+            Ok(outcome) => (
+                Vec::new(),
+                Some(outcome.complete_budget_report().clone()),
+                outcome.diagnostics().clone(),
+            ),
+            Err(crate::profile_dsl::runtime::PhaseRunError::Cancelled(cancelled)) => (
+                Vec::new(),
+                Some(cancelled.complete_budget_report),
+                cancelled.diagnostics,
+            ),
+            Err(crate::profile_dsl::runtime::PhaseRunError::NotStarted { diagnostics, .. }) => {
+                (Vec::new(), None, diagnostics)
+            }
+        };
+        let candidate_count = discovery_candidates.len();
+        let first_acceptable_candidate = discovery_candidates
             .iter()
             .find(|candidate| is_acceptable_live_candidate(candidate));
-        let acceptable_candidate_count = discovery_result
-            .candidates
+        let acceptable_candidate_count = discovery_candidates
             .iter()
             .filter(|candidate| is_acceptable_live_candidate(candidate))
             .count();
@@ -208,7 +232,7 @@ where
             "candidateCount".to_string(),
             serde_json::json!(candidate_count),
         );
-        if let Some(report) = &discovery_result.report {
+        if let Some(report) = &discovery_report {
             details.insert(
                 "discoveryExecutionReport".to_string(),
                 serde_json::to_value(report).map_err(|error| {
@@ -216,7 +240,7 @@ where
                 })?,
             );
         }
-        diagnostics.extend(discovery_result.diagnostics);
+        diagnostics.extend(discovery_diagnostics);
 
         if acceptable_candidate_count == 0 {
             diagnostics.push(no_candidates_diagnostic(
@@ -236,7 +260,14 @@ where
                     browser,
                     RuntimeExecutionContext::uncancellable(),
                 ));
-                if let Some(report) = &detail_result.report {
+                let detail_report = match &detail_result {
+                    Ok(outcome) => Some(outcome.complete_budget_report()),
+                    Err(crate::profile_dsl::runtime::PhaseRunError::Cancelled(cancelled)) => {
+                        Some(&cancelled.complete_budget_report)
+                    }
+                    Err(crate::profile_dsl::runtime::PhaseRunError::NotStarted { .. }) => None,
+                };
+                if let Some(report) = detail_report {
                     details.insert(
                         "detailExecutionReport".to_string(),
                         serde_json::to_value(report).map_err(|error| {
@@ -250,10 +281,17 @@ where
                     serde_json::Value::Bool(detail_passed),
                 );
                 let detail_failure_cause = if detail_passed {
-                    diagnostics.extend(non_error_diagnostics(detail_result.diagnostics));
+                    let outcome = detail_result.expect("passing Detail result is a normal outcome");
+                    diagnostics.extend(non_error_diagnostics(outcome.diagnostics().clone()));
                     None
                 } else {
-                    diagnostics.extend(detail_result.diagnostics.clone());
+                    diagnostics.extend(
+                        detail_result
+                            .as_ref()
+                            .map(PhaseOutcome::diagnostics)
+                            .unwrap_or_else(|error| error.diagnostics())
+                            .clone(),
+                    );
                     Some(detail_failure_cause(&detail_result))
                 };
                 if let Some(cause) = detail_failure_cause {
@@ -406,15 +444,18 @@ fn is_acceptable_live_candidate(candidate: &PostingOccurrence) -> bool {
             .is_some_and(|value| !value.trim().is_empty())
 }
 
-fn is_acceptable_detail_result(result: &DetailExecutionResult) -> bool {
+fn is_acceptable_detail_result(result: &PhaseRunResult<DetailPhasePayload>) -> bool {
     matches!(
-        result.report.as_ref().map(|report| &report.completion),
-        Some(PhaseCompletion::Accepted)
-    ) && result
-        .patch
-        .description_text
-        .as_ref()
-        .is_some_and(|description_text| !description_text.trim().is_empty())
+        result,
+        Ok(PhaseOutcome::Completed {
+            policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+            ..
+        }) if reduced_payload
+            .patch
+            .description_text
+            .as_ref()
+            .is_some_and(|description_text| !description_text.trim().is_empty())
+    )
 }
 
 fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
@@ -424,13 +465,34 @@ fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
         .collect()
 }
 
-fn detail_failure_cause(result: &DetailExecutionResult) -> String {
-    result
-        .diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-        .map(|diagnostic| diagnostic.code.clone())
-        .unwrap_or_else(|| "detail_description_text_missing".to_string())
+fn detail_failure_cause(result: &PhaseRunResult<DetailPhasePayload>) -> String {
+    use crate::profile_dsl::runtime::{PhaseRunError, PolicyUnsatisfiedCause};
+
+    match result {
+        Ok(PhaseOutcome::Completed {
+            policy_outcome: PolicyOutcome::Accepted { .. },
+            ..
+        }) => "detail_description_text_missing",
+        Ok(PhaseOutcome::Completed {
+            policy_outcome:
+                PolicyOutcome::PolicyUnsatisfied {
+                    cause: PolicyUnsatisfiedCause::RejectedOnly,
+                },
+            ..
+        }) => "detail_policy_rejected",
+        Ok(PhaseOutcome::Completed {
+            policy_outcome:
+                PolicyOutcome::PolicyUnsatisfied {
+                    cause: PolicyUnsatisfiedCause::IncludesExecutionFailure,
+                },
+            ..
+        }) => "detail_policy_includes_execution_failure",
+        Ok(PhaseOutcome::BudgetExhausted { .. }) => "detail_budget_exhausted",
+        Ok(PhaseOutcome::ExecutionFailed { .. }) => "detail_execution_failed",
+        Err(PhaseRunError::NotStarted { .. }) => "detail_not_started",
+        Err(PhaseRunError::Cancelled(_)) => "detail_cancelled",
+    }
+    .to_string()
 }
 
 fn no_candidates_diagnostic(

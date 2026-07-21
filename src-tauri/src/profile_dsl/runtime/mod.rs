@@ -4,6 +4,7 @@ pub(crate) mod cancellation;
 pub(crate) mod detail;
 pub(crate) mod discovery;
 pub mod http;
+pub mod outcome;
 pub(crate) mod reducers;
 pub(crate) mod strategy_set;
 
@@ -23,10 +24,14 @@ pub use browser::{
     UnavailableProfileBrowserClient,
 };
 pub use cancellation::{RuntimeCancellation, RuntimeExecutionContext};
-pub use detail::{execute_detail, DetailExecutionResult};
-pub use discovery::{execute_discovery, DiscoveryExecutionResult};
+pub use detail::execute_detail;
+pub use discovery::execute_discovery;
 pub use http::{
     ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
     ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient, ScriptedHttpBodyEvent,
     ScriptedHttpEvent, ScriptedProfileHttpClient, SensitiveRequestBody,
+};
+pub use outcome::{
+    DetailPhasePayload, DiscoveryPhasePayload, PhaseCancelled, PhaseExecutionFailure, PhaseOutcome,
+    PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome, PolicyUnsatisfiedCause,
 };

@@ -1,3 +1,4 @@
+use crate::support::accepted_phase;
 use std::{fs, path::Path};
 
 use job_radar_lib::{
@@ -92,16 +93,19 @@ fn resolved_source_config_is_ephemeral_runtime_input_and_absent_from_the_plan() 
         )],
         content_length: None,
     }]);
-    let result = tauri::async_runtime::block_on(execute_discovery(
+    let phase_result = tauri::async_runtime::block_on(execute_discovery(
         &plan,
         &source.source_config,
         &fetcher,
         &UnavailableProfileBrowserClient,
         RuntimeExecutionContext::uncancellable(),
     ));
+    assert!(!serde_json::to_string(&phase_result)
+        .unwrap()
+        .contains(SENTINEL));
+    let result = accepted_phase(phase_result);
 
-    assert_eq!(result.candidates.len(), 1);
-    assert!(!serde_json::to_string(&result).unwrap().contains(SENTINEL));
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(fetcher.requests()[0].url, SENTINEL);
 }
 

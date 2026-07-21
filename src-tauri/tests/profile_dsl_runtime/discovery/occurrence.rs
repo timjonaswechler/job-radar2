@@ -18,13 +18,13 @@ fn discovery_emits_minimal_occurrences_and_keeps_later_complete_items() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 2);
+    assert_eq!(result.payload.candidates.len(), 2);
     assert_eq!(
-        result.candidates[0].provider_values,
+        result.payload.candidates[0].provider_values,
         job_radar_lib::ProviderValues::default()
     );
     assert_eq!(
-        result.candidates[1].reference.provider_url,
+        result.payload.candidates[1].reference.provider_url,
         "https://example.test/jobs/complete"
     );
     assert!(result.diagnostics.is_empty());
@@ -65,7 +65,7 @@ fn discovery_keeps_provider_values_hints_and_posting_meta_disjoint() {
     )]);
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
-    let occurrence = &result.candidates[0];
+    let occurrence = &result.payload.candidates[0];
 
     assert_eq!(
         occurrence.provider_values.title.as_deref(),
@@ -106,9 +106,12 @@ fn invalid_references_suppress_only_the_item_and_do_not_leak_urls() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0].provider_values.title.as_deref(),
+        result.payload.candidates[0]
+            .provider_values
+            .title
+            .as_deref(),
         Some("Good")
     );
     let serialized = serde_json::to_string(&result.diagnostics).unwrap();
@@ -135,7 +138,7 @@ fn empty_provider_id_suppresses_the_item_with_an_item_scoped_diagnostic() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
+    assert!(result.payload.candidates.is_empty());
     assert_eq!(result.diagnostics[0].code, "occurrence_provider_id_empty");
     assert_eq!(
         result.diagnostics[0].details.as_ref().unwrap()["itemIndex"],

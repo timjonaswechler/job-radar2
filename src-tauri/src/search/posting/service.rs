@@ -6,9 +6,9 @@ use crate::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_detail, ManagedProfileBrowserClient, PhaseCompletion, PostingOccurrence,
-            ProfileBrowserClient, ProfileHttpClient, RequestedDetailFields,
-            ReqwestProfileHttpClient, RuntimeExecutionContext,
+            execute_detail, ManagedProfileBrowserClient, PostingOccurrence, ProfileBrowserClient,
+            ProfileHttpClient, RequestedDetailFields, ReqwestProfileHttpClient,
+            RuntimeExecutionContext,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -252,14 +252,21 @@ impl<'a> JobPostingService<'a> {
                 RuntimeExecutionContext::uncancellable(),
             )
             .await;
+            use crate::profile_dsl::runtime::{PhaseOutcome, PolicyOutcome};
+            let (accepted_payload, phase_diagnostics) = match result {
+                Ok(PhaseOutcome::Completed {
+                    policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+                    diagnostics,
+                    ..
+                }) => (Some(reduced_payload), diagnostics),
+                Ok(outcome) => (None, outcome.diagnostics().clone()),
+                Err(error) => (None, error.diagnostics().clone()),
+            };
             let result_diagnostics =
-                with_posting_source_context(result.diagnostics, &posting_source);
+                with_posting_source_context(phase_diagnostics, &posting_source);
 
-            if matches!(
-                result.report.as_ref().map(|report| &report.completion),
-                Some(PhaseCompletion::Accepted)
-            ) {
-                let Some(description_text) = result.patch.description_text else {
+            if let Some(payload) = accepted_payload {
+                let Some(description_text) = payload.patch.description_text else {
                     diagnostics.extend(result_diagnostics);
                     diagnostics.push(detail_source_diagnostic(
                         &posting_source,

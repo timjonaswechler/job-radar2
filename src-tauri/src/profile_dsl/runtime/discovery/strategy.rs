@@ -17,6 +17,7 @@ where
     let base_path = format!("/discovery/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());
     let mut diagnostics = Vec::new();
+    let mut execution_failed = false;
 
     let candidates = if let Some(pagination) = &strategy.pagination {
         match execute_paginated_strategy(
@@ -30,6 +31,7 @@ where
             &base_path,
             strategy_key.as_deref(),
             &mut diagnostics,
+            &mut execution_failed,
             context,
         )
         .await
@@ -57,6 +59,7 @@ where
             &base_path,
             strategy_key.as_deref(),
             &mut diagnostics,
+            &mut execution_failed,
             context,
         )
         .await
@@ -112,15 +115,6 @@ where
         })
         .collect();
     let reduced = reduce_discovery(contributions);
-    let mut result = DiscoveryExecutionResult {
-        candidates,
-        provenance: reduced.provenance,
-        conflicts: reduced.conflicts,
-        rejections: reduced.rejections,
-        diagnostics,
-        report: None,
-    };
-    let execution_failed = discovery_execution_failed(&result);
     let accepted = !execution_failed
         && evaluate_discovery_strategy_acceptance(
             &reduced.candidates,
@@ -128,41 +122,23 @@ where
             strategy.accept_when.as_ref(),
             &base_path,
             strategy_key.as_deref(),
-            &mut result.diagnostics,
+            &mut diagnostics,
         )
         .is_satisfied();
     if !accepted {
-        result.diagnostics.extend(reduced.diagnostics);
+        diagnostics.extend(reduced.diagnostics);
     }
     let completion = if accepted {
-        StrategyAttemptCompletion::Accepted(result.candidates)
+        StrategyAttemptCompletion::Accepted(candidates)
     } else if execution_failed {
         StrategyAttemptCompletion::Failed
     } else {
         StrategyAttemptCompletion::Rejected
     };
     StrategyExecution {
-        diagnostics: result.diagnostics,
+        diagnostics,
         completion,
     }
-}
-
-fn discovery_execution_failed(result: &DiscoveryExecutionResult) -> bool {
-    result.diagnostics.iter().any(is_strategy_level_error)
-        || (result.candidates.is_empty()
-            && result
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error))
-}
-
-fn is_strategy_level_error(diagnostic: &Diagnostic) -> bool {
-    diagnostic.severity == DiagnosticSeverity::Error
-        && diagnostic
-            .details
-            .as_ref()
-            .and_then(|details| details.get("itemIndex"))
-            .is_none()
 }
 
 pub(super) struct StrategyFetchOutput {
@@ -205,6 +181,7 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_failed: &mut bool,
     context: RuntimeExecutionContext<'_>,
 ) -> Result<StrategyFetchOutput, TypedCancellation>
 where
@@ -241,8 +218,9 @@ where
     )
     .await?
     {
-        Some(response) => response,
-        None => {
+        DiscoveryFetchOutcome::Complete(response) => response,
+        DiscoveryFetchOutcome::ExecutionFailed => {
+            *execution_failed = true;
             return Ok(StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count: None,
@@ -261,6 +239,7 @@ where
         base_path,
         strategy_key,
         diagnostics,
+        execution_failed,
     ))
 }
 
@@ -274,6 +253,7 @@ fn extract_candidates_from_response(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_failed: &mut bool,
 ) -> StrategyFetchOutput {
     let document = match strategy.parse.parse_with_diagnostics(
         response.as_input(),
@@ -285,11 +265,12 @@ fn extract_candidates_from_response(
     ) {
         Some(document) => document,
         None => {
+            *execution_failed = true;
             return StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count: None,
                 next_cursor: None,
-            }
+            };
         }
     };
     let total_count = total_path.and_then(|path| extract_total_count(&document, path));
@@ -304,11 +285,12 @@ fn extract_candidates_from_response(
     ) {
         Some(items) => items,
         None => {
+            *execution_failed = true;
             return StrategyFetchOutput {
                 candidates: Vec::new(),
                 total_count,
                 next_cursor,
-            }
+            };
         }
     };
 

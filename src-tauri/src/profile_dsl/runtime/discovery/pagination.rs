@@ -11,6 +11,7 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
+    execution_failed: &mut bool,
     context: RuntimeExecutionContext<'_>,
 ) -> Result<Vec<PostingOccurrence>, TypedCancellation>
 where
@@ -52,6 +53,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    execution_failed,
                     context,
                 )
                 .await?;
@@ -129,6 +131,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    execution_failed,
                     context,
                 )
                 .await?;
@@ -200,6 +203,7 @@ where
                     base_path,
                     strategy_key,
                     diagnostics,
+                    execution_failed,
                     context,
                 )
                 .await?;
@@ -316,7 +320,13 @@ where
                 if context.is_cancelled() {
                     return Err(pagination_cancellation(strategy_index, strategy_key));
                 }
-                let Some(response) = response else { break };
+                let response = match response {
+                    DiscoveryFetchOutcome::Complete(response) => response,
+                    DiscoveryFetchOutcome::ExecutionFailed => {
+                        *execution_failed = true;
+                        break;
+                    }
+                };
                 request_count += 1;
 
                 let document = match strategy.parse.parse_with_diagnostics(
@@ -328,81 +338,92 @@ where
                     diagnostics,
                 ) {
                     Some(document) => document,
-                    None => break,
+                    None => {
+                        *execution_failed = true;
+                        break;
+                    }
                 };
 
-                if let Some(items) = document::select_items_raw(
+                let Some(items) = document::select_items_raw(
                     &document,
                     posting_url_selector,
                     &format!("{base_path}/pagination/postingUrlSelector"),
                     strategy_key,
                     diagnostics,
+                ) else {
+                    *execution_failed = true;
+                    break;
+                };
+                let page_candidates = extract_candidates_from_items(
+                    plan,
+                    source_config,
+                    strategy,
+                    items,
+                    base_path,
+                    strategy_key,
+                    diagnostics,
+                );
+                if append_page_candidates(
+                    &mut candidates,
+                    page_candidates,
+                    limits.max_items,
+                    "sitemap",
+                    base_path,
+                    strategy_key,
+                    diagnostics,
+                    context,
                 ) {
-                    let page_candidates = extract_candidates_from_items(
-                        plan,
-                        source_config,
-                        strategy,
-                        items,
-                        base_path,
-                        strategy_key,
-                        diagnostics,
-                    );
-                    if append_page_candidates(
-                        &mut candidates,
-                        page_candidates,
-                        limits.max_items,
-                        "sitemap",
-                        base_path,
-                        strategy_key,
-                        diagnostics,
-                        context,
-                    ) {
-                        break;
-                    }
+                    break;
                 }
 
                 if let Some(child_sitemap_selector) = child_sitemap_selector {
-                    if let Some(child_items) = document::select_items_raw(
+                    match document::select_items_raw(
                         &document,
                         child_sitemap_selector,
                         &format!("{base_path}/pagination/childSitemapSelector"),
                         strategy_key,
                         diagnostics,
                     ) {
-                        let child_urls = text_items_to_urls(child_items);
-                        if depth < max_depth {
-                            for child_url in child_urls {
-                                if context.is_cancelled() {
-                                    queue.clear();
-                                    break;
+                        Some(child_items) => {
+                            let child_urls = text_items_to_urls(child_items);
+                            if depth < max_depth {
+                                for child_url in child_urls {
+                                    if context.is_cancelled() {
+                                        queue.clear();
+                                        break;
+                                    }
+                                    if !seen_children.insert(child_url.clone()) {
+                                        continue;
+                                    }
+                                    if context
+                                        .debit(AllowanceCharge {
+                                            fan_out: 1,
+                                            ..AllowanceCharge::default()
+                                        })
+                                        .is_err()
+                                    {
+                                        queue.clear();
+                                        break;
+                                    }
+                                    if context.is_cancelled() {
+                                        queue.clear();
+                                        break;
+                                    }
+                                    queue.push_back((Some(child_url), depth + 1));
                                 }
-                                if !seen_children.insert(child_url.clone()) {
-                                    continue;
-                                }
-                                if context
-                                    .debit(AllowanceCharge {
-                                        fan_out: 1,
-                                        ..AllowanceCharge::default()
-                                    })
-                                    .is_err()
-                                {
-                                    queue.clear();
-                                    break;
-                                }
-                                if context.is_cancelled() {
-                                    queue.clear();
-                                    break;
-                                }
-                                queue.push_back((Some(child_url), depth + 1));
-                            }
-                        } else if !child_urls.is_empty() {
-                            diagnostics.push(runtime_warning(
+                            } else if !child_urls.is_empty() {
+                                diagnostics.push(runtime_warning(
                                 "pagination_max_depth_reached",
                                 "Sitemap pagination did not follow child sitemap URLs because maxDepth was reached",
                                 format!("{base_path}/pagination/limits/maxDepth"),
                                 strategy_key,
                                 json!({ "maxDepth": max_depth, "paginationType": "sitemap" }),
                             ));
+                            }
+                        }
+                        None => {
+                            *execution_failed = true;
+                            break;
                         }
                     }
                 }

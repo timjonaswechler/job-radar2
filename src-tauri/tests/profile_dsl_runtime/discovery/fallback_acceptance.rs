@@ -60,9 +60,9 @@ fn compiled_discovery_runtime_falls_back_to_first_accepted_strategy() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -174,9 +174,9 @@ fn compiled_discovery_runtime_falls_back_after_paginated_strategy_level_error() 
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -231,9 +231,8 @@ fn compiled_discovery_runtime_combines_step_and_strategy_acceptance() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_rejected_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
     assert_eq!(result.diagnostics.len(), 2);
     assert_eq!(result.diagnostics[0].code, "acceptance_min_results_not_met");
     assert_eq!(
@@ -325,9 +324,9 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
-        result.candidates[0]
+        result.payload.candidates[0]
             .provider_values
             .title
             .as_deref()
@@ -389,9 +388,8 @@ fn discovery_acceptance_observes_conflict_safe_reduced_occurrences() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_rejected_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
     assert_eq!(
         result.diagnostics[0].code,
         "acceptance_required_field_missing"

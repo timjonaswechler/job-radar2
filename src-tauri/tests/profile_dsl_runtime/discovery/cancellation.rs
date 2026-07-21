@@ -41,8 +41,8 @@ fn discovery_cancellation_interrupts_an_active_http_fetch_without_fallback_failu
         };
 
         let (_, result) = tokio::join!(cancel_after_fetch_starts, execute);
+        let result = crate::support::cancelled(result);
 
-        assert!(result.candidates.is_empty());
         assert_eq!(fetcher.request_count(), 1);
         assert_eq!(
             result
@@ -95,8 +95,8 @@ fn discovery_browser_cancellation_is_distinct_from_runtime_failure() {
         };
 
         let (_, result) = tokio::join!(cancel_after_render_starts, execute);
+        let result = crate::support::cancelled(result);
 
-        assert!(result.candidates.is_empty());
         assert_eq!(browser.render_count(), 1);
         assert!(result
             .diagnostics
@@ -159,16 +159,11 @@ fn discovery_cancellation_stops_page_pagination_before_the_next_request() {
             RuntimeExecutionContext::with_cancellation(&cancellation),
         );
         let (_, result) = tokio::join!(cancel, execute);
+        let result = crate::support::cancelled(result);
 
-        assert!(result.candidates.is_empty());
         assert_eq!(fetcher.request_count(), 1);
         assert_eq!(
-            result
-                .report
-                .as_ref()
-                .expect("cancelled execution report")
-                .usage
-                .response_bytes,
+            result.complete_budget_report.usage.response_bytes,
             b"{\"jobs\":[".len() as u64
         );
         assert!(result

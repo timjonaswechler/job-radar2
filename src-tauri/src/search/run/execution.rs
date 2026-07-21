@@ -6,7 +6,7 @@ use crate::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_discovery, ManagedProfileBrowserClient, PhaseCompletion, PostingOccurrence,
+            execute_discovery, ManagedProfileBrowserClient, PostingOccurrence,
             ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
             RuntimeExecutionContext,
         },
@@ -127,35 +127,53 @@ where
     )
     .await;
 
-    if input
-        .cancellation_token
-        .is_some_and(CancellationToken::is_cancelled)
-    {
-        return Err(source_execution_cancelled_error(result.diagnostics));
+    use crate::profile_dsl::runtime::{PhaseOutcome, PhaseRunError, PolicyOutcome};
+
+    let outcome = match result {
+        Ok(outcome) => outcome,
+        Err(PhaseRunError::Cancelled(cancelled)) => {
+            return Err(source_execution_cancelled_error(cancelled.diagnostics));
+        }
+        Err(PhaseRunError::NotStarted { diagnostics, .. }) => {
+            return Err(discovery_failed_error(
+                "Discovery did not start",
+                diagnostics,
+            ));
+        }
+    };
+
+    match outcome {
+        PhaseOutcome::Completed {
+            policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+            diagnostics,
+            ..
+        } => Ok(SourceExecutionOutput {
+            occurrences: reduced_payload.candidates,
+            diagnostics,
+        }),
+        PhaseOutcome::Completed { diagnostics, .. } => Err(discovery_failed_error(
+            "Discovery Policy was unsatisfied",
+            diagnostics,
+        )),
+        PhaseOutcome::BudgetExhausted { diagnostics, .. } => Err(discovery_failed_error(
+            "Discovery budget was exhausted",
+            diagnostics,
+        )),
+        PhaseOutcome::ExecutionFailed { diagnostics, .. } => Err(discovery_failed_error(
+            "Discovery execution failed",
+            diagnostics,
+        )),
     }
+}
 
-    let execution_failed = !matches!(
-        result.report.as_ref().map(|report| &report.completion),
-        Some(PhaseCompletion::Accepted)
-    );
-
-    if execution_failed {
-        let message = result
-            .diagnostics
-            .iter()
-            .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-            .map(|diagnostic| diagnostic.message.clone())
-            .unwrap_or_else(|| "Discovery failed".to_string());
-        return Err(SourceExecutionError::FailedWithDiagnostics {
-            message,
-            diagnostics: result.diagnostics,
-        });
+fn discovery_failed_error(
+    message: impl Into<String>,
+    diagnostics: Diagnostics,
+) -> SourceExecutionError {
+    SourceExecutionError::FailedWithDiagnostics {
+        message: message.into(),
+        diagnostics,
     }
-
-    Ok(SourceExecutionOutput {
-        occurrences: result.candidates,
-        diagnostics: result.diagnostics,
-    })
 }
 
 fn source_execution_cancelled_error(mut diagnostics: Diagnostics) -> SourceExecutionError {

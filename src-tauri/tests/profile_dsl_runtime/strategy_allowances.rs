@@ -1,3 +1,4 @@
+use crate::support::{accepted_phase, budget_exhausted, cancelled, execution_failed, not_started};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> {
@@ -96,18 +97,19 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
     plan.discovery.limits.max_duration_ms = 1_999;
     let fetcher = QueueFetcher::new([]);
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable(),
-    )
-    .await;
+    let diagnostics = not_started(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable(),
+        )
+        .await,
+        job_radar_lib::PhasePreStartFailure::PlanMismatch,
+    );
 
-    assert!(result.report.is_none());
-    assert!(result.candidates.is_empty());
-    assert!(result.diagnostics.iter().any(|diagnostic| {
+    assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "invalid_compiled_browser_phase_duration"
             && diagnostic.path == "/discovery/limits/maxDurationMs"
     }));
@@ -133,19 +135,21 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = execution_failed(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+        job_radar_lib::PhaseExecutionFailure::InvalidCallerLimits,
+    );
 
-    let report = result.report.expect("caller mismatch has a report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
     assert_eq!(report.usage, Default::default());
-    assert!(result.candidates.is_empty());
     assert!(result
         .diagnostics
         .iter()
@@ -168,17 +172,19 @@ async fn accepted_discovery_has_one_complete_exact_eight_dimension_report() {
         max_pages: 2,
         ..PhaseLimits::BACKEND
     };
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(equality_limits),
-    )
-    .await;
+    let result = accepted_phase(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(equality_limits),
+        )
+        .await,
+    );
 
-    assert_eq!(result.candidates.len(), 1);
-    let report = result.report.expect("started execution has a report");
+    assert_eq!(result.payload.candidates.len(), 1);
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.strategy_attempts, 1);
     assert_eq!(report.usage.requests, 2);
@@ -209,20 +215,21 @@ async fn attempt_one_over_is_denied_before_second_strategy() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        &fetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            &fetcher,
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("attempt exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::StrategyAttempts);
     assert_eq!(report.usage.strategy_attempts, 1);
     assert_eq!(fetcher.request_count(), 1);
-    assert!(result.candidates.is_empty());
 }
 
 #[tokio::test]
@@ -236,22 +243,23 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("request exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::Requests);
     assert_eq!(report.usage.requests, 1);
     assert_eq!(report.usage.pages, 1);
     assert_eq!(report.usage.produced_items, 1);
     assert_eq!(fetcher.request_count(), 1);
-    assert!(result.candidates.is_empty());
 }
 
 #[tokio::test]
@@ -265,17 +273,18 @@ async fn exact_response_byte_allowance_followed_by_eof_succeeds() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = accepted_phase(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    assert!(result.candidates.is_empty());
-    let report = result.report.expect("accepted exact-boundary report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.response_bytes, body.len() as u64);
     assert_eq!(fetcher.request_count(), 1);
@@ -291,18 +300,19 @@ async fn response_byte_one_over_commits_only_the_admitted_prefix_and_hides_paylo
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.request_count(), 1);
-    let report = result.report.expect("response-byte exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::ResponseBytes);
     assert_eq!(report.usage.response_bytes, 10);
 }
@@ -322,18 +332,19 @@ async fn response_byte_allowance_is_cumulative_across_pages() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.request_count(), 2);
-    let report = result.report.expect("cumulative byte exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::ResponseBytes);
     assert_eq!(report.usage.response_bytes, limit);
     assert_eq!(report.usage.requests, 2);
@@ -351,16 +362,18 @@ async fn atomic_request_page_one_over_does_not_charge_the_fitting_request() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("page exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::Pages);
     assert_eq!(
         report.usage.requests, 1,
@@ -380,16 +393,18 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
     };
     let fetcher = QueueFetcher::new([json!({ "jobs": [] })]);
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::with_cancellation(&cancellation),
-    )
-    .await;
+    let result = cancelled(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::with_cancellation(&cancellation),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("cancelled execution report");
+    let report = result.complete_budget_report;
     assert_eq!(
         report.completion,
         PhaseCompletion::Cancelled {
@@ -415,18 +430,19 @@ async fn produced_item_prefix_is_charged_and_denial_exposes_no_payload() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.request_count(), 1);
-    let report = result.report.expect("budget terminal has a report");
+    let report = result.report;
     let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
         panic!("expected budget exhaustion")
     };
@@ -452,21 +468,22 @@ async fn fan_out_one_over_charges_only_the_fitting_nonduplicate_prefix() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("fan-out exhaustion report");
+    let report = result.report;
     assert_exhaustion(&report.completion, AllowanceDimension::FanOut);
     assert_eq!(report.usage.fan_out, 1);
     assert_eq!(report.usage.requests, 1);
     assert_eq!(fetcher.request_count(), 1);
-    assert!(result.candidates.is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -503,8 +520,9 @@ async fn exact_duration_boundary_may_complete_before_deadline_exhaustion() {
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     );
     let (_, result) = tokio::join!(release, execute);
+    let result = accepted_phase(result);
 
-    let report = result.report.expect("boundary completion report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.duration_ms, 50);
 }
@@ -529,19 +547,19 @@ async fn admitted_response_prefix_is_committed_after_deadline_stop_is_recorded()
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        &fetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            &fetcher,
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
 
-    assert!(result.candidates.is_empty());
-    let report = result.report.expect("deadline exhaustion report");
-    assert_exhaustion(&report.completion, AllowanceDimension::Duration);
-    assert_eq!(report.usage.response_bytes, prefix.len() as u64);
+    assert_exhaustion(&result.report.completion, AllowanceDimension::Duration);
+    assert_eq!(result.report.usage.response_bytes, prefix.len() as u64);
     assert_eq!(fetcher.request_count(), 1);
 }
 
@@ -573,16 +591,18 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        &fetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::with_cancellation(&cancellation).with_limits(caller),
-    )
-    .await;
+    let result = cancelled(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            &fetcher,
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::with_cancellation(&cancellation).with_limits(caller),
+        )
+        .await,
+    );
 
-    let report = result.report.expect("cancelled terminal report");
+    let report = result.complete_budget_report;
     assert_eq!(
         report.completion,
         PhaseCompletion::Cancelled {
@@ -610,16 +630,17 @@ async fn invocation_deadline_stops_active_effect_and_reports_duration_exhaustion
         max_duration_ms: 1,
         ..PhaseLimits::BACKEND
     };
-    let result = execute_discovery(
-        &plan,
-        empty_source_config(),
-        &fetcher,
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    )
-    .await;
-    assert!(result.candidates.is_empty());
-    let report = result.report.expect("deadline terminal has report");
+    let result = budget_exhausted(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            &fetcher,
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
+    let report = result.report;
     let PhaseCompletion::BudgetExhausted { exhaustion } = report.completion else {
         panic!("expected budget exhaustion")
     };
@@ -638,17 +659,18 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
         ..PhaseLimits::BACKEND
     };
 
-    let result = tauri::async_runtime::block_on(execute_discovery(
-        &plan,
-        empty_source_config(),
-        fetcher.client(),
-        &UnavailableProfileBrowserClient,
-        RuntimeExecutionContext::uncancellable().with_limits(caller),
-    ));
+    let result = execution_failed(
+        tauri::async_runtime::block_on(execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )),
+        job_radar_lib::PhaseExecutionFailure::InvalidCallerLimits,
+    );
 
-    let report = result
-        .report
-        .expect("invalid caller limit has a complete report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
     assert_eq!(report.usage.strategy_attempts, 0);
     assert_eq!(report.usage.requests, 0);

@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
 
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
@@ -13,10 +12,7 @@ use crate::{
             discovery::{ExecutionPlanDiscoveryOutput, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
-        occurrence::{
-            ContributionOrigin, DiscoveryContributionEvidence, DiscoveryRejection,
-            PostingOccurrence,
-        },
+        occurrence::{ContributionOrigin, PostingOccurrence},
         primitives::{
             acceptance::{
                 evaluate_discovery_final_acceptance, evaluate_discovery_strategy_acceptance,
@@ -44,6 +40,10 @@ use super::{
         RuntimePhase, TypedCancellation,
     },
     http::{ProfileHttpClient, ProfileHttpFailureKind},
+    outcome::{
+        DiscoveryPhasePayload, PhaseCancelled, PhaseExecutionFailure, PhaseOutcome,
+        PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome, PolicyUnsatisfiedCause,
+    },
     reducers::{reduce_discovery, DiscoveryContribution},
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
@@ -61,24 +61,12 @@ mod support;
 use diagnostics::{runtime_error, runtime_warning};
 use document::select_items;
 use extract::extract_candidate;
-use fetch::{fetch_strategy_document_at_url, fetch_strategy_document_with_query_params};
+use fetch::{
+    fetch_strategy_document_at_url, fetch_strategy_document_with_query_params,
+    DiscoveryFetchOutcome,
+};
 use pagination::execute_paginated_strategy;
 use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidates_from_items};
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiscoveryExecutionResult {
-    pub candidates: Vec<PostingOccurrence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub provenance: Vec<DiscoveryContributionEvidence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub conflicts: Vec<DiscoveryContributionEvidence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub rejections: Vec<DiscoveryRejection>,
-    pub diagnostics: Diagnostics,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub report: Option<PhaseExecutionReport>,
-}
 
 pub async fn execute_discovery<F, B>(
     plan: &SourceExecutionPlan,
@@ -86,17 +74,14 @@ pub async fn execute_discovery<F, B>(
     fetcher: &F,
     browser: &B,
     context: RuntimeExecutionContext<'_>,
-) -> DiscoveryExecutionResult
+) -> PhaseRunResult<DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
     if plan.discovery.strategies.is_empty() {
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::PlanMismatch,
             diagnostics: vec![runtime_error(
                 "discovery_strategy_missing",
                 "discovery does not contain an executable strategy",
@@ -104,8 +89,7 @@ where
                 None,
                 json!({}),
             )],
-            report: None,
-        };
+        });
     }
     let browser_requires_reserve = plan
         .discovery
@@ -115,11 +99,8 @@ where
     if browser_requires_reserve
         && plan.discovery.limits.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS
     {
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Err(PhaseRunError::NotStarted {
+            failure: PhasePreStartFailure::PlanMismatch,
             diagnostics: vec![runtime_error(
                 "invalid_compiled_browser_phase_duration",
                 "Compiled Discovery Browser duration does not preserve the teardown reserve",
@@ -127,28 +108,25 @@ where
                 None,
                 json!({}),
             )],
-            report: None,
-        };
+        });
     }
     if let Some(caller) = context.caller_limits() {
         if !caller.all_positive()
             || !caller.within(plan.discovery.limits)
             || (browser_requires_reserve && caller.max_duration_ms < BROWSER_TEARDOWN_RESERVE_MS)
         {
-            return DiscoveryExecutionResult {
-                candidates: Vec::new(),
-                provenance: Vec::new(),
-                conflicts: Vec::new(),
-                rejections: Vec::new(),
-                diagnostics: vec![runtime_error(
+            let diagnostics = vec![runtime_error(
                     "invalid_caller_phase_limits",
                     "Caller phase limits must be positive, may only tighten compiled limits, and must preserve the Browser teardown reserve",
                     "/discovery/limits",
                     None,
                     json!({}),
-                )],
-                report: Some(InvocationAllowance::prestart_failure_report()),
-            };
+                )];
+            return Ok(PhaseOutcome::ExecutionFailed {
+                typed_failure: PhaseExecutionFailure::InvalidCallerLimits,
+                complete_budget_report: InvocationAllowance::prestart_failure_report(),
+                diagnostics,
+            });
         }
     }
     let allowance = InvocationAllowance::new(
@@ -238,7 +216,7 @@ fn project_discovery_execution(
     phase_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
-) -> DiscoveryExecutionResult {
+) -> PhaseRunResult<DiscoveryPhasePayload> {
     let accepted_attempt = match execution.terminal {
         StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
         StrategySetTerminal::Cancelled(cancellation) => {
@@ -248,16 +226,12 @@ fn project_discovery_execution(
                 .flat_map(|attempt| attempt.diagnostics)
                 .collect::<Diagnostics>();
             diagnostics.push(runtime_execution_cancelled_diagnostic(&cancellation));
-            return DiscoveryExecutionResult {
-                candidates: Vec::new(),
-                provenance: Vec::new(),
-                conflicts: Vec::new(),
-                rejections: Vec::new(),
-                diagnostics,
-                report: Some(allowance.report(PhaseCompletion::Cancelled {
+            return Err(PhaseRunError::Cancelled(PhaseCancelled {
+                complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
                     reason: PhaseCancellationReason::UserCancelled,
-                })),
-            };
+                }),
+                diagnostics,
+            }));
         }
         StrategySetTerminal::Stopped(stop) => {
             let diagnostics = execution
@@ -267,24 +241,32 @@ fn project_discovery_execution(
                 .chain(std::iter::once(diagnostic_for_stop(&stop, "/discovery")))
                 .collect();
             let completion = completion_for_stop(stop);
-            return DiscoveryExecutionResult {
-                candidates: Vec::new(),
-                provenance: Vec::new(),
-                conflicts: Vec::new(),
-                rejections: Vec::new(),
-                diagnostics,
-                report: Some(allowance.report(completion)),
-            };
+            let report = allowance.report(completion.clone());
+            return Ok(match completion {
+                PhaseCompletion::BudgetExhausted { .. } => PhaseOutcome::BudgetExhausted {
+                    complete_budget_report: report,
+                    diagnostics,
+                },
+                PhaseCompletion::ExecutionFailed => PhaseOutcome::ExecutionFailed {
+                    typed_failure: PhaseExecutionFailure::Internal,
+                    complete_budget_report: report,
+                    diagnostics,
+                },
+                _ => unreachable!("stopped phase has budget or execution-failure completion"),
+            });
         }
         StrategySetTerminal::Exhausted => None,
     };
 
     let mut diagnostics = Vec::new();
     let mut reduced = None;
+    let mut includes_execution_failure = false;
     for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
         diagnostics.extend(attempt.diagnostics);
+        includes_execution_failure |=
+            matches!(attempt.completion, StrategyAttemptCompletion::Failed);
         if Some(attempt_index) == accepted_attempt {
             let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
                 unreachable!("accepted terminal must reference accepted typed output");
@@ -306,6 +288,17 @@ fn project_discovery_execution(
     }
 
     if accepted_attempt.is_none() {
+        if context.is_cancelled() {
+            diagnostics.push(runtime_execution_cancelled_diagnostic(
+                &TypedCancellation::phase(RuntimePhase::Discovery),
+            ));
+            return Err(PhaseRunError::Cancelled(PhaseCancelled {
+                complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
+                    reason: PhaseCancellationReason::UserCancelled,
+                }),
+                diagnostics,
+            }));
+        }
         diagnostics.push(runtime_error(
             "fallback_exhausted",
             "discovery fallback strategies were exhausted without an accepted result",
@@ -313,14 +306,17 @@ fn project_discovery_execution(
             None,
             json!({}),
         ));
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
+        return Ok(PhaseOutcome::Completed {
+            policy_outcome: PolicyOutcome::PolicyUnsatisfied {
+                cause: if includes_execution_failure {
+                    PolicyUnsatisfiedCause::IncludesExecutionFailure
+                } else {
+                    PolicyUnsatisfiedCause::RejectedOnly
+                },
+            },
+            complete_budget_report: allowance.report(PhaseCompletion::PolicyUnsatisfied),
             diagnostics,
-            report: Some(allowance.report(PhaseCompletion::PolicyUnsatisfied)),
-        };
+        });
     }
     let reduced = reduced.expect("accepted policy terminal must carry selected output");
     diagnostics.extend(reduced.diagnostics);
@@ -334,60 +330,47 @@ fn project_discovery_execution(
         diagnostics.push(runtime_execution_cancelled_diagnostic(
             &TypedCancellation::phase(RuntimePhase::Discovery),
         ));
-        return DiscoveryExecutionResult {
-            candidates: Vec::new(),
-            provenance: Vec::new(),
-            conflicts: Vec::new(),
-            rejections: Vec::new(),
-            diagnostics,
-            report: Some(allowance.report(PhaseCompletion::Cancelled {
+        return Err(PhaseRunError::Cancelled(PhaseCancelled {
+            complete_budget_report: allowance.report(PhaseCompletion::Cancelled {
                 reason: PhaseCancellationReason::UserCancelled,
-            })),
-        };
+            }),
+            diagnostics,
+        }));
     }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
-    DiscoveryExecutionResult {
-        candidates: if final_accepted {
-            reduced.candidates
-        } else {
-            Vec::new()
-        },
-        provenance: if final_accepted {
-            reduced.provenance
-        } else {
-            Vec::new()
-        },
-        conflicts: if final_accepted {
-            reduced.conflicts
-        } else {
-            Vec::new()
-        },
-        rejections: if final_accepted {
-            reduced.rejections
-        } else {
-            Vec::new()
-        },
+    let policy_outcome = if final_accepted {
+        PolicyOutcome::Accepted {
+            reduced_payload: DiscoveryPhasePayload {
+                candidates: reduced.candidates,
+                provenance: reduced.provenance,
+                conflicts: reduced.conflicts,
+                rejections: reduced.rejections,
+            },
+        }
+    } else {
+        PolicyOutcome::PolicyUnsatisfied {
+            cause: PolicyUnsatisfiedCause::RejectedOnly,
+        }
+    };
+    Ok(PhaseOutcome::Completed {
+        policy_outcome,
+        complete_budget_report: allowance.report(completion),
         diagnostics,
-        report: Some(allowance.report(completion)),
-    }
+    })
 }
 
 fn cancelled_discovery_result(
     cancellation: TypedCancellation,
     report: PhaseExecutionReport,
-) -> DiscoveryExecutionResult {
-    DiscoveryExecutionResult {
-        candidates: Vec::new(),
-        provenance: Vec::new(),
-        conflicts: Vec::new(),
-        rejections: Vec::new(),
+) -> PhaseRunResult<DiscoveryPhasePayload> {
+    Err(PhaseRunError::Cancelled(PhaseCancelled {
         diagnostics: vec![runtime_execution_cancelled_diagnostic(&cancellation)],
-        report: Some(report),
-    }
+        complete_budget_report: report,
+    }))
 }
 
 #[cfg(test)]
@@ -408,6 +391,37 @@ mod acceptance_projection_tests {
         fn is_cancelled(&self) -> bool {
             true
         }
+    }
+
+    #[test]
+    fn cancellation_after_policy_exhaustion_wins_without_fallback_summary() {
+        let execution = StrategySetExecution::<Vec<PostingOccurrence>> {
+            attempts: Vec::new(),
+            terminal: StrategySetTerminal::Exhausted,
+        };
+        let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
+        let cancellation = Cancelled;
+        let context = RuntimeExecutionContext::with_cancellation(&cancellation);
+
+        let result = project_discovery_execution(execution, None, context, &allowance);
+
+        let PhaseRunError::Cancelled(cancelled) = result.unwrap_err() else {
+            panic!("expected typed cancellation")
+        };
+        assert_eq!(
+            cancelled.complete_budget_report.completion,
+            PhaseCompletion::Cancelled {
+                reason: PhaseCancellationReason::UserCancelled,
+            }
+        );
+        assert_eq!(
+            cancelled
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            vec!["runtime_execution_cancelled"]
+        );
     }
 
     #[test]
@@ -432,9 +446,11 @@ mod acceptance_projection_tests {
 
         let result = project_discovery_execution(execution, Some(&acceptance), context, &allowance);
 
-        assert!(result.candidates.is_empty());
+        let PhaseRunError::Cancelled(result) = result.unwrap_err() else {
+            panic!("expected typed cancellation")
+        };
         assert_eq!(
-            result.report.unwrap().completion,
+            result.complete_budget_report.completion,
             PhaseCompletion::Cancelled {
                 reason: PhaseCancellationReason::UserCancelled,
             }

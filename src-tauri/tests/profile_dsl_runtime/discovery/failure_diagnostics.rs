@@ -3,10 +3,10 @@ use super::*;
 #[test]
 fn compiled_discovery_runtime_reports_fetch_parse_select_and_extract_failures() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
-    let fetch_failure = block_on(execute_discovery_test(&plan, &fake_fetcher([])));
+    let fetch_failure = block_on(execute_discovery_failed_test(&plan, &fake_fetcher([])));
     assert_runtime_diagnostic(&fetch_failure.diagnostics[0], "fetch_failed");
 
-    let parse_failure = block_on(execute_discovery_test(
+    let parse_failure = block_on(execute_discovery_failed_test(
         &plan,
         &fake_fetcher([("https://example.test/jobs.json", "{not-json".to_string())]),
     ));
@@ -55,9 +55,8 @@ fn strict_decode_terminal_exposes_no_document_or_parse_diagnostic() {
         content_length: None,
     }]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_failed_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.requests().len(), 1);
     assert_runtime_diagnostic(&result.diagnostics[0], "fetch_failed");
     assert!(result
@@ -87,9 +86,8 @@ fn non_success_http_status_exposes_no_discovery_payload_or_parse_result() {
         content_length: None,
     }]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = block_on(execute_discovery_failed_test(&plan, &fetcher));
 
-    assert!(result.candidates.is_empty());
     assert_eq!(fetcher.request_count(), 1);
     assert_runtime_diagnostic(&result.diagnostics[0], "http_fetch_non_success_status");
     assert_eq!(
@@ -100,7 +98,7 @@ fn non_success_http_status_exposes_no_discovery_payload_or_parse_result() {
         .diagnostics
         .iter()
         .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
-    let report = result.report.expect("work-started terminal has a report");
+    let report = result.report;
     assert_eq!(report.completion, PhaseCompletion::PolicyUnsatisfied);
     assert_eq!(report.usage.requests, 1);
 }
@@ -118,7 +116,7 @@ fn discovery_url_render_failure_does_not_expose_authored_template() {
     )
     .unwrap();
 
-    let result = block_on(execute_discovery_test(&plan, &fake_fetcher([])));
+    let result = block_on(execute_discovery_failed_test(&plan, &fake_fetcher([])));
 
     let diagnostic = &result.diagnostics[0];
     assert_runtime_diagnostic(diagnostic, "fetch_url_template_failed");
