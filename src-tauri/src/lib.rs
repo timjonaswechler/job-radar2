@@ -39,23 +39,28 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    AccessPathFragment, AuthoredScalar, DetailStep, DetailStepFragment, DetailStrategyFragment,
-    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
-    DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
-    ListFieldExpression, Parse, ParseFragment, ParseType, ParseTypeFragment, PhaseLimits,
-    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SelectTypeFragment,
-    SupportLevel,
+    AccessPathFragment, AuthoredScalar, CaptureRule, Captures, DetailStep, DetailStepFragment,
+    DetailStrategyFragment, DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument,
+    DetectionEvidence, DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep,
+    DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod,
+    InputUrlPattern, ListFieldExpression, Parse, ParseFragment, ParseType, ParseTypeFragment,
+    PhaseLimits, PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select,
+    SelectTypeFragment, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
     ExecutionPlanJsonValue, ExecutionPlanPagination, ExecutionPlanRequestBody,
 };
-pub use profile_dsl::execution_plan::values::{CompiledValueCaptureRule, CompiledValueCaptures};
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::policy::StrategyPolicy;
+pub use profile_dsl::primitives::capture::{
+    capture_descriptors, compile_captures, compile_named_capture_rule, evaluate_compiled_captures,
+    validate_capture_registration_keys, CaptureCompileError, CaptureCompileErrorKind,
+    CaptureDescriptor, CaptureEvaluationError, CaptureEvaluationErrorKind, CaptureOutput,
+    CaptureRegistryError, CompiledCapturePlan, CompiledCaptureRule, CAPTURE_DESCRIPTOR,
+};
 pub use profile_dsl::primitives::cardinality::{
     cardinality_descriptors, compile_cardinality, validate_cardinality_registration_keys, All,
     AllPlan, Cardinality, CardinalityDescriptor, CardinalityDiagnosticContext, CardinalityError,

@@ -82,7 +82,7 @@
                   "key": "value",
                   "cardinality": "one"
                 },
-                "pattern": "(?i)/job/(?<value>[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-"
+                "pattern": "(?i)/job/(?<location>[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-"
               },
               "title": {
                 "from": {
@@ -90,7 +90,7 @@
                   "key": "value",
                   "cardinality": "one"
                 },
-                "pattern": "(?i)/job/(?:[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-(?<value>.+?)(?:-[0-9]+|/[0-9]+/?)(?:[?#]|$)"
+                "pattern": "(?i)/job/(?:[^/?#-]*_[^/?#-]*-[^/?#-]+|[^/?#-]+)-(?<title>.+?)(?:-[0-9]+|/[0-9]+/?)(?:[?#]|$)"
               },
               "jobId": {
                 "from": {
@@ -98,7 +98,7 @@
                   "key": "value",
                   "cardinality": "one"
                 },
-                "pattern": "(?i)(?:-|/)(?<value>[0-9]+)/?(?:[?#]|$)"
+                "pattern": "(?i)(?:-|/)(?<jobId>[0-9]+)/?(?:[?#]|$)"
               },
               "externalPath": {
                 "from": {
@@ -106,7 +106,7 @@
                   "key": "value",
                   "cardinality": "one"
                 },
-                "pattern": "(?i)^https?://[^/]+(?<value>/job/[^?#]+)"
+                "pattern": "(?i)^https?://[^/]+(?<externalPath>/job/[^?#]+)"
               }
             },
             "extract": {

@@ -361,7 +361,7 @@ fn compiled_detail_runtime_renders_fetch_templates_from_pre_fetch_contexts() {
         Some(json!({
             "tenant": {
                 "from": { "type": "posting_meta", "key": "tenant", "cardinality": "one" },
-                "pattern": "^(?<value>[a-z0-9_]+)$"
+                "pattern": "^(?<tenant>[a-z0-9_]+)$"
             }
         })),
         None,
@@ -967,6 +967,42 @@ fn detail_strict_decode_terminal_exposes_no_document_or_parse_diagnostic() {
         .diagnostics
         .iter()
         .all(|diagnostic| !diagnostic.code.ends_with("_parse_failed")));
+}
+
+#[test]
+fn detail_capture_failure_is_atomic_and_prevents_fetch() {
+    let plan = compiled_json_detail_plan(
+        "https://example.test/detail",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        Some(json!({
+            "tenant": {
+                "from": { "type": "posting_meta", "key": "tenant" },
+                "pattern": "^(?<tenant>.+)$"
+            },
+            "optional": {
+                "from": { "type": "posting_meta", "key": "jobId" },
+                "pattern": "^REQ-[0-9]+(?<optional>X)?$"
+            }
+        })),
+        None,
+    );
+    let posting = posting_occurrence("job-42", [("tenant", "acme"), ("jobId", "REQ-42")]);
+    let fetcher = fake_profile_http_client([]);
+
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+
+    assert_eq!(result.description_text, None);
+    assert!(fetcher.requests().is_empty());
+    assert_eq!(result.diagnostics[0].code, "capture_named_group_unmatched");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/detail/strategies/0/captures/optional"
+    );
+    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
 }
 
 #[test]

@@ -104,6 +104,104 @@ fn compiler_rejects_invalid_predicate_regex_during_plan_compilation() {
 }
 
 #[test]
+fn compiler_preserves_base_and_direct_capture_order_in_the_typed_plan() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let mut source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    profile.access_paths[0].discovery.strategies[0].captures = Some(
+        serde_json::from_str(
+            r#"{
+                "zeta": {
+                    "from": { "type": "const", "value": "z" },
+                    "pattern": "^(?<zeta>z)$"
+                },
+                "alpha": {
+                    "from": { "type": "const", "value": "a" },
+                    "pattern": "^(?<alpha>a)$"
+                }
+            }"#,
+        )
+        .unwrap(),
+    );
+    source.access_paths = Some(
+        serde_json::from_str(
+            r#"[{
+                "key": "json_feed",
+                "discovery": {
+                    "strategies": [{
+                        "key": "json_api",
+                        "captures": {
+                            "beta": {
+                                "from": { "type": "const", "value": "b" },
+                                "pattern": "^(?<beta>b)$"
+                            },
+                            "gamma": {
+                                "from": { "type": "const", "value": "g" },
+                                "pattern": "^(?<gamma>g)$"
+                            }
+                        }
+                    }]
+                }
+            }]"#,
+        )
+        .unwrap(),
+    );
+
+    let result = compile_test_source(&source, Some(profile));
+    let plan = result.execution_plan.expect("capture profile compiles");
+    let keys = plan.discovery.strategies[0]
+        .captures
+        .as_ref()
+        .unwrap()
+        .rules()
+        .iter()
+        .map(|rule| rule.key())
+        .collect::<Vec<_>>();
+
+    assert_eq!(keys, vec!["zeta", "alpha", "beta", "gamma"]);
+}
+
+#[test]
+fn compiler_rejects_invalid_capture_regex_and_missing_selected_group_before_execution() {
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+
+    for (pattern, expected_code) in [
+        ("(", "capture_pattern_invalid"),
+        ("^(?<other>.+)$", "capture_named_group_missing"),
+    ] {
+        let mut profile: SourceProfileDocument =
+            read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+        profile.access_paths[0].discovery.strategies[0].captures = Some(
+            serde_json::from_value(serde_json::json!({
+                "tenant": {
+                    "from": { "type": "const", "value": "runtime-secret-sentinel" },
+                    "pattern": pattern
+                }
+            }))
+            .unwrap(),
+        );
+
+        let result = compile_test_source(&source, Some(profile));
+
+        assert_eq!(result.execution_plan, None);
+        let diagnostic = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == expected_code)
+            .expect("capture compiler diagnostic");
+        assert!(diagnostic
+            .path
+            .ends_with("/discovery/strategies/0/captures/tenant/pattern"));
+        assert_eq!(diagnostic.strategy_key.as_deref(), Some("json_api"));
+        assert!(!serde_json::to_string(diagnostic)
+            .unwrap()
+            .contains("runtime-secret-sentinel"));
+    }
+}
+
+#[test]
 fn compiler_rejects_invalid_transform_plans_with_stable_context() {
     let mut profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");

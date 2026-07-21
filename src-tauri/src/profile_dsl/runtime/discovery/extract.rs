@@ -1,19 +1,22 @@
 use super::document::RuntimeItem;
 use super::*;
-use crate::profile_dsl::execution_plan::values::{
-    CompiledValueCaptureRule as CaptureRule, CompiledValueCaptures as Captures,
+use crate::profile_dsl::primitives::{
+    capture::{evaluate_compiled_captures, CompiledCapturePlan},
+    predicate::CompiledPredicate,
+    value::{evaluate_discovery_capture_value, DiscoveryCaptureValueContext, SourceValueView},
 };
-use crate::profile_dsl::primitives::predicate::CompiledPredicate;
+use crate::profile_dsl::template::json_pointer_segment;
 
-mod captures;
 mod fields;
 
-use captures::evaluate_strategy_captures;
-use fields::{evaluate_list_field, evaluate_predicate, evaluate_value_scalar, FieldEvaluation};
+use fields::{
+    evaluate_list_field, evaluate_predicate, evaluate_value_scalar, push_value_error,
+    FieldEvaluation,
+};
 
 pub(super) fn extract_candidate(
     item: &RuntimeItem<'_, '_>,
-    capture_rules: Option<&Captures>,
+    capture_rules: Option<&CompiledCapturePlan>,
     conditions: Option<&Vec<CompiledPredicate>>,
     fields: &ExecutionPlanDiscoveryFields,
     source_config: &SourceConfig,
@@ -157,6 +160,65 @@ pub(super) fn extract_candidate(
             description_text,
         }),
         _ => None,
+    }
+}
+
+fn evaluate_strategy_captures(
+    item: &RuntimeItem<'_, '_>,
+    capture_rules: Option<&CompiledCapturePlan>,
+    source_config: &SourceConfig,
+    source_name: &str,
+    base_path: &str,
+    strategy_key: Option<&str>,
+    item_index: usize,
+    diagnostics: &mut Diagnostics,
+) -> Option<BTreeMap<String, String>> {
+    let Some(plan) = capture_rules else {
+        return Some(BTreeMap::new());
+    };
+    let context = DiscoveryCaptureValueContext {
+        source: SourceValueView {
+            source_name,
+            source_config,
+        },
+        selected: item,
+    };
+    match evaluate_compiled_captures(plan, |value| {
+        evaluate_discovery_capture_value(value, &context)
+    }) {
+        Ok(outputs) => Some(
+            outputs
+                .into_iter()
+                .map(|output| (output.key, output.value))
+                .collect(),
+        ),
+        Err(errors) => {
+            for error in errors {
+                let path = format!(
+                    "{base_path}/captures/{}",
+                    json_pointer_segment(&error.capture_key)
+                );
+                if let Some(value_error) = error.value_error {
+                    push_value_error(
+                        value_error,
+                        &format!("{path}/from"),
+                        strategy_key,
+                        item_index,
+                        diagnostics,
+                    );
+                    continue;
+                }
+                let (code, message) = error.kind.diagnostic();
+                diagnostics.push(runtime_error(
+                    code,
+                    message,
+                    path,
+                    strategy_key,
+                    json!({ "captureKey": error.capture_key, "itemIndex": item_index }),
+                ));
+            }
+            None
+        }
     }
 }
 

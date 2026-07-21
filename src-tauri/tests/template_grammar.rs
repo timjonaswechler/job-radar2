@@ -181,7 +181,7 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
 fn compile_source_rejects_detail_fetch_capture_before_io_and_detection_malformed_template() {
     let mut value = profile_value();
     value["accessPaths"][0]["detail"]["strategies"][0]["captures"] = json!({
-        "tenant": { "from": { "type": "posting_meta", "key": "jobId" }, "pattern": "^(?<value>.+)$" }
+        "tenant": { "from": { "type": "posting_meta", "key": "jobId" }, "pattern": "^(?<tenant>.+)$" }
     });
     value["accessPaths"][0]["detail"]["strategies"][0]["fetch"]["url"] =
         json!("{{captures:tenant}}");

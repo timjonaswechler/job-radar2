@@ -12,7 +12,9 @@ use std::collections::{BTreeMap, HashSet};
 use serde_json::Value;
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{AccessPathFragment, PhaseLimits};
+use crate::profile_dsl::documents::{
+    AccessPathFragment, Captures, DetailStepFragment, DiscoveryStepFragment, PhaseLimits,
+};
 use crate::source_profile::documents::SourceProfileDocument;
 
 use super::provenance::{self, OriginTree, ProvenanceOrigin, RecordedProvenance};
@@ -52,8 +54,113 @@ pub(super) fn specialize_profile_with_provenance(
     // Finalize typed paths from the merge's own materialization and origin
     // tree before constructing the completed typed document.
     let provenance = provenance::profile_provenance(&materialized, &origins);
-    let profile = deserialize_effective_profile(materialized, diagnostics)?;
+    let mut profile = deserialize_effective_profile(materialized, diagnostics)?;
+    restore_capture_order(&mut profile, base, fragments);
     Some((profile, provenance))
+}
+
+fn restore_capture_order(
+    profile: &mut SourceProfileDocument,
+    base: &SourceProfileDocument,
+    fragments: Option<&[AccessPathFragment]>,
+) {
+    for path in &mut profile.access_paths {
+        let base_path = base
+            .access_paths
+            .iter()
+            .find(|candidate| candidate.key == path.key);
+        let fragment_path = fragments
+            .into_iter()
+            .flatten()
+            .find(|candidate| candidate.key == path.key);
+
+        restore_discovery_capture_order(
+            &mut path.discovery,
+            base_path.map(|path| &path.discovery),
+            fragment_path.and_then(|path| path.discovery.as_ref()),
+        );
+        if let Some(detail) = &mut path.detail {
+            restore_detail_capture_order(
+                detail,
+                base_path.and_then(|path| path.detail.as_ref()),
+                fragment_path.and_then(|path| path.detail.as_ref()),
+            );
+        }
+    }
+}
+
+fn restore_discovery_capture_order(
+    effective: &mut crate::profile_dsl::documents::DiscoveryStep,
+    base: Option<&crate::profile_dsl::documents::DiscoveryStep>,
+    fragment: Option<&DiscoveryStepFragment>,
+) {
+    for strategy in &mut effective.strategies {
+        let base_captures = base
+            .and_then(|step| step.strategies.iter().find(|item| item.key == strategy.key))
+            .and_then(|item| item.captures.as_ref());
+        let fragment_captures = fragment
+            .and_then(|step| step.strategies.as_ref())
+            .and_then(|items| items.iter().find(|item| item.key == strategy.key))
+            .and_then(|item| item.captures.as_ref());
+        restore_capture_map_order(
+            strategy.captures.as_mut(),
+            base_captures.map(|captures| captures.keys()),
+            fragment_captures.map(|captures| captures.keys()),
+        );
+    }
+}
+
+fn restore_detail_capture_order(
+    effective: &mut crate::profile_dsl::documents::DetailStep,
+    base: Option<&crate::profile_dsl::documents::DetailStep>,
+    fragment: Option<&DetailStepFragment>,
+) {
+    for strategy in &mut effective.strategies {
+        let base_captures = base
+            .and_then(|step| step.strategies.iter().find(|item| item.key == strategy.key))
+            .and_then(|item| item.captures.as_ref());
+        let fragment_captures = fragment
+            .and_then(|step| step.strategies.as_ref())
+            .and_then(|items| items.iter().find(|item| item.key == strategy.key))
+            .and_then(|item| item.captures.as_ref());
+        restore_capture_map_order(
+            strategy.captures.as_mut(),
+            base_captures.map(|captures| captures.keys()),
+            fragment_captures.map(|captures| captures.keys()),
+        );
+    }
+}
+
+fn restore_capture_map_order<'a, B, F>(
+    effective: Option<&mut Captures>,
+    base_keys: Option<B>,
+    fragment_keys: Option<F>,
+) where
+    B: Iterator<Item = &'a String>,
+    F: Iterator<Item = &'a String>,
+{
+    let Some(effective) = effective else {
+        return;
+    };
+    let mut desired = Vec::new();
+    let mut seen = HashSet::new();
+    for key in base_keys
+        .into_iter()
+        .flatten()
+        .chain(fragment_keys.into_iter().flatten())
+    {
+        if seen.insert(key.clone()) {
+            desired.push(key.clone());
+        }
+    }
+
+    let mut current = std::mem::take(effective);
+    for key in desired {
+        if let Some(rule) = current.shift_remove(&key) {
+            effective.insert(key, rule);
+        }
+    }
+    effective.extend(current);
 }
 
 fn materialize_serialized_profile<T, F>(

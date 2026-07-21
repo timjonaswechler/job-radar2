@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use super::values::{
-    compile_captures, compile_field_expression, compile_predicates, CompiledValueCaptures,
-};
+use super::values::{compile_field_expression, compile_predicates};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::primitives::capture::{
+    compile_captures, CaptureCompileError, CompiledCapturePlan,
+};
 use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
 use crate::profile_dsl::primitives::predicate::{
     compile_predicate, CompiledPredicate, PredicateCompileContext, PredicateCompileError,
@@ -19,7 +20,9 @@ use crate::profile_dsl::primitives::select::{
 use crate::profile_dsl::primitives::value::{
     CompiledValue, ValueCompileContext, ValueCompileError, ValuePlacement,
 };
-use crate::profile_dsl::template::{TemplateAdmissionKeys, TemplatePlacement};
+use crate::profile_dsl::template::{
+    json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
+};
 
 use super::capabilities::{compile_fetch, ExecutionPlanBuildError, ExecutionPlanFetch};
 
@@ -46,7 +49,7 @@ pub struct ExecutionPlanDetailStrategy {
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<CompiledPredicate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub captures: Option<CompiledValueCaptures>,
+    pub captures: Option<CompiledCapturePlan>,
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
     pub field_match: Option<CompiledPredicate>,
     pub extract: ExecutionPlanDetailExtraction,
@@ -169,8 +172,12 @@ fn compile_detail_strategy(
         )
         .map_err(|error| predicate_error(format!("{path}/where/{}", error.index), error.source))?,
 
-        captures: compile_captures(strategy.captures.as_ref(), &capture_context)
-            .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
+        captures: strategy
+            .captures
+            .as_ref()
+            .map(|captures| compile_captures(captures, &capture_context))
+            .transpose()
+            .map_err(|error| capture_error(format!("{path}/captures"), error))?,
         field_match: strategy
             .field_match
             .as_ref()
@@ -190,6 +197,17 @@ fn compile_detail_strategy(
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
+}
+
+fn capture_error(path: String, error: CaptureCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(
+        format!(
+            "{path}/{}{}",
+            json_pointer_segment(&error.capture_key),
+            error.path
+        ),
+        error.message,
+    )
 }
 
 fn field_expression_error(path: String, error: ValueCompileError) -> ExecutionPlanBuildError {

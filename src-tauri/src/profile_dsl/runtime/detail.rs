@@ -12,7 +12,6 @@ use crate::{
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
-            values::CompiledValueCaptureRule as CaptureRule,
             SourceExecutionPlan,
         },
         primitives::{

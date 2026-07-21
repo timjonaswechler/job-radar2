@@ -1,9 +1,5 @@
-use std::collections::BTreeMap;
-
-use serde::{Deserialize, Serialize};
-
 use crate::profile_dsl::{
-    documents::{CaptureRule, Captures, FieldExpression, ListFieldExpression},
+    documents::{FieldExpression, ListFieldExpression},
     primitives::{
         predicate::{
             compile_predicate, CompiledPredicate, Predicate, PredicateCompileContext,
@@ -15,15 +11,6 @@ use crate::profile_dsl::{
         },
     },
 };
-
-pub type CompiledValueCaptures = BTreeMap<String, CompiledValueCaptureRule>;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompiledValueCaptureRule {
-    pub from: CompiledValue,
-    pub pattern: String,
-}
 
 pub(crate) fn compile_field_expression(
     value: &FieldExpression,
@@ -56,28 +43,6 @@ pub(crate) fn compile_predicates(
                 .map(|(index, predicate)| {
                     compile_predicate(predicate, context)
                         .map_err(|source| IndexedPredicateCompileError { index, source })
-                })
-                .collect()
-        })
-        .transpose()
-}
-
-pub(crate) fn compile_captures(
-    values: Option<&Captures>,
-    context: &ValueCompileContext,
-) -> Result<Option<CompiledValueCaptures>, ValueCompileError> {
-    values
-        .map(|values| {
-            values
-                .iter()
-                .map(|(key, CaptureRule { from, pattern })| {
-                    Ok((
-                        key.clone(),
-                        CompiledValueCaptureRule {
-                            from: compile_value(from, context)?,
-                            pattern: pattern.clone(),
-                        },
-                    ))
                 })
                 .collect()
         })

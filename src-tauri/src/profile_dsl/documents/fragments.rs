@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use indexmap::IndexMap;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -142,7 +143,7 @@ pub struct DiscoveryStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub captures: Option<BTreeMap<String, CaptureRuleFragment>>,
+    pub captures: Option<IndexMap<String, CaptureRuleFragment>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -191,7 +192,7 @@ pub struct DetailStrategyFragment {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "non_null"
     )]
-    pub captures: Option<BTreeMap<String, CaptureRuleFragment>>,
+    pub captures: Option<IndexMap<String, CaptureRuleFragment>>,
     #[serde(
         rename = "match",
         default,

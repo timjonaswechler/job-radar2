@@ -3,9 +3,8 @@ use crate::profile_dsl::primitives::{
     predicate::{evaluate_detail_predicate, CompiledPredicate},
     select::SelectedItem,
     value::{
-        evaluate_detail_capture_value, evaluate_detail_output_value, DetailCaptureValueContext,
-        DetailMatchFilterOutputValueContext, PostingValueView, SourceValueView,
-        ValueEvaluationError, ValueEvaluationErrorKind,
+        evaluate_detail_output_value, DetailMatchFilterOutputValueContext, PostingValueView,
+        SourceValueView, ValueEvaluationError, ValueEvaluationErrorKind,
     },
 };
 
@@ -13,30 +12,6 @@ use crate::profile_dsl::primitives::{
 pub(in crate::profile_dsl::runtime::detail) struct FieldEvaluation {
     pub(in crate::profile_dsl::runtime::detail) value: Option<String>,
     pub(in crate::profile_dsl::runtime::detail) failed: bool,
-}
-
-pub(in crate::profile_dsl::runtime::detail) fn evaluate_capture_source(
-    source_config: &SourceConfig,
-    source_name: &str,
-    posting: &DetailPostingOccurrence,
-    expression: &CompiledValue,
-    path: &str,
-    strategy_key: Option<&str>,
-    diagnostics: &mut Diagnostics,
-) -> FieldEvaluation {
-    let context = DetailCaptureValueContext {
-        source: SourceValueView {
-            source_name,
-            source_config,
-        },
-        posting: posting_view(posting),
-    };
-    evaluate_result(
-        evaluate_detail_capture_value(expression, &context),
-        path,
-        strategy_key,
-        diagnostics,
-    )
 }
 
 pub(in crate::profile_dsl::runtime::detail) fn evaluate_value_scalar(
@@ -136,7 +111,9 @@ fn selected_item<'doc, 'body>(
     }
 }
 
-fn posting_view(posting: &DetailPostingOccurrence) -> PostingValueView<'_> {
+pub(in crate::profile_dsl::runtime::detail) fn posting_view(
+    posting: &DetailPostingOccurrence,
+) -> PostingValueView<'_> {
     PostingValueView {
         title: posting.title.as_deref().unwrap_or_default(),
         company: posting.company.as_deref().unwrap_or_default(),
@@ -171,7 +148,7 @@ fn evaluate_result(
     }
 }
 
-fn push_value_error(
+pub(in crate::profile_dsl::runtime::detail) fn push_value_error(
     error: ValueEvaluationError,
     path: &str,
     strategy_key: Option<&str>,

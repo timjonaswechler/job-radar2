@@ -65,6 +65,51 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
+fn capture_keys_are_valid_named_group_identifiers_in_complete_and_fragment_documents() {
+    let harness = SchemaHarness::new();
+    let mut profile = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["captures"] = json!({
+        "tenant_2": {
+            "from": { "type": "const", "value": "acme" },
+            "pattern": "^(?<tenant_2>.+)$"
+        }
+    });
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        profile.clone(),
+        "named Capture key",
+    );
+
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["captures"] = json!({
+        "not/a/group": {
+            "from": { "type": "const", "value": "acme" },
+            "pattern": "^(?<value>.+)$"
+        }
+    });
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["captures"]);
+
+    let mut source = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+    );
+    source["accessPaths"] = json!([{
+        "key": "json_feed",
+        "discovery": {
+            "strategies": [{
+                "key": "json_api",
+                "captures": {
+                    "not/a/group": { "pattern": "^(?<value>.+)$" }
+                }
+            }]
+        }
+    }]);
+    harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["captures"]);
+}
+
+#[test]
 fn first_non_empty_candidate_loading_limit_is_enforced_by_schema() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(

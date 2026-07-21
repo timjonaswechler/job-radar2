@@ -27,6 +27,45 @@ fn compiled_discovery_runtime_returns_one_normalized_candidate() {
 }
 
 #[test]
+fn compiled_discovery_runtime_uses_the_canonical_named_capture_output() {
+    let plan = compiled_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        json!({
+            "title": { "type": "capture", "key": "title" },
+            "company": { "type": "json_path", "jsonPath": "$.company" },
+            "url": { "type": "json_path", "jsonPath": "$.url" }
+        }),
+        "https://example.test/jobs.json",
+        serde_json::Map::from_iter([(
+            "captures".to_string(),
+            json!({
+                "title": {
+                    "from": { "type": "json_path", "jsonPath": "$.title" },
+                    "pattern": "^prefix: (?<title>.+)$"
+                }
+            }),
+        )]),
+    );
+    let fetcher = fake_fetcher([(
+        "https://example.test/jobs.json",
+        json!({
+            "jobs": [{
+                "title": "prefix: Rust Engineer",
+                "company": "Example GmbH",
+                "url": "https://example.test/jobs/1"
+            }]
+        })
+        .to_string(),
+    )]);
+
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
+
+    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.candidates[0].title, "Rust Engineer");
+}
+
+#[test]
 fn compiled_discovery_runtime_selects_multiple_json_items() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
     let fetcher = fake_fetcher([(

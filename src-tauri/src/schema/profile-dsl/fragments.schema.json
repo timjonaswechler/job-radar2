@@ -61,7 +61,7 @@
         "parse": { "$ref": "#/$defs/parseFragment" },
         "select": { "$ref": "#/$defs/selectFragment" },
         "where": { "type": "array", "items": { "$ref": "predicate.schema.json#/$defs/where" } },
-        "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
+        "captures": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/captureKey" }, "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
         "extract": { "$ref": "#/$defs/discoveryExtractionFragment" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }
       }
@@ -76,7 +76,7 @@
         "parse": { "$ref": "#/$defs/parseFragment" },
         "select": { "$ref": "#/$defs/selectFragment" },
         "where": { "type": "array", "items": { "$ref": "predicate.schema.json#/$defs/where" } },
-        "captures": { "type": "object", "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
+        "captures": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/captureKey" }, "additionalProperties": { "$ref": "#/$defs/captureRuleFragment" } },
         "match": { "$ref": "#/$defs/matchFragment" },
         "extract": { "$ref": "#/$defs/detailExtractionFragment" },
         "acceptWhen": { "$ref": "strategy.schema.json#/$defs/acceptance" }

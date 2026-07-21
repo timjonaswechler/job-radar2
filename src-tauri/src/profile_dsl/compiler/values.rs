@@ -2,8 +2,11 @@ use std::collections::BTreeSet;
 
 use crate::profile_dsl::{
     diagnostics::Diagnostics,
-    documents::{DetailStep, DiscoveryStep, FieldExpression, ListFieldExpression, ParseType},
+    documents::{
+        CaptureRule, DetailStep, DiscoveryStep, FieldExpression, ListFieldExpression, ParseType,
+    },
     primitives::{
+        capture::{compile_named_capture_rule, CaptureCompileError, CaptureCompileErrorKind},
         predicate::{
             compile_predicate, Predicate, PredicateCompileContext, PredicateCompileError,
             PredicateCompileErrorKind, PredicatePlacement,
@@ -45,17 +48,18 @@ pub(super) fn validate_value_context_foundation(
             &BTreeSet::new(),
         );
         for (key, rule) in strategy.captures.iter().flatten() {
-            validate_expression(
-                &rule.from,
+            validate_capture_rule(
+                key,
+                rule,
                 &format!(
-                    "{strategy_path}/captures/{}/from",
+                    "{strategy_path}/captures/{}",
                     crate::profile_dsl::template::json_pointer_segment(key)
                 ),
                 &strategy.key,
                 &capture_context,
                 total_nodes,
                 diagnostics,
-                &mut &mut references_source_name,
+                &mut references_source_name,
             );
         }
 
@@ -158,17 +162,18 @@ pub(super) fn validate_value_context_foundation(
                 &BTreeSet::new(),
             );
             for (key, rule) in strategy.captures.iter().flatten() {
-                validate_expression(
-                    &rule.from,
+                validate_capture_rule(
+                    key,
+                    rule,
                     &format!(
-                        "{strategy_path}/captures/{}/from",
+                        "{strategy_path}/captures/{}",
                         crate::profile_dsl::template::json_pointer_segment(key)
                     ),
                     &strategy.key,
                     &capture_context,
                     total_nodes,
                     diagnostics,
-                    &mut &mut references_source_name,
+                    &mut references_source_name,
                 );
             }
             let output_context = context(
@@ -362,6 +367,70 @@ fn validate_list(
             }
         }
     }
+}
+
+fn validate_capture_rule(
+    key: &str,
+    rule: &CaptureRule,
+    path: &str,
+    strategy_key: &str,
+    context: &ValueCompileContext,
+    total_nodes: &mut usize,
+    diagnostics: &mut Diagnostics,
+    references_source_name: &mut bool,
+) {
+    let nodes = value_expression_node_count(&rule.from);
+    let previous_total = *total_nodes;
+    *total_nodes = total_nodes.saturating_add(nodes);
+    if *total_nodes > VALUE_MAX_NODES {
+        if previous_total <= VALUE_MAX_NODES {
+            let mut diagnostic = compiler_error(
+                "value_node_limit_exceeded",
+                "Complete Effective Source behavior exceeds the immutable Value expression node maximum",
+                format!("{path}/from"),
+                serde_json::json!({ "actual": *total_nodes, "maximum": VALUE_MAX_NODES }),
+            );
+            diagnostic.strategy_key = Some(strategy_key.to_string());
+            diagnostics.push(diagnostic);
+        }
+        return;
+    }
+
+    match compile_named_capture_rule(0, key, rule, context) {
+        Ok(compiled) => *references_source_name |= compiled.references_source_name(),
+        Err(error) => push_capture_error(path, strategy_key, error, diagnostics),
+    }
+}
+
+fn push_capture_error(
+    base_path: &str,
+    strategy_key: &str,
+    error: CaptureCompileError,
+    diagnostics: &mut Diagnostics,
+) {
+    if let Some(value_error) = error.value_error {
+        push_error(
+            &format!("{base_path}/from"),
+            strategy_key,
+            value_error,
+            diagnostics,
+        );
+        return;
+    }
+    let code = match error.kind {
+        CaptureCompileErrorKind::Value => "capture_value_invalid",
+        CaptureCompileErrorKind::SourceShape => "capture_source_shape_invalid",
+        CaptureCompileErrorKind::InvalidRegex => "capture_pattern_invalid",
+        CaptureCompileErrorKind::NamedGroupMissing => "capture_named_group_missing",
+    };
+    let mut diagnostic = compiler_error(
+        code,
+        error.message,
+        format!("{base_path}{}", error.path),
+        serde_json::json!({ "captureKey": error.capture_key }),
+    );
+    diagnostic.strategy_key = Some(strategy_key.to_string());
+    diagnostics.push(diagnostic);
 }
 
 fn validate_expression(

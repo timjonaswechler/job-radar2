@@ -2,8 +2,7 @@ use super::*;
 use crate::profile_dsl::primitives::{
     predicate::{evaluate_discovery_predicate, CompiledPredicate},
     value::{
-        evaluate_discovery_capture_value, evaluate_discovery_output_value,
-        DiscoveryCaptureValueContext, DiscoveryFilterOutputValueContext, SourceValueView,
+        evaluate_discovery_output_value, DiscoveryFilterOutputValueContext, SourceValueView,
         ValueEvaluationError, ValueEvaluationErrorKind,
     },
 };
@@ -11,32 +10,6 @@ use crate::profile_dsl::primitives::{
 pub(in crate::profile_dsl::runtime::discovery) struct FieldEvaluation {
     pub(in crate::profile_dsl::runtime::discovery) value: Option<String>,
     pub(in crate::profile_dsl::runtime::discovery) failed: bool,
-}
-
-pub(in crate::profile_dsl::runtime::discovery) fn evaluate_capture_source(
-    item: &RuntimeItem<'_, '_>,
-    source_config: &SourceConfig,
-    source_name: &str,
-    expression: &CompiledValue,
-    path: &str,
-    strategy_key: Option<&str>,
-    item_index: usize,
-    diagnostics: &mut Diagnostics,
-) -> FieldEvaluation {
-    let context = DiscoveryCaptureValueContext {
-        source: SourceValueView {
-            source_name,
-            source_config,
-        },
-        selected: item,
-    };
-    evaluate_result(
-        evaluate_discovery_capture_value(expression, &context),
-        path,
-        strategy_key,
-        item_index,
-        diagnostics,
-    )
 }
 
 pub(in crate::profile_dsl::runtime::discovery) fn evaluate_value_scalar(
@@ -160,7 +133,7 @@ fn evaluate_result(
     }
 }
 
-fn push_value_error(
+pub(in crate::profile_dsl::runtime::discovery) fn push_value_error(
     error: ValueEvaluationError,
     path: &str,
     strategy_key: Option<&str>,

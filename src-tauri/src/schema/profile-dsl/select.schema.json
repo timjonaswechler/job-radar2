@@ -72,9 +72,11 @@
     },
     "captures": {
       "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/captureKey" },
       "additionalProperties": { "$ref": "#/$defs/captureRule" }
     },
     "captureRule": {
+      "x-primitive": "capture",
       "type": "object",
       "additionalProperties": false,
       "required": ["from", "pattern"],

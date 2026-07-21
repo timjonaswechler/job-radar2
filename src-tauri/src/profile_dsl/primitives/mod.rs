@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod cardinality;
 pub mod parse;
 pub mod predicate;
