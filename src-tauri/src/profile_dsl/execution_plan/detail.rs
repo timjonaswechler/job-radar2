@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::values::{
     compile_captures, compile_field_expression, compile_field_match, compile_filters,
     ExecutionPlanCaptures, ExecutionPlanFieldExpression, ExecutionPlanFieldMatch,
-    ExecutionPlanFilter,
+    ExecutionPlanFilter, FieldExpressionCompileError,
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
@@ -144,27 +144,30 @@ fn compile_detail_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
-        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
-            |error| ExecutionPlanBuildError {
-                path: format!("{path}/where"),
-                message: error.to_string(),
-            },
-        )?,
-        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor).map_err(
-            |error| ExecutionPlanBuildError {
-                path: format!("{path}/captures"),
-                message: error.to_string(),
-            },
-        )?,
+        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
+            .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
+        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor)
+            .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
         field_match: compile_field_match(strategy.field_match.as_ref(), &field_descriptor)
-            .map_err(|error| ExecutionPlanBuildError {
-                path: format!("{path}/match"),
-                message: error.to_string(),
-            })?,
+            .map_err(|error| field_expression_error(format!("{path}/match"), error))?,
         extract: compile_detail_extraction(&strategy.extract, &field_descriptor, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
+}
+
+fn field_expression_error(
+    path: String,
+    error: FieldExpressionCompileError,
+) -> ExecutionPlanBuildError {
+    match error {
+        FieldExpressionCompileError::Template(error) => {
+            ExecutionPlanBuildError::new(path, error.to_string())
+        }
+        FieldExpressionCompileError::Transform(error) => {
+            ExecutionPlanBuildError::transform(path, error)
+        }
+    }
 }
 
 fn compile_detail_extraction(
@@ -178,9 +181,8 @@ fn compile_detail_extraction(
                 &extraction.fields.description_text,
                 descriptor,
             )
-            .map_err(|error| ExecutionPlanBuildError {
-                path: format!("{path}/extract/fields/descriptionText"),
-                message: error.to_string(),
+            .map_err(|error| {
+                field_expression_error(format!("{path}/extract/fields/descriptionText"), error)
             })?,
         },
     })

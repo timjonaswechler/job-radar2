@@ -239,7 +239,7 @@ fn executable_posting_title_provenance_is_retained() {
                             "type": "json_path",
                             "jsonPath": "$.title",
                             "cardinality": "one",
-                            "transforms": [{ "type": "trim" }]
+                            "transforms": [{ "type": "to_string" }, { "type": "trim" }]
                         }
                     }
                 }

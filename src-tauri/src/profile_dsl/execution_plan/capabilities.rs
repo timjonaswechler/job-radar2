@@ -165,14 +165,38 @@ pub enum ExecutionPlanJsonValue {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExecutionPlanBuildError {
     pub path: String,
+    pub code: &'static str,
     pub message: String,
+    pub details: serde_json::Value,
 }
 
 impl ExecutionPlanBuildError {
     pub(super) fn new(path: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             path: path.into(),
+            code: "compiled_execution_plan_invariant_violation",
             message: message.into(),
+            details: serde_json::json!({ "invariant": "strict_execution_plan" }),
+        }
+    }
+
+    pub(super) fn transform(
+        path: impl Into<String>,
+        error: crate::profile_dsl::primitives::transform::CompileTransformError,
+    ) -> Self {
+        let code = match error.kind {
+            crate::profile_dsl::primitives::transform::CompileTransformErrorKind::EmptySeparator => {
+                "transform_empty_separator"
+            }
+            crate::profile_dsl::primitives::transform::CompileTransformErrorKind::InvalidRegex => {
+                "transform_invalid_regex"
+            }
+        };
+        Self {
+            path: format!("{}/transforms/{}", path.into(), error.transform_index),
+            code,
+            message: error.message,
+            details: serde_json::json!({ "transformIndex": error.transform_index }),
         }
     }
 }

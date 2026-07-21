@@ -400,13 +400,13 @@ fn validate_source_owned_access_path(
 
 fn push_compiled_plan_invariant(error: ExecutionPlanBuildError, diagnostics: &mut Diagnostics) {
     diagnostics.push(compiler_error(
-        "compiled_execution_plan_invariant_violation",
+        error.code,
         format!(
             "Validated Profile DSL could not be converted into a strict Execution Plan: {}",
             error.message
         ),
         error.path,
-        serde_json::json!({ "invariant": "strict_execution_plan" }),
+        error.details,
     ));
 }
 

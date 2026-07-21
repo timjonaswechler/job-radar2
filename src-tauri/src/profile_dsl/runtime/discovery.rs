@@ -10,7 +10,7 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{transform::Transform, HttpMethod, PaginationParameterLocation, RequestBody},
+        documents::{HttpMethod, PaginationParameterLocation, RequestBody},
         execution_plan::{
             capabilities::{
                 ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanPagination,
@@ -27,6 +27,10 @@ use crate::{
         primitives::{
             cardinality::{CardinalityDiagnosticContext, CardinalityOutcome, CompiledCardinality},
             parse::{CompleteParseText, ParseDiagnosticContext},
+            transform::{
+                normalize_whitespace_text, CompiledTransformPipeline, TransformErrorKind,
+                TransformShape, TransformValue,
+            },
         },
     },
     source::documents::SourceConfig,
@@ -50,7 +54,6 @@ use super::{
     strategy_set::{
         execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
     },
-    transform::{apply_transform_pipeline, normalize_whitespace},
 };
 
 mod acceptance;

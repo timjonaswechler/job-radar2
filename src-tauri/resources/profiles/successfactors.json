@@ -116,6 +116,7 @@
                   "key": "title",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "url_decode"
                     },
@@ -139,6 +140,7 @@
                   "key": "location",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "url_decode"
                     },
@@ -204,6 +206,7 @@
                   "selector": "[data-automation-id='jobPostingDescription'], [data-automation-id*='job-description']",
                   "cardinality": "first",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "normalize_whitespace"
                     }
@@ -239,6 +242,7 @@
                   "selector": ".job-description__content, .job-description, .jobdescription, .jobDescription, #job-description, main [class*='description']",
                   "cardinality": "first",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "normalize_whitespace"
                     }

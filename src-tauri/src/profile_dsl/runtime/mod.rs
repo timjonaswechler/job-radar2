@@ -5,7 +5,6 @@ pub(crate) mod detail;
 pub(crate) mod discovery;
 pub mod http;
 pub(crate) mod strategy_set;
-pub(crate) mod transform;
 
 pub use allowance::{
     AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, PhaseCancellationReason,

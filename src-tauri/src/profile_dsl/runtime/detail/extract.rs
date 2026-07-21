@@ -1,7 +1,7 @@
 use super::document::RuntimeItem;
 use super::support::{render_template, TemplateRuntimeContext};
 use super::values::{
-    css_attribute_values, css_text_values, json_value_to_strings, xml_descendant_elements,
+    css_attribute_values, css_text_values, json_value_to_transform_values, xml_descendant_elements,
     xml_node_text, xml_path_texts, JsonStringsResult,
 };
 use super::*;

@@ -7,7 +7,7 @@ fn compiled_discovery_runtime_applies_explicit_whitespace_transforms() {
         "type": "json_path",
         "jsonPath": "$.title",
         "cardinality": "one",
-        "transforms": [{ "type": "trim" }, { "type": "normalize_whitespace" }]
+        "transforms": [{ "type": "to_string" }, { "type": "trim" }, { "type": "normalize_whitespace" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -35,7 +35,7 @@ fn compiled_discovery_runtime_applies_url_decode_and_slug_to_title_transforms_in
         "type": "json_path",
         "jsonPath": "$.titleSlug",
         "cardinality": "one",
-        "transforms": [{ "type": "url_decode" }, { "type": "slug_to_title" }]
+        "transforms": [{ "type": "to_string" }, { "type": "url_decode" }, { "type": "slug_to_title" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -63,7 +63,7 @@ fn compiled_discovery_runtime_dedupes_string_arrays_before_cardinality() {
         "type": "json_path",
         "jsonPath": "$.titles",
         "cardinality": "one",
-        "transforms": [{ "type": "dedupe" }]
+        "transforms": [{ "type": "to_string" }, { "type": "dedupe" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -91,7 +91,7 @@ fn compiled_discovery_runtime_joins_arrays_before_cardinality() {
         "type": "json_path",
         "jsonPath": "$.titleParts",
         "cardinality": "one",
-        "transforms": [{ "type": "join", "separator": " " }]
+        "transforms": [{ "type": "to_string" }, { "type": "join", "separator": " " }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -119,7 +119,7 @@ fn compiled_discovery_runtime_applies_regex_replace_transforms() {
         "type": "json_path",
         "jsonPath": "$.title",
         "cardinality": "one",
-        "transforms": [{ "type": "regex_replace", "pattern": "\\s*\\(m/f/d\\)$", "replacement": "" }]
+        "transforms": [{ "type": "to_string" }, { "type": "regex_replace", "pattern": "\\s*\\(m/f/d\\)$", "replacement": "" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -276,7 +276,7 @@ fn compiled_discovery_runtime_applies_final_transforms_after_combine() {
             { "value": { "type": "json_path", "jsonPath": "$.level", "cardinality": "one" } },
             { "value": { "type": "json_path", "jsonPath": "$.role", "cardinality": "one" } }
         ],
-        "transforms": [{ "type": "slug_to_title" }]
+        "transforms": [{ "type": "to_string" }, { "type": "slug_to_title" }]
     });
     let plan = compiled_json_discovery_plan(fields, default_select());
     let fetcher = fake_fetcher([(
@@ -398,7 +398,7 @@ fn compiled_discovery_runtime_splits_and_dedupes_location_arrays_in_order() {
         "type": "json_path",
         "jsonPath": "$.locationsText",
         "cardinality": "one",
-        "transforms": [
+        "transforms": [{ "type": "to_string" },
             { "type": "split", "separator": ";" },
             { "type": "trim" },
             { "type": "dedupe" }

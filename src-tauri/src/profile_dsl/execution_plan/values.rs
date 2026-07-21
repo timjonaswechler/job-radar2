@@ -4,8 +4,10 @@ use serde_json::Value;
 use crate::profile_dsl::documents::extract::{CombinePart, FieldExpression, ListFieldExpression};
 use crate::profile_dsl::documents::select::{CaptureRule, Captures, Filter};
 use crate::profile_dsl::documents::strategy::FieldMatch;
-use crate::profile_dsl::documents::transform::Transform;
 use crate::profile_dsl::primitives::cardinality::{compile_cardinality, CompiledCardinality};
+use crate::profile_dsl::primitives::transform::{
+    compile_transform_pipeline, CompileTransformError, CompiledTransformPipeline,
+};
 use crate::profile_dsl::template::{
     compile_template, CompiledTemplate, TemplateCompileError, TemplateDescriptor,
 };
@@ -17,79 +19,79 @@ pub enum ExecutionPlanFieldExpression {
     Const {
         value: Value,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     Template {
         template: CompiledTemplate,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     SourceConfig {
         key: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     PostingMeta {
         key: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     Capture {
         key: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     ItemField {
         key: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     JsonPath {
         #[serde(rename = "jsonPath")]
         json_path: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     XmlText {
         #[serde(rename = "textPath")]
         text_path: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     XmlElement {
         element: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     CssText {
         selector: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     CssAttribute {
         selector: String,
         attribute: String,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
     Combine {
         parts: Vec<ExecutionPlanCombinePart>,
         #[serde(skip_serializing_if = "Option::is_none")]
         join: Option<String>,
         cardinality: CompiledCardinality,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transforms: Option<Vec<Transform>>,
+        #[serde(default)]
+        transforms: CompiledTransformPipeline,
     },
 }
 
@@ -136,10 +138,37 @@ pub struct ExecutionPlanFieldMatch {
     pub right: ExecutionPlanFieldExpression,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum FieldExpressionCompileError {
+    Template(TemplateCompileError),
+    Transform(CompileTransformError),
+}
+
+impl std::fmt::Display for FieldExpressionCompileError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Template(error) => error.fmt(formatter),
+            Self::Transform(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl From<TemplateCompileError> for FieldExpressionCompileError {
+    fn from(error: TemplateCompileError) -> Self {
+        Self::Template(error)
+    }
+}
+
+impl From<CompileTransformError> for FieldExpressionCompileError {
+    fn from(error: CompileTransformError) -> Self {
+        Self::Transform(error)
+    }
+}
+
 pub(crate) fn compile_field_expression(
     value: &FieldExpression,
     descriptor: &TemplateDescriptor,
-) -> Result<ExecutionPlanFieldExpression, TemplateCompileError> {
+) -> Result<ExecutionPlanFieldExpression, FieldExpressionCompileError> {
     use ExecutionPlanFieldExpression as C;
     Ok(match value {
         FieldExpression::Const {
@@ -149,7 +178,7 @@ pub(crate) fn compile_field_expression(
         } => C::Const {
             value: value.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::Template {
             template,
@@ -158,7 +187,7 @@ pub(crate) fn compile_field_expression(
         } => C::Template {
             template: compile_template(template, descriptor)?,
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::SourceConfig {
             key,
@@ -167,7 +196,7 @@ pub(crate) fn compile_field_expression(
         } => C::SourceConfig {
             key: key.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::PostingMeta {
             key,
@@ -176,7 +205,7 @@ pub(crate) fn compile_field_expression(
         } => C::PostingMeta {
             key: key.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::Capture {
             key,
@@ -185,7 +214,7 @@ pub(crate) fn compile_field_expression(
         } => C::Capture {
             key: key.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::ItemField {
             key,
@@ -194,7 +223,7 @@ pub(crate) fn compile_field_expression(
         } => C::ItemField {
             key: key.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::JsonPath {
             json_path,
@@ -203,7 +232,7 @@ pub(crate) fn compile_field_expression(
         } => C::JsonPath {
             json_path: json_path.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::XmlText {
             text_path,
@@ -212,7 +241,7 @@ pub(crate) fn compile_field_expression(
         } => C::XmlText {
             text_path: text_path.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::XmlElement {
             element,
@@ -221,7 +250,7 @@ pub(crate) fn compile_field_expression(
         } => C::XmlElement {
             element: element.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::CssText {
             selector,
@@ -230,7 +259,7 @@ pub(crate) fn compile_field_expression(
         } => C::CssText {
             selector: selector.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::CssAttribute {
             selector,
@@ -241,7 +270,7 @@ pub(crate) fn compile_field_expression(
             selector: selector.clone(),
             attribute: attribute.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
         FieldExpression::Combine {
             parts,
@@ -257,10 +286,10 @@ pub(crate) fn compile_field_expression(
                         optional: part.optional,
                     })
                 })
-                .collect::<Result<_, TemplateCompileError>>()?,
+                .collect::<Result<_, FieldExpressionCompileError>>()?,
             join: join.clone(),
             cardinality: compile_cardinality(cardinality.unwrap_or_default()),
-            transforms: transforms.clone(),
+            transforms: compile_transform_pipeline(transforms.as_deref().unwrap_or(&[]))?,
         },
     })
 }
@@ -268,7 +297,7 @@ pub(crate) fn compile_field_expression(
 pub(crate) fn compile_list_field_expression(
     value: &ListFieldExpression,
     descriptor: &TemplateDescriptor,
-) -> Result<ExecutionPlanListFieldExpression, TemplateCompileError> {
+) -> Result<ExecutionPlanListFieldExpression, FieldExpressionCompileError> {
     Ok(match value {
         ListFieldExpression::Single(value) => {
             ExecutionPlanListFieldExpression::Single(compile_field_expression(value, descriptor)?)
@@ -285,7 +314,7 @@ pub(crate) fn compile_list_field_expression(
 pub(crate) fn compile_filters(
     values: Option<&Vec<Filter>>,
     descriptor: &TemplateDescriptor,
-) -> Result<Option<Vec<ExecutionPlanFilter>>, TemplateCompileError> {
+) -> Result<Option<Vec<ExecutionPlanFilter>>, FieldExpressionCompileError> {
     values
         .map(|values| {
             values
@@ -309,7 +338,7 @@ pub(crate) fn compile_filters(
 pub(crate) fn compile_captures(
     values: Option<&Captures>,
     descriptor: &TemplateDescriptor,
-) -> Result<Option<ExecutionPlanCaptures>, TemplateCompileError> {
+) -> Result<Option<ExecutionPlanCaptures>, FieldExpressionCompileError> {
     values
         .map(|values| {
             values
@@ -331,7 +360,7 @@ pub(crate) fn compile_captures(
 pub(crate) fn compile_field_match(
     value: Option<&FieldMatch>,
     descriptor: &TemplateDescriptor,
-) -> Result<Option<ExecutionPlanFieldMatch>, TemplateCompileError> {
+) -> Result<Option<ExecutionPlanFieldMatch>, FieldExpressionCompileError> {
     value
         .map(|value| {
             Ok(ExecutionPlanFieldMatch {

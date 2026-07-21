@@ -76,6 +76,12 @@ pub use profile_dsl::primitives::select::{
     SelectExecutionError, SelectKind, SelectPhase, SelectPlacement, SelectRegistryError,
     SelectedItem, SelectedSequence,
 };
+pub use profile_dsl::primitives::transform::{
+    compile_transform_pipeline, transform_descriptors, validate_transform_registration_keys,
+    CompileTransformError, CompileTransformErrorKind, CompiledTransform, CompiledTransformPipeline,
+    Transform, TransformDescriptor, TransformError, TransformErrorKind, TransformKind,
+    TransformRegistryError, TransformShape, TransformValue,
+};
 pub use profile_dsl::runtime::{
     execute_detail, execute_discovery, AllowanceDimension, AllowanceExhaustion,
     AllowanceLimitSource, DetailExecutionResult, DetailPostingOccurrence, DiscoveryCandidate,

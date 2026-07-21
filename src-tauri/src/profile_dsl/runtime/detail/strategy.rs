@@ -147,7 +147,7 @@ where
         return rejected_detail_attempt(diagnostics);
     };
 
-    let description = normalize_whitespace(description.trim());
+    let description = normalize_whitespace_text(description.trim());
     let accepted = accept_detail_result(
         &description,
         step_acceptance,

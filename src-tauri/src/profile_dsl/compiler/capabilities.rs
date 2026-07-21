@@ -5,6 +5,9 @@ use crate::profile_dsl::documents::{
 use crate::profile_dsl::primitives::select::{
     compile_select, CompileSelectErrorKind, SelectCompileContext, SelectPhase, SelectPlacement,
 };
+use crate::profile_dsl::primitives::transform::{
+    compile_transform_pipeline, CompileTransformErrorKind,
+};
 
 use super::compiler_error;
 
@@ -264,6 +267,23 @@ fn validate_field_extract_compatibility(
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
 ) {
+    if let Some(transforms) = expression.transforms() {
+        if let Err(error) = compile_transform_pipeline(transforms) {
+            let code = match error.kind {
+                CompileTransformErrorKind::EmptySeparator => "transform_empty_separator",
+                CompileTransformErrorKind::InvalidRegex => "transform_invalid_regex",
+            };
+            let mut diagnostic = compiler_error(
+                code,
+                error.message,
+                format!("{path}/transforms/{}", error.transform_index),
+                serde_json::json!({ "transformIndex": error.transform_index }),
+            );
+            diagnostic.strategy_key = Some(strategy_key.to_string());
+            diagnostics.push(diagnostic);
+        }
+    }
+
     match expression {
         FieldExpression::JsonPath { .. } if parse_type != ParseType::Json => {
             push_capability_diagnostic(

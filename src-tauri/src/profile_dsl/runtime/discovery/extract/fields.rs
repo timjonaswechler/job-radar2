@@ -56,15 +56,13 @@ pub(in crate::profile_dsl::runtime::discovery) fn evaluate_string_field(
         }
     };
 
-    let mut normalized_values = Vec::new();
-    for value in values {
-        let value = normalize_whitespace(value.trim());
-        if !value.is_empty() {
-            normalized_values.push(value);
-        }
-    }
+    let values = values
+        .into_iter()
+        .map(|value| normalize_whitespace_text(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
 
-    match cardinality.execute(normalized_values) {
+    match cardinality.execute(values) {
         Ok(outcome) => FieldEvaluation {
             value: match outcome {
                 CardinalityOutcome::Scalar(value) => value,
@@ -87,10 +85,10 @@ pub(in crate::profile_dsl::runtime::discovery) fn evaluate_string_field(
 }
 
 pub(in crate::profile_dsl::runtime::discovery) struct RawFieldValues<'a> {
-    pub(in crate::profile_dsl::runtime::discovery) values: Vec<String>,
+    pub(in crate::profile_dsl::runtime::discovery) values: Vec<TransformValue<'static, 'static>>,
     pub(in crate::profile_dsl::runtime::discovery) failed: bool,
     pub(in crate::profile_dsl::runtime::discovery) cardinality: CompiledCardinality,
-    pub(in crate::profile_dsl::runtime::discovery) transforms: Option<&'a Vec<Transform>>,
+    pub(in crate::profile_dsl::runtime::discovery) transforms: &'a CompiledTransformPipeline,
 }
 
 pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
@@ -109,8 +107,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             value,
             cardinality,
             transforms,
-        } => json_value_to_strings(value, path, strategy_key, item_index, diagnostics)
-            .into_raw(*cardinality, transforms.as_ref()),
+        } => json_value_to_transform_values(value).into_raw(*cardinality, transforms),
         FieldExpression::JsonPath {
             json_path,
             cardinality,
@@ -118,14 +115,13 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
         } => match item {
             RuntimeItem::Json(value) => match resolve_simple_json_path(value, json_path) {
                 Ok(Some(value)) => {
-                    json_value_to_strings(value, path, strategy_key, item_index, diagnostics)
-                        .into_raw(*cardinality, transforms.as_ref())
+                    json_value_to_transform_values(value).into_raw(*cardinality, transforms)
                 }
                 Ok(None) => RawFieldValues {
                     values: Vec::new(),
                     failed: false,
                     cardinality: *cardinality,
-                    transforms: transforms.as_ref(),
+                    transforms: transforms,
                 },
                 Err(error) => {
                     diagnostics.push(runtime_error(
@@ -143,7 +139,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                         values: Vec::new(),
                         failed: true,
                         cardinality: *cardinality,
-                        transforms: transforms.as_ref(),
+                        transforms: transforms,
                     }
                 }
             },
@@ -153,7 +149,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 strategy_key,
                 item_index,
                 *cardinality,
-                transforms.as_ref(),
+                transforms,
                 diagnostics,
             ),
         },
@@ -162,15 +158,12 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             cardinality,
             transforms,
         } => match source_config.get(key) {
-            Some(value) => {
-                json_value_to_strings(value, path, strategy_key, item_index, diagnostics)
-                    .into_raw(*cardinality, transforms.as_ref())
-            }
+            Some(value) => json_value_to_transform_values(value).into_raw(*cardinality, transforms),
             None => RawFieldValues {
                 values: Vec::new(),
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
         },
         FieldExpression::Capture {
@@ -178,10 +171,15 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             cardinality,
             transforms,
         } => RawFieldValues {
-            values: captures.get(key).cloned().into_iter().collect(),
+            values: captures
+                .get(key)
+                .cloned()
+                .into_iter()
+                .map(TransformValue::Text)
+                .collect(),
             failed: false,
             cardinality: *cardinality,
-            transforms: transforms.as_ref(),
+            transforms: transforms,
         },
         FieldExpression::ItemField {
             key,
@@ -190,27 +188,26 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
         } => match item {
             RuntimeItem::Json(value) => match value.get(key) {
                 Some(value) => {
-                    json_value_to_strings(value, path, strategy_key, item_index, diagnostics)
-                        .into_raw(*cardinality, transforms.as_ref())
+                    json_value_to_transform_values(value).into_raw(*cardinality, transforms)
                 }
                 None => RawFieldValues {
                     values: Vec::new(),
                     failed: false,
                     cardinality: *cardinality,
-                    transforms: transforms.as_ref(),
+                    transforms: transforms,
                 },
             },
             RuntimeItem::Text(value) if key == "value" || key == "." => RawFieldValues {
-                values: vec![value.clone()],
+                values: vec![TransformValue::Text(value.clone())],
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
             _ => RawFieldValues {
                 values: Vec::new(),
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
         },
         FieldExpression::Template {
@@ -224,10 +221,10 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             captures,
         ) {
             Ok(value) => RawFieldValues {
-                values: vec![value],
+                values: vec![TransformValue::Text(value)],
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
             Err(message) => {
                 diagnostics.push(runtime_error(
@@ -241,7 +238,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                     values: Vec::new(),
                     failed: true,
                     cardinality: *cardinality,
-                    transforms: transforms.as_ref(),
+                    transforms: transforms,
                 }
             }
         },
@@ -251,16 +248,19 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             transforms,
         } => match item {
             RuntimeItem::Xml(node) => RawFieldValues {
-                values: xml_path_texts(*node, text_path),
+                values: xml_path_texts(*node, text_path)
+                    .into_iter()
+                    .map(TransformValue::Text)
+                    .collect(),
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
             RuntimeItem::Text(value) if text_path == "." => RawFieldValues {
-                values: vec![value.clone()],
+                values: vec![TransformValue::Text(value.clone())],
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
             _ => incompatible_field_expression(
                 "field_xml_text_incompatible",
@@ -268,7 +268,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 strategy_key,
                 item_index,
                 *cardinality,
-                transforms.as_ref(),
+                transforms,
                 diagnostics,
             ),
         },
@@ -281,10 +281,11 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 values: xml_descendant_elements(*node, element)
                     .into_iter()
                     .map(xml_node_text)
+                    .map(TransformValue::Text)
                     .collect(),
                 failed: false,
                 cardinality: *cardinality,
-                transforms: transforms.as_ref(),
+                transforms: transforms,
             },
             _ => incompatible_field_expression(
                 "field_xml_element_incompatible",
@@ -292,7 +293,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 strategy_key,
                 item_index,
                 *cardinality,
-                transforms.as_ref(),
+                transforms,
                 diagnostics,
             ),
         },
@@ -303,7 +304,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
         } => match item {
             RuntimeItem::Html(node) => {
                 css_text_values(node, selector, path, strategy_key, item_index, diagnostics)
-                    .into_raw(*cardinality, transforms.as_ref())
+                    .into_raw(*cardinality, transforms)
             }
             _ => incompatible_field_expression(
                 "field_css_text_incompatible",
@@ -311,7 +312,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 strategy_key,
                 item_index,
                 *cardinality,
-                transforms.as_ref(),
+                transforms,
                 diagnostics,
             ),
         },
@@ -330,14 +331,14 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
                 item_index,
                 diagnostics,
             )
-            .into_raw(*cardinality, transforms.as_ref()),
+            .into_raw(*cardinality, transforms),
             _ => incompatible_field_expression(
                 "field_css_attribute_incompatible",
                 path,
                 strategy_key,
                 item_index,
                 *cardinality,
-                transforms.as_ref(),
+                transforms,
                 diagnostics,
             ),
         },
@@ -358,8 +359,12 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             item_index,
             diagnostics,
         )
-        .into_raw(*cardinality, transforms.as_ref()),
-        _ => {
+        .into_raw(*cardinality, transforms),
+        FieldExpression::PostingMeta {
+            cardinality,
+            transforms,
+            ..
+        } => {
             diagnostics.push(runtime_error(
                 "unsupported_field_expression",
                 "discovery runtime supports const, template, sourceConfig, capture, itemField, JSONPath, XML, CSS, and combine field expressions",
@@ -370,8 +375,8 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             RawFieldValues {
                 values: Vec::new(),
                 failed: true,
-                cardinality: CompiledCardinality::default(),
-                transforms: None,
+                cardinality: *cardinality,
+                transforms,
             }
         }
     }
@@ -448,7 +453,7 @@ fn incompatible_field_expression<'a>(
     strategy_key: Option<&str>,
     item_index: usize,
     cardinality: CompiledCardinality,
-    transforms: Option<&'a Vec<Transform>>,
+    transforms: &'a CompiledTransformPipeline,
     diagnostics: &mut Diagnostics,
 ) -> RawFieldValues<'a> {
     diagnostics.push(runtime_error(
@@ -467,24 +472,56 @@ fn incompatible_field_expression<'a>(
 }
 
 pub(in crate::profile_dsl::runtime::discovery) fn apply_transforms(
-    values: Vec<String>,
-    transforms: Option<&Vec<Transform>>,
+    values: Vec<TransformValue<'static, 'static>>,
+    transforms: &CompiledTransformPipeline,
     path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
     diagnostics: &mut Diagnostics,
 ) -> Option<Vec<String>> {
-    match apply_transform_pipeline(values, transforms) {
-        Ok(values) => Some(values),
+    let input = TransformShape::Sequence(values);
+    match transforms.execute(input) {
+        Ok(output) => {
+            let mut values = Vec::new();
+            for (value_index, value) in output.into_values().into_iter().enumerate() {
+                match value {
+                    TransformValue::Text(value) => values.push(value),
+                    TransformValue::Json(Value::String(value)) => values.push(value),
+                    TransformValue::Json(Value::Number(value)) => values.push(value.to_string()),
+                    TransformValue::Json(Value::Bool(value)) => values.push(value.to_string()),
+                    TransformValue::Json(Value::Null) => {}
+                    TransformValue::Json(Value::Array(_) | Value::Object(_))
+                    | TransformValue::Xml(_)
+                    | TransformValue::Html(_) => {
+                        diagnostics.push(runtime_error(
+                            "field_type_mismatch",
+                            "Field value must resolve to text or a JSON scalar",
+                            path,
+                            strategy_key,
+                            json!({ "itemIndex": item_index, "valueIndex": value_index }),
+                        ));
+                        return None;
+                    }
+                }
+            }
+            Some(values)
+        }
         Err(error) => {
             diagnostics.push(runtime_error(
-                error.code,
+                match error.kind {
+                    TransformErrorKind::TypeMismatch => "transform_type_mismatch",
+                    TransformErrorKind::InvalidPercentEncoding => {
+                        "transform_invalid_percent_encoding"
+                    }
+                    TransformErrorKind::InvalidUtf8 => "transform_invalid_utf8",
+                },
                 error.message,
                 path,
                 strategy_key,
                 json!({
                     "itemIndex": item_index,
-                    "transform": error.transform,
+                    "transformIndex": error.transform_index,
+                    "valueIndex": error.value_index,
                 }),
             ));
             None

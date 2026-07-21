@@ -92,10 +92,10 @@ impl JsonStringsResult {
     pub(super) fn into_raw(
         self,
         cardinality: CompiledCardinality,
-        transforms: Option<&Vec<Transform>>,
+        transforms: &CompiledTransformPipeline,
     ) -> RawFieldValues<'_> {
         RawFieldValues {
-            values: self.values,
+            values: self.values.into_iter().map(TransformValue::Text).collect(),
             failed: self.failed,
             cardinality,
             transforms,
@@ -103,70 +103,29 @@ impl JsonStringsResult {
     }
 }
 
-pub(super) fn json_value_to_strings(
-    value: &Value,
-    path: &str,
-    strategy_key: Option<&str>,
-    item_index: usize,
-    diagnostics: &mut Diagnostics,
-) -> JsonStringsResult {
-    match value {
-        Value::Null => JsonStringsResult {
-            values: Vec::new(),
+pub(super) struct JsonTransformValuesResult {
+    pub(super) values: Vec<TransformValue<'static, 'static>>,
+}
+
+impl JsonTransformValuesResult {
+    pub(super) fn into_raw(
+        self,
+        cardinality: CompiledCardinality,
+        transforms: &CompiledTransformPipeline,
+    ) -> RawFieldValues<'_> {
+        RawFieldValues {
+            values: self.values,
             failed: false,
-        },
-        Value::String(value) => JsonStringsResult {
-            values: vec![value.clone()],
-            failed: false,
-        },
-        Value::Number(value) => JsonStringsResult {
-            values: vec![value.to_string()],
-            failed: false,
-        },
-        Value::Bool(value) => JsonStringsResult {
-            values: vec![value.to_string()],
-            failed: false,
-        },
-        Value::Array(values) => {
-            let mut strings = Vec::new();
-            for (value_index, value) in values.iter().enumerate() {
-                match value {
-                    Value::Null => {}
-                    Value::String(value) => strings.push(value.clone()),
-                    Value::Number(value) => strings.push(value.to_string()),
-                    Value::Bool(value) => strings.push(value.to_string()),
-                    Value::Array(_) | Value::Object(_) => {
-                        diagnostics.push(runtime_error(
-                            "field_type_mismatch",
-                            "Field array values must resolve to strings, numbers, booleans, or null",
-                            path,
-                            strategy_key,
-                            json!({ "itemIndex": item_index, "valueIndex": value_index }),
-                        ));
-                        return JsonStringsResult {
-                            values: Vec::new(),
-                            failed: true,
-                        };
-                    }
-                }
-            }
-            JsonStringsResult {
-                values: strings,
-                failed: false,
-            }
-        }
-        Value::Object(_) => {
-            diagnostics.push(runtime_error(
-                "field_type_mismatch",
-                "Field value must resolve to a string, number, boolean, null, or an array of scalar values",
-                path,
-                strategy_key,
-                json!({ "itemIndex": item_index }),
-            ));
-            JsonStringsResult {
-                values: Vec::new(),
-                failed: true,
-            }
+            cardinality,
+            transforms,
         }
     }
+}
+
+pub(super) fn json_value_to_transform_values(value: &Value) -> JsonTransformValuesResult {
+    let values = match value {
+        Value::Array(values) => values.iter().cloned().map(TransformValue::Json).collect(),
+        value => vec![TransformValue::Json(value.clone())],
+    };
+    JsonTransformValuesResult { values }
 }

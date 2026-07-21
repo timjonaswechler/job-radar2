@@ -1,6 +1,6 @@
 use super::document::RuntimeItem;
 use super::values::{
-    css_attribute_values, css_text_values, json_value_to_strings, xml_descendant_elements,
+    css_attribute_values, css_text_values, json_value_to_transform_values, xml_descendant_elements,
     xml_node_text, xml_path_texts, JsonStringsResult,
 };
 use super::*;
@@ -339,7 +339,7 @@ fn extract_locations_field(
             continue;
         };
         for value in values {
-            let value = normalize_whitespace(value.trim());
+            let value = normalize_whitespace_text(value.trim());
             if !value.is_empty() && !locations.contains(&value) {
                 locations.push(value);
             }

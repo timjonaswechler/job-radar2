@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::profile_dsl::{documents::transform::Transform, primitives::cardinality::Cardinality};
+use crate::profile_dsl::primitives::{cardinality::Cardinality, transform::Transform};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -95,6 +95,25 @@ pub enum FieldExpression {
         #[serde(skip_serializing_if = "Option::is_none")]
         transforms: Option<Vec<Transform>>,
     },
+}
+
+impl FieldExpression {
+    pub(crate) fn transforms(&self) -> Option<&[Transform]> {
+        match self {
+            Self::Const { transforms, .. }
+            | Self::Template { transforms, .. }
+            | Self::SourceConfig { transforms, .. }
+            | Self::PostingMeta { transforms, .. }
+            | Self::Capture { transforms, .. }
+            | Self::ItemField { transforms, .. }
+            | Self::JsonPath { transforms, .. }
+            | Self::XmlText { transforms, .. }
+            | Self::XmlElement { transforms, .. }
+            | Self::CssText { transforms, .. }
+            | Self::CssAttribute { transforms, .. }
+            | Self::Combine { transforms, .. } => transforms.as_deref(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

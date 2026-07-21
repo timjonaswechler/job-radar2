@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::values::{
     compile_captures, compile_field_expression, compile_filters, compile_list_field_expression,
     ExecutionPlanCaptures, ExecutionPlanFieldExpression, ExecutionPlanFilter,
-    ExecutionPlanListFieldExpression,
+    ExecutionPlanListFieldExpression, FieldExpressionCompileError,
 };
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::discovery::{
@@ -166,22 +166,28 @@ fn compile_discovery_strategy(
             },
         )
         .map_err(|error| ExecutionPlanBuildError::new(format!("{path}/select"), error.message))?,
-        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor).map_err(
-            |error| ExecutionPlanBuildError {
-                path: format!("{path}/where"),
-                message: error.to_string(),
-            },
-        )?,
-        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor).map_err(
-            |error| ExecutionPlanBuildError {
-                path: format!("{path}/captures"),
-                message: error.to_string(),
-            },
-        )?,
+        conditions: compile_filters(strategy.conditions.as_ref(), &field_descriptor)
+            .map_err(|error| field_expression_error(format!("{path}/where"), error))?,
+        captures: compile_captures(strategy.captures.as_ref(), &field_descriptor)
+            .map_err(|error| field_expression_error(format!("{path}/captures"), error))?,
         extract: compile_discovery_extraction(&strategy.extract, &field_descriptor, path)?,
         accept_when: strategy.accept_when.clone(),
         diagnostics: strategy.diagnostics.clone(),
     })
+}
+
+fn field_expression_error(
+    path: String,
+    error: FieldExpressionCompileError,
+) -> ExecutionPlanBuildError {
+    match error {
+        FieldExpressionCompileError::Template(error) => {
+            ExecutionPlanBuildError::new(path, error.to_string())
+        }
+        FieldExpressionCompileError::Transform(error) => {
+            ExecutionPlanBuildError::transform(path, error)
+        }
+    }
 }
 
 fn compile_discovery_extraction(
@@ -192,22 +198,13 @@ fn compile_discovery_extraction(
     Ok(ExecutionPlanDiscoveryExtraction {
         fields: ExecutionPlanDiscoveryFields {
             title: compile_field_expression(&extraction.fields.title, descriptor).map_err(
-                |error| ExecutionPlanBuildError {
-                    path: format!("{path}/extract/fields/title"),
-                    message: error.to_string(),
-                },
+                |error| field_expression_error(format!("{path}/extract/fields/title"), error),
             )?,
             company: compile_field_expression(&extraction.fields.company, descriptor).map_err(
-                |error| ExecutionPlanBuildError {
-                    path: format!("{path}/extract/fields/company"),
-                    message: error.to_string(),
-                },
+                |error| field_expression_error(format!("{path}/extract/fields/company"), error),
             )?,
             url: compile_field_expression(&extraction.fields.url, descriptor).map_err(|error| {
-                ExecutionPlanBuildError {
-                    path: format!("{path}/extract/fields/url"),
-                    message: error.to_string(),
-                }
+                field_expression_error(format!("{path}/extract/fields/url"), error)
             })?,
             locations: extraction
                 .fields
@@ -215,10 +212,7 @@ fn compile_discovery_extraction(
                 .as_ref()
                 .map(|value| {
                     compile_list_field_expression(value, descriptor).map_err(|error| {
-                        ExecutionPlanBuildError {
-                            path: format!("{path}/extract/fields/locations"),
-                            message: error.to_string(),
-                        }
+                        field_expression_error(format!("{path}/extract/fields/locations"), error)
                     })
                 })
                 .transpose()?,
@@ -233,13 +227,13 @@ fn compile_discovery_extraction(
                             Ok((
                                 key.clone(),
                                 compile_field_expression(value, descriptor).map_err(|error| {
-                                    ExecutionPlanBuildError {
-                                        path: format!(
+                                    field_expression_error(
+                                        format!(
                                             "{path}/extract/fields/postingMeta/{}",
                                             json_pointer_segment(key)
                                         ),
-                                        message: error.to_string(),
-                                    }
+                                        error,
+                                    )
                                 })?,
                             ))
                         })
@@ -252,10 +246,10 @@ fn compile_discovery_extraction(
                 .as_ref()
                 .map(|value| {
                     compile_field_expression(value, descriptor).map_err(|error| {
-                        ExecutionPlanBuildError {
-                            path: format!("{path}/extract/fields/descriptionText"),
-                            message: error.to_string(),
-                        }
+                        field_expression_error(
+                            format!("{path}/extract/fields/descriptionText"),
+                            error,
+                        )
                     })
                 })
                 .transpose()?,

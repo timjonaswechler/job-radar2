@@ -13,7 +13,6 @@ pub mod parse;
 pub mod select;
 pub mod strategy;
 pub mod support;
-pub mod transform;
 
 #[cfg(test)]
 mod serde_tests;
@@ -40,4 +39,3 @@ pub use support::{
     JsonObject, JsonSchemaObject, SupportEvidence, SupportEvidenceKind, SupportLevel,
     SupportMetadata, SupportNote,
 };
-pub use transform::Transform;

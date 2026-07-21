@@ -75,6 +75,7 @@
                   "jsonPath": "$.title",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "trim"
                     }
@@ -94,6 +95,7 @@
                   "jsonPath": "$.locations",
                   "cardinality": "all",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "trim"
                     },
@@ -151,6 +153,7 @@
                   "jsonPath": "$.descriptionHtml",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "html_to_text"
                     },

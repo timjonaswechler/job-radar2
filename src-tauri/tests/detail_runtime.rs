@@ -493,7 +493,7 @@ fn compiled_detail_runtime_normalizes_html_in_json_description_text() {
             "type": "json_path",
             "jsonPath": "$.descriptionHtml",
             "cardinality": "one",
-            "transforms": [{ "type": "html_to_text" }, { "type": "normalize_whitespace" }]
+            "transforms": [{ "type": "to_string" }, { "type": "html_to_text" }, { "type": "normalize_whitespace" }]
         }),
         None,
         None,
@@ -521,7 +521,7 @@ fn compiled_detail_runtime_applies_explicit_text_transforms() {
             "type": "json_path",
             "jsonPath": "$.descriptionSlug",
             "cardinality": "one",
-            "transforms": [{ "type": "url_decode" }, { "type": "slug_to_title" }]
+            "transforms": [{ "type": "to_string" }, { "type": "url_decode" }, { "type": "slug_to_title" }]
         }),
         None,
         None,
@@ -542,6 +542,40 @@ fn compiled_detail_runtime_applies_explicit_text_transforms() {
 }
 
 #[test]
+fn compiled_detail_runtime_to_string_rejects_json_null_without_partial_output() {
+    let plan = compiled_json_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one",
+            "transforms": [{ "type": "to_string" }]
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = fake_profile_http_client([(
+        "https://example.test/jobs/42.json",
+        json!({ "description": null }).to_string(),
+    )]);
+
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+
+    assert_eq!(result.description_text, None);
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "transform_type_mismatch")
+        .expect("typed transform failure");
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({ "transformIndex": 0, "valueIndex": 0 }))
+    );
+    assert!(!diagnostic.message.contains("null"));
+}
+
+#[test]
 fn compiled_detail_runtime_combines_description_text_parts() {
     let plan = compiled_json_detail_plan(
         "{{posting:url}}",
@@ -553,7 +587,7 @@ fn compiled_detail_runtime_combines_description_text_parts() {
                 { "value": { "type": "json_path", "jsonPath": "$.body", "cardinality": "one" } },
                 { "value": { "type": "json_path", "jsonPath": "$.footer", "cardinality": "one" }, "optional": true }
             ],
-            "transforms": [{ "type": "normalize_whitespace" }]
+            "transforms": [{ "type": "to_string" }, { "type": "normalize_whitespace" }]
         }),
         None,
         None,

@@ -61,6 +61,7 @@
                   "jsonPath": "$.title",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "trim"
                     }
@@ -136,6 +137,7 @@
                   "jsonPath": "$.content",
                   "cardinality": "one",
                   "transforms": [
+                    { "type": "to_string" },
                     {
                       "type": "html_to_text"
                     },

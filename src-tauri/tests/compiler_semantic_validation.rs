@@ -74,6 +74,45 @@ fn compiler_validates_structural_capability_compatibility() {
 }
 
 #[test]
+fn compiler_rejects_invalid_transform_plans_with_stable_context() {
+    let mut profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    let mut unselected_path = profile.access_paths[0].clone();
+    unselected_path.key = "invalid_unselected_path".to_string();
+    unselected_path.name = "Invalid unselected path".to_string();
+    unselected_path.discovery.strategies[0].extract.fields.title =
+        serde_json::from_value(serde_json::json!({
+            "type": "json_path",
+            "jsonPath": "$.title",
+            "transforms": [{
+                "type": "regex_replace",
+                "pattern": "(",
+                "replacement": "x"
+            }]
+        }))
+        .unwrap();
+    profile.access_paths.push(unselected_path);
+
+    let result = compile_test_source(&source, Some(profile));
+
+    assert_eq!(result.execution_plan, None);
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "transform_invalid_regex")
+        .expect("transform compile diagnostic");
+    assert!(diagnostic
+        .path
+        .ends_with("/accessPaths/1/discovery/strategies/0/extract/fields/title/transforms/0"));
+    assert_eq!(
+        diagnostic.details,
+        Some(serde_json::json!({ "transformIndex": 0 }))
+    );
+}
+
+#[test]
 fn compiler_validates_template_variable_namespaces_keys_and_context() {
     let mut profile: SourceProfileDocument =
         read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
