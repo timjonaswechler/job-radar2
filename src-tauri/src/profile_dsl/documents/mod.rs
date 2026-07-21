@@ -25,7 +25,7 @@ pub use detection::{
     DetectionEvidenceKind, DetectionHttpCheck, InputUrlPattern,
 };
 pub use discovery::{DiscoveryExtraction, DiscoveryFields, DiscoveryStep, DiscoveryStrategy};
-pub use extract::{Cardinality, CombinePart, FieldExpression, ListFieldExpression};
+pub use extract::{CombinePart, FieldExpression, ListFieldExpression};
 pub use fetch::{BrowserInteraction, BrowserWait, Fetch, HttpMethod, RequestBody};
 pub use fragments::{
     AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DiscoveryStepFragment,

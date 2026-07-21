@@ -10,7 +10,7 @@ use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         documents::strategy::Acceptance,
-        documents::{extract::Cardinality, transform::Transform, HttpMethod, RequestBody},
+        documents::{transform::Transform, HttpMethod, RequestBody},
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanJsonValue, ExecutionPlanRequestBody},
             detail::ExecutionPlanDetailStrategy,
@@ -20,7 +20,10 @@ use crate::{
             },
             SourceExecutionPlan,
         },
-        primitives::parse::{CompleteParseText, ParseDiagnosticContext},
+        primitives::{
+            cardinality::{CardinalityDiagnosticContext, CardinalityOutcome, CompiledCardinality},
+            parse::{CompleteParseText, ParseDiagnosticContext},
+        },
     },
     source::documents::SourceConfig,
 };

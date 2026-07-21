@@ -64,87 +64,32 @@ pub(in crate::profile_dsl::runtime::discovery) fn evaluate_string_field(
         }
     }
 
-    match cardinality.unwrap_or(Cardinality::One) {
-        Cardinality::One => match normalized_values.len() {
-            0 => FieldEvaluation {
-                value: None,
-                failed: false,
+    match cardinality.execute(normalized_values) {
+        Ok(outcome) => FieldEvaluation {
+            value: match outcome {
+                CardinalityOutcome::Scalar(value) => value,
+                CardinalityOutcome::Sequence(values) => values.into_iter().next(),
             },
-            1 => FieldEvaluation {
-                value: normalized_values.into_iter().next(),
-                failed: false,
-            },
-            count => {
-                cardinality_mismatch(path, strategy_key, item_index, count, "one", diagnostics)
-            }
-        },
-        Cardinality::First => {
-            if let Some(value) = normalized_values.into_iter().next() {
-                FieldEvaluation {
-                    value: Some(value),
-                    failed: false,
-                }
-            } else {
-                FieldEvaluation {
-                    value: None,
-                    failed: false,
-                }
-            }
-        }
-        Cardinality::Optional => match normalized_values.len() {
-            0 => FieldEvaluation {
-                value: None,
-                failed: false,
-            },
-            1 => FieldEvaluation {
-                value: normalized_values.into_iter().next(),
-                failed: false,
-            },
-            count => cardinality_mismatch(
-                path,
-                strategy_key,
-                item_index,
-                count,
-                "optional",
-                diagnostics,
-            ),
-        },
-        Cardinality::All => FieldEvaluation {
-            value: normalized_values.into_iter().next(),
             failed: false,
         },
-    }
-}
-
-fn cardinality_mismatch(
-    path: &str,
-    strategy_key: Option<&str>,
-    item_index: usize,
-    actual_count: usize,
-    expected: &str,
-    diagnostics: &mut Diagnostics,
-) -> FieldEvaluation {
-    diagnostics.push(runtime_error(
-        "field_cardinality_mismatch",
-        format!("Field cardinality `{expected}` did not match {actual_count} resolved values"),
-        path,
-        strategy_key,
-        json!({
-            "itemIndex": item_index,
-            "expectedCardinality": expected,
-            "actualCount": actual_count,
-        }),
-    ));
-    FieldEvaluation {
-        value: None,
-        failed: true,
+        Err(error) => {
+            diagnostics.push(error.into_diagnostic(CardinalityDiagnosticContext {
+                path,
+                strategy_key,
+                item_index: Some(item_index),
+            }));
+            FieldEvaluation {
+                value: None,
+                failed: true,
+            }
+        }
     }
 }
 
 pub(in crate::profile_dsl::runtime::discovery) struct RawFieldValues<'a> {
     pub(in crate::profile_dsl::runtime::discovery) values: Vec<String>,
     pub(in crate::profile_dsl::runtime::discovery) failed: bool,
-    pub(in crate::profile_dsl::runtime::discovery) cardinality: Option<Cardinality>,
+    pub(in crate::profile_dsl::runtime::discovery) cardinality: CompiledCardinality,
     pub(in crate::profile_dsl::runtime::discovery) transforms: Option<&'a Vec<Transform>>,
 }
 
@@ -425,7 +370,7 @@ pub(in crate::profile_dsl::runtime::discovery) fn raw_field_values<'a>(
             RawFieldValues {
                 values: Vec::new(),
                 failed: true,
-                cardinality: None,
+                cardinality: CompiledCardinality::default(),
                 transforms: None,
             }
         }
@@ -502,7 +447,7 @@ fn incompatible_field_expression<'a>(
     path: &str,
     strategy_key: Option<&str>,
     item_index: usize,
-    cardinality: Option<Cardinality>,
+    cardinality: CompiledCardinality,
     transforms: Option<&'a Vec<Transform>>,
     diagnostics: &mut Diagnostics,
 ) -> RawFieldValues<'a> {

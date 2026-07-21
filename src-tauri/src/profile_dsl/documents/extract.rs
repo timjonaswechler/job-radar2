@@ -1,16 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::profile_dsl::documents::transform::Transform;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Cardinality {
-    One,
-    First,
-    Optional,
-    All,
-}
+use crate::profile_dsl::{documents::transform::Transform, primitives::cardinality::Cardinality};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]

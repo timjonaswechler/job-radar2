@@ -58,67 +58,32 @@ pub(in crate::profile_dsl::runtime::detail) fn evaluate_string_field(
         }
     }
 
-    match cardinality.unwrap_or(Cardinality::One) {
-        Cardinality::One => match normalized_values.len() {
-            0 => FieldEvaluation {
-                value: None,
-                failed: false,
+    match cardinality.execute(normalized_values) {
+        Ok(outcome) => FieldEvaluation {
+            value: match outcome {
+                CardinalityOutcome::Scalar(value) => value,
+                CardinalityOutcome::Sequence(values) => values.into_iter().next(),
             },
-            1 => FieldEvaluation {
-                value: normalized_values.into_iter().next(),
-                failed: false,
-            },
-            count => cardinality_mismatch(path, strategy_key, count, "one", diagnostics),
-        },
-        Cardinality::First => FieldEvaluation {
-            value: normalized_values.into_iter().next(),
             failed: false,
         },
-        Cardinality::Optional => match normalized_values.len() {
-            0 => FieldEvaluation {
+        Err(error) => {
+            diagnostics.push(error.into_diagnostic(CardinalityDiagnosticContext {
+                path,
+                strategy_key,
+                item_index: None,
+            }));
+            FieldEvaluation {
                 value: None,
-                failed: false,
-            },
-            1 => FieldEvaluation {
-                value: normalized_values.into_iter().next(),
-                failed: false,
-            },
-            count => cardinality_mismatch(path, strategy_key, count, "optional", diagnostics),
-        },
-        Cardinality::All => FieldEvaluation {
-            value: normalized_values.into_iter().next(),
-            failed: false,
-        },
-    }
-}
-
-fn cardinality_mismatch(
-    path: &str,
-    strategy_key: Option<&str>,
-    actual_count: usize,
-    expected: &str,
-    diagnostics: &mut Diagnostics,
-) -> FieldEvaluation {
-    diagnostics.push(runtime_error(
-        "field_cardinality_mismatch",
-        format!("Field cardinality `{expected}` did not match {actual_count} resolved values"),
-        path,
-        strategy_key,
-        json!({
-            "expectedCardinality": expected,
-            "actualCount": actual_count,
-        }),
-    ));
-    FieldEvaluation {
-        value: None,
-        failed: true,
+                failed: true,
+            }
+        }
     }
 }
 
 pub(in crate::profile_dsl::runtime::detail) struct RawFieldValues<'a> {
     pub(in crate::profile_dsl::runtime::detail) values: Vec<String>,
     pub(in crate::profile_dsl::runtime::detail) failed: bool,
-    pub(in crate::profile_dsl::runtime::detail) cardinality: Option<Cardinality>,
+    pub(in crate::profile_dsl::runtime::detail) cardinality: CompiledCardinality,
     pub(in crate::profile_dsl::runtime::detail) transforms: Option<&'a Vec<Transform>>,
 }
 
@@ -453,7 +418,7 @@ fn incompatible_field_expression<'a>(
     code: &'static str,
     path: &str,
     strategy_key: Option<&str>,
-    cardinality: Option<Cardinality>,
+    cardinality: CompiledCardinality,
     transforms: Option<&'a Vec<Transform>>,
     diagnostics: &mut Diagnostics,
 ) -> RawFieldValues<'a> {

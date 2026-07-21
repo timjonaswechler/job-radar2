@@ -59,6 +59,12 @@ pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::policy::StrategyPolicy;
+pub use profile_dsl::primitives::cardinality::{
+    cardinality_descriptors, compile_cardinality, validate_cardinality_registration_keys, All,
+    AllPlan, Cardinality, CardinalityDescriptor, CardinalityDiagnosticContext, CardinalityError,
+    CardinalityOutcome, CardinalityRegistryError, CardinalitySequence, CompiledCardinality, First,
+    FirstPlan, One, OnePlan, Optional, OptionalPlan,
+};
 pub use profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,
     CompileParseError, CompiledParse, DecodedHttpText, ParseDescriptor, ParseFailure,

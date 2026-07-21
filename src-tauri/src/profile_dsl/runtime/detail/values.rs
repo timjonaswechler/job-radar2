@@ -82,7 +82,7 @@ pub(super) struct JsonStringsResult {
 impl JsonStringsResult {
     pub(super) fn into_raw(
         self,
-        cardinality: Option<Cardinality>,
+        cardinality: CompiledCardinality,
         transforms: Option<&Vec<Transform>>,
     ) -> RawFieldValues<'_> {
         RawFieldValues {

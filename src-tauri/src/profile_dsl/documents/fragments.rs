@@ -4,10 +4,11 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::profile_dsl::documents::{
-    Acceptance, BrowserInteraction, BrowserWait, Cardinality, Filter, HttpMethod, JsonSchemaObject,
+    Acceptance, BrowserInteraction, BrowserWait, Filter, HttpMethod, JsonSchemaObject,
     PaginationLimits, PaginationParameterLocation, PhaseLimitsFragment, Transform,
 };
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::primitives::cardinality::Cardinality;
 
 /// Active schema-v3 Direct Source Specialization fragment for one reusable
 /// Access Path. `SourceDocument::access_paths` persists these typed fragments.

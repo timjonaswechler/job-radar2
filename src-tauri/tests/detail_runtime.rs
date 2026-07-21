@@ -56,6 +56,63 @@ fn compiled_detail_runtime_extracts_direct_json_description_text() {
 }
 
 #[test]
+fn compiler_materializes_omitted_cardinality_as_typed_one_plan() {
+    let plan = compiled_json_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description"
+        }),
+        None,
+        None,
+    );
+
+    let serialized = serde_json::to_value(plan).unwrap();
+    assert_eq!(
+        serialized.pointer("/detail/strategies/0/extract/fields/descriptionText/cardinality"),
+        Some(&json!("one"))
+    );
+}
+
+#[test]
+fn compiled_detail_runtime_projects_canonical_cardinality_failures() {
+    let plan = compiled_json_detail_plan(
+        "{{posting:url}}",
+        json!({
+            "type": "json_path",
+            "jsonPath": "$.description",
+            "cardinality": "one"
+        }),
+        None,
+        None,
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
+    let fetcher = fake_profile_http_client([(
+        "https://example.test/jobs/42.json",
+        json!({ "description": ["first", "second"] }).to_string(),
+    )]);
+
+    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
+
+    assert_eq!(result.description_text, None);
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "field_cardinality_mismatch")
+        .expect("canonical cardinality failure must be projected by Detail");
+    assert_eq!(diagnostic.category, DiagnosticCategory::Runtime);
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+    assert_eq!(diagnostic.strategy_key.as_deref(), Some("detail_api"));
+    assert_eq!(
+        diagnostic.details,
+        Some(json!({
+            "expectedCardinality": "one",
+            "actualCount": 2,
+        }))
+    );
+}
+
+#[test]
 fn compiled_detail_runtime_falls_back_to_first_accepted_strategy() {
     let plan = compiled_detail_plan_with_strategies(
         None,
