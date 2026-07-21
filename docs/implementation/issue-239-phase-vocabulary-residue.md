@@ -117,15 +117,15 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json:18` — `"step": "postingDiscovery",`
 - `src-tauri/tests/profile_dsl_profiles/schema.rs:195` — `"postingDiscovery": {`
 - `src-tauri/tests/profile_dsl_profiles/schema.rs:223` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
-- `src-tauri/tests/source_live_check.rs:57` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]`
-- `src-tauri/tests/source_live_check.rs:670` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
-- `src-tauri/tests/source_live_check.rs:675` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
-- `src-tauri/tests/source_live_check.rs:677` — `profile["accessPaths"][0]["postingDetail"]["strategies"] =`
-- `src-tauri/tests/source_live_check.rs:724` — `.remove("postingDetail");`
-- `src-tauri/tests/source_profile_detection.rs:1479` — `"detect": detection,`
-- `src-tauri/tests/source_profile_detection.rs:1492` — `"postingDiscovery": {`
-- `src-tauri/tests/source_profile_registry.rs:212` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
-- `src-tauri/tests/source_profile_registry.rs:317` — `"step": "postingDiscovery",`
+- `src-tauri/tests/source/live_check.rs:57` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]`
+- `src-tauri/tests/source/live_check.rs:670` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
+- `src-tauri/tests/source/live_check.rs:675` — `profile["accessPaths"][0]["postingDetail"]["strategies"][0].clone();`
+- `src-tauri/tests/source/live_check.rs:677` — `profile["accessPaths"][0]["postingDetail"]["strategies"] =`
+- `src-tauri/tests/source/live_check.rs:724` — `.remove("postingDetail");`
+- `src-tauri/tests/source/profile_detection.rs:1479` — `"detect": detection,`
+- `src-tauri/tests/source/profile_detection.rs:1492` — `"postingDiscovery": {`
+- `src-tauri/tests/source/profile_registry.rs:212` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"]`
+- `src-tauri/tests/source/profile_registry.rs:317` — `"step": "postingDiscovery",`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:51` — `"postingDiscovery": {`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:58` — `"postingDetail": { "policy": "first_accepted" }`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:74` — `"postingDiscovery": discovery_step(),`
@@ -311,33 +311,33 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:304` — `"/accessPaths/2/postingDetail",`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:347` — `"/accessPaths/0/postingDiscovery/strategies/1/key",`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:348` — `"/accessPaths/0/postingDiscovery/strategies/2/key",`
-- `src-tauri/tests/source_live_check.rs:164` — `.find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")`
-- `src-tauri/tests/source_live_check.rs:169` — `"/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"`
-- `src-tauri/tests/source_live_check.rs:240` — `diagnostic.code == "posting_discovery_request_budget_reached"`
-- `src-tauri/tests/source_profile_detection.rs:85` — `&& diagnostic.path == "/profiles/0/detect/keyCandidates/0"`
-- `src-tauri/tests/source_profile_detection.rs:142` — `&& diagnostic.path == "/profiles/0/detect/inputUrlPatterns/0/pattern"`
-- `src-tauri/tests/source_profile_detection.rs:169` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/timeoutMs"`
-- `src-tauri/tests/source_profile_detection.rs:201` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
-- `src-tauri/tests/source_profile_detection.rs:244` — `"/profiles/0/detect/sourceConfig/boardSlug",`
-- `src-tauri/tests/source_profile_detection.rs:249` — `"/profiles/0/detect/sourceConfig/keyword",`
-- `src-tauri/tests/source_profile_detection.rs:254` — `"/profiles/0/detect/sourceConfig/unexpected",`
-- `src-tauri/tests/source_profile_detection.rs:407` — `"/profiles/0/detect/sourceConfig/alpha"`
-- `src-tauri/tests/source_profile_detection.rs:411` — `"/profiles/0/detect/sourceConfig/bad"`
-- `src-tauri/tests/source_profile_detection.rs:415` — `"/profiles/0/detect/sourceConfig/zeta"`
-- `src-tauri/tests/source_profile_detection.rs:505` — `&& diagnostic.path == "/profiles/0/detect/sourceConfig/startUrl"`
-- `src-tauri/tests/source_profile_detection.rs:943` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/url"`
-- `src-tauri/tests/source_profile_detection.rs:1097` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0"`
-- `src-tauri/tests/source_profile_detection.rs:1109` — `"/profiles/0/detect/browserProbes/0",`
-- `src-tauri/tests/source_profile_detection.rs:1115` — `"/profiles/0/detect/browserProbes/0/url",`
-- `src-tauri/tests/source_profile_detection.rs:1123` — `"/profiles/0/detect/browserProbes/0/interactions/0",`
-- `src-tauri/tests/source_profile_detection.rs:1129` — `"/profiles/0/detect/browserProbes/0/timeoutMs",`
-- `src-tauri/tests/source_profile_detection.rs:1135` — `"/profiles/0/detect/browserProbes/0",`
-- `src-tauri/tests/source_profile_detection.rs:1210` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/htmlContains"`
-- `src-tauri/tests/source_profile_detection.rs:1243` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
-- `src-tauri/tests/source_profile_detection.rs:1278` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0/timeoutMs"`
-- `src-tauri/tests/source_profile_detection.rs:1312` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/interactions/0/maxCount"`
-- `src-tauri/tests/source_profile_detection.rs:1343` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0"`
-- `src-tauri/tests/source_profile_registry.rs:230` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"`
+- `src-tauri/tests/source/live_check.rs:164` — `.find(|diagnostic| diagnostic.code == "posting_discovery_request_budget_reached")`
+- `src-tauri/tests/source/live_check.rs:169` — `"/postingDiscovery/strategies/0/executionBudget/maxRequestsPerStrategy"`
+- `src-tauri/tests/source/live_check.rs:240` — `diagnostic.code == "posting_discovery_request_budget_reached"`
+- `src-tauri/tests/source/profile_detection.rs:85` — `&& diagnostic.path == "/profiles/0/detect/keyCandidates/0"`
+- `src-tauri/tests/source/profile_detection.rs:142` — `&& diagnostic.path == "/profiles/0/detect/inputUrlPatterns/0/pattern"`
+- `src-tauri/tests/source/profile_detection.rs:169` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/timeoutMs"`
+- `src-tauri/tests/source/profile_detection.rs:201` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
+- `src-tauri/tests/source/profile_detection.rs:244` — `"/profiles/0/detect/sourceConfig/boardSlug",`
+- `src-tauri/tests/source/profile_detection.rs:249` — `"/profiles/0/detect/sourceConfig/keyword",`
+- `src-tauri/tests/source/profile_detection.rs:254` — `"/profiles/0/detect/sourceConfig/unexpected",`
+- `src-tauri/tests/source/profile_detection.rs:407` — `"/profiles/0/detect/sourceConfig/alpha"`
+- `src-tauri/tests/source/profile_detection.rs:411` — `"/profiles/0/detect/sourceConfig/bad"`
+- `src-tauri/tests/source/profile_detection.rs:415` — `"/profiles/0/detect/sourceConfig/zeta"`
+- `src-tauri/tests/source/profile_detection.rs:505` — `&& diagnostic.path == "/profiles/0/detect/sourceConfig/startUrl"`
+- `src-tauri/tests/source/profile_detection.rs:943` — `&& diagnostic.path == "/profiles/0/detect/httpChecks/0/url"`
+- `src-tauri/tests/source/profile_detection.rs:1097` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0"`
+- `src-tauri/tests/source/profile_detection.rs:1109` — `"/profiles/0/detect/browserProbes/0",`
+- `src-tauri/tests/source/profile_detection.rs:1115` — `"/profiles/0/detect/browserProbes/0/url",`
+- `src-tauri/tests/source/profile_detection.rs:1123` — `"/profiles/0/detect/browserProbes/0/interactions/0",`
+- `src-tauri/tests/source/profile_detection.rs:1129` — `"/profiles/0/detect/browserProbes/0/timeoutMs",`
+- `src-tauri/tests/source/profile_detection.rs:1135` — `"/profiles/0/detect/browserProbes/0",`
+- `src-tauri/tests/source/profile_detection.rs:1210` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/htmlContains"`
+- `src-tauri/tests/source/profile_detection.rs:1243` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"`
+- `src-tauri/tests/source/profile_detection.rs:1278` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0/timeoutMs"`
+- `src-tauri/tests/source/profile_detection.rs:1312` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0/interactions/0/maxCount"`
+- `src-tauri/tests/source/profile_detection.rs:1343` — `&& diagnostic.path == "/profiles/0/detect/browserProbes/0"`
+- `src-tauri/tests/source/profile_registry.rs:230` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/fetch/timeoutMs"`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:298` — `"/postingDiscovery/strategies"`
 - `src-tauri/tests/strategy_policy_first_accepted.rs:338` — `"/postingDetail/strategies"`
 - `src-tauri/tests/profile_dsl_profiles/workday.rs:225` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`

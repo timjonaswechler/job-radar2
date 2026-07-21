@@ -53,7 +53,7 @@ Focused commands run on 2026-07-11:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles successfactors::
-cargo test --manifest-path src-tauri/Cargo.toml --test source_profile_detection successfactors
+cargo test --manifest-path src-tauri/Cargo.toml --test source profile_detection:: successfactors
 ```
 
 Results:

@@ -12,9 +12,9 @@ use job_radar_lib::{
 use serde_json::json;
 
 const SIMPLE_PROFILE: &str =
-    include_str!("fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    include_str!("../fixtures/source-profile-dsl/valid/simple-source-profile.json");
 const SIMPLE_SOURCE: &str =
-    include_str!("fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    include_str!("../fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
 
 fn write_profile(app_data_dir: &Path, profile: &serde_json::Value) {
     let profile_dir = app_data_dir.join("source-profiles");

@@ -1451,7 +1451,7 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
    src-tauri/src/source_profile/detection/proposal.rs
    src-tauri/src/source_profile/detection/templates.rs
    src-tauri/src/schema/source-profile.schema.json
-   src-tauri/tests/source_profile_detection.rs
+   src-tauri/tests/source/profile_detection.rs
  ```
 
  proposal.rs sollte der einzige Ort bleiben, der aus akzeptierter Evidenz eine SourceProposal konstruiert.
@@ -1579,11 +1579,11 @@ Ich würde eine gemeinsame Strategy-/Primitive-Algebra entwerfen, aber nicht all
 
  ```text
    src-tauri/tests/profile_dsl_profiles/schema.rs
-   src-tauri/tests/source_profile_detection.rs
+   src-tauri/tests/source/profile_detection.rs
    src-tauri/tests/profile_dsl_profiles/greenhouse.rs
    src-tauri/tests/profile_dsl_profiles/workday.rs
    src-tauri/tests/profile_dsl_profiles/successfactors.rs
-   src-tauri/tests/source_live_check.rs
+   src-tauri/tests/source/live_check.rs
  ```
 
  ────────────────────────────────────────────────────────────────────────────────
