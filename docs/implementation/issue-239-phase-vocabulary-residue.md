@@ -75,16 +75,16 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:225` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"] = json!([]);`
 - `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:226` — `profile["accessPaths"][0]["postingDetail"]["strategies"] = json!([]);`
 - `src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:246` — `profile["accessPaths"][0]["postingDiscovery"]["strategies"][0]["fetch"] = json!({`
-- `src-tauri/tests/detail_runtime.rs:1128` — `"postingDiscovery": {`
-- `src-tauri/tests/detail_runtime.rs:1152` — `"postingDetail": { "strategies": [strategy] }`
-- `src-tauri/tests/detail_runtime.rs:1214` — `"postingDiscovery": {`
-- `src-tauri/tests/detail_runtime.rs:1237` — `"postingDetail": detail`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:387` — `"postingDiscovery": discovery`
-- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:141` — `"postingDiscovery": {`
-- `src-tauri/tests/discovery_runtime/template_validation.rs:27` — `"postingDiscovery": {`
-- `src-tauri/tests/discovery_runtime.rs:191` — `"postingDiscovery": {`
-- `src-tauri/tests/discovery_runtime.rs:246` — `"postingDiscovery": {`
-- `src-tauri/tests/discovery_runtime.rs:327` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:1126` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:1150` — `"postingDetail": { "strategies": [strategy] }`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:1212` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:1235` — `"postingDetail": detail`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:387` — `"postingDiscovery": discovery`
+- `src-tauri/tests/profile_dsl_runtime/discovery/post_request_bodies.rs:141` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/discovery/template_validation.rs:27` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/discovery.rs:189` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/discovery.rs:244` — `"postingDiscovery": {`
+- `src-tauri/tests/profile_dsl_runtime/discovery.rs:325` — `"postingDiscovery": {`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:98` — `"postingDiscovery": {`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:107` — `"postingDiscovery": {`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:190` — `"postingDiscovery": {`
@@ -274,36 +274,36 @@ At that time, classes were intentionally limited to the two temporary boundaries
 - `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:165` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/0/select"`
 - `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:265` — `&& diagnostic.path == "/accessPaths/0/postingDiscovery/strategies/1/key"`
 - `src-tauri/tests/profile_dsl_compiler/semantic_validation.rs:270` — `&& diagnostic.path == "/accessPaths/0/postingDetail/strategies/1/key"`
-- `src-tauri/tests/detail_runtime.rs:233` — `"/postingDetail/strategies/0/where/0/pattern"`
-- `src-tauri/tests/detail_runtime.rs:277` — `"/postingDetail/acceptWhen/minDescriptionLength"`
-- `src-tauri/tests/detail_runtime.rs:280` — `assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");`
-- `src-tauri/tests/detail_runtime.rs:320` — `"/postingDetail/strategies/0/acceptWhen/maxErrorRatio"`
-- `src-tauri/tests/detail_runtime.rs:555` — `"/postingDetail/strategies/0/extract/fields/descriptionText"`
-- `src-tauri/tests/detail_runtime.rs:801` — `"/postingDetail/strategies/0/fetch/interactions/0"`
-- `src-tauri/tests/discovery_runtime/cancellation.rs:203` — `"postingDiscovery cancelled",`
-- `src-tauri/tests/discovery_runtime/core.rs:72` — `"/postingDiscovery/strategies/0/extract/fields/title"`
-- `src-tauri/tests/discovery_runtime/core.rs:76` — `"/postingDiscovery/strategies/0/extract/fields/company"`
-- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:176` — `"/postingDiscovery/strategies/0/fetch/waits/0"`
-- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:195` — `"/postingDiscovery/strategies/0/parse"`
-- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:214` — `"/postingDiscovery/strategies/0/select/selector"`
-- `src-tauri/tests/discovery_runtime/document_types_and_browser.rs:238` — `"/postingDiscovery/strategies/0/extract/fields/title"`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:82` — `"/postingDiscovery/strategies/0/acceptWhen/minResults"`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:206` — `"/postingDiscovery/acceptWhen/minResults"`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:209` — `assert_eq!(result.diagnostics[1].path, "/postingDiscovery/strategies");`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:302` — `"/postingDiscovery/strategies/0/acceptWhen/requiredFields"`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:314` — `"/postingDiscovery/strategies/1/acceptWhen/minDescriptionLength"`
-- `src-tauri/tests/discovery_runtime/fallback_acceptance.rs:355` — `"/postingDiscovery/strategies/0/acceptWhen/maxErrorRatio"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:99` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:195` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:379` — `"/postingDiscovery/strategies/0/pagination/limits/maxDepth"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:425` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:494` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:599` — `"/postingDiscovery/strategies/0/pagination/nextCursorPath"`
-- `src-tauri/tests/discovery_runtime/pagination.rs:647` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
-- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:192` — `"/postingDiscovery/strategies/0/fetch/body"`
-- `src-tauri/tests/discovery_runtime/post_request_bodies.rs:229` — `"/postingDiscovery/strategies/0/fetch/body"`
-- `src-tauri/tests/discovery_runtime/template_validation.rs:71` — `== "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"`
-- `src-tauri/tests/discovery_runtime/transforms_and_combine.rs:204` — `"/postingDiscovery/strategies/0/extract/fields/title/parts/1/value"`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:231` — `"/postingDetail/strategies/0/where/0/pattern"`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:275` — `"/postingDetail/acceptWhen/minDescriptionLength"`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:278` — `assert_eq!(result.diagnostics[1].path, "/postingDetail/strategies");`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:318` — `"/postingDetail/strategies/0/acceptWhen/maxErrorRatio"`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:553` — `"/postingDetail/strategies/0/extract/fields/descriptionText"`
+- `src-tauri/tests/profile_dsl_runtime/detail.rs:799` — `"/postingDetail/strategies/0/fetch/interactions/0"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/cancellation.rs:203` — `"postingDiscovery cancelled",`
+- `src-tauri/tests/profile_dsl_runtime/discovery/core.rs:72` — `"/postingDiscovery/strategies/0/extract/fields/title"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/core.rs:76` — `"/postingDiscovery/strategies/0/extract/fields/company"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/document_types_and_browser.rs:176` — `"/postingDiscovery/strategies/0/fetch/waits/0"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/document_types_and_browser.rs:195` — `"/postingDiscovery/strategies/0/parse"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/document_types_and_browser.rs:214` — `"/postingDiscovery/strategies/0/select/selector"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/document_types_and_browser.rs:238` — `"/postingDiscovery/strategies/0/extract/fields/title"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:82` — `"/postingDiscovery/strategies/0/acceptWhen/minResults"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:206` — `"/postingDiscovery/acceptWhen/minResults"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:209` — `assert_eq!(result.diagnostics[1].path, "/postingDiscovery/strategies");`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:302` — `"/postingDiscovery/strategies/0/acceptWhen/requiredFields"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:314` — `"/postingDiscovery/strategies/1/acceptWhen/minDescriptionLength"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/fallback_acceptance.rs:355` — `"/postingDiscovery/strategies/0/acceptWhen/maxErrorRatio"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:99` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:195` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:379` — `"/postingDiscovery/strategies/0/pagination/limits/maxDepth"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:425` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:494` — `"/postingDiscovery/strategies/0/pagination/limits/maxRequests"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:599` — `"/postingDiscovery/strategies/0/pagination/nextCursorPath"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/pagination.rs:647` — `"/postingDiscovery/strategies/0/pagination/limits/maxItems"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/post_request_bodies.rs:192` — `"/postingDiscovery/strategies/0/fetch/body"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/post_request_bodies.rs:229` — `"/postingDiscovery/strategies/0/fetch/body"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/template_validation.rs:71` — `== "/accessPaths/0/postingDiscovery/strategies/0/extract/fields/company/template"`
+- `src-tauri/tests/profile_dsl_runtime/discovery/transforms_and_combine.rs:204` — `"/postingDiscovery/strategies/0/extract/fields/title/parts/1/value"`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:288` — `"/accessPaths/0/postingDiscovery/strategies/0",`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:292` — `"/accessPaths/0/postingDiscovery/strategies/1",`
 - `src-tauri/tests/profile_dsl_compiler/effective_profile.rs:297` — `serde_json::json!(["name", "postingDiscovery"]),`

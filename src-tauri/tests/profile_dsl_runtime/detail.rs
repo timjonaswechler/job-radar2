@@ -1,6 +1,4 @@
-mod support;
-
-use support::{
+use crate::support::{
     compile_test_source, execute_detail_test, execute_detail_test_with_config, unwrap_plan,
 };
 

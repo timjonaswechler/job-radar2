@@ -1,6 +1,4 @@
-mod support;
-
-use support::{
+use crate::support::{
     compile_test_source, execute_discovery_test, execute_discovery_test_with_config, unwrap_plan,
 };
 
@@ -16,25 +14,25 @@ use job_radar_lib::{
 };
 use serde_json::{json, Value};
 
-#[path = "discovery_runtime/cancellation.rs"]
+#[path = "discovery/cancellation.rs"]
 mod cancellation;
-#[path = "discovery_runtime/core.rs"]
+#[path = "discovery/core.rs"]
 mod core;
-#[path = "discovery_runtime/document_types_and_browser.rs"]
+#[path = "discovery/document_types_and_browser.rs"]
 mod document_types_and_browser;
-#[path = "discovery_runtime/failure_diagnostics.rs"]
+#[path = "discovery/failure_diagnostics.rs"]
 mod failure_diagnostics;
-#[path = "discovery_runtime/fallback_acceptance.rs"]
+#[path = "discovery/fallback_acceptance.rs"]
 mod fallback_acceptance;
-#[path = "discovery_runtime/occurrence.rs"]
+#[path = "discovery/occurrence.rs"]
 mod occurrence;
-#[path = "discovery_runtime/pagination.rs"]
+#[path = "discovery/pagination.rs"]
 mod pagination;
-#[path = "discovery_runtime/post_request_bodies.rs"]
+#[path = "discovery/post_request_bodies.rs"]
 mod post_request_bodies;
-#[path = "discovery_runtime/template_validation.rs"]
+#[path = "discovery/template_validation.rs"]
 mod template_validation;
-#[path = "discovery_runtime/transforms_and_combine.rs"]
+#[path = "discovery/transforms_and_combine.rs"]
 mod transforms_and_combine;
 
 fn fake_fetcher(
