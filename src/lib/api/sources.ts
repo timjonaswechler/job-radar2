@@ -136,7 +136,6 @@ export type Acceptance = {
   requiredFields?: string[]
   minDescriptionLength?: number
   minResults?: number
-  maxErrorRatio?: number
 }
 
 export type BrowserWait =

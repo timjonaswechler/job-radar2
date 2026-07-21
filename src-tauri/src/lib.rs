@@ -39,9 +39,9 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    AccessPathFragment, AuthoredScalar, CaptureRule, Captures, DetailStep, DetailStepFragment,
-    DetailStrategyFragment, DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument,
-    DetectionEvidence, DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep,
+    Acceptance, AccessPathFragment, AuthoredScalar, CaptureRule, Captures, DetailStep,
+    DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction, DetectionBrowserProbe,
+    DetectionDocument, DetectionEvidence, DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep,
     DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod,
     InputUrlPattern, ListFieldExpression, Parse, ParseFragment, ParseType, ParseTypeFragment,
     PhaseLimits, PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select,
@@ -55,6 +55,13 @@ pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
 pub use profile_dsl::policy::StrategyPolicy;
+pub use profile_dsl::primitives::acceptance::{
+    acceptance_context_registrations, acceptance_descriptors, compile_acceptance,
+    validate_acceptance_context_registrations, validate_acceptance_registration_keys,
+    AcceptanceCompileContext, AcceptanceCompileError, AcceptanceContextRegistration,
+    AcceptanceContextRegistryError, AcceptanceDescriptor, AcceptanceField, AcceptancePhase,
+    AcceptanceRegistryError, CompiledAcceptance,
+};
 pub use profile_dsl::primitives::capture::{
     capture_descriptors, compile_captures, compile_named_capture_rule, evaluate_compiled_captures,
     validate_capture_registration_keys, CaptureCompileError, CaptureCompileErrorKind,

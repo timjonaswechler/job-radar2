@@ -5,10 +5,12 @@ use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::discovery::{
     DiscoveryExtraction, DiscoveryStep, DiscoveryStrategy,
 };
-use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::occurrence::HintUse;
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::primitives::acceptance::{
+    compile_acceptance, AcceptanceCompileContext, CompiledAcceptance,
+};
 use crate::profile_dsl::primitives::capture::{
     compile_captures, CaptureCompileError, CompiledCapturePlan,
 };
@@ -39,7 +41,7 @@ pub struct ExecutionPlanDiscoveryStep {
     pub limits: PhaseLimits,
     pub limits_authored: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accept_when: Option<Acceptance>,
+    pub accept_when: Option<CompiledAcceptance>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -59,7 +61,7 @@ pub struct ExecutionPlanDiscoveryStrategy {
     pub captures: Option<CompiledCapturePlan>,
     pub extract: ExecutionPlanDiscoveryExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accept_when: Option<Acceptance>,
+    pub accept_when: Option<CompiledAcceptance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Diagnostics>,
 }
@@ -116,6 +118,19 @@ pub(crate) fn compile_discovery_step(
     path: &str,
     source_config_keys: &[String],
 ) -> Result<ExecutionPlanDiscoveryStep, ExecutionPlanBuildError> {
+    let posting_meta_keys = step
+        .strategies
+        .iter()
+        .flat_map(|strategy| {
+            strategy
+                .extract
+                .posting_meta
+                .as_ref()
+                .into_iter()
+                .flat_map(|values| values.keys().cloned())
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let acceptance_context = AcceptanceCompileContext::discovery(posting_meta_keys);
     Ok(ExecutionPlanDiscoveryStep {
         policy: step.policy,
         strategies: step
@@ -132,7 +147,14 @@ pub(crate) fn compile_discovery_step(
             .collect::<Result<Vec<_>, _>>()?,
         limits: step.limits.unwrap_or(PhaseLimits::BACKEND),
         limits_authored: step.limits.is_some(),
-        accept_when: step.accept_when.clone(),
+        accept_when: step
+            .accept_when
+            .as_ref()
+            .map(|acceptance| {
+                compile_acceptance(acceptance, &acceptance_context)
+                    .map_err(|error| acceptance_error(path, error))
+            })
+            .transpose()?,
     })
 }
 
@@ -227,9 +249,33 @@ fn compile_discovery_strategy(
             .transpose()
             .map_err(|error| capture_error(format!("{path}/captures"), error))?,
         extract: compile_discovery_extraction(&strategy.extract, &field_context, path)?,
-        accept_when: strategy.accept_when.clone(),
+        accept_when: strategy
+            .accept_when
+            .as_ref()
+            .map(|acceptance| {
+                compile_acceptance(
+                    acceptance,
+                    &AcceptanceCompileContext::discovery(
+                        strategy
+                            .extract
+                            .posting_meta
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|values| values.keys().cloned()),
+                    ),
+                )
+                .map_err(|error| acceptance_error(path, error))
+            })
+            .transpose()?,
         diagnostics: strategy.diagnostics.clone(),
     })
+}
+
+fn acceptance_error(
+    path: &str,
+    error: crate::profile_dsl::primitives::acceptance::AcceptanceCompileError,
+) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}/acceptWhen/{}", error.key), error.message)
 }
 
 fn capture_error(path: String, error: CaptureCompileError) -> ExecutionPlanBuildError {

@@ -7,7 +7,7 @@ pub(super) async fn execute_strategy<F, B>(
     browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
-    step_acceptance: Option<&Acceptance>,
+    step_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
 ) -> StrategyExecution<Vec<PostingOccurrence>>
 where
@@ -98,24 +98,41 @@ where
         }
     }
 
+    let contributions = candidates
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(item_index, occurrence)| DiscoveryContribution {
+            occurrence,
+            origin: ContributionOrigin {
+                strategy_key: strategy.key.clone(),
+                attempt_index: strategy_index,
+                provider_item_index: Some(item_index),
+            },
+        })
+        .collect();
+    let reduced = reduce_discovery(contributions);
     let mut result = DiscoveryExecutionResult {
         candidates,
-        provenance: Vec::new(),
-        conflicts: Vec::new(),
-        rejections: Vec::new(),
+        provenance: reduced.provenance,
+        conflicts: reduced.conflicts,
+        rejections: reduced.rejections,
         diagnostics,
         report: None,
     };
     let execution_failed = discovery_execution_failed(&result);
     let accepted = !execution_failed
-        && accept_discovery_result(
-            &result.candidates,
+        && evaluate_discovery_acceptance(
+            &reduced.candidates,
             step_acceptance,
             strategy.accept_when.as_ref(),
             &base_path,
             strategy_key.as_deref(),
             &mut result.diagnostics,
         );
+    if !accepted {
+        result.diagnostics.extend(reduced.diagnostics);
+    }
     let completion = if accepted {
         StrategyAttemptCompletion::Accepted(result.candidates)
     } else if execution_failed {

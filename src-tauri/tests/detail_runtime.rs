@@ -141,10 +141,6 @@ fn compiled_detail_runtime_extracts_only_requested_available_fields() {
                     "locations": { "type": "json_path", "jsonPath": "$.locations", "cardinality": "all" },
                     "descriptionText": { "type": "json_path", "jsonPath": "$.missingDescription" }
                 }
-            },
-            "acceptWhen": {
-                "requiredFields": ["descriptionText"],
-                "minDescriptionLength": 20
             }
         })],
     );
@@ -177,6 +173,58 @@ fn compiled_detail_runtime_extracts_only_requested_available_fields() {
     assert_eq!(result.patch.description_text, None);
     assert!(result.rejections.is_empty());
     assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn detail_acceptance_rejects_unrequested_fields_before_io() {
+    let plan = compiled_detail_plan_with_strategies(
+        None,
+        vec![json!({
+            "key": "detail_api",
+            "fetch": {
+                "mode": "http",
+                "method": "GET",
+                "url": "https://example.test/jobs/fields.json",
+                "timeoutMs": 10000
+            },
+            "parse": { "type": "json" },
+            "select": { "type": "document" },
+            "extract": {
+                "fields": {
+                    "title": { "type": "json_path", "jsonPath": "$.title" },
+                    "locations": { "type": "json_path", "jsonPath": "$.locations", "cardinality": "all" }
+                }
+            },
+            "acceptWhen": { "requiredFields": ["title"] }
+        })],
+    );
+    let posting = posting_occurrence("https://example.test/jobs/42", []);
+    let fetcher = fake_profile_http_client([(
+        "https://example.test/jobs/fields.json",
+        json!({ "title": "Engineer", "locations": ["Berlin"] }).to_string(),
+    )]);
+
+    let result = block_on(execute_detail(
+        &plan,
+        &Default::default(),
+        &posting,
+        RequestedDetailFields::new([DetailField::Locations]).unwrap(),
+        &fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+
+    assert!(result.patch.is_empty());
+    assert_eq!(result.diagnostics[0].code, "acceptance_field_not_requested");
+    assert_eq!(
+        result.diagnostics[0].path,
+        "/detail/strategies/0/acceptWhen/requiredFields"
+    );
+    assert_eq!(
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("detail_api")
+    );
+    assert!(fetcher.requests().is_empty());
 }
 
 #[test]
@@ -365,48 +413,6 @@ fn compiled_detail_runtime_combines_step_and_strategy_acceptance() {
     );
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
     assert_eq!(result.diagnostics[1].path, "/detail/strategies");
-}
-
-#[test]
-fn compiled_detail_runtime_reports_unsupported_max_error_ratio() {
-    let plan = compiled_detail_plan_with_strategies(
-        None,
-        vec![json!({
-            "key": "detail_api",
-            "fetch": {
-                "mode": "http",
-                "method": "GET",
-                "url": "https://example.test/jobs/detail.json",
-                "timeoutMs": 10000
-            },
-            "parse": { "type": "json" },
-            "select": { "type": "document" },
-            "extract": {
-                "fields": {
-                    "descriptionText": { "type": "json_path", "jsonPath": "$.description", "cardinality": "one" }
-                }
-            },
-            "acceptWhen": { "maxErrorRatio": 0.25 }
-        })],
-    );
-    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = fake_profile_http_client([(
-        "https://example.test/jobs/detail.json",
-        json!({ "description": "Detailed role description." }).to_string(),
-    )]);
-
-    let result = block_on(execute_detail_test(&plan, &posting, &fetcher));
-
-    assert_eq!(result.patch.description_text, None);
-    assert_eq!(
-        result.diagnostics[0].code,
-        "acceptance_max_error_ratio_unsupported"
-    );
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/detail/strategies/0/acceptWhen/maxErrorRatio"
-    );
-    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
 }
 
 #[test]

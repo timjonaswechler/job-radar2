@@ -442,14 +442,8 @@ fn ordered_fields(object: &Map<String, Value>) -> Vec<String> {
     } else if object.contains_key("requiredFields")
         || object.contains_key("minDescriptionLength")
         || object.contains_key("minResults")
-        || object.contains_key("maxErrorRatio")
     {
-        &[
-            "requiredFields",
-            "minDescriptionLength",
-            "minResults",
-            "maxErrorRatio",
-        ]
+        &["requiredFields", "minDescriptionLength", "minResults"]
     } else if object.contains_key("title")
         && object.contains_key("company")
         && object.contains_key("url")

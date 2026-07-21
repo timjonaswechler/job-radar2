@@ -3,9 +3,11 @@ use serde::{Deserialize, Serialize};
 use super::values::{compile_field_expression, compile_list_field_expression, compile_predicates};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::profile_dsl::documents::detail::{DetailExtraction, DetailStep, DetailStrategy};
-use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::documents::PhaseLimits;
 use crate::profile_dsl::policy::StrategyPolicy;
+use crate::profile_dsl::primitives::acceptance::{
+    compile_acceptance, AcceptanceCompileContext, CompiledAcceptance,
+};
 use crate::profile_dsl::primitives::capture::{
     compile_captures, CaptureCompileError, CompiledCapturePlan,
 };
@@ -34,7 +36,7 @@ pub struct ExecutionPlanDetailStep {
     pub limits: PhaseLimits,
     pub limits_authored: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accept_when: Option<Acceptance>,
+    pub accept_when: Option<CompiledAcceptance>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -54,7 +56,7 @@ pub struct ExecutionPlanDetailStrategy {
     pub field_match: Option<CompiledPredicate>,
     pub extract: ExecutionPlanDetailExtraction,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accept_when: Option<Acceptance>,
+    pub accept_when: Option<CompiledAcceptance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Diagnostics>,
 }
@@ -101,7 +103,14 @@ pub(crate) fn compile_detail_step(
             .collect::<Result<Vec<_>, _>>()?,
         limits: step.limits.unwrap_or(PhaseLimits::BACKEND),
         limits_authored: step.limits.is_some(),
-        accept_when: step.accept_when.clone(),
+        accept_when: step
+            .accept_when
+            .as_ref()
+            .map(|acceptance| {
+                compile_acceptance(acceptance, &AcceptanceCompileContext::detail())
+                    .map_err(|error| acceptance_error(path, error))
+            })
+            .transpose()?,
     })
 }
 
@@ -201,9 +210,23 @@ fn compile_detail_strategy(
             .transpose()?,
 
         extract: compile_detail_extraction(&strategy.extract, &field_context, path)?,
-        accept_when: strategy.accept_when.clone(),
+        accept_when: strategy
+            .accept_when
+            .as_ref()
+            .map(|acceptance| {
+                compile_acceptance(acceptance, &AcceptanceCompileContext::detail())
+                    .map_err(|error| acceptance_error(path, error))
+            })
+            .transpose()?,
         diagnostics: strategy.diagnostics.clone(),
     })
+}
+
+fn acceptance_error(
+    path: &str,
+    error: crate::profile_dsl::primitives::acceptance::AcceptanceCompileError,
+) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}/acceptWhen/{}", error.key), error.message)
 }
 
 fn capture_error(path: String, error: CaptureCompileError) -> ExecutionPlanBuildError {

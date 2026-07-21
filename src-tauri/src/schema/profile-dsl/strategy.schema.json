@@ -209,11 +209,6 @@
         "minResults": {
           "type": "integer",
           "minimum": 0
-        },
-        "maxErrorRatio": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
         }
       }
     }

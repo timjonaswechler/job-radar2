@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
+    compile_source, Acceptance, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
     ListFieldExpression, Predicate, RegistrySourceProfile, ScriptedProfileHttpClient,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
     SourceStatus,
@@ -42,6 +42,45 @@ fn compile_test_source(
             diagnostics,
         },
     }
+}
+
+#[test]
+fn compiler_rejects_acceptance_fields_and_thresholds_outside_the_phase_catalogue() {
+    let source: SourceDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+
+    let mut detail_profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    detail_profile.access_paths[0]
+        .detail
+        .as_mut()
+        .unwrap()
+        .accept_when = Some(Acceptance {
+        required_fields: None,
+        min_description_length: None,
+        min_results: Some(1),
+    });
+    let detail_result = compile_test_source(&source, Some(detail_profile));
+    assert_eq!(detail_result.execution_plan, None);
+    assert!(detail_result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.path.ends_with("/detail/acceptWhen/minResults") }));
+
+    let mut discovery_profile: SourceProfileDocument =
+        read_fixture("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    discovery_profile.access_paths[0].discovery.accept_when = Some(Acceptance {
+        required_fields: Some(vec!["postingMeta.unknown".into()]),
+        min_description_length: None,
+        min_results: None,
+    });
+    let discovery_result = compile_test_source(&source, Some(discovery_profile));
+    assert_eq!(discovery_result.execution_plan, None);
+    assert!(discovery_result.diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .path
+            .ends_with("/discovery/acceptWhen/requiredFields")
+    }));
 }
 
 #[test]

@@ -7,7 +7,6 @@ use crate::{
     profile_dsl::primitives::select::resolve_authored_json_path as resolve_simple_json_path,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        documents::strategy::Acceptance,
         documents::PaginationParameterLocation,
         execution_plan::{
             capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
@@ -19,6 +18,7 @@ use crate::{
             PostingOccurrence,
         },
         primitives::{
+            acceptance::{evaluate_discovery_acceptance, CompiledAcceptance},
             parse::{CompleteParseText, ParseDiagnosticContext},
             value::{CompiledListValue, CompiledValue},
         },
@@ -47,7 +47,6 @@ use super::{
     },
 };
 
-mod acceptance;
 mod diagnostics;
 mod document;
 mod extract;
@@ -56,7 +55,6 @@ mod pagination;
 mod strategy;
 mod support;
 
-use acceptance::accept_discovery_result;
 use diagnostics::{runtime_error, runtime_warning};
 use document::select_items;
 use extract::extract_candidate;
@@ -224,11 +222,12 @@ where
         },
     )
     .await;
-    project_discovery_execution(execution, &allowance)
+    project_discovery_execution(execution, plan.discovery.accept_when.as_ref(), &allowance)
 }
 
 fn project_discovery_execution(
     execution: super::strategy_set::StrategySetExecution<Vec<PostingOccurrence>>,
+    phase_acceptance: Option<&CompiledAcceptance>,
     allowance: &InvocationAllowance,
 ) -> DiscoveryExecutionResult {
     let accepted_attempt = match execution.terminal {
@@ -306,18 +305,43 @@ fn project_discovery_execution(
             json!({}),
         ));
     }
-    let completion = if accepted_attempt.is_some() {
+    let reduced = reduced.unwrap_or_else(|| reduce_discovery(Vec::new()));
+    diagnostics.extend(reduced.diagnostics);
+    let final_accepted = accepted_attempt.is_some()
+        && evaluate_discovery_acceptance(
+            &reduced.candidates,
+            phase_acceptance,
+            None,
+            "/discovery",
+            None,
+            &mut diagnostics,
+        );
+    let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
-    let reduced = reduced.unwrap_or_else(|| reduce_discovery(Vec::new()));
-    diagnostics.extend(reduced.diagnostics);
     DiscoveryExecutionResult {
-        candidates: reduced.candidates,
-        provenance: reduced.provenance,
-        conflicts: reduced.conflicts,
-        rejections: reduced.rejections,
+        candidates: if final_accepted {
+            reduced.candidates
+        } else {
+            Vec::new()
+        },
+        provenance: if final_accepted {
+            reduced.provenance
+        } else {
+            Vec::new()
+        },
+        conflicts: if final_accepted {
+            reduced.conflicts
+        } else {
+            Vec::new()
+        },
+        rejections: if final_accepted {
+            reduced.rejections
+        } else {
+            Vec::new()
+        },
         diagnostics,
         report: Some(allowance.report(completion)),
     }

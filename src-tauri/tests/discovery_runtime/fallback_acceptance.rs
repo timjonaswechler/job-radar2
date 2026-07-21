@@ -358,28 +358,32 @@ fn compiled_discovery_runtime_applies_required_fields_and_description_length() {
 }
 
 #[test]
-fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
+fn discovery_acceptance_observes_conflict_safe_reduced_occurrences() {
+    let mut fields = default_fields();
+    fields["providerPostingId"] =
+        json!({ "type": "json_path", "jsonPath": "$.id", "cardinality": "one" });
     let plan = compiled_discovery_plan_with_strategies(
         None,
         vec![json!({
-            "key": "json_api",
+            "key": "conflicting_api",
             "fetch": {
                 "mode": "http",
                 "method": "GET",
-                "url": "https://example.test/jobs.json",
+                "url": "https://example.test/conflicting.json",
                 "timeoutMs": 10000
             },
             "parse": { "type": "json" },
             "select": default_select(),
-            "extract": discovery_extract(default_fields()),
-            "acceptWhen": { "maxErrorRatio": 0.25 }
+            "extract": discovery_extract(fields),
+            "acceptWhen": { "requiredFields": ["title"], "minResults": 1 }
         })],
     );
     let fetcher = fake_fetcher([(
-        "https://example.test/jobs.json",
+        "https://example.test/conflicting.json",
         json!({
             "jobs": [
-                { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+                { "id": "42", "title": "First title", "company": "Example GmbH", "url": "https://example.test/jobs/42" },
+                { "id": "42", "title": "Conflicting title", "company": "Example GmbH", "url": "https://example.test/jobs/42" }
             ]
         })
         .to_string(),
@@ -390,13 +394,20 @@ fn compiled_discovery_runtime_reports_unsupported_max_error_ratio() {
     assert!(result.candidates.is_empty());
     assert_eq!(
         result.diagnostics[0].code,
-        "acceptance_max_error_ratio_unsupported"
+        "acceptance_required_field_missing"
     );
     assert_eq!(
-        result.diagnostics[0].path,
-        "/discovery/strategies/0/acceptWhen/maxErrorRatio"
+        result.diagnostics[0].strategy_key.as_deref(),
+        Some("conflicting_api")
     );
-    assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "discovery_provider_field_conflict"));
+    assert_eq!(
+        result.diagnostics.last().unwrap().code,
+        "fallback_exhausted"
+    );
 }
 
 fn compiled_discovery_plan_with_strategies(

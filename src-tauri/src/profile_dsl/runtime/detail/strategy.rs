@@ -9,7 +9,7 @@ pub(super) async fn execute_strategy<F, B>(
     browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanDetailStrategy,
-    step_acceptance: Option<&Acceptance>,
+    step_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
 ) -> StrategyExecution<DetailPatch>
 where
@@ -195,9 +195,21 @@ where
         return rejected_detail_attempt(diagnostics);
     }
 
-    let accepted = accept_detail_result(
-        &patch,
+    let reduced = reduce_detail(
+        &posting.identity,
         requested_fields,
+        vec![DetailContribution {
+            identity: posting.identity.clone(),
+            patch: patch.clone(),
+            origin: ContributionOrigin {
+                strategy_key: strategy.key.clone(),
+                attempt_index: strategy_index,
+                provider_item_index: None,
+            },
+        }],
+    );
+    let accepted = evaluate_detail_acceptance(
+        &reduced.patch,
         step_acceptance,
         strategy.accept_when.as_ref(),
         &base_path,
@@ -205,6 +217,7 @@ where
         &mut diagnostics,
     );
     if !accepted {
+        diagnostics.extend(reduced.diagnostics);
         return StrategyExecution {
             diagnostics,
             completion: StrategyAttemptCompletion::Rejected,

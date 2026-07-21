@@ -7,7 +7,6 @@ use serde_json::{json, Value};
 use crate::{
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        documents::strategy::Acceptance,
         execution_plan::{
             capabilities::ExecutionPlanFetch, detail::ExecutionPlanDetailStrategy,
             SourceExecutionPlan,
@@ -17,6 +16,9 @@ use crate::{
             DetailRejection, PostingOccurrence, RequestedDetailFields,
         },
         primitives::{
+            acceptance::{
+                evaluate_detail_acceptance, validate_detail_acceptance_request, CompiledAcceptance,
+            },
             parse::{CompleteParseText, ParseDiagnosticContext},
             predicate::CompiledPredicate,
             transform::normalize_whitespace_text,
@@ -47,7 +49,6 @@ use super::{
     },
 };
 
-mod acceptance;
 mod diagnostics;
 mod document;
 mod extract;
@@ -55,7 +56,6 @@ mod fetch;
 mod strategy;
 mod support;
 
-use acceptance::accept_detail_result;
 use diagnostics::runtime_error;
 use document::{select_detail_document, RuntimeItem};
 use extract::{
@@ -108,6 +108,31 @@ where
             report: None,
         };
     };
+
+    if let Some(diagnostic) = validate_detail_acceptance_request(
+        detail.accept_when.as_ref(),
+        detail
+            .strategies
+            .iter()
+            .enumerate()
+            .map(|(index, strategy)| {
+                (
+                    format!("/detail/strategies/{index}"),
+                    strategy.key.clone(),
+                    strategy.accept_when.as_ref(),
+                )
+            }),
+        &requested_fields,
+    ) {
+        return DetailExecutionResult {
+            patch: DetailPatch::default(),
+            provenance: Vec::new(),
+            conflicts: Vec::new(),
+            rejections: Vec::new(),
+            diagnostics: vec![diagnostic],
+            report: Some(InvocationAllowance::prestart_failure_report()),
+        };
+    }
 
     if detail.strategies.is_empty() {
         return DetailExecutionResult {
@@ -243,13 +268,20 @@ where
         },
     )
     .await;
-    project_detail_execution(execution, posting, &requested_fields, &allowance)
+    project_detail_execution(
+        execution,
+        posting,
+        &requested_fields,
+        detail.accept_when.as_ref(),
+        &allowance,
+    )
 }
 
 fn project_detail_execution(
     execution: super::strategy_set::StrategySetExecution<DetailPatch>,
     posting: &PostingOccurrence,
     requested_fields: &RequestedDetailFields,
+    phase_acceptance: Option<&CompiledAcceptance>,
     allowance: &InvocationAllowance,
 ) -> DetailExecutionResult {
     let accepted_attempt = match execution.terminal {
@@ -323,18 +355,43 @@ fn project_detail_execution(
             json!({}),
         ));
     }
-    let completion = if accepted_attempt.is_some() {
+    let reduced = reduce_detail(&posting.identity, requested_fields, contributions);
+    diagnostics.extend(reduced.diagnostics);
+    let final_accepted = accepted_attempt.is_some()
+        && evaluate_detail_acceptance(
+            &reduced.patch,
+            phase_acceptance,
+            None,
+            "/detail",
+            None,
+            &mut diagnostics,
+        );
+    let completion = if final_accepted {
         PhaseCompletion::Accepted
     } else {
         PhaseCompletion::PolicyUnsatisfied
     };
-    let reduced = reduce_detail(&posting.identity, requested_fields, contributions);
-    diagnostics.extend(reduced.diagnostics);
     DetailExecutionResult {
-        patch: reduced.patch,
-        provenance: reduced.provenance,
-        conflicts: reduced.conflicts,
-        rejections: reduced.rejections,
+        patch: if final_accepted {
+            reduced.patch
+        } else {
+            DetailPatch::default()
+        },
+        provenance: if final_accepted {
+            reduced.provenance
+        } else {
+            Vec::new()
+        },
+        conflicts: if final_accepted {
+            reduced.conflicts
+        } else {
+            Vec::new()
+        },
+        rejections: if final_accepted {
+            reduced.rejections
+        } else {
+            Vec::new()
+        },
         diagnostics,
         report: Some(allowance.report(completion)),
     }
