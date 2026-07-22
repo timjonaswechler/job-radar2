@@ -389,7 +389,7 @@ async fn budget_exhaustion_stays_distinct_and_releases_no_fields_or_dispositions
         max_requests: 1,
         ..PhaseLimits::BACKEND
     };
-    let (expected_report, expected_diagnostics) = match __test_execute_detail_phase(
+    let (mut expected_report, expected_diagnostics) = match __test_execute_detail_phase(
         &compiled.execution_plan,
         &Default::default(),
         &occurrence,
@@ -423,12 +423,16 @@ async fn budget_exhaustion_stays_distinct_and_releases_no_fields_or_dispositions
         .unwrap();
 
     let SourceDetailOutcome::BudgetExhausted {
-        complete_budget_report,
+        mut complete_budget_report,
         diagnostics,
     } = outcome
     else {
         panic!("expected Source Detail budget exhaustion");
     };
+    assert!(complete_budget_report.usage.duration_ms <= limits.max_duration_ms);
+    assert!(expected_report.usage.duration_ms <= limits.max_duration_ms);
+    complete_budget_report.usage.duration_ms = 0;
+    expected_report.usage.duration_ms = 0;
     assert_eq!(complete_budget_report, expected_report);
     assert_eq!(diagnostics, expected_diagnostics);
     assert_eq!(fetcher.requests().len(), 1);
