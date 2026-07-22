@@ -282,7 +282,11 @@ impl AgentChat {
         model: ModelId,
     ) -> Result<ReasoningLevel, AgentChatError> {
         self.ensure_mutable()?;
-        let selected = find_model(self.provider.as_ref(), &provider, &model)
+        let models = self.provider.model_snapshot();
+        let selected = models
+            .iter()
+            .find(|candidate| candidate.provider() == &provider && candidate.id() == &model)
+            .cloned()
             .ok_or(AgentChatError::ModelUnavailable)?;
         let current_reasoning = self
             .conversation
@@ -295,7 +299,7 @@ impl AgentChat {
             return Err(error.into());
         }
         if let Some(conversation) = &mut self.conversation {
-            conversation.select_provider_model(&provider, model)?;
+            conversation.apply_model_snapshot(selected, models);
             conversation.set_reasoning_level(effective);
         } else {
             self.conversation =

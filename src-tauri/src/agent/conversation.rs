@@ -416,16 +416,20 @@ impl AgentConversation {
         provider: &crate::agent::models::ProviderId,
         model: ModelId,
     ) -> Result<(), AgentError> {
-        self.models = self.provider.model_snapshot();
-        let selected = self
-            .models
+        let models = self.provider.model_snapshot();
+        let selected = models
             .iter()
             .find(|candidate| candidate.provider() == provider && candidate.id() == &model)
             .cloned()
             .ok_or_else(AgentError::model_unavailable)?;
+        self.apply_model_snapshot(selected, models);
+        Ok(())
+    }
+
+    pub(crate) fn apply_model_snapshot(&mut self, selected: Model, models: Vec<Model>) {
         self.reasoning = selected.normalize_reasoning(self.reasoning);
         self.model = selected;
-        Ok(())
+        self.models = models;
     }
 
     pub fn set_reasoning_level(&mut self, level: ReasoningLevel) -> ReasoningLevel {
