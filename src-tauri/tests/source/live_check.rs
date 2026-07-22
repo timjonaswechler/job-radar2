@@ -679,7 +679,7 @@ fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
                     "profileKey": "example_jobs",
                     "accessPathKey": "json_feed",
                     "candidateUrl": "https://example.test/jobs/job-1",
-                    "cause": "detail_policy_rejected"
+                    "cause": "detail_description_text_unavailable"
                 }))
     }));
 }

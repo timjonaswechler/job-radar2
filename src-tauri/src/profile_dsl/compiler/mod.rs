@@ -39,7 +39,8 @@ pub use provenance::{
 
 use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, JsonSchemaObject};
 use crate::profile_dsl::execution_plan::SourceExecutionPlan;
-use crate::source::documents::{SelectedAccessPath, SourceDocument};
+use crate::profile_dsl::occurrence::{DetailField, DetailFieldCapabilities};
+use crate::source::documents::{SelectedAccessPath, SourceConfig, SourceDocument};
 use crate::source_profile::documents::SourceProfileDocument;
 use crate::source_profile::registry::SourceProfileRegistrySnapshot;
 
@@ -92,19 +93,50 @@ impl SourceRuntimeBindingDependencies {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct CompiledSource {
     pub access: CompiledSourceAccess,
     pub execution_plan: SourceExecutionPlan,
     pub provenance: CompiledSourceProvenance,
     pub runtime_binding_dependencies: SourceRuntimeBindingDependencies,
+    /// Validated runtime bindings owned by this authoritative compiled Source.
+    /// Values stay out of generic serialization because Source Config may contain
+    /// sensitive access material.
+    #[serde(skip)]
+    pub(crate) source_config: SourceConfig,
+}
+
+impl CompiledSource {
+    /// Canonical finite Detail fields that at least one compiled Strategy can produce.
+    ///
+    /// Capabilities are derived only from typed executable output expressions. They
+    /// are not authored promises and therefore cannot contain dynamic field names.
+    pub fn detail_capabilities(&self) -> DetailFieldCapabilities {
+        let Some(detail) = &self.execution_plan.detail else {
+            return DetailFieldCapabilities::default();
+        };
+        DetailFieldCapabilities::new(detail.strategies.iter().flat_map(|strategy| {
+            let fields = &strategy.extract.fields;
+            [
+                fields.title.as_ref().map(|_| DetailField::Title),
+                fields.company.as_ref().map(|_| DetailField::Company),
+                fields.locations.as_ref().map(|_| DetailField::Locations),
+                fields
+                    .description_text
+                    .as_ref()
+                    .map(|_| DetailField::DescriptionText),
+            ]
+            .into_iter()
+            .flatten()
+        }))
+    }
 }
 
 /// Closed result of compiling one authoritative Source.
 ///
 /// A rejection cannot expose an Effective Source Profile, selected Access Path,
 /// or Execution Plan. Source lifecycle admission intentionally belongs to callers.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum CompileSourceOutcome {
     Compiled {
         source: CompiledSource,
@@ -193,6 +225,7 @@ fn build_compiled_source(
                 execution_plan,
                 provenance,
                 runtime_binding_dependencies: resolved.runtime_binding_dependencies,
+                source_config: source.source_config.clone(),
             })
         }
         SelectedAccessPath::SourceOwnedAccessPath {
@@ -225,6 +258,7 @@ fn build_compiled_source(
                 execution_plan,
                 provenance,
                 runtime_binding_dependencies: resolved.runtime_binding_dependencies,
+                source_config: source.source_config.clone(),
             })
         }
     }

@@ -13,10 +13,11 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
-    execute_detail, execute_discovery, DetailPhasePayload, PhaseOutcome, PhaseRunResult,
-    PolicyOutcome, PostingOccurrence, ProfileBrowserClient, ProfileHttpClient,
-    RequestedDetailFields, ReqwestProfileHttpClient, RuntimeExecutionContext,
-    UnavailableProfileBrowserClient,
+    execute_discovery, DetailField, PhaseOutcome, PolicyOutcome, PostingOccurrence,
+    ProfileBrowserClient, ProfileDslSourceDetailExecution, ProfileHttpClient,
+    RequestedDetailFields, RequestedFieldDisposition, ReqwestProfileHttpClient,
+    RuntimeExecutionContext, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
+    SourceDetailResult, UnavailableProfileBrowserClient,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -251,21 +252,18 @@ where
         } else if execution_plan.detail.is_some() {
             if let Some(candidate) = first_acceptable_candidate {
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
-                let detail_result = tauri::async_runtime::block_on(execute_detail(
-                    execution_plan,
-                    &document.source_config,
-                    candidate,
-                    RequestedDetailFields::description_text(),
-                    detail_fetcher,
-                    browser,
-                    RuntimeExecutionContext::uncancellable(),
-                ));
+                let detail_execution =
+                    ProfileDslSourceDetailExecution::new(detail_fetcher, browser);
+                let detail_result =
+                    tauri::async_runtime::block_on(detail_execution.execute(SourceDetailRequest {
+                        compiled_source: compiled,
+                        occurrence: candidate,
+                        requested_fields: RequestedDetailFields::description_text(),
+                        context: RuntimeExecutionContext::uncancellable(),
+                    }));
                 let detail_report = match &detail_result {
-                    Ok(outcome) => Some(outcome.complete_budget_report()),
-                    Err(crate::profile_dsl::runtime::PhaseRunError::Cancelled(cancelled)) => {
-                        Some(&cancelled.complete_budget_report)
-                    }
-                    Err(crate::profile_dsl::runtime::PhaseRunError::NotStarted { .. }) => None,
+                    Ok(outcome) => outcome.complete_budget_report(),
+                    Err(cancelled) => Some(&cancelled.complete_budget_report),
                 };
                 if let Some(report) = detail_report {
                     details.insert(
@@ -281,17 +279,15 @@ where
                     serde_json::Value::Bool(detail_passed),
                 );
                 let detail_failure_cause = if detail_passed {
-                    let outcome = detail_result.expect("passing Detail result is a normal outcome");
-                    diagnostics.extend(non_error_diagnostics(outcome.diagnostics().clone()));
+                    let outcome = detail_result
+                        .as_ref()
+                        .expect("passing Detail result is a normal outcome");
+                    diagnostics.extend(non_error_diagnostics(
+                        outcome.diagnostics().cloned().unwrap_or_default(),
+                    ));
                     None
                 } else {
-                    diagnostics.extend(
-                        detail_result
-                            .as_ref()
-                            .map(PhaseOutcome::diagnostics)
-                            .unwrap_or_else(|error| error.diagnostics())
-                            .clone(),
-                    );
+                    diagnostics.extend(source_detail_diagnostics(&detail_result));
                     Some(detail_failure_cause(&detail_result))
                 };
                 if let Some(cause) = detail_failure_cause {
@@ -444,18 +440,33 @@ fn is_acceptable_live_candidate(candidate: &PostingOccurrence) -> bool {
             .is_some_and(|value| !value.trim().is_empty())
 }
 
-fn is_acceptable_detail_result(result: &PhaseRunResult<DetailPhasePayload>) -> bool {
+fn is_acceptable_detail_result(result: &SourceDetailResult) -> bool {
     matches!(
         result,
-        Ok(PhaseOutcome::Completed {
-            policy_outcome: PolicyOutcome::Accepted { reduced_payload },
+        Ok(SourceDetailOutcome::Completed {
+            fields,
+            dispositions,
             ..
-        }) if reduced_payload
-            .patch
+        }) if fields
             .description_text
             .as_ref()
             .is_some_and(|description_text| !description_text.trim().is_empty())
+            && dispositions.iter().any(|disposition| matches!(
+                disposition,
+                RequestedFieldDisposition::Reused {
+                    field: DetailField::DescriptionText
+                } | RequestedFieldDisposition::Produced {
+                    field: DetailField::DescriptionText
+                }
+            ))
     )
+}
+
+fn source_detail_diagnostics(result: &SourceDetailResult) -> Diagnostics {
+    match result {
+        Ok(outcome) => outcome.diagnostics().cloned().unwrap_or_default(),
+        Err(cancelled) => cancelled.diagnostics.clone(),
+    }
 }
 
 fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
@@ -465,34 +476,77 @@ fn non_error_diagnostics(diagnostics: Diagnostics) -> Diagnostics {
         .collect()
 }
 
-fn detail_failure_cause(result: &PhaseRunResult<DetailPhasePayload>) -> String {
-    use crate::profile_dsl::runtime::{PhaseRunError, PolicyUnsatisfiedCause};
-
+fn detail_failure_cause(result: &SourceDetailResult) -> String {
     match result {
-        Ok(PhaseOutcome::Completed {
-            policy_outcome: PolicyOutcome::Accepted { .. },
-            ..
-        }) => "detail_description_text_missing",
-        Ok(PhaseOutcome::Completed {
-            policy_outcome:
-                PolicyOutcome::PolicyUnsatisfied {
-                    cause: PolicyUnsatisfiedCause::RejectedOnly,
-                },
-            ..
-        }) => "detail_policy_rejected",
-        Ok(PhaseOutcome::Completed {
-            policy_outcome:
-                PolicyOutcome::PolicyUnsatisfied {
-                    cause: PolicyUnsatisfiedCause::IncludesExecutionFailure,
-                },
-            ..
-        }) => "detail_policy_includes_execution_failure",
-        Ok(PhaseOutcome::BudgetExhausted { .. }) => "detail_budget_exhausted",
-        Ok(PhaseOutcome::ExecutionFailed { .. }) => "detail_execution_failed",
-        Err(PhaseRunError::NotStarted { .. }) => "detail_not_started",
-        Err(PhaseRunError::Cancelled(_)) => "detail_cancelled",
+        Ok(SourceDetailOutcome::Completed { dispositions, .. }) => dispositions
+            .iter()
+            .find_map(|disposition| match disposition {
+                RequestedFieldDisposition::Unsupported {
+                    field: DetailField::DescriptionText,
+                } => Some("detail_description_text_unsupported"),
+                RequestedFieldDisposition::Unavailable {
+                    field: DetailField::DescriptionText,
+                } => Some("detail_description_text_unavailable"),
+                RequestedFieldDisposition::Conflicted {
+                    field: DetailField::DescriptionText,
+                } => Some("detail_description_text_conflicted"),
+                _ => None,
+            })
+            .unwrap_or("detail_description_text_missing"),
+        Ok(SourceDetailOutcome::BudgetExhausted { .. }) => "detail_budget_exhausted",
+        Ok(SourceDetailOutcome::CandidateExecutionFailed { .. }) => {
+            "detail_candidate_execution_failed"
+        }
+        Ok(SourceDetailOutcome::SourceExecutionFailed { .. }) => "detail_source_execution_failed",
+        Ok(SourceDetailOutcome::SourceMismatch) => "detail_source_mismatch",
+        Err(_) => "detail_cancelled",
     }
     .to_string()
+}
+
+#[cfg(test)]
+mod source_detail_typed_control_tests {
+    use super::*;
+    use crate::profile_dsl::runtime::{
+        DetailPatch, PhaseCompletion, PhaseExecutionReport, PhaseUsage, SourceDetailPhaseEvidence,
+    };
+
+    #[test]
+    fn changed_runtime_diagnostic_text_does_not_change_live_check_detail_state() {
+        let result_with_message = |message: &str| {
+            Ok(SourceDetailOutcome::Completed {
+                fields: DetailPatch::default(),
+                dispositions: vec![RequestedFieldDisposition::Unavailable {
+                    field: DetailField::DescriptionText,
+                }],
+                phase_evidence: Some(SourceDetailPhaseEvidence {
+                    complete_budget_report: PhaseExecutionReport {
+                        usage: PhaseUsage::default(),
+                        completion: PhaseCompletion::PolicyUnsatisfied,
+                    },
+                    diagnostics: vec![Diagnostic {
+                        category: DiagnosticCategory::Runtime,
+                        code: "arbitrary_runtime_code".to_string(),
+                        message: message.to_string(),
+                        severity: DiagnosticSeverity::Error,
+                        path: "/detail".to_string(),
+                        strategy_key: None,
+                        details: None,
+                    }],
+                }),
+            })
+        };
+        let first: SourceDetailResult = result_with_message("first wording");
+        let second: SourceDetailResult = result_with_message("completely changed wording");
+
+        assert!(!is_acceptable_detail_result(&first));
+        assert!(!is_acceptable_detail_result(&second));
+        assert_eq!(detail_failure_cause(&first), detail_failure_cause(&second));
+        assert_eq!(
+            detail_failure_cause(&first),
+            "detail_description_text_unavailable"
+        );
+    }
 }
 
 fn no_candidates_diagnostic(

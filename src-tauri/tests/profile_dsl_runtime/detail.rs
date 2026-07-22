@@ -20,13 +20,14 @@ use std::{
 };
 
 use job_radar_lib::{
-    execute_detail, DetailField, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    DetailField, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PhaseCompletion,
     PostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
     ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent,
     ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
     SourceProfileDocument, UnavailableProfileBrowserClient,
+    __test_execute_detail_phase as execute_detail,
 };
 use serde_json::{json, Value};
 use tokio::sync::Notify;

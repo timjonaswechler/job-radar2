@@ -20,6 +20,16 @@ pub enum PostingOccurrenceIdentity {
     },
 }
 
+impl PostingOccurrenceIdentity {
+    pub fn source_key(&self) -> &str {
+        match self {
+            Self::ProviderPostingId { source_key, .. } | Self::NormalizedUrl { source_key, .. } => {
+                source_key
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PostingReference {
@@ -80,6 +90,40 @@ impl RequestedDetailFields {
 
     pub fn iter(&self) -> impl Iterator<Item = DetailField> + '_ {
         self.0.iter().copied()
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct DetailFieldCapabilities(Vec<DetailField>);
+
+impl DetailFieldCapabilities {
+    pub(crate) fn new(fields: impl IntoIterator<Item = DetailField>) -> Self {
+        let mut fields = fields.into_iter().collect::<Vec<_>>();
+        fields.sort_unstable();
+        fields.dedup();
+        Self(fields)
+    }
+
+    pub fn contains(&self, field: DetailField) -> bool {
+        self.0.binary_search(&field).is_ok()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = DetailField> + '_ {
+        self.0.iter().copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<'de> Deserialize<'de> for DetailFieldCapabilities {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self::new(Vec::<DetailField>::deserialize(deserializer)?))
     }
 }
 

@@ -6,9 +6,10 @@ use crate::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            execute_detail, ManagedProfileBrowserClient, PostingOccurrence, ProfileBrowserClient,
-            ProfileHttpClient, RequestedDetailFields, ReqwestProfileHttpClient,
-            RuntimeExecutionContext,
+            DetailField, ManagedProfileBrowserClient, PostingOccurrence, ProfileBrowserClient,
+            ProfileDslSourceDetailExecution, ProfileHttpClient, RequestedDetailFields,
+            RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeExecutionContext,
+            SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
         },
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
@@ -148,6 +149,20 @@ impl<'a> JobPostingService<'a> {
         F: ProfileHttpClient + Sync + ?Sized,
         B: ProfileBrowserClient + Sync + ?Sized,
     {
+        let execution = ProfileDslSourceDetailExecution::new(fetcher, browser);
+        self.get_job_posting_with_detail_execution(id, snapshot, &execution)
+            .await
+    }
+
+    pub(crate) async fn get_job_posting_with_detail_execution<E>(
+        &self,
+        id: i64,
+        snapshot: &SourceProfileRegistrySnapshot,
+        execution: &E,
+    ) -> Result<JobPostingView, String>
+    where
+        E: SourceDetailExecution + ?Sized,
+    {
         let mut posting = self.get(id).await?;
         if posting.read_state != ReadState::Read {
             sqlx::query(
@@ -199,14 +214,12 @@ impl<'a> JobPostingService<'a> {
                 continue;
             }
 
-            let (execution_plan, compile_diagnostics) =
+            let (compiled_source, compile_diagnostics) =
                 match compile_source(&source.document, snapshot) {
                     CompileSourceOutcome::Compiled {
                         source: compiled,
                         diagnostics,
-                    } if !has_error_diagnostics(&diagnostics) => {
-                        (compiled.execution_plan, diagnostics)
-                    }
+                    } if !has_error_diagnostics(&diagnostics) => (compiled, diagnostics),
                     CompileSourceOutcome::Compiled {
                         diagnostics: compile_diagnostics,
                         ..
@@ -226,57 +239,62 @@ impl<'a> JobPostingService<'a> {
                 compile_diagnostics,
                 &posting_source,
             ));
-            if execution_plan.detail.is_none() {
-                diagnostics.push(detail_source_diagnostic(
-                    &posting_source,
-                    "detail_missing",
-                    format!(
-                        "Source `{}` compiled successfully but does not provide Detail",
-                        source.document.key
-                    ),
-                    "/detail",
-                    serde_json::json!({ "sourceKey": source.document.key }),
-                ));
-                continue;
+            let description_capable = compiled_source
+                .detail_capabilities()
+                .contains(DetailField::DescriptionText);
+            if description_capable {
+                attempted_detail_capable_source = true;
             }
-
-            attempted_detail_capable_source = true;
             let occurrence = posting_occurrence(&posting, &posting_source)?;
-            let result = execute_detail(
-                &execution_plan,
-                &source.document.source_config,
-                &occurrence,
-                RequestedDetailFields::description_text(),
-                fetcher,
-                browser,
-                RuntimeExecutionContext::uncancellable(),
-            )
-            .await;
-            use crate::profile_dsl::runtime::{PhaseOutcome, PolicyOutcome};
-            let (accepted_payload, phase_diagnostics) = match result {
-                Ok(PhaseOutcome::Completed {
-                    policy_outcome: PolicyOutcome::Accepted { reduced_payload },
-                    diagnostics,
-                    ..
-                }) => (Some(reduced_payload), diagnostics),
-                Ok(outcome) => (None, outcome.diagnostics().clone()),
-                Err(error) => (None, error.diagnostics().clone()),
+            let result = execution
+                .execute(SourceDetailRequest {
+                    compiled_source: &compiled_source,
+                    occurrence: &occurrence,
+                    requested_fields: RequestedDetailFields::description_text(),
+                    context: RuntimeExecutionContext::uncancellable(),
+                })
+                .await;
+            let completed_without_description = matches!(
+                &result,
+                Ok(SourceDetailOutcome::Completed { dispositions, .. })
+                    if dispositions.iter().any(|disposition| matches!(
+                        disposition,
+                        RequestedFieldDisposition::Unavailable {
+                            field: DetailField::DescriptionText
+                        }
+                    ))
+            );
+
+            let (description_text, phase_diagnostics) = match result {
+                Ok(SourceDetailOutcome::Completed {
+                    fields,
+                    dispositions,
+                    phase_evidence,
+                }) => {
+                    let usable = dispositions.iter().any(|disposition| {
+                        matches!(
+                            disposition,
+                            RequestedFieldDisposition::Reused {
+                                field: DetailField::DescriptionText
+                            } | RequestedFieldDisposition::Produced {
+                                field: DetailField::DescriptionText
+                            }
+                        )
+                    });
+                    (
+                        usable.then_some(fields.description_text).flatten(),
+                        phase_evidence
+                            .map(|evidence| evidence.diagnostics)
+                            .unwrap_or_default(),
+                    )
+                }
+                Ok(outcome) => (None, outcome.diagnostics().cloned().unwrap_or_default()),
+                Err(cancelled) => (None, cancelled.diagnostics),
             };
             let result_diagnostics =
                 with_posting_source_context(phase_diagnostics, &posting_source);
 
-            if let Some(payload) = accepted_payload {
-                let Some(description_text) = payload.patch.description_text else {
-                    diagnostics.extend(result_diagnostics);
-                    diagnostics.push(detail_source_diagnostic(
-                        &posting_source,
-                        "description_empty",
-                        "Accepted Detail response did not provide the requested descriptionText",
-                        "/detail/fields/descriptionText",
-                        serde_json::json!({}),
-                    ));
-                    continue;
-                };
+            if let Some(description_text) = description_text {
                 diagnostics.extend(result_diagnostics);
                 sqlx::query(
                     "UPDATE job_postings
@@ -300,6 +318,26 @@ impl<'a> JobPostingService<'a> {
             }
 
             diagnostics.extend(result_diagnostics);
+            if completed_without_description {
+                diagnostics.push(detail_source_diagnostic(
+                    &posting_source,
+                    "description_empty",
+                    "Completed Source Detail did not provide the requested descriptionText",
+                    "/detail/fields/descriptionText",
+                    serde_json::json!({}),
+                ));
+            } else if !description_capable {
+                diagnostics.push(detail_source_diagnostic(
+                    &posting_source,
+                    "detail_missing",
+                    format!(
+                        "Source `{}` does not provide descriptionText Detail capability",
+                        source.document.key
+                    ),
+                    "/detail",
+                    serde_json::json!({ "sourceKey": source.document.key }),
+                ));
+            }
         }
 
         if attempted_detail_capable_source {

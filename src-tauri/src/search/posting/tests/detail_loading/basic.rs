@@ -82,6 +82,91 @@ fn get_job_posting_loads_missing_description_marks_read_and_persists_text() {
 }
 
 #[test]
+fn get_job_posting_persists_one_scripted_source_detail_description_update() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let posting_id = insert_existing_posting(
+            &pool,
+            ExistingPosting {
+                title: "Laser Engineer",
+                company: "ACME GmbH",
+                locations: &["Mainz"],
+                read_state: "unread",
+                interest_state: "undecided",
+                preparation_state: "not_started",
+                application_state: "not_applied",
+                first_seen_at: "2026-06-01T00:00:00.000Z",
+                last_seen_at: "2026-06-23T21:41:36.000Z",
+            },
+        )
+        .await;
+        let url = "https://detail.example.test/jobs/scripted";
+        let source_id = insert_existing_source(
+            &pool,
+            posting_id,
+            "detail_source",
+            "Detail Source",
+            url,
+            "2026-06-01T00:00:00.000Z",
+        )
+        .await;
+        set_primary_source(&pool, posting_id, source_id).await;
+        let snapshot = test_snapshot(
+            vec![detail_profile_json(
+                "detail_profile",
+                "detail_path",
+                "{{posting:url}}",
+            )],
+            vec![profile_source_json(
+                "detail_source",
+                "detail_profile",
+                "detail_path",
+                json!({}),
+            )],
+        );
+        let (_, identity) =
+            crate::profile_dsl::runtime::validate_posting_reference("detail_source", url, None)
+                .unwrap();
+        let expected = SourceDetailRequestSnapshot::new(
+            "detail_source",
+            identity,
+            RequestedDetailFields::description_text(),
+        );
+        let execution = ScriptedSourceDetailExecution::new([(
+            expected.clone(),
+            Ok(SourceDetailOutcome::Completed {
+                fields: DetailPatch {
+                    description_text: Some("Scripted description".to_string()),
+                    ..DetailPatch::default()
+                },
+                dispositions: vec![RequestedFieldDisposition::Produced {
+                    field: DetailField::DescriptionText,
+                }],
+                phase_evidence: None,
+            }),
+        )]);
+
+        let detail = JobPostingService::new(&pool)
+            .get_job_posting_with_detail_execution(posting_id, &snapshot, &execution)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            detail.posting.description_text.as_deref(),
+            Some("Scripted description")
+        );
+        assert_eq!(
+            persisted_description_text(&pool, posting_id)
+                .await
+                .as_deref(),
+            Some("Scripted description")
+        );
+        assert_eq!(execution.recorded_calls(), vec![expected]);
+        execution.assert_finished();
+    });
+}
+
+#[test]
 fn get_job_posting_returns_existing_description_without_fetching() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

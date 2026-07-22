@@ -116,21 +116,30 @@ pub use profile_dsl::primitives::value::{
     ValuePlacementDescriptor, ValuePlacementRegistryError, ValueRegistryError, ValueShape,
     VALUE_MAX_DEPTH, VALUE_MAX_FIRST_NON_EMPTY_CANDIDATES, VALUE_MAX_NODES,
 };
+// Lower-level phase execution remains externally reachable only as a hidden
+// deterministic regression-test hook. Application callers use SourceDetailExecution.
+#[doc(hidden)]
+pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
+
 pub use profile_dsl::runtime::{
-    execute_detail, execute_discovery, validate_posting_reference, AllowanceDimension,
-    AllowanceExhaustion, AllowanceLimitSource, ContributionOrigin, DetailContributionEvidence,
-    DetailField, DetailPatch, DetailPhasePayload, DetailRejection, DiscoveryContributionEvidence,
-    DiscoveryHint, DiscoveryPhasePayload, DiscoveryRejection, DiscoveryResponsibility, HintUse,
+    execute_discovery, validate_posting_reference, AllowanceDimension, AllowanceExhaustion,
+    AllowanceLimitSource, CandidateDetailFailure, ContributionOrigin, DetailCancelled,
+    DetailContributionEvidence, DetailField, DetailFieldCapabilities, DetailPatch,
+    DetailPhasePayload, DetailRejection, DiscoveryContributionEvidence, DiscoveryHint,
+    DiscoveryPhasePayload, DiscoveryRejection, DiscoveryResponsibility, HintUse,
     ManagedProfileBrowserClient, OccurrenceReferenceError, PhaseCancellationReason, PhaseCancelled,
     PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
     PhasePreStartFailure, PhaseRunError, PhaseRunResult, PhaseUsage, PolicyOutcome,
     PolicyUnsatisfiedCause, PostingOccurrence, PostingOccurrenceIdentity, PostingReference,
     ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileHttpClient, ProfileHttpError,
-    ProfileHttpFailureKind, ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse,
-    ProviderValues, RequestedDetailFields, ReqwestProfileHttpClient, RuntimeCancellation,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileDslSourceDetailExecution,
+    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
+    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
+    RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeCancellation,
     RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SensitiveRequestBody, UnavailableProfileBrowserClient,
+    ScriptedSourceDetailExecution, SensitiveRequestBody, SourceDetailExecution,
+    SourceDetailFailure, SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequest,
+    SourceDetailRequestSnapshot, SourceDetailResult, UnavailableProfileBrowserClient,
 };
 pub use profile_dsl::template::{
     compile_template, render_template, CompiledTemplate, TemplateCompileError,

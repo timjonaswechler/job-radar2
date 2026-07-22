@@ -1,9 +1,11 @@
 use super::*;
 use crate::{
     profile_dsl::runtime::{
-        ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchRequest,
-        ProfileBrowserFetchResponse, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-        ScriptedProfileHttpClient, UnavailableProfileBrowserClient,
+        DetailField, DetailPatch, ProfileBrowserClient, ProfileBrowserFetchError,
+        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, RequestedDetailFields,
+        RequestedFieldDisposition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+        ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceDetailOutcome,
+        SourceDetailRequestSnapshot, UnavailableProfileBrowserClient,
     },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,

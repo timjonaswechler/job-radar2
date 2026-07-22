@@ -9,13 +9,13 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
     EMPTY.get_or_init(serde_json::Map::new)
 }
 use job_radar_lib::{
-    compile_source, execute_detail, execute_discovery, AllowanceDimension, CompileSourceOutcome,
-    DiscoveryStep, ExecutionPlanFetch, PhaseCompletion, PhaseLimits, PhaseOutcome, PolicyOutcome,
-    PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpFailureKind, RegistrySourceProfile,
-    RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, StrategyPolicy,
-    UnavailableProfileBrowserClient,
+    __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
+    AllowanceDimension, CompileSourceOutcome, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion,
+    PhaseLimits, PhaseOutcome, PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence,
+    ProfileHttpFailureKind, RegistrySourceProfile, RequestedDetailFields, RuntimeCancellation,
+    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    StrategyPolicy, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
