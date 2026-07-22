@@ -44,13 +44,13 @@ pub use profile_dsl::documents::{
     Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
     DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
     DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch,
-    FieldExpression, HttpMethod, InputUrlPattern, ListFieldExpression, Parse, ParseFragment,
-    ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
-    ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
+    FieldExpression, HttpMethod, InputUrlPattern, ListFieldExpression, PaginationFragment,
+    PaginationTypeFragment, Parse, ParseFragment, ParseType, ParseTypeFragment, PhaseLimits,
+    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SelectTypeFragment,
+    SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
-    ExecutionPlanPagination,
 };
 pub use profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
@@ -78,6 +78,13 @@ pub use profile_dsl::primitives::cardinality::{
 pub use profile_dsl::primitives::fetch::http::{
     http_fetch_descriptors, validate_http_fetch_descriptors, CompiledHttpFetch,
     CompiledHttpJsonValue, CompiledHttpRequestBody, HttpFetchDescriptor, HTTP_FETCH_DESCRIPTOR,
+};
+pub use profile_dsl::primitives::pagination::{
+    compile_pagination_plan, pagination_descriptors, pagination_limit_options,
+    pagination_parameter_locations, validate_pagination_inventories, CompiledPagination,
+    CursorPaginationPlan, OffsetLimitPaginationPlan, PagePaginationPlan, Pagination,
+    PaginationDescriptor, PaginationInventory, PaginationLimits, PaginationOverlay,
+    PaginationParameterLocation, PaginationRegistryError, SitemapPaginationPlan,
 };
 pub use profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,

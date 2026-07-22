@@ -14,8 +14,8 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
     })
 }
 use job_radar_lib::{
-    execute_discovery, AllowanceDimension, CompileSourceOutcome, ExecutionPlanFetch,
-    PhaseCancellationReason, PhaseCompletion, PhaseLimits, PhaseLimitsFragment,
+    execute_discovery, AllowanceDimension, CompileSourceOutcome, CompiledPagination,
+    ExecutionPlanFetch, PhaseCancellationReason, PhaseCompletion, PhaseLimits, PhaseLimitsFragment,
     ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
     SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
@@ -270,7 +270,7 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
     assert_exhaustion(&report.completion, AllowanceDimension::Requests);
     assert_eq!(report.usage.requests, 1);
     assert_eq!(report.usage.pages, 1);
-    assert_eq!(report.usage.produced_items, 1);
+    assert_eq!(report.usage.produced_items, 0);
     assert_eq!(fetcher.request_count(), 1);
 }
 
@@ -431,8 +431,46 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
 }
 
 #[tokio::test]
-async fn produced_item_prefix_is_charged_and_denial_exposes_no_payload() {
-    let plan = plan();
+async fn paginated_produced_item_exact_equality_is_charged_after_acceptance() {
+    let mut plan = plan();
+    let Some(CompiledPagination::Page(pagination)) = &mut plan.discovery.strategies[0].pagination
+    else {
+        panic!("expected page pagination")
+    };
+    pagination.limits.max_items = Some(1);
+    let fetcher = QueueFetcher::new([json!({ "jobs": [
+        { "id": "1", "title": "One", "url": "https://example.test/1", "locations": [] }
+    ] })]);
+    let caller = PhaseLimits {
+        max_produced_items: 1,
+        ..PhaseLimits::BACKEND
+    };
+
+    let result = accepted_phase(
+        execute_discovery(
+            &plan,
+            empty_source_config(),
+            fetcher.client(),
+            &UnavailableProfileBrowserClient,
+            RuntimeExecutionContext::uncancellable().with_limits(caller),
+        )
+        .await,
+    );
+
+    assert_eq!(result.payload.candidates.len(), 1);
+    assert_eq!(result.report.usage.produced_items, 1);
+    assert_eq!(result.report.completion, PhaseCompletion::Accepted);
+    assert_eq!(fetcher.request_count(), 1);
+}
+
+#[tokio::test]
+async fn paginated_produced_item_one_over_is_payload_free_after_acceptance_validation() {
+    let mut plan = plan();
+    let Some(CompiledPagination::Page(pagination)) = &mut plan.discovery.strategies[0].pagination
+    else {
+        panic!("expected page pagination")
+    };
+    pagination.limits.max_items = Some(2);
     let fetcher = QueueFetcher::new([json!({ "jobs": [
         { "id": "1", "title": "One", "url": "https://example.test/1", "locations": [] },
         { "id": "2", "title": "Two", "url": "https://example.test/2", "locations": [] }

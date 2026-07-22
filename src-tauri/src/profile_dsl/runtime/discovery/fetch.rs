@@ -2,8 +2,9 @@ use super::support::{
     push_browser_fetch_diagnostic, render_source_config_template, DiscoveryTemplateValues,
 };
 use super::*;
-use crate::profile_dsl::primitives::fetch::http::{
-    execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay,
+use crate::profile_dsl::primitives::{
+    fetch::http::{execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay},
+    pagination::PaginationOverlay,
 };
 
 pub(super) enum DiscoveryFetchOutcome {
@@ -28,15 +29,14 @@ where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
-    fetch_strategy_document_with_query_params(
+    fetch_strategy_document_with_overlay(
         fetcher,
         browser,
         fetch,
         authored_charset,
         source_config,
         source_name,
-        &[],
-        &[],
+        &PaginationOverlay::default(),
         base_path,
         strategy_key,
         strategy_index,
@@ -46,15 +46,14 @@ where
     .await
 }
 
-pub(super) async fn fetch_strategy_document_with_query_params<F, B>(
+pub(super) async fn fetch_strategy_document_with_overlay<F, B>(
     fetcher: &F,
     browser: &B,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
     source_name: &str,
-    query_params: &[(&str, String)],
-    json_body_params: &[(&str, String)],
+    overlay: &PaginationOverlay,
     base_path: &str,
     strategy_key: Option<&str>,
     strategy_index: usize,
@@ -73,8 +72,7 @@ where
         source_config,
         source_name,
         None,
-        query_params,
-        json_body_params,
+        overlay,
         base_path,
         strategy_key,
         strategy_index,
@@ -110,8 +108,7 @@ where
         source_config,
         source_name,
         Some(url_override),
-        &[],
-        &[],
+        &PaginationOverlay::default(),
         base_path,
         strategy_key,
         strategy_index,
@@ -130,8 +127,7 @@ async fn fetch_strategy_document_with_options<F, B>(
     source_config: &SourceConfig,
     source_name: &str,
     url_override: Option<&str>,
-    query_params: &[(&str, String)],
-    json_body_params: &[(&str, String)],
+    overlay: &PaginationOverlay,
     base_path: &str,
     strategy_key: Option<&str>,
     strategy_index: usize,
@@ -142,6 +138,16 @@ where
     F: ProfileHttpClient + Sync + ?Sized,
     B: ProfileBrowserClient + Sync + ?Sized,
 {
+    let query_params = overlay
+        .query
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.clone()))
+        .collect::<Vec<_>>();
+    let json_body_params = overlay
+        .json_body
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.clone()))
+        .collect::<Vec<_>>();
     match fetch {
         ExecutionPlanFetch::Http(fetch) => {
             let values = DiscoveryTemplateValues {
@@ -154,8 +160,8 @@ where
                 &values,
                 HttpFetchOverlay {
                     url_override,
-                    query_params,
-                    json_body_params,
+                    query_params: &query_params,
+                    json_body_params: &json_body_params,
                 },
                 authored_charset,
                 context,
@@ -239,7 +245,7 @@ where
                 source_config,
                 source_name,
                 url_override,
-                query_params,
+                &query_params,
                 base_path,
                 strategy_key,
                 strategy_index,

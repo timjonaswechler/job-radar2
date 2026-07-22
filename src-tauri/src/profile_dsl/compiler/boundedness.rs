@@ -9,9 +9,7 @@ use crate::profile_dsl::documents::fetch::{
     BrowserInteraction, BrowserWait, MAX_BROWSER_FETCH_TIMEOUT_MS, MAX_BROWSER_INTERACTION_COUNT,
     MAX_BROWSER_WAIT_AFTER_MS, MAX_BROWSER_WAIT_TIMEOUT_MS,
 };
-use crate::profile_dsl::documents::{
-    DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits, PhaseLimits,
-};
+use crate::profile_dsl::documents::{DetailStep, DiscoveryStep, Fetch, PhaseLimits};
 use crate::profile_dsl::policy::StrategyPolicy;
 
 use super::compiler_error;
@@ -51,14 +49,6 @@ pub(super) fn validate_boundedness(
             &strategy.key,
             diagnostics,
         );
-        if let Some(pagination) = &strategy.pagination {
-            validate_pagination_bounds(
-                pagination,
-                &format!("{strategy_path}/pagination"),
-                &strategy.key,
-                diagnostics,
-            );
-        }
     }
 
     if let Some(detail) = detail {
@@ -403,80 +393,6 @@ fn validate_browser_interaction_bounds(
             &format!("{path}/waitAfterMs"),
             strategy_key,
             serde_json::json!({ "minimum": 0, "maximum": max_wait_after_ms }),
-        );
-    }
-}
-
-fn validate_pagination_bounds(
-    pagination: &Pagination,
-    path: &str,
-    strategy_key: &str,
-    diagnostics: &mut Diagnostics,
-) {
-    let (limits, pagination_type, requires_depth_bound) = match pagination {
-        Pagination::Page { limits, .. } => (limits.as_ref(), "page", false),
-        Pagination::OffsetLimit { limits, .. } => (limits.as_ref(), "offset_limit", false),
-        Pagination::Cursor { limits, .. } => (limits.as_ref(), "cursor", false),
-        Pagination::Sitemap {
-            limits,
-            child_sitemap_selector,
-            ..
-        } => (limits.as_ref(), "sitemap", child_sitemap_selector.is_some()),
-    };
-
-    let Some(limits) = limits else {
-        push_bounded_diagnostic(
-            diagnostics,
-            "unbounded_pagination",
-            "Pagination must declare explicit stop limits".to_string(),
-            &format!("{path}/limits"),
-            strategy_key,
-            serde_json::json!({ "paginationType": pagination_type }),
-        );
-        return;
-    };
-
-    validate_pagination_limits(
-        limits,
-        path,
-        pagination_type,
-        requires_depth_bound,
-        strategy_key,
-        diagnostics,
-    );
-}
-
-fn validate_pagination_limits(
-    limits: &PaginationLimits,
-    path: &str,
-    pagination_type: &str,
-    requires_depth_bound: bool,
-    strategy_key: &str,
-    diagnostics: &mut Diagnostics,
-) {
-    let has_request_bound = limits.max_requests.filter(|limit| *limit > 0).is_some();
-    let has_item_bound = limits.max_items.filter(|limit| *limit > 0).is_some();
-    let has_depth_bound = limits.max_depth.is_some();
-
-    if !(has_request_bound || has_item_bound || has_depth_bound) {
-        push_bounded_diagnostic(
-            diagnostics,
-            "unbounded_pagination",
-            "Pagination limits must include at least one positive stop rule such as maxRequests, maxItems, or maxDepth".to_string(),
-            &format!("{path}/limits"),
-            strategy_key,
-            serde_json::json!({ "paginationType": pagination_type }),
-        );
-    }
-
-    if requires_depth_bound && !has_depth_bound {
-        push_bounded_diagnostic(
-            diagnostics,
-            "unbounded_pagination_depth",
-            "Recursive sitemap pagination must declare maxDepth".to_string(),
-            &format!("{path}/limits/maxDepth"),
-            strategy_key,
-            serde_json::json!({ "paginationType": pagination_type }),
         );
     }
 }

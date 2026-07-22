@@ -3,12 +3,10 @@ use std::collections::{BTreeMap, HashSet, VecDeque};
 use serde_json::{json, Value};
 
 use crate::{
-    profile_dsl::primitives::select::resolve_authored_json_path as resolve_simple_json_path,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        documents::PaginationParameterLocation,
         execution_plan::{
-            capabilities::{ExecutionPlanFetch, ExecutionPlanPagination},
+            capabilities::ExecutionPlanFetch,
             discovery::{ExecutionPlanDiscoveryOutput, ExecutionPlanDiscoveryStrategy},
             SourceExecutionPlan,
         },
@@ -19,6 +17,7 @@ use crate::{
                 evaluate_discovery_final_acceptance, evaluate_discovery_strategy_acceptance,
                 CompiledAcceptance,
             },
+            pagination::{CompiledPagination, CursorAdvance, PaginationOverlay},
             parse::{CompleteParseText, ParseDiagnosticContext},
             value::{CompiledListValue, CompiledValue},
         },
@@ -64,8 +63,7 @@ use diagnostics::{runtime_error, runtime_warning};
 use document::select_items;
 use extract::extract_candidate;
 use fetch::{
-    fetch_strategy_document_at_url, fetch_strategy_document_with_query_params,
-    DiscoveryFetchOutcome,
+    fetch_strategy_document_at_url, fetch_strategy_document_with_overlay, DiscoveryFetchOutcome,
 };
 use pagination::execute_paginated_strategy;
 use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidates_from_items};
@@ -334,6 +332,30 @@ fn project_discovery_execution(
             }),
             diagnostics,
         }));
+    }
+    if final_accepted {
+        for _ in &reduced.candidates {
+            if let Err(stop) = context.debit(AllowanceCharge {
+                produced_items: 1,
+                ..AllowanceCharge::default()
+            }) {
+                diagnostics.push(diagnostic_for_stop(&stop, "/discovery"));
+                let completion = completion_for_stop(stop);
+                let report = allowance.report(completion.clone());
+                return Ok(match completion {
+                    PhaseCompletion::BudgetExhausted { .. } => PhaseOutcome::BudgetExhausted {
+                        complete_budget_report: report,
+                        diagnostics,
+                    },
+                    PhaseCompletion::ExecutionFailed => PhaseOutcome::ExecutionFailed {
+                        typed_failure: PhaseExecutionFailure::Internal,
+                        complete_budget_report: report,
+                        diagnostics,
+                    },
+                    _ => unreachable!("stopped phase has budget or execution-failure completion"),
+                });
+            }
+        }
     }
     if !final_accepted && policy.reports_final_rejection() {
         diagnostics.push(policy_unsatisfied_diagnostic(

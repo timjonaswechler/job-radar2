@@ -86,6 +86,11 @@ pub struct CompiledHttpFetch {
 }
 
 impl CompiledHttpFetch {
+    pub(crate) fn supports_json_body_overlay(&self) -> bool {
+        self.method == HttpMethod::Post
+            && matches!(self.body, Some(CompiledHttpRequestBody::Json { .. }))
+    }
+
     pub(crate) fn references_source_name(&self) -> bool {
         self.url.references(Some("source"), "name")
             || self

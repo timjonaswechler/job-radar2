@@ -14,8 +14,18 @@ pub(crate) mod xml_text;
 
 pub use css::{CssSelect, CssSelectPlan};
 pub use document::{DocumentSelect, DocumentSelectPlan};
-pub(crate) use json_path::resolve_authored_json_path;
 pub use json_path::{JsonPathSelect, JsonPathSelectPlan};
+
+pub(crate) fn compile_json_path(path: &str) -> Result<JsonPathSelectPlan, String> {
+    json_path::compile(path)
+}
+
+pub(crate) fn resolve_compiled_json_path<'a>(
+    plan: &JsonPathSelectPlan,
+    root: &'a Value,
+) -> Option<&'a Value> {
+    json_path::resolve_compiled(plan, root)
+}
 pub use sitemap_urls::{SitemapUrlsSelect, SitemapUrlsSelectPlan};
 pub use xml_element::{XmlElementSelect, XmlElementSelectPlan};
 pub use xml_text::{XmlTextSelect, XmlTextSelectPlan};

@@ -86,6 +86,7 @@ pub struct RuntimeExecutionContext<'a> {
     caller_limits: Option<PhaseLimits>,
     allowance: Option<&'a InvocationAllowance>,
     page_request: bool,
+    pagination_max_requests: Option<u64>,
 }
 
 impl<'a> RuntimeExecutionContext<'a> {
@@ -95,6 +96,7 @@ impl<'a> RuntimeExecutionContext<'a> {
             caller_limits: None,
             allowance: None,
             page_request: false,
+            pagination_max_requests: None,
         }
     }
     pub const fn with_cancellation(cancellation: &'a dyn RuntimeCancellation) -> Self {
@@ -103,6 +105,7 @@ impl<'a> RuntimeExecutionContext<'a> {
             caller_limits: None,
             allowance: None,
             page_request: false,
+            pagination_max_requests: None,
         }
     }
     pub const fn with_limits(mut self, limits: PhaseLimits) -> Self {
@@ -124,10 +127,15 @@ impl<'a> RuntimeExecutionContext<'a> {
             caller_limits: self.caller_limits,
             allowance: Some(allowance),
             page_request: self.page_request,
+            pagination_max_requests: self.pagination_max_requests,
         }
     }
     pub(crate) const fn with_page_request(mut self, page_request: bool) -> Self {
         self.page_request = page_request;
+        self
+    }
+    pub(crate) const fn with_pagination_limit(mut self, max_requests: u64) -> Self {
+        self.pagination_max_requests = Some(max_requests);
         self
     }
     pub(crate) const fn page_request(self) -> bool {
@@ -138,8 +146,9 @@ impl<'a> RuntimeExecutionContext<'a> {
             .is_some_and(RuntimeCancellation::is_cancelled)
     }
     pub(crate) fn debit(self, charge: AllowanceCharge) -> Result<(), AllowanceStop> {
-        self.allowance
-            .map_or(Ok(()), |allowance| allowance.debit(charge))
+        self.allowance.map_or(Ok(()), |allowance| {
+            allowance.debit_with_pagination_limit(charge, self.pagination_max_requests)
+        })
     }
     pub(crate) fn stop(self) -> Option<AllowanceStop> {
         self.allowance.and_then(InvocationAllowance::stop)

@@ -1,14 +1,15 @@
 use crate::support::{
-    compile_test_source, execute_detail_test_with_config, execute_discovery_test_with_config,
-    unwrap_plan,
+    budget_exhausted, compile_test_source, execute_detail_test_with_config,
+    execute_discovery_test_with_config, unwrap_plan,
 };
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    detect_source_proposal, HttpMethod, PostingOccurrence, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
-    SourceProposalDetectionStatus, SupportLevel,
+    detect_source_proposal, execute_discovery, AllowanceDimension, HttpMethod, PhaseCompletion,
+    PostingOccurrence, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
+    SourceProposalDetectionStatus, SupportLevel, UnavailableProfileBrowserClient,
 };
 use serde_json::{json, Value};
 
@@ -188,27 +189,30 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         ),
     ]);
 
-    let discovery = block_on(execute_discovery_test_with_config(
+    let discovery = budget_exhausted(block_on(execute_discovery(
         &plan,
         &source.source_config,
         &fetcher,
-    ));
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    )));
 
-    assert_eq!(discovery.payload.candidates.len(), 4);
-    assert_eq!(fetcher.requests().len(), 2);
-    assert_eq!(discovery.diagnostics.len(), 1);
     assert_eq!(
-        discovery.diagnostics[0].code,
-        "pagination_max_requests_reached"
+        fetcher.requests().len(),
+        2,
+        "one-over request is denied before I/O"
     );
-    assert_eq!(
-        discovery.diagnostics[0].path,
-        "/discovery/strategies/0/pagination/limits/maxRequests"
-    );
-    assert_eq!(
-        discovery.diagnostics[0].strategy_key.as_deref(),
-        Some("cxs_jobs_api")
-    );
+    assert_eq!(discovery.report.usage.requests, 2);
+    assert_eq!(discovery.report.usage.pages, 2);
+    assert_eq!(discovery.report.usage.produced_items, 0);
+    let PhaseCompletion::BudgetExhausted { exhaustion } = discovery.report.completion else {
+        panic!("expected request exhaustion")
+    };
+    assert_eq!(exhaustion.dimension, AllowanceDimension::Requests);
+    assert!(discovery
+        .diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "pagination_max_requests_reached"));
 }
 
 #[test]

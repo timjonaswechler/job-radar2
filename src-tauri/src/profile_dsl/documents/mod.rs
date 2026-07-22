@@ -31,7 +31,8 @@ pub use extract::{AuthoredScalar, CombinePart, FieldExpression, ListFieldExpress
 pub use fetch::{BrowserInteraction, BrowserWait, Fetch, HttpMethod, RequestBody};
 pub use fragments::{
     AccessPathFragment, DetailStepFragment, DetailStrategyFragment, DiscoveryStepFragment,
-    DiscoveryStrategyFragment, ParseFragment, ParseTypeFragment, SelectTypeFragment,
+    DiscoveryStrategyFragment, PaginationFragment, PaginationTypeFragment, ParseFragment,
+    ParseTypeFragment, SelectTypeFragment,
 };
 pub use limits::{PhaseLimits, PhaseLimitsFragment};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};

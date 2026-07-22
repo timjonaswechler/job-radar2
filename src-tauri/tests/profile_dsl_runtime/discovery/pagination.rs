@@ -1,5 +1,10 @@
 use super::*;
 
+fn pagination_source_config() -> serde_json::Map<String, Value> {
+    serde_json::from_value(json!({ "feedUrl": "https://example.test/rendered?tenant=acme" }))
+        .unwrap()
+}
+
 #[test]
 fn compiled_discovery_runtime_executes_bounded_page_pagination() {
     let plan = compiled_discovery_plan_with_strategy(
@@ -15,6 +20,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
                 "firstPage": 1,
                 "pageSizeParam": "per_page",
                 "pageSize": 2,
+                "totalPath": "$.total",
                 "limits": { "maxRequests": 2 }
             }),
         )]),
@@ -23,6 +29,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
         (
             "https://example.test/jobs.json?page=1&per_page=2",
             json!({
+                "total": 3,
                 "jobs": [
                     { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
                 ]
@@ -32,6 +39,7 @@ fn compiled_discovery_runtime_executes_bounded_page_pagination() {
         (
             "https://example.test/jobs.json?page=2&per_page=2",
             json!({
+                "total": 3,
                 "jobs": [
                     { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
                 ]
@@ -98,24 +106,32 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
         .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = budget_exhausted(block_on(execute_discovery(
+        &plan,
+        &pagination_source_config(),
+        &fetcher,
+        &FakeBrowser::new([]),
+        RuntimeExecutionContext::uncancellable(),
+    )));
 
-    assert_eq!(result.payload.candidates.len(), 1);
-    assert_eq!(result.diagnostics.len(), 1);
-    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
-    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
     assert_eq!(
-        result.diagnostics[0].code,
-        "pagination_max_requests_reached"
+        fetcher.requests().len(),
+        1,
+        "one-over request must not start"
     );
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/discovery/strategies/0/pagination/limits/maxRequests"
-    );
-    assert_eq!(
-        result.diagnostics[0].strategy_key.as_deref(),
-        Some("json_api")
-    );
+    assert_eq!(result.report.usage.requests, 1);
+    assert_eq!(result.report.usage.pages, 1);
+    assert_eq!(result.report.usage.produced_items, 0);
+    let PhaseCompletion::BudgetExhausted { exhaustion } = result.report.completion else {
+        panic!("expected request exhaustion")
+    };
+    assert_eq!(exhaustion.dimension, AllowanceDimension::Requests);
+    assert_eq!(exhaustion.requested, 1);
+    assert_eq!(exhaustion.remaining, 0);
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "pagination_max_requests_reached"));
 }
 
 #[test]
@@ -225,6 +241,47 @@ fn compiled_discovery_runtime_reports_max_items_limit() {
 }
 
 #[test]
+fn max_items_exact_fit_stops_after_inserting_item_without_fetching_later_page() {
+    let plan = compiled_discovery_plan_with_strategy(
+        json!({ "type": "json" }),
+        default_select(),
+        default_fields(),
+        "https://example.test/jobs.json",
+        serde_json::Map::from_iter([(
+            "pagination".to_string(),
+            json!({
+                "type": "page",
+                "pageParam": "page",
+                "limits": { "maxRequests": 5, "maxItems": 2 }
+            }),
+        )]),
+    );
+    let fetcher = fake_fetcher([
+        (
+            "https://example.test/jobs.json?page=1",
+            json!({ "jobs": [
+                { "title": "One", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
+            ] })
+            .to_string(),
+        ),
+        (
+            "https://example.test/jobs.json?page=2",
+            json!({ "jobs": [
+                { "title": "Two", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
+            ] })
+            .to_string(),
+        ),
+    ]);
+
+    let result = block_on(execute_discovery_test(&plan, &fetcher));
+
+    assert_eq!(result.payload.candidates.len(), 2);
+    assert_eq!(fetcher.requests().len(), 2);
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].code, "pagination_max_items_reached");
+}
+
+#[test]
 fn compiled_discovery_runtime_stops_offset_limit_pagination_when_total_path_is_exhausted() {
     let plan = compiled_discovery_plan_with_strategy(
         json!({ "type": "json" }),
@@ -295,7 +352,8 @@ fn compiled_discovery_runtime_extracts_posting_urls_from_sitemap_xml() {
 
     let result = block_on(execute_discovery_test(&plan, &fetcher));
 
-    assert_eq!(result.diagnostics, Vec::new());
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].code, "pagination_max_items_reached");
     assert_eq!(
         result
             .payload
@@ -488,21 +546,29 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
             .to_string(),
     )]);
 
-    let result = block_on(execute_discovery_test(&plan, &fetcher));
+    let result = budget_exhausted(block_on(execute_discovery(
+        &plan,
+        &pagination_source_config(),
+        &fetcher,
+        &FakeBrowser::new([]),
+        RuntimeExecutionContext::uncancellable(),
+    )));
 
-    assert!(result.payload.candidates.is_empty());
-    assert_eq!(fetcher.requests().len(), 1);
-    assert_eq!(result.diagnostics.len(), 1);
-    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
-    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
     assert_eq!(
-        result.diagnostics[0].code,
-        "pagination_max_requests_reached"
+        fetcher.requests().len(),
+        1,
+        "child fetch is denied before effect"
     );
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/discovery/strategies/0/pagination/limits/maxRequests"
-    );
+    assert_eq!(result.report.usage.requests, 1);
+    assert_eq!(result.report.usage.pages, 1);
+    let PhaseCompletion::BudgetExhausted { exhaustion } = result.report.completion else {
+        panic!("expected request exhaustion")
+    };
+    assert_eq!(exhaustion.dimension, AllowanceDimension::Requests);
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "pagination_max_requests_reached"));
 }
 
 #[test]
@@ -538,8 +604,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
             json!({
                 "jobs": [
                     { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
-                ],
-                "nextCursor": "page-3"
+                ]
             })
             .to_string(),
         ),
@@ -575,17 +640,7 @@ fn compiled_discovery_runtime_executes_bounded_cursor_pagination() {
             "https://example.test/jobs.json?tenant=acme&cursor=page-2".to_string(),
         ]
     );
-    assert_eq!(result.diagnostics.len(), 1);
-    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::Runtime);
-    assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
-    assert_eq!(
-        result.diagnostics[0].code,
-        "pagination_max_requests_reached"
-    );
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/discovery/strategies/0/pagination/limits/maxRequests"
-    );
+    assert!(result.diagnostics.is_empty());
 }
 
 #[test]
@@ -764,6 +819,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
                 "limitParam": "limit",
                 "startOffset": 0,
                 "limit": 2,
+                "totalPath": "$.total",
                 "limits": { "maxRequests": 2 }
             }),
         )]),
@@ -772,6 +828,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
         (
             "https://example.test/jobs.json?tenant=acme&offset=0&limit=2",
             json!({
+                "total": 4,
                 "jobs": [
                     { "title": "Rust Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/1" }
                 ]
@@ -781,6 +838,7 @@ fn compiled_discovery_runtime_executes_bounded_offset_limit_pagination() {
         (
             "https://example.test/jobs.json?tenant=acme&offset=2&limit=2",
             json!({
+                "total": 4,
                 "jobs": [
                     { "title": "Frontend Engineer", "company": "Example GmbH", "url": "https://example.test/jobs/2" }
                 ]
@@ -887,6 +945,10 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
 
     assert_eq!(result.payload.candidates.len(), 1);
     assert_eq!(
+        result.report.usage.produced_items, 1,
+        "R02 charges only the final reduced occurrence, not duplicate selected candidates"
+    );
+    assert_eq!(
         result
             .payload
             .provenance
@@ -921,6 +983,85 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
 }
 
 #[test]
+fn browser_page_pagination_repeats_query_navigation_with_static_waits_and_interactions() {
+    let mut extra = serde_json::Map::new();
+    extra.insert("fetch".to_string(), json!({
+        "mode": "browser",
+        "url": "{{sourceConfig:feedUrl}}",
+        "timeoutMs": 30000,
+        "waits": [{ "type": "selector", "selector": "article.posting", "timeoutMs": 5000 }],
+        "interactions": [{ "type": "click_if_visible", "selector": "button.more", "maxCount": 1, "waitAfterMs": 100 }]
+    }));
+    extra.insert(
+        "pagination".to_string(),
+        json!({
+            "type": "page", "pageParam": "page", "firstPage": 1,
+            "limits": { "maxRequests": 5, "maxItems": 2 }
+        }),
+    );
+    let plan = compiled_discovery_plan_with_strategy(
+        json!({ "type": "html" }),
+        json!({ "type": "css", "selector": "article.posting" }),
+        default_html_fields(),
+        "https://example.test/rendered?tenant=acme",
+        extra,
+    );
+    let browser = FakeBrowser::new([
+        (
+            "https://example.test/rendered?tenant=acme&page=1",
+            r#"<article class="posting"><span class="title">One</span><span class="company">Example</span><a class="apply" href="https://example.test/1">Apply</a></article>"#.to_string(),
+        ),
+        (
+            "https://example.test/rendered?tenant=acme&page=2",
+            r#"<article class="posting"><span class="title">Two</span><span class="company">Example</span><a class="apply" href="https://example.test/2">Apply</a></article>"#.to_string(),
+        ),
+    ]);
+    let fetcher = fake_fetcher([]);
+
+    let result = accepted_phase(block_on(execute_discovery(
+        &plan,
+        &pagination_source_config(),
+        &fetcher,
+        &browser,
+        RuntimeExecutionContext::uncancellable(),
+    )));
+
+    assert_eq!(result.payload.candidates.len(), 2);
+    let requests = browser.requests();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request.url.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "https://example.test/rendered?tenant=acme&page=1",
+            "https://example.test/rendered?tenant=acme&page=2",
+        ]
+    );
+    assert!(
+        requests
+            .windows(2)
+            .all(|pair| pair[0].waits == pair[1].waits
+                && pair[0].interactions == pair[1].interactions)
+    );
+    assert_eq!(
+        requests[0].waits,
+        vec![ExecutionPlanBrowserWait::Selector {
+            selector: "article.posting".into(),
+            timeout_ms: 5000
+        }]
+    );
+    assert_eq!(
+        requests[0].interactions,
+        vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
+            selector: "button.more".into(),
+            max_count: 1,
+            wait_after_ms: Some(100)
+        }]
+    );
+}
+
+#[test]
 fn json_body_pagination_overlay_rejects_non_post_json_fetch_before_io() {
     let mut extra = serde_json::Map::new();
     extra.insert(
@@ -934,20 +1075,19 @@ fn json_body_pagination_overlay_rejects_non_post_json_fetch_before_io() {
             "limits": { "maxRequests": 1 }
         }),
     );
-    let plan = compiled_discovery_plan_with_strategy(
+    let outcome = compile_discovery_outcome_with_strategy(
         json!({ "type": "json" }),
         default_select(),
         default_fields(),
         "https://example.test/jobs.json",
         extra,
     );
-    let fetcher = fake_fetcher([]);
 
-    let result = block_on(execute_discovery_failed_test(&plan, &fetcher));
-
-    assert!(result
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "invalid_json_body_overlay"));
-    assert!(fetcher.requests().is_empty());
+    let CompileSourceOutcome::Rejected { diagnostics } = outcome else {
+        panic!("json_body pagination on GET must reject during compilation")
+    };
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.path.ends_with("/pagination/parameterLocation")
+            && diagnostic.message.contains("HTTP POST JSON-body")
+    }));
 }

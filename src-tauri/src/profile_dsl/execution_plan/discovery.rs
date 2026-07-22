@@ -17,6 +17,7 @@ use crate::profile_dsl::primitives::acceptance::{
 use crate::profile_dsl::primitives::capture::{
     compile_captures, CaptureCompileError, CompiledCapturePlan,
 };
+use crate::profile_dsl::primitives::pagination::{compile_pagination_plan, CompiledPagination};
 use crate::profile_dsl::primitives::parse::{compile_parse, CompiledParse, ParseInputKind};
 use crate::profile_dsl::primitives::predicate::{
     CompiledPredicate, PredicateCompileContext, PredicateCompileError, PredicatePlacement,
@@ -31,10 +32,7 @@ use crate::profile_dsl::template::{
     json_pointer_segment, TemplateAdmissionKeys, TemplatePlacement,
 };
 
-use super::capabilities::{
-    compile_fetch, compile_pagination, ExecutionPlanBuildError, ExecutionPlanFetch,
-    ExecutionPlanPagination,
-};
+use super::capabilities::{compile_fetch, ExecutionPlanBuildError, ExecutionPlanFetch};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +53,7 @@ pub struct ExecutionPlanDiscoveryStrategy {
     pub description: Option<String>,
     pub fetch: ExecutionPlanFetch,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pagination: Option<ExecutionPlanPagination>,
+    pub pagination: Option<CompiledPagination>,
     pub parse: CompiledParse,
     pub select: CompiledSelect,
     #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
@@ -190,33 +188,39 @@ fn compile_discovery_strategy(
         posting_meta_keys: Default::default(),
         capture_keys: Default::default(),
     };
+    let fetch = compile_fetch(
+        &strategy.fetch,
+        &format!("{path}/fetch"),
+        match strategy.fetch {
+            crate::profile_dsl::documents::Fetch::Http { .. } => {
+                TemplatePlacement::DiscoveryHttpUrl
+            }
+            crate::profile_dsl::documents::Fetch::Browser { .. } => {
+                TemplatePlacement::DiscoveryBrowserUrl
+            }
+        },
+        &keys,
+    )?;
+    let supports_json_body =
+        matches!(&fetch, ExecutionPlanFetch::Http(fetch) if fetch.supports_json_body_overlay());
+    let pagination = strategy
+        .pagination
+        .as_ref()
+        .map(|pagination| {
+            compile_pagination_plan(pagination, strategy.parse.parse_type(), supports_json_body)
+                .map_err(|error| {
+                    ExecutionPlanBuildError::new(
+                        format!("{path}/pagination{}", error.path),
+                        error.message,
+                    )
+                })
+        })
+        .transpose()?;
     Ok(ExecutionPlanDiscoveryStrategy {
         key: strategy.key.clone(),
         description: strategy.description.clone(),
-        fetch: compile_fetch(
-            &strategy.fetch,
-            &format!("{path}/fetch"),
-            match strategy.fetch {
-                crate::profile_dsl::documents::Fetch::Http { .. } => {
-                    TemplatePlacement::DiscoveryHttpUrl
-                }
-                crate::profile_dsl::documents::Fetch::Browser { .. } => {
-                    TemplatePlacement::DiscoveryBrowserUrl
-                }
-            },
-            &keys,
-        )?,
-        pagination: strategy
-            .pagination
-            .as_ref()
-            .map(|pagination| {
-                compile_pagination(
-                    pagination,
-                    &format!("{path}/pagination"),
-                    strategy.parse.parse_type(),
-                )
-            })
-            .transpose()?,
+        fetch,
+        pagination,
         parse: compile_parse(
             &strategy.parse,
             match strategy.fetch {

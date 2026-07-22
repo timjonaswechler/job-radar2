@@ -55,12 +55,11 @@ pub(crate) fn execute<'doc>(
         .unwrap_or_default()
 }
 
-pub(crate) fn resolve_authored_json_path<'a>(
+pub(super) fn resolve_compiled<'a>(
+    plan: &JsonPathSelectPlan,
     root: &'a Value,
-    json_path: &str,
-) -> Result<Option<&'a Value>, String> {
-    let segments = parse_simple_json_path(json_path)?;
-    Ok(resolve_segments(root, &segments))
+) -> Option<&'a Value> {
+    resolve_segments(root, &plan.segments)
 }
 
 fn resolve_segments<'a>(root: &'a Value, segments: &[String]) -> Option<&'a Value> {

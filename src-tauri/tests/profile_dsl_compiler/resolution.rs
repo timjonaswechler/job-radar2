@@ -3,11 +3,11 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, compile_template, execute_discovery, CompileSourceOutcome, CompiledHttpFetch,
-    DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
+    CompiledPagination, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
-    ExecutionPlanPagination, RegistrySourceProfile, RuntimeExecutionContext, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceStatus, TemplateDescriptor,
+    RegistrySourceProfile, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceProfileRegistrySnapshot, SourceStatus, TemplateDescriptor,
     UnavailableProfileBrowserClient,
 };
 
@@ -43,11 +43,11 @@ fn compiler_resolves_source_selecting_reusable_profile_access_path() {
             timeout_ms: 10000,
         })
     );
-    let Some(ExecutionPlanPagination::Page { limits, .. }) = &discovery_strategy.pagination else {
+    let Some(CompiledPagination::Page(pagination)) = &discovery_strategy.pagination else {
         panic!("expected compiled page pagination with concrete limits");
     };
-    assert_eq!(limits.max_requests, Some(3));
-    assert_eq!(limits.max_items, Some(100));
+    assert_eq!(pagination.limits.max_requests, 3);
+    assert_eq!(pagination.limits.max_items, Some(100));
     assert_eq!(
         discovery_strategy.accept_when.as_ref().unwrap().min_results,
         Some(0),

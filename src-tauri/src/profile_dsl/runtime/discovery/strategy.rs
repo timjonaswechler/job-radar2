@@ -52,8 +52,7 @@ where
             browser,
             strategy_index,
             strategy,
-            &[],
-            PaginationParameterLocation::Query,
+            &PaginationOverlay::default(),
             None,
             None,
             &base_path,
@@ -73,33 +72,6 @@ where
             }
         }
     };
-
-    if strategy.pagination.is_none() {
-        for _ in &candidates {
-            if context.is_cancelled() {
-                return StrategyExecution {
-                    diagnostics,
-                    completion: StrategyAttemptCompletion::Cancelled(TypedCancellation::strategy(
-                        RuntimePhase::Discovery,
-                        strategy_index,
-                        strategy_key
-                            .as_deref()
-                            .expect("compiled strategy has a key"),
-                        CancellationOperation::Phase,
-                    )),
-                };
-            }
-            if let Err(stop) = context.debit(AllowanceCharge {
-                produced_items: 1,
-                ..AllowanceCharge::default()
-            }) {
-                return StrategyExecution {
-                    diagnostics,
-                    completion: StrategyAttemptCompletion::Stopped(stop),
-                };
-            }
-        }
-    }
 
     let contributions = candidates
         .iter()
@@ -147,26 +119,6 @@ pub(super) struct StrategyFetchOutput {
     pub(super) next_cursor: Option<String>,
 }
 
-fn query_params_for_location<'a>(
-    params: &'a [(&'a str, String)],
-    location: PaginationParameterLocation,
-) -> &'a [(&'a str, String)] {
-    match location {
-        PaginationParameterLocation::Query => params,
-        PaginationParameterLocation::JsonBody => &[],
-    }
-}
-
-fn json_body_params_for_location<'a>(
-    params: &'a [(&'a str, String)],
-    location: PaginationParameterLocation,
-) -> &'a [(&'a str, String)] {
-    match location {
-        PaginationParameterLocation::Query => &[],
-        PaginationParameterLocation::JsonBody => params,
-    }
-}
-
 pub(super) async fn execute_single_strategy_fetch<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
@@ -174,10 +126,9 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
     browser: &B,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
-    pagination_params: &[(&str, String)],
-    parameter_location: PaginationParameterLocation,
-    total_path: Option<&str>,
-    next_cursor_path: Option<&str>,
+    overlay: &PaginationOverlay,
+    total_path: Option<&crate::profile_dsl::primitives::select::JsonPathSelectPlan>,
+    next_cursor_path: Option<&crate::profile_dsl::primitives::select::JsonPathSelectPlan>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -201,15 +152,14 @@ where
         ));
     }
     let context = context.with_page_request(strategy.pagination.is_some());
-    let response = match fetch_strategy_document_with_query_params(
+    let response = match fetch_strategy_document_with_overlay(
         fetcher,
         browser,
         &strategy.fetch,
         strategy.parse.authored_charset(),
         source_config,
         &plan.source.name,
-        query_params_for_location(pagination_params, parameter_location),
-        json_body_params_for_location(pagination_params, parameter_location),
+        overlay,
         base_path,
         strategy_key,
         strategy_index,
@@ -248,8 +198,8 @@ fn extract_candidates_from_response(
     source_config: &SourceConfig,
     strategy: &ExecutionPlanDiscoveryStrategy,
     response: &CompleteParseText,
-    total_path: Option<&str>,
-    next_cursor_path: Option<&str>,
+    total_path: Option<&crate::profile_dsl::primitives::select::JsonPathSelectPlan>,
+    next_cursor_path: Option<&crate::profile_dsl::primitives::select::JsonPathSelectPlan>,
     base_path: &str,
     strategy_key: Option<&str>,
     diagnostics: &mut Diagnostics,
@@ -340,12 +290,14 @@ pub(super) fn extract_candidates_from_items(
     candidates
 }
 
-fn extract_total_count(document: &document::ParsedDocument<'_>, total_path: &str) -> Option<u64> {
+fn extract_total_count(
+    document: &document::ParsedDocument<'_>,
+    total_path: &crate::profile_dsl::primitives::select::JsonPathSelectPlan,
+) -> Option<u64> {
     let document::ParsedDocument::Json(value) = document else {
         return None;
     };
-    let value = resolve_simple_json_path(value, total_path).ok().flatten()?;
-    match value {
+    match crate::profile_dsl::primitives::select::resolve_compiled_json_path(total_path, value)? {
         Value::Number(number) => number.as_u64(),
         Value::String(value) => value.parse::<u64>().ok(),
         _ => None,
@@ -354,26 +306,19 @@ fn extract_total_count(document: &document::ParsedDocument<'_>, total_path: &str
 
 fn extract_next_cursor(
     document: &document::ParsedDocument<'_>,
-    next_cursor_path: &str,
+    next_cursor_path: &crate::profile_dsl::primitives::select::JsonPathSelectPlan,
 ) -> Option<String> {
     let document::ParsedDocument::Json(value) = document else {
         return None;
     };
-    let value = resolve_simple_json_path(value, next_cursor_path)
-        .ok()
-        .flatten()?;
-    match value {
-        Value::String(value) => non_empty_cursor(value),
-        Value::Number(number) => non_empty_cursor(&number.to_string()),
-        _ => None,
-    }
-}
-
-fn non_empty_cursor(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    let value = match crate::profile_dsl::primitives::select::resolve_compiled_json_path(
+        next_cursor_path,
+        value,
+    )? {
+        Value::String(value) => value.clone(),
+        Value::Number(number) => number.to_string(),
+        _ => return None,
+    };
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }

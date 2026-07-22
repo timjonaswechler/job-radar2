@@ -2,6 +2,7 @@ pub mod acceptance;
 pub mod capture;
 pub mod cardinality;
 pub mod fetch;
+pub mod pagination;
 pub mod parse;
 pub mod predicate;
 pub mod select;

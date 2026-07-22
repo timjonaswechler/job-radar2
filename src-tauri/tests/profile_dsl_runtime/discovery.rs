@@ -1,5 +1,5 @@
 use crate::support::{
-    accepted_phase, compile_test_source, execute_discovery_failed_test,
+    accepted_phase, budget_exhausted, compile_test_source, execute_discovery_failed_test,
     execute_discovery_rejected_test, execute_discovery_test, execute_discovery_test_with_config,
     policy_unsatisfied, unwrap_plan,
 };
@@ -7,12 +7,13 @@ use crate::support::{
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use job_radar_lib::{
-    execute_discovery, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch, HttpMethod,
-    PhaseCompletion, ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileHttpFailureKind,
-    RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    execute_discovery, AllowanceDimension, CompileSourceOutcome, DiagnosticCategory,
+    DiagnosticSeverity, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
+    ExecutionPlanFetch, HttpMethod, PhaseCompletion, ProfileBrowserClient,
+    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
+    ProfileBrowserFetchResponse, ProfileHttpFailureKind, RuntimeCancellation,
+    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 

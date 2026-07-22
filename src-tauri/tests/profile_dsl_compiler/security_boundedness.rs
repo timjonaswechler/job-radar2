@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    compile_source, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity,
+    compile_source, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity, Pagination,
     RegistrySourceProfile, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
     SourceProfileRegistrySnapshot,
 };
@@ -304,42 +304,27 @@ fn compiler_validates_security_and_boundedness_after_direct_specialization() {
 }
 
 #[test]
-fn compiler_diagnoses_unbounded_pagination() {
-    let mut profile = simple_profile_value();
-    let strategy = &mut profile["accessPaths"][0]["discovery"]["strategies"][0];
-    strategy["pagination"]
-        .as_object_mut()
-        .unwrap()
-        .remove("limits");
+fn direct_serde_rejects_pagination_without_required_request_limit() {
+    let mut pagination = simple_profile_value()["accessPaths"][0]["discovery"]["strategies"][0]
+        ["pagination"]
+        .clone();
+    pagination.as_object_mut().unwrap().remove("limits");
 
-    let result = compile_profile_value(profile);
-
-    assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "unbounded_pagination",
-        "/accessPaths/0/discovery/strategies/0/pagination/limits",
-    );
+    serde_json::from_value::<Pagination>(pagination)
+        .expect_err("pagination without limits must fail direct Serde admission");
 }
 
 #[test]
-fn compiler_diagnoses_unbounded_recursive_sitemap_depth() {
-    let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["pagination"] = json!({
+fn direct_serde_allows_bounded_sitemap_without_optional_depth() {
+    let pagination = json!({
         "type": "sitemap",
         "childSitemapSelector": { "type": "sitemap_urls" },
         "postingUrlSelector": { "type": "sitemap_urls" },
         "limits": { "maxRequests": 10 }
     });
 
-    let result = compile_profile_value(profile);
-
-    assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "unbounded_pagination_depth",
-        "/accessPaths/0/discovery/strategies/0/pagination/limits/maxDepth",
-    );
+    serde_json::from_value::<Pagination>(pagination)
+        .expect("maxRequests bounds traversal even when maxDepth is omitted");
 }
 
 #[test]

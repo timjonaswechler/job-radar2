@@ -189,6 +189,14 @@ impl InvocationAllowance {
     }
 
     pub(crate) fn debit(&self, charge: AllowanceCharge) -> Result<(), AllowanceStop> {
+        self.debit_with_pagination_limit(charge, None)
+    }
+
+    pub(crate) fn debit_with_pagination_limit(
+        &self,
+        charge: AllowanceCharge,
+        pagination_max_requests: Option<u64>,
+    ) -> Result<(), AllowanceStop> {
         if let Some(stop) = self.stop() {
             return Err(stop);
         }
@@ -206,7 +214,9 @@ impl InvocationAllowance {
                 AllowanceDimension::Requests,
                 state.usage.requests,
                 charge.requests,
-                self.limits.values.max_requests,
+                pagination_max_requests.map_or(self.limits.values.max_requests, |limit| {
+                    self.limits.values.max_requests.min(limit)
+                }),
             ),
             (
                 AllowanceDimension::ProducedItems,
@@ -228,7 +238,13 @@ impl InvocationAllowance {
             };
             if next > limit {
                 drop(state);
-                return Err(self.exhaust(dimension, requested, limit.saturating_sub(used)));
+                return Err(self.exhaust_at_limit(
+                    dimension,
+                    requested,
+                    limit.saturating_sub(used),
+                    pagination_max_requests,
+                    limit,
+                ));
             }
         }
         if Instant::now() > self.deadline {
@@ -240,7 +256,9 @@ impl InvocationAllowance {
                 AllowanceDimension::Pages,
                 state.usage.pages,
                 charge.pages,
-                self.limits.values.max_pages,
+                pagination_max_requests.map_or(self.limits.values.max_pages, |limit| {
+                    self.limits.values.max_pages.min(limit)
+                }),
             ),
             (
                 AllowanceDimension::BrowserActions,
@@ -262,7 +280,13 @@ impl InvocationAllowance {
             };
             if next > limit {
                 drop(state);
-                return Err(self.exhaust(dimension, requested, limit.saturating_sub(used)));
+                return Err(self.exhaust_at_limit(
+                    dimension,
+                    requested,
+                    limit.saturating_sub(used),
+                    pagination_max_requests,
+                    limit,
+                ));
             }
         }
         state.usage.strategy_attempts += charge.strategy_attempts;
@@ -403,6 +427,40 @@ impl InvocationAllowance {
         remaining: u64,
     ) -> AllowanceStop {
         let sources = self.sources(dimension);
+        let stop = AllowanceStop::Exhausted(AllowanceExhaustion {
+            dimension,
+            requested,
+            remaining,
+            limit_sources: sources,
+        });
+        let mut current = self.stop.lock().unwrap_or_else(|p| p.into_inner());
+        if current.is_none() {
+            *current = Some(stop.clone());
+        }
+        current.clone().expect("stop was set")
+    }
+
+    fn exhaust_at_limit(
+        &self,
+        dimension: AllowanceDimension,
+        requested: u64,
+        remaining: u64,
+        pagination_max_requests: Option<u64>,
+        effective_limit: u64,
+    ) -> AllowanceStop {
+        let pagination_applies = matches!(
+            dimension,
+            AllowanceDimension::Requests | AllowanceDimension::Pages
+        ) && pagination_max_requests
+            .is_some_and(|limit| limit == effective_limit);
+        if !pagination_applies {
+            return self.exhaust(dimension, requested, remaining);
+        }
+        let mut sources = self.sources(dimension);
+        if !sources.contains(&AllowanceLimitSource::Compiled) {
+            let index = usize::from(sources.first() == Some(&AllowanceLimitSource::Backend));
+            sources.insert(index, AllowanceLimitSource::Compiled);
+        }
         let stop = AllowanceStop::Exhausted(AllowanceExhaustion {
             dimension,
             requested,

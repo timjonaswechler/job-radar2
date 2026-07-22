@@ -500,7 +500,10 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
     assert_eq!(report.completion, PhaseCompletion::Accepted);
     assert_eq!(report.usage.strategy_attempts, 2);
     assert_eq!(report.usage.requests, 2);
-    assert_eq!(report.usage.produced_items, 2);
+    assert_eq!(
+        report.usage.produced_items, 1,
+        "only the accepted Strategy produces phase output"
+    );
     assert_eq!(
         discovery.requests(),
         vec![
