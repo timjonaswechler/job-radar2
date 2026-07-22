@@ -1947,7 +1947,7 @@ mod tests {
         vec![
             "-NoProfile".to_string(),
             "-Command".to_string(),
-            format!("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Milliseconds 100' -PassThru; Set-Content -NoNewline -Path '{escaped}' -Value $p.Id; Wait-Process -Id $p.Id"),
+            format!("$p=Start-Process powershell.exe -ArgumentList '-NoProfile -Command \"Start-Sleep -Milliseconds 100\"' -PassThru; Set-Content -NoNewline -Path '{escaped}' -Value $p.Id; Wait-Process -Id $p.Id"),
         ]
     }
 
@@ -1957,7 +1957,7 @@ mod tests {
         vec![
             "-NoProfile".to_string(),
             "-Command".to_string(),
-            format!("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 30' -PassThru; Set-Content -NoNewline -Path '{escaped}' -Value $p.Id; Wait-Process -Id $p.Id"),
+            format!("$p=Start-Process powershell.exe -ArgumentList '-NoProfile -Command \"Start-Sleep -Seconds 30\"' -PassThru; Set-Content -NoNewline -Path '{escaped}' -Value $p.Id; Wait-Process -Id $p.Id"),
         ]
     }
 

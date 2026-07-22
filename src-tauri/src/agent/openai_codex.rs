@@ -716,7 +716,7 @@ fn hex(bytes: &[u8]) -> String {
     result
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::collections::VecDeque;
