@@ -302,8 +302,12 @@ impl AgentChat {
             conversation.apply_model_snapshot(selected, models);
             conversation.set_reasoning_level(effective);
         } else {
-            self.conversation =
-                build_conversation(&self.system_prompt, &self.provider, &self.session);
+            self.conversation = build_conversation_with_models(
+                &self.system_prompt,
+                &self.provider,
+                &self.session,
+                models,
+            );
         }
         Ok(effective)
     }
@@ -375,14 +379,26 @@ fn build_conversation(
     provider: &Arc<dyn ConversationProvider>,
     session: &SessionHandle,
 ) -> Option<AgentConversation> {
+    build_conversation_with_models(system_prompt, provider, session, provider.model_snapshot())
+}
+
+fn build_conversation_with_models(
+    system_prompt: &str,
+    provider: &Arc<dyn ConversationProvider>,
+    session: &SessionHandle,
+    models: Vec<Model>,
+) -> Option<AgentConversation> {
     if session.snapshot().access() != SessionAccess::Writable {
         return None;
     }
     let provider_id = session.snapshot().selected_provider()?;
     let model_id = session.snapshot().selected_model()?;
-    let model = find_model(provider.as_ref(), provider_id, model_id)?;
+    let model = models
+        .iter()
+        .find(|model| model.provider() == provider_id && model.id() == model_id)?
+        .clone();
     let messages = hydrate_messages(session.continuation(), &model, provider.as_ref());
-    AgentConversation::from_shared(
+    AgentConversation::from_shared_with_models(
         system_prompt.to_owned(),
         Arc::clone(provider),
         model.provider().clone(),
@@ -390,6 +406,7 @@ fn build_conversation(
         session.snapshot().reasoning_level(),
         messages,
         session.snapshot().id().to_string(),
+        models,
     )
     .ok()
 }

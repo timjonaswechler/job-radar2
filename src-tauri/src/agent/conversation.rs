@@ -365,6 +365,29 @@ impl AgentConversation {
         conversation_id: String,
     ) -> Result<Self, AgentError> {
         let models = provider.model_snapshot();
+        Self::from_shared_with_models(
+            system_prompt,
+            provider,
+            provider_id,
+            model,
+            reasoning,
+            messages,
+            conversation_id,
+            models,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn from_shared_with_models(
+        system_prompt: String,
+        provider: Arc<dyn ConversationProvider>,
+        provider_id: crate::agent::models::ProviderId,
+        model: ModelId,
+        reasoning: ReasoningLevel,
+        messages: Vec<Message>,
+        conversation_id: String,
+        models: Vec<Model>,
+    ) -> Result<Self, AgentError> {
         let selected = models
             .iter()
             .find(|candidate| candidate.provider() == &provider_id && candidate.id() == &model)
