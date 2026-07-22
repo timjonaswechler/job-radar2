@@ -1,9 +1,12 @@
+#[cfg(unix)]
 #[path = "agent/chat_application.rs"]
 mod chat_application;
 
+#[cfg(unix)]
 #[path = "agent/chats.rs"]
 mod chats;
 
+#[cfg(unix)]
 #[path = "agent/sessions.rs"]
 mod sessions;
 
