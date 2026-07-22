@@ -364,6 +364,14 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
             "final Strategy Set with a closed Policy",
         );
     }
+    harness.assert_json_valid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({
+            "policy": { "type": "at_least", "count": 1 },
+            "strategies": [strategy.clone()]
+        }),
+        "final Strategy Set with a positive at_least Policy",
+    );
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
         json!({ "strategies": [strategy.clone()] }),
@@ -394,6 +402,14 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
         json!({ "type": "all_required", "threshold": 1 }),
         json!({ "type": "all_required", "mode": "strict" }),
         json!({ "type": "all_required", "continueAfterFailure": true }),
+        json!({ "type": "at_least" }),
+        json!({ "type": "at_least", "count": 0 }),
+        json!({ "type": "at_least", "count": -1 }),
+        json!({ "type": "at_least", "count": 1.5 }),
+        json!({ "type": "at_least", "count": "1" }),
+        json!({ "type": "at_least", "count": null }),
+        json!({ "type": "at_least", "count": 1, "extra": true }),
+        json!({ "type": "atLeast", "count": 1 }),
     ] {
         harness.assert_json_invalid(
             SchemaEntrypoint::PolicyStrategySet,

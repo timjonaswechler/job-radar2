@@ -65,6 +65,12 @@ pub(crate) fn policy_unsatisfied_diagnostic(
             format!("/{phase_name}/policy"),
             json!({ "policy": "all_required" }),
         ),
+        StrategyPolicy::AtLeast { count } => (
+            "strategy_policy_at_least_unsatisfied",
+            "at_least policy was not satisfied".to_string(),
+            format!("/{phase_name}/policy"),
+            json!({ "policy": "at_least", "requiredAccepted": count }),
+        ),
     };
     Diagnostic {
         category: DiagnosticCategory::Runtime,
@@ -95,6 +101,7 @@ where
     F: FnMut(usize, &'a S) -> Pin<Box<dyn Future<Output = StrategyExecution<O>> + Send + 'a>>,
 {
     let mut attempts = Vec::new();
+    let mut accepted = 0_usize;
     for (strategy_index, strategy) in strategies.iter().enumerate() {
         let key = strategy_key(strategy).to_string();
         let execution =
@@ -106,18 +113,33 @@ where
             } else {
                 execute(strategy_index, strategy).await
             };
+        let remaining = strategies.len() - strategy_index - 1;
         let terminal = match &execution.completion {
-            StrategyAttemptCompletion::Accepted(_) => match policy {
-                StrategyPolicy::FirstAccepted => Some(StrategySetTerminal::Satisfied),
-                StrategyPolicy::AllRequired if strategy_index + 1 == strategies.len() => {
-                    Some(StrategySetTerminal::Satisfied)
+            StrategyAttemptCompletion::Accepted(_) => {
+                accepted += 1;
+                match policy {
+                    StrategyPolicy::FirstAccepted => Some(StrategySetTerminal::Satisfied),
+                    StrategyPolicy::AllRequired if remaining == 0 => {
+                        Some(StrategySetTerminal::Satisfied)
+                    }
+                    StrategyPolicy::AllRequired => None,
+                    StrategyPolicy::AtLeast { count } if accepted == count => {
+                        Some(StrategySetTerminal::Satisfied)
+                    }
+                    StrategyPolicy::AtLeast { count } if accepted + remaining < count => {
+                        Some(StrategySetTerminal::PolicyUnsatisfied)
+                    }
+                    StrategyPolicy::AtLeast { .. } => None,
                 }
-                StrategyPolicy::AllRequired => None,
-            },
+            }
             StrategyAttemptCompletion::Rejected | StrategyAttemptCompletion::Failed => match policy
             {
                 StrategyPolicy::FirstAccepted => None,
                 StrategyPolicy::AllRequired => Some(StrategySetTerminal::PolicyUnsatisfied),
+                StrategyPolicy::AtLeast { count } if accepted + remaining < count => {
+                    Some(StrategySetTerminal::PolicyUnsatisfied)
+                }
+                StrategyPolicy::AtLeast { .. } => None,
             },
             StrategyAttemptCompletion::Cancelled(cancellation) => {
                 Some(StrategySetTerminal::Cancelled(cancellation.clone()))
@@ -189,6 +211,91 @@ mod tests {
 
         assert!(matches!(result.terminal, StrategySetTerminal::Satisfied));
         assert_eq!(result.attempts.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn at_least_stops_at_threshold_and_strict_impossibility() {
+        let strategies = ["first", "second", "third"];
+
+        let threshold = execute_strategy_set(
+            StrategyPolicy::AtLeast { count: 2 },
+            &strategies,
+            |strategy| *strategy,
+            |_, _| None,
+            |index, _| {
+                Box::pin(async move {
+                    StrategyExecution::<usize> {
+                        diagnostics: Vec::new(),
+                        completion: StrategyAttemptCompletion::Accepted(index),
+                    }
+                })
+            },
+        )
+        .await;
+        assert!(matches!(threshold.terminal, StrategySetTerminal::Satisfied));
+        assert_eq!(
+            threshold.attempts.len(),
+            2,
+            "the Nth acceptance stops immediately"
+        );
+
+        let equality_is_reachable = execute_strategy_set(
+            StrategyPolicy::AtLeast { count: 2 },
+            &strategies,
+            |strategy| *strategy,
+            |_, _| None,
+            |index, _| {
+                Box::pin(async move {
+                    StrategyExecution {
+                        diagnostics: Vec::new(),
+                        completion: if index == 0 {
+                            StrategyAttemptCompletion::Rejected
+                        } else {
+                            StrategyAttemptCompletion::Accepted(index)
+                        },
+                    }
+                })
+            },
+        )
+        .await;
+        assert!(matches!(
+            equality_is_reachable.terminal,
+            StrategySetTerminal::Satisfied
+        ));
+        assert_eq!(
+            equality_is_reachable.attempts.len(),
+            3,
+            "accepted + remaining == count must continue"
+        );
+
+        let impossible = execute_strategy_set(
+            StrategyPolicy::AtLeast { count: 3 },
+            &strategies,
+            |strategy| *strategy,
+            |_, _| None,
+            |index, _| {
+                Box::pin(async move {
+                    StrategyExecution {
+                        diagnostics: Vec::new(),
+                        completion: if index == 0 {
+                            StrategyAttemptCompletion::Accepted(index)
+                        } else {
+                            StrategyAttemptCompletion::Failed
+                        },
+                    }
+                })
+            },
+        )
+        .await;
+        assert!(matches!(
+            impossible.terminal,
+            StrategySetTerminal::PolicyUnsatisfied
+        ));
+        assert_eq!(
+            impossible.attempts.len(),
+            2,
+            "accepted + remaining < count must stop immediately"
+        );
     }
 
     #[tokio::test]

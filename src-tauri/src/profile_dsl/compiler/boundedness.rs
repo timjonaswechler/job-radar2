@@ -9,6 +9,7 @@ use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
 use crate::profile_dsl::documents::{
     DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits, PhaseLimits,
 };
+use crate::profile_dsl::policy::StrategyPolicy;
 
 use super::compiler_error;
 
@@ -21,6 +22,12 @@ pub(super) fn validate_boundedness(
     diagnostics: &mut Diagnostics,
 ) {
     validate_discovery_strategy_list(discovery, &base_path, diagnostics);
+    validate_at_least_cardinality(
+        discovery.policy,
+        discovery.strategies.len(),
+        &format!("{base_path}/discovery/policy/count"),
+        diagnostics,
+    );
     validate_phase_limits(
         discovery.limits,
         &format!("{base_path}/discovery/limits"),
@@ -51,6 +58,12 @@ pub(super) fn validate_boundedness(
 
     if let Some(detail) = detail {
         validate_detail_strategy_list(detail, &base_path, diagnostics);
+        validate_at_least_cardinality(
+            detail.policy,
+            detail.strategies.len(),
+            &format!("{base_path}/detail/policy/count"),
+            diagnostics,
+        );
         validate_phase_limits(
             detail.limits,
             &format!("{base_path}/detail/limits"),
@@ -166,6 +179,28 @@ fn validate_detail_strategy_list(
         "detail",
         diagnostics,
     );
+}
+
+fn validate_at_least_cardinality(
+    policy: StrategyPolicy,
+    strategy_count: usize,
+    path: &str,
+    diagnostics: &mut Diagnostics,
+) {
+    let StrategyPolicy::AtLeast { count } = policy else {
+        return;
+    };
+    if count > strategy_count {
+        diagnostics.push(compiler_error(
+            "strategy_policy_at_least_count_exceeds_cardinality",
+            "at_least count may not exceed the final merged Strategy cardinality",
+            path,
+            serde_json::json!({
+                "requiredAccepted": count,
+                "strategyCount": strategy_count,
+            }),
+        ));
+    }
 }
 
 fn validate_strategy_list_len(len: usize, path: &str, step: &str, diagnostics: &mut Diagnostics) {

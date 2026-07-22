@@ -8,12 +8,33 @@
   ],
   "$defs": {
     "strategyPolicy": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type"],
-      "properties": {
-        "type": { "enum": ["first_accepted", "all_required"] }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "first_accepted" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "all_required" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "count"],
+          "properties": {
+            "type": { "const": "at_least" },
+            "count": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
     },
     "phaseLimits": {
       "type": "object",

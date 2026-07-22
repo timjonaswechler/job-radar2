@@ -335,7 +335,7 @@ fn project_discovery_execution(
             diagnostics,
         }));
     }
-    if !final_accepted && policy == StrategyPolicy::AllRequired {
+    if !final_accepted && policy.reports_final_rejection() {
         diagnostics.push(policy_unsatisfied_diagnostic(
             policy,
             RuntimePhase::Discovery,

@@ -70,6 +70,34 @@ fn final_strategy_set_requires_an_exact_closed_policy_object() {
             json!({ "type": policy_type })
         );
     }
+
+    let at_least: DiscoveryStep = serde_json::from_value(json!({
+        "policy": { "type": "at_least", "count": 2 },
+        "strategies": []
+    }))
+    .unwrap();
+    assert_eq!(at_least.policy, StrategyPolicy::AtLeast { count: 2 });
+    assert_eq!(
+        serde_json::to_value(at_least.policy).unwrap(),
+        json!({ "type": "at_least", "count": 2 })
+    );
+
+    for invalid_policy in [
+        json!({ "type": "at_least" }),
+        json!({ "type": "at_least", "count": 0 }),
+        json!({ "type": "at_least", "count": -1 }),
+        json!({ "type": "at_least", "count": 1.5 }),
+        json!({ "type": "at_least", "count": "1" }),
+        json!({ "type": "at_least", "count": null }),
+        json!({ "type": "at_least", "count": 1, "extra": true }),
+        json!({ "type": "atLeast", "count": 1 }),
+    ] {
+        serde_json::from_value::<DiscoveryStep>(json!({
+            "policy": invalid_policy,
+            "strategies": []
+        }))
+        .expect_err("an inexact at_least Policy must be rejected");
+    }
 }
 
 #[test]
@@ -84,6 +112,17 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         all_required_profile_document(),
     );
     assert_plan_policies(&reusable_all_required, StrategyPolicy::AllRequired);
+
+    let mut reusable_at_least = serde_json::to_value(profile_document()).unwrap();
+    reusable_at_least["accessPaths"][0]["discovery"]["policy"] =
+        json!({ "type": "at_least", "count": 2 });
+    reusable_at_least["accessPaths"][0]["detail"]["policy"] =
+        json!({ "type": "at_least", "count": 2 });
+    let reusable_at_least = compile(
+        profile_source(None, "main"),
+        serde_json::from_value(reusable_at_least).unwrap(),
+    );
+    assert_plan_policies(&reusable_at_least, StrategyPolicy::AtLeast { count: 2 });
 
     let specialized = compile(
         profile_source(
@@ -150,6 +189,85 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         job_radar_lib::CompiledSourceAccess::SourceOwned { .. }
     ));
     assert_plan_policies(&source.execution_plan, StrategyPolicy::AllRequired);
+
+    let mut source_owned_at_least = serde_json::to_value(source_owned).unwrap();
+    source_owned_at_least["selectedAccessPath"]["discovery"]["policy"] =
+        json!({ "type": "at_least", "count": 2 });
+    source_owned_at_least["selectedAccessPath"]["detail"]["policy"] =
+        json!({ "type": "at_least", "count": 2 });
+    let source_owned_at_least: SourceDocument =
+        serde_json::from_value(source_owned_at_least).unwrap();
+    let CompileSourceOutcome::Compiled {
+        source,
+        diagnostics,
+    } = compile_source(
+        &source_owned_at_least,
+        &SourceProfileRegistrySnapshot::default(),
+    )
+    else {
+        panic!("valid Source-owned at_least path must compile");
+    };
+    assert!(diagnostics.is_empty());
+    assert_plan_policies(&source.execution_plan, StrategyPolicy::AtLeast { count: 2 });
+}
+
+#[test]
+fn at_least_count_is_validated_after_the_final_strategy_merge() {
+    let mut profile_value = serde_json::to_value(profile_document()).unwrap();
+    profile_value["accessPaths"][0]["discovery"]["policy"] =
+        json!({ "type": "at_least", "count": 4 });
+    let profile: SourceProfileDocument = serde_json::from_value(profile_value).unwrap();
+    let registry = SourceProfileRegistrySnapshot {
+        profiles: vec![RegistrySourceProfile {
+            origin: "test".into(),
+            path: String::new(),
+            document: profile.clone(),
+        }],
+        sources: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+
+    let CompileSourceOutcome::Rejected { diagnostics } =
+        compile_source(&profile_source(None, "main"), &registry)
+    else {
+        panic!("count above the final Strategy cardinality must reject compilation");
+    };
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code == "strategy_policy_at_least_count_exceeds_cardinality"
+            })
+            .count(),
+        1
+    );
+
+    let specialized = profile_source(
+        Some(json!([{
+            "key": "main",
+            "discovery": {
+                "strategies": [discovery_strategy(
+                    "source_added",
+                    "https://example.test/discovery/source-added"
+                )]
+            }
+        }])),
+        "main",
+    );
+    let specialized_outcome = compile_source(&specialized, &registry);
+    let CompileSourceOutcome::Compiled {
+        source,
+        diagnostics,
+    } = specialized_outcome
+    else {
+        panic!("Source-added Strategy must participate in final cardinality validation: {specialized_outcome:?}");
+    };
+    assert!(diagnostics.is_empty());
+    assert_eq!(
+        source.execution_plan.discovery.policy,
+        StrategyPolicy::AtLeast { count: 4 }
+    );
+    assert_eq!(source.execution_plan.discovery.strategies.len(), 4);
 }
 
 #[test]
@@ -396,6 +514,253 @@ fn all_required_reduces_every_accepted_strategy_once_for_both_phases() {
     assert_eq!(result.payload.provenance[0].contributors.len(), 3);
     assert!(result.payload.conflicts.is_empty());
     assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn at_least_reduces_the_accepted_prefix_at_the_earliest_threshold_for_both_phases() {
+    let plan = at_least_plan(2);
+    let discovery = DiscoveryScriptedClient::new([
+        (
+            "https://example.test/discovery/empty",
+            Ok(json!({ "jobs": [
+                { "title": "One", "company": "Example", "url": "https://example.test/jobs/1" },
+                { "title": "Two", "company": "Example", "url": "https://example.test/jobs/2" }
+            ] })
+            .to_string()),
+        ),
+        (
+            "https://example.test/discovery/accepted",
+            Ok(json!({ "jobs": [
+                { "title": "Three", "company": "Example", "url": "https://example.test/jobs/3" }
+            ] })
+            .to_string()),
+        ),
+    ]);
+    let result = accepted_phase(block_on(execute_discovery(
+        &plan,
+        empty_source_config(),
+        discovery.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    )));
+    assert_eq!(result.payload.candidates.len(), 3);
+    assert_eq!(result.report.usage.strategy_attempts, 2);
+    assert_eq!(discovery.requests().len(), 2);
+    assert!(result.diagnostics.is_empty());
+
+    let accepted_description = "accepted ".repeat(20);
+    let detail = DetailScriptedClient::new([
+        (
+            "https://example.test/detail/failed",
+            Ok(json!({ "description": accepted_description.clone() }).to_string()),
+        ),
+        (
+            "https://example.test/detail/accepted",
+            Ok(json!({ "description": accepted_description }).to_string()),
+        ),
+    ]);
+    let result = accepted_phase(block_on(execute_detail(
+        &plan,
+        empty_source_config(),
+        &posting(),
+        RequestedDetailFields::description_text(),
+        detail.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    )));
+    assert_eq!(result.report.usage.strategy_attempts, 2);
+    assert_eq!(detail.requests().len(), 2);
+    assert_eq!(result.payload.provenance[0].contributors.len(), 2);
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn at_least_stops_at_earliest_impossibility_without_exposing_a_prefix() {
+    let plan = at_least_plan(3);
+    let discovery = DiscoveryScriptedClient::new([
+        (
+            "https://example.test/discovery/empty",
+            Ok(json!({ "jobs": [
+                { "title": "One", "company": "Example", "url": "https://example.test/jobs/1" },
+                { "title": "Two", "company": "Example", "url": "https://example.test/jobs/2" }
+            ] })
+            .to_string()),
+        ),
+        (
+            "https://example.test/discovery/accepted",
+            Ok(json!({ "jobs": [] }).to_string()),
+        ),
+    ]);
+    let result = block_on(execute_discovery(
+        &plan,
+        empty_source_config(),
+        discovery.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+    let PhaseOutcome::Completed {
+        policy_outcome: PolicyOutcome::PolicyUnsatisfied { cause },
+        complete_budget_report,
+        diagnostics,
+    } = result.unwrap()
+    else {
+        panic!("impossible at_least must expose no accepted prefix")
+    };
+    assert_eq!(cause, PolicyUnsatisfiedCause::RejectedOnly);
+    assert_eq!(complete_budget_report.usage.strategy_attempts, 2);
+    assert_eq!(discovery.requests().len(), 2);
+    let terminal = diagnostics.last().unwrap();
+    assert_eq!(
+        terminal.category,
+        job_radar_lib::DiagnosticCategory::Runtime
+    );
+    assert_eq!(terminal.code, "strategy_policy_at_least_unsatisfied");
+    assert_eq!(terminal.message, "at_least policy was not satisfied");
+    assert_eq!(terminal.severity, job_radar_lib::DiagnosticSeverity::Error);
+    assert_eq!(terminal.path, "/discovery/policy");
+    assert_eq!(terminal.strategy_key, None);
+    assert_eq!(
+        terminal.details,
+        Some(json!({ "policy": "at_least", "requiredAccepted": 3 }))
+    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
+
+    let detail = DetailScriptedClient::new([
+        (
+            "https://example.test/detail/failed",
+            Ok(json!({ "description": "accepted ".repeat(20) }).to_string()),
+        ),
+        (
+            "https://example.test/detail/accepted",
+            Err("ordinary failure".to_string()),
+        ),
+    ]);
+    let result = block_on(execute_detail(
+        &plan,
+        empty_source_config(),
+        &posting(),
+        RequestedDetailFields::description_text(),
+        detail.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+    let PhaseOutcome::Completed {
+        policy_outcome: PolicyOutcome::PolicyUnsatisfied { cause },
+        diagnostics,
+        ..
+    } = result.unwrap()
+    else {
+        panic!("failed at_least must expose no accepted detail prefix")
+    };
+    assert_eq!(cause, PolicyUnsatisfiedCause::IncludesExecutionFailure);
+    assert_eq!(detail.requests().len(), 2);
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>(),
+        vec!["fetch_failed", "strategy_policy_at_least_unsatisfied"]
+    );
+    assert_eq!(diagnostics.last().unwrap().path, "/detail/policy");
+}
+
+#[test]
+fn at_least_final_acceptance_failure_is_payload_free_and_appends_its_terminal() {
+    let plan = at_least_plan_with_detail_phase_acceptance(2);
+    let detail = DetailScriptedClient::new([
+        (
+            "https://example.test/detail/failed",
+            Ok(json!({ "description": "first ".repeat(20) }).to_string()),
+        ),
+        (
+            "https://example.test/detail/accepted",
+            Ok(json!({ "description": "second ".repeat(20) }).to_string()),
+        ),
+    ]);
+    let result = block_on(execute_detail(
+        &plan,
+        empty_source_config(),
+        &posting(),
+        RequestedDetailFields::description_text(),
+        detail.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable(),
+    ));
+    let PhaseOutcome::Completed {
+        policy_outcome: PolicyOutcome::PolicyUnsatisfied { cause },
+        complete_budget_report,
+        diagnostics,
+    } = result.unwrap()
+    else {
+        panic!("unsatisfied final acceptance must expose no reduced patch")
+    };
+    assert_eq!(cause, PolicyUnsatisfiedCause::RejectedOnly);
+    assert_eq!(complete_budget_report.usage.strategy_attempts, 2);
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "detail_field_conflict",
+            "acceptance_required_field_missing",
+            "strategy_policy_at_least_unsatisfied"
+        ]
+    );
+}
+
+#[test]
+fn at_least_exact_limit_succeeds_and_denial_takes_precedence() {
+    let plan = at_least_plan(2);
+    let accepted_description = "accepted ".repeat(20);
+    let exact_limit = DetailScriptedClient::new([
+        (
+            "https://example.test/detail/failed",
+            Ok(json!({ "description": accepted_description.clone() }).to_string()),
+        ),
+        (
+            "https://example.test/detail/accepted",
+            Ok(json!({ "description": accepted_description.clone() }).to_string()),
+        ),
+    ]);
+    let result = accepted_phase(block_on(execute_detail(
+        &plan,
+        empty_source_config(),
+        &posting(),
+        RequestedDetailFields::description_text(),
+        exact_limit.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
+            max_requests: 2,
+            ..PhaseLimits::BACKEND
+        }),
+    )));
+    assert_eq!(result.report.usage.requests, 2);
+    assert_eq!(result.report.usage.strategy_attempts, 2);
+
+    let denied = DetailScriptedClient::new([(
+        "https://example.test/detail/failed",
+        Ok(json!({ "description": accepted_description }).to_string()),
+    )]);
+    let result = budget_exhausted(block_on(execute_detail(
+        &plan,
+        empty_source_config(),
+        &posting(),
+        RequestedDetailFields::description_text(),
+        denied.client(),
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
+            max_requests: 1,
+            ..PhaseLimits::BACKEND
+        }),
+    )));
+    assert_eq!(result.report.usage.requests, 1);
+    assert!(result.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code != "strategy_policy_at_least_unsatisfied"
+            && diagnostic.code != "fallback_exhausted"
+    }));
 }
 
 #[test]
@@ -911,6 +1276,41 @@ fn all_required_cancellation_discards_the_accepted_prefix_without_a_policy_termi
 }
 
 #[test]
+fn at_least_cancellation_discards_the_accepted_prefix_without_a_policy_terminal() {
+    let plan = at_least_plan(2);
+    let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
+        status: 200,
+        final_url: "https://example.test/discovery/empty".to_string(),
+        headers: Vec::new(),
+        body: vec![ScriptedHttpBodyEvent::Chunk(
+            json!({ "jobs": [
+                { "title": "One", "company": "Example", "url": "https://example.test/jobs/1" },
+                { "title": "Two", "company": "Example", "url": "https://example.test/jobs/2" }
+            ] })
+            .to_string()
+            .into_bytes(),
+        )],
+        content_length: None,
+    }]);
+    let signal = RequestObservedCancellation { client: &fetcher };
+
+    let result = cancelled(block_on(execute_discovery(
+        &plan,
+        empty_source_config(),
+        &fetcher,
+        &UnavailableProfileBrowserClient,
+        RuntimeExecutionContext::with_cancellation(&signal),
+    )));
+
+    assert_eq!(fetcher.request_count(), 1);
+    assert_eq!(result.complete_budget_report.usage.strategy_attempts, 1);
+    assert!(result.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code != "strategy_policy_at_least_unsatisfied"
+            && diagnostic.code != "fallback_exhausted"
+    }));
+}
+
+#[test]
 fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhaustion() {
     let plan = compile(profile_source(None, "main"), profile_document());
     let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
@@ -1015,6 +1415,30 @@ fn all_required_plan() -> SourceExecutionPlan {
     compile(
         profile_source(None, "main"),
         all_required_profile_document(),
+    )
+}
+
+fn at_least_plan(count: usize) -> SourceExecutionPlan {
+    let mut profile = serde_json::to_value(profile_document()).unwrap();
+    profile["accessPaths"][0]["discovery"]["policy"] =
+        json!({ "type": "at_least", "count": count });
+    profile["accessPaths"][0]["detail"]["policy"] = json!({ "type": "at_least", "count": count });
+    compile(
+        profile_source(None, "main"),
+        serde_json::from_value(profile).unwrap(),
+    )
+}
+
+fn at_least_plan_with_detail_phase_acceptance(count: usize) -> SourceExecutionPlan {
+    let mut profile = serde_json::to_value(profile_document()).unwrap();
+    profile["accessPaths"][0]["discovery"]["policy"] =
+        json!({ "type": "at_least", "count": count });
+    profile["accessPaths"][0]["detail"]["policy"] = json!({ "type": "at_least", "count": count });
+    profile["accessPaths"][0]["detail"]["acceptWhen"] =
+        json!({ "requiredFields": ["descriptionText"] });
+    compile(
+        profile_source(None, "main"),
+        serde_json::from_value(profile).unwrap(),
     )
 }
 
