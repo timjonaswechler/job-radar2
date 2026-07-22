@@ -716,6 +716,8 @@ fn hex(bytes: &[u8]) -> String {
     result
 }
 
+// These fixtures use AuthStorage's injected filesystem backend, whose native
+// Windows durability/ACL implementation and coverage are tracked by #294.
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;

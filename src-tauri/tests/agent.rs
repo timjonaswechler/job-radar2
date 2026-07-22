@@ -1,3 +1,6 @@
+// #294 owns native Windows Agent auth/session durability and re-enabling
+// persistence-backed integration contracts there. POSIX storage contracts
+// remain exercised on macOS and Linux instead of being silently weakened.
 #[cfg(unix)]
 #[path = "agent/chat_application.rs"]
 mod chat_application;

@@ -920,11 +920,16 @@ mod windows_process {
         },
     };
 
+    struct ObservedProcess {
+        id: usize,
+        handle: HANDLE,
+    }
+
     pub(super) struct ProcessTree {
         process: HANDLE,
         job: HANDLE,
         kill_initiated: bool,
-        observed_processes: Vec<HANDLE>,
+        observed_processes: Vec<ObservedProcess>,
         cleanup_confirmed: bool,
         protection: ActiveBrowserSession,
     }
@@ -1059,9 +1064,8 @@ mod windows_process {
             if self.kill_initiated {
                 return Ok(());
             }
-            self.observed_processes = open_job_processes_for_observation(self.job)?;
+            capture_job_processes(self.job, &mut self.observed_processes)?;
             if unsafe { TerminateJobObject(self.job, 1) } == 0 {
-                close_handles(&mut self.observed_processes);
                 return Err(io::Error::last_os_error());
             }
             self.kill_initiated = true;
@@ -1083,6 +1087,12 @@ mod windows_process {
             if self.cleanup_confirmed {
                 return Ok(true);
             }
+            capture_job_processes(self.job, &mut self.observed_processes).map_err(|error| {
+                OwnedChromiumError::new(
+                    OwnedChromiumErrorKind::Cleanup,
+                    format!("failed to observe owned Chromium Job Object membership: {error}"),
+                )
+            })?;
             let complete = self.try_wait()?.is_some()
                 && self.job_is_empty()?
                 && observed_processes_have_exited(&self.observed_processes)?;
@@ -1198,7 +1208,7 @@ mod windows_process {
         quoted
     }
 
-    fn open_job_processes_for_observation(job: HANDLE) -> io::Result<Vec<HANDLE>> {
+    fn capture_job_processes(job: HANDLE, observed: &mut Vec<ObservedProcess>) -> io::Result<()> {
         const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
         // Chromium's bounded managed session cannot legitimately need enough
         // processes to exceed this buffer; failing the query keeps cleanup
@@ -1224,13 +1234,13 @@ mod windows_process {
             ));
         }
         let process_ids = unsafe { std::slice::from_raw_parts(list.ProcessIdList.as_ptr(), count) };
-        let mut handles = Vec::with_capacity(count);
         for &process_id in process_ids {
-            let Ok(process_id) = u32::try_from(process_id) else {
-                close_handles(&mut handles);
-                return Err(io::Error::other("Windows process identifier exceeded u32"));
-            };
-            let handle = unsafe { OpenProcess(SYNCHRONIZE_ACCESS, 0, process_id) };
+            if observed.iter().any(|process| process.id == process_id) {
+                continue;
+            }
+            let process_id_u32 = u32::try_from(process_id)
+                .map_err(|_| io::Error::other("Windows process identifier exceeded u32"))?;
+            let handle = unsafe { OpenProcess(SYNCHRONIZE_ACCESS, 0, process_id_u32) };
             if handle.is_null() {
                 let error = io::Error::last_os_error();
                 // A process can exit between the Job Object query and OpenProcess;
@@ -1238,17 +1248,21 @@ mod windows_process {
                 if error.raw_os_error() == Some(87) {
                     continue;
                 }
-                close_handles(&mut handles);
                 return Err(error);
             }
-            handles.push(handle);
+            observed.push(ObservedProcess {
+                id: process_id,
+                handle,
+            });
         }
-        Ok(handles)
+        Ok(())
     }
 
-    fn observed_processes_have_exited(handles: &[HANDLE]) -> Result<bool, OwnedChromiumError> {
-        for &handle in handles {
-            match unsafe { WaitForSingleObject(handle, 0) } {
+    fn observed_processes_have_exited(
+        processes: &[ObservedProcess],
+    ) -> Result<bool, OwnedChromiumError> {
+        for process in processes {
+            match unsafe { WaitForSingleObject(process.handle, 0) } {
                 WAIT_OBJECT_0 => {}
                 WAIT_TIMEOUT => return Ok(false),
                 WAIT_FAILED => {
@@ -1271,9 +1285,9 @@ mod windows_process {
         Ok(true)
     }
 
-    fn close_handles(handles: &mut Vec<HANDLE>) {
-        for handle in handles.drain(..) {
-            unsafe { CloseHandle(handle) };
+    fn close_handles(processes: &mut Vec<ObservedProcess>) {
+        for process in processes.drain(..) {
+            unsafe { CloseHandle(process.handle) };
         }
     }
 
@@ -1851,7 +1865,9 @@ mod tests {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         loop {
             if let Ok(contents) = tokio::fs::read_to_string(path).await {
-                return contents.trim().parse().unwrap();
+                if let Ok(pid) = contents.trim().parse() {
+                    return pid;
+                }
             }
             assert!(
                 tokio::time::Instant::now() < deadline,
