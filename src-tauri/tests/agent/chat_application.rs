@@ -236,6 +236,55 @@ fn identified_resume_preserves_unavailable_model_without_fallback() {
     });
 }
 
+#[derive(Clone)]
+struct ReloadableProvider {
+    initial_models: Vec<Model>,
+    current_models: Arc<std::sync::Mutex<Vec<Model>>>,
+}
+
+impl ConversationProvider for ReloadableProvider {
+    fn models(&self) -> &[Model] {
+        &self.initial_models
+    }
+
+    fn model_snapshot(&self) -> Vec<Model> {
+        self.current_models.lock().unwrap().clone()
+    }
+
+    fn stream(&self, _request: ConversationRequest) -> ProviderEventStream {
+        Box::pin(stream::empty())
+    }
+}
+
+#[test]
+fn model_selection_uses_the_latest_provider_registry_snapshot() {
+    tauri::async_runtime::block_on(async {
+        let temp = TempDir::new().unwrap();
+        let old = model("old-model", vec![ReasoningLevel::Off]);
+        let replacement = model("replacement", vec![ReasoningLevel::Off]);
+        let current_models = Arc::new(std::sync::Mutex::new(vec![old.clone()]));
+        let application = AgentChatApplication::new(
+            harness().manager(&root(&temp)).unwrap(),
+            ReloadableProvider {
+                initial_models: vec![old.clone()],
+                current_models: Arc::clone(&current_models),
+            },
+        );
+        let draft = application.create(input(&old)).unwrap();
+
+        *current_models.lock().unwrap() = vec![replacement.clone()];
+        let selected = application
+            .select_model(
+                &draft.id,
+                provider_id().as_str().into(),
+                replacement.id().as_str().into(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(selected.selected_model_id.as_deref(), Some("replacement"));
+    });
+}
+
 #[test]
 fn manual_compaction_is_streamed_and_snapshot_history_exposes_no_summary_or_storage_ids() {
     tauri::async_runtime::block_on(async {

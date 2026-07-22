@@ -283,7 +283,6 @@ impl AgentChat {
     ) -> Result<ReasoningLevel, AgentChatError> {
         self.ensure_mutable()?;
         let selected = find_model(self.provider.as_ref(), &provider, &model)
-            .cloned()
             .ok_or(AgentChatError::ModelUnavailable)?;
         let current_reasoning = self
             .conversation
@@ -356,14 +355,14 @@ impl AgentChat {
     }
 }
 
-fn find_model<'a>(
-    provider: &'a dyn ConversationProvider,
+fn find_model(
+    provider: &dyn ConversationProvider,
     provider_id: &ProviderId,
     model_id: &ModelId,
-) -> Option<&'a Model> {
+) -> Option<Model> {
     provider
-        .models()
-        .iter()
+        .model_snapshot()
+        .into_iter()
         .find(|model| model.provider() == provider_id && model.id() == model_id)
 }
 
@@ -377,7 +376,7 @@ fn build_conversation(
     }
     let provider_id = session.snapshot().selected_provider()?;
     let model_id = session.snapshot().selected_model()?;
-    let model = find_model(provider.as_ref(), provider_id, model_id)?.clone();
+    let model = find_model(provider.as_ref(), provider_id, model_id)?;
     let messages = hydrate_messages(session.continuation(), &model, provider.as_ref());
     AgentConversation::from_shared(
         system_prompt.to_owned(),
@@ -441,17 +440,15 @@ fn hydrate_messages(
                             .map(|model_id| (provider_id, model_id))
                     })
                     .and_then(|(provider_id, model_id)| {
-                        find_model(provider, &provider_id, &model_id)
-                            .cloned()
-                            .or_else(|| {
-                                Model::new(
-                                    model_id,
-                                    "Unavailable historical model",
-                                    provider_id,
-                                    vec![ReasoningLevel::Off],
-                                )
-                                .ok()
-                            })
+                        find_model(provider, &provider_id, &model_id).or_else(|| {
+                            Model::new(
+                                model_id,
+                                "Unavailable historical model",
+                                provider_id,
+                                vec![ReasoningLevel::Off],
+                            )
+                            .ok()
+                        })
                     })
                     .unwrap_or_else(|| selected_model.clone());
                 Message::Assistant(AssistantMessage::from_replay(

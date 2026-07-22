@@ -193,6 +193,17 @@ impl ConversationProvider for ConfiguredAgentChatProvider {
         &self.models
     }
 
+    fn model_snapshot(&self) -> Vec<crate::agent::models::Model> {
+        let provider_id = crate::agent::models::ProviderId::new(OPENAI_CODEX_PROVIDER)
+            .expect("built-in provider identifier must be valid");
+        self.configuration
+            .registry
+            .snapshot()
+            .provider(&provider_id)
+            .map(|provider| provider.models().to_vec())
+            .unwrap_or_default()
+    }
+
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream {
         match self.configuration.conversation_provider() {
             Ok(provider) => provider.stream(request),

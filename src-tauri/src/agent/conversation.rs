@@ -312,6 +312,11 @@ impl ConversationRequest {
 
 pub trait ConversationProvider: Send + Sync + 'static {
     fn models(&self) -> &[Model];
+
+    fn model_snapshot(&self) -> Vec<Model> {
+        self.models().to_vec()
+    }
+
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream;
 }
 
@@ -334,7 +339,7 @@ impl AgentConversation {
     ) -> Result<Self, AgentError> {
         let provider = Arc::new(provider);
         let provider_id = provider
-            .models()
+            .model_snapshot()
             .iter()
             .find(|candidate| candidate.id() == &model)
             .map(|candidate| candidate.provider().clone())
@@ -359,7 +364,7 @@ impl AgentConversation {
         messages: Vec<Message>,
         conversation_id: String,
     ) -> Result<Self, AgentError> {
-        let models = provider.models().to_vec();
+        let models = provider.model_snapshot();
         let selected = models
             .iter()
             .find(|candidate| candidate.provider() == &provider_id && candidate.id() == &model)
@@ -411,6 +416,7 @@ impl AgentConversation {
         provider: &crate::agent::models::ProviderId,
         model: ModelId,
     ) -> Result<(), AgentError> {
+        self.models = self.provider.model_snapshot();
         let selected = self
             .models
             .iter()

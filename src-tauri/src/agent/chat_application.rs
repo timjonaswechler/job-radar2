@@ -292,6 +292,10 @@ impl ConversationProvider for SharedProvider {
         self.0.models()
     }
 
+    fn model_snapshot(&self) -> Vec<super::models::Model> {
+        self.0.model_snapshot()
+    }
+
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream {
         self.0.stream(request)
     }
