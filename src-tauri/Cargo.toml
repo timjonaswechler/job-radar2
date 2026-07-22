@@ -69,3 +69,19 @@ windows-sys = { version = "0.59", features = [
 tempfile = "3"
 jsonschema = { version = "0.46.8", default-features = false }
 proptest = "1.6"
+
+# Keep incremental compilation for fast local rebuilds while limiting the
+# amount of debug information generated for large third-party dependencies.
+[profile.dev]
+debug = 1
+incremental = true
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.test]
+debug = 1
+incremental = true
+
+[profile.test.package."*"]
+debug = false
