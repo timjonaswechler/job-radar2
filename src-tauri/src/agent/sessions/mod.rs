@@ -7,6 +7,8 @@ use std::{fmt, path::Path, str::FromStr, sync::Arc};
 use uuid::Uuid;
 
 pub use storage::SessionManager;
+#[cfg(windows)]
+pub(crate) use storage::{harden_windows_path, unsafe_path_metadata};
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SessionId(String);

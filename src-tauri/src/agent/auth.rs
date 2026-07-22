@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -767,7 +768,7 @@ pub(crate) fn path_below_ancestor_contains_symlink(
     for component in relative.components() {
         current.push(component);
         match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(true),
+            Ok(metadata) if private_path_metadata_is_unsafe(&metadata) => return Ok(true),
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err(AuthStorageError::unavailable()),
@@ -776,6 +777,22 @@ pub(crate) fn path_below_ancestor_contains_symlink(
     Ok(false)
 }
 
+#[cfg(unix)]
+fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
+    crate::agent::sessions::unsafe_path_metadata(metadata)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+#[cfg(unix)]
 pub(crate) fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
     fs::create_dir_all(path).map_err(|_| AuthStorageError::unavailable())?;
     let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
@@ -795,16 +812,32 @@ pub(crate) fn create_private_directory(path: &Path) -> Result<(), AuthStorageErr
     Ok(())
 }
 
+#[cfg(windows)]
+pub(crate) fn create_private_directory(path: &Path) -> Result<(), AuthStorageError> {
+    fs::create_dir_all(path).map_err(|_| AuthStorageError::unavailable())?;
+    let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_dir() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    crate::agent::sessions::harden_windows_path(path, true)
+        .map_err(|_| AuthStorageError::unavailable())
+}
+
+#[cfg(not(any(unix, windows)))]
+pub(crate) fn create_private_directory(_path: &Path) -> Result<(), AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
 pub(crate) fn trusted_directory_is_real(path: &Path) -> Result<bool, AuthStorageError> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) => Ok(!metadata.file_type().is_symlink() && metadata.is_dir()),
+        Ok(metadata) => Ok(!private_path_metadata_is_unsafe(&metadata) && metadata.is_dir()),
         Err(_) => Err(AuthStorageError::invalid_configuration()),
     }
 }
 
 fn private_directory_exists(path: &Path) -> Result<bool, AuthStorageError> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+        Ok(metadata) if private_path_metadata_is_unsafe(&metadata) || !metadata.is_dir() => {
             Err(AuthStorageError::invalid_configuration())
         }
         Ok(_) => Ok(true),
@@ -815,7 +848,7 @@ fn private_directory_exists(path: &Path) -> Result<bool, AuthStorageError> {
 
 fn private_regular_file_exists(path: &Path) -> Result<bool, AuthStorageError> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+        Ok(metadata) if private_path_metadata_is_unsafe(&metadata) || !metadata.is_file() => {
             Err(AuthStorageError::invalid_configuration())
         }
         Ok(_) => Ok(true),
@@ -836,6 +869,7 @@ fn read_document_at(path: &Path) -> Result<AuthDocument, AuthStorageError> {
     Ok(document)
 }
 
+#[cfg(unix)]
 fn validate_private_directory(path: &Path) -> Result<(), AuthStorageError> {
     let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
     if metadata.file_type().is_symlink()
@@ -847,6 +881,7 @@ fn validate_private_directory(path: &Path) -> Result<(), AuthStorageError> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn validate_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
     let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
     if metadata.file_type().is_symlink()
@@ -858,6 +893,7 @@ fn validate_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn ensure_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
     let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -876,6 +912,7 @@ fn ensure_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
     Ok(())
 }
 
+#[cfg(unix)]
 pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthStorageError> {
     let mut file = OpenOptions::new()
         .read(true)
@@ -894,6 +931,40 @@ pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthSto
     Ok(bytes)
 }
 
+#[cfg(windows)]
+pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthStorageError> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
+    let path_metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&path_metadata) || !path_metadata.is_file() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    crate::agent::sessions::harden_windows_path(path, false)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_file() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    Ok(bytes)
+}
+
+#[cfg(not(any(unix, windows)))]
+pub(crate) fn read_existing_private_file(_path: &Path) -> Result<Vec<u8>, AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
+#[cfg(unix)]
 fn open_private_file(path: &Path, create_new: bool) -> Result<File, AuthStorageError> {
     let mut options = OpenOptions::new();
     options
@@ -921,7 +992,27 @@ fn open_private_file(path: &Path, create_new: bool) -> Result<File, AuthStorageE
     Ok(file)
 }
 
-#[cfg(test)]
+#[cfg(not(unix))]
+fn validate_private_directory(_path: &Path) -> Result<(), AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
+#[cfg(not(unix))]
+fn validate_private_regular_file(_path: &Path) -> Result<(), AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
+#[cfg(not(unix))]
+fn ensure_private_regular_file(_path: &Path) -> Result<(), AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
+#[cfg(not(unix))]
+fn open_private_file(_path: &Path, _create_new: bool) -> Result<File, AuthStorageError> {
+    Err(AuthStorageError::invalid_configuration())
+}
+
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
@@ -1780,5 +1871,36 @@ mod tests {
             AuthStorageErrorCategory::InvalidConfiguration | AuthStorageErrorCategory::Unavailable
         ));
         assert!(!format!("{symlink_error:?}").contains(app_data.path().to_string_lossy().as_ref()));
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::{
+        create_private_directory, path_below_ancestor_contains_symlink, read_existing_private_file,
+    };
+    use std::os::windows::fs::symlink_file;
+
+    #[test]
+    fn private_registry_storage_hardens_directories_and_reads_regular_files() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let private = temp.path().join("agents");
+        create_private_directory(&private).unwrap();
+        let models = private.join("models.json");
+        std::fs::write(&models, b"synthetic").unwrap();
+
+        assert_eq!(read_existing_private_file(&models).unwrap(), b"synthetic");
+    }
+
+    #[test]
+    fn private_registry_storage_rejects_reparse_points_when_supported() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let target = temp.path().join("models.json");
+        std::fs::write(&target, b"synthetic").unwrap();
+        let link = temp.path().join("linked-models.json");
+        if symlink_file(&target, &link).is_ok() {
+            assert!(path_below_ancestor_contains_symlink(temp.path(), &link).unwrap());
+            assert!(read_existing_private_file(&link).is_err());
+        }
     }
 }

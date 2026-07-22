@@ -214,7 +214,7 @@ fn validate_root(root: &Path) -> Result<(), SessionError> {
     private_dir(root)?;
     private_dir(&root.join("sessions"))
 }
-fn unsafe_path_metadata(metadata: &fs::Metadata) -> bool {
+pub(crate) fn unsafe_path_metadata(metadata: &fs::Metadata) -> bool {
     if metadata.file_type().is_symlink() {
         return true;
     }
@@ -229,11 +229,11 @@ fn unsafe_path_metadata(metadata: &fs::Metadata) -> bool {
 }
 
 #[cfg(windows)]
-fn harden_windows_path(path: &Path, directory: bool) -> Result<(), SessionError> {
+pub(crate) fn harden_windows_path(path: &Path, directory: bool) -> Result<(), SessionError> {
     use std::ffi::c_void;
     use std::os::windows::ffi::OsStrExt;
     use std::ptr::{null, null_mut};
-    use windows_sys::Win32::Foundation::{CloseHandle, GENERIC_ALL, HANDLE};
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, GENERIC_ALL, HANDLE};
     use windows_sys::Win32::Security::Authorization::{
         SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W, SET_ACCESS, SE_FILE_OBJECT,
         TRUSTEE_IS_SID, TRUSTEE_IS_USER, TRUSTEE_W,
@@ -243,7 +243,6 @@ fn harden_windows_path(path: &Path, directory: bool) -> Result<(), SessionError>
         PROTECTED_DACL_SECURITY_INFORMATION, SUB_CONTAINERS_AND_OBJECTS_INHERIT, TOKEN_QUERY,
         TOKEN_USER,
     };
-    use windows_sys::Win32::System::Memory::LocalFree;
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
     let mut token: HANDLE = null_mut();
@@ -1074,11 +1073,42 @@ fn path_matches_file(path: &Path, file: &File) -> Result<bool, SessionError> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-        Ok(
-            path_metadata.volume_serial_number() == file_metadata.volume_serial_number()
-                && path_metadata.file_index() == file_metadata.file_index(),
-        )
+        use std::mem::zeroed;
+        use std::os::windows::fs::OpenOptionsExt;
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_OPEN_REPARSE_POINT,
+        };
+
+        if unsafe_path_metadata(&path_metadata) {
+            return Ok(false);
+        }
+        let path_file = OpenOptions::new()
+            .read(true)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+            .map_err(|_| SessionError::new(SessionErrorCode::ExternalChange))?;
+        if unsafe_path_metadata(
+            &path_file
+                .metadata()
+                .map_err(|_| SessionError::new(SessionErrorCode::ExternalChange))?,
+        ) {
+            return Ok(false);
+        }
+
+        fn identity(file: &File) -> Result<(u32, u64), SessionError> {
+            let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { zeroed() };
+            if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) } == 0 {
+                return Err(SessionError::new(SessionErrorCode::ExternalChange));
+            }
+            Ok((
+                information.dwVolumeSerialNumber,
+                (u64::from(information.nFileIndexHigh) << 32)
+                    | u64::from(information.nFileIndexLow),
+            ))
+        }
+
+        Ok(identity(&path_file)? == identity(file)?)
     }
     #[cfg(not(any(unix, windows)))]
     {
