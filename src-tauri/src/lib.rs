@@ -40,13 +40,13 @@ pub use profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 pub use profile_dsl::documents::{
-    Acceptance, AccessPathFragment, AuthoredScalar, CaptureRule, Captures, DetailStep,
-    DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction, DetectionBrowserProbe,
-    DetectionDocument, DetectionEvidence, DetectionEvidenceKind, DetectionHttpCheck, DiscoveryStep,
-    DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod,
-    InputUrlPattern, ListFieldExpression, Parse, ParseFragment, ParseType, ParseTypeFragment,
-    PhaseLimits, PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select,
-    SelectTypeFragment, SupportLevel,
+    Acceptance, AccessPathFragment, AuthoredScalar, BrowserInteraction, BrowserWait, CaptureRule,
+    Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
+    DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
+    DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch,
+    FieldExpression, HttpMethod, InputUrlPattern, ListFieldExpression, Parse, ParseFragment,
+    ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
+    ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,

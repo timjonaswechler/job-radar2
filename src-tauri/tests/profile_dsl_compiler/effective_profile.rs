@@ -386,9 +386,8 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
         serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
     strategy["fetch"] = serde_json::json!({
         "mode": "browser",
-        "url": "https://example.test/jobs",
-        "timeoutMs": 10000,
-        "interactions": [{ "type": "execute_script", "script": "return 1" }]
+        "url": "{{sourceConfig:missing}}",
+        "timeoutMs": 10000
     });
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "invalid_unselected",
@@ -405,8 +404,7 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
         panic!("an invalid unselected addition must reject the complete profile");
     };
     assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "prohibited_browser_behavior"
-            && diagnostic.path.starts_with("/accessPaths/1/")
+        diagnostic.code == "unknown_template_key" && diagnostic.path.starts_with("/accessPaths/1/")
     }));
     assert!(
         diagnostics

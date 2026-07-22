@@ -5,7 +5,10 @@
 //! pagination, or runtime behavior.
 
 use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
+use crate::profile_dsl::documents::fetch::{
+    BrowserInteraction, BrowserWait, MAX_BROWSER_FETCH_TIMEOUT_MS, MAX_BROWSER_INTERACTION_COUNT,
+    MAX_BROWSER_WAIT_AFTER_MS, MAX_BROWSER_WAIT_TIMEOUT_MS,
+};
 use crate::profile_dsl::documents::{
     DetailStep, DiscoveryStep, Fetch, Pagination, PaginationLimits, PhaseLimits,
 };
@@ -38,10 +41,12 @@ pub(super) fn validate_boundedness(
             .any(|strategy| matches!(strategy.fetch, Fetch::Browser { .. })),
     );
 
+    let discovery_limits = discovery.limits.unwrap_or(PhaseLimits::BACKEND);
     for (index, strategy) in discovery.strategies.iter().enumerate() {
         let strategy_path = format!("{base_path}/discovery/strategies/{index}");
         validate_fetch_bounds(
             &strategy.fetch,
+            discovery_limits,
             &format!("{strategy_path}/fetch"),
             &strategy.key,
             diagnostics,
@@ -73,10 +78,12 @@ pub(super) fn validate_boundedness(
                 .iter()
                 .any(|strategy| matches!(strategy.fetch, Fetch::Browser { .. })),
         );
+        let detail_limits = detail.limits.unwrap_or(PhaseLimits::BACKEND);
         for (index, strategy) in detail.strategies.iter().enumerate() {
             let strategy_path = format!("{base_path}/detail/strategies/{index}");
             validate_fetch_bounds(
                 &strategy.fetch,
+                detail_limits,
                 &format!("{strategy_path}/fetch"),
                 &strategy.key,
                 diagnostics,
@@ -246,6 +253,7 @@ fn validate_strategy_list_len(len: usize, path: &str, step: &str, diagnostics: &
 
 fn validate_fetch_bounds(
     fetch: &Fetch,
+    phase_limits: PhaseLimits,
     path: &str,
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
@@ -259,10 +267,11 @@ fn validate_fetch_bounds(
     else {
         return;
     };
-    validate_timeout(
+    validate_positive_bound(
         *timeout_ms,
-        "missing_fetch_timeout",
-        "Browser fetch must declare an explicit timeoutMs bound",
+        MAX_BROWSER_FETCH_TIMEOUT_MS.min(phase_limits.max_duration_ms),
+        "invalid_fetch_timeout",
+        "Browser fetch timeoutMs must be positive and within the backend ceiling",
         &format!("{path}/timeoutMs"),
         strategy_key,
         diagnostics,
@@ -271,6 +280,7 @@ fn validate_fetch_bounds(
         for (index, wait) in waits.iter().enumerate() {
             validate_browser_wait_bounds(
                 wait,
+                phase_limits,
                 &format!("{path}/waits/{index}"),
                 strategy_key,
                 diagnostics,
@@ -281,6 +291,7 @@ fn validate_fetch_bounds(
         for (index, interaction) in interactions.iter().enumerate() {
             validate_browser_interaction_bounds(
                 interaction,
+                phase_limits,
                 &format!("{path}/interactions/{index}"),
                 strategy_key,
                 diagnostics,
@@ -289,41 +300,56 @@ fn validate_fetch_bounds(
     }
 }
 
-fn validate_timeout(
-    timeout_ms: Option<u64>,
+fn validate_positive_bound(
+    value: u64,
+    max: u64,
     code: &str,
     message: &str,
     path: &str,
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    if timeout_ms.filter(|timeout| *timeout > 0).is_none() {
+    if !(1..=max).contains(&value) {
         push_bounded_diagnostic(
             diagnostics,
             code,
             message.to_string(),
             path,
             strategy_key,
-            serde_json::json!({ "bound": "timeoutMs" }),
+            serde_json::json!({ "minimum": 1, "maximum": max }),
         );
     }
 }
 
 fn validate_browser_wait_bounds(
     wait: &BrowserWait,
+    phase_limits: PhaseLimits,
     path: &str,
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    let timeout_ms = match wait {
-        BrowserWait::Selector { timeout_ms, .. } | BrowserWait::NetworkIdle { timeout_ms, .. } => {
-            *timeout_ms
-        }
+    let (timeout_ms, selector) = match wait {
+        BrowserWait::Selector {
+            selector,
+            timeout_ms,
+        } => (*timeout_ms, Some(selector)),
+        BrowserWait::NetworkIdle { timeout_ms } => (*timeout_ms, None),
     };
-    validate_timeout(
+    if selector.is_some_and(|selector| selector.trim().is_empty()) {
+        push_bounded_diagnostic(
+            diagnostics,
+            "empty_browser_selector",
+            "Browser selector wait must declare a non-empty selector".to_string(),
+            &format!("{path}/selector"),
+            strategy_key,
+            serde_json::json!({ "field": "selector" }),
+        );
+    }
+    validate_positive_bound(
         timeout_ms,
-        "unbounded_browser_wait",
-        "Browser wait must declare an explicit timeoutMs bound",
+        MAX_BROWSER_WAIT_TIMEOUT_MS.min(phase_limits.max_duration_ms),
+        "invalid_browser_wait_timeout",
+        "Browser wait timeoutMs must be positive and within the backend ceiling",
         &format!("{path}/timeoutMs"),
         strategy_key,
         diagnostics,
@@ -332,28 +358,51 @@ fn validate_browser_wait_bounds(
 
 fn validate_browser_interaction_bounds(
     interaction: &BrowserInteraction,
+    phase_limits: PhaseLimits,
     path: &str,
     strategy_key: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    let max_count = match interaction {
-        BrowserInteraction::ClickIfVisible { max_count, .. }
-        | BrowserInteraction::ClickUntilGone { max_count, .. } => *max_count,
-        BrowserInteraction::ExecuteScript { .. }
-        | BrowserInteraction::Eval { .. }
-        | BrowserInteraction::MutateDom { .. }
-        | BrowserInteraction::LoginFlow { .. }
-        | BrowserInteraction::CaptchaBypass { .. } => return,
+    let (selector, max_count, wait_after_ms) = match interaction {
+        BrowserInteraction::ClickIfVisible {
+            selector,
+            max_count,
+            wait_after_ms,
+        }
+        | BrowserInteraction::ClickUntilGone {
+            selector,
+            max_count,
+            wait_after_ms,
+        } => (selector, *max_count, *wait_after_ms),
     };
-
-    if max_count.filter(|count| *count > 0).is_none() {
+    if selector.trim().is_empty() {
         push_bounded_diagnostic(
             diagnostics,
-            "unbounded_browser_interaction",
-            "Browser interaction must declare a positive maxCount bound".to_string(),
-            &format!("{path}/maxCount"),
+            "empty_browser_selector",
+            "Browser interaction must declare a non-empty selector".to_string(),
+            &format!("{path}/selector"),
             strategy_key,
-            serde_json::json!({ "bound": "maxCount" }),
+            serde_json::json!({ "field": "selector" }),
+        );
+    }
+    validate_positive_bound(
+        max_count,
+        MAX_BROWSER_INTERACTION_COUNT.min(phase_limits.max_browser_actions),
+        "invalid_browser_interaction_count",
+        "Browser interaction maxCount must be positive and within the backend ceiling",
+        &format!("{path}/maxCount"),
+        strategy_key,
+        diagnostics,
+    );
+    let max_wait_after_ms = MAX_BROWSER_WAIT_AFTER_MS.min(phase_limits.max_duration_ms);
+    if wait_after_ms.is_some_and(|value| value > max_wait_after_ms) {
+        push_bounded_diagnostic(
+            diagnostics,
+            "invalid_browser_wait_after",
+            "Browser interaction waitAfterMs exceeds the backend ceiling".to_string(),
+            &format!("{path}/waitAfterMs"),
+            strategy_key,
+            serde_json::json!({ "minimum": 0, "maximum": max_wait_after_ms }),
         );
     }
 }

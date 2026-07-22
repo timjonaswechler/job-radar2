@@ -896,7 +896,7 @@ fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
     assert_eq!(
         browser_requests[0].waits,
         vec![ExecutionPlanBrowserWait::Selector {
-            selector: Some("main.job".to_string()),
+            selector: "main.job".to_string(),
             timeout_ms: 5000,
         }]
     );

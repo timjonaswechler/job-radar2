@@ -135,7 +135,7 @@ fn compiler_resolves_source_owned_access_path() {
     assert_eq!(
         waits,
         &vec![ExecutionPlanBrowserWait::Selector {
-            selector: Some(".job-card".to_string()),
+            selector: ".job-card".to_string(),
             timeout_ms: 10000,
         }]
     );

@@ -146,6 +146,10 @@ impl InvocationAllowance {
         }
     }
 
+    pub(crate) fn effective_limits(&self) -> PhaseLimits {
+        self.limits.values
+    }
+
     pub(crate) fn deadline(&self) -> Instant {
         self.deadline
     }

@@ -11,8 +11,17 @@ use job_radar_lib::{
 };
 
 fn snapshot(target: &str, remaining: u64) -> BrowserAcquisitionRequestSnapshot {
+    snapshot_with_timeout(target, 120_000, remaining)
+}
+
+fn snapshot_with_timeout(
+    target: &str,
+    timeout_ms: u64,
+    remaining: u64,
+) -> BrowserAcquisitionRequestSnapshot {
     BrowserAcquisitionRequestSnapshot {
         target: target.to_string(),
+        timeout_ms,
         waits: Vec::new(),
         interactions: Vec::new(),
         browser_rendered_bytes_remaining: remaining,
@@ -132,7 +141,7 @@ async fn every_ordinary_stage_failure_is_typed_charged_and_finalized_before_retu
             BrowserAcquisitionFailureKind::Navigation => (Vec::new(), Vec::new(), Vec::new(), 1, 0),
             BrowserAcquisitionFailureKind::Wait { .. } => (
                 vec![ExecutionPlanBrowserWait::Selector {
-                    selector: Some("main".to_string()),
+                    selector: "main".to_string(),
                     timeout_ms: 500,
                 }],
                 Vec::new(),
@@ -171,6 +180,7 @@ async fn every_ordinary_stage_failure_is_typed_charged_and_finalized_before_retu
         let adapter = ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
             request: BrowserAcquisitionRequestSnapshot {
                 target: target.clone(),
+                timeout_ms: 120_000,
                 waits: waits.clone(),
                 interactions: interactions.clone(),
                 browser_rendered_bytes_remaining: PhaseLimits::BACKEND.max_browser_rendered_bytes,
@@ -208,8 +218,9 @@ async fn hard_deadline_comes_only_from_shared_control_and_finalizes_before_budge
     };
     let invocation = BrowserAcquisitionTestInvocation::new(limits, true, None);
     let adapter = ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
-        request: snapshot(
+        request: snapshot_with_timeout(
             "https://example.test/deadline",
+            2_001,
             PhaseLimits::BACKEND.max_browser_rendered_bytes,
         ),
         events: vec![
@@ -248,6 +259,102 @@ async fn hard_deadline_comes_only_from_shared_control_and_finalizes_before_budge
         job_radar_lib::AllowanceDimension::Duration
     );
     assert!(adapter.lifecycle().ends_with(&[
+        BrowserLifecycleEvent::HandlerCompleted,
+        BrowserLifecycleEvent::ActiveSessionReleased,
+        BrowserLifecycleEvent::SessionFinalized,
+    ]));
+}
+
+#[test]
+fn caller_tightening_rejects_browser_primitive_raises_before_acquisition() {
+    let caller = PhaseLimits {
+        max_duration_ms: 5_000,
+        max_browser_actions: 1,
+        ..PhaseLimits::BACKEND
+    };
+    let invocation =
+        BrowserAcquisitionTestInvocation::new(PhaseLimits::BACKEND, false, Some(caller));
+
+    let Err(timeout_error) =
+        invocation.try_request_with_timeout("https://example.test", 5_001, Vec::new(), Vec::new())
+    else {
+        panic!("Fetch timeout may not raise caller duration ceiling")
+    };
+    assert_eq!(timeout_error.kind, BrowserAcquisitionFailureKind::Deadline);
+
+    let Err(action_error) = invocation.try_request_with_timeout(
+        "https://example.test",
+        5_000,
+        Vec::new(),
+        vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
+            selector: ".more".to_string(),
+            max_count: 2,
+            wait_after_ms: None,
+        }],
+    ) else {
+        panic!("interaction may not raise caller action ceiling")
+    };
+    assert_eq!(
+        action_error.kind,
+        BrowserAcquisitionFailureKind::Interaction {
+            interaction_index: 0
+        }
+    );
+    let report = invocation.report(PhaseCompletion::ExecutionFailed);
+    assert_eq!(report.usage.requests, 0);
+    assert_eq!(report.usage.browser_actions, 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn browser_fetch_timeout_tightens_work_without_exhausting_the_phase_duration() {
+    let invocation = BrowserAcquisitionTestInvocation::new(PhaseLimits::BACKEND, false, None);
+    let adapter = ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
+        request: BrowserAcquisitionRequestSnapshot {
+            target: "https://example.test/local-timeout".to_string(),
+            timeout_ms: 1,
+            waits: Vec::new(),
+            interactions: Vec::new(),
+            browser_rendered_bytes_remaining: PhaseLimits::BACKEND.max_browser_rendered_bytes,
+        },
+        events: vec![
+            ScriptedBrowserAcquisitionEvent::Navigate,
+            ScriptedBrowserAcquisitionEvent::Gate("local-timeout".to_string()),
+            ScriptedBrowserAcquisitionEvent::Content("must-not-run".to_string()),
+        ],
+        finalization: ScriptedBrowserFinalization::default(),
+    }]);
+    let future = adapter.acquire(invocation.request_with_timeout(
+        "https://example.test/local-timeout",
+        1,
+        Vec::new(),
+        Vec::new(),
+    ));
+    tokio::pin!(future);
+    tokio::select! {
+        result = &mut future => panic!("local timeout gate unexpectedly completed: {result:?}"),
+        _ = async {
+            while !adapter.gate_is_waiting("local-timeout") {
+                tokio::task::yield_now().await;
+            }
+        } => {}
+    }
+
+    tokio::time::advance(std::time::Duration::from_millis(1)).await;
+    let terminal = future
+        .await
+        .expect_err("local Browser timeout must stop work");
+    assert!(matches!(
+        terminal,
+        BrowserAcquisitionTerminal::Failure(BrowserAcquisitionFailure {
+            kind: BrowserAcquisitionFailureKind::Deadline,
+            ..
+        })
+    ));
+    let report = invocation.report(PhaseCompletion::ExecutionFailed);
+    assert_eq!(report.completion, PhaseCompletion::ExecutionFailed);
+    assert_eq!(report.usage.requests, 1);
+    assert!(adapter.lifecycle().ends_with(&[
+        BrowserLifecycleEvent::GracefulClose,
         BrowserLifecycleEvent::HandlerCompleted,
         BrowserLifecycleEvent::ActiveSessionReleased,
         BrowserLifecycleEvent::SessionFinalized,

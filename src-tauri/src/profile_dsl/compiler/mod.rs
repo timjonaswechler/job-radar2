@@ -23,7 +23,6 @@ mod capabilities;
 mod keys;
 mod provenance;
 mod resolution;
-mod security;
 mod source_config;
 mod specialization;
 mod support;

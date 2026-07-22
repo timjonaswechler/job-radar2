@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::documents::fetch::{BrowserInteraction, BrowserWait};
+use crate::profile_dsl::documents::fetch::{
+    deserialize_browser_fetch_timeout, deserialize_browser_interaction_count,
+    deserialize_browser_wait_after, deserialize_browser_wait_timeout,
+    deserialize_non_empty_selector, BrowserInteraction, BrowserWait, MAX_BROWSER_FETCH_TIMEOUT_MS,
+    MAX_BROWSER_INTERACTION_COUNT, MAX_BROWSER_WAIT_AFTER_MS, MAX_BROWSER_WAIT_TIMEOUT_MS,
+};
 use crate::profile_dsl::documents::{
     Fetch, Pagination, PaginationParameterLocation, ParseType, Select,
 };
@@ -14,12 +19,15 @@ use crate::profile_dsl::template::{
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "mode", rename_all = "snake_case")]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExecutionPlanFetch {
     Http(CompiledHttpFetch),
     Browser {
         url: CompiledTemplate,
-        #[serde(rename = "timeoutMs")]
+        #[serde(
+            rename = "timeoutMs",
+            deserialize_with = "deserialize_browser_fetch_timeout"
+        )]
         timeout_ms: u64,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         waits: Vec<ExecutionPlanBrowserWait>,
@@ -29,37 +37,59 @@ pub enum ExecutionPlanFetch {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExecutionPlanBrowserWait {
     Selector {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        selector: Option<String>,
-        #[serde(rename = "timeoutMs")]
+        #[serde(deserialize_with = "deserialize_non_empty_selector")]
+        selector: String,
+        #[serde(
+            rename = "timeoutMs",
+            deserialize_with = "deserialize_browser_wait_timeout"
+        )]
         timeout_ms: u64,
     },
     NetworkIdle {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        selector: Option<String>,
-        #[serde(rename = "timeoutMs")]
+        #[serde(
+            rename = "timeoutMs",
+            deserialize_with = "deserialize_browser_wait_timeout"
+        )]
         timeout_ms: u64,
     },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExecutionPlanBrowserInteraction {
     ClickIfVisible {
+        #[serde(deserialize_with = "deserialize_non_empty_selector")]
         selector: String,
-        #[serde(rename = "maxCount")]
+        #[serde(
+            rename = "maxCount",
+            deserialize_with = "deserialize_browser_interaction_count"
+        )]
         max_count: u64,
-        #[serde(rename = "waitAfterMs", skip_serializing_if = "Option::is_none")]
+        #[serde(
+            rename = "waitAfterMs",
+            default,
+            deserialize_with = "deserialize_browser_wait_after",
+            skip_serializing_if = "Option::is_none"
+        )]
         wait_after_ms: Option<u64>,
     },
     ClickUntilGone {
+        #[serde(deserialize_with = "deserialize_non_empty_selector")]
         selector: String,
-        #[serde(rename = "maxCount")]
+        #[serde(
+            rename = "maxCount",
+            deserialize_with = "deserialize_browser_interaction_count"
+        )]
         max_count: u64,
-        #[serde(rename = "waitAfterMs", skip_serializing_if = "Option::is_none")]
+        #[serde(
+            rename = "waitAfterMs",
+            default,
+            deserialize_with = "deserialize_browser_wait_after",
+            skip_serializing_if = "Option::is_none"
+        )]
         wait_after_ms: Option<u64>,
     },
 }
@@ -218,7 +248,11 @@ pub(crate) fn compile_fetch(
             url: compile_template(url, &descriptor).map_err(|error| {
                 ExecutionPlanBuildError::new(format!("{path}/url"), error.to_string())
             })?,
-            timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
+            timeout_ms: require_bounded(
+                *timeout_ms,
+                MAX_BROWSER_FETCH_TIMEOUT_MS,
+                &format!("{path}/timeoutMs"),
+            )?,
             waits: waits
                 .as_deref()
                 .unwrap_or(&[])
@@ -251,15 +285,19 @@ fn compile_browser_wait(
             selector,
             timeout_ms,
         } => Ok(ExecutionPlanBrowserWait::Selector {
-            selector: selector.clone(),
-            timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
+            selector: require_non_empty(selector, &format!("{path}/selector"))?,
+            timeout_ms: require_bounded(
+                *timeout_ms,
+                MAX_BROWSER_WAIT_TIMEOUT_MS,
+                &format!("{path}/timeoutMs"),
+            )?,
         }),
-        BrowserWait::NetworkIdle {
-            selector,
-            timeout_ms,
-        } => Ok(ExecutionPlanBrowserWait::NetworkIdle {
-            selector: selector.clone(),
-            timeout_ms: require_positive(*timeout_ms, &format!("{path}/timeoutMs"))?,
+        BrowserWait::NetworkIdle { timeout_ms } => Ok(ExecutionPlanBrowserWait::NetworkIdle {
+            timeout_ms: require_bounded(
+                *timeout_ms,
+                MAX_BROWSER_WAIT_TIMEOUT_MS,
+                &format!("{path}/timeoutMs"),
+            )?,
         }),
     }
 }
@@ -268,33 +306,48 @@ fn compile_browser_interaction(
     interaction: &BrowserInteraction,
     path: &str,
 ) -> Result<ExecutionPlanBrowserInteraction, ExecutionPlanBuildError> {
+    let compile_fields = |selector: &str, max_count: u64, wait_after_ms: Option<u64>| {
+        Ok((
+            require_non_empty(selector, &format!("{path}/selector"))?,
+            require_bounded(
+                max_count,
+                MAX_BROWSER_INTERACTION_COUNT,
+                &format!("{path}/maxCount"),
+            )?,
+            require_optional_max(
+                wait_after_ms,
+                MAX_BROWSER_WAIT_AFTER_MS,
+                &format!("{path}/waitAfterMs"),
+            )?,
+        ))
+    };
     match interaction {
         BrowserInteraction::ClickIfVisible {
             selector,
             max_count,
             wait_after_ms,
-        } => Ok(ExecutionPlanBrowserInteraction::ClickIfVisible {
-            selector: selector.clone(),
-            max_count: require_positive(*max_count, &format!("{path}/maxCount"))?,
-            wait_after_ms: *wait_after_ms,
-        }),
+        } => {
+            let (selector, max_count, wait_after_ms) =
+                compile_fields(selector, *max_count, *wait_after_ms)?;
+            Ok(ExecutionPlanBrowserInteraction::ClickIfVisible {
+                selector,
+                max_count,
+                wait_after_ms,
+            })
+        }
         BrowserInteraction::ClickUntilGone {
             selector,
             max_count,
             wait_after_ms,
-        } => Ok(ExecutionPlanBrowserInteraction::ClickUntilGone {
-            selector: selector.clone(),
-            max_count: require_positive(*max_count, &format!("{path}/maxCount"))?,
-            wait_after_ms: *wait_after_ms,
-        }),
-        BrowserInteraction::ExecuteScript { .. }
-        | BrowserInteraction::Eval { .. }
-        | BrowserInteraction::MutateDom { .. }
-        | BrowserInteraction::LoginFlow { .. }
-        | BrowserInteraction::CaptchaBypass { .. } => Err(ExecutionPlanBuildError::new(
-            path,
-            "prohibited browser behavior cannot be compiled into an Execution Plan",
-        )),
+        } => {
+            let (selector, max_count, wait_after_ms) =
+                compile_fields(selector, *max_count, *wait_after_ms)?;
+            Ok(ExecutionPlanBrowserInteraction::ClickUntilGone {
+                selector,
+                max_count,
+                wait_after_ms,
+            })
+        }
     }
 }
 
@@ -411,8 +464,39 @@ fn compile_pagination_limits(
     Ok(compiled)
 }
 
-fn require_positive(value: Option<u64>, path: &str) -> Result<u64, ExecutionPlanBuildError> {
-    value
-        .filter(|value| *value > 0)
-        .ok_or_else(|| ExecutionPlanBuildError::new(path, "positive bound is required"))
+fn require_bounded(value: u64, max: u64, path: &str) -> Result<u64, ExecutionPlanBuildError> {
+    if (1..=max).contains(&value) {
+        Ok(value)
+    } else {
+        Err(ExecutionPlanBuildError::new(
+            path,
+            format!("bound must be between 1 and {max}"),
+        ))
+    }
+}
+
+fn require_optional_max(
+    value: Option<u64>,
+    max: u64,
+    path: &str,
+) -> Result<Option<u64>, ExecutionPlanBuildError> {
+    if value.map_or(true, |value| value <= max) {
+        Ok(value)
+    } else {
+        Err(ExecutionPlanBuildError::new(
+            path,
+            format!("bound must not exceed {max}"),
+        ))
+    }
+}
+
+fn require_non_empty(value: &str, path: &str) -> Result<String, ExecutionPlanBuildError> {
+    if value.trim().is_empty() {
+        Err(ExecutionPlanBuildError::new(
+            path,
+            "selector must not be empty",
+        ))
+    } else {
+        Ok(value.to_string())
+    }
 }

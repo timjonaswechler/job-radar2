@@ -176,6 +176,9 @@ impl<'a> RuntimeExecutionContext<'a> {
             allowance.mark_deadline_if_expired();
         }
     }
+    pub(crate) fn effective_limits(self) -> Option<PhaseLimits> {
+        self.allowance.map(InvocationAllowance::effective_limits)
+    }
     pub(crate) fn deadline(self) -> Option<tokio::time::Instant> {
         self.allowance.map(InvocationAllowance::deadline)
     }

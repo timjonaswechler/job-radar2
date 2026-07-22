@@ -169,16 +169,15 @@ impl ProfileBrowserClient for ManagedProfileBrowserClient {
                             selector,
                             timeout_ms,
                         } => crate::browser_runtime::BrowserRuntimeWait::Selector {
-                            selector,
+                            selector: Some(selector),
                             timeout_ms,
                         },
-                        ExecutionPlanBrowserWait::NetworkIdle {
-                            selector,
-                            timeout_ms,
-                        } => crate::browser_runtime::BrowserRuntimeWait::NetworkIdle {
-                            selector,
-                            timeout_ms,
-                        },
+                        ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } => {
+                            crate::browser_runtime::BrowserRuntimeWait::NetworkIdle {
+                                selector: None,
+                                timeout_ms,
+                            }
+                        }
                     })
                     .collect(),
                 interactions: request

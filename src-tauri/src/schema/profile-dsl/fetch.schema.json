@@ -86,21 +86,50 @@
       }
     },
     "browserWait": {
+      "oneOf": [
+        { "$ref": "#/$defs/selectorWait" },
+        { "$ref": "#/$defs/networkIdleWait" }
+      ]
+    },
+    "selectorWait": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "timeoutMs"],
+      "required": ["type", "selector", "timeoutMs"],
       "properties": {
-        "type": { "type": "string", "enum": ["selector", "network_idle"] },
+        "type": { "const": "selector" },
         "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
         "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     },
+    "networkIdleWait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "timeoutMs"],
+      "properties": {
+        "type": { "const": "network_idle" },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
     "browserInteraction": {
+      "oneOf": [
+        { "$ref": "#/$defs/clickIfVisible" },
+        { "$ref": "#/$defs/clickUntilGone" }
+      ]
+    },
+    "clickIfVisible": {
+      "$ref": "#/$defs/boundedClick",
+      "properties": { "type": { "const": "click_if_visible" } }
+    },
+    "clickUntilGone": {
+      "$ref": "#/$defs/boundedClick",
+      "properties": { "type": { "const": "click_until_gone" } }
+    },
+    "boundedClick": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "selector", "maxCount"],
       "properties": {
-        "type": { "type": "string", "enum": ["click_if_visible", "click_until_gone"] },
+        "type": { "type": "string" },
         "selector": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
         "maxCount": { "type": "integer", "minimum": 1, "maximum": 50 },
         "waitAfterMs": { "type": "integer", "minimum": 0, "maximum": 60000 }

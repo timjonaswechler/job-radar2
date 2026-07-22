@@ -52,11 +52,10 @@ async fn real_managed_adapter_probe_is_environment_gated_and_uses_the_final_inte
             "data:text/html,%3Cmain%20id%3D%22probe%22%3Emanaged-adapter%3Cbutton%20id%3D%22remove%22%20onclick%3D%22this.remove()%22%3Eremove%3C%2Fbutton%3E%3Cdiv%20style%3D%22opacity%3A0%22%3E%3Cbutton%20id%3D%22hidden%22%3Ehidden%3C%2Fbutton%3E%3C%2Fdiv%3E%3C%2Fmain%3E",
             vec![
                 ExecutionPlanBrowserWait::Selector {
-                    selector: Some("#remove".to_string()),
+                    selector: "#remove".to_string(),
                     timeout_ms: 500,
                 },
                 ExecutionPlanBrowserWait::NetworkIdle {
-                    selector: None,
                     timeout_ms: 1_000,
                 },
             ],

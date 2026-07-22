@@ -1144,13 +1144,10 @@ fn source_profile_detection_browser_probe_contributes_evidence_captures_and_boun
         requests[0].waits,
         vec![
             ExecutionPlanBrowserWait::Selector {
-                selector: Some(".jobs".to_string()),
+                selector: ".jobs".to_string(),
                 timeout_ms: 5000,
             },
-            ExecutionPlanBrowserWait::NetworkIdle {
-                selector: None,
-                timeout_ms: 250,
-            },
+            ExecutionPlanBrowserWait::NetworkIdle { timeout_ms: 250 },
         ]
     );
     assert_eq!(
@@ -1379,41 +1376,6 @@ fn source_profile_detection_rejects_unbounded_browser_probe_render_timeout() {
             && diagnostic.severity == DiagnosticSeverity::Error
             && diagnostic.code == "browser_probe_timeout_required"
             && diagnostic.path == "/profiles/0/detect/browserProbes/0/timeoutMs"
-            && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
-    }));
-}
-
-#[test]
-fn source_profile_detection_rejects_unbounded_browser_probe_waits_and_interactions() {
-    let profile = fixture_profile(json!({
-        "recommendedAccessPathKey": "api",
-        "inputUrlPatterns": [{ "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$" }],
-        "browserProbes": [{
-            "key": "rendered_jobs_page",
-            "url": "{{inputUrl}}",
-            "timeoutMs": 10000,
-            "waits": [{ "type": "selector", "selector": ".jobs" }],
-            "interactions": [{ "type": "click_until_gone", "selector": "button.load-more" }],
-            "htmlContains": "ExampleJobs"
-        }]
-    }));
-    let browser = FakeBrowser::new(std::iter::empty());
-
-    let result = block_on(detect_source_proposal_with_clients(
-        "https://jobs.example.test/acme",
-        &[profile],
-        &FakeHttpClient::default(),
-        &browser,
-    ));
-
-    assert_eq!(result.status, SourceProposalDetectionStatus::Failed);
-    assert!(result.proposal.is_none());
-    assert!(browser.requests().is_empty());
-    assert!(result.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == DiagnosticCategory::Detection
-            && diagnostic.severity == DiagnosticSeverity::Error
-            && diagnostic.code == "browser_wait_timeout_required"
-            && diagnostic.path == "/profiles/0/detect/browserProbes/0/waits/0/timeoutMs"
             && diagnostic.strategy_key.as_deref() == Some("rendered_jobs_page")
     }));
 }

@@ -91,7 +91,7 @@ async fn acquire_managed(
         Ok(session) => session,
         Err(error) => {
             if error.kind == OwnedChromiumErrorKind::Deadline {
-                request.mark_deadline();
+                return apply_late_control(&request, Err(request.deadline_terminal()));
             }
             return apply_late_control(&request, Err(map_owned_launch_error(error)));
         }
@@ -200,22 +200,8 @@ async fn apply_wait(
         ExecutionPlanBrowserWait::Selector {
             selector,
             timeout_ms,
-        } => {
-            let selector = selector.as_ref().ok_or_else(|| {
-                stage_failure(
-                    BrowserAcquisitionFailureKind::Wait { wait_index },
-                    "managed Chromium selector wait is missing a selector",
-                )
-            })?;
-            wait_for_selector(page, selector, *timeout_ms, wait_index, request).await
-        }
-        ExecutionPlanBrowserWait::NetworkIdle {
-            selector,
-            timeout_ms,
-        } => {
-            if let Some(selector) = selector {
-                wait_for_selector(page, selector, *timeout_ms, wait_index, request).await?;
-            }
+        } => wait_for_selector(page, selector, *timeout_ms, wait_index, request).await,
+        ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } => {
             wait_for_network_idle(page, *timeout_ms, wait_index, request).await
         }
     }
@@ -230,6 +216,30 @@ struct NetworkState {
     last_response_end: f64,
 }
 
+struct NetworkIdleTracker {
+    stable: Option<(NetworkState, tokio::time::Instant)>,
+}
+
+impl NetworkIdleTracker {
+    fn new() -> Self {
+        Self { stable: None }
+    }
+
+    fn observe(&mut self, state: NetworkState, now: tokio::time::Instant, quiet: Duration) -> bool {
+        if !state.ready || state.pending_requests != 0 {
+            self.stable = None;
+            return false;
+        }
+        match self.stable {
+            Some((previous, since)) if previous == state => now.duration_since(since) >= quiet,
+            _ => {
+                self.stable = Some((state, now));
+                false
+            }
+        }
+    }
+}
+
 async fn wait_for_network_idle(
     page: &Page,
     timeout_ms: u64,
@@ -240,7 +250,7 @@ async fn wait_for_network_idle(
     const POLL_MS: u64 = 50;
 
     let deadline = bounded_local_deadline(request, timeout_ms);
-    let mut stable: Option<(NetworkState, tokio::time::Instant)> = None;
+    let mut idle = NetworkIdleTracker::new();
     loop {
         let evaluation = match controlled_until(
             request,
@@ -264,17 +274,8 @@ async fn wait_for_network_idle(
             )
         })?;
         let now = tokio::time::Instant::now();
-        if state.ready && state.pending_requests == 0 {
-            match stable {
-                Some((previous, since)) if previous == state => {
-                    if now.duration_since(since) >= Duration::from_millis(QUIET_MS) {
-                        return Ok(());
-                    }
-                }
-                _ => stable = Some((state, now)),
-            }
-        } else {
-            stable = None;
+        if idle.observe(state, now, Duration::from_millis(QUIET_MS)) {
+            return Ok(());
         }
         if now >= deadline {
             return Err(network_idle_timeout(wait_index, timeout_ms));
@@ -385,7 +386,8 @@ async fn apply_interaction(
                     format!("managed Chromium click failed for selector `{selector}`: {error}"),
                 )
             })?;
-        if let Some(wait_after_ms) = wait_after_ms {
+        if let Some(wait_after_ms) = wait_after_ms.filter(|duration| *duration > 0) {
+            request.admit_wait()?;
             controlled_sleep(request, Duration::from_millis(wait_after_ms)).await?;
         }
     }
@@ -441,8 +443,7 @@ async fn controlled<T, E>(
         _ = request.cancelled() => Err(cancelled_terminal()),
         result = operation => Ok(result),
         _ = tokio::time::sleep_until(request.browser_work_deadline()) => {
-            request.mark_deadline();
-            Err(BrowserAcquisitionTerminal::AllowanceStopped)
+            Err(request.deadline_terminal())
         }
     }
 }
@@ -457,8 +458,7 @@ async fn controlled_until<T, E>(
         _ = request.cancelled() => Err(cancelled_terminal()),
         result = operation => Ok(Some(result)),
         _ = tokio::time::sleep_until(request.browser_work_deadline()) => {
-            request.mark_deadline();
-            Err(BrowserAcquisitionTerminal::AllowanceStopped)
+            Err(request.deadline_terminal())
         }
         _ = tokio::time::sleep_until(local_deadline) => Ok(None),
     }
@@ -473,8 +473,7 @@ async fn controlled_sleep(
         _ = request.cancelled() => Err(cancelled_terminal()),
         _ = tokio::time::sleep(duration) => Ok(()),
         _ = tokio::time::sleep_until(request.browser_work_deadline()) => {
-            request.mark_deadline();
-            Err(BrowserAcquisitionTerminal::AllowanceStopped)
+            Err(request.deadline_terminal())
         }
     }
 }
@@ -486,8 +485,7 @@ fn ensure_work_control(
         return Err(cancelled_terminal());
     }
     if tokio::time::Instant::now() >= request.browser_work_deadline() {
-        request.mark_deadline();
-        return Err(BrowserAcquisitionTerminal::AllowanceStopped);
+        return Err(request.deadline_terminal());
     }
     Ok(())
 }
@@ -543,6 +541,45 @@ mod tests {
         fn is_cancelled(&self) -> bool {
             self.0.load(Ordering::SeqCst)
         }
+    }
+
+    #[test]
+    fn network_idle_requires_a_complete_quiet_unchanged_observation_window() {
+        let start = tokio::time::Instant::now();
+        let quiet = Duration::from_millis(500);
+        let idle_state = NetworkState {
+            ready: true,
+            pending_requests: 0,
+            resource_count: 1,
+            last_response_end: 10.0,
+        };
+        let mut tracker = NetworkIdleTracker::new();
+
+        assert!(!tracker.observe(idle_state, start, quiet));
+        assert!(!tracker.observe(
+            NetworkState {
+                pending_requests: 1,
+                ..idle_state
+            },
+            start + Duration::from_millis(250),
+            quiet,
+        ));
+        assert!(!tracker.observe(idle_state, start + Duration::from_millis(300), quiet,));
+        assert!(!tracker.observe(
+            NetworkState {
+                resource_count: 2,
+                last_response_end: 20.0,
+                ..idle_state
+            },
+            start + Duration::from_millis(600),
+            quiet,
+        ));
+        let final_state = NetworkState {
+            resource_count: 2,
+            last_response_end: 20.0,
+            ..idle_state
+        };
+        assert!(tracker.observe(final_state, start + Duration::from_millis(1_100), quiet,));
     }
 
     #[cfg(unix)]

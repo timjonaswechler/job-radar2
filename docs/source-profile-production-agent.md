@@ -59,7 +59,7 @@ Use these terms exactly:
 - Do not run high-volume live fetches. Use small samples only.
 - Do not create multiple profiles in one pass unless the user explicitly asks.
 - Do not implement a whole catalog.
-- Do not use arbitrary JavaScript. Browser fetch may use bounded waits/interactions only if the DSL and app support them.
+- Do not use arbitrary JavaScript. Browser fetch supports only bounded `selector`/`network_idle` waits and `click_if_visible`/`click_until_gone` interactions; every wait needs `timeoutMs`, every click needs `maxCount`, and `network_idle` has no selector fallback.
 - Do not describe Source Profile support metadata as operational confidence. Production confidence comes from the concrete Source's latest Source Live Check.
 - Do not create files outside `source-profiles/` and `sources/` as part of the production custom profile workflow.
 

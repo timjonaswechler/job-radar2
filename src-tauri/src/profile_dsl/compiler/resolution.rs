@@ -18,7 +18,6 @@ use super::keys::{
     access_path_index, validate_detail_strategy_keys, validate_discovery_strategy_keys,
     validate_reusable_access_path_keys,
 };
-use super::security::validate_security;
 use super::source_config::{
     compile_reusable_contract, compile_source_owned_contract, push_definition_violations,
     source_owned_access_path_schema, validate_source_config_against_contract,
@@ -120,12 +119,6 @@ fn validate_source_profile_document_with_contracts(
                 &access_path.discovery,
                 access_path.detail.as_ref(),
                 access_path_base.clone(),
-                diagnostics,
-            );
-            validate_security(
-                &access_path.discovery,
-                access_path.detail.as_ref(),
-                access_path_base,
                 diagnostics,
             );
             ValidatedAccessPath {
@@ -413,12 +406,6 @@ fn validate_source_owned_access_path(
         diagnostics,
     );
     validate_boundedness(
-        discovery,
-        detail,
-        "/selectedAccessPath".to_string(),
-        diagnostics,
-    );
-    validate_security(
         discovery,
         detail,
         "/selectedAccessPath".to_string(),

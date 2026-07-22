@@ -189,13 +189,10 @@ fn compiled_discovery_runtime_uses_browser_fetch_rendered_html() {
         browser_requests[0].waits,
         vec![
             ExecutionPlanBrowserWait::Selector {
-                selector: Some("article.posting".to_string()),
+                selector: "article.posting".to_string(),
                 timeout_ms: 5000,
             },
-            ExecutionPlanBrowserWait::NetworkIdle {
-                selector: None,
-                timeout_ms: 250,
-            },
+            ExecutionPlanBrowserWait::NetworkIdle { timeout_ms: 250 },
         ]
     );
     assert_eq!(

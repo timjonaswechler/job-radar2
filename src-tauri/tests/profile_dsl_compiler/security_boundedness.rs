@@ -145,6 +145,56 @@ fn browser_phase_duration_must_preserve_the_two_second_teardown_reserve() {
 }
 
 #[test]
+fn browser_primitive_bounds_cannot_raise_tightened_phase_limits() {
+    let mut profile = simple_profile_value();
+    profile["accessPaths"][0]["discovery"]["limits"] = json!({
+        "maxStrategyAttempts": 50,
+        "maxRequests": 1000,
+        "maxProducedItems": 100000,
+        "maxDurationMs": 5000,
+        "maxPages": 1000,
+        "maxBrowserActions": 1,
+        "maxFanOut": 100000,
+        "maxResponseBytes": 67108864,
+        "maxBrowserRenderedBytes": 67108864
+    });
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
+        "mode": "browser",
+        "url": "{{sourceConfig:feedUrl}}",
+        "timeoutMs": 5001,
+        "waits": [{ "type": "selector", "selector": ".jobs", "timeoutMs": 5001 }],
+        "interactions": [{
+            "type": "click_until_gone",
+            "selector": ".more",
+            "maxCount": 2,
+            "waitAfterMs": 5001
+        }]
+    });
+
+    let result = compile_profile_value(profile);
+
+    assert!(result.execution_plan.is_none());
+    for (code, suffix) in [
+        ("invalid_fetch_timeout", "/fetch/timeoutMs"),
+        ("invalid_browser_wait_timeout", "/waits/0/timeoutMs"),
+        (
+            "invalid_browser_interaction_count",
+            "/interactions/0/maxCount",
+        ),
+        ("invalid_browser_wait_after", "/interactions/0/waitAfterMs"),
+    ] {
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.code == code && diagnostic.path.ends_with(suffix) }),
+            "missing {code}: {:?}",
+            result.diagnostics
+        );
+    }
+}
+
+#[test]
 fn direct_serde_rejects_missing_http_fetch_timeout() {
     let mut profile = simple_profile_value();
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
@@ -293,7 +343,7 @@ fn compiler_diagnoses_unbounded_recursive_sitemap_depth() {
 }
 
 #[test]
-fn compiler_diagnoses_unbounded_browser_waits_and_interactions() {
+fn direct_serde_rejects_unbounded_browser_waits_and_interactions() {
     let mut profile = simple_profile_value();
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "browser",
@@ -307,19 +357,9 @@ fn compiler_diagnoses_unbounded_browser_waits_and_interactions() {
         ]
     });
 
-    let result = compile_profile_value(profile);
-
-    assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "unbounded_browser_wait",
-        "/accessPaths/0/discovery/strategies/0/fetch/waits/0/timeoutMs",
-    );
-    assert_compiler_error(
-        &result,
-        "unbounded_browser_interaction",
-        "/accessPaths/0/discovery/strategies/0/fetch/interactions/0/maxCount",
-    );
+    let error = serde_json::from_value::<SourceProfileDocument>(profile)
+        .expect_err("missing Browser primitive bounds must reject during Serde admission");
+    assert!(error.to_string().contains("timeoutMs") || error.to_string().contains("maxCount"));
 }
 
 #[test]
@@ -344,35 +384,25 @@ fn compiler_diagnoses_empty_fallback_strategy_lists() {
 }
 
 #[test]
-fn compiler_diagnoses_prohibited_browser_behaviors() {
-    let mut profile = simple_profile_value();
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
-        "mode": "browser",
-        "url": "{{sourceConfig:feedUrl}}",
-        "timeoutMs": 10000,
-        "interactions": [
-            { "type": "execute_script", "script": "return window.__jobs" },
-            { "type": "eval", "expression": "document.body.innerHTML" },
-            { "type": "mutate_dom", "selector": "body", "mutation": "remove overlays" },
-            { "type": "login_flow", "selector": "form.login" },
-            { "type": "captcha_bypass", "provider": "example" }
-        ]
-    });
+fn direct_serde_has_no_prohibited_browser_interaction_variants() {
+    for interaction in [
+        json!({ "type": "execute_script", "script": "return window.__jobs" }),
+        json!({ "type": "eval", "expression": "document.body.innerHTML" }),
+        json!({ "type": "mutate_dom", "selector": "body", "mutation": "remove overlays" }),
+        json!({ "type": "login_flow", "selector": "form.login" }),
+        json!({ "type": "captcha_bypass", "provider": "example" }),
+    ] {
+        let mut profile = simple_profile_value();
+        profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
+            "mode": "browser",
+            "url": "{{sourceConfig:feedUrl}}",
+            "timeoutMs": 10000,
+            "interactions": [interaction]
+        });
 
-    let result = compile_profile_value(profile);
-
-    assert_eq!(result.execution_plan, None);
-    let prohibited = result
-        .diagnostics
-        .iter()
-        .filter(|diagnostic| diagnostic.code == "prohibited_browser_behavior")
-        .count();
-    assert_eq!(prohibited, 5, "got diagnostics: {:?}", result.diagnostics);
-    assert_compiler_error(
-        &result,
-        "prohibited_browser_behavior",
-        "/accessPaths/0/discovery/strategies/0/fetch/interactions/0",
-    );
+        serde_json::from_value::<SourceProfileDocument>(profile)
+            .expect_err("prohibited Browser interaction must be absent from Serde admission");
+    }
 }
 
 fn compile_profile_value(profile: Value) -> TestCompileResult {

@@ -544,7 +544,7 @@ fn source_schema_rejects_titles_on_source_owned_config_properties() {
 }
 
 #[test]
-fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnostics() {
+fn schema_has_no_prohibited_browser_interaction_variants() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
@@ -564,6 +564,51 @@ fn schema_rejects_prohibited_browser_interactions_kept_only_for_compiler_diagnos
         profile,
         &["execute_script", "oneOf"],
     );
+}
+
+#[test]
+fn browser_wait_schema_is_variant_exact_and_has_no_authored_byte_field() {
+    let harness = SchemaHarness::new();
+    let base = read_json(
+        env!("CARGO_MANIFEST_DIR"),
+        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+    );
+    let browser_fetch = |wait: Value| {
+        let mut profile = base.clone();
+        profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
+            "mode": "browser",
+            "url": "{{sourceConfig:feedUrl}}",
+            "timeoutMs": 10000,
+            "waits": [wait]
+        });
+        profile
+    };
+
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        browser_fetch(json!({ "type": "selector", "selector": ".jobs", "timeoutMs": 1000 })),
+        "selector Browser wait",
+    );
+    harness.assert_json_valid(
+        SchemaEntrypoint::SourceProfile,
+        browser_fetch(json!({ "type": "network_idle", "timeoutMs": 1000 })),
+        "network-idle Browser wait",
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::SourceProfile,
+        browser_fetch(json!({ "type": "selector", "timeoutMs": 1000 })),
+        &["oneOf"],
+    );
+    harness.assert_json_invalid(
+        SchemaEntrypoint::SourceProfile,
+        browser_fetch(json!({ "type": "network_idle", "selector": ".jobs", "timeoutMs": 1000 })),
+        &["oneOf"],
+    );
+
+    let mut profile = browser_fetch(json!({ "type": "network_idle", "timeoutMs": 1000 }));
+    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["maxBrowserRenderedBytes"] =
+        json!(1024);
+    harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["oneOf"]);
 }
 
 #[test]

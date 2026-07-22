@@ -31,8 +31,11 @@ pub(crate) type BoxedBrowserAcquisitionFuture<'a> = Pin<
 /// or reset capacity.
 pub struct BrowserAcquisitionRequest<'a> {
     pub target: String,
+    pub timeout_ms: u64,
     pub waits: Vec<ExecutionPlanBrowserWait>,
     pub interactions: Vec<ExecutionPlanBrowserInteraction>,
+    work_deadline: Instant,
+    phase_work_deadline: Instant,
     hard_deadline: Instant,
     control: RuntimeExecutionContext<'a>,
 }
@@ -40,6 +43,7 @@ pub struct BrowserAcquisitionRequest<'a> {
 impl<'a> BrowserAcquisitionRequest<'a> {
     pub(crate) fn new(
         target: String,
+        timeout_ms: u64,
         waits: Vec<ExecutionPlanBrowserWait>,
         interactions: Vec<ExecutionPlanBrowserInteraction>,
         control: RuntimeExecutionContext<'a>,
@@ -50,10 +54,29 @@ impl<'a> BrowserAcquisitionRequest<'a> {
                 "Browser acquisition requires caller-owned cumulative control",
             )
         })?;
+        let effective_limits = control.effective_limits().ok_or_else(|| {
+            BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::RuntimeLaunch,
+                "Browser acquisition requires caller-owned effective limits",
+            )
+        })?;
+        validate_request_bounds(timeout_ms, &waits, &interactions, effective_limits)?;
+        let phase_work_deadline = control.browser_work_deadline().ok_or_else(|| {
+            BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::RuntimeLaunch,
+                "Browser acquisition requires caller-owned work control",
+            )
+        })?;
+        let local_deadline = Instant::now()
+            .checked_add(std::time::Duration::from_millis(timeout_ms))
+            .unwrap_or(phase_work_deadline);
         Ok(Self {
             target,
+            timeout_ms,
             waits,
             interactions,
+            work_deadline: phase_work_deadline.min(local_deadline),
+            phase_work_deadline,
             hard_deadline,
             control,
         })
@@ -64,9 +87,7 @@ impl<'a> BrowserAcquisitionRequest<'a> {
     }
 
     pub(crate) fn browser_work_deadline(&self) -> Instant {
-        self.control
-            .browser_work_deadline()
-            .expect("Browser acquisition always has caller-owned control")
+        self.work_deadline
     }
 
     pub(crate) fn browser_graceful_deadline(&self) -> Instant {
@@ -95,8 +116,19 @@ impl<'a> BrowserAcquisitionRequest<'a> {
         self.control.cancelled().await;
     }
 
-    pub(crate) fn mark_deadline(&self) {
-        self.control.mark_deadline();
+    pub(crate) fn deadline_terminal(&self) -> BrowserAcquisitionTerminal {
+        if Instant::now() >= self.phase_work_deadline {
+            self.control.mark_deadline();
+            BrowserAcquisitionTerminal::AllowanceStopped
+        } else {
+            BrowserAcquisitionTerminal::Failure(BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::Deadline,
+                format!(
+                    "Browser Fetch exceeded its local timeoutMs of {}",
+                    self.timeout_ms
+                ),
+            ))
+        }
     }
 
     pub(crate) fn admit_navigation(&self) -> Result<(), BrowserAcquisitionTerminal> {
@@ -136,6 +168,7 @@ impl<'a> BrowserAcquisitionRequest<'a> {
     fn snapshot(&self) -> BrowserAcquisitionRequestSnapshot {
         BrowserAcquisitionRequestSnapshot {
             target: self.target.clone(),
+            timeout_ms: self.timeout_ms,
             waits: self.waits.clone(),
             interactions: self.interactions.clone(),
             browser_rendered_bytes_remaining: self.control.remaining_browser_rendered_bytes(),
@@ -143,9 +176,75 @@ impl<'a> BrowserAcquisitionRequest<'a> {
     }
 }
 
+fn validate_request_bounds(
+    timeout_ms: u64,
+    waits: &[ExecutionPlanBrowserWait],
+    interactions: &[ExecutionPlanBrowserInteraction],
+    limits: PhaseLimits,
+) -> Result<(), BrowserAcquisitionFailure> {
+    if timeout_ms > limits.max_duration_ms {
+        return Err(BrowserAcquisitionFailure::new(
+            BrowserAcquisitionFailureKind::Deadline,
+            format!(
+                "Browser Fetch timeoutMs {timeout_ms} raises the effective phase duration limit {}",
+                limits.max_duration_ms
+            ),
+        ));
+    }
+    for (wait_index, wait) in waits.iter().enumerate() {
+        let wait_timeout_ms = match wait {
+            ExecutionPlanBrowserWait::Selector { timeout_ms, .. }
+            | ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } => *timeout_ms,
+        };
+        if wait_timeout_ms > limits.max_duration_ms {
+            return Err(BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::Wait { wait_index },
+                format!(
+                    "Browser wait timeoutMs {wait_timeout_ms} raises the effective phase duration limit {}",
+                    limits.max_duration_ms
+                ),
+            ));
+        }
+    }
+    for (interaction_index, interaction) in interactions.iter().enumerate() {
+        let (max_count, wait_after_ms) = match interaction {
+            ExecutionPlanBrowserInteraction::ClickIfVisible {
+                max_count,
+                wait_after_ms,
+                ..
+            }
+            | ExecutionPlanBrowserInteraction::ClickUntilGone {
+                max_count,
+                wait_after_ms,
+                ..
+            } => (*max_count, *wait_after_ms),
+        };
+        if max_count > limits.max_browser_actions {
+            return Err(BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::Interaction { interaction_index },
+                format!(
+                    "Browser interaction maxCount {max_count} raises the effective phase Browser-action limit {}",
+                    limits.max_browser_actions
+                ),
+            ));
+        }
+        if wait_after_ms.is_some_and(|value| value > limits.max_duration_ms) {
+            return Err(BrowserAcquisitionFailure::new(
+                BrowserAcquisitionFailureKind::Interaction { interaction_index },
+                format!(
+                    "Browser interaction waitAfterMs raises the effective phase duration limit {}",
+                    limits.max_duration_ms
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BrowserAcquisitionRequestSnapshot {
     pub target: String,
+    pub timeout_ms: u64,
     pub waits: Vec<ExecutionPlanBrowserWait>,
     pub interactions: Vec<ExecutionPlanBrowserInteraction>,
     pub browser_rendered_bytes_remaining: u64,
@@ -262,8 +361,16 @@ pub struct ScriptedBrowserAcquisitionExpectation {
 pub enum BrowserLifecycleEvent {
     Reserved,
     Navigation,
-    Wait { wait_index: usize },
-    InteractionAttempt { interaction_index: usize },
+    Wait {
+        wait_index: usize,
+    },
+    InteractionAttempt {
+        interaction_index: usize,
+    },
+    WaitAfter {
+        interaction_index: usize,
+        duration_ms: u64,
+    },
     ContentRead,
     PrimarySealed,
     GracefulClose,
@@ -574,12 +681,11 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                     primary = cancelled();
                     break;
                 }
-                if request.control.deadline_is_expired() || Instant::now() >= request.hard_deadline
+                if request.control.deadline_is_expired()
+                    || Instant::now() >= request.browser_work_deadline()
                 {
-                    request.control.mark_deadline();
-                    primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
-                        BrowserAcquisitionTerminal::AllowanceStopped,
-                    );
+                    primary =
+                        BrowserAcquisitionTerminalOrSuccess::Terminal(request.deadline_terminal());
                     break;
                 }
                 match event {
@@ -588,16 +694,15 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                             .await_gate(
                                 name,
                                 request.control,
-                                request.control.browser_work_deadline(),
+                                Some(request.browser_work_deadline()),
                             )
                             .await
                         {
                             GateOutcome::Released => {}
                             GateOutcome::Cancelled => primary = cancelled(),
                             GateOutcome::Deadline => {
-                                request.control.mark_deadline();
                                 primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
-                                    BrowserAcquisitionTerminal::AllowanceStopped,
+                                    request.deadline_terminal(),
                                 );
                             }
                         }
@@ -680,6 +785,20 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                             self.log(BrowserLifecycleEvent::InteractionAttempt {
                                 interaction_index,
                             });
+                            if let Some(duration_ms) =
+                                interaction_wait_after(&request.interactions[interaction_index])
+                            {
+                                if request.control.debit(AllowanceCharge::default()).is_err() {
+                                    primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
+                                        BrowserAcquisitionTerminal::AllowanceStopped,
+                                    );
+                                    break;
+                                }
+                                self.log(BrowserLifecycleEvent::WaitAfter {
+                                    interaction_index,
+                                    duration_ms,
+                                });
+                            }
                         }
                         next_interaction += 1;
                     }
@@ -854,6 +973,15 @@ fn interaction_max_count(interaction: &ExecutionPlanBrowserInteraction) -> u64 {
     }
 }
 
+fn interaction_wait_after(interaction: &ExecutionPlanBrowserInteraction) -> Option<u64> {
+    match interaction {
+        ExecutionPlanBrowserInteraction::ClickIfVisible { wait_after_ms, .. }
+        | ExecutionPlanBrowserInteraction::ClickUntilGone { wait_after_ms, .. } => {
+            wait_after_ms.filter(|duration| *duration > 0)
+        }
+    }
+}
+
 /// Hidden deterministic invocation owner for external contract tests. Productive
 /// phase callers create the same `InvocationAllowance` and pass its attached
 /// `RuntimeExecutionContext` directly; Browser acquisition never owns this root.
@@ -881,11 +1009,39 @@ impl BrowserAcquisitionTestInvocation {
     ) -> BrowserAcquisitionRequest<'_> {
         BrowserAcquisitionRequest::new(
             target.into(),
+            self.allowance.effective_limits().max_duration_ms,
             waits,
             interactions,
             RuntimeExecutionContext::uncancellable().for_invocation(&self.allowance),
         )
         .expect("test invocation always supplies cumulative control")
+    }
+
+    pub fn request_with_timeout(
+        &self,
+        target: impl Into<String>,
+        timeout_ms: u64,
+        waits: Vec<ExecutionPlanBrowserWait>,
+        interactions: Vec<ExecutionPlanBrowserInteraction>,
+    ) -> BrowserAcquisitionRequest<'_> {
+        self.try_request_with_timeout(target, timeout_ms, waits, interactions)
+            .expect("test Browser request bounds fit cumulative control")
+    }
+
+    pub fn try_request_with_timeout(
+        &self,
+        target: impl Into<String>,
+        timeout_ms: u64,
+        waits: Vec<ExecutionPlanBrowserWait>,
+        interactions: Vec<ExecutionPlanBrowserInteraction>,
+    ) -> Result<BrowserAcquisitionRequest<'_>, BrowserAcquisitionFailure> {
+        BrowserAcquisitionRequest::new(
+            target.into(),
+            timeout_ms,
+            waits,
+            interactions,
+            RuntimeExecutionContext::uncancellable().for_invocation(&self.allowance),
+        )
     }
 
     pub fn request_with_cancellation<'a>(
@@ -897,6 +1053,7 @@ impl BrowserAcquisitionTestInvocation {
     ) -> BrowserAcquisitionRequest<'a> {
         BrowserAcquisitionRequest::new(
             target.into(),
+            self.allowance.effective_limits().max_duration_ms,
             waits,
             interactions,
             RuntimeExecutionContext::with_cancellation(cancellation)

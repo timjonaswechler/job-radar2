@@ -103,30 +103,10 @@ fn browser_probe_request(
     };
 
     let mut waits = Vec::new();
-    for (index, wait) in probe
-        .waits
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .enumerate()
-    {
-        let path = format!("{probe_path}/waits/{index}");
+    for wait in probe.waits.as_deref().unwrap_or_default() {
         let timeout_ms = match wait {
             crate::profile_dsl::documents::BrowserWait::Selector { timeout_ms, .. }
-            | crate::profile_dsl::documents::BrowserWait::NetworkIdle { timeout_ms, .. } => {
-                timeout_ms.filter(|value| *value > 0).ok_or_else(|| {
-                    detection_error(
-                        "browser_wait_timeout_required",
-                        format!(
-                            "Browser probe `{}` wait must declare a positive timeoutMs",
-                            probe.key
-                        ),
-                        format!("{path}/timeoutMs"),
-                        Some(&probe.key),
-                        serde_json::json!({ "probeKey": probe.key }),
-                    )
-                })?
-            }
+            | crate::profile_dsl::documents::BrowserWait::NetworkIdle { timeout_ms } => *timeout_ms,
         };
         waits.push(match wait {
             crate::profile_dsl::documents::BrowserWait::Selector { selector, .. } => {
@@ -135,11 +115,8 @@ fn browser_probe_request(
                     timeout_ms,
                 }
             }
-            crate::profile_dsl::documents::BrowserWait::NetworkIdle { selector, .. } => {
-                ExecutionPlanBrowserWait::NetworkIdle {
-                    selector: selector.clone(),
-                    timeout_ms,
-                }
+            crate::profile_dsl::documents::BrowserWait::NetworkIdle { .. } => {
+                ExecutionPlanBrowserWait::NetworkIdle { timeout_ms }
             }
         });
     }
