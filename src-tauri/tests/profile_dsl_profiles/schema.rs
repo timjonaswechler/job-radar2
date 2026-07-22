@@ -372,6 +372,14 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
         }),
         "final Strategy Set with a positive at_least Policy",
     );
+    harness.assert_json_valid(
+        SchemaEntrypoint::PolicyStrategySet,
+        json!({
+            "policy": { "type": "collect_all", "minAccepted": 1 },
+            "strategies": [strategy.clone()]
+        }),
+        "final Strategy Set with a positive collect_all Policy",
+    );
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
         json!({ "strategies": [strategy.clone()] }),
@@ -410,6 +418,15 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
         json!({ "type": "at_least", "count": null }),
         json!({ "type": "at_least", "count": 1, "extra": true }),
         json!({ "type": "atLeast", "count": 1 }),
+        json!({ "type": "collect_all" }),
+        json!({ "type": "collect_all", "minAccepted": 0 }),
+        json!({ "type": "collect_all", "minAccepted": -1 }),
+        json!({ "type": "collect_all", "minAccepted": 1.5 }),
+        json!({ "type": "collect_all", "minAccepted": "1" }),
+        json!({ "type": "collect_all", "minAccepted": null }),
+        json!({ "type": "collect_all", "minAccepted": 1, "extra": true }),
+        json!({ "type": "collectAll", "minAccepted": 1 }),
+        json!({ "type": "collect_all", "min_accepted": 1 }),
     ] {
         harness.assert_json_invalid(
             SchemaEntrypoint::PolicyStrategySet,

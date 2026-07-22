@@ -22,10 +22,10 @@ pub(super) fn validate_boundedness(
     diagnostics: &mut Diagnostics,
 ) {
     validate_discovery_strategy_list(discovery, &base_path, diagnostics);
-    validate_at_least_cardinality(
+    validate_policy_cardinality(
         discovery.policy,
         discovery.strategies.len(),
-        &format!("{base_path}/discovery/policy/count"),
+        &format!("{base_path}/discovery/policy"),
         diagnostics,
     );
     validate_phase_limits(
@@ -58,10 +58,10 @@ pub(super) fn validate_boundedness(
 
     if let Some(detail) = detail {
         validate_detail_strategy_list(detail, &base_path, diagnostics);
-        validate_at_least_cardinality(
+        validate_policy_cardinality(
             detail.policy,
             detail.strategies.len(),
-            &format!("{base_path}/detail/policy/count"),
+            &format!("{base_path}/detail/policy"),
             diagnostics,
         );
         validate_phase_limits(
@@ -181,22 +181,34 @@ fn validate_detail_strategy_list(
     );
 }
 
-fn validate_at_least_cardinality(
+fn validate_policy_cardinality(
     policy: StrategyPolicy,
     strategy_count: usize,
-    path: &str,
+    policy_path: &str,
     diagnostics: &mut Diagnostics,
 ) {
-    let StrategyPolicy::AtLeast { count } = policy else {
-        return;
-    };
-    if count > strategy_count {
-        diagnostics.push(compiler_error(
+    let (required_accepted, field, code, message) = match policy {
+        StrategyPolicy::AtLeast { count } => (
+            count,
+            "count",
             "strategy_policy_at_least_count_exceeds_cardinality",
             "at_least count may not exceed the final merged Strategy cardinality",
-            path,
+        ),
+        StrategyPolicy::CollectAll { min_accepted } => (
+            min_accepted,
+            "minAccepted",
+            "strategy_policy_collect_all_min_accepted_exceeds_cardinality",
+            "collect_all minAccepted may not exceed the final merged Strategy cardinality",
+        ),
+        StrategyPolicy::FirstAccepted | StrategyPolicy::AllRequired => return,
+    };
+    if required_accepted > strategy_count {
+        diagnostics.push(compiler_error(
+            code,
+            message,
+            format!("{policy_path}/{field}"),
             serde_json::json!({
-                "requiredAccepted": count,
+                "requiredAccepted": required_accepted,
                 "strategyCount": strategy_count,
             }),
         ));

@@ -47,7 +47,7 @@ An inline Access Path stored on exactly one Source when no reusable Source Profi
 _Avoid_: source-specific extraction, Quellenprofil, one-off profile, adapter
 
 **Profile DSL**:
-The declarative schema-v3 JSON language used to describe Source Profiles, Access Paths, `detection`, `discovery`, lazy `detail`, ordered fallback Strategies, extraction, transforms, bounded browser interactions, diagnostics, and support metadata. Every complete Discovery/Detail Strategy Set carries one mandatory typed Policy: `{ "type": "first_accepted" }` for ordered fallback, `{ "type": "all_required" }` for strict sequential universal acceptance, or `{ "type": "at_least", "count": N }` for a positive threshold no greater than the final merged Strategy cardinality. Profile-DSL Retry is not supported. The DSL is configuration, not arbitrary code.
+The declarative schema-v3 JSON language used to describe Source Profiles, Access Paths, `detection`, `discovery`, lazy `detail`, ordered fallback Strategies, extraction, transforms, bounded browser interactions, diagnostics, and support metadata. Every complete Discovery/Detail Strategy Set carries one mandatory typed Policy: `{ "type": "first_accepted" }` for ordered fallback, `{ "type": "all_required" }` for strict sequential universal acceptance, `{ "type": "at_least", "count": N }` for an early positive threshold, or `{ "type": "collect_all", "minAccepted": N }` to execute every Strategy before checking a positive minimum. Both cardinalities may not exceed the final merged Strategy cardinality. Profile-DSL Retry is not supported. The DSL is configuration, not arbitrary code.
 _Avoid_: script, plugin API, scraper code, profile-specific Rust
 
 **Profile Compiler**:

@@ -71,6 +71,12 @@ pub(crate) fn policy_unsatisfied_diagnostic(
             format!("/{phase_name}/policy"),
             json!({ "policy": "at_least", "requiredAccepted": count }),
         ),
+        StrategyPolicy::CollectAll { min_accepted } => (
+            "strategy_policy_collect_all_unsatisfied",
+            "collect_all policy was not satisfied".to_string(),
+            format!("/{phase_name}/policy"),
+            json!({ "policy": "collect_all", "requiredAccepted": min_accepted }),
+        ),
     };
     Diagnostic {
         category: DiagnosticCategory::Runtime,
@@ -129,7 +135,7 @@ where
                     StrategyPolicy::AtLeast { count } if accepted + remaining < count => {
                         Some(StrategySetTerminal::PolicyUnsatisfied)
                     }
-                    StrategyPolicy::AtLeast { .. } => None,
+                    StrategyPolicy::AtLeast { .. } | StrategyPolicy::CollectAll { .. } => None,
                 }
             }
             StrategyAttemptCompletion::Rejected | StrategyAttemptCompletion::Failed => match policy
@@ -139,7 +145,7 @@ where
                 StrategyPolicy::AtLeast { count } if accepted + remaining < count => {
                     Some(StrategySetTerminal::PolicyUnsatisfied)
                 }
-                StrategyPolicy::AtLeast { .. } => None,
+                StrategyPolicy::AtLeast { .. } | StrategyPolicy::CollectAll { .. } => None,
             },
             StrategyAttemptCompletion::Cancelled(cancellation) => {
                 Some(StrategySetTerminal::Cancelled(cancellation.clone()))
@@ -159,10 +165,13 @@ where
         }
     }
 
-    StrategySetExecution {
-        attempts,
-        terminal: StrategySetTerminal::PolicyUnsatisfied,
-    }
+    let terminal = match policy {
+        StrategyPolicy::CollectAll { min_accepted } if accepted >= min_accepted => {
+            StrategySetTerminal::Satisfied
+        }
+        _ => StrategySetTerminal::PolicyUnsatisfied,
+    };
+    StrategySetExecution { attempts, terminal }
 }
 
 #[cfg(test)]

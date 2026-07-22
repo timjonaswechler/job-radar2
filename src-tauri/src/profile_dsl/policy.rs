@@ -7,14 +7,20 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub enum StrategyPolicy {
     FirstAccepted,
     AllRequired,
-    AtLeast { count: usize },
+    AtLeast {
+        count: usize,
+    },
+    CollectAll {
+        #[serde(rename = "minAccepted")]
+        min_accepted: usize,
+    },
 }
 
 impl StrategyPolicy {
     pub(crate) fn reports_final_rejection(self) -> bool {
         match self {
             Self::FirstAccepted => false,
-            Self::AllRequired | Self::AtLeast { .. } => true,
+            Self::AllRequired | Self::AtLeast { .. } | Self::CollectAll { .. } => true,
         }
     }
 }
@@ -30,6 +36,7 @@ impl<'de> Deserialize<'de> for StrategyPolicy {
             FirstAccepted(EmptyPolicy),
             AllRequired(EmptyPolicy),
             AtLeast(AtLeastPolicy),
+            CollectAll(CollectAllPolicy),
         }
 
         #[derive(Deserialize)]
@@ -42,11 +49,21 @@ impl<'de> Deserialize<'de> for StrategyPolicy {
             count: std::num::NonZeroUsize,
         }
 
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CollectAllPolicy {
+            #[serde(rename = "minAccepted")]
+            min_accepted: std::num::NonZeroUsize,
+        }
+
         Ok(match PolicyObject::deserialize(deserializer)? {
             PolicyObject::FirstAccepted(_) => Self::FirstAccepted,
             PolicyObject::AllRequired(_) => Self::AllRequired,
             PolicyObject::AtLeast(policy) => Self::AtLeast {
                 count: policy.count.get(),
+            },
+            PolicyObject::CollectAll(policy) => Self::CollectAll {
+                min_accepted: policy.min_accepted.get(),
             },
         })
     }

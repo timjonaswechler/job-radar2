@@ -594,14 +594,15 @@ fn expected_access_path_paths(path: &Map<String, Value>) -> Vec<ProvenancePath> 
         expected.push(ProvenancePath {
             segments: [segments.clone(), vec![field("policy"), field("type")]].concat(),
         });
-        if step
-            .get("policy")
-            .and_then(Value::as_object)
-            .is_some_and(|policy| policy.contains_key("count"))
-        {
-            expected.push(ProvenancePath {
-                segments: [segments.clone(), vec![field("policy"), field("count")]].concat(),
-            });
+        if let Some(policy) = step.get("policy").and_then(Value::as_object) {
+            for policy_field in ["count", "minAccepted"] {
+                if policy.contains_key(policy_field) {
+                    expected.push(ProvenancePath {
+                        segments: [segments.clone(), vec![field("policy"), field(policy_field)]]
+                            .concat(),
+                    });
+                }
+            }
         }
         for strategy_value in step["strategies"].as_array().expect("strategies array") {
             let strategy_object = strategy_value.as_object().expect("Strategy object");

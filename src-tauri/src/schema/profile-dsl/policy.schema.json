@@ -33,6 +33,15 @@
             "type": { "const": "at_least" },
             "count": { "type": "integer", "minimum": 1 }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "minAccepted"],
+          "properties": {
+            "type": { "const": "collect_all" },
+            "minAccepted": { "type": "integer", "minimum": 1 }
+          }
         }
       ]
     },
