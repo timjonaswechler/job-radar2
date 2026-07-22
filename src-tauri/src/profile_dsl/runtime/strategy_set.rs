@@ -1,8 +1,16 @@
 use std::{future::Future, pin::Pin};
 
-use crate::profile_dsl::diagnostics::Diagnostics;
+use serde_json::json;
 
-use super::{allowance::AllowanceStop, cancellation::TypedCancellation};
+use crate::profile_dsl::{
+    diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
+    policy::StrategyPolicy,
+};
+
+use super::{
+    allowance::AllowanceStop,
+    cancellation::{RuntimePhase, TypedCancellation},
+};
 
 pub(crate) enum StrategyAttemptCompletion<O> {
     Accepted(O),
@@ -25,10 +33,10 @@ pub(crate) struct StrategyAttempt<O> {
 }
 
 pub(crate) enum StrategySetTerminal {
-    Accepted { attempt_index: usize },
+    Satisfied,
+    PolicyUnsatisfied,
     Cancelled(TypedCancellation),
     Stopped(AllowanceStop),
-    Exhausted,
 }
 
 pub(crate) struct StrategySetExecution<O> {
@@ -36,11 +44,46 @@ pub(crate) struct StrategySetExecution<O> {
     pub(crate) terminal: StrategySetTerminal,
 }
 
-/// Executes the closed, ordered `first_accepted` policy for a typed phase output.
+pub(crate) fn policy_unsatisfied_diagnostic(
+    policy: StrategyPolicy,
+    phase: RuntimePhase,
+) -> Diagnostic {
+    let phase_name = match phase {
+        RuntimePhase::Discovery => "discovery",
+        RuntimePhase::Detail => "detail",
+    };
+    let (code, message, path, details) = match policy {
+        StrategyPolicy::FirstAccepted => (
+            "fallback_exhausted",
+            format!("{phase_name} fallback strategies were exhausted without an accepted result"),
+            format!("/{phase_name}/strategies"),
+            json!({}),
+        ),
+        StrategyPolicy::AllRequired => (
+            "strategy_policy_all_required_unsatisfied",
+            "all_required policy was not satisfied".to_string(),
+            format!("/{phase_name}/policy"),
+            json!({ "policy": "all_required" }),
+        ),
+    };
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: code.to_string(),
+        message,
+        severity: DiagnosticSeverity::Error,
+        path,
+        strategy_key: None,
+        details: Some(details),
+    }
+}
+
+/// Executes a closed, ordered Strategy Policy for a typed phase output.
 ///
-/// Phase adapters own strategy execution, acceptance, failure classification, and public
-/// projection. This kernel alone owns attempt identity/history and deterministic stopping.
-pub(crate) async fn execute_first_accepted<'a, S, K, C, F, O>(
+/// Phase adapters own strategy execution, acceptance, failure classification, reduction, and
+/// public projection. This kernel alone owns attempt identity/history and deterministic Policy
+/// transitions.
+pub(crate) async fn execute_strategy_set<'a, S, K, C, F, O>(
+    policy: StrategyPolicy,
     strategies: &'a [S],
     strategy_key: K,
     cancellation_before_attempt: C,
@@ -64,16 +107,24 @@ where
                 execute(strategy_index, strategy).await
             };
         let terminal = match &execution.completion {
-            StrategyAttemptCompletion::Accepted(_) => Some(StrategySetTerminal::Accepted {
-                attempt_index: attempts.len(),
-            }),
+            StrategyAttemptCompletion::Accepted(_) => match policy {
+                StrategyPolicy::FirstAccepted => Some(StrategySetTerminal::Satisfied),
+                StrategyPolicy::AllRequired if strategy_index + 1 == strategies.len() => {
+                    Some(StrategySetTerminal::Satisfied)
+                }
+                StrategyPolicy::AllRequired => None,
+            },
+            StrategyAttemptCompletion::Rejected | StrategyAttemptCompletion::Failed => match policy
+            {
+                StrategyPolicy::FirstAccepted => None,
+                StrategyPolicy::AllRequired => Some(StrategySetTerminal::PolicyUnsatisfied),
+            },
             StrategyAttemptCompletion::Cancelled(cancellation) => {
                 Some(StrategySetTerminal::Cancelled(cancellation.clone()))
             }
             StrategyAttemptCompletion::Stopped(stop) => {
                 Some(StrategySetTerminal::Stopped(stop.clone()))
             }
-            StrategyAttemptCompletion::Rejected | StrategyAttemptCompletion::Failed => None,
         };
         attempts.push(StrategyAttempt {
             strategy_index,
@@ -88,7 +139,7 @@ where
 
     StrategySetExecution {
         attempts,
-        terminal: StrategySetTerminal::Exhausted,
+        terminal: StrategySetTerminal::PolicyUnsatisfied,
     }
 }
 
@@ -112,7 +163,8 @@ mod tests {
             details: Some(json!({})),
         };
         let strategies = ["first", "second"];
-        let result = execute_first_accepted(
+        let result = execute_strategy_set(
+            StrategyPolicy::FirstAccepted,
             &strategies,
             |strategy| *strategy,
             |_, _| None,
@@ -135,10 +187,44 @@ mod tests {
         )
         .await;
 
+        assert!(matches!(result.terminal, StrategySetTerminal::Satisfied));
+        assert_eq!(result.attempts.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn all_required_transition_is_generic_and_fails_fast() {
+        let strategies = ["first", "second", "never"];
+        let result = execute_strategy_set(
+            StrategyPolicy::AllRequired,
+            &strategies,
+            |strategy| *strategy,
+            |_, _| None,
+            |index, _| {
+                Box::pin(async move {
+                    if index == 0 {
+                        StrategyExecution {
+                            diagnostics: Vec::new(),
+                            completion: StrategyAttemptCompletion::Accepted(7_u8),
+                        }
+                    } else {
+                        StrategyExecution {
+                            diagnostics: Vec::new(),
+                            completion: StrategyAttemptCompletion::Rejected,
+                        }
+                    }
+                })
+            },
+        )
+        .await;
+
         assert!(matches!(
             result.terminal,
-            StrategySetTerminal::Accepted { attempt_index: 1 }
+            StrategySetTerminal::PolicyUnsatisfied
         ));
         assert_eq!(result.attempts.len(), 2);
+        assert!(matches!(
+            result.attempts[0].completion,
+            StrategyAttemptCompletion::Accepted(7)
+        ));
     }
 }

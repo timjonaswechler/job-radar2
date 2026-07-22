@@ -13,6 +13,7 @@ use crate::{
         occurrence::{
             ContributionOrigin, DetailField, DetailPatch, PostingOccurrence, RequestedDetailFields,
         },
+        policy::StrategyPolicy,
         primitives::{
             acceptance::{
                 evaluate_detail_final_acceptance, evaluate_detail_strategy_acceptance,
@@ -48,7 +49,8 @@ use super::{
     },
     reducers::{reduce_detail, DetailContribution},
     strategy_set::{
-        execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
+        execute_strategy_set, policy_unsatisfied_diagnostic, StrategyAttemptCompletion,
+        StrategyExecution, StrategySetTerminal,
     },
 };
 
@@ -176,7 +178,8 @@ where
         );
     }
 
-    let execution = execute_first_accepted(
+    let execution = execute_strategy_set(
+        detail.policy,
         &detail.strategies,
         |strategy| strategy.key.as_str(),
         |strategy_index, strategy| {
@@ -240,6 +243,7 @@ where
     .await;
     project_detail_execution(
         execution,
+        detail.policy,
         posting,
         &requested_fields,
         detail.accept_when.as_ref(),
@@ -250,14 +254,15 @@ where
 
 fn project_detail_execution(
     execution: super::strategy_set::StrategySetExecution<DetailPatch>,
+    policy: StrategyPolicy,
     posting: &PostingOccurrence,
     requested_fields: &RequestedDetailFields,
     phase_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
 ) -> PhaseRunResult<DetailPhasePayload> {
-    let accepted_attempt = match execution.terminal {
-        StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
+    let policy_satisfied = match execution.terminal {
+        StrategySetTerminal::Satisfied => true,
         StrategySetTerminal::Cancelled(cancellation) => {
             let mut diagnostics = execution
                 .attempts
@@ -294,7 +299,7 @@ fn project_detail_execution(
                 _ => unreachable!("stopped phase has budget or execution-failure completion"),
             });
         }
-        StrategySetTerminal::Exhausted => None,
+        StrategySetTerminal::PolicyUnsatisfied => false,
     };
 
     let mut diagnostics = Vec::new();
@@ -304,25 +309,24 @@ fn project_detail_execution(
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
         diagnostics.extend(attempt.diagnostics);
-        includes_execution_failure |=
-            matches!(attempt.completion, StrategyAttemptCompletion::Failed);
-        if Some(attempt_index) == accepted_attempt {
-            let StrategyAttemptCompletion::Accepted(patch) = attempt.completion else {
-                unreachable!("accepted terminal must reference accepted typed output");
-            };
-            contributions.push(DetailContribution {
-                identity: posting.identity.clone(),
-                patch,
-                origin: ContributionOrigin {
-                    strategy_key: attempt.strategy_key,
-                    attempt_index,
-                    provider_item_index: None,
-                },
-            });
+        match attempt.completion {
+            StrategyAttemptCompletion::Accepted(patch) if policy_satisfied => {
+                contributions.push(DetailContribution {
+                    identity: posting.identity.clone(),
+                    patch,
+                    origin: ContributionOrigin {
+                        strategy_key: attempt.strategy_key,
+                        attempt_index,
+                        provider_item_index: None,
+                    },
+                });
+            }
+            StrategyAttemptCompletion::Failed => includes_execution_failure = true,
+            _ => {}
         }
     }
 
-    if accepted_attempt.is_none() {
+    if !policy_satisfied {
         if context.is_cancelled() {
             diagnostics.push(runtime_execution_cancelled_diagnostic(
                 &TypedCancellation::phase(RuntimePhase::Detail),
@@ -334,13 +338,7 @@ fn project_detail_execution(
                 diagnostics,
             }));
         }
-        diagnostics.push(runtime_error(
-            "fallback_exhausted",
-            "detail fallback strategies were exhausted without an accepted result",
-            "/detail/strategies",
-            None,
-            json!({}),
-        ));
+        diagnostics.push(policy_unsatisfied_diagnostic(policy, RuntimePhase::Detail));
         return Ok(PhaseOutcome::Completed {
             policy_outcome: PolicyOutcome::PolicyUnsatisfied {
                 cause: if includes_execution_failure {
@@ -368,6 +366,9 @@ fn project_detail_execution(
             }),
             diagnostics,
         }));
+    }
+    if !final_accepted && policy == StrategyPolicy::AllRequired {
+        diagnostics.push(policy_unsatisfied_diagnostic(policy, RuntimePhase::Detail));
     }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
@@ -429,7 +430,7 @@ mod acceptance_projection_tests {
     fn cancellation_after_policy_exhaustion_wins_without_fallback_summary() {
         let execution = StrategySetExecution::<DetailPatch> {
             attempts: Vec::new(),
-            terminal: StrategySetTerminal::Exhausted,
+            terminal: StrategySetTerminal::PolicyUnsatisfied,
         };
         let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
         let cancellation = Cancelled;
@@ -452,6 +453,7 @@ mod acceptance_projection_tests {
 
         let result = project_detail_execution(
             execution,
+            StrategyPolicy::FirstAccepted,
             &posting,
             &requested_fields,
             None,
@@ -487,7 +489,7 @@ mod acceptance_projection_tests {
                 diagnostics: Vec::new(),
                 completion: StrategyAttemptCompletion::Accepted(DetailPatch::default()),
             }],
-            terminal: StrategySetTerminal::Accepted { attempt_index: 0 },
+            terminal: StrategySetTerminal::Satisfied,
         };
         let acceptance = CompiledAcceptance {
             required_fields: vec![AcceptanceField::Title],
@@ -515,6 +517,7 @@ mod acceptance_projection_tests {
 
         let result = project_detail_execution(
             execution,
+            StrategyPolicy::FirstAccepted,
             &posting,
             &requested_fields,
             Some(&acceptance),

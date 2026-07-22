@@ -12,7 +12,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "const": "first_accepted" }
+        "type": { "enum": ["first_accepted", "all_required"] }
       }
     },
     "phaseLimits": {

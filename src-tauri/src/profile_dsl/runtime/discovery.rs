@@ -13,6 +13,7 @@ use crate::{
             SourceExecutionPlan,
         },
         occurrence::{ContributionOrigin, PostingOccurrence},
+        policy::StrategyPolicy,
         primitives::{
             acceptance::{
                 evaluate_discovery_final_acceptance, evaluate_discovery_strategy_acceptance,
@@ -46,7 +47,8 @@ use super::{
     },
     reducers::{reduce_discovery, DiscoveryContribution},
     strategy_set::{
-        execute_first_accepted, StrategyAttemptCompletion, StrategyExecution, StrategySetTerminal,
+        execute_strategy_set, policy_unsatisfied_diagnostic, StrategyAttemptCompletion,
+        StrategyExecution, StrategySetTerminal,
     },
 };
 
@@ -144,7 +146,8 @@ where
         );
     }
 
-    let execution = execute_first_accepted(
+    let execution = execute_strategy_set(
+        plan.discovery.policy,
         &plan.discovery.strategies,
         |strategy| strategy.key.as_str(),
         |strategy_index, strategy| {
@@ -205,6 +208,7 @@ where
     .await;
     project_discovery_execution(
         execution,
+        plan.discovery.policy,
         plan.discovery.accept_when.as_ref(),
         context,
         &allowance,
@@ -213,12 +217,13 @@ where
 
 fn project_discovery_execution(
     execution: super::strategy_set::StrategySetExecution<Vec<PostingOccurrence>>,
+    policy: StrategyPolicy,
     phase_acceptance: Option<&CompiledAcceptance>,
     context: RuntimeExecutionContext<'_>,
     allowance: &InvocationAllowance,
 ) -> PhaseRunResult<DiscoveryPhasePayload> {
-    let accepted_attempt = match execution.terminal {
-        StrategySetTerminal::Accepted { attempt_index } => Some(attempt_index),
+    let policy_satisfied = match execution.terminal {
+        StrategySetTerminal::Satisfied => true,
         StrategySetTerminal::Cancelled(cancellation) => {
             let mut diagnostics = execution
                 .attempts
@@ -255,39 +260,35 @@ fn project_discovery_execution(
                 _ => unreachable!("stopped phase has budget or execution-failure completion"),
             });
         }
-        StrategySetTerminal::Exhausted => None,
+        StrategySetTerminal::PolicyUnsatisfied => false,
     };
 
     let mut diagnostics = Vec::new();
-    let mut reduced = None;
+    let mut contributions = Vec::new();
     let mut includes_execution_failure = false;
     for (attempt_index, attempt) in execution.attempts.into_iter().enumerate() {
         debug_assert_eq!(attempt.strategy_index, attempt_index);
         debug_assert!(!attempt.strategy_key.is_empty());
         diagnostics.extend(attempt.diagnostics);
-        includes_execution_failure |=
-            matches!(attempt.completion, StrategyAttemptCompletion::Failed);
-        if Some(attempt_index) == accepted_attempt {
-            let StrategyAttemptCompletion::Accepted(output) = attempt.completion else {
-                unreachable!("accepted terminal must reference accepted typed output");
-            };
-            let contributions = output
-                .into_iter()
-                .enumerate()
-                .map(|(item_index, occurrence)| DiscoveryContribution {
-                    occurrence,
-                    origin: ContributionOrigin {
-                        strategy_key: attempt.strategy_key.clone(),
-                        attempt_index,
-                        provider_item_index: Some(item_index),
+        match attempt.completion {
+            StrategyAttemptCompletion::Accepted(output) if policy_satisfied => {
+                contributions.extend(output.into_iter().enumerate().map(
+                    |(item_index, occurrence)| DiscoveryContribution {
+                        occurrence,
+                        origin: ContributionOrigin {
+                            strategy_key: attempt.strategy_key.clone(),
+                            attempt_index,
+                            provider_item_index: Some(item_index),
+                        },
                     },
-                })
-                .collect();
-            reduced = Some(reduce_discovery(contributions));
+                ));
+            }
+            StrategyAttemptCompletion::Failed => includes_execution_failure = true,
+            _ => {}
         }
     }
 
-    if accepted_attempt.is_none() {
+    if !policy_satisfied {
         if context.is_cancelled() {
             diagnostics.push(runtime_execution_cancelled_diagnostic(
                 &TypedCancellation::phase(RuntimePhase::Discovery),
@@ -299,12 +300,9 @@ fn project_discovery_execution(
                 diagnostics,
             }));
         }
-        diagnostics.push(runtime_error(
-            "fallback_exhausted",
-            "discovery fallback strategies were exhausted without an accepted result",
-            "/discovery/strategies",
-            None,
-            json!({}),
+        diagnostics.push(policy_unsatisfied_diagnostic(
+            policy,
+            RuntimePhase::Discovery,
         ));
         return Ok(PhaseOutcome::Completed {
             policy_outcome: PolicyOutcome::PolicyUnsatisfied {
@@ -318,7 +316,7 @@ fn project_discovery_execution(
             diagnostics,
         });
     }
-    let reduced = reduced.expect("accepted policy terminal must carry selected output");
+    let reduced = reduce_discovery(contributions);
     diagnostics.extend(reduced.diagnostics);
     let final_accepted = evaluate_discovery_final_acceptance(
         &reduced.candidates,
@@ -336,6 +334,12 @@ fn project_discovery_execution(
             }),
             diagnostics,
         }));
+    }
+    if !final_accepted && policy == StrategyPolicy::AllRequired {
+        diagnostics.push(policy_unsatisfied_diagnostic(
+            policy,
+            RuntimePhase::Discovery,
+        ));
     }
     let completion = if final_accepted {
         PhaseCompletion::Accepted
@@ -397,13 +401,19 @@ mod acceptance_projection_tests {
     fn cancellation_after_policy_exhaustion_wins_without_fallback_summary() {
         let execution = StrategySetExecution::<Vec<PostingOccurrence>> {
             attempts: Vec::new(),
-            terminal: StrategySetTerminal::Exhausted,
+            terminal: StrategySetTerminal::PolicyUnsatisfied,
         };
         let allowance = InvocationAllowance::new(PhaseLimits::BACKEND, false, None);
         let cancellation = Cancelled;
         let context = RuntimeExecutionContext::with_cancellation(&cancellation);
 
-        let result = project_discovery_execution(execution, None, context, &allowance);
+        let result = project_discovery_execution(
+            execution,
+            StrategyPolicy::FirstAccepted,
+            None,
+            context,
+            &allowance,
+        );
 
         let PhaseRunError::Cancelled(cancelled) = result.unwrap_err() else {
             panic!("expected typed cancellation")
@@ -433,7 +443,7 @@ mod acceptance_projection_tests {
                 diagnostics: Vec::new(),
                 completion: StrategyAttemptCompletion::Accepted(Vec::new()),
             }],
-            terminal: StrategySetTerminal::Accepted { attempt_index: 0 },
+            terminal: StrategySetTerminal::Satisfied,
         };
         let acceptance = CompiledAcceptance {
             required_fields: Vec::new(),
@@ -444,7 +454,13 @@ mod acceptance_projection_tests {
         let cancellation = Cancelled;
         let context = RuntimeExecutionContext::with_cancellation(&cancellation);
 
-        let result = project_discovery_execution(execution, Some(&acceptance), context, &allowance);
+        let result = project_discovery_execution(
+            execution,
+            StrategyPolicy::FirstAccepted,
+            Some(&acceptance),
+            context,
+            &allowance,
+        );
 
         let PhaseRunError::Cancelled(result) = result.unwrap_err() else {
             panic!("expected typed cancellation")

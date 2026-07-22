@@ -331,7 +331,7 @@ fn discovery_occurrence_sections_are_disjoint_and_hint_use_is_closed() {
 }
 
 #[test]
-fn final_strategy_set_schema_requires_first_accepted_policy() {
+fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
     let harness = SchemaHarness::new();
     let strategy = json!({
         "key": "json_api",
@@ -354,14 +354,16 @@ fn final_strategy_set_schema_requires_first_accepted_policy() {
         }
     });
 
-    harness.assert_json_valid(
-        SchemaEntrypoint::PolicyStrategySet,
-        json!({
-            "policy": { "type": "first_accepted" },
-            "strategies": [strategy.clone()]
-        }),
-        "final first_accepted Strategy Set",
-    );
+    for policy_type in ["first_accepted", "all_required"] {
+        harness.assert_json_valid(
+            SchemaEntrypoint::PolicyStrategySet,
+            json!({
+                "policy": { "type": policy_type },
+                "strategies": [strategy.clone()]
+            }),
+            "final Strategy Set with a closed Policy",
+        );
+    }
     harness.assert_json_invalid(
         SchemaEntrypoint::PolicyStrategySet,
         json!({ "strategies": [strategy.clone()] }),
@@ -385,6 +387,20 @@ fn final_strategy_set_schema_requires_first_accepted_policy() {
         json!({ "policy": { "type": "unknown" }, "strategies": [strategy.clone()] }),
         &["unknown"],
     );
+    for invalid_policy in [
+        Value::Null,
+        json!({ "type": "allRequired" }),
+        json!({ "type": "all_required", "count": 1 }),
+        json!({ "type": "all_required", "threshold": 1 }),
+        json!({ "type": "all_required", "mode": "strict" }),
+        json!({ "type": "all_required", "continueAfterFailure": true }),
+    ] {
+        harness.assert_json_invalid(
+            SchemaEntrypoint::PolicyStrategySet,
+            json!({ "policy": invalid_policy, "strategies": [strategy.clone()] }),
+            &["oneOf"],
+        );
+    }
 
     let limits = json!({
         "maxStrategyAttempts": 50,
