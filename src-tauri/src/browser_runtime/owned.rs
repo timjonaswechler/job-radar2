@@ -908,13 +908,14 @@ mod windows_process {
         System::{
             JobObjects::{
                 AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
-                JobObjectExtendedLimitInformation, QueryInformationJobObject,
-                SetInformationJobObject, TerminateJobObject,
-                JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                JobObjectBasicProcessIdList, JobObjectExtendedLimitInformation,
+                QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
+                JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_BASIC_PROCESS_ID_LIST,
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             },
             Threading::{
-                CreateProcessW, ResumeThread, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTUPINFOW,
+                CreateProcessW, OpenProcess, ResumeThread, WaitForSingleObject, CREATE_SUSPENDED,
+                PROCESS_INFORMATION, STARTUPINFOW,
             },
         },
     };
@@ -923,6 +924,7 @@ mod windows_process {
         process: HANDLE,
         job: HANDLE,
         kill_initiated: bool,
+        observed_processes: Vec<HANDLE>,
         cleanup_confirmed: bool,
         protection: ActiveBrowserSession,
     }
@@ -1030,6 +1032,7 @@ mod windows_process {
                 process: info.hProcess,
                 job,
                 kill_initiated: false,
+                observed_processes: Vec::new(),
                 cleanup_confirmed: false,
                 protection: begin_active_browser_session(session_dir),
             })
@@ -1056,7 +1059,9 @@ mod windows_process {
             if self.kill_initiated {
                 return Ok(());
             }
+            self.observed_processes = open_job_processes_for_observation(self.job)?;
             if unsafe { TerminateJobObject(self.job, 1) } == 0 {
+                close_handles(&mut self.observed_processes);
                 return Err(io::Error::last_os_error());
             }
             self.kill_initiated = true;
@@ -1078,7 +1083,9 @@ mod windows_process {
             if self.cleanup_confirmed {
                 return Ok(true);
             }
-            let complete = self.try_wait()?.is_some() && self.job_is_empty()?;
+            let complete = self.try_wait()?.is_some()
+                && self.job_is_empty()?
+                && observed_processes_have_exited(&self.observed_processes)?;
             if complete {
                 self.cleanup_confirmed = true;
             }
@@ -1155,6 +1162,7 @@ mod windows_process {
             if !self.cleanup_confirmed && self.terminate_and_reap_on_drop().is_err() {
                 self.protection.quarantine();
             }
+            close_handles(&mut self.observed_processes);
             unsafe {
                 CloseHandle(self.job);
                 CloseHandle(self.process);
@@ -1188,6 +1196,85 @@ mod windows_process {
         quoted.push_str(&"\\".repeat(backslashes * 2));
         quoted.push('"');
         quoted
+    }
+
+    fn open_job_processes_for_observation(job: HANDLE) -> io::Result<Vec<HANDLE>> {
+        const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
+        // Chromium's bounded managed session cannot legitimately need enough
+        // processes to exceed this buffer; failing the query keeps cleanup
+        // closed rather than returning with an unobserved descendant.
+        let mut buffer = vec![0_usize; 8194];
+        let queried = unsafe {
+            QueryInformationJobObject(
+                job,
+                JobObjectBasicProcessIdList,
+                buffer.as_mut_ptr().cast(),
+                (buffer.len() * mem::size_of::<usize>()) as u32,
+                ptr::null_mut(),
+            )
+        };
+        if queried == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let list = unsafe { &*(buffer.as_ptr().cast::<JOBOBJECT_BASIC_PROCESS_ID_LIST>()) };
+        let count = list.NumberOfProcessIdsInList as usize;
+        if count > buffer.len() - 1 {
+            return Err(io::Error::other(
+                "Windows Job Object process list exceeded its observation buffer",
+            ));
+        }
+        let process_ids = unsafe { std::slice::from_raw_parts(list.ProcessIdList.as_ptr(), count) };
+        let mut handles = Vec::with_capacity(count);
+        for &process_id in process_ids {
+            let Ok(process_id) = u32::try_from(process_id) else {
+                close_handles(&mut handles);
+                return Err(io::Error::other("Windows process identifier exceeded u32"));
+            };
+            let handle = unsafe { OpenProcess(SYNCHRONIZE_ACCESS, 0, process_id) };
+            if handle.is_null() {
+                let error = io::Error::last_os_error();
+                // A process can exit between the Job Object query and OpenProcess;
+                // in that case there is nothing left to observe.
+                if error.raw_os_error() == Some(87) {
+                    continue;
+                }
+                close_handles(&mut handles);
+                return Err(error);
+            }
+            handles.push(handle);
+        }
+        Ok(handles)
+    }
+
+    fn observed_processes_have_exited(handles: &[HANDLE]) -> Result<bool, OwnedChromiumError> {
+        for &handle in handles {
+            match unsafe { WaitForSingleObject(handle, 0) } {
+                WAIT_OBJECT_0 => {}
+                WAIT_TIMEOUT => return Ok(false),
+                WAIT_FAILED => {
+                    return Err(OwnedChromiumError::new(
+                        OwnedChromiumErrorKind::Cleanup,
+                        format!(
+                            "failed to observe owned Chromium descendant exit: {}",
+                            io::Error::last_os_error()
+                        ),
+                    ))
+                }
+                other => {
+                    return Err(OwnedChromiumError::new(
+                        OwnedChromiumErrorKind::Cleanup,
+                        format!("unexpected descendant wait result {other}"),
+                    ))
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    fn close_handles(handles: &mut Vec<HANDLE>) {
+        for handle in handles.drain(..) {
+            unsafe { CloseHandle(handle) };
+        }
     }
 
     fn job_active_processes(job: HANDLE) -> io::Result<u32> {

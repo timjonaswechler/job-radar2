@@ -950,7 +950,10 @@ pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthSto
     let metadata = file
         .metadata()
         .map_err(|_| AuthStorageError::unavailable())?;
-    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_file() {
+    if private_path_metadata_is_unsafe(&metadata)
+        || !metadata.is_file()
+        || !crate::agent::sessions::path_matches_file(path, &file).unwrap_or(false)
+    {
         return Err(AuthStorageError::invalid_configuration());
     }
     let mut bytes = Vec::new();
@@ -992,22 +995,79 @@ fn open_private_file(path: &Path, create_new: bool) -> Result<File, AuthStorageE
     Ok(file)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn validate_private_directory(path: &Path) -> Result<(), AuthStorageError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_dir() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    crate::agent::sessions::harden_windows_path(path, true)
+        .map_err(|_| AuthStorageError::unavailable())
+}
+
+#[cfg(windows)]
+fn validate_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_file() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    crate::agent::sessions::harden_windows_path(path, false)
+        .map_err(|_| AuthStorageError::unavailable())
+}
+
+#[cfg(windows)]
+fn ensure_private_regular_file(path: &Path) -> Result<(), AuthStorageError> {
+    validate_private_regular_file(path)
+}
+
+#[cfg(windows)]
+fn open_private_file(path: &Path, create_new: bool) -> Result<File, AuthStorageError> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
+    let mut options = OpenOptions::new();
+    options
+        .read(true)
+        .write(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    if create_new {
+        options.create_new(true);
+    } else {
+        options.create(true);
+    }
+    let file = options
+        .open(path)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| AuthStorageError::unavailable())?;
+    if private_path_metadata_is_unsafe(&metadata) || !metadata.is_file() {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    crate::agent::sessions::harden_windows_path(path, false)
+        .map_err(|_| AuthStorageError::unavailable())?;
+    if !crate::agent::sessions::path_matches_file(path, &file).unwrap_or(false) {
+        return Err(AuthStorageError::invalid_configuration());
+    }
+    Ok(file)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn validate_private_directory(_path: &Path) -> Result<(), AuthStorageError> {
     Err(AuthStorageError::invalid_configuration())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn validate_private_regular_file(_path: &Path) -> Result<(), AuthStorageError> {
     Err(AuthStorageError::invalid_configuration())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn ensure_private_regular_file(_path: &Path) -> Result<(), AuthStorageError> {
     Err(AuthStorageError::invalid_configuration())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn open_private_file(_path: &Path, _create_new: bool) -> Result<File, AuthStorageError> {
     Err(AuthStorageError::invalid_configuration())
 }

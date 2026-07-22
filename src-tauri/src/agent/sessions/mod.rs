@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub use storage::SessionManager;
 #[cfg(windows)]
-pub(crate) use storage::{harden_windows_path, unsafe_path_metadata};
+pub(crate) use storage::{harden_windows_path, path_matches_file, unsafe_path_metadata};
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SessionId(String);

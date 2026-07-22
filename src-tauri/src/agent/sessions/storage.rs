@@ -1057,7 +1057,7 @@ fn refresh(h: &mut SessionHandle) -> Result<(), SessionError> {
     };
     Ok(())
 }
-fn path_matches_file(path: &Path, file: &File) -> Result<bool, SessionError> {
+pub(crate) fn path_matches_file(path: &Path, file: &File) -> Result<bool, SessionError> {
     let path_metadata = fs::symlink_metadata(path)
         .map_err(|_| SessionError::new(SessionErrorCode::ExternalChange))?;
     if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
