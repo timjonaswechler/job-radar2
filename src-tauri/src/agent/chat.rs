@@ -128,6 +128,20 @@ impl AgentChat {
         self.session.snapshot()
     }
 
+    pub fn selected_provider(&self) -> Option<&ProviderId> {
+        self.conversation
+            .as_ref()
+            .map(|conversation| conversation.model().provider())
+            .or_else(|| self.session.snapshot().selected_provider())
+    }
+
+    pub fn selected_model(&self) -> Option<&ModelId> {
+        self.conversation
+            .as_ref()
+            .map(|conversation| conversation.model().id())
+            .or_else(|| self.session.snapshot().selected_model())
+    }
+
     pub fn reasoning_level(&self) -> ReasoningLevel {
         self.conversation
             .as_ref()
@@ -268,7 +282,10 @@ impl AgentChat {
         model: ModelId,
     ) -> Result<ReasoningLevel, AgentChatError> {
         self.ensure_mutable()?;
-        let selected = find_model(self.provider.as_ref(), &provider, &model)
+        let models = self.provider.model_snapshot();
+        let selected = models
+            .iter()
+            .find(|candidate| candidate.provider() == &provider && candidate.id() == &model)
             .cloned()
             .ok_or(AgentChatError::ModelUnavailable)?;
         let current_reasoning = self
@@ -282,11 +299,15 @@ impl AgentChat {
             return Err(error.into());
         }
         if let Some(conversation) = &mut self.conversation {
-            conversation.select_provider_model(&provider, model)?;
+            conversation.apply_model_snapshot(selected, models);
             conversation.set_reasoning_level(effective);
         } else {
-            self.conversation =
-                build_conversation(&self.system_prompt, &self.provider, &self.session);
+            self.conversation = build_conversation_with_models(
+                &self.system_prompt,
+                &self.provider,
+                &self.session,
+                models,
+            );
         }
         Ok(effective)
     }
@@ -342,14 +363,14 @@ impl AgentChat {
     }
 }
 
-fn find_model<'a>(
-    provider: &'a dyn ConversationProvider,
+fn find_model(
+    provider: &dyn ConversationProvider,
     provider_id: &ProviderId,
     model_id: &ModelId,
-) -> Option<&'a Model> {
+) -> Option<Model> {
     provider
-        .models()
-        .iter()
+        .model_snapshot()
+        .into_iter()
         .find(|model| model.provider() == provider_id && model.id() == model_id)
 }
 
@@ -358,14 +379,26 @@ fn build_conversation(
     provider: &Arc<dyn ConversationProvider>,
     session: &SessionHandle,
 ) -> Option<AgentConversation> {
+    build_conversation_with_models(system_prompt, provider, session, provider.model_snapshot())
+}
+
+fn build_conversation_with_models(
+    system_prompt: &str,
+    provider: &Arc<dyn ConversationProvider>,
+    session: &SessionHandle,
+    models: Vec<Model>,
+) -> Option<AgentConversation> {
     if session.snapshot().access() != SessionAccess::Writable {
         return None;
     }
     let provider_id = session.snapshot().selected_provider()?;
     let model_id = session.snapshot().selected_model()?;
-    let model = find_model(provider.as_ref(), provider_id, model_id)?.clone();
+    let model = models
+        .iter()
+        .find(|model| model.provider() == provider_id && model.id() == model_id)?
+        .clone();
     let messages = hydrate_messages(session.continuation(), &model, provider.as_ref());
-    AgentConversation::from_shared(
+    AgentConversation::from_shared_with_models(
         system_prompt.to_owned(),
         Arc::clone(provider),
         model.provider().clone(),
@@ -373,6 +406,7 @@ fn build_conversation(
         session.snapshot().reasoning_level(),
         messages,
         session.snapshot().id().to_string(),
+        models,
     )
     .ok()
 }
@@ -427,17 +461,15 @@ fn hydrate_messages(
                             .map(|model_id| (provider_id, model_id))
                     })
                     .and_then(|(provider_id, model_id)| {
-                        find_model(provider, &provider_id, &model_id)
-                            .cloned()
-                            .or_else(|| {
-                                Model::new(
-                                    model_id,
-                                    "Unavailable historical model",
-                                    provider_id,
-                                    vec![ReasoningLevel::Off],
-                                )
-                                .ok()
-                            })
+                        find_model(provider, &provider_id, &model_id).or_else(|| {
+                            Model::new(
+                                model_id,
+                                "Unavailable historical model",
+                                provider_id,
+                                vec![ReasoningLevel::Off],
+                            )
+                            .ok()
+                        })
                     })
                     .unwrap_or_else(|| selected_model.clone());
                 Message::Assistant(AssistantMessage::from_replay(
@@ -588,6 +620,36 @@ pub struct AgentChatEventStream<'a> {
 impl AgentChatEventStream<'_> {
     pub fn cancellation(&self) -> TurnCancellation {
         self.cancellation.clone()
+    }
+
+    pub fn snapshot(&self) -> &SessionSnapshot {
+        self.session.snapshot()
+    }
+
+    pub fn state(&self) -> AgentChatState {
+        if *self.not_saved {
+            AgentChatState::NotSaved
+        } else if self.session.snapshot().access() != SessionAccess::Writable {
+            AgentChatState::ReadOnly
+        } else {
+            AgentChatState::Ready
+        }
+    }
+
+    pub fn selected_provider(&self) -> &ProviderId {
+        self.conversation.model().provider()
+    }
+
+    pub fn selected_model(&self) -> &ModelId {
+        self.conversation.model().id()
+    }
+
+    pub fn reasoning_level(&self) -> ReasoningLevel {
+        self.conversation.reasoning_level()
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
     }
 
     fn fail_compaction(&mut self, error: AgentError) -> Poll<Option<AgentChatEvent>> {

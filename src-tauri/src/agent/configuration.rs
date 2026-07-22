@@ -5,7 +5,10 @@ use crate::agent::openai_codex::{
     LoginMethod, SecretAuthorizationInput,
 };
 use crate::agent::providers::AuthenticationMethod;
-use crate::agent::{AgentError, ModelRegistry};
+use crate::agent::{
+    AgentError, ConversationProvider, ConversationRequest, ModelRegistry, ProviderEvent,
+    ProviderEventStream,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -180,6 +183,41 @@ impl LoginCancellation {
     }
 }
 
+pub(crate) struct ConfiguredAgentChatProvider {
+    configuration: Arc<AgentConfiguration>,
+    models: Vec<crate::agent::models::Model>,
+}
+
+impl ConversationProvider for ConfiguredAgentChatProvider {
+    fn models(&self) -> &[crate::agent::models::Model] {
+        &self.models
+    }
+
+    fn model_snapshot(&self) -> Vec<crate::agent::models::Model> {
+        let provider_id = crate::agent::models::ProviderId::new(OPENAI_CODEX_PROVIDER)
+            .expect("built-in provider identifier must be valid");
+        self.configuration
+            .registry
+            .snapshot()
+            .provider(&provider_id)
+            .map(|provider| provider.models().to_vec())
+            .unwrap_or_default()
+    }
+
+    fn stream(&self, request: ConversationRequest) -> ProviderEventStream {
+        match self.configuration.conversation_provider() {
+            Ok(provider) => provider.stream(request),
+            Err(_) => Box::pin(futures_util::stream::iter(vec![
+                ProviderEvent::Started,
+                ProviderEvent::Failed(AgentError::fixed(
+                    crate::agent::AgentErrorCategory::Authentication,
+                    "authentication is unavailable",
+                )),
+            ])),
+        }
+    }
+}
+
 pub struct AgentConfiguration {
     agents_data_root: PathBuf,
     authentication: RwLock<AuthenticationState>,
@@ -238,6 +276,31 @@ impl AgentConfiguration {
             configuration_change: RwLock::new(()),
             logins: Mutex::new(HashMap::new()),
         })
+    }
+
+    pub(crate) fn configured_chat_provider(self: &Arc<Self>) -> ConfiguredAgentChatProvider {
+        let provider_id = crate::agent::models::ProviderId::new(OPENAI_CODEX_PROVIDER)
+            .expect("built-in provider identifier must be valid");
+        let models = self
+            .registry
+            .snapshot()
+            .provider(&provider_id)
+            .map(|provider| provider.models().to_vec())
+            .unwrap_or_default();
+        ConfiguredAgentChatProvider {
+            configuration: Arc::clone(self),
+            models,
+        }
+    }
+
+    fn conversation_provider(
+        &self,
+    ) -> Result<crate::agent::openai_codex::OpenAiCodexProvider, AgentConfigurationError> {
+        crate::agent::openai_codex::OpenAiCodexProvider::new(
+            self.authentication()?,
+            Arc::clone(&self.registry),
+        )
+        .map_err(|error| map_agent_error(&error))
     }
 
     pub fn status(&self) -> AgentConfigurationStatus {

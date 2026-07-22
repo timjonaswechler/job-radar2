@@ -1,6 +1,7 @@
 pub mod api;
 pub(crate) mod auth;
 mod chat;
+pub mod chat_application;
 mod compaction;
 pub mod configuration;
 mod conversation;
