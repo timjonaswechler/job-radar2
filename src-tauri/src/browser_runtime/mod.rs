@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
@@ -9,6 +9,8 @@ mod control;
 mod download;
 mod install;
 mod manifest;
+#[allow(dead_code)]
+pub(crate) mod owned;
 mod spec;
 mod status;
 #[cfg(test)]
@@ -34,39 +36,74 @@ pub use types::{
 
 use install::emit_progress;
 
-static ACTIVE_BROWSER_SESSIONS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+#[derive(Default)]
+struct BrowserSessionProtection {
+    active_guards: usize,
+    quarantined: bool,
+}
+
+static PROTECTED_BROWSER_SESSIONS: OnceLock<Mutex<HashMap<PathBuf, BrowserSessionProtection>>> =
+    OnceLock::new();
 
 pub(super) struct ActiveBrowserSession {
     path: PathBuf,
 }
 
 pub(super) fn begin_active_browser_session(path: &Path) -> ActiveBrowserSession {
-    active_browser_sessions()
+    let mut sessions = protected_browser_sessions()
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(path.to_path_buf());
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    sessions
+        .entry(path.to_path_buf())
+        .or_default()
+        .active_guards += 1;
     ActiveBrowserSession {
         path: path.to_path_buf(),
     }
 }
 
-pub(super) fn is_active_browser_session(path: &Path) -> bool {
-    active_browser_sessions()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .contains(path)
+impl ActiveBrowserSession {
+    /// Atomically changes active protection into persistent quarantine. A later
+    /// guard release cannot erase quarantine established by process ownership.
+    pub(super) fn quarantine(&mut self) {
+        quarantine_browser_session(&self.path);
+    }
 }
 
-fn active_browser_sessions() -> &'static Mutex<HashSet<PathBuf>> {
-    ACTIVE_BROWSER_SESSIONS.get_or_init(|| Mutex::new(HashSet::new()))
+pub(super) fn quarantine_browser_session(path: &Path) {
+    protected_browser_sessions()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entry(path.to_path_buf())
+        .or_default()
+        .quarantined = true;
+}
+
+pub(super) fn is_protected_browser_session(path: &Path) -> bool {
+    protected_browser_sessions()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains_key(path)
+}
+
+fn protected_browser_sessions() -> &'static Mutex<HashMap<PathBuf, BrowserSessionProtection>> {
+    PROTECTED_BROWSER_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 impl Drop for ActiveBrowserSession {
     fn drop(&mut self) {
-        active_browser_sessions()
+        let mut sessions = protected_browser_sessions()
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&self.path);
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let should_remove = if let Some(protection) = sessions.get_mut(&self.path) {
+            protection.active_guards = protection.active_guards.saturating_sub(1);
+            protection.active_guards == 0 && !protection.quarantined
+        } else {
+            false
+        };
+        if should_remove {
+            sessions.remove(&self.path);
+        }
     }
 }
 use manifest::{

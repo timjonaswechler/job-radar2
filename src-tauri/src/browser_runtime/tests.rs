@@ -108,6 +108,38 @@ fn manifest_version_mismatch_returns_update_required() {
 }
 
 #[test]
+fn noncanonical_manifest_install_dir_is_never_accepted_as_pinned_runtime() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let runtime_dir = temp_dir.path().join("browser-runtime");
+    let spec = BrowserRuntimeSpec::for_test("mac-arm64", "1.0.0", "abc123");
+    write_manifest_json(
+        &runtime_dir,
+        serde_json::json!({
+            "schemaVersion": 1,
+            "runtimeKind": "chrome-for-testing",
+            "platform": "mac-arm64",
+            "version": "1.0.0",
+            "downloadUrl": spec.download_url,
+            "archiveSha256": "abc123",
+            "installDir": "unexpected/1.0.0",
+            "executablePath": "chrome",
+            "installedAt": "2026-06-09T00:00:00Z"
+        }),
+    );
+    let executable_path = runtime_dir.join("unexpected/1.0.0/chrome");
+    std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
+    std::fs::write(executable_path, "fake chrome").unwrap();
+
+    let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
+
+    assert_eq!(status.status, BrowserRuntimeState::UpdateRequired);
+    assert!(status
+        .error
+        .unwrap()
+        .contains("does not match the pinned runtime spec"));
+}
+
+#[test]
 fn missing_manifest_executable_returns_invalid() {
     let temp_dir = tempfile::tempdir().unwrap();
     let runtime_dir = temp_dir.path().join("browser-runtime");
@@ -371,6 +403,43 @@ fn status_cleans_stale_session_dirs_without_removing_active_sessions() {
     let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
     assert_eq!(status.status, BrowserRuntimeState::Installed);
     assert!(!active_session_dir.exists());
+}
+
+#[test]
+fn status_never_removes_quarantined_session_residue() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let runtime_dir = temp_dir.path().join("browser-runtime");
+    let spec = BrowserRuntimeSpec::for_test("mac-arm64", "1.0.0", "abc123");
+    write_manifest_json(
+        &runtime_dir,
+        serde_json::json!({
+            "schemaVersion": 1,
+            "runtimeKind": "chrome-for-testing",
+            "platform": "mac-arm64",
+            "version": "1.0.0",
+            "downloadUrl": spec.download_url,
+            "archiveSha256": "abc123",
+            "installDir": "mac-arm64/1.0.0",
+            "executablePath": "chrome",
+            "installedAt": "2026-06-09T00:00:00Z"
+        }),
+    );
+    let executable_path = test_executable_path(&runtime_dir);
+    std::fs::create_dir_all(executable_path.parent().unwrap()).unwrap();
+    std::fs::write(&executable_path, "fake chrome").unwrap();
+    let session_dir = runtime_dir.join(".tmp/session-quarantined");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    let session_a = super::begin_active_browser_session(&session_dir);
+    let session_b = super::begin_active_browser_session(&session_dir);
+    // Process ownership can quarantine independently of either active guard.
+    super::quarantine_browser_session(&session_dir);
+    drop(session_a);
+    drop(session_b);
+
+    let status = status_for_runtime_dir(&runtime_dir, Some(&spec), false);
+
+    assert_eq!(status.status, BrowserRuntimeState::Installed);
+    assert!(session_dir.exists());
 }
 
 fn test_executable_path(runtime_dir: &Path) -> PathBuf {

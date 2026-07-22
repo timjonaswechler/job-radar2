@@ -196,6 +196,7 @@ pub fn status_for_runtime_dir_with_platform(
         || manifest.version != spec.version
         || manifest.download_url != spec.download_url
         || manifest.archive_sha256 != spec.expected_archive_sha256
+        || manifest.install_dir != install::relative_install_dir_string(spec)
         || manifest.executable_path != spec.relative_executable_path
     {
         return status(
@@ -232,7 +233,7 @@ fn cleanup_temporary_runtime_dirs(runtime_dir: &Path) -> Result<(), String> {
         let file_name = file_name.to_string_lossy();
         if file_name.starts_with("install-") || file_name.starts_with("session-") {
             let path = entry.path();
-            if file_name.starts_with("session-") && super::is_active_browser_session(&path) {
+            if file_name.starts_with("session-") && super::is_protected_browser_session(&path) {
                 continue;
             }
             if path.is_dir() {

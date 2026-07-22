@@ -227,7 +227,7 @@ fn relative_install_dir(spec: &BrowserRuntimeSpec) -> PathBuf {
     PathBuf::from(&spec.platform).join(&spec.version)
 }
 
-fn relative_install_dir_string(spec: &BrowserRuntimeSpec) -> String {
+pub(super) fn relative_install_dir_string(spec: &BrowserRuntimeSpec) -> String {
     format!("{}/{}", spec.platform, spec.version)
 }
 
