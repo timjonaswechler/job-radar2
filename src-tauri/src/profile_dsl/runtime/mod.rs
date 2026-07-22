@@ -1,5 +1,6 @@
 pub(crate) mod allowance;
 pub(crate) mod browser;
+pub(crate) mod browser_acquisition;
 pub(crate) mod cancellation;
 pub(crate) mod detail;
 pub(crate) mod discovery;
@@ -24,6 +25,16 @@ pub use browser::{
     ManagedProfileBrowserClient, ProfileBrowserClient, ProfileBrowserFetchError,
     ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     UnavailableProfileBrowserClient,
+};
+#[doc(hidden)]
+pub use browser_acquisition::BrowserAcquisitionTestInvocation as __TestBrowserAcquisitionInvocation;
+pub use browser_acquisition::{
+    BrowserAcquisition, BrowserAcquisitionCancellation, BrowserAcquisitionCancellationReason,
+    BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequest,
+    BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
+    BrowserLifecycleEvent, BrowserRenderedContent, ScriptedBrowserAcquisition,
+    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
+    ScriptedBrowserFinalization,
 };
 pub use cancellation::{RuntimeCancellation, RuntimeExecutionContext};
 pub use discovery::execute_discovery;

@@ -29,6 +29,7 @@ pub enum AllowanceDimension {
     BrowserActions,
     FanOut,
     ResponseBytes,
+    BrowserRenderedBytes,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -75,6 +76,7 @@ pub struct PhaseUsage {
     pub browser_actions: u64,
     pub fan_out: u64,
     pub response_bytes: u64,
+    pub browser_rendered_bytes: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -269,6 +271,53 @@ impl InvocationAllowance {
         Ok(())
     }
 
+    pub(crate) fn admit_browser_rendered_bytes(&self, observed: u64) -> Result<(), AllowanceStop> {
+        let mut stop = self.stop.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(stop) = stop.clone() {
+            return Err(stop);
+        }
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let remaining = self
+            .limits
+            .values
+            .max_browser_rendered_bytes
+            .saturating_sub(state.usage.browser_rendered_bytes);
+        let admitted = observed.min(remaining);
+        let Some(next) = state.usage.browser_rendered_bytes.checked_add(admitted) else {
+            drop(state);
+            let internal = AllowanceStop::Internal;
+            *stop = Some(internal.clone());
+            return Err(internal);
+        };
+        state.usage.browser_rendered_bytes = next;
+        if observed <= remaining {
+            return Ok(());
+        }
+        drop(state);
+        let exhaustion = AllowanceExhaustion {
+            dimension: AllowanceDimension::BrowserRenderedBytes,
+            requested: observed - remaining,
+            remaining: 0,
+            limit_sources: self.sources(AllowanceDimension::BrowserRenderedBytes),
+        };
+        let exhausted = AllowanceStop::Exhausted(exhaustion);
+        *stop = Some(exhausted.clone());
+        Err(exhausted)
+    }
+
+    pub(crate) fn remaining_browser_rendered_bytes(&self) -> u64 {
+        let used = self
+            .state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .usage
+            .browser_rendered_bytes;
+        self.limits
+            .values
+            .max_browser_rendered_bytes
+            .saturating_sub(used)
+    }
+
     pub(crate) fn remaining_response_bytes(&self) -> u64 {
         let used = self
             .state
@@ -430,6 +479,7 @@ fn dimension_value(limits: PhaseLimits, dimension: AllowanceDimension) -> u64 {
         AllowanceDimension::BrowserActions => limits.max_browser_actions,
         AllowanceDimension::FanOut => limits.max_fan_out,
         AllowanceDimension::ResponseBytes => limits.max_response_bytes,
+        AllowanceDimension::BrowserRenderedBytes => limits.max_browser_rendered_bytes,
     }
 }
 
@@ -448,6 +498,7 @@ mod tests {
             max_browser_actions: 1,
             max_fan_out: 1,
             max_response_bytes: 67_108_864,
+            max_browser_rendered_bytes: 67_108_864,
         };
         let allowance = InvocationAllowance::new(limits, true, None);
         allowance
@@ -486,6 +537,7 @@ mod tests {
             max_browser_actions: 1,
             max_fan_out: 1,
             max_response_bytes: 67_108_864,
+            max_browser_rendered_bytes: 67_108_864,
         };
         let cases = [
             (

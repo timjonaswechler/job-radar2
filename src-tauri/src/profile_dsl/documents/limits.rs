@@ -12,6 +12,7 @@ pub struct PhaseLimits {
     pub max_browser_actions: u64,
     pub max_fan_out: u64,
     pub max_response_bytes: u64,
+    pub max_browser_rendered_bytes: u64,
 }
 
 impl PhaseLimits {
@@ -24,6 +25,7 @@ impl PhaseLimits {
         max_browser_actions: 50,
         max_fan_out: 100_000,
         max_response_bytes: 67_108_864,
+        max_browser_rendered_bytes: 67_108_864,
     };
 
     pub const fn minimum(self, other: Self) -> Self {
@@ -68,6 +70,13 @@ impl PhaseLimits {
             } else {
                 other.max_response_bytes
             },
+            max_browser_rendered_bytes: if self.max_browser_rendered_bytes
+                < other.max_browser_rendered_bytes
+            {
+                self.max_browser_rendered_bytes
+            } else {
+                other.max_browser_rendered_bytes
+            },
         }
     }
 
@@ -80,6 +89,7 @@ impl PhaseLimits {
             && self.max_browser_actions > 0
             && self.max_fan_out > 0
             && self.max_response_bytes > 0
+            && self.max_browser_rendered_bytes > 0
     }
 
     pub const fn within(self, inherited: Self) -> bool {
@@ -91,6 +101,7 @@ impl PhaseLimits {
             && self.max_browser_actions <= inherited.max_browser_actions
             && self.max_fan_out <= inherited.max_fan_out
             && self.max_response_bytes <= inherited.max_response_bytes
+            && self.max_browser_rendered_bytes <= inherited.max_browser_rendered_bytes
     }
 }
 
@@ -113,6 +124,8 @@ pub struct PhaseLimitsFragment {
     pub max_fan_out: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_response_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_browser_rendered_bytes: Option<u64>,
 }
 
 impl<'de> Deserialize<'de> for PhaseLimitsFragment {
@@ -133,6 +146,7 @@ impl<'de> Deserialize<'de> for PhaseLimitsFragment {
             "maxBrowserActions",
             "maxFanOut",
             "maxResponseBytes",
+            "maxBrowserRenderedBytes",
         ];
         if object.is_empty() {
             return Err(D::Error::custom(
@@ -159,6 +173,7 @@ impl<'de> Deserialize<'de> for PhaseLimitsFragment {
             max_browser_actions: field("maxBrowserActions")?,
             max_fan_out: field("maxFanOut")?,
             max_response_bytes: field("maxResponseBytes")?,
+            max_browser_rendered_bytes: field("maxBrowserRenderedBytes")?,
         })
     }
 }

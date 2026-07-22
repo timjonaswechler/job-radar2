@@ -169,7 +169,8 @@ mod tests {
             "pages": 0,
             "browserActions": 0,
             "fanOut": 0,
-            "responseBytes": 0
+            "responseBytes": 0,
+            "browserRenderedBytes": 0
         })
     }
 

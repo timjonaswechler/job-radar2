@@ -129,6 +129,11 @@ fn validate_phase_limits(
             limits.max_response_bytes,
             PhaseLimits::BACKEND.max_response_bytes,
         ),
+        (
+            "maxBrowserRenderedBytes",
+            limits.max_browser_rendered_bytes,
+            PhaseLimits::BACKEND.max_browser_rendered_bytes,
+        ),
     ];
     for (field, value, ceiling) in fields {
         if value == 0 || value > ceiling {

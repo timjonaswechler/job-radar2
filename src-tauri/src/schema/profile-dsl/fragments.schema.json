@@ -113,6 +113,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 67108864
+        },
+        "maxBrowserRenderedBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
         }
       }
     },

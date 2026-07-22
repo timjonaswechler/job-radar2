@@ -72,12 +72,22 @@ impl RuntimeCancellation for CancelsOnCheck {
 fn typed_limit_fragment_rejects_empty_null_and_unknown_shapes() {
     assert!(serde_json::from_value::<PhaseLimitsFragment>(json!({})).is_err());
     assert!(serde_json::from_value::<PhaseLimitsFragment>(json!({ "maxRequests": null })).is_err());
+    assert!(serde_json::from_value::<PhaseLimitsFragment>(
+        json!({ "maxBrowserRenderedBytes": null })
+    )
+    .is_err());
     assert!(serde_json::from_value::<PhaseLimitsFragment>(json!({ "unknownLimit": 1 })).is_err());
     assert_eq!(
         serde_json::from_value::<PhaseLimitsFragment>(json!({ "maxRequests": 3 }))
             .unwrap()
             .max_requests,
         Some(3)
+    );
+    assert_eq!(
+        serde_json::from_value::<PhaseLimitsFragment>(json!({ "maxBrowserRenderedBytes": 1024 }))
+            .unwrap()
+            .max_browser_rendered_bytes,
+        Some(1024)
     );
 }
 
@@ -158,7 +168,7 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
 }
 
 #[tokio::test]
-async fn accepted_discovery_has_one_complete_exact_eight_dimension_report() {
+async fn accepted_discovery_has_one_complete_exact_nine_dimension_report() {
     let plan = plan();
     let fetcher = QueueFetcher::new([
         json!({ "jobs": [{ "id": "1", "title": "Engineer", "url": "https://example.test/1", "locations": [] }] }),
@@ -192,6 +202,8 @@ async fn accepted_discovery_has_one_complete_exact_eight_dimension_report() {
     assert_eq!(report.usage.pages, 2);
     assert_eq!(report.usage.browser_actions, 0);
     assert_eq!(report.usage.fan_out, 0);
+    assert!(report.usage.response_bytes > 0);
+    assert_eq!(report.usage.browser_rendered_bytes, 0);
     assert!(report.usage.duration_ms <= PhaseLimits::BACKEND.max_duration_ms);
 }
 
@@ -655,7 +667,7 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
     let plan = plan();
     let fetcher = QueueFetcher::new([]);
     let caller = PhaseLimits {
-        max_requests: plan.discovery.limits.max_requests + 1,
+        max_browser_rendered_bytes: plan.discovery.limits.max_browser_rendered_bytes + 1,
         ..PhaseLimits::BACKEND
     };
 
@@ -680,6 +692,7 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
     assert_eq!(report.usage.browser_actions, 0);
     assert_eq!(report.usage.fan_out, 0);
     assert_eq!(report.usage.response_bytes, 0);
+    assert_eq!(report.usage.browser_rendered_bytes, 0);
     assert!(fetcher.request_count() == 0);
     assert_eq!(result.diagnostics[0].code, "invalid_caller_phase_limits");
 }

@@ -121,26 +121,35 @@ pub use profile_dsl::primitives::value::{
 #[doc(hidden)]
 pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
 
+#[doc(hidden)]
+pub use profile_dsl::runtime::__TestBrowserAcquisitionInvocation;
 pub use profile_dsl::runtime::{
     execute_discovery, validate_posting_reference, AllowanceDimension, AllowanceExhaustion,
-    AllowanceLimitSource, CandidateDetailFailure, ContributionOrigin, DetailCancelled,
-    DetailContributionEvidence, DetailField, DetailFieldCapabilities, DetailPatch,
-    DetailPhasePayload, DetailRejection, DiscoveryContributionEvidence, DiscoveryHint,
-    DiscoveryPhasePayload, DiscoveryRejection, DiscoveryResponsibility, HintUse,
-    ManagedProfileBrowserClient, OccurrenceReferenceError, PhaseCancellationReason, PhaseCancelled,
-    PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
-    PhasePreStartFailure, PhaseRunError, PhaseRunResult, PhaseUsage, PolicyOutcome,
-    PolicyUnsatisfiedCause, PostingOccurrence, PostingOccurrenceIdentity, PostingReference,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileDslSourceDetailExecution,
-    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
-    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
-    RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeCancellation,
-    RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    ScriptedSourceDetailExecution, SensitiveRequestBody, SourceDetailExecution,
-    SourceDetailFailure, SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequest,
-    SourceDetailRequestSnapshot, SourceDetailResult, UnavailableProfileBrowserClient,
+    AllowanceLimitSource, BrowserAcquisition, BrowserAcquisitionCancellation,
+    BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
+    BrowserAcquisitionRequest, BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal,
+    BrowserInfrastructureFailure, BrowserLifecycleEvent, BrowserRenderedContent,
+    CandidateDetailFailure, ContributionOrigin, DetailCancelled, DetailContributionEvidence,
+    DetailField, DetailFieldCapabilities, DetailPatch, DetailPhasePayload, DetailRejection,
+    DiscoveryContributionEvidence, DiscoveryHint, DiscoveryPhasePayload, DiscoveryRejection,
+    DiscoveryResponsibility, HintUse, ManagedProfileBrowserClient, OccurrenceReferenceError,
+    PhaseCancellationReason, PhaseCancelled, PhaseCompletion, PhaseExecutionFailure,
+    PhaseExecutionReport, PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult,
+    PhaseUsage, PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence,
+    PostingOccurrenceIdentity, PostingReference, ProfileBrowserClient, ProfileBrowserFetchError,
+    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    ProfileDslSourceDetailExecution, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
+    ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ProviderValues,
+    RequestedDetailFields, RequestedFieldDisposition, ReqwestProfileHttpClient,
+    RuntimeCancellation, RuntimeExecutionContext, ScriptedBrowserAcquisition,
+    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
+    ScriptedBrowserFinalization, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SensitiveRequestBody,
+    SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome, SourceDetailPhaseEvidence,
+    SourceDetailRequest, SourceDetailRequestSnapshot, SourceDetailResult,
+    UnavailableProfileBrowserClient,
 };
+
 pub use profile_dsl::template::{
     compile_template, render_template, CompiledTemplate, TemplateCompileError,
     TemplateCompileErrorKind, TemplateDescriptor, TemplateReference, TemplateRenderError,

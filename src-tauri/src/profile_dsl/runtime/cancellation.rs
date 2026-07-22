@@ -144,6 +144,17 @@ impl<'a> RuntimeExecutionContext<'a> {
     pub(crate) fn stop(self) -> Option<AllowanceStop> {
         self.allowance.and_then(InvocationAllowance::stop)
     }
+    pub(crate) fn admit_browser_rendered_bytes(self, observed: u64) -> Result<(), AllowanceStop> {
+        self.allowance.map_or(Ok(()), |allowance| {
+            allowance.admit_browser_rendered_bytes(observed)
+        })
+    }
+    pub(crate) fn remaining_browser_rendered_bytes(self) -> u64 {
+        self.allowance.map_or(
+            PhaseLimits::BACKEND.max_browser_rendered_bytes,
+            InvocationAllowance::remaining_browser_rendered_bytes,
+        )
+    }
     pub(crate) fn remaining_response_bytes(self) -> u64 {
         self.allowance.map_or(
             PhaseLimits::BACKEND.max_response_bytes,

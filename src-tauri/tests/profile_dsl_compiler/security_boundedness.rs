@@ -36,6 +36,15 @@ fn phase_limits_resolve_to_backend_ceiling_and_authored_values_can_only_tighten(
     let result = compile_profile_value(simple_profile_value());
     let plan = result.execution_plan.expect("omitted limits compile");
     assert_eq!(plan.discovery.limits, job_radar_lib::PhaseLimits::BACKEND);
+    assert_eq!(plan.discovery.limits.max_browser_rendered_bytes, 67_108_864);
+    assert_eq!(
+        plan.detail
+            .as_ref()
+            .expect("fixture has Detail")
+            .limits
+            .max_browser_rendered_bytes,
+        67_108_864
+    );
     assert!(!plan.discovery.limits_authored);
 
     let mut profile = simple_profile_value();
@@ -43,6 +52,7 @@ fn phase_limits_resolve_to_backend_ceiling_and_authored_values_can_only_tighten(
     let result = compile_profile_value(profile);
     let plan = result.execution_plan.expect("tightened limits compile");
     assert_eq!(plan.discovery.limits.max_requests, 7);
+    assert_eq!(plan.discovery.limits.max_browser_rendered_bytes, 67_108_864);
     assert!(plan.discovery.limits_authored);
 }
 
@@ -69,6 +79,18 @@ fn compiler_rejects_above_ceiling_and_inherited_limit_raises() {
     assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.code
         == "phase_limit_cannot_raise_inherited"
         && diagnostic.path == "/accessPaths/0/discovery/limits/maxRequests"));
+
+    let mut profile = simple_profile_value();
+    let mut limits = phase_limits(1_000);
+    limits["maxBrowserRenderedBytes"] = json!(67_108_865_u64);
+    profile["accessPaths"][0]["discovery"]["limits"] = limits;
+    let result = compile_profile_value(profile);
+    assert!(result.execution_plan.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.code
+        == "phase_limit_out_of_bounds"
+        && diagnostic
+            .path
+            .ends_with("/discovery/limits/maxBrowserRenderedBytes")));
 }
 
 #[test]
@@ -76,8 +98,12 @@ fn partial_direct_limit_fragment_inherits_backend_values_and_tightens_one_dimens
     let profile = simple_profile_value();
     let mut source: Value =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
-    source["accessPaths"] =
-        json!([{ "key": "json_feed", "discovery": { "limits": { "maxRequests": 3 } } }]);
+    source["accessPaths"] = json!([{
+        "key": "json_feed",
+        "discovery": {
+            "limits": { "maxRequests": 3, "maxBrowserRenderedBytes": 1048576 }
+        }
+    }]);
     let result = compile_profile_and_source_values(profile, source);
     let limits = result
         .execution_plan
@@ -85,6 +111,7 @@ fn partial_direct_limit_fragment_inherits_backend_values_and_tightens_one_dimens
         .discovery
         .limits;
     assert_eq!(limits.max_requests, 3);
+    assert_eq!(limits.max_browser_rendered_bytes, 1_048_576);
     assert_eq!(limits.max_produced_items, 100_000);
 }
 
@@ -104,7 +131,8 @@ fn browser_phase_duration_must_preserve_the_two_second_teardown_reserve() {
         "maxPages": 1000,
         "maxBrowserActions": 50,
         "maxFanOut": 100000,
-        "maxResponseBytes": 67108864
+        "maxResponseBytes": 67108864,
+        "maxBrowserRenderedBytes": 67108864
     });
 
     let result = compile_profile_value(profile);
@@ -404,7 +432,8 @@ fn phase_limits(max_requests: u64) -> Value {
         "maxPages": 1000,
         "maxBrowserActions": 50,
         "maxFanOut": 100000,
-        "maxResponseBytes": 67108864
+        "maxResponseBytes": 67108864,
+        "maxBrowserRenderedBytes": 67108864
     })
 }
 

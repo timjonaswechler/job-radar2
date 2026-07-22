@@ -443,12 +443,13 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
         "maxPages": 1000,
         "maxBrowserActions": 50,
         "maxFanOut": 100000,
-        "maxResponseBytes": 67108864
+        "maxResponseBytes": 67108864,
+        "maxBrowserRenderedBytes": 67108864
     });
     harness.assert_json_valid(
         SchemaEntrypoint::PolicyStrategySet,
         json!({ "policy": { "type": "first_accepted" }, "strategies": [strategy.clone()], "limits": limits.clone() }),
-        "Strategy Set with all eight phase limits",
+        "Strategy Set with all nine phase limits",
     );
     for invalid_limits in [
         {
@@ -473,7 +474,30 @@ fn final_strategy_set_schema_requires_an_exact_closed_policy_object() {
         },
         {
             let mut value = limits.clone();
+            value["maxBrowserRenderedBytes"] = json!(0);
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value["maxBrowserRenderedBytes"] = Value::Null;
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value["maxBrowserRenderedBytes"] = json!(67_108_865);
+            value
+        },
+        {
+            let mut value = limits.clone();
             value.as_object_mut().unwrap().remove("maxFanOut");
+            value
+        },
+        {
+            let mut value = limits.clone();
+            value
+                .as_object_mut()
+                .unwrap()
+                .remove("maxBrowserRenderedBytes");
             value
         },
     ] {
