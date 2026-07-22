@@ -14,6 +14,7 @@ pub struct AppState {
     pub running_search_runs: Arc<crate::search::request::RunningSearchRuns>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
+    pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
 }
 
 impl AppState {
@@ -48,6 +49,16 @@ impl AppState {
                 &paths.agents_data_dir,
             )?,
         );
+        let agent_chat_provider = agent_configuration.conversation_provider()?;
+        std::fs::create_dir_all(&paths.agents_data_dir)?;
+        let canonical_agents_data_dir = std::fs::canonicalize(&paths.agents_data_dir)?;
+        let agent_session_manager = crate::agent::sessions::SessionManager::from_agents_data_root(
+            &canonical_agents_data_dir,
+        )?;
+        let agent_chats = Arc::new(crate::agent::chat_application::AgentChatApplication::new(
+            agent_session_manager,
+            agent_chat_provider,
+        ));
 
         Ok(Self {
             db,
@@ -60,6 +71,7 @@ impl AppState {
                 notifier,
             ),
             agent_configuration,
+            agent_chats,
         })
     }
 }

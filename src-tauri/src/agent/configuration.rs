@@ -240,6 +240,16 @@ impl AgentConfiguration {
         })
     }
 
+    pub(crate) fn conversation_provider(
+        &self,
+    ) -> Result<crate::agent::openai_codex::OpenAiCodexProvider, AgentConfigurationError> {
+        crate::agent::openai_codex::OpenAiCodexProvider::new(
+            self.authentication()?,
+            Arc::clone(&self.registry),
+        )
+        .map_err(|error| map_agent_error(&error))
+    }
+
     pub fn status(&self) -> AgentConfigurationStatus {
         let _change = self
             .configuration_change

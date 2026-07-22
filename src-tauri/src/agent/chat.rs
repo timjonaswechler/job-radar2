@@ -128,6 +128,20 @@ impl AgentChat {
         self.session.snapshot()
     }
 
+    pub fn selected_provider(&self) -> Option<&ProviderId> {
+        self.conversation
+            .as_ref()
+            .map(|conversation| conversation.model().provider())
+            .or_else(|| self.session.snapshot().selected_provider())
+    }
+
+    pub fn selected_model(&self) -> Option<&ModelId> {
+        self.conversation
+            .as_ref()
+            .map(|conversation| conversation.model().id())
+            .or_else(|| self.session.snapshot().selected_model())
+    }
+
     pub fn reasoning_level(&self) -> ReasoningLevel {
         self.conversation
             .as_ref()
@@ -588,6 +602,36 @@ pub struct AgentChatEventStream<'a> {
 impl AgentChatEventStream<'_> {
     pub fn cancellation(&self) -> TurnCancellation {
         self.cancellation.clone()
+    }
+
+    pub fn snapshot(&self) -> &SessionSnapshot {
+        self.session.snapshot()
+    }
+
+    pub fn state(&self) -> AgentChatState {
+        if *self.not_saved {
+            AgentChatState::NotSaved
+        } else if self.session.snapshot().access() != SessionAccess::Writable {
+            AgentChatState::ReadOnly
+        } else {
+            AgentChatState::Ready
+        }
+    }
+
+    pub fn selected_provider(&self) -> &ProviderId {
+        self.conversation.model().provider()
+    }
+
+    pub fn selected_model(&self) -> &ModelId {
+        self.conversation.model().id()
+    }
+
+    pub fn reasoning_level(&self) -> ReasoningLevel {
+        self.conversation.reasoning_level()
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
     }
 
     fn fail_compaction(&mut self, error: AgentError) -> Poll<Option<AgentChatEvent>> {

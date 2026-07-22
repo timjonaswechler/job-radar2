@@ -1,3 +1,6 @@
+#[path = "agent/chat_application.rs"]
+mod chat_application;
+
 #[path = "agent/chats.rs"]
 mod chats;
 
