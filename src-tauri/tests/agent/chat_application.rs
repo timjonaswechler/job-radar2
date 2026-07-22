@@ -8,8 +8,9 @@ use job_radar_lib::agent::testing::{
     ExpectedConversationRequest, ScriptedProvider, ScriptedTurn, SessionTestHarness,
 };
 use job_radar_lib::agent::{
-    ContentKind, ConversationProvider, ConversationRequest, FinishReason, Message, ProviderEvent,
-    ProviderEventStream, ProviderTurnCompletion, TokenUsage, UserMessage,
+    AgentError, AgentErrorCategory, ContentKind, ConversationProvider, ConversationRequest,
+    FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,
+    UserMessage,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -320,6 +321,57 @@ fn manual_compaction_is_streamed_and_snapshot_history_exposes_no_summary_or_stor
         let serialized = serde_json::to_string(&events).unwrap();
         assert!(!serialized.contains("COMPACTION-SUMMARY-CANARY"));
         assert!(!serialized.contains("firstKeptEntryId"));
+    });
+}
+
+#[test]
+fn provider_failures_are_mapped_without_credentials_bodies_or_paths() {
+    tauri::async_runtime::block_on(async {
+        let temp = TempDir::new().unwrap();
+        let selected = model("synthetic-model", vec![ReasoningLevel::Off]);
+        let provider = ScriptedProvider::new(
+            vec![selected.clone()],
+            vec![ScriptedTurn::new(
+                ExpectedConversationRequest::any_messages(
+                    "SYSTEM-PROMPT-CANARY",
+                    selected.id().clone(),
+                    ReasoningLevel::Off,
+                ),
+                vec![
+                    ProviderEvent::Started,
+                    ProviderEvent::Failed(AgentError {
+                        category: AgentErrorCategory::Provider,
+                        message: "CREDENTIAL-CANARY PROVIDER-BODY-CANARY /private/PATH-CANARY"
+                            .into(),
+                        retry_after: None,
+                    }),
+                ],
+            )],
+        );
+        let application = Arc::new(AgentChatApplication::new(
+            harness().manager(&root(&temp)).unwrap(),
+            provider,
+        ));
+        let draft = application.create(input(&selected)).unwrap();
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        application
+            .send(draft.id, "fail".into(), Arc::new(ChannelListener(sender)))
+            .unwrap();
+        let mut events = Vec::new();
+        loop {
+            let event = receiver.recv().await.unwrap();
+            let done = matches!(event.event, AgentChatApplicationEventKind::Failed { .. });
+            events.push(event);
+            if done {
+                break;
+            }
+        }
+        let serialized = serde_json::to_string(&events).unwrap();
+        let debugged = format!("{events:?}");
+        for forbidden in ["CREDENTIAL-CANARY", "PROVIDER-BODY-CANARY", "PATH-CANARY"] {
+            assert!(!serialized.contains(forbidden));
+            assert!(!debugged.contains(forbidden));
+        }
     });
 }
 

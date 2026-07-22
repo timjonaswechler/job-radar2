@@ -49,7 +49,7 @@ impl AppState {
                 &paths.agents_data_dir,
             )?,
         );
-        let agent_chat_provider = agent_configuration.conversation_provider()?;
+        let agent_chat_provider = agent_configuration.configured_chat_provider();
         std::fs::create_dir_all(&paths.agents_data_dir)?;
         let canonical_agents_data_dir = std::fs::canonicalize(&paths.agents_data_dir)?;
         let agent_session_manager = crate::agent::sessions::SessionManager::from_agents_data_root(

@@ -500,14 +500,14 @@ impl AgentChatApplication {
         let mut stream = match stream {
             Ok(stream) => stream,
             Err(error) => {
-                self.emit(
+                self.finish_operation_and_emit(
                     &id,
+                    generation,
                     listener.as_ref(),
                     AgentChatApplicationEventKind::Failed {
                         error: map_chat_error(error),
                     },
                 );
-                self.finish_operation(&id, generation);
                 return;
             }
         };
@@ -537,8 +537,7 @@ impl AgentChatApplication {
             projected.reasoning_level = stream.reasoning_level().into();
             let event = project_event(event, projected);
             if stream.is_finished() {
-                self.finish_operation(&id, generation);
-                self.emit(&id, listener.as_ref(), event);
+                self.finish_operation_and_emit(&id, generation, listener.as_ref(), event);
                 return;
             }
             self.emit(&id, listener.as_ref(), event);
@@ -557,6 +556,30 @@ impl AgentChatApplication {
             sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed),
             event,
         });
+    }
+
+    fn finish_operation_and_emit(
+        &self,
+        id: &AgentChatId,
+        generation: u64,
+        listener: &dyn AgentChatEventListener,
+        event: AgentChatApplicationEventKind,
+    ) {
+        let mut operations = self
+            .operations
+            .lock()
+            .expect("Agent Chat operation lock poisoned");
+        if operations
+            .get(id)
+            .is_some_and(|operation| operation.generation == generation)
+        {
+            listener.emit(AgentChatApplicationEvent {
+                chat_id: id.clone(),
+                sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed),
+                event,
+            });
+            operations.remove(id);
+        }
     }
 
     fn finish_operation(&self, id: &AgentChatId, generation: u64) {
