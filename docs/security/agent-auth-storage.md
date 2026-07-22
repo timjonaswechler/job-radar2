@@ -31,7 +31,9 @@ The OpenAI Codex authentication module uses these provider-neutral mutation and 
 
 Tests exercise the same `AuthStorage` interface future Provider and configuration modules call. A temporary application-data root is the filesystem adapter; values are conspicuously synthetic and environment lookup is injected rather than reading developer credentials. Coverage includes both tagged variants, direct/reference resolution, no-fallback ownership, command rejection, transactional reload, provider-scoped mutation, exact-expiry concurrent refresh, atomic persistence, migration, permissions, symlinks, and redacted failures.
 
-Run:
+These persistence and POSIX permission contracts currently run on macOS and Linux. Native Windows auth/session durability, ACL coverage, and re-enabling the persistence-backed Agent integration suite are tracked by [#294](https://github.com/timjonaswechler/job-radar2/issues/294).
+
+Run on a supported Unix host:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml agent::auth::tests

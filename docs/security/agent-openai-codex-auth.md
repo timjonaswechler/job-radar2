@@ -15,7 +15,9 @@ Issue [#185](https://github.com/timjonaswechler/job-radar2/issues/185) implement
 
 Tests use the caller-facing authentication and model interfaces with injected synthetic HTTP, interaction, clock, randomness, and filesystem adapters. All JWT-shaped values and credential fields are fabricated. Coverage includes PKCE request construction, login/logout, device polling and deadline behavior, exact-expiry refresh after lock acquisition, refresh rotation and persistence, model lookup, reasoning normalization, and redacted error categories.
 
-Run:
+The OAuth fixtures use the filesystem-backed `AuthStorage` test seam and currently run on macOS and Linux. Native Windows persistence support and equivalent coverage are tracked by [#294](https://github.com/timjonaswechler/job-radar2/issues/294).
+
+Run on a supported Unix host:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml agent:: --no-fail-fast
