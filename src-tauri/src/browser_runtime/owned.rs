@@ -11,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
+    sync::{Mutex, OnceLock},
     time::Duration,
 };
 use tokio::{io::AsyncReadExt, task::JoinHandle};
@@ -19,6 +20,10 @@ use uuid::Uuid;
 use super::{
     begin_active_browser_session, current_runtime_spec, status_for_runtime_dir,
     ActiveBrowserSession, BrowserRuntimeState,
+};
+use crate::profile_dsl::runtime::allowance::{
+    BROWSER_FORCE_TERMINATE_REAP_MS, BROWSER_GRACEFUL_CLOSE_MS, BROWSER_HANDLER_COMPLETION_MS,
+    BROWSER_SESSION_FINALIZATION_MS,
 };
 
 const DROP_REAP_TIMEOUT: Duration = Duration::from_secs(1);
@@ -191,7 +196,9 @@ impl OwnedChromiumLauncher {
             )),
         };
         if let Err(primary) = create_result {
-            return match cleanup_session_dir(&session_dir, deadlines.force).await {
+            let finalization_deadline =
+                capped_stage_deadline(deadlines.finalize, BROWSER_SESSION_FINALIZATION_MS);
+            return match cleanup_session_dir(&session_dir, finalization_deadline).await {
                 Ok(()) => Err(primary),
                 Err(cleanup) => Err(cleanup),
             };
@@ -210,7 +217,9 @@ impl OwnedChromiumLauncher {
             )),
         };
         if let Err(primary) = clear_result {
-            return match cleanup_session_dir(&session_dir, deadlines.force).await {
+            let finalization_deadline =
+                capped_stage_deadline(deadlines.finalize, BROWSER_SESSION_FINALIZATION_MS);
+            return match cleanup_session_dir(&session_dir, finalization_deadline).await {
                 Ok(()) => Err(primary),
                 Err(cleanup) => Err(cleanup),
             };
@@ -230,7 +239,7 @@ impl OwnedChromiumLauncher {
             &self.executable_path,
             &args,
             &[],
-            deadlines.force,
+            capped_stage_deadline(deadlines.force, BROWSER_FORCE_TERMINATE_REAP_MS),
             &session_dir,
         ) {
             Ok(process) => process,
@@ -248,7 +257,9 @@ impl OwnedChromiumLauncher {
                 if error.cleanup_unconfirmed {
                     return Err(primary);
                 }
-                return match cleanup_session_dir(&session_dir, deadlines.force).await {
+                let finalization_deadline =
+                    capped_stage_deadline(deadlines.finalize, BROWSER_SESSION_FINALIZATION_MS);
+                return match cleanup_session_dir(&session_dir, finalization_deadline).await {
                     Ok(()) => Err(primary),
                     Err(cleanup) => Err(cleanup),
                 };
@@ -269,8 +280,7 @@ impl OwnedChromiumLauncher {
             None
         };
         if let Some(primary) = post_spawn_primary {
-            let error =
-                finalize_failed_launch(primary, process, &session_dir, deadlines.force).await;
+            let error = finalize_failed_launch(primary, process, &session_dir, deadlines).await;
             if error.kind == OwnedChromiumErrorKind::Cleanup {
                 active_session.quarantine();
             }
@@ -287,8 +297,7 @@ impl OwnedChromiumLauncher {
         let endpoint = match endpoint_result {
             Ok(endpoint) => endpoint,
             Err(primary) => {
-                let error =
-                    finalize_failed_launch(primary, process, &session_dir, deadlines.force).await;
+                let error = finalize_failed_launch(primary, process, &session_dir, deadlines).await;
                 if error.kind == OwnedChromiumErrorKind::Cleanup {
                     active_session.quarantine();
                 }
@@ -316,8 +325,7 @@ impl OwnedChromiumLauncher {
         let (browser, handler) = match connection_result {
             Ok(connection) => connection,
             Err(primary) => {
-                let error =
-                    finalize_failed_launch(primary, process, &session_dir, deadlines.force).await;
+                let error = finalize_failed_launch(primary, process, &session_dir, deadlines).await;
                 if error.kind == OwnedChromiumErrorKind::Cleanup {
                     active_session.quarantine();
                 }
@@ -371,7 +379,9 @@ impl OwnedChromiumSession {
         let mut forced = false;
 
         if let Some(browser) = self.browser.as_mut() {
-            let _ = tokio::time::timeout_at(deadlines.graceful, browser.close()).await;
+            let graceful_deadline =
+                capped_stage_deadline(deadlines.graceful, BROWSER_GRACEFUL_CLOSE_MS);
+            let _ = tokio::time::timeout_at(graceful_deadline, browser.close()).await;
         }
         self.browser.take();
 
@@ -394,20 +404,23 @@ impl OwnedChromiumSession {
             Err(error) => Some(error),
         };
 
-        if let Some(mut handler_task) = self.handler_task.take() {
-            if tokio::time::timeout_at(deadlines.handler, &mut handler_task)
+        let handler_error = if let Some(handler_task) = self.handler_task.take() {
+            observe_or_abort_handler(handler_task, deadlines.handler)
                 .await
-                .is_err()
-            {
-                handler_task.abort();
-                let _ = handler_task.await;
-            }
-        }
+                .err()
+        } else {
+            None
+        };
 
         if process_error.is_some() {
             if let Some(active_session) = self.active_session.as_mut() {
                 active_session.quarantine();
             }
+            retain_unconfirmed_process(
+                self.process
+                    .take()
+                    .expect("failed process remains owned until quarantine"),
+            );
             self.active_session.take();
             return Err(process_error.expect("checked above"));
         }
@@ -415,12 +428,17 @@ impl OwnedChromiumSession {
         // Drop the confirmed process owner while active protection is retained.
         // Its bounded synchronous Drop re-check cannot race status cleanup.
         self.process.take();
-        let cleanup_result = cleanup_session_dir(&self.session_dir, deadlines.finalize).await;
+        let finalization_deadline =
+            capped_stage_deadline(deadlines.finalize, BROWSER_SESSION_FINALIZATION_MS);
+        let cleanup_result = cleanup_session_dir(&self.session_dir, finalization_deadline).await;
         // Keep status cleanup excluded until our own filesystem finalization has
         // reached a terminal result. The process tree is already confirmed gone,
         // so safe residue after a typed filesystem failure need not be quarantined.
         self.active_session.take();
         cleanup_result?;
+        if let Some(error) = handler_error {
+            return Err(error);
+        }
         Ok(OwnedChromiumShutdown { forced })
     }
 
@@ -449,35 +467,104 @@ fn spawn_handler(mut handler: Handler) -> JoinHandle<()> {
     })
 }
 
+async fn observe_or_abort_handler(
+    mut handler_task: JoinHandle<()>,
+    handler_boundary: tokio::time::Instant,
+) -> Result<(), OwnedChromiumError> {
+    const ABORT_OBSERVATION_MS: u64 = 25;
+
+    let handler_deadline = capped_stage_deadline(handler_boundary, BROWSER_HANDLER_COMPLETION_MS);
+    let natural_completion_deadline = handler_deadline
+        .checked_sub(Duration::from_millis(ABORT_OBSERVATION_MS))
+        .unwrap_or_else(tokio::time::Instant::now)
+        .max(tokio::time::Instant::now());
+    if tokio::time::timeout_at(natural_completion_deadline, &mut handler_task)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
+
+    handler_task.abort();
+    match tokio::time::timeout_at(handler_deadline, &mut handler_task).await {
+        Ok(_) => Ok(()),
+        Err(_) => Err(OwnedChromiumError::new(
+            OwnedChromiumErrorKind::Cleanup,
+            "owned Chromium handler abort could not be observed within its 250 ms slice",
+        )),
+    }
+}
+
 async fn finalize_failed_launch(
     primary: OwnedChromiumError,
     mut process: ProcessTree,
     session_dir: &Path,
-    force_deadline: tokio::time::Instant,
+    deadlines: OwnedChromiumDeadlines,
 ) -> OwnedChromiumError {
-    let cleanup = async {
-        force_terminate_and_reap(&mut process, force_deadline).await?;
-        cleanup_session_dir(session_dir, force_deadline).await
+    if let Err(error) = force_terminate_and_reap(&mut process, deadlines.force).await {
+        // The bounded force stage already initiated termination. Retain native
+        // ownership process-lifetime without another Drop wait crossing B01's
+        // hard deadline; the caller persistently quarantines the session path.
+        retain_unconfirmed_process(process);
+        return error;
     }
-    .await;
-    cleanup.err().unwrap_or(primary)
+    let finalization_deadline =
+        capped_stage_deadline(deadlines.finalize, BROWSER_SESSION_FINALIZATION_MS);
+    cleanup_session_dir(session_dir, finalization_deadline)
+        .await
+        .err()
+        .unwrap_or(primary)
+}
+
+static UNCONFIRMED_PROCESS_TREES: OnceLock<Mutex<Vec<ProcessTree>>> = OnceLock::new();
+
+fn retain_unconfirmed_process(process: ProcessTree) {
+    UNCONFIRMED_PROCESS_TREES
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(process);
 }
 
 async fn cleanup_session_dir(
     session_dir: &Path,
     deadline: tokio::time::Instant,
 ) -> Result<(), OwnedChromiumError> {
-    match tokio::time::timeout_at(deadline, tokio::fs::remove_dir_all(session_dir)).await {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(error)) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Ok(Err(error)) => Err(OwnedChromiumError::new(
-            OwnedChromiumErrorKind::Cleanup,
-            format!("failed to finalize owned Chromium session directory: {error}"),
-        )),
-        Err(_) => Err(OwnedChromiumError::new(
-            OwnedChromiumErrorKind::Cleanup,
-            "owned Chromium session finalization exceeded its deadline",
-        )),
+    remove_path_bounded(session_dir, deadline).map_err(|error| {
+        let message = if error.kind() == io::ErrorKind::TimedOut {
+            "owned Chromium session finalization exceeded its deadline".to_string()
+        } else {
+            format!("failed to finalize owned Chromium session directory: {error}")
+        };
+        OwnedChromiumError::new(OwnedChromiumErrorKind::Cleanup, message)
+    })
+}
+
+fn remove_path_bounded(path: &Path, deadline: tokio::time::Instant) -> io::Result<()> {
+    if tokio::time::Instant::now() >= deadline {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "session finalization deadline reached",
+        ));
+    }
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if metadata.file_type().is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            remove_path_bounded(&entry?.path(), deadline)?;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "session finalization deadline reached",
+            ));
+        }
+        std::fs::remove_dir(path)
+    } else {
+        std::fs::remove_file(path)
     }
 }
 
@@ -686,17 +773,25 @@ trait ForceReapProcess {
     ) -> Pin<Box<dyn Future<Output = Result<(), OwnedChromiumError>> + Send + '_>>;
 }
 
+fn capped_stage_deadline(
+    absolute_boundary: tokio::time::Instant,
+    maximum_ms: u64,
+) -> tokio::time::Instant {
+    absolute_boundary.min(tokio::time::Instant::now() + Duration::from_millis(maximum_ms))
+}
+
 async fn finalize_owned_process(
     process: &mut impl ForceReapProcess,
-    graceful_deadline: tokio::time::Instant,
-    force_deadline: tokio::time::Instant,
+    graceful_boundary: tokio::time::Instant,
+    force_boundary: tokio::time::Instant,
 ) -> Result<bool, OwnedChromiumError> {
+    let graceful_deadline = capped_stage_deadline(graceful_boundary, BROWSER_GRACEFUL_CLOSE_MS);
     match process.wait_until(graceful_deadline).await {
         Ok(Some(())) => Ok(false),
         // An observation error is not permission to return and rely on Drop.
         // Establish the cleanup invariant through the independent forced path.
         Ok(None) | Err(_) => {
-            force_terminate_and_reap(process, force_deadline).await?;
+            force_terminate_and_reap(process, force_boundary).await?;
             Ok(true)
         }
     }
@@ -704,7 +799,7 @@ async fn finalize_owned_process(
 
 async fn force_terminate_and_reap(
     process: &mut impl ForceReapProcess,
-    deadline: tokio::time::Instant,
+    force_boundary: tokio::time::Instant,
 ) -> Result<(), OwnedChromiumError> {
     process.initiate_force_termination().map_err(|error| {
         OwnedChromiumError::new(
@@ -712,7 +807,8 @@ async fn force_terminate_and_reap(
             format!("failed to initiate owned Chromium tree termination: {error}"),
         )
     })?;
-    match tokio::time::timeout_at(deadline, process.wait_for_reap()).await {
+    let force_deadline = capped_stage_deadline(force_boundary, BROWSER_FORCE_TERMINATE_REAP_MS);
+    match tokio::time::timeout_at(force_deadline, process.wait_for_reap()).await {
         Ok(result) => result,
         Err(_) => Err(OwnedChromiumError::new(
             OwnedChromiumErrorKind::Cleanup,
@@ -1567,6 +1663,69 @@ mod tests {
         assert!(process.reaped);
     }
 
+    struct DeadlineDrivenProcess {
+        termination_initiated: bool,
+    }
+
+    impl ForceReapProcess for DeadlineDrivenProcess {
+        fn initiate_force_termination(&mut self) -> io::Result<()> {
+            self.termination_initiated = true;
+            Ok(())
+        }
+
+        fn wait_until(
+            &mut self,
+            deadline: tokio::time::Instant,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<()>, OwnedChromiumError>> + Send + '_>>
+        {
+            Box::pin(async move {
+                tokio::time::sleep_until(deadline).await;
+                Ok(None)
+            })
+        }
+
+        fn wait_for_reap(
+            &mut self,
+        ) -> Pin<Box<dyn Future<Output = Result<(), OwnedChromiumError>> + Send + '_>> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn graceful_and_forced_process_stages_are_each_capped_from_when_they_start() {
+        let mut process = DeadlineDrivenProcess {
+            termination_initiated: false,
+        };
+        let started = tokio::time::Instant::now();
+
+        let error = finalize_owned_process(
+            &mut process,
+            started + Duration::from_secs(10),
+            started + Duration::from_secs(20),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(process.termination_initiated);
+        assert_eq!(error.kind, OwnedChromiumErrorKind::Cleanup);
+        assert_eq!(
+            tokio::time::Instant::now().duration_since(started),
+            Duration::from_millis(1_500)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_handler_is_aborted_and_observed_within_its_stage_cap() {
+        let task = tokio::spawn(std::future::pending::<()>());
+        let started = tokio::time::Instant::now();
+
+        observe_or_abort_handler(task, started + Duration::from_secs(10))
+            .await
+            .unwrap();
+
+        assert!(tokio::time::Instant::now().duration_since(started) <= Duration::from_millis(250));
+    }
+
     #[tokio::test(start_paused = true)]
     async fn forced_reap_timeout_is_typed_only_after_termination_is_initiated() {
         let mut process = PendingReapProcess {
@@ -1856,13 +2015,26 @@ mod tests {
     }
 
     async fn cancel_when_descendant_is_published(path: &Path) {
-        while !path.is_file() {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            if tokio::fs::read_to_string(path)
+                .await
+                .ok()
+                .and_then(|contents| contents.trim().parse::<u32>().ok())
+                .is_some()
+            {
+                return;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "helper did not publish descendant cancellation marker"
+            );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
 
     async fn wait_for_descendant_pid(path: &Path) -> u32 {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
         loop {
             if let Ok(contents) = tokio::fs::read_to_string(path).await {
                 if let Ok(pid) = contents.trim().parse() {

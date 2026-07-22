@@ -20,7 +20,7 @@ use super::{
     cancellation::{RuntimeCancellation, RuntimeExecutionContext},
 };
 
-pub type BoxedBrowserAcquisitionFuture<'a> = Pin<
+pub(crate) type BoxedBrowserAcquisitionFuture<'a> = Pin<
     Box<
         dyn Future<Output = Result<BrowserRenderedContent, BrowserAcquisitionTerminal>> + Send + 'a,
     >,
@@ -61,6 +61,76 @@ impl<'a> BrowserAcquisitionRequest<'a> {
 
     pub fn hard_deadline(&self) -> Instant {
         self.hard_deadline
+    }
+
+    pub(crate) fn browser_work_deadline(&self) -> Instant {
+        self.control
+            .browser_work_deadline()
+            .expect("Browser acquisition always has caller-owned control")
+    }
+
+    pub(crate) fn browser_graceful_deadline(&self) -> Instant {
+        self.control
+            .browser_graceful_deadline()
+            .expect("Browser acquisition always has caller-owned control")
+    }
+
+    pub(crate) fn browser_force_deadline(&self) -> Instant {
+        self.control
+            .browser_force_deadline()
+            .expect("Browser acquisition always has caller-owned control")
+    }
+
+    pub(crate) fn browser_handler_deadline(&self) -> Instant {
+        self.control
+            .browser_handler_deadline()
+            .expect("Browser acquisition always has caller-owned control")
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.control.is_cancelled()
+    }
+
+    pub(crate) async fn cancelled(&self) {
+        self.control.cancelled().await;
+    }
+
+    pub(crate) fn mark_deadline(&self) {
+        self.control.mark_deadline();
+    }
+
+    pub(crate) fn admit_navigation(&self) -> Result<(), BrowserAcquisitionTerminal> {
+        self.control
+            .debit(AllowanceCharge {
+                requests: 1,
+                ..AllowanceCharge::default()
+            })
+            .map_err(|_| BrowserAcquisitionTerminal::AllowanceStopped)
+    }
+
+    pub(crate) fn admit_wait(&self) -> Result<(), BrowserAcquisitionTerminal> {
+        self.control
+            .debit(AllowanceCharge::default())
+            .map_err(|_| BrowserAcquisitionTerminal::AllowanceStopped)
+    }
+
+    pub(crate) fn admit_interaction(&self) -> Result<(), BrowserAcquisitionTerminal> {
+        self.control
+            .debit(AllowanceCharge {
+                browser_actions: 1,
+                ..AllowanceCharge::default()
+            })
+            .map_err(|_| BrowserAcquisitionTerminal::AllowanceStopped)
+    }
+
+    pub(crate) fn admit_rendered_content(
+        &self,
+        content: String,
+    ) -> Result<BrowserRenderedContent, BrowserAcquisitionTerminal> {
+        self.control
+            .admit_browser_rendered_bytes(content.len() as u64)
+            .map_err(|_| BrowserAcquisitionTerminal::AllowanceStopped)?;
+        Ok(BrowserRenderedContent(content))
     }
 
     fn snapshot(&self) -> BrowserAcquisitionRequestSnapshot {

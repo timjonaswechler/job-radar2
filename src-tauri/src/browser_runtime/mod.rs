@@ -8,6 +8,7 @@ mod archive;
 mod control;
 mod download;
 mod install;
+mod managed;
 mod manifest;
 #[allow(dead_code)]
 pub(crate) mod owned;
@@ -21,6 +22,7 @@ pub use archive::{RuntimeArchiveExtractor, ZipRuntimeArchiveExtractor};
 pub(crate) use control::render_page_html_with_actions_and_context;
 pub use download::{ReqwestRuntimeDownloader, RuntimeDownloader};
 pub use install::{install_runtime, uninstall_runtime};
+pub use managed::ManagedBrowserAcquisition;
 pub use spec::{current_platform, current_runtime_spec};
 #[cfg(test)]
 pub use status::status_for_runtime_dir_with_platform;

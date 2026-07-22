@@ -10,6 +10,7 @@ mod search;
 mod source;
 mod source_profile;
 
+pub use browser_runtime::ManagedBrowserAcquisition;
 pub use checks::{
     check_and_activate_source, check_and_activate_source_with_clients,
     check_and_activate_source_with_fetcher, check_and_reactivate_source,
