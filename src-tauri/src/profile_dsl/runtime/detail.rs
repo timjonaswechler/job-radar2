@@ -38,6 +38,7 @@ use super::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
         ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     },
+    browser_phase::{BrowserPhaseFetchInput, BrowserPhaseFetchProjection, PhaseBrowser},
     cancellation::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
@@ -54,6 +55,7 @@ use super::{
     },
 };
 
+mod browser_adapter;
 mod diagnostics;
 mod document;
 mod extract;
@@ -61,12 +63,13 @@ mod fetch;
 mod strategy;
 mod support;
 
+pub use browser_adapter::DetailBrowserAdapter;
 use diagnostics::runtime_error;
 use document::{select_detail_document, RuntimeItem};
 use extract::{
     evaluate_predicate, evaluate_strategy_captures, evaluate_value_list, evaluate_value_scalar,
 };
-use fetch::fetch_strategy_document;
+use fetch::{fetch_strategy_document, DetailBrowserBackend};
 use strategy::execute_strategy;
 
 pub async fn execute_detail<F, B>(
@@ -76,6 +79,78 @@ pub async fn execute_detail<F, B>(
     requested_fields: RequestedDetailFields,
     fetcher: &F,
     browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PhaseRunResult<DetailPhasePayload>
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    execute_detail_with_backend(
+        plan,
+        source_config,
+        posting,
+        requested_fields,
+        fetcher,
+        DetailBrowserBackend::Legacy(browser),
+        context,
+    )
+    .await
+}
+
+pub async fn execute_detail_with_browser_adapter<F>(
+    plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
+    posting: &PostingOccurrence,
+    requested_fields: RequestedDetailFields,
+    fetcher: &F,
+    browser: PhaseBrowser<DetailBrowserAdapter<'_>>,
+    context: RuntimeExecutionContext<'_>,
+) -> PhaseRunResult<DetailPhasePayload>
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+{
+    let requires_browser = plan.detail.as_ref().is_some_and(|detail| {
+        detail
+            .strategies
+            .iter()
+            .any(|strategy| uses_browser(&strategy.fetch))
+    });
+    let backend: DetailBrowserBackend<'_, dyn ProfileBrowserClient + Sync> =
+        match (requires_browser, browser) {
+            (false, PhaseBrowser::BrowserFree) => DetailBrowserBackend::BrowserFree,
+            (true, PhaseBrowser::Browser(adapter)) => DetailBrowserBackend::Canonical(adapter),
+            _ => {
+                return Err(PhaseRunError::NotStarted {
+                    failure: PhasePreStartFailure::PlanMismatch,
+                    diagnostics: vec![runtime_error(
+                        "detail_browser_capability_mismatch",
+                        "Detail Browser capability does not match the compiled plan",
+                        "/detail/strategies",
+                        None,
+                        json!({}),
+                    )],
+                });
+            }
+        };
+    execute_detail_with_backend(
+        plan,
+        source_config,
+        posting,
+        requested_fields,
+        fetcher,
+        backend,
+        context,
+    )
+    .await
+}
+
+async fn execute_detail_with_backend<F, B>(
+    plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
+    posting: &PostingOccurrence,
+    requested_fields: RequestedDetailFields,
+    fetcher: &F,
+    browser: DetailBrowserBackend<'_, B>,
     context: RuntimeExecutionContext<'_>,
 ) -> PhaseRunResult<DetailPhasePayload>
 where
@@ -210,7 +285,7 @@ where
                     posting,
                     &requested_fields,
                     fetcher,
-                    browser,
+                    &browser,
                     strategy_index,
                     strategy,
                     detail.accept_when.as_ref(),

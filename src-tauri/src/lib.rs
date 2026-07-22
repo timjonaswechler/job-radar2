@@ -127,35 +127,39 @@ pub use profile_dsl::primitives::value::{
 // Lower-level phase execution remains externally reachable only as a hidden
 // deterministic regression-test hook. Application callers use SourceDetailExecution.
 #[doc(hidden)]
-pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
+pub use profile_dsl::runtime::detail::{
+    execute_detail as __test_execute_detail_phase,
+    execute_detail_with_browser_adapter as __test_execute_detail_with_browser_adapter,
+};
 
 #[doc(hidden)]
 pub use profile_dsl::runtime::__TestBrowserAcquisitionInvocation;
 pub use profile_dsl::runtime::{
-    execute_discovery, validate_posting_reference, AllowanceDimension, AllowanceExhaustion,
-    AllowanceLimitSource, BrowserAcquisition, BrowserAcquisitionCancellation,
-    BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
-    BrowserAcquisitionRequest, BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal,
-    BrowserInfrastructureFailure, BrowserLifecycleEvent, BrowserRenderedContent,
-    CandidateDetailFailure, ContributionOrigin, DetailCancelled, DetailContributionEvidence,
-    DetailField, DetailFieldCapabilities, DetailPatch, DetailPhasePayload, DetailRejection,
-    DiscoveryContributionEvidence, DiscoveryHint, DiscoveryPhasePayload, DiscoveryRejection,
-    DiscoveryResponsibility, HintUse, ManagedProfileBrowserClient, OccurrenceReferenceError,
-    PhaseCancellationReason, PhaseCancelled, PhaseCompletion, PhaseExecutionFailure,
-    PhaseExecutionReport, PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult,
-    PhaseUsage, PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence,
-    PostingOccurrenceIdentity, PostingReference, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    ProfileDslSourceDetailExecution, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
-    ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ProviderValues,
-    RequestedDetailFields, RequestedFieldDisposition, ReqwestProfileHttpClient,
-    RuntimeCancellation, RuntimeExecutionContext, ScriptedBrowserAcquisition,
-    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
-    ScriptedBrowserFinalization, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SensitiveRequestBody,
-    SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome, SourceDetailPhaseEvidence,
-    SourceDetailRequest, SourceDetailRequestSnapshot, SourceDetailResult,
-    UnavailableProfileBrowserClient,
+    execute_discovery, execute_discovery_with_browser_adapter, validate_posting_reference,
+    AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, BrowserAcquisition,
+    BrowserAcquisitionCancellation, BrowserAcquisitionCancellationReason,
+    BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequest,
+    BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
+    BrowserLifecycleEvent, BrowserRenderedContent, CandidateDetailFailure, ContributionOrigin,
+    DetailBrowserAdapter, DetailCancelled, DetailContributionEvidence, DetailField,
+    DetailFieldCapabilities, DetailPatch, DetailPhasePayload, DetailRejection,
+    DiscoveryBrowserAdapter, DiscoveryContributionEvidence, DiscoveryHint, DiscoveryPhasePayload,
+    DiscoveryRejection, DiscoveryResponsibility, HintUse, ManagedProfileBrowserClient,
+    OccurrenceReferenceError, PhaseBrowser, PhaseCancellationReason, PhaseCancelled,
+    PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
+    PhasePreStartFailure, PhaseRunError, PhaseRunResult, PhaseUsage, PolicyOutcome,
+    PolicyUnsatisfiedCause, PostingOccurrence, PostingOccurrenceIdentity, PostingReference,
+    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
+    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileDslSourceDetailExecution,
+    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
+    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
+    RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeCancellation,
+    RuntimeExecutionContext, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
+    SensitiveRequestBody, SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome,
+    SourceDetailPhaseEvidence, SourceDetailRequest, SourceDetailRequestSnapshot,
+    SourceDetailResult, UnavailableProfileBrowserClient,
 };
 
 pub use profile_dsl::template::{

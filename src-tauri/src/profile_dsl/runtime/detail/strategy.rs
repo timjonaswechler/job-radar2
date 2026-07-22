@@ -6,7 +6,7 @@ pub(super) async fn execute_strategy<F, B>(
     posting: &PostingOccurrence,
     requested_fields: &RequestedDetailFields,
     fetcher: &F,
-    browser: &B,
+    browser: &DetailBrowserBackend<'_, B>,
     strategy_index: usize,
     strategy: &ExecutionPlanDetailStrategy,
     step_acceptance: Option<&CompiledAcceptance>,

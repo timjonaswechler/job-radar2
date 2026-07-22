@@ -12,7 +12,7 @@ pub(super) async fn execute_paginated_strategy<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination: &CompiledPagination,

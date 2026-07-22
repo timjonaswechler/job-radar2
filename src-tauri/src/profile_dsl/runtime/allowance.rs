@@ -411,6 +411,10 @@ impl InvocationAllowance {
         u64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 
+    pub(crate) fn mark_internal_failure(&self) {
+        let _ = self.fail_internal();
+    }
+
     fn fail_internal(&self) -> AllowanceStop {
         let stop = AllowanceStop::Internal;
         let mut current = self.stop.lock().unwrap_or_else(|p| p.into_inner());

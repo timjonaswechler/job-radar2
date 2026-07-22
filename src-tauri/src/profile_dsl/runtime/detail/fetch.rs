@@ -4,9 +4,23 @@ use crate::profile_dsl::primitives::fetch::http::{
     execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay,
 };
 
+pub(super) enum DetailBrowserBackend<'a, B: ?Sized> {
+    Legacy(&'a B),
+    Canonical(DetailBrowserAdapter<'a>),
+    BrowserFree,
+}
+
+impl<B: ?Sized> Clone for DetailBrowserBackend<'_, B> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<B: ?Sized> Copy for DetailBrowserBackend<'_, B> {}
+
 pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
-    browser: &B,
+    browser: &DetailBrowserBackend<'_, B>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -114,7 +128,7 @@ where
 
 #[allow(clippy::too_many_arguments)]
 async fn fetch_browser_strategy_document<B>(
-    browser: &B,
+    browser: &DetailBrowserBackend<'_, B>,
     url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
@@ -142,55 +156,104 @@ where
             return Ok(None);
         }
     };
-    if execution_context.is_cancelled() {
-        return Err(fetch_cancellation(
-            strategy_index,
-            strategy_key,
-            CancellationOperation::Browser,
-        ));
+    match browser {
+        DetailBrowserBackend::Legacy(browser) => {
+            if execution_context.is_cancelled() {
+                return Err(fetch_cancellation(
+                    strategy_index,
+                    strategy_key,
+                    CancellationOperation::Browser,
+                ));
+            }
+            if execution_context
+                .debit(AllowanceCharge {
+                    requests: 1,
+                    ..AllowanceCharge::default()
+                })
+                .is_err()
+            {
+                return Ok(None);
+            }
+            if execution_context.is_cancelled() {
+                return Err(fetch_cancellation(
+                    strategy_index,
+                    strategy_key,
+                    CancellationOperation::Browser,
+                ));
+            }
+            let request = ProfileBrowserFetchRequest {
+                url: rendered_url.clone(),
+                timeout_ms,
+                waits: waits.to_vec(),
+                interactions: interactions.to_vec(),
+            };
+            match browser
+                .render_with_context(request, execution_context)
+                .await
+            {
+                Ok(ProfileBrowserFetchResponse { body }) => {
+                    Ok(Some(CompleteParseText::BrowserRendered(body)))
+                }
+                Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
+                    Err(fetch_cancellation(
+                        strategy_index,
+                        strategy_key,
+                        CancellationOperation::Browser,
+                    ))
+                }
+                Err(error) => {
+                    push_browser_fetch_diagnostic(
+                        error,
+                        &rendered_url,
+                        base_path,
+                        strategy_key,
+                        diagnostics,
+                    );
+                    Ok(None)
+                }
+            }
+        }
+        DetailBrowserBackend::Canonical(adapter) => {
+            let strategy_key = strategy_key
+                .expect("compiled strategy has a key")
+                .to_string();
+            project_browser_fetch(
+                adapter
+                    .fetch(BrowserPhaseFetchInput {
+                        target: rendered_url,
+                        timeout_ms,
+                        waits: waits.to_vec(),
+                        interactions: interactions.to_vec(),
+                        base_path: base_path.to_string(),
+                        strategy_key,
+                        strategy_index,
+                        control: execution_context,
+                    })
+                    .await,
+                diagnostics,
+            )
+        }
+        DetailBrowserBackend::BrowserFree => {
+            unreachable!("Browser-free phase construction was validated before execution")
+        }
     }
-    if execution_context
-        .debit(AllowanceCharge {
-            requests: 1,
-            ..AllowanceCharge::default()
-        })
-        .is_err()
-    {
-        return Ok(None);
-    }
-    if execution_context.is_cancelled() {
-        return Err(fetch_cancellation(
-            strategy_index,
-            strategy_key,
-            CancellationOperation::Browser,
-        ));
-    }
-    let request = ProfileBrowserFetchRequest {
-        url: rendered_url.clone(),
-        timeout_ms,
-        waits: waits.to_vec(),
-        interactions: interactions.to_vec(),
-    };
-    match browser
-        .render_with_context(request, execution_context)
-        .await
-    {
-        Ok(ProfileBrowserFetchResponse { body }) => {
+}
+
+fn project_browser_fetch(
+    projection: BrowserPhaseFetchProjection,
+    diagnostics: &mut Diagnostics,
+) -> Result<Option<CompleteParseText>, TypedCancellation> {
+    match projection {
+        BrowserPhaseFetchProjection::Rendered(body) => {
             Ok(Some(CompleteParseText::BrowserRendered(body)))
         }
-        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => Err(
-            fetch_cancellation(strategy_index, strategy_key, CancellationOperation::Browser),
-        ),
-        Err(error) => {
-            push_browser_fetch_diagnostic(
-                error,
-                &rendered_url,
-                base_path,
-                strategy_key,
-                diagnostics,
-            );
+        BrowserPhaseFetchProjection::AttemptFailed(diagnostic)
+        | BrowserPhaseFetchProjection::PhaseFatal(diagnostic) => {
+            diagnostics.push(diagnostic);
             Ok(None)
         }
+        BrowserPhaseFetchProjection::AllowanceStopped => Ok(None),
+        BrowserPhaseFetchProjection::Cancelled(cancellation) => Err(cancellation),
     }
 }
 

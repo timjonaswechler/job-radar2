@@ -5,7 +5,7 @@ pub(super) async fn execute<F, B>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination: &SitemapPaginationPlan,

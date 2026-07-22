@@ -1,6 +1,7 @@
 pub(crate) mod allowance;
 pub(crate) mod browser;
 pub(crate) mod browser_acquisition;
+pub(crate) mod browser_phase;
 pub(crate) mod cancellation;
 pub(crate) mod detail;
 pub(crate) mod discovery;
@@ -36,8 +37,12 @@ pub use browser_acquisition::{
     ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
     ScriptedBrowserFinalization,
 };
+pub use browser_phase::PhaseBrowser;
 pub use cancellation::{RuntimeCancellation, RuntimeExecutionContext};
-pub use discovery::execute_discovery;
+pub use detail::DetailBrowserAdapter;
+pub use discovery::{
+    execute_discovery, execute_discovery_with_browser_adapter, DiscoveryBrowserAdapter,
+};
 pub use http::{
     ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
     ProfileHttpRequest, ProfileHttpResponse, ReqwestProfileHttpClient, ScriptedHttpBodyEvent,

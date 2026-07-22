@@ -12,9 +12,23 @@ pub(super) enum DiscoveryFetchOutcome {
     ExecutionFailed,
 }
 
+pub(super) enum DiscoveryBrowserBackend<'a, B: ?Sized> {
+    Legacy(&'a B),
+    Canonical(DiscoveryBrowserAdapter<'a>),
+    BrowserFree,
+}
+
+impl<B: ?Sized> Clone for DiscoveryBrowserBackend<'_, B> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<B: ?Sized> Copy for DiscoveryBrowserBackend<'_, B> {}
+
 pub(super) async fn fetch_strategy_document<F, B>(
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -48,7 +62,7 @@ where
 
 pub(super) async fn fetch_strategy_document_with_overlay<F, B>(
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -84,7 +98,7 @@ where
 
 pub(super) async fn fetch_strategy_document_at_url<F, B>(
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -121,7 +135,7 @@ where
 #[allow(clippy::too_many_arguments)]
 async fn fetch_strategy_document_with_options<F, B>(
     fetcher: &F,
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -259,7 +273,7 @@ where
 
 #[allow(clippy::too_many_arguments)]
 async fn fetch_browser_strategy_document<B>(
-    browser: &B,
+    browser: &DiscoveryBrowserBackend<'_, B>,
     url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
@@ -293,53 +307,102 @@ where
             }
         },
     };
-    if context.is_cancelled() {
-        return Err(fetch_cancellation(
-            strategy_index,
-            strategy_key,
-            CancellationOperation::Browser,
-        ));
+    match browser {
+        DiscoveryBrowserBackend::Legacy(browser) => {
+            if context.is_cancelled() {
+                return Err(fetch_cancellation(
+                    strategy_index,
+                    strategy_key,
+                    CancellationOperation::Browser,
+                ));
+            }
+            if context
+                .debit(AllowanceCharge {
+                    requests: 1,
+                    pages: u64::from(context.page_request()),
+                    ..AllowanceCharge::default()
+                })
+                .is_err()
+            {
+                return Ok(DiscoveryFetchOutcome::ExecutionFailed);
+            }
+            if context.is_cancelled() {
+                return Err(fetch_cancellation(
+                    strategy_index,
+                    strategy_key,
+                    CancellationOperation::Browser,
+                ));
+            }
+            let request = ProfileBrowserFetchRequest {
+                url: rendered_url.clone(),
+                timeout_ms,
+                waits: waits.to_vec(),
+                interactions: interactions.to_vec(),
+            };
+            match browser.render_with_context(request, context).await {
+                Ok(ProfileBrowserFetchResponse { body }) => Ok(DiscoveryFetchOutcome::Complete(
+                    CompleteParseText::BrowserRendered(body),
+                )),
+                Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
+                    Err(fetch_cancellation(
+                        strategy_index,
+                        strategy_key,
+                        CancellationOperation::Browser,
+                    ))
+                }
+                Err(error) => {
+                    push_browser_fetch_diagnostic(
+                        error,
+                        &rendered_url,
+                        base_path,
+                        strategy_key,
+                        diagnostics,
+                    );
+                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
+                }
+            }
+        }
+        DiscoveryBrowserBackend::Canonical(adapter) => {
+            let strategy_key = strategy_key
+                .expect("compiled strategy has a key")
+                .to_string();
+            project_browser_fetch(
+                adapter
+                    .fetch(BrowserPhaseFetchInput {
+                        target: rendered_url,
+                        timeout_ms,
+                        waits: waits.to_vec(),
+                        interactions: interactions.to_vec(),
+                        base_path: base_path.to_string(),
+                        strategy_key,
+                        strategy_index,
+                        control: context,
+                    })
+                    .await,
+                diagnostics,
+            )
+        }
+        DiscoveryBrowserBackend::BrowserFree => {
+            unreachable!("Browser-free phase construction was validated before execution")
+        }
     }
-    if context
-        .debit(AllowanceCharge {
-            requests: 1,
-            pages: u64::from(context.page_request()),
-            ..AllowanceCharge::default()
-        })
-        .is_err()
-    {
-        return Ok(DiscoveryFetchOutcome::ExecutionFailed);
-    }
-    if context.is_cancelled() {
-        return Err(fetch_cancellation(
-            strategy_index,
-            strategy_key,
-            CancellationOperation::Browser,
-        ));
-    }
-    let request = ProfileBrowserFetchRequest {
-        url: rendered_url.clone(),
-        timeout_ms,
-        waits: waits.to_vec(),
-        interactions: interactions.to_vec(),
-    };
-    match browser.render_with_context(request, context).await {
-        Ok(ProfileBrowserFetchResponse { body }) => Ok(DiscoveryFetchOutcome::Complete(
+}
+
+fn project_browser_fetch(
+    projection: BrowserPhaseFetchProjection,
+    diagnostics: &mut Diagnostics,
+) -> Result<DiscoveryFetchOutcome, TypedCancellation> {
+    match projection {
+        BrowserPhaseFetchProjection::Rendered(body) => Ok(DiscoveryFetchOutcome::Complete(
             CompleteParseText::BrowserRendered(body),
         )),
-        Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => Err(
-            fetch_cancellation(strategy_index, strategy_key, CancellationOperation::Browser),
-        ),
-        Err(error) => {
-            push_browser_fetch_diagnostic(
-                error,
-                &rendered_url,
-                base_path,
-                strategy_key,
-                diagnostics,
-            );
+        BrowserPhaseFetchProjection::AttemptFailed(diagnostic)
+        | BrowserPhaseFetchProjection::PhaseFatal(diagnostic) => {
+            diagnostics.push(diagnostic);
             Ok(DiscoveryFetchOutcome::ExecutionFailed)
         }
+        BrowserPhaseFetchProjection::AllowanceStopped => Ok(DiscoveryFetchOutcome::ExecutionFailed),
+        BrowserPhaseFetchProjection::Cancelled(cancellation) => Err(cancellation),
     }
 }
 

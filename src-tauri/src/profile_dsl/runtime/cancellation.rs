@@ -180,6 +180,11 @@ impl<'a> RuntimeExecutionContext<'a> {
             allowance.mark_deadline();
         }
     }
+    pub(crate) fn mark_internal_failure(self) {
+        if let Some(allowance) = self.allowance {
+            allowance.mark_internal_failure();
+        }
+    }
     pub(crate) fn mark_deadline_if_expired(self) {
         if let Some(allowance) = self.allowance {
             allowance.mark_deadline_if_expired();

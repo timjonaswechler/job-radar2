@@ -165,7 +165,7 @@ A Source Live Check should:
 
 - compile the concrete Source into an Execution Plan;
 - run bounded live `discovery` with one cumulative logical-request allowance for the whole invocation (not one request per Strategy); when known pagination or fallback work requests a second acquisition, the check ends budget-exhausted without exposing the first-page candidate prefix;
-- retain the complete seven-dimension Discovery execution report, and the Detail report when Detail runs;
+- retain the complete nine-dimension Discovery execution report, including distinct HTTP response-byte and Browser-rendered-byte usage, and the Detail report when Detail runs;
 - expect at least one candidate with `title`, `company`, and `url`;
 - if `detail` exists, check detail extraction for at most one candidate;
 - avoid Search Request criteria and Match Rules;

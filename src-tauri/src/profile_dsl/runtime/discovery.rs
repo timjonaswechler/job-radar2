@@ -35,6 +35,7 @@ use super::{
         ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
         ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
     },
+    browser_phase::{BrowserPhaseFetchInput, BrowserPhaseFetchProjection, PhaseBrowser},
     cancellation::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
         RuntimePhase, TypedCancellation,
@@ -51,6 +52,7 @@ use super::{
     },
 };
 
+mod browser_adapter;
 mod diagnostics;
 mod document;
 mod extract;
@@ -59,11 +61,13 @@ mod pagination;
 mod strategy;
 mod support;
 
+pub use browser_adapter::DiscoveryBrowserAdapter;
 use diagnostics::{runtime_error, runtime_warning};
 use document::select_items;
 use extract::extract_candidate;
 use fetch::{
-    fetch_strategy_document_at_url, fetch_strategy_document_with_overlay, DiscoveryFetchOutcome,
+    fetch_strategy_document_at_url, fetch_strategy_document_with_overlay, DiscoveryBrowserBackend,
+    DiscoveryFetchOutcome,
 };
 use pagination::execute_paginated_strategy;
 use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidates_from_items};
@@ -73,6 +77,62 @@ pub async fn execute_discovery<F, B>(
     source_config: &SourceConfig,
     fetcher: &F,
     browser: &B,
+    context: RuntimeExecutionContext<'_>,
+) -> PhaseRunResult<DiscoveryPhasePayload>
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+    B: ProfileBrowserClient + Sync + ?Sized,
+{
+    execute_discovery_with_backend(
+        plan,
+        source_config,
+        fetcher,
+        DiscoveryBrowserBackend::Legacy(browser),
+        context,
+    )
+    .await
+}
+
+pub async fn execute_discovery_with_browser_adapter<F>(
+    plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
+    fetcher: &F,
+    browser: PhaseBrowser<DiscoveryBrowserAdapter<'_>>,
+    context: RuntimeExecutionContext<'_>,
+) -> PhaseRunResult<DiscoveryPhasePayload>
+where
+    F: ProfileHttpClient + Sync + ?Sized,
+{
+    let requires_browser = plan
+        .discovery
+        .strategies
+        .iter()
+        .any(|strategy| uses_browser(&strategy.fetch));
+    let backend: DiscoveryBrowserBackend<'_, dyn ProfileBrowserClient + Sync> =
+        match (requires_browser, browser) {
+            (false, PhaseBrowser::BrowserFree) => DiscoveryBrowserBackend::BrowserFree,
+            (true, PhaseBrowser::Browser(adapter)) => DiscoveryBrowserBackend::Canonical(adapter),
+            _ => {
+                return Err(PhaseRunError::NotStarted {
+                    failure: PhasePreStartFailure::PlanMismatch,
+                    diagnostics: vec![runtime_error(
+                        "discovery_browser_capability_mismatch",
+                        "Discovery Browser capability does not match the compiled plan",
+                        "/discovery/strategies",
+                        None,
+                        json!({}),
+                    )],
+                });
+            }
+        };
+    execute_discovery_with_backend(plan, source_config, fetcher, backend, context).await
+}
+
+async fn execute_discovery_with_backend<F, B>(
+    plan: &SourceExecutionPlan,
+    source_config: &SourceConfig,
+    fetcher: &F,
+    browser: DiscoveryBrowserBackend<'_, B>,
     context: RuntimeExecutionContext<'_>,
 ) -> PhaseRunResult<DiscoveryPhasePayload>
 where
@@ -173,7 +233,7 @@ where
                     plan,
                     source_config,
                     fetcher,
-                    browser,
+                    &browser,
                     strategy_index,
                     strategy,
                     plan.discovery.accept_when.as_ref(),
