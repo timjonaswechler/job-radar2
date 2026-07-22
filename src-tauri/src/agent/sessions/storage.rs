@@ -1063,11 +1063,11 @@ fn path_matches_file(path: &Path, file: &File) -> Result<bool, SessionError> {
     if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
         return Ok(false);
     }
-    let file_metadata = file
-        .metadata()
-        .map_err(|_| SessionError::new(SessionErrorCode::ExternalChange))?;
     #[cfg(unix)]
     {
+        let file_metadata = file
+            .metadata()
+            .map_err(|_| SessionError::new(SessionErrorCode::ExternalChange))?;
         return Ok(path_metadata.dev() == file_metadata.dev()
             && path_metadata.ino() == file_metadata.ino());
     }
