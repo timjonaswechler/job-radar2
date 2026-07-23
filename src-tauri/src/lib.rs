@@ -160,6 +160,15 @@ pub use profile_dsl::template::{
     TemplateCompileErrorKind, TemplateDescriptor, TemplateReference, TemplateRenderError,
     TemplateSegment, TemplateValueView,
 };
+pub use search::candidate_resolution::{
+    resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
+    FinalizedCandidate, RequirementsCompilationFailure, ResolutionCeilings, ResolutionCompletion,
+    ResolutionCounts, ResolutionFailure, ResolutionLimitDimension, ResolutionReport,
+    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
+    SourceDiscovery, SourceResolution, SourceResolutionError, SourceResolutionRequest,
+    CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
+};
+pub use search::request::{SearchRule, SearchRuleKind, SearchRuleTarget};
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
