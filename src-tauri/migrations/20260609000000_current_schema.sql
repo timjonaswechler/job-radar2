@@ -86,3 +86,26 @@ CREATE INDEX idx_job_posting_sources_posting_id
 
 CREATE INDEX idx_job_postings_last_seen_at
   ON job_postings(last_seen_at);
+
+CREATE TABLE search_runs(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  search_request_id INTEGER NOT NULL REFERENCES search_requests(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK(status IN('completed', 'completed_with_errors', 'failed', 'cancelled'))
+);
+
+CREATE INDEX idx_search_runs_search_request_id
+  ON search_runs(search_request_id);
+
+CREATE TABLE matches(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  search_run_id INTEGER NOT NULL REFERENCES search_runs(id) ON DELETE CASCADE,
+  job_posting_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(search_run_id, job_posting_id)
+);
+
+CREATE INDEX idx_matches_job_posting_id
+  ON matches(job_posting_id);

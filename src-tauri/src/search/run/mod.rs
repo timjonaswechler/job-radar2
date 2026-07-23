@@ -1,9 +1,12 @@
+mod atomic_persistence;
 mod execution;
 mod service;
 #[cfg(test)]
 mod tests;
 mod types;
 
+#[allow(unused_imports)]
+pub(crate) use atomic_persistence::{persist_atomic_search_run, AtomicSearchRunInput};
 #[allow(unused_imports)]
 pub(crate) use execution::source_candidate;
 #[allow(unused_imports)]

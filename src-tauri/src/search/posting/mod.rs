@@ -47,24 +47,17 @@ pub(crate) async fn import_search_run_result_in_transaction(
     transaction: &mut Transaction<'_, Sqlite>,
     result: &SearchRunResult,
 ) -> Result<(), String> {
-    validate_import_result(result)?;
+    validate_merged_postings(&result.postings)?;
 
     for posting in &result.postings {
-        match find_existing_posting(transaction, posting).await? {
-            Some(posting_id) => {
-                update_existing_posting(transaction, posting_id, posting, result).await?;
-            }
-            None => {
-                insert_new_posting(transaction, posting, result).await?;
-            }
-        }
+        persist_merged_posting_in_transaction(transaction, posting, &result.generated_at).await?;
     }
 
     Ok(())
 }
 
-fn validate_import_result(result: &SearchRunResult) -> Result<(), String> {
-    for posting in &result.postings {
+pub(crate) fn validate_merged_postings(postings: &[NormalizedPosting]) -> Result<(), String> {
+    for posting in postings {
         if posting.sources.is_empty() {
             return Err("posting has no sources".to_string());
         }
@@ -84,6 +77,20 @@ fn validate_import_result(result: &SearchRunResult) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub(crate) async fn persist_merged_posting_in_transaction(
+    transaction: &mut Transaction<'_, Sqlite>,
+    posting: &NormalizedPosting,
+    seen_at: &str,
+) -> Result<i64, String> {
+    match find_existing_posting(transaction, posting).await? {
+        Some(posting_id) => {
+            update_existing_posting(transaction, posting_id, posting, seen_at).await?;
+            Ok(posting_id)
+        }
+        None => insert_new_posting(transaction, posting, seen_at).await,
+    }
 }
 
 async fn find_existing_posting(
@@ -180,7 +187,7 @@ async fn find_posting_by_dedupe(
 async fn insert_new_posting(
     transaction: &mut Transaction<'_, Sqlite>,
     posting: &NormalizedPosting,
-    result: &SearchRunResult,
+    seen_at: &str,
 ) -> Result<i64, String> {
     let locations_json = serde_json::to_string(&posting.locations).map_err(json_error)?;
     let inserted_posting = sqlx::query(
@@ -192,7 +199,7 @@ async fn insert_new_posting(
     .bind(&posting.title)
     .bind(&posting.company)
     .bind(locations_json)
-    .bind(&result.generated_at)
+    .bind(seen_at)
     .execute(&mut **transaction)
     .await
     .map_err(db_error)?;
@@ -200,8 +207,7 @@ async fn insert_new_posting(
 
     let mut primary_source_id = None;
     for source in &posting.sources {
-        let source_id =
-            upsert_posting_source(transaction, posting_id, source, &result.generated_at).await?;
+        let source_id = upsert_posting_source(transaction, posting_id, source, seen_at).await?;
         if primary_source_id.is_none() {
             primary_source_id = Some(source_id);
         }
@@ -221,7 +227,7 @@ async fn update_existing_posting(
     transaction: &mut Transaction<'_, Sqlite>,
     posting_id: i64,
     posting: &NormalizedPosting,
-    result: &SearchRunResult,
+    seen_at: &str,
 ) -> Result<(), String> {
     let existing_locations_json = sqlx::query_scalar::<_, String>(
         "SELECT locations_json
@@ -243,14 +249,14 @@ async fn update_existing_posting(
          WHERE id = ?3",
     )
     .bind(merged_locations_json)
-    .bind(&result.generated_at)
+    .bind(seen_at)
     .bind(posting_id)
     .execute(&mut **transaction)
     .await
     .map_err(db_error)?;
 
     for source in &posting.sources {
-        upsert_posting_source(transaction, posting_id, source, &result.generated_at).await?;
+        upsert_posting_source(transaction, posting_id, source, seen_at).await?;
     }
 
     Ok(())
