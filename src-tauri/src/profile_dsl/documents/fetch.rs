@@ -139,6 +139,29 @@ pub enum HttpMethod {
     Post,
 }
 
+impl Fetch {
+    pub(crate) fn http_parts(
+        &self,
+    ) -> Option<(
+        Option<HttpMethod>,
+        &str,
+        Option<&BTreeMap<String, String>>,
+        Option<&RequestBody>,
+        u64,
+    )> {
+        match self {
+            Self::Http {
+                method,
+                url,
+                headers,
+                body,
+                timeout_ms,
+            } => Some((*method, url, headers.as_ref(), body.as_ref(), *timeout_ms)),
+            Self::Browser { .. } => None,
+        }
+    }
+}
+
 impl HttpMethod {
     pub(crate) fn label(self) -> &'static str {
         match self {

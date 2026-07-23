@@ -49,6 +49,7 @@ pub(crate) fn policy_unsatisfied_diagnostic(
     phase: RuntimePhase,
 ) -> Diagnostic {
     let phase_name = match phase {
+        RuntimePhase::Detection => "detection",
         RuntimePhase::Discovery => "discovery",
         RuntimePhase::Detail => "detail",
     };

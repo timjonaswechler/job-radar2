@@ -116,6 +116,63 @@ struct LedgerState {
     usage: PhaseUsage,
 }
 
+/// Detection's only HTTP allowance. It deliberately owns no posting-phase limits or report.
+pub(crate) struct DetectionHttpAllowance {
+    response_bytes: Mutex<u64>,
+    exhausted: Mutex<Option<AllowanceExhaustion>>,
+}
+
+impl DetectionHttpAllowance {
+    pub(crate) const LIMIT: u64 = 67_108_864;
+
+    pub(crate) fn new() -> Self {
+        Self {
+            response_bytes: Mutex::new(0),
+            exhausted: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn response_bytes(&self) -> u64 {
+        *self
+            .response_bytes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn remaining_response_bytes(&self) -> u64 {
+        Self::LIMIT.saturating_sub(self.response_bytes())
+    }
+
+    pub(crate) fn exhaustion(&self) -> Option<AllowanceExhaustion> {
+        self.exhausted
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
+    pub(crate) fn commit_response_bytes(&self, admitted: u64, exceeded: Option<u64>) {
+        let mut used = self
+            .response_bytes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let remaining_before = Self::LIMIT.saturating_sub(*used);
+        *used = used.saturating_add(admitted.min(remaining_before));
+        let remaining_after = Self::LIMIT.saturating_sub(*used);
+        drop(used);
+        if let Some(requested) = exceeded {
+            let mut exhaustion = self.exhausted.lock().unwrap_or_else(|p| p.into_inner());
+            if exhaustion.is_none() {
+                *exhaustion = Some(AllowanceExhaustion {
+                    dimension: AllowanceDimension::ResponseBytes,
+                    requested,
+                    remaining: remaining_after,
+                    limit_sources: vec![AllowanceLimitSource::Backend],
+                });
+            }
+        }
+    }
+}
+
 pub(crate) struct InvocationAllowance {
     limits: EffectiveLimits,
     started_at: Instant,

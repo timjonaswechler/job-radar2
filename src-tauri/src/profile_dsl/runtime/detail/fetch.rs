@@ -51,6 +51,7 @@ where
             &values,
             HttpFetchOverlay::default(),
             authored_charset,
+            crate::profile_dsl::primitives::fetch::http::HttpStatusPolicy::RequireSuccess,
             execution_context,
         )
         .await

@@ -22,17 +22,47 @@ pub struct RegexPredicate {
 pub const DESCRIPTOR: PredicateDescriptor = PredicateDescriptor { key: "regex" };
 
 #[derive(Clone, Debug)]
-pub struct RegexPredicatePlan {
-    field: CompiledValue,
+pub struct CompiledRegex {
     pattern: String,
     regex: Regex,
+}
+
+impl CompiledRegex {
+    pub fn pattern(&self) -> &str {
+        &self.pattern
+    }
+    pub fn is_match(&self, value: &str) -> bool {
+        !value.is_empty() && self.regex.is_match(value)
+    }
+}
+
+impl PartialEq for CompiledRegex {
+    fn eq(&self, other: &Self) -> bool {
+        self.pattern == other.pattern
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RegexCompileError;
+
+pub fn compile_regex(pattern: &str) -> Result<CompiledRegex, RegexCompileError> {
+    Ok(CompiledRegex {
+        pattern: pattern.to_string(),
+        regex: Regex::new(pattern).map_err(|_| RegexCompileError)?,
+    })
+}
+
+#[derive(Clone, Debug)]
+pub struct RegexPredicatePlan {
+    field: CompiledValue,
+    regex: CompiledRegex,
 }
 impl RegexPredicatePlan {
     pub fn field(&self) -> &CompiledValue {
         &self.field
     }
     pub fn pattern(&self) -> &str {
-        &self.pattern
+        self.regex.pattern()
     }
     pub(super) fn references_source_name(&self) -> bool {
         self.field.references_source_name()
@@ -40,7 +70,7 @@ impl RegexPredicatePlan {
 }
 impl PartialEq for RegexPredicatePlan {
     fn eq(&self, other: &Self) -> bool {
-        self.field == other.field && self.pattern == other.pattern
+        self.field == other.field && self.regex == other.regex
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -53,7 +83,7 @@ impl Serialize for RegexPredicatePlan {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         SerializedRegexPredicatePlan {
             field: self.field.clone(),
-            pattern: self.pattern.clone(),
+            pattern: self.regex.pattern.clone(),
         }
         .serialize(serializer)
     }
@@ -61,10 +91,10 @@ impl Serialize for RegexPredicatePlan {
 impl<'de> Deserialize<'de> for RegexPredicatePlan {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = SerializedRegexPredicatePlan::deserialize(deserializer)?;
-        let regex = Regex::new(&value.pattern).map_err(serde::de::Error::custom)?;
+        let regex =
+            compile_regex(&value.pattern).map_err(|_| serde::de::Error::custom("invalid regex"))?;
         Ok(Self {
             field: value.field,
-            pattern: value.pattern,
             regex,
         })
     }
@@ -95,17 +125,13 @@ pub(super) fn compile(
             value_error: None,
         });
     }
-    let regex = Regex::new(&predicate.pattern).map_err(|_| PredicateCompileError {
+    let regex = compile_regex(&predicate.pattern).map_err(|_| PredicateCompileError {
         kind: PredicateCompileErrorKind::InvalidRegex,
         path: "/pattern".to_string(),
         message: "regex predicate pattern is invalid Rust regex syntax".to_string(),
         value_error: None,
     })?;
-    Ok(RegexPredicatePlan {
-        field,
-        pattern: predicate.pattern.clone(),
-        regex,
-    })
+    Ok(RegexPredicatePlan { field, regex })
 }
 
 pub(super) fn execute<F>(
@@ -120,9 +146,7 @@ where
         source,
     })?;
     Ok(match result {
-        CompiledValueResult::Scalar(Some(value)) => {
-            !value.is_empty() && plan.regex.is_match(&value)
-        }
+        CompiledValueResult::Scalar(Some(value)) => plan.regex.is_match(&value),
         CompiledValueResult::Scalar(None) => false,
         CompiledValueResult::Sequence(_) => false,
     })

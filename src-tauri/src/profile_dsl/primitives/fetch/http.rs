@@ -395,6 +395,12 @@ impl HttpFetchRenderError {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HttpStatusPolicy {
+    RequireSuccess,
+    PreserveResponse,
+}
+
 pub enum HttpFetchExecutionError {
     Render(HttpFetchRenderError),
     Cancelled,
@@ -412,6 +418,7 @@ pub async fn execute_http_fetch<
     values: &V,
     overlay: HttpFetchOverlay<'_>,
     authored_charset: Option<&str>,
+    status_policy: HttpStatusPolicy,
     context: RuntimeExecutionContext<'_>,
 ) -> Result<ProfileHttpResponse, HttpFetchExecutionError> {
     let request = render_http_request(fetch, values, overlay, authored_charset)
@@ -436,7 +443,9 @@ pub async fn execute_http_fetch<
         .fetch(request, context)
         .await
         .map_err(HttpFetchExecutionError::Acquisition)?;
-    if !(200..=299).contains(&response.status()) {
+    if status_policy == HttpStatusPolicy::RequireSuccess
+        && !(200..=299).contains(&response.status())
+    {
         return Err(HttpFetchExecutionError::NonSuccessStatus {
             status: response.status(),
         });

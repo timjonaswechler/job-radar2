@@ -29,11 +29,85 @@ impl CaptureRule {
 }
 
 #[derive(Clone, Debug)]
+pub struct CompiledNamedPattern {
+    pattern: String,
+    keys: Vec<String>,
+    regex: Regex,
+}
+
+impl PartialEq for CompiledNamedPattern {
+    fn eq(&self, other: &Self) -> bool {
+        self.pattern == other.pattern && self.keys == other.keys
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NamedPatternCompileError {
+    InvalidRegex,
+    DuplicateKey(String),
+    NamedGroupMissing(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NamedPatternEvaluationError {
+    NamedGroupUnmatched(String),
+    Empty(String),
+}
+
+pub fn compile_named_pattern(
+    pattern: &str,
+    keys: &[String],
+) -> Result<CompiledNamedPattern, NamedPatternCompileError> {
+    let regex = Regex::new(pattern).map_err(|_| NamedPatternCompileError::InvalidRegex)?;
+    let mut unique = std::collections::BTreeSet::new();
+    for key in keys {
+        if !unique.insert(key.clone()) {
+            return Err(NamedPatternCompileError::DuplicateKey(key.clone()));
+        }
+        if !regex.capture_names().flatten().any(|name| name == key) {
+            return Err(NamedPatternCompileError::NamedGroupMissing(key.clone()));
+        }
+    }
+    Ok(CompiledNamedPattern {
+        pattern: pattern.to_string(),
+        keys: keys.to_vec(),
+        regex,
+    })
+}
+
+pub fn evaluate_named_pattern(
+    pattern: &CompiledNamedPattern,
+    value: &str,
+) -> Result<Option<Vec<super::CaptureOutput>>, NamedPatternEvaluationError> {
+    let Some(captures) = pattern.regex.captures(value) else {
+        return Ok(None);
+    };
+    pattern
+        .keys
+        .iter()
+        .map(|key| {
+            let value = captures
+                .name(key)
+                .ok_or_else(|| NamedPatternEvaluationError::NamedGroupUnmatched(key.clone()))?
+                .as_str()
+                .trim();
+            if value.is_empty() {
+                return Err(NamedPatternEvaluationError::Empty(key.clone()));
+            }
+            Ok(super::CaptureOutput {
+                key: key.clone(),
+                value: value.to_string(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+#[derive(Clone, Debug)]
 pub struct CompiledCaptureRule {
     key: String,
     from: CompiledValue,
-    pattern: String,
-    regex: Regex,
+    named_pattern: CompiledNamedPattern,
 }
 
 impl CompiledCaptureRule {
@@ -46,7 +120,7 @@ impl CompiledCaptureRule {
     }
 
     pub fn pattern(&self) -> &str {
-        &self.pattern
+        &self.named_pattern.pattern
     }
 
     pub(crate) fn references_source_name(&self) -> bool {
@@ -70,23 +144,24 @@ impl CompiledCaptureRule {
             }
             Err(error) => return Err((CaptureEvaluationErrorKind::Value, Some(error))),
         };
-        let Some(captures) = self.regex.captures(&source) else {
-            return Err((CaptureEvaluationErrorKind::PatternNotMatched, None));
-        };
-        let Some(value) = captures.name(&self.key) else {
-            return Err((CaptureEvaluationErrorKind::NamedGroupUnmatched, None));
-        };
-        let value = value.as_str().trim();
-        if value.is_empty() {
-            return Err((CaptureEvaluationErrorKind::Empty, None));
+        match evaluate_named_pattern(&self.named_pattern, &source) {
+            Ok(Some(mut outputs)) => Ok(outputs.remove(0).value),
+            Ok(None) => Err((CaptureEvaluationErrorKind::PatternNotMatched, None)),
+            Err(NamedPatternEvaluationError::NamedGroupUnmatched(_)) => {
+                Err((CaptureEvaluationErrorKind::NamedGroupUnmatched, None))
+            }
+            Err(NamedPatternEvaluationError::Empty(_)) => {
+                Err((CaptureEvaluationErrorKind::Empty, None))
+            }
         }
-        Ok(value.to_string())
     }
 }
 
 impl PartialEq for CompiledCaptureRule {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.from == other.from && self.pattern == other.pattern
+        self.key == other.key
+            && self.from == other.from
+            && self.named_pattern == other.named_pattern
     }
 }
 
@@ -103,7 +178,7 @@ impl Serialize for CompiledCaptureRule {
         SerializedCompiledCaptureRule {
             key: self.key.clone(),
             from: self.from.clone(),
-            pattern: self.pattern.clone(),
+            pattern: self.named_pattern.pattern.clone(),
         }
         .serialize(serializer)
     }
@@ -117,21 +192,20 @@ impl<'de> Deserialize<'de> for CompiledCaptureRule {
                 "compiled Capture source must be scalar",
             ));
         }
-        let regex = Regex::new(&value.pattern).map_err(serde::de::Error::custom)?;
-        if !regex
-            .capture_names()
-            .flatten()
-            .any(|name| name == value.key)
-        {
-            return Err(serde::de::Error::custom(
-                "compiled Capture pattern does not declare its selected named group",
-            ));
-        }
+        let named_pattern = compile_named_pattern(&value.pattern, std::slice::from_ref(&value.key))
+            .map_err(|error| match error {
+                NamedPatternCompileError::InvalidRegex => serde::de::Error::custom(
+                    "compiled Capture pattern is invalid Rust regex syntax",
+                ),
+                NamedPatternCompileError::DuplicateKey(_)
+                | NamedPatternCompileError::NamedGroupMissing(_) => serde::de::Error::custom(
+                    "compiled Capture pattern must declare its selected named group",
+                ),
+            })?;
         Ok(Self {
             key: value.key,
             from: value.from,
-            pattern: value.pattern,
-            regex,
+            named_pattern,
         })
     }
 }
@@ -143,29 +217,35 @@ pub fn compile_named_capture_rule(
     context: &ValueCompileContext,
 ) -> Result<CompiledCaptureRule, CaptureCompileError> {
     let from = compile_value_source(rule_index, key, rule, context)?;
-    let regex = Regex::new(&rule.pattern).map_err(|_| CaptureCompileError {
-        rule_index,
-        capture_key: key.to_string(),
-        kind: CaptureCompileErrorKind::InvalidRegex,
-        path: "/pattern".to_string(),
-        message: "Capture pattern is invalid Rust regex syntax".to_string(),
-        value_error: None,
-    })?;
-    if !regex.capture_names().flatten().any(|name| name == key) {
-        return Err(CaptureCompileError {
-            rule_index,
-            capture_key: key.to_string(),
-            kind: CaptureCompileErrorKind::NamedGroupMissing,
-            path: "/pattern".to_string(),
-            message: "Capture pattern must declare a named group matching its Capture key"
-                .to_string(),
-            value_error: None,
-        });
-    }
+    let named_pattern =
+        compile_named_pattern(&rule.pattern, &[key.to_string()]).map_err(|error| {
+            CaptureCompileError {
+                rule_index,
+                capture_key: key.to_string(),
+                kind: match &error {
+                    NamedPatternCompileError::InvalidRegex => CaptureCompileErrorKind::InvalidRegex,
+                    NamedPatternCompileError::DuplicateKey(_)
+                    | NamedPatternCompileError::NamedGroupMissing(_) => {
+                        CaptureCompileErrorKind::NamedGroupMissing
+                    }
+                },
+                path: "/pattern".to_string(),
+                message: match &error {
+                    NamedPatternCompileError::InvalidRegex => {
+                        "Capture pattern is invalid Rust regex syntax".to_string()
+                    }
+                    NamedPatternCompileError::DuplicateKey(_)
+                    | NamedPatternCompileError::NamedGroupMissing(_) => {
+                        "Capture pattern must declare a named group matching its Capture key"
+                            .to_string()
+                    }
+                },
+                value_error: None,
+            }
+        })?;
     Ok(CompiledCaptureRule {
         key: key.to_string(),
         from,
-        pattern: rule.pattern.clone(),
-        regex,
+        named_pattern,
     })
 }

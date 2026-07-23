@@ -178,6 +178,7 @@ where
                     json_body_params: &json_body_params,
                 },
                 authored_charset,
+                crate::profile_dsl::primitives::fetch::http::HttpStatusPolicy::RequireSuccess,
                 context,
             )
             .await

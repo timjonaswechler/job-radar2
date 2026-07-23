@@ -43,11 +43,11 @@ pub use profile_dsl::documents::{
     Acceptance, AccessPathFragment, AuthoredScalar, BrowserInteraction, BrowserWait, CaptureRule,
     Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
     DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
-    DetectionHttpCheck, DiscoveryStep, DiscoveryStepFragment, DiscoveryStrategyFragment, Fetch,
-    FieldExpression, HttpMethod, InputUrlPattern, ListFieldExpression, PaginationFragment,
-    PaginationTypeFragment, Parse, ParseFragment, ParseType, ParseTypeFragment, PhaseLimits,
-    PhaseLimitsFragment, RequestBody, ReusableAccessPathDocument, Select, SelectTypeFragment,
-    SupportLevel,
+    DetectionHttpCheck, DetectionStrategy, DetectionUrlInput, DiscoveryStep, DiscoveryStepFragment,
+    DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
+    ListFieldExpression, PaginationFragment, PaginationTypeFragment, Parse, ParseFragment,
+    ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
+    ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
 };
 pub use profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
@@ -171,17 +171,21 @@ pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
-    aggregate_detection_attempts, detect_source_proposal, detect_source_proposal_with_clients,
-    detect_source_proposal_with_http_client, DetectionAttempt, DetectionConfigContribution,
-    DetectionContribution, DetectionDefinitionError, DetectionEvidenceContribution,
-    DetectionHttpClient, DetectionHttpError, DetectionHttpResponse, DetectionOrigin,
-    DetectionProfileContext, DetectionProposalProvenance, DetectionReconciliationError,
-    DetectionRunStatus, DetectionStateConflict, DetectionStateConflictKind,
-    PreparedDetectionOutput, ProposalEvidence, ReconciledCapture, ReconciledDetectionRunResult,
-    ReconciledDetectionState, ReconciledEvidence, ReconciledRecommendation,
-    ReconciledSourceConfigValue, ReconciledSourceProposal, ReqwestDetectionHttpClient,
-    SourceProposal, SourceProposalDetectionResult, SourceProposalDetectionStatus,
-    SourceProposalEvidence, UnsupportedReconciledDetection, UnsupportedSourceProfile,
+    aggregate_detection_attempts, compile_url_http_detection_plan, detect_source_proposal,
+    detect_source_proposal_with_clients, detect_source_proposal_with_http_client,
+    execute_url_http_detection_operation, CompiledUrlHttpDetectionPlan, DetectionAttempt,
+    DetectionConfigContribution, DetectionContribution, DetectionDefinitionError,
+    DetectionEvidenceContribution, DetectionHttpClient, DetectionHttpCompletion,
+    DetectionHttpError, DetectionHttpReport, DetectionHttpResponse, DetectionOrigin,
+    DetectionProfileCompletion, DetectionProfileContext, DetectionProfileExecutionFailureKind,
+    DetectionProfileOutcome, DetectionProfileRejectionKind, DetectionProposalProvenance,
+    DetectionReconciliationError, DetectionRunStatus, DetectionStateConflict,
+    DetectionStateConflictKind, PreparedDetectionOutput, ProposalEvidence, ReconciledCapture,
+    ReconciledDetectionRunResult, ReconciledDetectionState, ReconciledEvidence,
+    ReconciledRecommendation, ReconciledSourceConfigValue, ReconciledSourceProposal,
+    ReqwestDetectionHttpClient, SourceProposal, SourceProposalDetectionResult,
+    SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedReconciledDetection,
+    UnsupportedSourceProfile, UrlHttpDetectionOperationResult,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{

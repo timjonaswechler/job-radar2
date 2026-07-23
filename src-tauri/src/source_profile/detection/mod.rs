@@ -18,6 +18,7 @@ mod naming;
 mod proposal;
 mod reconciliation;
 mod templates;
+mod url_http;
 
 use browser::{browser_probe_unavailable_diagnostics, evaluate_browser_probes};
 use diagnostics::{
@@ -47,6 +48,12 @@ pub use reconciliation::{
 use templates::{
     render_detection_http_template, render_detection_template,
     render_detection_template_with_source_config, template_diagnostic,
+};
+pub use url_http::{
+    compile_url_http_detection_plan, execute_url_http_detection_operation,
+    CompiledUrlHttpDetectionPlan, DetectionHttpCompletion, DetectionHttpReport,
+    DetectionProfileCompletion, DetectionProfileExecutionFailureKind, DetectionProfileOutcome,
+    DetectionProfileRejectionKind, UrlHttpDetectionOperationResult,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

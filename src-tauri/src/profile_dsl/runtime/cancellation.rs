@@ -7,12 +7,15 @@ use crate::profile_dsl::{
     documents::PhaseLimits,
 };
 
-use super::allowance::{AllowanceCharge, AllowanceStop, InvocationAllowance};
+use super::allowance::{
+    AllowanceCharge, AllowanceStop, DetectionHttpAllowance, InvocationAllowance,
+};
 
 const RUNTIME_EXECUTION_CANCELLED_CODE: &str = "runtime_execution_cancelled";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RuntimePhase {
+    Detection,
     Discovery,
     Detail,
 }
@@ -57,6 +60,7 @@ impl TypedCancellation {
     }
     fn path(&self) -> String {
         let phase = match self.phase {
+            RuntimePhase::Detection => "detection",
             RuntimePhase::Discovery => "discovery",
             RuntimePhase::Detail => "detail",
         };
@@ -85,6 +89,7 @@ pub struct RuntimeExecutionContext<'a> {
     cancellation: Option<&'a dyn RuntimeCancellation>,
     caller_limits: Option<PhaseLimits>,
     allowance: Option<&'a InvocationAllowance>,
+    detection_http_allowance: Option<&'a DetectionHttpAllowance>,
     page_request: bool,
     pagination_max_requests: Option<u64>,
 }
@@ -95,6 +100,7 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: None,
             caller_limits: None,
             allowance: None,
+            detection_http_allowance: None,
             page_request: false,
             pagination_max_requests: None,
         }
@@ -104,6 +110,7 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: Some(cancellation),
             caller_limits: None,
             allowance: None,
+            detection_http_allowance: None,
             page_request: false,
             pagination_max_requests: None,
         }
@@ -126,8 +133,25 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: self.cancellation,
             caller_limits: self.caller_limits,
             allowance: Some(allowance),
+            detection_http_allowance: None,
             page_request: self.page_request,
             pagination_max_requests: self.pagination_max_requests,
+        }
+    }
+    pub(crate) fn for_detection_http<'b>(
+        &self,
+        allowance: &'b DetectionHttpAllowance,
+    ) -> RuntimeExecutionContext<'b>
+    where
+        'a: 'b,
+    {
+        RuntimeExecutionContext {
+            cancellation: self.cancellation,
+            caller_limits: None,
+            allowance: None,
+            detection_http_allowance: Some(allowance),
+            page_request: false,
+            pagination_max_requests: None,
         }
     }
     pub(crate) const fn with_page_request(mut self, page_request: bool) -> Self {
@@ -151,7 +175,10 @@ impl<'a> RuntimeExecutionContext<'a> {
         })
     }
     pub(crate) fn stop(self) -> Option<AllowanceStop> {
-        self.allowance.and_then(InvocationAllowance::stop)
+        self.detection_http_allowance
+            .and_then(DetectionHttpAllowance::exhaustion)
+            .map(AllowanceStop::Exhausted)
+            .or_else(|| self.allowance.and_then(InvocationAllowance::stop))
     }
     pub(crate) fn admit_browser_rendered_bytes(self, observed: u64) -> Result<(), AllowanceStop> {
         self.allowance.map_or(Ok(()), |allowance| {
@@ -165,13 +192,20 @@ impl<'a> RuntimeExecutionContext<'a> {
         )
     }
     pub(crate) fn remaining_response_bytes(self) -> u64 {
-        self.allowance.map_or(
-            PhaseLimits::BACKEND.max_response_bytes,
-            InvocationAllowance::remaining_response_bytes,
+        self.detection_http_allowance.map_or_else(
+            || {
+                self.allowance.map_or(
+                    PhaseLimits::BACKEND.max_response_bytes,
+                    InvocationAllowance::remaining_response_bytes,
+                )
+            },
+            DetectionHttpAllowance::remaining_response_bytes,
         )
     }
     pub(crate) fn commit_response_bytes(self, admitted: u64, exceeded: Option<u64>) {
-        if let Some(allowance) = self.allowance {
+        if let Some(allowance) = self.detection_http_allowance {
+            allowance.commit_response_bytes(admitted, exceeded);
+        } else if let Some(allowance) = self.allowance {
             allowance.commit_response_bytes(admitted, exceeded);
         }
     }

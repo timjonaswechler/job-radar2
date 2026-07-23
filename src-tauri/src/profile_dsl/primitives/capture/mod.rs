@@ -8,7 +8,10 @@ use super::value::{
 };
 mod named;
 
-pub use named::{compile_named_capture_rule, CaptureRule, Captures, CompiledCaptureRule};
+pub use named::{
+    compile_named_capture_rule, compile_named_pattern, evaluate_named_pattern, CaptureRule,
+    Captures, CompiledCaptureRule, CompiledNamedPattern,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureDescriptor {

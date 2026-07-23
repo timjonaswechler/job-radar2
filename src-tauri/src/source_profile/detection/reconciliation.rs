@@ -640,6 +640,23 @@ impl DetectionProfileContext {
     ) -> Result<PreparedDetectionOutput, DetectionReconciliationError> {
         let canonical_input_url = canonical_http_url(input_url)
             .map_err(|diagnostic| DetectionReconciliationError::InvalidState(vec![diagnostic]))?;
+        self.prepare_proposal_with_canonical_url(
+            state,
+            &canonical_input_url,
+            rendered_source_config_template,
+            key_candidates,
+            name_candidates,
+        )
+    }
+
+    pub(crate) fn prepare_proposal_with_canonical_url(
+        &self,
+        state: &ReconciledDetectionState,
+        canonical_input_url: &str,
+        rendered_source_config_template: Option<JsonObject>,
+        key_candidates: Vec<String>,
+        name_candidates: Vec<String>,
+    ) -> Result<PreparedDetectionOutput, DetectionReconciliationError> {
         let selected_key = self
             .explicit_recommendation
             .clone()
@@ -719,9 +736,11 @@ impl DetectionProfileContext {
         }
 
         if selected.contract.requires_property("startUrl") {
-            let config =
-                DetectionConfigContribution::new("/startUrl", Value::String(canonical_input_url))
-                    .expect("static startUrl pointer is valid");
+            let config = DetectionConfigContribution::new(
+                "/startUrl",
+                Value::String(canonical_input_url.to_string()),
+            )
+            .expect("static startUrl pointer is valid");
             let origin = DetectionOrigin::new(PREPARATION_STRATEGY, "/inputUrl")
                 .expect("static input origin is valid");
             next = self.apply(

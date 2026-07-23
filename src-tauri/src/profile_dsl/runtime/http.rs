@@ -8,6 +8,7 @@ use std::{
 
 use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
 use futures_util::{stream, Stream, StreamExt};
+use serde::{Deserialize, Serialize};
 
 use crate::profile_dsl::documents::HttpMethod;
 
@@ -119,7 +120,8 @@ impl ProfileHttpResponse {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ProfileHttpFailureKind {
     Connect,
     Timeout,

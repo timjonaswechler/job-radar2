@@ -21,7 +21,8 @@ pub use access_path::ReusableAccessPathDocument;
 pub use detail::{DetailExtraction, DetailFields, DetailStep, DetailStrategy};
 pub use detection::{
     DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
-    DetectionEvidenceKind, DetectionHttpCheck, InputUrlPattern,
+    DetectionEvidenceKind, DetectionHttpCheck, DetectionStrategy, DetectionUrlInput,
+    InputUrlPattern,
 };
 pub use discovery::{
     DiscoveryExtraction, DiscoveryHintExpression, DiscoveryProviderValues, DiscoveryReference,

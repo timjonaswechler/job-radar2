@@ -16,7 +16,7 @@ mod regex;
 pub use equal::{values_equal, Equal, EqualPlan};
 pub use literal_contains::literal_contains;
 pub use non_empty::{NonEmpty, NonEmptyPlan};
-pub use regex::{RegexPredicate, RegexPredicatePlan};
+pub use regex::{compile_regex, CompiledRegex, RegexPredicate, RegexPredicatePlan};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]

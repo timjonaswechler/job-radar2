@@ -133,6 +133,10 @@ fn invalid_regex_and_missing_selected_named_group_fail_compilation() {
     .unwrap_err();
     assert_eq!(invalid.kind, CaptureCompileErrorKind::InvalidRegex);
     assert_eq!(invalid.path, "/pattern");
+    assert_eq!(
+        invalid.message,
+        "Capture pattern is invalid Rust regex syntax"
+    );
 
     let missing = compile_captures(
         &captures(json!({
@@ -146,6 +150,10 @@ fn invalid_regex_and_missing_selected_named_group_fail_compilation() {
     .unwrap_err();
     assert_eq!(missing.kind, CaptureCompileErrorKind::NamedGroupMissing);
     assert_eq!(missing.capture_key, "tenant");
+    assert_eq!(
+        missing.message,
+        "Capture pattern must declare a named group matching its Capture key"
+    );
 }
 
 #[test]
