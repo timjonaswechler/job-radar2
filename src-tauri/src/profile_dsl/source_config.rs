@@ -187,6 +187,10 @@ impl EffectiveSourceConfigContract {
         self.properties.keys().cloned().collect()
     }
 
+    pub(crate) fn requires_property(&self, name: &str) -> bool {
+        self.required.contains(name)
+    }
+
     pub(crate) fn validate_incremental(&self, values: &JsonObject) -> Vec<ContractViolation> {
         self.validate(values, false)
     }

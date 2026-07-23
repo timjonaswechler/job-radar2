@@ -171,11 +171,17 @@ pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
-    detect_source_proposal, detect_source_proposal_with_clients,
-    detect_source_proposal_with_http_client, DetectionHttpClient, DetectionHttpError,
-    DetectionHttpResponse, ReqwestDetectionHttpClient, SourceProposal,
-    SourceProposalDetectionResult, SourceProposalDetectionStatus, SourceProposalEvidence,
-    UnsupportedSourceProfile,
+    aggregate_detection_attempts, detect_source_proposal, detect_source_proposal_with_clients,
+    detect_source_proposal_with_http_client, DetectionAttempt, DetectionConfigContribution,
+    DetectionContribution, DetectionDefinitionError, DetectionEvidenceContribution,
+    DetectionHttpClient, DetectionHttpError, DetectionHttpResponse, DetectionOrigin,
+    DetectionProfileContext, DetectionProposalProvenance, DetectionReconciliationError,
+    DetectionRunStatus, DetectionStateConflict, DetectionStateConflictKind,
+    PreparedDetectionOutput, ProposalEvidence, ReconciledCapture, ReconciledDetectionRunResult,
+    ReconciledDetectionState, ReconciledEvidence, ReconciledRecommendation,
+    ReconciledSourceConfigValue, ReconciledSourceProposal, ReqwestDetectionHttpClient,
+    SourceProposal, SourceProposalDetectionResult, SourceProposalDetectionStatus,
+    SourceProposalEvidence, UnsupportedReconciledDetection, UnsupportedSourceProfile,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{

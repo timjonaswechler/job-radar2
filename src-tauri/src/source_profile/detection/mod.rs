@@ -16,6 +16,7 @@ mod diagnostics;
 mod http;
 mod naming;
 mod proposal;
+mod reconciliation;
 mod templates;
 
 use browser::{browser_probe_unavailable_diagnostics, evaluate_browser_probes};
@@ -32,6 +33,16 @@ use proposal::{
     build_source_config, build_source_proposal, compiler_definition_diagnostic,
     detection_document_evidence, recommended_access_path, validate_detection_source_config_values,
     ValidationCompleteness,
+};
+pub use reconciliation::{
+    aggregate_detection_attempts, DetectionAttempt, DetectionConfigContribution,
+    DetectionContribution, DetectionDefinitionError, DetectionEvidenceContribution,
+    DetectionOrigin, DetectionProfileContext, DetectionProposalProvenance,
+    DetectionReconciliationError, DetectionRunStatus, DetectionStateConflict,
+    DetectionStateConflictKind, PreparedDetectionOutput, ProposalEvidence, ReconciledCapture,
+    ReconciledDetectionRunResult, ReconciledDetectionState, ReconciledEvidence,
+    ReconciledRecommendation, ReconciledSourceConfigValue, ReconciledSourceProposal,
+    UnsupportedReconciledDetection,
 };
 use templates::{
     render_detection_http_template, render_detection_template,
