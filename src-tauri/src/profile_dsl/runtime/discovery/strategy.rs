@@ -1,10 +1,10 @@
 use super::*;
 
-pub(super) async fn execute_strategy<F, B>(
+pub(super) async fn execute_strategy<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     step_acceptance: Option<&CompiledAcceptance>,
@@ -12,7 +12,6 @@ pub(super) async fn execute_strategy<F, B>(
 ) -> StrategyExecution<Vec<PostingOccurrence>>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let base_path = format!("/discovery/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());
@@ -119,11 +118,11 @@ pub(super) struct StrategyFetchOutput {
     pub(super) next_cursor: Option<String>,
 }
 
-pub(super) async fn execute_single_strategy_fetch<F, B>(
+pub(super) async fn execute_single_strategy_fetch<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     overlay: &PaginationOverlay,
@@ -137,7 +136,6 @@ pub(super) async fn execute_single_strategy_fetch<F, B>(
 ) -> Result<StrategyFetchOutput, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     if context.is_cancelled() {
         return Err(TypedCancellation::strategy(

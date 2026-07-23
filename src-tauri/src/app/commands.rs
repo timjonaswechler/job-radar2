@@ -527,10 +527,10 @@ pub fn check_source(
 ) -> Result<crate::checks::CheckReport, String> {
     let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
+    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
         state.paths.browser_runtime_dir.clone(),
     );
-    crate::checks::check_source_with_clients(
+    crate::checks::check_source_with_runtime(
         &state.paths.app_data_dir,
         source_key,
         &discovery_fetcher,
@@ -546,10 +546,10 @@ pub fn check_and_activate_source(
 ) -> Result<crate::checks::CheckReport, String> {
     let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
+    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
         state.paths.browser_runtime_dir.clone(),
     );
-    crate::checks::check_and_activate_source_with_clients(
+    crate::checks::check_and_activate_source_with_runtime(
         &state.paths.app_data_dir,
         source_key,
         &discovery_fetcher,
@@ -565,10 +565,10 @@ pub fn check_and_reactivate_source(
 ) -> Result<crate::checks::CheckReport, String> {
     let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
     let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
+    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
         state.paths.browser_runtime_dir.clone(),
     );
-    crate::checks::check_and_reactivate_source_with_clients(
+    crate::checks::check_and_reactivate_source_with_runtime(
         &state.paths.app_data_dir,
         source_key,
         &discovery_fetcher,
@@ -589,41 +589,76 @@ pub fn get_source_live_check_report_status(
 pub async fn detect_source_proposal_from_url(
     state: State<'_, AppState>,
     url: String,
-) -> Result<crate::source_profile::detection::SourceProposalDetectionResult, String> {
-    let http_client = crate::source_profile::detection::ReqwestDetectionHttpClient::new()?;
-    let browser_client = crate::profile_dsl::runtime::ManagedProfileBrowserClient::new(
+) -> Result<crate::source_profile::detection::DetectionOperationResult, String> {
+    let http_client = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
+    let acquisition = crate::browser_runtime::ManagedBrowserAcquisition::new(
         state.paths.browser_runtime_dir.clone(),
     );
-    Ok(detect_source_proposal_from_url_with_clients(
+    Ok(detect_source_proposal_from_url_with_runtime(
         &state.paths.app_data_dir,
         &url,
         &http_client,
-        &browser_client,
+        &acquisition,
     )
     .await)
 }
 
-async fn detect_source_proposal_from_url_with_clients<C, B>(
+async fn detect_source_proposal_from_url_with_runtime<C, A>(
     app_data_dir: &Path,
     url: &str,
     http_client: &C,
-    browser_client: &B,
-) -> crate::source_profile::detection::SourceProposalDetectionResult
+    acquisition: &A,
+) -> crate::source_profile::detection::DetectionOperationResult
 where
-    C: crate::source_profile::detection::DetectionHttpClient + Sync,
-    B: crate::profile_dsl::runtime::ProfileBrowserClient + Sync,
+    C: crate::profile_dsl::runtime::ProfileHttpClient + Sync + ?Sized,
+    A: crate::profile_dsl::runtime::BrowserAcquisition + Sync,
 {
+    struct Uncancelled;
+    impl crate::profile_dsl::runtime::RuntimeCancellation for Uncancelled {
+        fn is_cancelled(&self) -> bool {
+            false
+        }
+    }
+
     let snapshot = load_source_profile_registry_snapshot(app_data_dir);
-    let profiles = snapshot
+    let mut plans = Vec::new();
+    let mut compile_diagnostics = Vec::new();
+    for profile in snapshot
         .profiles
-        .into_iter()
-        .map(|profile| profile.document)
-        .collect::<Vec<_>>();
-    crate::source_profile::detection::detect_source_proposal_with_clients(
+        .iter()
+        .filter(|profile| profile.document.detection.is_some())
+    {
+        match crate::source_profile::detection::compile_detection_plan(&profile.document) {
+            Ok(plan) => plans.push(plan),
+            Err(diagnostics) => compile_diagnostics.extend(diagnostics),
+        }
+    }
+
+    if !compile_diagnostics.is_empty() {
+        let attempt = crate::source_profile::detection::DetectionAttempt::Failed(
+            compile_diagnostics.clone(),
+        );
+        return crate::source_profile::detection::DetectionOperationResult {
+            attempts: vec![attempt.clone()],
+            profile_outcomes: Vec::new(),
+            run_result: crate::source_profile::detection::aggregate_detection_attempts(vec![
+                attempt,
+            ]),
+            diagnostics: compile_diagnostics,
+            report: crate::profile_dsl::runtime::PhaseExecutionReport {
+                usage: crate::profile_dsl::runtime::PhaseUsage::default(),
+                completion: crate::profile_dsl::runtime::PhaseCompletion::ExecutionFailed,
+            },
+        };
+    }
+
+    let acquisition: &dyn crate::profile_dsl::runtime::BrowserAcquisition = acquisition;
+    crate::source_profile::detection::execute_detection_operation(
         url,
-        &profiles,
+        &plans,
         http_client,
-        browser_client,
+        crate::profile_dsl::runtime::PhaseBrowser::Browser(acquisition),
+        &Uncancelled,
     )
     .await
 }
@@ -1214,188 +1249,6 @@ mod tests {
             ),
             source_support: None,
             diagnostics: None,
-        }
-    }
-
-    #[test]
-    fn source_proposal_command_seam_returns_actionable_proposal_without_adapter_key() {
-        tauri::async_runtime::block_on(async {
-            let temp_dir = tempfile::tempdir().unwrap();
-            let paths =
-                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
-                    .unwrap();
-            let state = AppState::new(paths).await.unwrap();
-            let browser_client = crate::profile_dsl::runtime::UnavailableProfileBrowserClient;
-
-            let result = detect_source_proposal_from_url_with_clients(
-                &state.paths.app_data_dir,
-                "https://boards.greenhouse.io/acme_corp",
-                &crate::source_profile::detection::NoopDetectionHttpClient,
-                &browser_client,
-            )
-            .await;
-
-            assert_eq!(
-                result.status,
-                crate::source_profile::detection::SourceProposalDetectionStatus::Matched
-            );
-            let proposal = result.proposal.expect("matched detection returns proposal");
-            assert_eq!(proposal.profile_key, "greenhouse");
-            assert_eq!(proposal.recommended_access_path_key, "boards_api");
-            assert_eq!(proposal.source_config["boardSlug"], "acme_corp");
-
-            let serialized = serde_json::to_value(&proposal).unwrap();
-            assert_no_adapter_key(&serialized);
-        });
-    }
-
-    #[test]
-    fn source_proposal_command_seam_executes_injected_browser_probe() {
-        tauri::async_runtime::block_on(async {
-            let temp_dir = tempfile::tempdir().unwrap();
-            let paths =
-                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
-                    .unwrap();
-            std::fs::create_dir_all(&paths.source_profiles_dir).unwrap();
-            std::fs::write(
-                paths.source_profiles_dir.join("browser_jobs.json"),
-                serde_json::to_string_pretty(&serde_json::json!({
-                    "schemaVersion": 3,
-                    "key": "browser_jobs",
-                    "name": "Browser Jobs",
-                    "kind": "generic",
-                    "support": { "level": "experimental" },
-                    "detection": {
-                        "recommendedAccessPathKey": "rendered",
-                        "inputUrlPatterns": [{
-                            "pattern": "^https://careers\\.example\\.test/(?<tenant>[a-z0-9_-]+)$"
-                        }],
-                        "browserProbes": [{
-                            "key": "rendered_page",
-                            "url": "{{inputUrl}}",
-                            "timeoutMs": 5000,
-                            "htmlContains": "BrowserJobs",
-                            "htmlRegex": "company=\\\"(?<organizationName>[^\\\"]+)\\\"",
-                            "evidence": "Rendered career page identified BrowserJobs."
-                        }],
-                        "sourceConfig": {
-                            "tenant": "{{capture:tenant}}",
-                            "startUrl": "{{inputUrl}}"
-                        },
-                        "keyCandidates": ["{{capture:tenant}}"],
-                        "nameCandidates": ["{{capture:organizationName}}"]
-                    },
-                    "sourceConfigSchema": {
-                        "type": "object",
-                        "required": ["tenant", "startUrl"],
-                        "additionalProperties": false,
-                        "properties": {
-                            "tenant": { "type": "string" },
-                            "startUrl": { "type": "string" }
-                        }
-                    },
-                    "accessPaths": [{
-                        "key": "rendered",
-                        "name": "Rendered page",
-                        "discovery": {
-                            "policy": { "type": "first_accepted" },
-                            "strategies": [{
-                                "key": "jobs_html",
-                                "fetch": {
-                                    "mode": "http",
-                                    "method": "GET",
-                                    "url": "https://example.test/jobs",
-                                    "timeoutMs": 10000
-                                },
-                                "parse": { "type": "html" },
-                                "select": { "type": "css", "selector": ".job" },
-                                "extract": {
-                                    "reference": {
-                                        "url": { "type": "css_attribute", "selector": "a", "attribute": "href", "cardinality": "one" }
-                                    },
-                                    "providerValues": {
-                                        "title": { "type": "css_text", "selector": ".title", "cardinality": "one" },
-                                        "company": { "type": "const", "value": "Example" }
-                                    }
-                                }
-                            }]
-                        }
-                    }]
-                }))
-                .unwrap(),
-            )
-            .unwrap();
-            let state = AppState::new(paths).await.unwrap();
-            let browser_client = StaticBrowserClient {
-                body: "<html>BrowserJobs company=\"ACME GmbH\"</html>".to_string(),
-            };
-
-            let result = detect_source_proposal_from_url_with_clients(
-                &state.paths.app_data_dir,
-                "https://careers.example.test/acme",
-                &crate::source_profile::detection::NoopDetectionHttpClient,
-                &browser_client,
-            )
-            .await;
-
-            assert_eq!(
-                result.status,
-                crate::source_profile::detection::SourceProposalDetectionStatus::Matched
-            );
-            let proposal = result.proposal.expect("browser detection returns proposal");
-            assert_eq!(proposal.profile_key, "browser_jobs");
-            assert_eq!(proposal.name_candidates, vec!["ACME GmbH"]);
-            assert!(proposal.evidence.iter().any(|evidence| {
-                evidence.probe_key.as_deref() == Some("rendered_page")
-                    && evidence.message == "Rendered career page identified BrowserJobs."
-            }));
-        });
-    }
-
-    struct StaticBrowserClient {
-        body: String,
-    }
-
-    impl crate::profile_dsl::runtime::ProfileBrowserClient for StaticBrowserClient {
-        fn render<'a>(
-            &'a self,
-            _request: crate::profile_dsl::runtime::ProfileBrowserFetchRequest,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            crate::profile_dsl::runtime::ProfileBrowserFetchResponse,
-                            crate::profile_dsl::runtime::ProfileBrowserFetchError,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(async move {
-                Ok(crate::profile_dsl::runtime::ProfileBrowserFetchResponse {
-                    body: self.body.clone(),
-                })
-            })
-        }
-    }
-
-    fn assert_no_adapter_key(value: &serde_json::Value) {
-        match value {
-            serde_json::Value::Object(map) => {
-                assert!(
-                    !map.contains_key("adapterKey"),
-                    "serialized value contains adapterKey: {value}"
-                );
-                for nested in map.values() {
-                    assert_no_adapter_key(nested);
-                }
-            }
-            serde_json::Value::Array(values) => {
-                for nested in values {
-                    assert_no_adapter_key(nested);
-                }
-            }
-            _ => {}
         }
     }
 

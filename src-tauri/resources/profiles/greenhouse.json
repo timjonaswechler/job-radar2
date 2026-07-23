@@ -176,6 +176,32 @@
     }
   ],
   "detection": {
+    "policy": {
+      "type": "all_required"
+    },
+    "strategies": [
+      {
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            {
+              "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
+              "captures": [
+                "boardSlug"
+              ]
+            },
+            {
+              "pattern": "(?i)^https?://boards-api\\.greenhouse\\.io/v1/boards/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:/(?:jobs|departments|offices|sections).*)?$",
+              "captures": [
+                "boardSlug"
+              ]
+            }
+          ]
+        }
+      }
+    ],
     "recommendedAccessPathKey": "boards_api",
     "sourceConfig": {
       "boardSlug": "{{capture:boardSlug}}"
@@ -185,20 +211,6 @@
     ],
     "nameCandidates": [
       "{{capture:boardSlug}}"
-    ],
-    "inputUrlPatterns": [
-      {
-        "pattern": "(?i)^https?://(?:boards|job-boards)\\.greenhouse\\.io/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:[/?#].*)?$",
-        "captures": [
-          "boardSlug"
-        ]
-      },
-      {
-        "pattern": "(?i)^https?://boards-api\\.greenhouse\\.io/v1/boards/(?<boardSlug>[a-z0-9][a-z0-9_-]*)(?:/(?:jobs|departments|offices|sections).*)?$",
-        "captures": [
-          "boardSlug"
-        ]
-      }
     ],
     "evidence": [
       {

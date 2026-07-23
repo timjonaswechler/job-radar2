@@ -14,11 +14,12 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
     })
 }
 use job_radar_lib::{
-    execute_discovery, AllowanceDimension, CompileSourceOutcome, CompiledPagination,
+    PhaseBrowser,
+    execute_discovery, AllowanceDimension, DiscoveryBrowserAdapter, ScriptedBrowserAcquisition, CompileSourceOutcome, CompiledPagination,
     ExecutionPlanFetch, PhaseCancellationReason, PhaseCompletion, PhaseLimits, PhaseLimitsFragment,
     ProfileHttpFailureKind, RegistrySourceProfile, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
+    SourceProfileDocument, SourceProfileRegistrySnapshot,
 };
 use serde_json::{json, Value};
 
@@ -106,13 +107,14 @@ async fn browser_compiled_plan_with_1999_ms_is_rejected_as_plan_mismatch_without
     };
     plan.discovery.limits.max_duration_ms = 1_999;
     let fetcher = QueueFetcher::new([]);
+    let acquisition = ScriptedBrowserAcquisition::new([]);
 
     let diagnostics = not_started(
         execute_discovery(
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(&acquisition)),
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -140,6 +142,7 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
         interactions: Vec::new(),
     };
     let fetcher = QueueFetcher::new([]);
+    let acquisition = ScriptedBrowserAcquisition::new([]);
     let caller = PhaseLimits {
         max_duration_ms: 1_999,
         ..PhaseLimits::BACKEND
@@ -150,7 +153,7 @@ async fn browser_caller_tightening_to_1999_ms_is_execution_failed_without_panic(
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(&acquisition)),
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -187,7 +190,7 @@ async fn accepted_discovery_has_one_complete_exact_nine_dimension_report() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(equality_limits),
         )
         .await,
@@ -232,7 +235,7 @@ async fn attempt_one_over_is_denied_before_second_strategy() {
             &plan,
             empty_source_config(),
             &fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -260,7 +263,7 @@ async fn request_one_over_is_denied_before_second_page_and_hides_prefix_payload(
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -290,7 +293,7 @@ async fn exact_response_byte_allowance_followed_by_eof_succeeds() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -317,7 +320,7 @@ async fn response_byte_one_over_commits_only_the_admitted_prefix_and_hides_paylo
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -349,7 +352,7 @@ async fn response_byte_allowance_is_cumulative_across_pages() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -379,7 +382,7 @@ async fn atomic_request_page_one_over_does_not_charge_the_fitting_request() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -410,7 +413,7 @@ async fn cancellation_after_request_debit_prevents_the_effect_and_keeps_the_char
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::with_cancellation(&cancellation),
         )
         .await,
@@ -451,7 +454,7 @@ async fn paginated_produced_item_exact_equality_is_charged_after_acceptance() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -485,7 +488,7 @@ async fn paginated_produced_item_one_over_is_payload_free_after_acceptance_valid
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -523,7 +526,7 @@ async fn fan_out_one_over_charges_only_the_fitting_nonduplicate_prefix() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -566,7 +569,7 @@ async fn exact_duration_boundary_may_complete_before_deadline_exhaustion() {
         &plan,
         empty_source_config(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     );
     let (_, result) = tokio::join!(release, execute);
@@ -602,7 +605,7 @@ async fn admitted_response_prefix_is_committed_after_deadline_stop_is_recorded()
             &plan,
             empty_source_config(),
             &fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -646,7 +649,7 @@ async fn observed_cancellation_wins_when_the_deadline_becomes_ready() {
             &plan,
             empty_source_config(),
             &fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::with_cancellation(&cancellation).with_limits(caller),
         )
         .await,
@@ -685,7 +688,7 @@ async fn invocation_deadline_stops_active_effect_and_reports_duration_exhaustion
             &plan,
             empty_source_config(),
             &fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )
         .await,
@@ -714,7 +717,7 @@ fn caller_raise_is_execution_failed_before_work_with_zero_usage_report() {
             &plan,
             empty_source_config(),
             fetcher.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )),
         job_radar_lib::PhaseExecutionFailure::InvalidCallerLimits,

@@ -2,12 +2,13 @@ use std::{future::Future, path::PathBuf, pin::Pin};
 
 use crate::{
     background_tasks::CancellationToken,
+    browser_runtime::ManagedBrowserAcquisition,
     profile_dsl::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::SourceExecutionPlan,
         runtime::{
-            execute_discovery, ManagedProfileBrowserClient, PostingOccurrence,
-            ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
+            execute_discovery, BrowserAcquisition, DiscoveryBrowserAdapter, PhaseBrowser,
+            PostingOccurrence, ProfileHttpClient, ReqwestProfileHttpClient,
             RuntimeExecutionContext,
         },
     },
@@ -92,20 +93,20 @@ impl SourceExecutor for DefaultSourceExecutor {
     fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
         Box::pin(async move {
             let fetcher = ReqwestProfileHttpClient::new();
-            let browser = ManagedProfileBrowserClient::new(self.browser_runtime_dir.clone());
-            execute_discovery_for_source(input, &fetcher, &browser).await
+            let acquisition = ManagedBrowserAcquisition::new(self.browser_runtime_dir.clone());
+            execute_discovery_for_source(input, &fetcher, &acquisition).await
         })
     }
 }
 
-pub(super) async fn execute_discovery_for_source<F, B>(
+pub(super) async fn execute_discovery_for_source<F, A>(
     input: SourceExecutionInput<'_>,
     fetcher: &F,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<SourceExecutionOutput, SourceExecutionError>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     if input
         .cancellation_token
@@ -118,6 +119,13 @@ where
         .cancellation_token
         .map(|token| RuntimeExecutionContext::with_cancellation(token))
         .unwrap_or_else(RuntimeExecutionContext::uncancellable);
+    let browser = if input.source.execution_plan.discovery.strategies.iter().any(|strategy| {
+        matches!(strategy.fetch, crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. })
+    }) {
+        PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
+    } else {
+        PhaseBrowser::BrowserFree
+    };
     let result = execute_discovery(
         &input.source.execution_plan,
         input.source.source_config(),

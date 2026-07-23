@@ -1,10 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
-use crate::profile_dsl::runtime::{
-    ProfileBrowserClient, ProfileHttpClient, ReqwestProfileHttpClient,
-    UnavailableProfileBrowserClient,
-};
+use crate::profile_dsl::runtime::{BrowserAcquisition, ProfileHttpClient};
 use crate::source::documents::{SourceDocument, SourceStatus};
 use crate::source_profile::registry::RegistrySource;
 
@@ -31,122 +28,54 @@ impl SourceActivationFlow {
     }
 }
 
-pub fn check_and_activate_source(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-) -> Result<CheckReport, String> {
-    check_and_activate_source_with_clients(
-        app_data_dir,
-        source_key,
-        &ReqwestProfileHttpClient::new(),
-        &ReqwestProfileHttpClient::new(),
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_and_activate_source_with_fetcher<F>(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-    fetcher: &F,
-) -> Result<CheckReport, String>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-{
-    check_and_activate_source_with_clients(
-        app_data_dir,
-        source_key,
-        fetcher,
-        fetcher,
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_and_activate_source_with_clients<D, T, B>(
+pub fn check_and_activate_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
     detail_fetcher: &T,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
     T: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     check_and_set_source_active(
-        app_data_dir,
-        source_key,
-        SourceActivationFlow::Activate,
-        discovery_fetcher,
-        detail_fetcher,
-        browser,
+        app_data_dir, source_key, SourceActivationFlow::Activate,
+        discovery_fetcher, detail_fetcher, acquisition,
     )
 }
 
-pub fn check_and_reactivate_source(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-) -> Result<CheckReport, String> {
-    check_and_reactivate_source_with_clients(
-        app_data_dir,
-        source_key,
-        &ReqwestProfileHttpClient::new(),
-        &ReqwestProfileHttpClient::new(),
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_and_reactivate_source_with_fetcher<F>(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-    fetcher: &F,
-) -> Result<CheckReport, String>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-{
-    check_and_reactivate_source_with_clients(
-        app_data_dir,
-        source_key,
-        fetcher,
-        fetcher,
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_and_reactivate_source_with_clients<D, T, B>(
+pub fn check_and_reactivate_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
     detail_fetcher: &T,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
     T: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     check_and_set_source_active(
-        app_data_dir,
-        source_key,
-        SourceActivationFlow::Reactivate,
-        discovery_fetcher,
-        detail_fetcher,
-        browser,
+        app_data_dir, source_key, SourceActivationFlow::Reactivate,
+        discovery_fetcher, detail_fetcher, acquisition,
     )
 }
 
-fn check_and_set_source_active<D, T, B>(
+fn check_and_set_source_active<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     flow: SourceActivationFlow,
     discovery_fetcher: &D,
     detail_fetcher: &T,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
     T: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
@@ -160,7 +89,7 @@ where
         source_key,
         discovery_fetcher,
         detail_fetcher,
-        browser,
+        acquisition,
     )?;
 
     let live_check_passed = report.result == CheckReportResult::Passed;

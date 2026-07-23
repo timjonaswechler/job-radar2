@@ -22,11 +22,10 @@ use std::{
 use job_radar_lib::{
     DetailField, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, HttpMethod, PhaseCompletion,
-    PostingOccurrence, ProfileBrowserClient, ProfileBrowserFetchError,
-    ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
+    PhaseBrowser, PostingOccurrence,
     RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext, ScriptedHttpBodyEvent,
     ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, UnavailableProfileBrowserClient,
+    SourceProfileDocument,
     __test_execute_detail_phase as execute_detail,
 };
 use serde_json::{json, Value};
@@ -160,7 +159,7 @@ fn compiled_detail_runtime_extracts_only_requested_available_fields() {
         &posting,
         RequestedDetailFields::new([DetailField::Title, DetailField::Locations]).unwrap(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -210,7 +209,7 @@ fn detail_acceptance_rejects_unrequested_fields_before_io() {
             &posting,
             RequestedDetailFields::new([DetailField::Locations]).unwrap(),
             &fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )),
         job_radar_lib::PhasePreStartFailure::RequestMismatch,
@@ -853,100 +852,6 @@ fn compiled_detail_runtime_extracts_html_description_text_with_css() {
 }
 
 #[test]
-fn compiled_detail_runtime_uses_browser_fetch_rendered_html() {
-    let plan = compiled_browser_detail_plan(
-        "{{posting:url}}?tenant={{postingMeta:tenant}}",
-        json!({ "type": "html" }),
-        json!({ "type": "css", "selector": "main.job" }),
-        json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
-    );
-    let posting = posting_occurrence(
-        "https://example.test/jobs/42.html",
-        [("tenant", "acme"), ("jobId", "42")],
-    );
-    let fetcher = fake_profile_http_client([]);
-    let browser = FakeBrowser::new([(
-        "https://example.test/jobs/42.html?tenant=acme",
-        r#"<main class="job"><section class="description">Rendered browser detail.</section></main>"#
-            .to_string(),
-    )]);
-
-    let result = accepted_phase(block_on(execute_detail(
-        &plan,
-        empty_source_config(),
-        &posting,
-        RequestedDetailFields::description_text(),
-        &fetcher,
-        &browser,
-        RuntimeExecutionContext::uncancellable(),
-    )));
-
-    assert_eq!(result.diagnostics, Vec::new());
-    assert_eq!(
-        result.payload.patch.description_text,
-        Some("Rendered browser detail.".to_string())
-    );
-    assert!(fetcher.requests().is_empty());
-    let browser_requests = browser.requests();
-    assert_eq!(browser_requests.len(), 1);
-    assert_eq!(
-        browser_requests[0].url,
-        "https://example.test/jobs/42.html?tenant=acme"
-    );
-    assert_eq!(
-        browser_requests[0].waits,
-        vec![ExecutionPlanBrowserWait::Selector {
-            selector: "main.job".to_string(),
-            timeout_ms: 5000,
-        }]
-    );
-    assert_eq!(
-        browser_requests[0].interactions,
-        vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
-            selector: "button.cookie-banner".to_string(),
-            max_count: 2,
-            wait_after_ms: Some(100),
-        }]
-    );
-}
-
-#[test]
-fn compiled_detail_runtime_reports_browser_interaction_diagnostics() {
-    let plan = compiled_browser_detail_plan(
-        "{{posting:url}}",
-        json!({ "type": "html" }),
-        json!({ "type": "css", "selector": "main.job" }),
-        json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
-    );
-    let fetcher = fake_profile_http_client([]);
-    let browser = FakeBrowser::failing(ProfileBrowserFetchError::new(
-        ProfileBrowserFetchErrorKind::InteractionFailed {
-            interaction_index: Some(0),
-        },
-        "click_until_gone reached maxCount",
-    ));
-
-    let result = policy_unsatisfied(
-        block_on(execute_detail(
-            &plan,
-            empty_source_config(),
-            &posting_occurrence("https://example.test/jobs/42.html", []),
-            RequestedDetailFields::description_text(),
-            &fetcher,
-            &browser,
-            RuntimeExecutionContext::uncancellable(),
-        )),
-        job_radar_lib::PolicyUnsatisfiedCause::IncludesExecutionFailure,
-    );
-
-    assert_runtime_diagnostic(&result.diagnostics[0], "browser_interaction_failed");
-    assert_eq!(
-        result.diagnostics[0].path,
-        "/detail/strategies/0/fetch/interactions/0"
-    );
-}
-
-#[test]
 fn compiled_detail_runtime_reports_fetch_parse_extract_and_missing_context_failures() {
     let plan = compiled_json_detail_plan(
         "{{posting:url}}",
@@ -1116,207 +1021,9 @@ fn detail_capture_failure_is_atomic_and_prevents_fetch() {
     assert_eq!(result.diagnostics[1].code, "fallback_exhausted");
 }
 
-#[test]
-fn detail_accepts_the_shared_runtime_cancellation_context() {
-    let plan = compiled_json_detail_plan(
-        "{{posting:url}}",
-        json!({
-            "type": "json_path",
-            "jsonPath": "$.description",
-            "cardinality": "one"
-        }),
-        None,
-        None,
-    );
-    let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-    let fetcher = fake_profile_http_client([]);
-    let browser = FakeBrowser::new([]);
-    let cancellation = AlwaysCancelled;
 
-    let result = cancelled(block_on(execute_detail(
-        &plan,
-        empty_source_config(),
-        &posting,
-        RequestedDetailFields::description_text(),
-        &fetcher,
-        &browser,
-        RuntimeExecutionContext::with_cancellation(&cancellation),
-    )));
 
-    assert!(fetcher.requests().is_empty());
-    assert_eq!(result.diagnostics.len(), 1);
-    assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
-    assert!(result
-        .diagnostics
-        .iter()
-        .all(|diagnostic| diagnostic.code != "fallback_exhausted"));
-}
 
-#[test]
-fn detail_cancellation_interrupts_an_active_http_fetch() {
-    block_on(async {
-        let plan = compiled_json_detail_plan(
-            "{{posting:url}}",
-            json!({
-                "type": "json_path",
-                "jsonPath": "$.description",
-                "cardinality": "one"
-            }),
-            None,
-            None,
-        );
-        let posting = posting_occurrence("https://example.test/jobs/42.json", []);
-        let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
-            status: 200,
-            final_url: "https://example.test/jobs/42.json".to_string(),
-            headers: Vec::new(),
-            body: vec![ScriptedHttpBodyEvent::Gate("active-fetch".to_string())],
-            content_length: None,
-        }]);
-        let browser = FakeBrowser::new([]);
-        let cancellation = TestCancellation::default();
-
-        let cancel = async {
-            while !fetcher.gate_is_waiting("active-fetch") {
-                tokio::task::yield_now().await;
-            }
-            cancellation.cancel();
-        };
-        let execute = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            execute_detail(
-                &plan,
-                empty_source_config(),
-                &posting,
-                RequestedDetailFields::description_text(),
-                &fetcher,
-                &browser,
-                RuntimeExecutionContext::with_cancellation(&cancellation),
-            ),
-        );
-        let (_, result) = tokio::join!(cancel, execute);
-        let result =
-            cancelled(result.expect("cancellation should interrupt the active Detail fetch"));
-
-        assert_eq!(fetcher.request_count(), 1);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
-    });
-}
-
-#[test]
-fn detail_browser_cancellation_is_typed_control_flow() {
-    block_on(async {
-        let plan = compiled_browser_detail_plan(
-            "{{posting:url}}",
-            json!({ "type": "html" }),
-            json!({ "type": "css", "selector": "main.job" }),
-            json!({ "type": "css_text", "selector": ".description", "cardinality": "one" }),
-        );
-        let posting = posting_occurrence("https://example.test/jobs/42.html", []);
-        let fetcher = fake_profile_http_client([]);
-        let browser = CancellationAwareDetailBrowser::default();
-        let cancellation = TestCancellation::default();
-
-        let cancel = async {
-            browser.started.notified().await;
-            cancellation.cancel();
-        };
-        let execute = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            execute_detail(
-                &plan,
-                empty_source_config(),
-                &posting,
-                RequestedDetailFields::description_text(),
-                &fetcher,
-                &browser,
-                RuntimeExecutionContext::with_cancellation(&cancellation),
-            ),
-        );
-        let (_, result) = tokio::join!(cancel, execute);
-        let result =
-            cancelled(result.expect("cancellation should interrupt the active Detail browser"));
-
-        assert_eq!(browser.render_count(), 1);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].code, "runtime_execution_cancelled");
-    });
-}
-
-#[derive(Default)]
-struct TestCancellation {
-    cancelled: AtomicBool,
-}
-
-impl TestCancellation {
-    fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
-    }
-}
-
-impl RuntimeCancellation for TestCancellation {
-    fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
-    }
-}
-
-#[derive(Default)]
-struct CancellationAwareDetailBrowser {
-    started: Arc<Notify>,
-    render_count: std::sync::Mutex<usize>,
-}
-
-impl CancellationAwareDetailBrowser {
-    fn render_count(&self) -> usize {
-        *self.render_count.lock().unwrap()
-    }
-}
-
-impl ProfileBrowserClient for CancellationAwareDetailBrowser {
-    fn render<'a>(
-        &'a self,
-        _request: ProfileBrowserFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move { panic!("Detail should use cancellation-aware browser rendering") })
-    }
-
-    fn render_with_context<'a>(
-        &'a self,
-        _request: ProfileBrowserFetchRequest,
-        context: RuntimeExecutionContext<'a>,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            *self.render_count.lock().unwrap() += 1;
-            self.started.notify_one();
-            context.cancelled().await;
-            Err(ProfileBrowserFetchError::new(
-                ProfileBrowserFetchErrorKind::Cancelled,
-                "detail cancelled",
-            ))
-        })
-    }
-}
-
-struct AlwaysCancelled;
-
-impl RuntimeCancellation for AlwaysCancelled {
-    fn is_cancelled(&self) -> bool {
-        true
-    }
-}
 
 fn fake_profile_http_client(
     responses: impl IntoIterator<Item = (&'static str, String)>,
@@ -1332,64 +1039,6 @@ fn fake_profile_http_client(
     }))
 }
 
-struct FakeBrowser {
-    responses: BTreeMap<String, String>,
-    failure: Option<ProfileBrowserFetchError>,
-    requests: std::sync::Mutex<Vec<ProfileBrowserFetchRequest>>,
-}
-
-impl FakeBrowser {
-    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
-        Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            failure: None,
-            requests: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    fn failing(error: ProfileBrowserFetchError) -> Self {
-        Self {
-            responses: BTreeMap::new(),
-            failure: Some(error),
-            requests: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    fn requests(&self) -> Vec<ProfileBrowserFetchRequest> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-impl ProfileBrowserClient for FakeBrowser {
-    fn render<'a>(
-        &'a self,
-        request: ProfileBrowserFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.clone());
-            if let Some(error) = &self.failure {
-                return Err(error.clone());
-            }
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                ProfileBrowserFetchError::new(
-                    ProfileBrowserFetchErrorKind::NavigationFailed,
-                    format!("missing fake browser response for {}", request.url),
-                )
-            })?;
-            Ok(ProfileBrowserFetchResponse { body })
-        })
-    }
-}
-
 fn compiled_json_detail_plan(
     fetch_url: &str,
     description_text: Value,
@@ -1403,37 +1052,6 @@ fn compiled_json_detail_plan(
         description_text,
         captures,
         min_description_length,
-    )
-}
-
-fn compiled_browser_detail_plan(
-    fetch_url: &str,
-    parse: Value,
-    select: Value,
-    description_text: Value,
-) -> SourceExecutionPlan {
-    compiled_detail_plan_with_fetch(
-        json!({
-            "mode": "browser",
-            "url": fetch_url,
-            "timeoutMs": 30000,
-            "waits": [{
-                "type": "selector",
-                "selector": "main.job",
-                "timeoutMs": 5000
-            }],
-            "interactions": [{
-                "type": "click_until_gone",
-                "selector": "button.cookie-banner",
-                "maxCount": 2,
-                "waitAfterMs": 100
-            }]
-        }),
-        parse,
-        select,
-        description_text,
-        None,
-        None,
     )
 }
 

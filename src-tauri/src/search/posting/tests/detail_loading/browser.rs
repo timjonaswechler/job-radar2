@@ -43,24 +43,20 @@ fn get_job_posting_executes_compiled_browser_detail_plan_through_browser_client(
             )],
         );
         let fetcher = FixtureDetailHttpClient::new([]);
-        let browser = FixtureProfileBrowserClient::new([(
-            "https://browser.example.test/jobs/laser".to_string(),
-            Ok(
-                "<main><div class=\"description\">Rendered browser description</div></main>"
-                    .to_string(),
-            ),
-        )]);
+        let browser = rendered_browser_acquisition(
+            "https://browser.example.test/jobs/laser",
+            1000,
+            "<main><div class=\"description\">Rendered browser description</div></main>",
+        );
 
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(posting_id, &snapshot, fetcher.client(), &browser)
+            .get_job_posting_with_runtime(posting_id, &snapshot, fetcher.client(), &browser)
             .await
             .unwrap();
 
         assert!(fetcher.requested_urls().is_empty());
-        assert_eq!(
-            browser.requested_urls(),
-            vec!["https://browser.example.test/jobs/laser"]
-        );
+        assert_eq!(browser.requests().len(), 1);
+        assert!(browser.expectations_satisfied(), "{:?}", browser.mismatches());
         assert_eq!(
             detail.description_state,
             PostingDescriptionState::Loaded {

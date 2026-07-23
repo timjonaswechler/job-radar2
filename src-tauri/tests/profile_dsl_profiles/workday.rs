@@ -6,10 +6,10 @@ use crate::support::{
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    detect_source_proposal, execute_discovery, AllowanceDimension, HttpMethod, PhaseCompletion,
+    execute_discovery, AllowanceDimension, HttpMethod, PhaseCompletion,
     PostingOccurrence, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
-    SourceProposalDetectionStatus, SupportLevel, UnavailableProfileBrowserClient,
+ SupportLevel, PhaseBrowser,
 };
 use serde_json::{json, Value};
 
@@ -193,7 +193,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         &plan,
         &source.source_config,
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -215,32 +215,7 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         .all(|diagnostic| diagnostic.code != "pagination_max_requests_reached"));
 }
 
-#[test]
-fn workday_builtin_detection_proposes_source_config_and_recommended_profile_path() {
-    let profile_text = read_text("resources/profiles/workday.json");
-    let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
-        .expect("Workday built-in profile should be a Source Profile DSL document");
 
-    let input_url = "https://acme.wd3.myworkdayjobs.com/en-US/External?source=job-radar";
-    let result = block_on(detect_source_proposal(input_url, &[profile]));
-
-    assert_eq!(result.status, SourceProposalDetectionStatus::Matched);
-    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-    let proposal = result.proposal.expect("Workday detection should match");
-    assert_eq!(proposal.profile_key, "workday");
-    assert_eq!(proposal.profile_name, "Workday Recruiting");
-    assert_eq!(proposal.recommended_access_path_key, "cxs_api");
-    assert_eq!(proposal.recommended_access_path_name, "Workday CXS API");
-    assert_eq!(
-        proposal.source_config,
-        json!({
-            "workdayHost": "acme.wd3.myworkdayjobs.com",
-            "tenant": "acme",
-            "site": "External",
-            "startUrl": input_url
-        })
-    );
-}
 
 fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     for forbidden in [
@@ -257,7 +232,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
 }
 
 fn assert_detects_named_workday_source_config_captures(profile: &Value) {
-    let captures = profile["detection"]["inputUrlPatterns"]
+    let captures = profile["detection"]["strategies"][0]["input"]["alternatives"]
         .as_array()
         .into_iter()
         .flatten()

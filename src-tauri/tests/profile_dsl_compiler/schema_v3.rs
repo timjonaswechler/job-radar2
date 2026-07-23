@@ -72,7 +72,15 @@ fn profile_document() -> Value {
         "kind": "generic",
         "support": { "level": "experimental" },
         "detection": {
-            "inputUrlPatterns": [{ "pattern": "^https://example\\.test/" }],
+            "policy": { "type": "all_required" },
+            "strategies": [{
+                "type": "url",
+                "key": "input_url",
+                "input": {
+                    "type": "pattern_alternatives",
+                    "alternatives": [{ "pattern": "^https://example\\.test/" }]
+                }
+            }],
             "recommendedAccessPathKey": "main"
         },
         "accessPaths": [{

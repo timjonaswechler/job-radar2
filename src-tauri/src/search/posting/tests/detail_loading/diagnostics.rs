@@ -54,11 +54,11 @@ fn get_job_posting_surfaces_missing_and_invalid_source_diagnostics_as_unsupporte
         let client = FixtureDetailHttpClient::new([]);
 
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();
@@ -208,11 +208,11 @@ fn get_job_posting_reports_parse_empty_too_short_and_admitted_absent_meta_diagno
         ]);
 
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();
@@ -322,11 +322,11 @@ fn get_job_posting_reports_no_match_and_multiple_match_diagnostics() {
         ]);
 
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();

@@ -25,15 +25,15 @@ export function SourceDetectionPanel({
 }: SourceDetectionPanelProps) {
   if (!result) return null;
 
-  if (result.status === "matched" && result.proposal) {
+  if (result.status === "matched" && result.proposals[0]) {
     return (
       <Alert variant="success">
         <CheckCircle2Icon aria-hidden="true" />
         <AlertTitle>Profil erkannt</AlertTitle>
         <AlertDescription>
-          <DetectionBadges proposal={result.proposal} />
-          <ProposalDetails proposal={result.proposal} />
-          <EvidenceList evidence={result.proposal.evidence} diagnostics={result.diagnostics} />
+          <DetectionBadges proposal={result.proposals[0]} />
+          <ProposalDetails proposal={result.proposals[0]} />
+          <EvidenceList evidence={result.proposals[0].evidence} diagnostics={result.diagnostics} />
         </AlertDescription>
       </Alert>
     );
@@ -47,7 +47,7 @@ export function SourceDetectionPanel({
         <AlertDescription>
           <p>Wähle den passenden Vorschlag aus. Danach kannst du alle Felder weiter bearbeiten.</p>
           <div className="grid w-full gap-2">
-            {(result.proposals ?? []).map((proposal) => (
+            {result.proposals.map((proposal) => (
               <Card key={`${proposal.profileKey}-${proposal.recommendedAccessPathKey}`}>
                 <CardHeader className="flex-row items-start justify-between gap-3">
                   <div className="grid gap-1">
@@ -96,19 +96,32 @@ export function SourceDetectionPanel({
 }
 
 export function sourceDetectionOutcomeCopy(result: SourceProposalDetectionResult) {
-  if (result.status === "failed") {
-    return {
-      title: "Profilerkennung fehlgeschlagen",
-      description:
-        "Die Prüfung konnte nicht abgeschlossen werden. Du kannst dieselben Felder manuell ausfüllen; es wurde kein Konfigurationswert automatisch übernommen.",
-    };
+  switch (result.status) {
+    case "failed":
+      return {
+        title: "Profilerkennung fehlgeschlagen",
+        description:
+          "Die Prüfung konnte nicht abgeschlossen werden. Du kannst dieselben Felder manuell ausfüllen; es wurde kein Konfigurationswert automatisch übernommen.",
+      };
+    case "budget_exhausted":
+      return {
+        title: "Profilerkennung hat ihr Ausführungslimit erreicht",
+        description:
+          "Die begrenzte Prüfung konnte nicht vollständig abgeschlossen werden. Du kannst es erneut versuchen oder die Source manuell einrichten.",
+      };
+    case "cancelled":
+      return {
+        title: "Profilerkennung abgebrochen",
+        description:
+          "Die Prüfung wurde abgebrochen und hat keinen Vorschlag übernommen. Du kannst sie erneut starten oder die Source manuell einrichten.",
+      };
+    default:
+      return {
+        title: "Kein ausführbares Profil verfügbar",
+        description:
+          "Job Radar hat ein bekanntes, aber derzeit nicht unterstütztes Profil erkannt. Du kannst dieselben Felder manuell ausfüllen; der eingegebene Link wurde, falls möglich, als Konfigurationswert startUrl übernommen.",
+      };
   }
-
-  return {
-    title: "Kein ausführbares Profil verfügbar",
-    description:
-      "Job Radar hat ein bekanntes, aber derzeit nicht unterstütztes Profil erkannt. Du kannst dieselben Felder manuell ausfüllen; der eingegebene Link wurde, falls möglich, als Konfigurationswert startUrl übernommen.",
-  };
 }
 
 function DetectionBadges({ proposal }: { proposal: SourceProposal }) {

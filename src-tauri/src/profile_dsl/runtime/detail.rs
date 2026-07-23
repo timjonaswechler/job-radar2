@@ -34,10 +34,6 @@ use super::{
         InvocationAllowance, PhaseCancellationReason, PhaseCompletion, PhaseExecutionReport,
         BROWSER_TEARDOWN_RESERVE_MS,
     },
-    browser::{
-        ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    },
     browser_phase::{BrowserPhaseFetchInput, BrowserPhaseFetchProjection, PhaseBrowser},
     cancellation::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
@@ -72,32 +68,7 @@ use extract::{
 use fetch::{fetch_strategy_document, DetailBrowserBackend};
 use strategy::execute_strategy;
 
-pub async fn execute_detail<F, B>(
-    plan: &SourceExecutionPlan,
-    source_config: &SourceConfig,
-    posting: &PostingOccurrence,
-    requested_fields: RequestedDetailFields,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> PhaseRunResult<DetailPhasePayload>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    execute_detail_with_backend(
-        plan,
-        source_config,
-        posting,
-        requested_fields,
-        fetcher,
-        DetailBrowserBackend::Legacy(browser),
-        context,
-    )
-    .await
-}
-
-pub async fn execute_detail_with_browser_adapter<F>(
+pub async fn execute_detail<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     posting: &PostingOccurrence,
@@ -115,7 +86,7 @@ where
             .iter()
             .any(|strategy| uses_browser(&strategy.fetch))
     });
-    let backend: DetailBrowserBackend<'_, dyn ProfileBrowserClient + Sync> =
+    let backend: DetailBrowserBackend<'_> =
         match (requires_browser, browser) {
             (false, PhaseBrowser::BrowserFree) => DetailBrowserBackend::BrowserFree,
             (true, PhaseBrowser::Browser(adapter)) => DetailBrowserBackend::Canonical(adapter),
@@ -144,18 +115,17 @@ where
     .await
 }
 
-async fn execute_detail_with_backend<F, B>(
+async fn execute_detail_with_backend<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     posting: &PostingOccurrence,
     requested_fields: RequestedDetailFields,
     fetcher: &F,
-    browser: DetailBrowserBackend<'_, B>,
+    browser: DetailBrowserBackend<'_>,
     context: RuntimeExecutionContext<'_>,
 ) -> PhaseRunResult<DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let Some(detail) = &plan.detail else {
         return Err(PhaseRunError::NotStarted {

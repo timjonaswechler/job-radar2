@@ -1,11 +1,12 @@
 use super::*;
 use crate::{
     profile_dsl::runtime::{
-        DetailField, DetailPatch, ProfileBrowserClient, ProfileBrowserFetchError,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, RequestedDetailFields,
-        RequestedFieldDisposition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+        BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
+        RequestedFieldDisposition, ScriptedBrowserAcquisition,
+        ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
+        ScriptedBrowserFinalization, ScriptedHttpBodyEvent, ScriptedHttpEvent,
         ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceDetailOutcome,
-        SourceDetailRequestSnapshot, UnavailableProfileBrowserClient,
+        SourceDetailRequestSnapshot,
     },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
@@ -13,16 +14,12 @@ use crate::{
     source_profile::registry::SourceProfileRegistrySnapshot,
 };
 use serde_json::{from_str, json, Value};
+use std::collections::BTreeMap;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
 };
-use std::{
-    collections::BTreeMap,
-    future::Future,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+
 
 mod detail_loading;
 mod import_and_merge;
@@ -31,12 +28,6 @@ mod state_updates;
 
 struct FixtureDetailHttpClient {
     client: ScriptedProfileHttpClient,
-}
-
-#[derive(Clone, Default)]
-struct FixtureProfileBrowserClient {
-    responses: Arc<Mutex<BTreeMap<String, Result<String, ProfileBrowserFetchError>>>>,
-    requested_urls: Arc<Mutex<Vec<String>>>,
 }
 
 impl FixtureDetailHttpClient {
@@ -73,48 +64,19 @@ impl FixtureDetailHttpClient {
     }
 }
 
-impl FixtureProfileBrowserClient {
-    fn new(
-        responses: impl IntoIterator<Item = (String, Result<String, ProfileBrowserFetchError>)>,
-    ) -> Self {
-        Self {
-            responses: Arc::new(Mutex::new(responses.into_iter().collect())),
-            requested_urls: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn requested_urls(&self) -> Vec<String> {
-        self.requested_urls.lock().unwrap().clone()
-    }
+fn browser_free_acquisition() -> ScriptedBrowserAcquisition {
+    ScriptedBrowserAcquisition::new([])
 }
 
-impl ProfileBrowserClient for FixtureProfileBrowserClient {
-    fn render<'a>(
-        &'a self,
-        request: ProfileBrowserFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        let url = request.url;
-        self.requested_urls.lock().unwrap().push(url.clone());
-        let result = self
-            .responses
-            .lock()
-            .unwrap()
-            .get(&url)
-            .cloned()
-            .unwrap_or_else(|| {
-                Err(ProfileBrowserFetchError::new(
-                    crate::profile_dsl::runtime::ProfileBrowserFetchErrorKind::NavigationFailed,
-                    format!("unexpected browser detail URL: {url}"),
-                ))
-            });
-        Box::pin(async move { result.map(|body| ProfileBrowserFetchResponse { body }) })
-    }
+fn rendered_browser_acquisition(target: &str, timeout_ms: u64, body: &str) -> ScriptedBrowserAcquisition {
+    ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
+        request: BrowserAcquisitionRequestSnapshot {
+            target: target.to_string(), timeout_ms, waits: Vec::new(), interactions: Vec::new(),
+            browser_rendered_bytes_remaining: 67_108_864,
+        },
+        events: vec![ScriptedBrowserAcquisitionEvent::Navigate, ScriptedBrowserAcquisitionEvent::Content(body.to_string())],
+        finalization: ScriptedBrowserFinalization::default(),
+    }])
 }
 
 fn test_snapshot(

@@ -8,11 +8,11 @@ mod offset_limit;
 mod page;
 mod sitemap;
 
-pub(super) async fn execute_paginated_strategy<F, B>(
+pub(super) async fn execute_paginated_strategy<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination: &CompiledPagination,
@@ -24,7 +24,6 @@ pub(super) async fn execute_paginated_strategy<F, B>(
 ) -> Result<Vec<PostingOccurrence>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     match pagination {
         CompiledPagination::Page(pagination) => {

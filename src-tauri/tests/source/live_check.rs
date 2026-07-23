@@ -1,8 +1,9 @@
 use std::{fs, path::Path};
 
 use job_radar_lib::{
-    check_and_activate_source_with_fetcher, check_and_reactivate_source_with_fetcher, check_source,
-    check_source_with_fetcher, persist_latest_check_report, read_latest_check_report,
+    CheckReport, ProfileHttpClient, ScriptedBrowserAcquisition,
+    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
+    check_source_with_runtime, persist_latest_check_report, read_latest_check_report,
     source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
     CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
     DiagnosticCategory, DiagnosticSeverity, ProfileHttpRequest, ScriptedHttpBodyEvent,
@@ -38,6 +39,24 @@ fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
     .unwrap();
 }
 
+fn browser_acquisition() -> ScriptedBrowserAcquisition {
+    ScriptedBrowserAcquisition::new([])
+}
+
+fn run_check<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
+    check_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+}
+fn run_activate<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
+    check_and_activate_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+}
+fn run_reactivate<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
+    check_and_reactivate_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+}
+fn run_check_without_io(app: impl AsRef<std::path::Path>, key: &str) -> Result<CheckReport, String> {
+    let fetcher = ScriptedProfileHttpClient::new([]);
+    run_check(app, key, &fetcher)
+}
+
 #[test]
 fn invalid_predicate_regex_stops_source_live_check_before_http() {
     let temp_dir = tempfile::tempdir().unwrap();
@@ -52,7 +71,7 @@ fn invalid_predicate_regex_stops_source_live_check_before_http() {
     write_source(temp_dir.path(), &source);
     let client = ScriptedProfileHttpClient::new([]);
 
-    let report = check_source_with_fetcher(temp_dir.path(), "example_source", &client).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", &client).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert!(report
@@ -120,7 +139,7 @@ fn create_passed_source_live_check(app_data_dir: &Path) -> job_radar_lib::CheckR
     write_profile(app_data_dir, &simple_profile_without_pagination());
     write_source(app_data_dir, &simple_source_with_status("draft"));
     let fetcher = passing_live_check_fetcher();
-    check_source_with_fetcher(app_data_dir, "example_source", fetcher.client()).unwrap()
+    run_check(app_data_dir, "example_source", fetcher.client()).unwrap()
 }
 
 fn assert_stale_detail(
@@ -169,7 +188,7 @@ fn source_live_check_reports_cumulative_request_exhaustion_without_partial_paylo
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -254,7 +273,7 @@ fn workday_source_live_check_exhausts_after_one_cumulative_request_without_detai
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "workday_smoke", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "workday_smoke", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     let requests = fetcher.discovery_requests();
@@ -308,7 +327,7 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.kind, CheckReportKind::SourceLiveCheck);
     assert_eq!(report.subject.subject_type, CheckReportSubjectType::Source);
@@ -365,7 +384,7 @@ fn check_source_rejects_invalid_source_key_without_writing_outside_report_dir() 
 
     let fetcher = passing_live_check_fetcher();
     let error =
-        check_source_with_fetcher(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
+        run_check(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
 
     assert!(error.contains("invalid Source key `../outside`"));
     assert!(!temp_dir.path().join("outside.json").exists());
@@ -510,7 +529,7 @@ fn check_source_rejects_unknown_source_without_persisting_a_report() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile());
 
-    let error = check_source(temp_dir.path(), "missing_source").unwrap_err();
+    let error = run_check_without_io(temp_dir.path(), "missing_source").unwrap_err();
 
     assert!(error.contains("was not found in the registry snapshot"));
     let persisted_path = source_live_check_report_path(temp_dir.path(), "missing_source");
@@ -525,7 +544,7 @@ fn check_source_maps_invalid_values_to_source_validation_diagnostics() {
     write_profile(temp_dir.path(), &simple_profile());
     write_source(temp_dir.path(), &source);
 
-    let report = check_source(temp_dir.path(), "example_source").unwrap();
+    let report = run_check_without_io(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["sourceStatusAtCheck"], json!("active"));
@@ -554,7 +573,7 @@ fn check_source_emits_no_candidates_diagnostic_for_empty_live_discovery() {
     )]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -585,7 +604,7 @@ fn check_source_preserves_runtime_diagnostics_from_failed_live_discovery() {
         FakeLiveCheckFetcher::new([("https://example.test/jobs.json", "not json".to_string())]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert!(report.diagnostics.iter().any(|diagnostic| {
@@ -625,7 +644,7 @@ fn check_source_does_not_need_search_request_or_match_rule_context() {
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(1));
@@ -658,7 +677,7 @@ fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -730,7 +749,7 @@ fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_passed"));
@@ -768,7 +787,7 @@ fn check_source_leaves_detail_unchecked_when_access_path_has_no_detail() {
     )]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["detailChecked"], json!(false));
@@ -816,7 +835,7 @@ fn check_source_checks_detail_for_no_more_than_one_candidate() {
     ]);
 
     let report =
-        check_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(2));
@@ -833,7 +852,7 @@ fn check_and_activate_source_changes_draft_to_active_after_passed_live_check() {
     let fetcher = passing_live_check_fetcher();
 
     let report =
-        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client())
+        run_activate(temp_dir.path(), "example_source", fetcher.client())
             .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
@@ -866,7 +885,7 @@ fn check_and_activate_source_leaves_draft_unchanged_after_failed_live_check() {
     )]);
 
     let report =
-        check_and_activate_source_with_fetcher(temp_dir.path(), "example_source", fetcher.client())
+        run_activate(temp_dir.path(), "example_source", fetcher.client())
             .unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
@@ -902,7 +921,7 @@ fn check_and_reactivate_source_changes_disabled_to_active_after_passed_live_chec
     write_source(temp_dir.path(), &simple_source_with_status("disabled"));
     let fetcher = passing_live_check_fetcher();
 
-    let report = check_and_reactivate_source_with_fetcher(
+    let report = run_reactivate(
         temp_dir.path(),
         "example_source",
         fetcher.client(),
@@ -932,7 +951,7 @@ fn check_and_reactivate_source_leaves_disabled_unchanged_after_failed_live_check
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report = check_and_reactivate_source_with_fetcher(
+    let report = run_reactivate(
         temp_dir.path(),
         "example_source",
         fetcher.client(),
@@ -965,7 +984,7 @@ fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
         &simple_source_with_status("active"),
     );
     let fetcher = passing_live_check_fetcher();
-    let activate_report = check_and_activate_source_with_fetcher(
+    let activate_report = run_activate(
         activate_temp_dir.path(),
         "example_source",
         fetcher.client(),
@@ -995,7 +1014,7 @@ fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
         &simple_source_with_status("draft"),
     );
     let fetcher = passing_live_check_fetcher();
-    let reactivate_report = check_and_reactivate_source_with_fetcher(
+    let reactivate_report = run_reactivate(
         reactivate_temp_dir.path(),
         "example_source",
         fetcher.client(),

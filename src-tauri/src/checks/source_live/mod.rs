@@ -13,11 +13,11 @@ use crate::profile_dsl::diagnostics::{
 };
 use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
-    execute_discovery, DetailField, PhaseOutcome, PolicyOutcome, PostingOccurrence,
-    ProfileBrowserClient, ProfileDslSourceDetailExecution, ProfileHttpClient,
-    RequestedDetailFields, RequestedFieldDisposition, ReqwestProfileHttpClient,
+    execute_discovery, BrowserAcquisition, DetailField, DiscoveryBrowserAdapter, PhaseBrowser,
+    PhaseOutcome, PolicyOutcome, PostingOccurrence, ProfileDslSourceDetailExecution,
+    ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition,
     RuntimeExecutionContext, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
-    SourceDetailResult, UnavailableProfileBrowserClient,
+    SourceDetailResult,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -31,9 +31,7 @@ use super::{
 };
 
 pub use activation::{
-    check_and_activate_source, check_and_activate_source_with_clients,
-    check_and_activate_source_with_fetcher, check_and_reactivate_source,
-    check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
+    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
@@ -55,47 +53,17 @@ pub struct SourceLiveCheckReportStatus {
     pub freshness: Option<CheckReportFreshness>,
 }
 
-pub fn check_source(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-) -> Result<CheckReport, String> {
-    check_source_with_clients(
-        app_data_dir,
-        source_key,
-        &ReqwestProfileHttpClient::new(),
-        &ReqwestProfileHttpClient::new(),
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_source_with_fetcher<F>(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-    fetcher: &F,
-) -> Result<CheckReport, String>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-{
-    check_source_with_clients(
-        app_data_dir,
-        source_key,
-        fetcher,
-        fetcher,
-        &UnavailableProfileBrowserClient,
-    )
-}
-
-pub fn check_source_with_clients<D, T, B>(
+pub fn check_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
     detail_fetcher: &T,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
     T: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     let app_data_dir = app_data_dir.as_ref();
     let source_key = source_key.as_ref();
@@ -106,7 +74,7 @@ where
         source_key,
         discovery_fetcher,
         detail_fetcher,
-        browser,
+        acquisition,
     )?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
@@ -151,17 +119,17 @@ pub fn source_live_check_report_status(
     })
 }
 
-pub(crate) fn build_source_live_check_report<D, T, B>(
+pub(crate) fn build_source_live_check_report<D, T, A>(
     snapshot: &SourceProfileRegistrySnapshot,
     source_key: &str,
     discovery_fetcher: &D,
     detail_fetcher: &T,
-    browser: &B,
+    acquisition: &A,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
     T: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     let prepared = prepare_source_live_check(snapshot, source_key)?;
     let document = &prepared.source.document;
@@ -189,11 +157,18 @@ where
             max_requests: SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
             ..execution_plan.discovery.limits
         });
+        let discovery_browser = if execution_plan.discovery.strategies.iter().any(|strategy| {
+            matches!(strategy.fetch, crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. })
+        }) {
+            PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
+        } else {
+            PhaseBrowser::BrowserFree
+        };
         let discovery_result = tauri::async_runtime::block_on(execute_discovery(
             execution_plan,
             &document.source_config,
             discovery_fetcher,
-            browser,
+            discovery_browser,
             discovery_context,
         ));
         let (discovery_candidates, discovery_report, discovery_diagnostics) = match discovery_result
@@ -253,7 +228,7 @@ where
             if let Some(candidate) = first_acceptable_candidate {
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
                 let detail_execution =
-                    ProfileDslSourceDetailExecution::new(detail_fetcher, browser);
+                    ProfileDslSourceDetailExecution::new(detail_fetcher, acquisition);
                 let detail_result =
                     tauri::async_runtime::block_on(detail_execution.execute(SourceDetailRequest {
                         compiled_source: compiled,

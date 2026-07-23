@@ -9,13 +9,14 @@ fn empty_source_config() -> &'static serde_json::Map<String, serde_json::Value> 
     EMPTY.get_or_init(serde_json::Map::new)
 }
 use job_radar_lib::{
+    PhaseBrowser,
     __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
-    AllowanceDimension, CompileSourceOutcome, DiscoveryStep, ExecutionPlanFetch, PhaseCompletion,
+    AllowanceDimension, CompileSourceOutcome, DetailBrowserAdapter, DiscoveryStep, ScriptedBrowserAcquisition, ExecutionPlanFetch, PhaseCompletion,
     PhaseLimits, PhaseOutcome, PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence,
     ProfileHttpFailureKind, RegistrySourceProfile, RequestedDetailFields, RuntimeCancellation,
     RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
-    StrategyPolicy, UnavailableProfileBrowserClient,
+    StrategyPolicy,
 };
 use serde_json::{json, Value};
 
@@ -484,7 +485,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -536,7 +537,7 @@ fn first_accepted_execution_is_ordered_and_recovers_for_both_phases() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -591,7 +592,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.payload.candidates.len(), 2);
@@ -609,7 +610,7 @@ fn first_accepted_execution_stops_after_an_accepted_first_attempt() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert!(result.payload.patch.description_text.is_some());
@@ -649,7 +650,7 @@ fn all_required_reduces_every_accepted_strategy_once_for_both_phases() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.payload.candidates.len(), 4);
@@ -689,7 +690,7 @@ fn all_required_reduces_every_accepted_strategy_once_for_both_phases() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.report.usage.strategy_attempts, 3);
@@ -732,7 +733,7 @@ fn collect_all_reduces_every_accepted_strategy_after_natural_completion_for_both
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.payload.candidates.len(), 4);
@@ -764,7 +765,7 @@ fn collect_all_reduces_every_accepted_strategy_after_natural_completion_for_both
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.report.usage.strategy_attempts, 3);
@@ -800,7 +801,7 @@ fn collect_all_can_satisfy_its_minimum_despite_an_ordinary_failure() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.payload.candidates.len(), 3);
@@ -835,7 +836,7 @@ fn collect_all_can_satisfy_its_minimum_despite_an_ordinary_failure() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.report.usage.strategy_attempts, 3);
@@ -872,7 +873,7 @@ fn collect_all_decides_dissatisfaction_only_after_every_strategy_for_both_phases
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ))
     .unwrap()
@@ -928,7 +929,7 @@ fn collect_all_decides_dissatisfaction_only_after_every_strategy_for_both_phases
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ))
     .unwrap()
@@ -969,7 +970,7 @@ fn at_least_reduces_the_accepted_prefix_at_the_earliest_threshold_for_both_phase
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.payload.candidates.len(), 3);
@@ -994,7 +995,7 @@ fn at_least_reduces_the_accepted_prefix_at_the_earliest_threshold_for_both_phase
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.report.usage.strategy_attempts, 2);
@@ -1024,7 +1025,7 @@ fn at_least_stops_at_earliest_impossibility_without_exposing_a_prefix() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1072,7 +1073,7 @@ fn at_least_stops_at_earliest_impossibility_without_exposing_a_prefix() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1114,7 +1115,7 @@ fn at_least_final_acceptance_failure_is_payload_free_and_appends_its_terminal() 
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1160,7 +1161,7 @@ fn at_least_exact_limit_succeeds_and_denial_takes_precedence() {
         &posting(),
         RequestedDetailFields::description_text(),
         exact_limit.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
             max_requests: 2,
             ..PhaseLimits::BACKEND
@@ -1179,7 +1180,7 @@ fn at_least_exact_limit_succeeds_and_denial_takes_precedence() {
         &posting(),
         RequestedDetailFields::description_text(),
         denied.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
             max_requests: 1,
             ..PhaseLimits::BACKEND
@@ -1217,7 +1218,7 @@ fn collect_all_reducer_conflicts_do_not_retroactively_reject_a_satisfied_policy(
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
     assert_eq!(result.report.usage.strategy_attempts, 3);
@@ -1235,7 +1236,7 @@ fn collect_all_reducer_conflicts_do_not_retroactively_reject_a_satisfied_policy(
             &posting(),
             RequestedDetailFields::description_text(),
             detail.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )),
         PolicyUnsatisfiedCause::RejectedOnly,
@@ -1271,7 +1272,7 @@ fn collect_all_exact_limit_reaches_natural_completion_and_denial_takes_precedenc
         &posting(),
         RequestedDetailFields::description_text(),
         exact_limit.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
             max_requests: 3,
             ..PhaseLimits::BACKEND
@@ -1296,7 +1297,7 @@ fn collect_all_exact_limit_reaches_natural_completion_and_denial_takes_precedenc
         &posting(),
         RequestedDetailFields::description_text(),
         denied.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
             max_requests: 2,
             ..PhaseLimits::BACKEND
@@ -1330,7 +1331,7 @@ fn all_required_fails_fast_without_reducing_or_exposing_an_accepted_prefix() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1388,7 +1389,7 @@ fn all_required_fails_fast_without_reducing_or_exposing_an_accepted_prefix() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1435,7 +1436,7 @@ fn all_required_reducer_conflicts_do_not_retroactively_reject_the_policy() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -1478,7 +1479,7 @@ fn all_required_final_acceptance_failure_appends_the_policy_terminal() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1534,7 +1535,7 @@ fn all_required_exact_limit_succeeds_and_one_over_is_budget_exhausted() {
         &posting(),
         RequestedDetailFields::description_text(),
         exact_limit.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )));
     assert_eq!(result.report.usage.requests, 3);
@@ -1560,7 +1561,7 @@ fn all_required_exact_limit_succeeds_and_one_over_is_budget_exhausted() {
         &posting(),
         RequestedDetailFields::description_text(),
         one_over.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )));
     assert_eq!(result.report.usage.requests, 2);
@@ -1593,7 +1594,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         &plan,
         empty_source_config(),
         discovery.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1653,7 +1654,7 @@ fn first_accepted_exhaustion_adds_one_terminal_after_attempt_diagnostics() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     let PhaseOutcome::Completed {
@@ -1704,7 +1705,7 @@ fn detail_request_one_over_is_budget_exhausted_with_no_patch() {
         &posting(),
         RequestedDetailFields::description_text(),
         detail.client(),
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(caller),
     )));
 
@@ -1739,6 +1740,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
     };
     detail_plan.limits.max_duration_ms = 1_999;
     let detail = DetailScriptedClient::new([]);
+    let acquisition = ScriptedBrowserAcquisition::new([]);
 
     let invalid_plan_diagnostics = not_started(
         block_on(execute_detail(
@@ -1747,7 +1749,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
             &posting(),
             RequestedDetailFields::description_text(),
             detail.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::Browser(DetailBrowserAdapter::new(&acquisition)),
             RuntimeExecutionContext::uncancellable(),
         )),
         job_radar_lib::PhasePreStartFailure::PlanMismatch,
@@ -1770,7 +1772,7 @@ fn detail_browser_1999_ms_compiled_and_caller_limits_are_rejected_without_panic(
             &posting(),
             RequestedDetailFields::description_text(),
             detail.client(),
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::Browser(DetailBrowserAdapter::new(&acquisition)),
             RuntimeExecutionContext::uncancellable().with_limits(caller),
         )),
         job_radar_lib::PhaseExecutionFailure::InvalidCallerLimits,
@@ -1809,7 +1811,7 @@ fn all_required_cancellation_discards_the_accepted_prefix_without_a_policy_termi
         &plan,
         empty_source_config(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&signal),
     )));
 
@@ -1844,7 +1846,7 @@ fn at_least_cancellation_discards_the_accepted_prefix_without_a_policy_terminal(
         &plan,
         empty_source_config(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&signal),
     )));
 
@@ -1879,7 +1881,7 @@ fn collect_all_cancellation_discards_retained_output_without_a_policy_terminal()
         &plan,
         empty_source_config(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&signal),
     )));
 
@@ -1909,7 +1911,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         &plan,
         empty_source_config(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&signal),
     )));
 
@@ -1945,7 +1947,7 @@ fn cancellation_discards_an_accepted_attempt_and_suppresses_later_work_and_exhau
         &posting(),
         RequestedDetailFields::description_text(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&signal),
     )));
     assert_eq!(fetcher.request_count(), 1);

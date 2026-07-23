@@ -151,14 +151,15 @@ const proposal: SourceProposal = {
   keyCandidates: ["acme_jobs"],
   nameCandidates: ["ACME Jobs"],
   captures: { host: "jobs.lever.co" },
-  evidence: [{ kind: "url", message: "Matched Lever URL" }],
+  evidence: [{ kind: "url", descriptorPath: "/detection/strategies/0", message: "Matched Lever URL" }],
   supportLevel: "stable",
+  provenance: { captures: {}, sourceConfig: {}, recommendation: [], evidence: [] },
 };
 
 const matchedDraft = sourceCreateDraftAfterDetectionResult({
   draft: initialDraft,
   profiles,
-  result: { status: "matched", proposal, diagnostics: [] },
+  result: { status: "matched", proposals: [proposal], unsupportedProfiles: [], diagnostics: [] },
   trimmedUrl: "https://jobs.lever.co/acme",
   createConfigEntryId: stableEntryIds("matched"),
 });
@@ -182,7 +183,7 @@ assert.deepEqual(entryValues(matchedDraft.configEntries), [
 const ambiguousDraft = sourceCreateDraftAfterDetectionResult({
   draft: initialDraft,
   profiles,
-  result: { status: "ambiguous", proposals: [proposal], diagnostics: [] },
+  result: { status: "ambiguous", proposals: [proposal], unsupportedProfiles: [], diagnostics: [] },
   trimmedUrl: "https://jobs.lever.co/acme",
   createConfigEntryId: stableEntryIds("ambiguous"),
 });
@@ -207,7 +208,7 @@ assert.deepEqual(entryValues(explicitlyAppliedProposal.configEntries), [
 const failedDraft = sourceCreateDraftAfterDetectionResult({
   draft: initialDraft,
   profiles,
-  result: { status: "failed", diagnostics: [] },
+  result: { status: "failed", proposals: [], unsupportedProfiles: [], diagnostics: [] },
   trimmedUrl: "https://jobs.lever.co/acme",
   createConfigEntryId: stableEntryIds("failed"),
 });
@@ -216,7 +217,7 @@ assert.deepEqual(failedDraft, { ...initialDraft, appliedDetectedSource: false })
 const unsupportedDraft = sourceCreateDraftAfterDetectionResult({
   draft: initialDraft,
   profiles,
-  result: { status: "unsupported", unsupportedProfiles: [], diagnostics: [] },
+  result: { status: "unsupported", proposals: [], unsupportedProfiles: [], diagnostics: [] },
   trimmedUrl: "https://jobs.lever.co/acme",
   createConfigEntryId: stableEntryIds("unsupported"),
 });
@@ -230,7 +231,7 @@ const unsupportedWithStartUrl = sourceCreateDraftAfterDetectionResult({
     configEntries: [entry("start", "startUrl", "https://existing.test/jobs")],
   },
   profiles,
-  result: { status: "unsupported", unsupportedProfiles: [], diagnostics: [] },
+  result: { status: "unsupported", proposals: [], unsupportedProfiles: [], diagnostics: [] },
   trimmedUrl: "https://jobs.lever.co/acme",
   createConfigEntryId: stableEntryIds("unsupported-existing"),
 });
@@ -280,8 +281,9 @@ const detected = detectedSourceFromProposal({
   keyCandidates: ["acme"],
   nameCandidates: ["ACME GmbH"],
   captures: { boardSlug: "acme" },
-  evidence: [{ kind: "url", message: "Matched board URL" }],
+  evidence: [{ kind: "url", descriptorPath: "/detection/strategies/0", message: "Matched board URL" }],
   supportLevel: "stable",
+  provenance: { captures: {}, sourceConfig: {}, recommendation: [], evidence: [] },
 });
 assert.deepEqual(detected, {
   profileKey: "greenhouse",
@@ -463,6 +465,8 @@ assert.equal(
 
 const failedDetectionCopy = sourceDetectionOutcomeCopy({
   status: "failed",
+  proposals: [],
+  unsupportedProfiles: [],
   diagnostics: [],
 });
 assert.equal(failedDetectionCopy.title, "Profilerkennung fehlgeschlagen");
@@ -480,9 +484,11 @@ const unsupportedDetectionCopy = sourceDetectionOutcomeCopy({
       profileName: "Known ATS",
       supportLevel: "unsupported",
       captures: {},
-      evidence: [{ kind: "url", message: "Known ATS URL" }],
+      evidence: [{ kind: "url", descriptorPath: "/detection/strategies/0", message: "Known ATS URL" }],
+      provenance: { captures: {}, sourceConfig: {}, recommendation: [], evidence: [] },
     },
   ],
+  proposals: [],
   diagnostics: [],
 });
 assert.equal(unsupportedDetectionCopy.title, "Kein ausführbares Profil verfügbar");

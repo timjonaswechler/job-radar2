@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use job_radar_lib::{
-    compile_source, execute_discovery_with_browser_adapter, AllowanceDimension,
+    compile_source, execute_discovery, AllowanceDimension,
     AllowanceExhaustion, AllowanceLimitSource, BrowserAcquisitionFailure,
     BrowserAcquisitionFailureKind, BrowserAcquisitionRequestSnapshot, CompileSourceOutcome,
     DiscoveryBrowserAdapter, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
@@ -117,7 +117,7 @@ async fn rendered_content_is_only_parser_input_before_acceptance() {
         ],
         finalization: ScriptedBrowserFinalization::default(),
     }]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -163,7 +163,7 @@ async fn accepted_discovery_preserves_exact_shared_browser_report() {
         ],
         finalization: ScriptedBrowserFinalization::default(),
     }]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -219,7 +219,7 @@ async fn ordinary_failure_is_attempt_failure_and_diagnostic_is_payload_safe() {
         )],
         finalization: ScriptedBrowserFinalization::default(),
     }]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -278,7 +278,7 @@ async fn cumulative_one_over_consumes_remaining_browser_bytes_and_exposes_no_pay
             finalization: ScriptedBrowserFinalization::default(),
         },
     ]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -355,7 +355,7 @@ async fn cumulative_request_exhaustion_is_payload_free_with_ordered_diagnostics(
             finalization: ScriptedBrowserFinalization::default(),
         },
     ]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -430,7 +430,7 @@ async fn discovery_infrastructure_failure_is_phase_fatal_and_payload_safe() {
             message: "private teardown token=secret".into(),
         },
     }]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -478,7 +478,7 @@ async fn active_acquisition_cancellation_projects_outside_ordinary_outcome() {
         .unwrap()
         .clone();
     let http = ScriptedProfileHttpClient::new([]);
-    let execute = execute_discovery_with_browser_adapter(
+    let execute = execute_discovery(
         &plan,
         &source_config,
         &http,
@@ -516,7 +516,7 @@ async fn browser_free_construction_has_no_dependency_or_acquisition_call() {
         content_length: Some(body.len() as u64),
         body: vec![ScriptedHttpBodyEvent::Chunk(body)],
     }]);
-    let result = execute_discovery_with_browser_adapter(
+    let result = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -536,7 +536,7 @@ async fn browser_free_construction_has_no_dependency_or_acquisition_call() {
     ));
 
     let empty = ScriptedBrowserAcquisition::new([]);
-    let mismatch = execute_discovery_with_browser_adapter(
+    let mismatch = execute_discovery(
         &plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()
@@ -557,7 +557,7 @@ async fn browser_free_construction_has_no_dependency_or_acquisition_call() {
     assert!(empty.requests().is_empty());
 
     let browser_plan = compiled_plan(true);
-    let missing = execute_discovery_with_browser_adapter(
+    let missing = execute_discovery(
         &browser_plan,
         &json!({ "startUrl": "https://example.test/jobs" })
             .as_object()

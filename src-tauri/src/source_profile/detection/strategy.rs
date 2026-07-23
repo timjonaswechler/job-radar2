@@ -184,7 +184,8 @@ pub struct DetectionProfileOutcome {
     pub diagnostics: Diagnostics,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DetectionOperationResult {
     pub attempts: Vec<DetectionAttempt>,
     pub profile_outcomes: Vec<DetectionProfileOutcome>,
@@ -204,16 +205,6 @@ pub fn compile_detection_plan(
             "/detection",
         )]
     })?;
-    if detection.input_url_patterns.is_some()
-        || detection.http_checks.is_some()
-        || detection.browser_probes.is_some()
-    {
-        return Err(vec![compiler_error(
-            "mixed_detection_execution_shapes",
-            "Final Detection strategies cannot be mixed with legacy executable fields",
-            "/detection",
-        )]);
-    }
     if detection.policy != Some(StrategyPolicy::AllRequired) {
         return Err(vec![compiler_error(
             "invalid_detection_policy",

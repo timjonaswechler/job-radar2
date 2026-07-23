@@ -56,22 +56,43 @@
     }
   ],
   "detection": {
-    "inputUrlPatterns": [
+    "policy": {
+      "type": "all_required"
+    },
+    "strategies": [
       {
-        "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$"
-      }
-    ],
-    "httpChecks": [
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            {
+              "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$",
+              "captures": [
+                "boardSlug"
+              ]
+            }
+          ]
+        }
+      },
       {
+        "type": "http",
         "key": "metadata_endpoint",
-        "url": "https://api.example.test/{{capture:boardSlug}}/metadata"
-      }
-    ],
-    "browserProbes": [
+        "fetch": {
+          "mode": "http",
+          "method": "GET",
+          "url": "https://api.example.test/{{capture:boardSlug}}/metadata"
+        },
+        "expectStatus": 200
+      },
       {
+        "type": "browser",
         "key": "rendered_jobs_page",
-        "url": "{{inputUrl}}",
-        "htmlContains": "ExampleJobs"
+        "fetch": {
+          "mode": "browser",
+          "url": "{{inputUrl}}"
+        },
+        "contains": "ExampleJobs"
       }
     ]
   }

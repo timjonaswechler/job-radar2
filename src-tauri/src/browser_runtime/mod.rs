@@ -5,7 +5,6 @@ use std::{
 };
 
 mod archive;
-mod control;
 mod download;
 mod install;
 mod managed;
@@ -19,7 +18,6 @@ mod tests;
 mod types;
 
 pub use archive::{RuntimeArchiveExtractor, ZipRuntimeArchiveExtractor};
-pub(crate) use control::render_page_html_with_actions_and_context;
 pub use download::{ReqwestRuntimeDownloader, RuntimeDownloader};
 pub use install::{install_runtime, uninstall_runtime};
 pub use managed::ManagedBrowserAcquisition;
@@ -31,9 +29,8 @@ pub use status::{check_runtime, status_for_runtime_dir};
 pub use types::BrowserRuntimeArchiveFormat;
 pub use types::{
     BrowserRuntimeCheckResult, BrowserRuntimeInstallPhase, BrowserRuntimeInstallProgress,
-    BrowserRuntimeInstallProgressReporter, BrowserRuntimeInteraction, BrowserRuntimeRenderError,
-    BrowserRuntimeRenderErrorKind, BrowserRuntimeRenderRequest, BrowserRuntimeSpec,
-    BrowserRuntimeState, BrowserRuntimeStatus, BrowserRuntimeWait, INSTALL_PROGRESS_EVENT,
+    BrowserRuntimeInstallProgressReporter, BrowserRuntimeSpec, BrowserRuntimeState,
+    BrowserRuntimeStatus, INSTALL_PROGRESS_EVENT,
 };
 
 use install::emit_progress;

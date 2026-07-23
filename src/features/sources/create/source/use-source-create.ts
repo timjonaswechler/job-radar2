@@ -229,7 +229,8 @@ export function useSourceCreate({
     try {
       setDetecting(true);
       setDetectionError(null);
-      const result = await detectSourceProposalFromUrl(trimmedUrl);
+      const operation = await detectSourceProposalFromUrl(trimmedUrl);
+      const result = operation.runResult;
       setDetectionResult(result);
 
       if (result.status === "matched") {

@@ -1,12 +1,12 @@
 use super::*;
 
-pub(super) async fn execute_strategy<F, B>(
+pub(super) async fn execute_strategy<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     posting: &PostingOccurrence,
     requested_fields: &RequestedDetailFields,
     fetcher: &F,
-    browser: &DetailBrowserBackend<'_, B>,
+    browser: &DetailBrowserBackend<'_>,
     strategy_index: usize,
     strategy: &ExecutionPlanDetailStrategy,
     step_acceptance: Option<&CompiledAcceptance>,
@@ -14,7 +14,6 @@ pub(super) async fn execute_strategy<F, B>(
 ) -> StrategyExecution<DetailPatch>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let base_path = format!("/detail/strategies/{strategy_index}");
     let strategy_key = Some(strategy.key.clone());

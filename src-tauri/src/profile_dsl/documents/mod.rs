@@ -20,9 +20,8 @@ mod serde_tests;
 pub use access_path::ReusableAccessPathDocument;
 pub use detail::{DetailExtraction, DetailFields, DetailStep, DetailStrategy};
 pub use detection::{
-    DetectionBrowserInteraction, DetectionBrowserProbe, DetectionDocument, DetectionEvidence,
-    DetectionEvidenceKind, DetectionHttpCheck, DetectionStrategy, DetectionUrlInput,
-    InputUrlPattern,
+    DetectionDocument, DetectionEvidence, DetectionEvidenceKind, DetectionStrategy,
+    DetectionUrlInput, InputUrlPattern,
 };
 pub use discovery::{
     DiscoveryExtraction, DiscoveryHintExpression, DiscoveryProviderValues, DiscoveryReference,

@@ -238,6 +238,14 @@ async fn alternatives_feed_latest_reconciled_capture_to_http_template_and_preser
         .evidence
         .iter()
         .any(|item| item.kind == job_radar_lib::DetectionEvidenceKind::Http));
+
+    let serialized = serde_json::to_value(&result).unwrap();
+    assert_eq!(serialized["report"], serde_json::to_value(&result.report).unwrap());
+    assert_eq!(serialized["runResult"], serde_json::to_value(&result.run_result).unwrap());
+    assert_eq!(
+        serde_json::from_value::<job_radar_lib::DetectionOperationResult>(serialized).unwrap(),
+        result
+    );
 }
 
 #[tokio::test]
@@ -655,4 +663,18 @@ async fn invalid_input_and_cancellation_start_no_http_work() {
     assert!(cancelled.profile_outcomes.is_empty());
     assert!(cancelled.run_result.proposals.is_empty());
     assert_eq!(client.request_count(), 0);
+}
+
+#[test]
+fn built_in_profiles_compile_only_the_final_detection_strategy_shape() {
+    for (key, document) in [
+        ("greenhouse", include_str!("../resources/profiles/greenhouse.json")),
+        ("workday", include_str!("../resources/profiles/workday.json")),
+        ("successfactors", include_str!("../resources/profiles/successfactors.json")),
+    ] {
+        let profile: SourceProfileDocument = serde_json::from_str(document)
+            .unwrap_or_else(|error| panic!("{key} final Detection document must deserialize: {error}"));
+        compile_detection_plan(&profile)
+            .unwrap_or_else(|diagnostics| panic!("{key} final Detection plan must compile: {diagnostics:?}"));
+    }
 }

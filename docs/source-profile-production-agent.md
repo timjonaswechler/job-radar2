@@ -222,9 +222,17 @@ A stale Source Live Check Report means canonical behavior changed after the repo
     }
   },
   "detection": {
-    "inputUrlPatterns": [
+    "policy": { "type": "all_required" },
+    "strategies": [
       {
-        "pattern": "^https://jobs\\.example\\.com(?:/.*)?$"
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            { "pattern": "^https://jobs\\.example\\.com(?:/.*)?$" }
+          ]
+        }
       }
     ],
     "recommendedAccessPathKey": "api",

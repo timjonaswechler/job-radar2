@@ -191,7 +191,7 @@ fn compiled_discovery_runtime_reports_body_template_rendering_failure() {
             &plan,
             &source_config(),
             &fetcher,
-            &FakeBrowser::new([]),
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )),
         job_radar_lib::PolicyUnsatisfiedCause::IncludesExecutionFailure,

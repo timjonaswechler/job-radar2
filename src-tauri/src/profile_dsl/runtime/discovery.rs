@@ -31,10 +31,6 @@ use super::{
         InvocationAllowance, PhaseCancellationReason, PhaseCompletion, PhaseExecutionReport,
         BROWSER_TEARDOWN_RESERVE_MS,
     },
-    browser::{
-        ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-        ProfileBrowserFetchRequest, ProfileBrowserFetchResponse,
-    },
     browser_phase::{BrowserPhaseFetchInput, BrowserPhaseFetchProjection, PhaseBrowser},
     cancellation::{
         runtime_execution_cancelled_diagnostic, CancellationOperation, RuntimeExecutionContext,
@@ -72,28 +68,7 @@ use fetch::{
 use pagination::execute_paginated_strategy;
 use strategy::{execute_single_strategy_fetch, execute_strategy, extract_candidates_from_items};
 
-pub async fn execute_discovery<F, B>(
-    plan: &SourceExecutionPlan,
-    source_config: &SourceConfig,
-    fetcher: &F,
-    browser: &B,
-    context: RuntimeExecutionContext<'_>,
-) -> PhaseRunResult<DiscoveryPhasePayload>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
-{
-    execute_discovery_with_backend(
-        plan,
-        source_config,
-        fetcher,
-        DiscoveryBrowserBackend::Legacy(browser),
-        context,
-    )
-    .await
-}
-
-pub async fn execute_discovery_with_browser_adapter<F>(
+pub async fn execute_discovery<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
@@ -108,7 +83,7 @@ where
         .strategies
         .iter()
         .any(|strategy| uses_browser(&strategy.fetch));
-    let backend: DiscoveryBrowserBackend<'_, dyn ProfileBrowserClient + Sync> =
+    let backend: DiscoveryBrowserBackend<'_> =
         match (requires_browser, browser) {
             (false, PhaseBrowser::BrowserFree) => DiscoveryBrowserBackend::BrowserFree,
             (true, PhaseBrowser::Browser(adapter)) => DiscoveryBrowserBackend::Canonical(adapter),
@@ -128,16 +103,15 @@ where
     execute_discovery_with_backend(plan, source_config, fetcher, backend, context).await
 }
 
-async fn execute_discovery_with_backend<F, B>(
+async fn execute_discovery_with_backend<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: DiscoveryBrowserBackend<'_, B>,
+    browser: DiscoveryBrowserBackend<'_>,
     context: RuntimeExecutionContext<'_>,
 ) -> PhaseRunResult<DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     if plan.discovery.strategies.is_empty() {
         return Err(PhaseRunError::NotStarted {

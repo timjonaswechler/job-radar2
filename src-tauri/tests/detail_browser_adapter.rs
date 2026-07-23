@@ -12,7 +12,7 @@ use job_radar_lib::{
     ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
     ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
     SourceProfileDocument, SourceProfileRegistrySnapshot,
-    __test_execute_detail_with_browser_adapter as execute_detail,
+    __test_execute_detail_phase as execute_detail,
 };
 use serde_json::json;
 

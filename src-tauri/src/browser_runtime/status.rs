@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::*;
 
@@ -19,18 +19,8 @@ pub async fn check_runtime(
         };
     }
 
-    let executable_path = match status.executable_path.as_deref() {
-        Some(path) => PathBuf::from(path),
-        None => {
-            return BrowserRuntimeCheckResult {
-                ok: false,
-                message: "Managed browser runtime status has no executable path".to_string(),
-                status,
-            }
-        }
-    };
-
-    match control::smoke_test(&executable_path, runtime_dir).await {
+    let acquisition = ManagedBrowserAcquisition::new(runtime_dir);
+    match crate::profile_dsl::runtime::browser_acquisition::probe_browser_acquisition(&acquisition).await {
         Ok(()) => BrowserRuntimeCheckResult {
             ok: true,
             message: "Managed browser runtime smoke test passed".to_string(),
@@ -38,7 +28,7 @@ pub async fn check_runtime(
         },
         Err(error) => BrowserRuntimeCheckResult {
             ok: false,
-            message: error,
+            message: format!("Managed browser runtime smoke test failed: {error:?}"),
             status,
         },
     }

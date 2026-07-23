@@ -64,92 +64,7 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
     );
 }
 
-#[test]
-fn detection_url_http_browser_strategy_set_schema_is_exact_while_legacy_detection_remains_valid() {
-    let harness = SchemaHarness::new();
-    let mut profile = read_json(
-        env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
-    );
-    let final_detection = json!({
-        "policy": { "type": "all_required" },
-        "strategies": [
-            { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
-            { "type": "http", "key": "probe", "fetch": {
-                "mode": "http", "url": "{{inputUrl}}", "timeoutMs": 1000
-            }, "captures": ["tenant"] , "regex": "(?<tenant>.+)" },
-            { "type": "browser", "key": "render", "fetch": {
-                "mode": "browser", "url": "{{inputUrl}}", "timeoutMs": 20000
-            }, "contains": "jobs" }
-        ]
-    });
-    profile["detection"] = final_detection.clone();
-    harness.assert_json_valid(
-        SchemaEntrypoint::SourceProfile,
-        profile.clone(),
-        "final Detection",
-    );
 
-    for (_label, detection) in [
-        (
-            "policy without strategies",
-            json!({ "policy": { "type": "all_required" } }),
-        ),
-        (
-            "strategies without policy",
-            json!({ "strategies": final_detection["strategies"] }),
-        ),
-        (
-            "wrong policy",
-            json!({ "policy": { "type": "first_accepted" }, "strategies": final_detection["strategies"] }),
-        ),
-        (
-            "HTTP first",
-            json!({ "policy": { "type": "all_required" }, "strategies": [final_detection["strategies"][1].clone()] }),
-        ),
-        (
-            "URL later",
-            json!({ "policy": { "type": "all_required" }, "strategies": [final_detection["strategies"][0].clone(), final_detection["strategies"][0].clone()] }),
-        ),
-        (
-            "Browser fetch",
-            json!({ "policy": { "type": "all_required" }, "strategies": [
-            final_detection["strategies"][0].clone(),
-            { "type": "http", "key": "probe", "fetch": { "mode": "browser", "url": "https://example.test", "timeoutMs": 1000 } }
-        ] }),
-        ),
-        (
-            "duplicate captures",
-            json!({ "policy": { "type": "all_required" }, "strategies": [
-            final_detection["strategies"][0].clone(),
-            { "type": "http", "key": "probe", "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1000 }, "regex": "(?<tenant>.+)", "captures": ["tenant", "tenant"] }
-        ] }),
-        ),
-        (
-            "captures without regex",
-            json!({ "policy": { "type": "all_required" }, "strategies": [
-            final_detection["strategies"][0].clone(),
-            { "type": "http", "key": "probe", "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1000 }, "captures": ["tenant"] }
-        ] }),
-        ),
-        (
-            "mixed final and legacy execution",
-            json!({
-                "policy": { "type": "all_required" },
-                "strategies": final_detection["strategies"].clone(),
-                "httpChecks": [{ "key": "legacy", "url": "https://example.test", "timeoutMs": 1000 }]
-            }),
-        ),
-    ] {
-        profile["detection"] = detection;
-        harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile.clone(), &[]);
-    }
-
-    profile["detection"] = json!({
-        "inputUrlPatterns": [{ "pattern": "^https://example\\.test" }]
-    });
-    harness.assert_json_valid(SchemaEntrypoint::SourceProfile, profile, "legacy Detection");
-}
 
 #[test]
 fn capture_keys_are_valid_named_group_identifiers_in_complete_and_fragment_documents() {
@@ -338,7 +253,7 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
         "tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json",
-        &["timeoutMs", "required"],
+        &["/detection/strategies", "oneOf"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,

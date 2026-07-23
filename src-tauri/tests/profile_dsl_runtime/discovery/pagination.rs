@@ -110,7 +110,7 @@ fn compiled_discovery_runtime_reports_max_requests_limit() {
         &plan,
         &pagination_source_config(),
         &fetcher,
-        &FakeBrowser::new([]),
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -550,7 +550,7 @@ fn compiled_discovery_runtime_reports_sitemap_max_requests_limit() {
         &plan,
         &pagination_source_config(),
         &fetcher,
-        &FakeBrowser::new([]),
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )));
 
@@ -980,85 +980,6 @@ fn compiled_discovery_runtime_can_place_offset_limit_pagination_in_json_body() {
         br#"{"appliedFacets":{},"limit":2,"offset":2}"#
     );
     assert_eq!(second_body.default_content_type(), Some("application/json"));
-}
-
-#[test]
-fn browser_page_pagination_repeats_query_navigation_with_static_waits_and_interactions() {
-    let mut extra = serde_json::Map::new();
-    extra.insert("fetch".to_string(), json!({
-        "mode": "browser",
-        "url": "{{sourceConfig:feedUrl}}",
-        "timeoutMs": 30000,
-        "waits": [{ "type": "selector", "selector": "article.posting", "timeoutMs": 5000 }],
-        "interactions": [{ "type": "click_if_visible", "selector": "button.more", "maxCount": 1, "waitAfterMs": 100 }]
-    }));
-    extra.insert(
-        "pagination".to_string(),
-        json!({
-            "type": "page", "pageParam": "page", "firstPage": 1,
-            "limits": { "maxRequests": 5, "maxItems": 2 }
-        }),
-    );
-    let plan = compiled_discovery_plan_with_strategy(
-        json!({ "type": "html" }),
-        json!({ "type": "css", "selector": "article.posting" }),
-        default_html_fields(),
-        "https://example.test/rendered?tenant=acme",
-        extra,
-    );
-    let browser = FakeBrowser::new([
-        (
-            "https://example.test/rendered?tenant=acme&page=1",
-            r#"<article class="posting"><span class="title">One</span><span class="company">Example</span><a class="apply" href="https://example.test/1">Apply</a></article>"#.to_string(),
-        ),
-        (
-            "https://example.test/rendered?tenant=acme&page=2",
-            r#"<article class="posting"><span class="title">Two</span><span class="company">Example</span><a class="apply" href="https://example.test/2">Apply</a></article>"#.to_string(),
-        ),
-    ]);
-    let fetcher = fake_fetcher([]);
-
-    let result = accepted_phase(block_on(execute_discovery(
-        &plan,
-        &pagination_source_config(),
-        &fetcher,
-        &browser,
-        RuntimeExecutionContext::uncancellable(),
-    )));
-
-    assert_eq!(result.payload.candidates.len(), 2);
-    let requests = browser.requests();
-    assert_eq!(
-        requests
-            .iter()
-            .map(|request| request.url.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "https://example.test/rendered?tenant=acme&page=1",
-            "https://example.test/rendered?tenant=acme&page=2",
-        ]
-    );
-    assert!(
-        requests
-            .windows(2)
-            .all(|pair| pair[0].waits == pair[1].waits
-                && pair[0].interactions == pair[1].interactions)
-    );
-    assert_eq!(
-        requests[0].waits,
-        vec![ExecutionPlanBrowserWait::Selector {
-            selector: "article.posting".into(),
-            timeout_ms: 5000
-        }]
-    );
-    assert_eq!(
-        requests[0].interactions,
-        vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
-            selector: "button.more".into(),
-            max_count: 1,
-            wait_after_ms: Some(100)
-        }]
-    );
 }
 
 #[test]

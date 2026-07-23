@@ -1,6 +1,4 @@
-use super::support::{
-    push_browser_fetch_diagnostic, render_source_config_template, DiscoveryTemplateValues,
-};
+use super::support::{render_source_config_template, DiscoveryTemplateValues};
 use super::*;
 use crate::profile_dsl::primitives::{
     fetch::http::{execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay},
@@ -12,23 +10,15 @@ pub(super) enum DiscoveryFetchOutcome {
     ExecutionFailed,
 }
 
-pub(super) enum DiscoveryBrowserBackend<'a, B: ?Sized> {
-    Legacy(&'a B),
+#[derive(Clone, Copy)]
+pub(super) enum DiscoveryBrowserBackend<'a> {
     Canonical(DiscoveryBrowserAdapter<'a>),
     BrowserFree,
 }
 
-impl<B: ?Sized> Clone for DiscoveryBrowserBackend<'_, B> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<B: ?Sized> Copy for DiscoveryBrowserBackend<'_, B> {}
-
-pub(super) async fn fetch_strategy_document<F, B>(
+pub(super) async fn fetch_strategy_document<F>(
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -41,7 +31,6 @@ pub(super) async fn fetch_strategy_document<F, B>(
 ) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_overlay(
         fetcher,
@@ -60,9 +49,9 @@ where
     .await
 }
 
-pub(super) async fn fetch_strategy_document_with_overlay<F, B>(
+pub(super) async fn fetch_strategy_document_with_overlay<F>(
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -76,7 +65,6 @@ pub(super) async fn fetch_strategy_document_with_overlay<F, B>(
 ) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_options(
         fetcher,
@@ -96,9 +84,9 @@ where
     .await
 }
 
-pub(super) async fn fetch_strategy_document_at_url<F, B>(
+pub(super) async fn fetch_strategy_document_at_url<F>(
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -112,7 +100,6 @@ pub(super) async fn fetch_strategy_document_at_url<F, B>(
 ) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     fetch_strategy_document_with_options(
         fetcher,
@@ -133,9 +120,9 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn fetch_strategy_document_with_options<F, B>(
+async fn fetch_strategy_document_with_options<F>(
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -150,7 +137,6 @@ async fn fetch_strategy_document_with_options<F, B>(
 ) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let query_params = overlay
         .query
@@ -273,8 +259,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn fetch_browser_strategy_document<B>(
-    browser: &DiscoveryBrowserBackend<'_, B>,
+async fn fetch_browser_strategy_document(
+    browser: &DiscoveryBrowserBackend<'_>,
     url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
@@ -290,7 +276,6 @@ async fn fetch_browser_strategy_document<B>(
     context: RuntimeExecutionContext<'_>,
 ) -> Result<DiscoveryFetchOutcome, TypedCancellation>
 where
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let rendered_url = match url_override {
         Some(url) => append_query_params(url.to_string(), query_params),
@@ -309,60 +294,6 @@ where
         },
     };
     match browser {
-        DiscoveryBrowserBackend::Legacy(browser) => {
-            if context.is_cancelled() {
-                return Err(fetch_cancellation(
-                    strategy_index,
-                    strategy_key,
-                    CancellationOperation::Browser,
-                ));
-            }
-            if context
-                .debit(AllowanceCharge {
-                    requests: 1,
-                    pages: u64::from(context.page_request()),
-                    ..AllowanceCharge::default()
-                })
-                .is_err()
-            {
-                return Ok(DiscoveryFetchOutcome::ExecutionFailed);
-            }
-            if context.is_cancelled() {
-                return Err(fetch_cancellation(
-                    strategy_index,
-                    strategy_key,
-                    CancellationOperation::Browser,
-                ));
-            }
-            let request = ProfileBrowserFetchRequest {
-                url: rendered_url.clone(),
-                timeout_ms,
-                waits: waits.to_vec(),
-                interactions: interactions.to_vec(),
-            };
-            match browser.render_with_context(request, context).await {
-                Ok(ProfileBrowserFetchResponse { body }) => Ok(DiscoveryFetchOutcome::Complete(
-                    CompleteParseText::BrowserRendered(body),
-                )),
-                Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
-                    Err(fetch_cancellation(
-                        strategy_index,
-                        strategy_key,
-                        CancellationOperation::Browser,
-                    ))
-                }
-                Err(error) => {
-                    push_browser_fetch_diagnostic(
-                        error,
-                        &rendered_url,
-                        base_path,
-                        strategy_key,
-                        diagnostics,
-                    );
-                    Ok(DiscoveryFetchOutcome::ExecutionFailed)
-                }
-            }
-        }
         DiscoveryBrowserBackend::Canonical(adapter) => {
             let strategy_key = strategy_key
                 .expect("compiled strategy has a key")

@@ -1,10 +1,11 @@
 use job_radar_lib::{
+    PhaseBrowser,
     __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
     CompileSourceOutcome, Diagnostics, PhaseCancelled, PhaseExecutionFailure, PhaseExecutionReport,
     PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome,
     PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpClient, RegistrySourceProfile,
     RequestedDetailFields, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, UnavailableProfileBrowserClient,
+    SourceProfileDocument, SourceProfileRegistrySnapshot,
 };
 
 pub struct AcceptedPhase<P> {
@@ -134,7 +135,7 @@ where
             plan,
             source_config,
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -154,7 +155,7 @@ where
             plan,
             &Default::default(),
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -175,7 +176,7 @@ where
             plan,
             &Default::default(),
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -212,7 +213,7 @@ where
             posting,
             RequestedDetailFields::description_text(),
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -235,7 +236,7 @@ where
             posting,
             RequestedDetailFields::description_text(),
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,
@@ -259,7 +260,7 @@ where
             posting,
             RequestedDetailFields::description_text(),
             fetcher,
-            &UnavailableProfileBrowserClient,
+            PhaseBrowser::BrowserFree,
             RuntimeExecutionContext::uncancellable(),
         )
         .await,

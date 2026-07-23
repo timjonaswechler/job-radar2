@@ -47,11 +47,11 @@ fn get_job_posting_loads_missing_description_marks_read_and_persists_text() {
             Ok("<main><div class=\"description\">Persisted description</div></main>".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();
@@ -211,11 +211,11 @@ fn get_job_posting_returns_existing_description_without_fetching() {
         );
         let client = FixtureDetailHttpClient::new([]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();
@@ -273,11 +273,11 @@ fn get_job_posting_returns_unsupported_when_no_concrete_source_supports_detail()
         assert_eq!(snapshot.diagnostics, Vec::new());
         let client = FixtureDetailHttpClient::new([]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();

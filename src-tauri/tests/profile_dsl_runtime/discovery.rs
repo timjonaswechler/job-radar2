@@ -4,25 +4,20 @@ use crate::support::{
     policy_unsatisfied, unwrap_plan,
 };
 
-use std::{collections::BTreeMap, future::Future, pin::Pin};
+use std::future::Future;
 
 use job_radar_lib::{
     execute_discovery, AllowanceDimension, CompileSourceOutcome, DiagnosticCategory,
     DiagnosticSeverity, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    ExecutionPlanFetch, HttpMethod, PhaseCompletion, ProfileBrowserClient,
-    ProfileBrowserFetchError, ProfileBrowserFetchErrorKind, ProfileBrowserFetchRequest,
-    ProfileBrowserFetchResponse, ProfileHttpFailureKind, RuntimeCancellation,
+    ExecutionPlanFetch, HttpMethod, PhaseBrowser, PhaseCompletion, ProfileHttpFailureKind,
+    RuntimeCancellation,
     RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
     SourceDocument, SourceExecutionPlan, SourceProfileDocument,
 };
 use serde_json::{json, Value};
 
-#[path = "discovery/cancellation.rs"]
-mod cancellation;
 #[path = "discovery/core.rs"]
 mod core;
-#[path = "discovery/document_types_and_browser.rs"]
-mod document_types_and_browser;
 #[path = "discovery/failure_diagnostics.rs"]
 mod failure_diagnostics;
 #[path = "discovery/fallback_acceptance.rs"]
@@ -50,64 +45,6 @@ fn fake_fetcher(
             content_length: None,
         }
     }))
-}
-
-struct FakeBrowser {
-    responses: BTreeMap<String, String>,
-    failure: Option<ProfileBrowserFetchError>,
-    requests: std::sync::Mutex<Vec<ProfileBrowserFetchRequest>>,
-}
-
-impl FakeBrowser {
-    fn new(responses: impl IntoIterator<Item = (&'static str, String)>) -> Self {
-        Self {
-            responses: responses
-                .into_iter()
-                .map(|(url, body)| (url.to_string(), body))
-                .collect(),
-            failure: None,
-            requests: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    fn failing(error: ProfileBrowserFetchError) -> Self {
-        Self {
-            responses: BTreeMap::new(),
-            failure: Some(error),
-            requests: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    fn requests(&self) -> Vec<ProfileBrowserFetchRequest> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-impl ProfileBrowserClient for FakeBrowser {
-    fn render<'a>(
-        &'a self,
-        request: ProfileBrowserFetchRequest,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<ProfileBrowserFetchResponse, ProfileBrowserFetchError>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            self.requests.lock().unwrap().push(request.clone());
-            if let Some(error) = &self.failure {
-                return Err(error.clone());
-            }
-            let body = self.responses.get(&request.url).cloned().ok_or_else(|| {
-                ProfileBrowserFetchError::new(
-                    ProfileBrowserFetchErrorKind::NavigationFailed,
-                    format!("missing fake browser response for {}", request.url),
-                )
-            })?;
-            Ok(ProfileBrowserFetchResponse { body })
-        })
-    }
 }
 
 fn compiled_json_discovery_plan(fields: Value, select: Value) -> SourceExecutionPlan {
@@ -217,81 +154,6 @@ fn compile_discovery_outcome_with_strategy(
     .unwrap();
 
     compile_test_source(&source, Some(profile))
-}
-
-fn compiled_browser_discovery_plan(
-    parse: Value,
-    select: Value,
-    fields: Value,
-    page_url: &'static str,
-) -> SourceExecutionPlan {
-    let profile: SourceProfileDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
-        "key": "browser_jobs",
-        "name": "Browser Jobs",
-        "kind": "generic",
-        "support": {
-            "level": "experimental",
-            "summary": "Browser runtime fixture profile."
-        },
-        "sourceConfigSchema": {
-            "type": "object",
-            "required": ["pageUrl"],
-            "properties": { "pageUrl": { "type": "string" } },
-            "additionalProperties": false
-        },
-        "accessPaths": [{
-            "key": "browser_page",
-            "name": "Browser page",
-            "discovery": {
-                "policy": { "type": "first_accepted" },
-                "strategies": [{
-                    "key": "browser_html",
-                    "fetch": {
-                        "mode": "browser",
-                        "url": page_url,
-                        "timeoutMs": 30000,
-                        "waits": [
-                            {
-                                "type": "selector",
-                                "selector": "article.posting",
-                                "timeoutMs": 5000
-                            },
-                            {
-                                "type": "network_idle",
-                                "timeoutMs": 250
-                            }
-                        ],
-                        "interactions": [{
-                            "type": "click_if_visible",
-                            "selector": "button.load-more",
-                            "maxCount": 2,
-                            "waitAfterMs": 250
-                        }]
-                    },
-                    "parse": parse,
-                    "select": select,
-                    "extract": discovery_extract(fields)
-                }]
-            }
-        }]
-    }))
-    .unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
-        "key": "browser_source",
-        "name": "Browser Source",
-        "status": "active",
-        "sourceConfig": { "pageUrl": page_url },
-        "selectedAccessPath": {
-            "type": "profile_access_path",
-            "profileKey": "browser_jobs",
-            "pathKey": "browser_page"
-        }
-    }))
-    .unwrap();
-
-    unwrap_plan(compile_test_source(&source, Some(profile)))
 }
 
 fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {

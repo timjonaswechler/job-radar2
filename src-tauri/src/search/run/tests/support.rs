@@ -106,10 +106,9 @@ impl SourceExecutor for CancellingRuntimeDiscoveryExecutor {
                 },
                 content_length: None,
             }]);
+            let acquisition = crate::profile_dsl::runtime::ScriptedBrowserAcquisition::new([]);
             let execute = super::super::execution::execute_discovery_for_source(
-                input,
-                &fetcher,
-                &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
+                input, &fetcher, &acquisition,
             );
             if during_fetch {
                 let cancel = async {
@@ -155,7 +154,7 @@ impl SourceExecutor for RuntimeDiscoveryExecutor {
                 &input.source.execution_plan,
                 input.source.source_config(),
                 &fetcher,
-                &crate::profile_dsl::runtime::UnavailableProfileBrowserClient,
+                crate::profile_dsl::runtime::PhaseBrowser::BrowserFree,
                 crate::profile_dsl::runtime::RuntimeExecutionContext::uncancellable(),
             )
             .await;

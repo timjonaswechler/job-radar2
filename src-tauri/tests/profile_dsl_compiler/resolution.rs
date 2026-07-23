@@ -2,13 +2,13 @@ use crate::support::accepted_phase;
 use std::{fs, path::Path};
 
 use job_radar_lib::{
+    PhaseBrowser,
     compile_source, compile_template, execute_discovery, CompileSourceOutcome, CompiledHttpFetch,
     CompiledPagination, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
     RegistrySourceProfile, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
     SourceProfileRegistrySnapshot, SourceStatus, TemplateDescriptor,
-    UnavailableProfileBrowserClient,
 };
 
 #[test]
@@ -97,7 +97,7 @@ fn resolved_source_config_is_ephemeral_runtime_input_and_absent_from_the_plan() 
         &plan,
         &source.source_config,
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     ));
     assert!(!serde_json::to_string(&phase_result)

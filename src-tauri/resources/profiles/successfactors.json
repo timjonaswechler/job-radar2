@@ -277,6 +277,45 @@
     }
   ],
   "detection": {
+    "policy": {
+      "type": "all_required"
+    },
+    "strategies": [
+      {
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            {
+              "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",
+              "captures": [
+                "successFactorsHost"
+              ]
+            },
+            {
+              "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/sitemap\\.xml(?:[?#].*)?$",
+              "captures": [
+                "successFactorsHost"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "http",
+        "key": "sitemap_contains_successfactors_job_urls",
+        "fetch": {
+          "mode": "http",
+          "method": "GET",
+          "url": "https://{{capture:successFactorsHost}}/sitemap.xml",
+          "timeoutMs": 10000
+        },
+        "expectStatus": 200,
+        "regex": "(?is)<loc>https?://[^<]+/job/[^<]+(?:-[0-9]+|/[0-9]+/?)(?:[?#][^<]*)?</loc>",
+        "evidence": "Public sitemap contains SuccessFactors/RMK-style job detail URLs."
+      }
+    ],
     "recommendedAccessPathKey": "rmk_sitemap_html",
     "sourceConfig": {
       "baseUrl": "https://{{capture:successFactorsHost}}",
@@ -287,30 +326,6 @@
     ],
     "nameCandidates": [
       "SAP SuccessFactors {{capture:successFactorsHost}}"
-    ],
-    "inputUrlPatterns": [
-      {
-        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/(?:job|go|career|careers)(?:/.*)?$",
-        "captures": [
-          "successFactorsHost"
-        ]
-      },
-      {
-        "pattern": "(?i)^https?://(?<successFactorsHost>[A-Za-z0-9.-]+)/sitemap\\.xml(?:[?#].*)?$",
-        "captures": [
-          "successFactorsHost"
-        ]
-      }
-    ],
-    "httpChecks": [
-      {
-        "key": "sitemap_contains_successfactors_job_urls",
-        "url": "https://{{capture:successFactorsHost}}/sitemap.xml",
-        "timeoutMs": 10000,
-        "expectStatus": 200,
-        "regex": "(?is)<loc>https?://[^<]+/job/[^<]+(?:-[0-9]+|/[0-9]+/?)(?:[?#][^<]*)?</loc>",
-        "evidence": "Public sitemap contains SuccessFactors/RMK-style job detail URLs."
-      }
     ],
     "evidence": [
       {

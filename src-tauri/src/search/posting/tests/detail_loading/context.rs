@@ -67,11 +67,11 @@ fn get_job_posting_fetches_with_aligned_source_url_config_and_posting_meta() {
             Ok("<div class=\"description\">Primary aligned description</div>".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();

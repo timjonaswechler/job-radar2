@@ -1,26 +1,18 @@
-use super::support::{push_browser_fetch_diagnostic, render_template, TemplateRuntimeContext};
+use super::support::{render_template, TemplateRuntimeContext};
 use super::*;
 use crate::profile_dsl::primitives::fetch::http::{
     execute_http_fetch, HttpFetchExecutionError, HttpFetchOverlay,
 };
 
-pub(super) enum DetailBrowserBackend<'a, B: ?Sized> {
-    Legacy(&'a B),
+#[derive(Clone, Copy)]
+pub(super) enum DetailBrowserBackend<'a> {
     Canonical(DetailBrowserAdapter<'a>),
     BrowserFree,
 }
 
-impl<B: ?Sized> Clone for DetailBrowserBackend<'_, B> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<B: ?Sized> Copy for DetailBrowserBackend<'_, B> {}
-
-pub(super) async fn fetch_strategy_document<F, B>(
+pub(super) async fn fetch_strategy_document<F>(
     fetcher: &F,
-    browser: &DetailBrowserBackend<'_, B>,
+    browser: &DetailBrowserBackend<'_>,
     fetch: &ExecutionPlanFetch,
     authored_charset: Option<&str>,
     source_config: &SourceConfig,
@@ -35,7 +27,6 @@ pub(super) async fn fetch_strategy_document<F, B>(
 ) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let values = TemplateRuntimeContext {
         source_config,
@@ -128,8 +119,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn fetch_browser_strategy_document<B>(
-    browser: &DetailBrowserBackend<'_, B>,
+async fn fetch_browser_strategy_document(
+    browser: &DetailBrowserBackend<'_>,
     url: &crate::profile_dsl::template::CompiledTemplate,
     timeout_ms: u64,
     waits: &[crate::profile_dsl::execution_plan::capabilities::ExecutionPlanBrowserWait],
@@ -142,7 +133,6 @@ async fn fetch_browser_strategy_document<B>(
     execution_context: RuntimeExecutionContext<'_>,
 ) -> Result<Option<CompleteParseText>, TypedCancellation>
 where
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let rendered_url = match render_template(url, context) {
         Ok(url) => url,
@@ -158,62 +148,6 @@ where
         }
     };
     match browser {
-        DetailBrowserBackend::Legacy(browser) => {
-            if execution_context.is_cancelled() {
-                return Err(fetch_cancellation(
-                    strategy_index,
-                    strategy_key,
-                    CancellationOperation::Browser,
-                ));
-            }
-            if execution_context
-                .debit(AllowanceCharge {
-                    requests: 1,
-                    ..AllowanceCharge::default()
-                })
-                .is_err()
-            {
-                return Ok(None);
-            }
-            if execution_context.is_cancelled() {
-                return Err(fetch_cancellation(
-                    strategy_index,
-                    strategy_key,
-                    CancellationOperation::Browser,
-                ));
-            }
-            let request = ProfileBrowserFetchRequest {
-                url: rendered_url.clone(),
-                timeout_ms,
-                waits: waits.to_vec(),
-                interactions: interactions.to_vec(),
-            };
-            match browser
-                .render_with_context(request, execution_context)
-                .await
-            {
-                Ok(ProfileBrowserFetchResponse { body }) => {
-                    Ok(Some(CompleteParseText::BrowserRendered(body)))
-                }
-                Err(error) if error.kind == ProfileBrowserFetchErrorKind::Cancelled => {
-                    Err(fetch_cancellation(
-                        strategy_index,
-                        strategy_key,
-                        CancellationOperation::Browser,
-                    ))
-                }
-                Err(error) => {
-                    push_browser_fetch_diagnostic(
-                        error,
-                        &rendered_url,
-                        base_path,
-                        strategy_key,
-                        diagnostics,
-                    );
-                    Ok(None)
-                }
-            }
-        }
         DetailBrowserBackend::Canonical(adapter) => {
             let strategy_key = strategy_key
                 .expect("compiled strategy has a key")

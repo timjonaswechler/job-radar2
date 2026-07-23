@@ -63,8 +63,10 @@ npm run smoke:search-run -- --app-data-dir "/path/to/app-data" --ensure-schott-s
 - The Source Profile registry loads built-in Source Profiles and the local `schott_ag` Source document.
 - Source validation derives `validationState` from schema, registry, and Profile Compiler diagnostics; Source status remains the user-controlled `active` lifecycle state.
 - At Search Run start, the selected Source Profile Access Path and Source Config compile into a typed Execution Plan.
-- The Search Run executes the compiled policy-bearing `discovery` plan for `schott_ag` under the backend's cumulative eight-dimension phase safety allowance, including HTTP response bytes, and then applies Search Request match and exclusion rules locally. Search Run does not invent a tighter product allowance.
-- Source Run diagnostics remain structured and source-scoped so one Source failure does not hide other Source outcomes.
+- The Search Run executes the compiled policy-bearing `discovery` plan for `schott_ag` under one shared invocation root. HTTP-only plans use the explicit Browser-free route and make no Browser acquisition. A plan containing a Browser Strategy uses the final managed Browser acquisition and Discovery phase adapter.
+- Discovery and Detail share the cumulative 64 MiB Browser-rendered-byte ceiling while HTTP response bytes remain a separate allowance dimension. Search Run does not invent a tighter product allowance or reconstruct the phase report.
+- Browser Runtime unavailability is reported as a typed acquisition failure only if a Browser Strategy actually executes. Runtime installation, status, and uninstall remain independent administration operations.
+- Source Run diagnostics remain structured and source-scoped so one Source failure does not hide other Source outcomes; Cancellation waits for bounded Browser cleanup and releases no rendered or domain payload.
 
 ## Expected validation
 

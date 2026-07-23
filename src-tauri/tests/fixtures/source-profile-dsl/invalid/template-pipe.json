@@ -56,9 +56,24 @@
     }
   ],
   "detection": {
-    "inputUrlPatterns": [
+    "policy": {
+      "type": "all_required"
+    },
+    "strategies": [
       {
-        "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$"
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            {
+              "pattern": "^https://jobs\\.example\\.test/(?<boardSlug>[a-z0-9_-]+)$",
+              "captures": [
+                "boardSlug"
+              ]
+            }
+          ]
+        }
       }
     ],
     "keyCandidates": [

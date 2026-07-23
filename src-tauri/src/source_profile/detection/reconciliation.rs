@@ -1057,7 +1057,8 @@ fn construct_proposal(
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum DetectionAttempt {
     Matched(ReconciledSourceProposal),
     Unsupported(UnsupportedReconciledDetection),

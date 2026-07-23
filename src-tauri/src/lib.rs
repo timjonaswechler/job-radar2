@@ -12,18 +12,15 @@ mod source_profile;
 
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use checks::{
-    check_and_activate_source, check_and_activate_source_with_clients,
-    check_and_activate_source_with_fetcher, check_and_reactivate_source,
-    check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
-    check_source, check_source_with_clients, check_source_with_fetcher,
-    evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
-    prepare_source_behavior_fingerprints, read_latest_check_report, source_live_check_report_path,
-    source_live_check_report_status, CheckFingerprint, CheckReport, CheckReportFreshness,
-    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
-    CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
-    SourceBehaviorFingerprintPreparationError, SourceBehaviorFingerprintPreparationErrorKind,
-    SourceLiveCheckReportState, SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
+    check_source_with_runtime, evaluate_check_report_freshness, latest_check_report_path,
+    persist_latest_check_report, prepare_source_behavior_fingerprints, read_latest_check_report,
+    source_live_check_report_path, source_live_check_report_status, CheckFingerprint, CheckReport,
+    CheckReportFreshness, CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError,
+    CheckReportResult, CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject,
+    CheckReportSubjectType, SourceBehaviorFingerprintPreparationError,
+    SourceBehaviorFingerprintPreparationErrorKind, SourceLiveCheckReportState,
+    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
@@ -41,9 +38,9 @@ pub use profile_dsl::diagnostics::{
 };
 pub use profile_dsl::documents::{
     Acceptance, AccessPathFragment, AuthoredScalar, BrowserInteraction, BrowserWait, CaptureRule,
-    Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionBrowserInteraction,
-    DetectionBrowserProbe, DetectionDocument, DetectionEvidence, DetectionEvidenceKind,
-    DetectionHttpCheck, DetectionStrategy, DetectionUrlInput, DiscoveryStep, DiscoveryStepFragment,
+    Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionDocument,
+    DetectionEvidence, DetectionEvidenceKind, DetectionStrategy, DetectionUrlInput, DiscoveryStep,
+    DiscoveryStepFragment,
     DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
     ListFieldExpression, PaginationFragment, PaginationTypeFragment, Parse, ParseFragment,
     ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
@@ -127,15 +124,12 @@ pub use profile_dsl::primitives::value::{
 // Lower-level phase execution remains externally reachable only as a hidden
 // deterministic regression-test hook. Application callers use SourceDetailExecution.
 #[doc(hidden)]
-pub use profile_dsl::runtime::detail::{
-    execute_detail as __test_execute_detail_phase,
-    execute_detail_with_browser_adapter as __test_execute_detail_with_browser_adapter,
-};
+pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
 
 #[doc(hidden)]
 pub use profile_dsl::runtime::__TestBrowserAcquisitionInvocation;
 pub use profile_dsl::runtime::{
-    execute_discovery, execute_discovery_with_browser_adapter, validate_posting_reference,
+    execute_discovery, validate_posting_reference,
     AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, BrowserAcquisition,
     BrowserAcquisitionCancellation, BrowserAcquisitionCancellationReason,
     BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequest,
@@ -144,13 +138,12 @@ pub use profile_dsl::runtime::{
     DetailBrowserAdapter, DetailCancelled, DetailContributionEvidence, DetailField,
     DetailFieldCapabilities, DetailPatch, DetailPhasePayload, DetailRejection,
     DiscoveryBrowserAdapter, DiscoveryContributionEvidence, DiscoveryHint, DiscoveryPhasePayload,
-    DiscoveryRejection, DiscoveryResponsibility, HintUse, ManagedProfileBrowserClient,
+    DiscoveryRejection, DiscoveryResponsibility, HintUse,
     OccurrenceReferenceError, PhaseBrowser, PhaseCancellationReason, PhaseCancelled,
     PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
     PhasePreStartFailure, PhaseRunError, PhaseRunResult, PhaseUsage, PolicyOutcome,
     PolicyUnsatisfiedCause, PostingOccurrence, PostingOccurrenceIdentity, PostingReference,
-    ProfileBrowserClient, ProfileBrowserFetchError, ProfileBrowserFetchErrorKind,
-    ProfileBrowserFetchRequest, ProfileBrowserFetchResponse, ProfileDslSourceDetailExecution,
+    ProfileDslSourceDetailExecution,
     ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
     ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
     RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeCancellation,
@@ -159,7 +152,7 @@ pub use profile_dsl::runtime::{
     ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
     SensitiveRequestBody, SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome,
     SourceDetailPhaseEvidence, SourceDetailRequest, SourceDetailRequestSnapshot,
-    SourceDetailResult, UnavailableProfileBrowserClient,
+    SourceDetailResult,
 };
 
 pub use profile_dsl::template::{
@@ -171,21 +164,17 @@ pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
-    aggregate_detection_attempts, compile_detection_plan, detect_source_proposal,
-    detect_source_proposal_with_clients, detect_source_proposal_with_http_client,
-    execute_detection_operation, CompiledDetectionPlan, DetectionAttempt,
-    DetectionBrowserFailureKind, DetectionConfigContribution, DetectionContribution,
-    DetectionDefinitionError, DetectionEvidenceContribution, DetectionHttpClient,
-    DetectionHttpError, DetectionHttpResponse, DetectionOperationResult, DetectionOrigin,
+    aggregate_detection_attempts, compile_detection_plan, execute_detection_operation,
+    CompiledDetectionPlan, DetectionAttempt, DetectionBrowserFailureKind,
+    DetectionConfigContribution, DetectionContribution, DetectionDefinitionError,
+    DetectionEvidenceContribution, DetectionOperationResult, DetectionOrigin,
     DetectionProfileCompletion, DetectionProfileContext, DetectionProfileExecutionFailureKind,
     DetectionProfileOutcome, DetectionProfileRejectionKind, DetectionProposalProvenance,
     DetectionReconciliationError, DetectionRunStatus, DetectionStateConflict,
     DetectionStateConflictKind, PreparedDetectionOutput, ProposalEvidence, ReconciledCapture,
     ReconciledDetectionRunResult, ReconciledDetectionState, ReconciledEvidence,
     ReconciledRecommendation, ReconciledSourceConfigValue, ReconciledSourceProposal,
-    ReqwestDetectionHttpClient, SourceProposal, SourceProposalDetectionResult,
-    SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedReconciledDetection,
-    UnsupportedSourceProfile,
+    UnsupportedReconciledDetection,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{

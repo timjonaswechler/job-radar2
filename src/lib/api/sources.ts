@@ -80,53 +80,22 @@ export type DetectionEvidence = {
   path?: string
 }
 
-export type DetectionHttpCheck = {
-  key: string
-  url: string
-  timeoutMs: number
-  expectStatus?: number
-  contains?: string
-  regex?: string
-  evidence?: string
-}
+export type DetectionUrlInput =
+  | { type: "pattern_alternatives"; alternatives: Array<{ pattern: string; captures?: string[] }> }
+  | { type: "absolute_url" }
 
-export type DetectionBrowserWait =
-  | { type: "selector"; selector?: string; timeoutMs: number }
-  | { type: "network_idle"; selector?: string; timeoutMs: number }
+export type DetectionStrategy =
+  | { type: "url"; key: string; input: DetectionUrlInput }
+  | { type: "http"; key: string; fetch: HttpFetch; expectStatus?: number; contains?: string; regex?: string; captures?: string[]; evidence?: string }
+  | { type: "browser"; key: string; fetch: BrowserFetch; contains?: string; regex?: string; captures?: string[]; evidence?: string }
 
-export type DetectionBrowserInteraction =
-  | {
-      type: "click_if_visible"
-      selector: string
-      maxCount: number
-      waitAfterMs?: number
-    }
-  | {
-      type: "click_until_gone"
-      selector: string
-      maxCount: number
-      waitAfterMs?: number
-    }
-
-export type DetectionBrowserProbe = {
-  key: string
-  url: string
-  timeoutMs: number
-  waits?: DetectionBrowserWait[]
-  interactions?: DetectionBrowserInteraction[]
-  htmlContains?: string
-  htmlRegex?: string
-  evidence?: string
-}
-
-export type ProfileDetectionDocument = {
-  inputUrlPatterns?: Array<{ pattern: string; captures?: string[] }>
+export type DetectionDocument = {
+  policy: { type: "all_required" }
+  strategies: DetectionStrategy[]
   recommendedAccessPathKey?: string
   sourceConfig?: JsonObject
   keyCandidates?: string[]
   nameCandidates?: string[]
-  httpChecks?: DetectionHttpCheck[]
-  browserProbes?: DetectionBrowserProbe[]
   evidence?: DetectionEvidence[]
 }
 
@@ -151,9 +120,9 @@ export type RequestBody =
   | { type: "text"; value: string }
   | { type: "form"; fields: Record<string, string> }
 
-export type Fetch =
-  | { mode: "http"; method?: "GET" | "POST"; url: string; headers?: Record<string, string>; body?: RequestBody; timeoutMs: number }
-  | { mode: "browser"; url: string; timeoutMs: number; waits?: BrowserWait[]; interactions?: BrowserInteraction[] }
+export type HttpFetch = { mode: "http"; method?: "GET" | "POST"; url: string; headers?: Record<string, string>; body?: RequestBody; timeoutMs: number }
+export type BrowserFetch = { mode: "browser"; url: string; timeoutMs: number; waits?: BrowserWait[]; interactions?: BrowserInteraction[] }
+export type Fetch = HttpFetch | BrowserFetch
 
 export type Parse = { type: "json" | "xml" | "html" | "text"; charset?: string }
 
@@ -351,7 +320,7 @@ export type SourceProfileDocument = {
   kind: SourceProfileKind
   description?: string
   support: SupportMetadata
-  detection?: ProfileDetectionDocument
+  detection?: DetectionDocument
   sourceConfigSchema?: JsonObject
   accessPaths: ProfileAccessPathDefinition[]
   diagnostics?: Diagnostics
@@ -482,7 +451,7 @@ export type SourceProposalEvidence = {
   kind: DetectionEvidenceKind
   message: string
   path?: string
-  probeKey?: string
+  descriptorPath: string
 }
 
 export type SourceProposal = {
@@ -496,6 +465,15 @@ export type SourceProposal = {
   captures: Record<string, string>
   evidence: SourceProposalEvidence[]
   supportLevel: SupportLevel
+  provenance: DetectionProposalProvenance
+}
+
+export type DetectionOrigin = { strategyKey: string; schemaPath: string }
+export type DetectionProposalProvenance = {
+  captures: Record<string, DetectionOrigin[]>
+  sourceConfig: Record<string, DetectionOrigin[]>
+  recommendation: DetectionOrigin[]
+  evidence: DetectionOrigin[][]
 }
 
 export type UnsupportedSourceProfile = {
@@ -504,6 +482,7 @@ export type UnsupportedSourceProfile = {
   supportLevel: SupportLevel
   captures: Record<string, string>
   evidence: SourceProposalEvidence[]
+  provenance: DetectionProposalProvenance
 }
 
 export type SourceProposalDetectionStatus =
@@ -511,13 +490,68 @@ export type SourceProposalDetectionStatus =
   | "ambiguous"
   | "unsupported"
   | "failed"
+  | "budget_exhausted"
+  | "cancelled"
 
 export type SourceProposalDetectionResult = {
   status: SourceProposalDetectionStatus
-  proposal?: SourceProposal
-  proposals?: SourceProposal[]
-  unsupportedProfiles?: UnsupportedSourceProfile[]
+  proposals: SourceProposal[]
+  unsupportedProfiles: UnsupportedSourceProfile[]
   diagnostics: Diagnostics
+}
+
+export type PhaseUsage = {
+  strategyAttempts: number
+  requests: number
+  producedItems: number
+  durationMs: number
+  pages: number
+  browserActions: number
+  fanOut: number
+  responseBytes: number
+  browserRenderedBytes: number
+}
+
+export type PhaseExecutionReport = {
+  usage: PhaseUsage
+  completion:
+    | { type: "accepted" }
+    | { type: "policy_unsatisfied" }
+    | { type: "execution_failed" }
+    | { type: "cancelled"; reason: "user_cancelled" }
+    | {
+        type: "budget_exhausted"
+        exhaustion: {
+          dimension: string
+          requested: number
+          remaining: number
+          limitSources: string[]
+        }
+      }
+}
+
+export type DetectionAttempt =
+  | { type: "matched"; value: SourceProposal }
+  | { type: "unsupported"; value: UnsupportedSourceProfile }
+  | { type: "failed" | "conflict" | "budget_exhausted" | "cancelled"; value: Diagnostics }
+
+export type DetectionProfileCompletion =
+  | { type: "matched" | "unsupported" }
+  | { type: "rejected"; strategyKey: string; kind: string }
+  | { type: "execution_failed"; strategyKey?: string; kind: string | { type: string; kind?: string } }
+
+export type DetectionProfileOutcome = {
+  profileKey: string
+  completion: DetectionProfileCompletion
+  diagnostics: Diagnostics
+}
+
+export type DetectionOperationResult = {
+  attempts: DetectionAttempt[]
+  profileOutcomes: DetectionProfileOutcome[]
+  runResult: SourceProposalDetectionResult
+  diagnostics: Diagnostics
+  report: PhaseExecutionReport
 }
 
 export function getSourceProfileRegistrySnapshot() {
@@ -558,7 +592,7 @@ export function getSourceLiveCheckReportStatus(sourceKey: string) {
 }
 
 export function detectSourceProposalFromUrl(url: string) {
-  return invoke<SourceProposalDetectionResult>("detect_source_proposal_from_url", { url })
+  return invoke<DetectionOperationResult>("detect_source_proposal_from_url", { url })
 }
 
 export function createSource(document: SourceDocument) {

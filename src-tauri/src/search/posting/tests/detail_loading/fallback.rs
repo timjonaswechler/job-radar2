@@ -70,11 +70,11 @@ fn get_job_posting_falls_back_after_detail_capable_source_failure() {
             ),
         ]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();
@@ -267,11 +267,11 @@ fn get_job_posting_reports_failed_after_all_detail_capable_sources_fail() {
             Err("HTTP 500".to_string()),
         )]);
         let detail = JobPostingService::new(&pool)
-            .get_job_posting_with_clients(
+            .get_job_posting_with_runtime(
                 posting_id,
                 &snapshot,
                 client.client(),
-                &UnavailableProfileBrowserClient,
+                &browser_free_acquisition(),
             )
             .await
             .unwrap();

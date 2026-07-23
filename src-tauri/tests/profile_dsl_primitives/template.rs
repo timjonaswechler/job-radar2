@@ -134,12 +134,15 @@ fn compile_source_compiles_value_http_browser_and_detection_templates_into_typed
         .unwrap()
         .push(browser);
     value["detection"] = json!({
-        "inputUrlPatterns": [{ "pattern": "^https://(?<tenant>[^/]+)" }],
+        "policy": { "type": "all_required" },
+        "strategies": [
+            { "type": "url", "key": "input_url", "input": { "type": "pattern_alternatives", "alternatives": [{ "pattern": "^https://(?<tenant>[^/]+)", "captures": ["tenant"] }] } },
+            { "type": "http", "key": "http", "fetch": { "mode": "http", "method": "GET", "url": "{{inputUrl}}", "timeoutMs": 1000 }, "expectStatus": 200 },
+            { "type": "browser", "key": "browser", "fetch": { "mode": "browser", "url": "https://{{capture:tenant}}/browser", "timeoutMs": 3000 }, "contains": "jobs" }
+        ],
         "sourceConfig": { "feedUrl": "{{inputUrl}}" },
         "keyCandidates": ["{{capture:tenant}}"],
-        "nameCandidates": ["Detected {{capture:tenant}}"],
-        "httpChecks": [{ "key": "http", "url": "{{inputUrl}}", "timeoutMs": 1000 }],
-        "browserProbes": [{ "key": "browser", "url": "{{sourceConfig:feedUrl}}", "timeoutMs": 3000 }]
+        "nameCandidates": ["Detected {{capture:tenant}}"]
     });
 
     let outcome = compile(serde_json::from_value(value).unwrap());
@@ -189,12 +192,13 @@ fn compile_source_rejects_detail_fetch_capture_before_io_and_detection_malformed
     value["accessPaths"][0]["detail"]["strategies"][0]["fetch"]["url"] =
         json!("{{captures:tenant}}");
     value["detection"] = json!({
-        "keyCandidates": ["prefix {{"],
-        "inputUrlPatterns": [{ "pattern": "^https://example\\.test" }]
+        "policy": { "type": "all_required" },
+        "strategies": [{ "type": "url", "key": "input_url", "input": { "type": "pattern_alternatives", "alternatives": [{ "pattern": "^https://example\\.test" }] } }],
+        "keyCandidates": ["prefix {{"]
     });
 
     let CompileSourceOutcome::Rejected { diagnostics } =
-        compile(serde_json::from_value(value).unwrap())
+        compile(serde_json::from_value(value.clone()).unwrap())
     else {
         panic!("invalid pre-I/O templates must reject compilation")
     };
@@ -203,8 +207,10 @@ fn compile_source_rejects_detail_fetch_capture_before_io_and_detection_malformed
             && diagnostic.path == "/accessPaths/0/detail/strategies/0/fetch/url"
             && diagnostic.strategy_key.as_deref() == Some("detail_api")
     }));
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "invalid_detection_template"
+    let profile: SourceProfileDocument = serde_json::from_value(value).unwrap();
+    let detection_diagnostics = job_radar_lib::compile_detection_plan(&profile).unwrap_err();
+    assert!(detection_diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "invalid_detection_proposal_template"
             && diagnostic.path == "/detection/keyCandidates/0"
     }));
 }

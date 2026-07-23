@@ -325,6 +325,30 @@ pub trait BrowserAcquisition: Send + Sync {
     ) -> BoxedBrowserAcquisitionFuture<'a>;
 }
 
+/// Nonproductive managed-runtime health probe through the final acquisition seam.
+pub(crate) async fn probe_browser_acquisition(
+    acquisition: &dyn BrowserAcquisition,
+) -> Result<(), BrowserAcquisitionTerminal> {
+    struct Uncancelled;
+    impl RuntimeCancellation for Uncancelled {
+        fn is_cancelled(&self) -> bool { false }
+    }
+    let limits = PhaseLimits {
+        max_requests: 1,
+        max_duration_ms: 30_000,
+        max_browser_rendered_bytes: 2_097_152,
+        ..PhaseLimits::BACKEND
+    };
+    let allowance = InvocationAllowance::new(limits, false, None);
+    let cancellation = Uncancelled;
+    let context = RuntimeExecutionContext::with_cancellation(&cancellation)
+        .for_invocation(&allowance);
+    let request = BrowserAcquisitionRequest::new(
+        "about:blank".to_string(), 10_000, Vec::new(), Vec::new(), context,
+    ).map_err(BrowserAcquisitionTerminal::Failure)?;
+    acquisition.acquire(request).await.map(|_| ())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScriptedBrowserAcquisitionEvent {
     Gate(String),

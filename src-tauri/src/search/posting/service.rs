@@ -2,11 +2,12 @@ use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use std::path::Path;
 
 use crate::{
+    browser_runtime::ManagedBrowserAcquisition,
     profile_dsl::{
         compiler::{compile_source, CompileSourceOutcome},
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         runtime::{
-            DetailField, ManagedProfileBrowserClient, PostingOccurrence, ProfileBrowserClient,
+            BrowserAcquisition, DetailField, PostingOccurrence,
             ProfileDslSourceDetailExecution, ProfileHttpClient, RequestedDetailFields,
             RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeExecutionContext,
             SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
@@ -133,23 +134,24 @@ impl<'a> JobPostingService<'a> {
     ) -> Result<JobPostingView, String> {
         let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
         let fetcher = ReqwestProfileHttpClient::new();
-        let browser = ManagedProfileBrowserClient::new(browser_runtime_dir);
-        self.get_job_posting_with_clients(id, &snapshot, &fetcher, &browser)
+        let browser_runtime_dir = browser_runtime_dir.into();
+        let acquisition = ManagedBrowserAcquisition::new(&browser_runtime_dir);
+        self.get_job_posting_with_runtime(id, &snapshot, &fetcher, &acquisition)
             .await
     }
 
-    pub(crate) async fn get_job_posting_with_clients<F, B>(
+    pub(crate) async fn get_job_posting_with_runtime<F, A>(
         &self,
         id: i64,
         snapshot: &SourceProfileRegistrySnapshot,
         fetcher: &F,
-        browser: &B,
+        acquisition: &A,
     ) -> Result<JobPostingView, String>
     where
         F: ProfileHttpClient + Sync + ?Sized,
-        B: ProfileBrowserClient + Sync + ?Sized,
+        A: BrowserAcquisition + Sync,
     {
-        let execution = ProfileDslSourceDetailExecution::new(fetcher, browser);
+        let execution = ProfileDslSourceDetailExecution::new(fetcher, acquisition);
         self.get_job_posting_with_detail_execution(id, snapshot, &execution)
             .await
     }

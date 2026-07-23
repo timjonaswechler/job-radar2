@@ -23,10 +23,7 @@ pub use source_behavior_fingerprints::{
     SourceBehaviorFingerprintPreparationErrorKind,
 };
 pub use source_live::{
-    check_and_activate_source, check_and_activate_source_with_clients,
-    check_and_activate_source_with_fetcher, check_and_reactivate_source,
-    check_and_reactivate_source_with_clients, check_and_reactivate_source_with_fetcher,
-    check_source, check_source_with_clients, check_source_with_fetcher,
-    source_live_check_report_status, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
+    check_source_with_runtime, source_live_check_report_status, SourceLiveCheckReportState,
+    SourceLiveCheckReportStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };

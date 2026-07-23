@@ -1,11 +1,11 @@
 use super::*;
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn execute<F, B>(
+pub(super) async fn execute<F>(
     plan: &SourceExecutionPlan,
     source_config: &SourceConfig,
     fetcher: &F,
-    browser: &DiscoveryBrowserBackend<'_, B>,
+    browser: &DiscoveryBrowserBackend<'_>,
     strategy_index: usize,
     strategy: &ExecutionPlanDiscoveryStrategy,
     pagination: &PagePaginationPlan,
@@ -17,7 +17,6 @@ pub(super) async fn execute<F, B>(
 ) -> Result<Vec<PostingOccurrence>, TypedCancellation>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
 {
     let context = context.with_pagination_limit(pagination.limits.max_requests);
     let mut candidates = Vec::new();

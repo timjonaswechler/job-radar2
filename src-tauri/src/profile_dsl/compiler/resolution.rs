@@ -23,7 +23,7 @@ use super::source_config::{
     source_owned_access_path_schema, validate_source_config_against_contract,
 };
 use super::support::validate_support_metadata;
-use super::templates::{validate_detection_templates, validate_template_variables};
+use super::templates::validate_template_variables;
 use super::values::validate_value_context_foundation;
 use super::{SourceRuntimeBinding, SourceRuntimeBindingDependencies};
 
@@ -48,7 +48,6 @@ fn validate_source_profile_document_with_contracts(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
 ) -> Vec<ValidatedAccessPath> {
-    validate_detection_templates(profile, diagnostics);
     validate_support_metadata(
         &profile.support,
         "/support",
@@ -56,6 +55,13 @@ fn validate_source_profile_document_with_contracts(
         diagnostics,
     );
     validate_reusable_access_path_keys(profile, diagnostics);
+    if profile.detection.is_some() {
+        if let Err(detection_diagnostics) =
+            crate::source_profile::detection::compile_detection_plan(profile)
+        {
+            diagnostics.extend(detection_diagnostics);
+        }
+    }
     let mut total_value_nodes = 0usize;
 
     profile

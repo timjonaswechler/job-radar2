@@ -13,9 +13,10 @@ use crate::profile_dsl::{
 
 use super::{
     allowance::PhaseExecutionReport,
-    browser::ProfileBrowserClient,
+    browser_acquisition::BrowserAcquisition,
+    browser_phase::PhaseBrowser,
     cancellation::RuntimeExecutionContext,
-    detail::execute_detail,
+    detail::{execute_detail, DetailBrowserAdapter},
     http::ProfileHttpClient,
     outcome::{
         DetailPhasePayload, PhaseCancelled, PhaseExecutionFailure, PhaseOutcome,
@@ -204,21 +205,21 @@ pub trait SourceDetailExecution: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = SourceDetailResult> + Send + 'a>>;
 }
 
-pub struct ProfileDslSourceDetailExecution<'a, F: ?Sized, B: ?Sized> {
+pub struct ProfileDslSourceDetailExecution<'a, F: ?Sized, A: ?Sized> {
     fetcher: &'a F,
-    browser: &'a B,
+    acquisition: &'a A,
 }
 
-impl<'a, F: ?Sized, B: ?Sized> ProfileDslSourceDetailExecution<'a, F, B> {
-    pub fn new(fetcher: &'a F, browser: &'a B) -> Self {
-        Self { fetcher, browser }
+impl<'a, F: ?Sized, A: ?Sized> ProfileDslSourceDetailExecution<'a, F, A> {
+    pub fn new(fetcher: &'a F, acquisition: &'a A) -> Self {
+        Self { fetcher, acquisition }
     }
 }
 
-impl<F, B> SourceDetailExecution for ProfileDslSourceDetailExecution<'_, F, B>
+impl<F, A> SourceDetailExecution for ProfileDslSourceDetailExecution<'_, F, A>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     fn execute<'a>(
         &'a self,
@@ -228,10 +229,10 @@ where
     }
 }
 
-impl<F, B> ProfileDslSourceDetailExecution<'_, F, B>
+impl<F, A> ProfileDslSourceDetailExecution<'_, F, A>
 where
     F: ProfileHttpClient + Sync + ?Sized,
-    B: ProfileBrowserClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
 {
     async fn execute_request(&self, request: SourceDetailRequest<'_>) -> SourceDetailResult {
         let source_key = &request.compiled_source.execution_plan.source.key;
@@ -270,7 +271,13 @@ where
             request.occurrence,
             phase_request,
             self.fetcher,
-            self.browser,
+            if request.compiled_source.execution_plan.detail.as_ref().is_some_and(|detail| {
+                detail.strategies.iter().any(|strategy| super::allowance::uses_browser(&strategy.fetch))
+            }) {
+                PhaseBrowser::Browser(DetailBrowserAdapter::new(self.acquisition))
+            } else {
+                PhaseBrowser::BrowserFree
+            },
             request.context,
         )
         .await;

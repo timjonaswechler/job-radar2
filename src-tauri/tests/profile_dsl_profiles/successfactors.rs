@@ -203,7 +203,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
 }
 
 fn assert_detects_named_successfactors_source_config_captures(profile: &Value) {
-    let captures = profile["detection"]["inputUrlPatterns"]
+    let captures = profile["detection"]["strategies"][0]["input"]["alternatives"]
         .as_array()
         .into_iter()
         .flatten()

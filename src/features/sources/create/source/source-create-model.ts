@@ -55,7 +55,7 @@ export type DetectedSourceLike = {
 export function detectedSourceFromResult(
   result: SourceProposalDetectionResult,
 ): DetectedSourceLike | null {
-  return result.proposal ? detectedSourceFromProposal(result.proposal) : null;
+  return result.proposals[0] ? detectedSourceFromProposal(result.proposals[0]) : null;
 }
 
 export function detectedSourceFromProposal(

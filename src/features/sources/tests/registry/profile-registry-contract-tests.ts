@@ -135,6 +135,8 @@ const evidenceProfile: RegistrySourceProfile = {
       ],
     },
     detection: {
+      policy: { type: "all_required" },
+      strategies: [{ type: "url", key: "input_url", input: { type: "absolute_url" } }],
       evidence: [
         { kind: "url", message: "Matched board URL" },
         { kind: "http", message: "HTTP marker matched" },

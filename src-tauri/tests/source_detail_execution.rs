@@ -10,7 +10,7 @@ use job_radar_lib::{
     RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
     ScriptedSourceDetailExecution, SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome,
     SourceDetailRequest, SourceDetailRequestSnapshot, SourceDocument, SourceProfileDocument,
-    UnavailableProfileBrowserClient, __test_execute_detail_phase,
+    ScriptedBrowserAcquisition, PhaseBrowser, __test_execute_detail_phase,
 };
 use serde_json::{json, Value};
 
@@ -78,6 +78,10 @@ fn authored_dynamic_detail_capability_name_is_rejected_by_closed_serde_shape() {
     assert!(error.to_string().contains("unknown field `salary`"));
 }
 
+fn browser_free_acquisition() -> &'static ScriptedBrowserAcquisition {
+    Box::leak(Box::new(ScriptedBrowserAcquisition::new([])))
+}
+
 #[tokio::test]
 async fn source_mismatch_precedes_reuse_routing_and_io() {
     let compiled = compiled_source(vec![detail_strategy(
@@ -89,7 +93,7 @@ async fn source_mismatch_precedes_reuse_routing_and_io() {
     let occurrence = occurrence("another_source", Some("already present"));
     let fetcher = ScriptedProfileHttpClient::new([]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -116,7 +120,7 @@ async fn reused_and_unsupported_fields_complete_canonically_without_phase_eviden
     let occurrence = occurrence("fixture_source", None);
     let fetcher = ScriptedProfileHttpClient::new([]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -187,7 +191,7 @@ async fn one_unchanged_policy_invocation_can_produce_multiple_requested_fields()
         "description": "Produced description"
     }));
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -257,7 +261,7 @@ async fn accepted_quarantined_patch_is_reported_as_conflicted_without_releasing_
         response_event(json!({ "description": "Conflicting description" })),
     ]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -300,7 +304,7 @@ async fn rejected_only_is_an_ordinary_completed_unavailable_result_with_phase_ev
     let occurrence = occurrence("fixture_source", None);
     let fetcher = response_client(json!({}));
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -395,7 +399,7 @@ async fn budget_exhaustion_stays_distinct_and_releases_no_fields_or_dispositions
         &occurrence,
         RequestedDetailFields::description_text(),
         &raw_fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable().with_limits(limits),
     )
     .await
@@ -410,7 +414,7 @@ async fn budget_exhaustion_stays_distinct_and_releases_no_fields_or_dispositions
         "description": "First description"
     }))]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -449,7 +453,7 @@ async fn invalid_caller_limits_are_source_execution_failure_with_exact_phase_evi
     let occurrence = occurrence("fixture_source", None);
     let fetcher = ScriptedProfileHttpClient::new([]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -506,7 +510,7 @@ async fn pre_start_request_mismatch_has_no_fabricated_budget_report() {
     let occurrence = occurrence("fixture_source", None);
     let fetcher = ScriptedProfileHttpClient::new([]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -559,7 +563,7 @@ async fn strategy_execution_failure_is_candidate_scoped_and_releases_no_fields()
         &occurrence,
         RequestedDetailFields::description_text(),
         &raw_fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::uncancellable(),
     )
     .await
@@ -576,7 +580,7 @@ async fn strategy_execution_failure_is_candidate_scoped_and_releases_no_fields()
     };
     let fetcher = ScriptedProfileHttpClient::new([failed_response()]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let outcome = execution
         .execute(SourceDetailRequest {
@@ -611,7 +615,7 @@ async fn cancellation_is_external_and_preserves_started_phase_evidence_without_r
     let occurrence = occurrence("fixture_source", None);
     let fetcher = ScriptedProfileHttpClient::new([]);
     let execution =
-        ProfileDslSourceDetailExecution::new(&fetcher, &UnavailableProfileBrowserClient);
+        ProfileDslSourceDetailExecution::new(&fetcher, browser_free_acquisition());
 
     let raw_cancelled = match __test_execute_detail_phase(
         &compiled.execution_plan,
@@ -619,7 +623,7 @@ async fn cancellation_is_external_and_preserves_started_phase_evidence_without_r
         &occurrence,
         RequestedDetailFields::description_text(),
         &fetcher,
-        &UnavailableProfileBrowserClient,
+        PhaseBrowser::BrowserFree,
         RuntimeExecutionContext::with_cancellation(&AlwaysCancelled),
     )
     .await
