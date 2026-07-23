@@ -171,12 +171,12 @@ pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
-    aggregate_detection_attempts, compile_url_http_detection_plan, detect_source_proposal,
+    aggregate_detection_attempts, compile_detection_plan, detect_source_proposal,
     detect_source_proposal_with_clients, detect_source_proposal_with_http_client,
-    execute_url_http_detection_operation, CompiledUrlHttpDetectionPlan, DetectionAttempt,
-    DetectionConfigContribution, DetectionContribution, DetectionDefinitionError,
-    DetectionEvidenceContribution, DetectionHttpClient, DetectionHttpCompletion,
-    DetectionHttpError, DetectionHttpReport, DetectionHttpResponse, DetectionOrigin,
+    execute_detection_operation, CompiledDetectionPlan, DetectionAttempt,
+    DetectionBrowserFailureKind, DetectionConfigContribution, DetectionContribution,
+    DetectionDefinitionError, DetectionEvidenceContribution, DetectionHttpClient,
+    DetectionHttpError, DetectionHttpResponse, DetectionOperationResult, DetectionOrigin,
     DetectionProfileCompletion, DetectionProfileContext, DetectionProfileExecutionFailureKind,
     DetectionProfileOutcome, DetectionProfileRejectionKind, DetectionProposalProvenance,
     DetectionReconciliationError, DetectionRunStatus, DetectionStateConflict,
@@ -185,7 +185,7 @@ pub use source_profile::detection::{
     ReconciledRecommendation, ReconciledSourceConfigValue, ReconciledSourceProposal,
     ReqwestDetectionHttpClient, SourceProposal, SourceProposalDetectionResult,
     SourceProposalDetectionStatus, SourceProposalEvidence, UnsupportedReconciledDetection,
-    UnsupportedSourceProfile, UrlHttpDetectionOperationResult,
+    UnsupportedSourceProfile,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{

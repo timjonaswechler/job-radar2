@@ -7,7 +7,13 @@ use url::Url;
 use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::profile_dsl::documents::{DetectionEvidenceKind, DetectionStrategy, DetectionUrlInput};
+use crate::profile_dsl::documents::{
+    DetectionEvidenceKind, DetectionStrategy, DetectionUrlInput, PhaseLimits,
+};
+use crate::profile_dsl::execution_plan::capabilities::{
+    compile_browser_fetch_with_descriptor, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, ExecutionPlanFetch,
+};
 use crate::profile_dsl::policy::StrategyPolicy;
 use crate::profile_dsl::primitives::capture::{
     compile_named_pattern, evaluate_named_pattern, CompiledNamedPattern,
@@ -20,7 +26,10 @@ use crate::profile_dsl::primitives::predicate::{
     compile_regex, literal_contains, values_equal, CompiledRegex,
 };
 use crate::profile_dsl::runtime::allowance::{
-    AllowanceExhaustion, AllowanceStop, DetectionHttpAllowance,
+    completion_for_stop, AllowanceStop, InvocationAllowance,
+};
+use crate::profile_dsl::runtime::browser_phase::{
+    execute_canonical_browser_fetch, BrowserPhaseFetchInput, BrowserPhaseFetchProjection,
 };
 use crate::profile_dsl::runtime::cancellation::{
     CancellationOperation, RuntimePhase, TypedCancellation,
@@ -30,7 +39,9 @@ use crate::profile_dsl::runtime::strategy_set::{
     StrategyExecution, StrategySetTerminal,
 };
 use crate::profile_dsl::runtime::{
-    ProfileHttpClient, ProfileHttpFailureKind, RuntimeCancellation, RuntimeExecutionContext,
+    BrowserAcquisition, BrowserAcquisitionFailureKind, PhaseBrowser, PhaseCompletion,
+    PhaseExecutionReport, ProfileHttpClient, ProfileHttpFailureKind, RuntimeCancellation,
+    RuntimeExecutionContext,
 };
 use crate::profile_dsl::template::{
     compile_template, render_template, CompiledTemplate, TemplateDescriptor, TemplateReference,
@@ -45,7 +56,7 @@ use super::reconciliation::{
 };
 
 #[derive(Clone, Debug)]
-pub struct CompiledUrlHttpDetectionPlan {
+pub struct CompiledDetectionPlan {
     profile_key: String,
     context: DetectionProfileContext,
     strategies: Vec<CompiledDetectionStrategy>,
@@ -62,7 +73,7 @@ enum CompiledDetectionJsonValue {
     Literal(serde_json::Value),
 }
 
-impl CompiledUrlHttpDetectionPlan {
+impl CompiledDetectionPlan {
     pub fn profile_key(&self) -> &str {
         &self.profile_key
     }
@@ -86,12 +97,23 @@ enum CompiledDetectionStrategy {
         captures: Option<CompiledNamedPattern>,
         evidence: Option<String>,
     },
+    Browser {
+        key: String,
+        url: CompiledTemplate,
+        timeout_ms: u64,
+        waits: Vec<ExecutionPlanBrowserWait>,
+        interactions: Vec<ExecutionPlanBrowserInteraction>,
+        contains: Option<String>,
+        acceptance_regex: Option<CompiledRegex>,
+        captures: Option<CompiledNamedPattern>,
+        evidence: Option<String>,
+    },
 }
 
 impl CompiledDetectionStrategy {
     fn key(&self) -> &str {
         match self {
-            Self::Url { key, .. } | Self::Http { key, .. } => key,
+            Self::Url { key, .. } | Self::Http { key, .. } | Self::Browser { key, .. } => key,
         }
     }
 }
@@ -105,24 +127,6 @@ enum CompiledUrlInput {
 #[derive(Clone, Debug)]
 struct CompiledUrlAlternative {
     pattern: CompiledNamedPattern,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DetectionHttpCompletion {
-    Completed,
-    BudgetExhausted,
-    Cancelled,
-    ExecutionFailed,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DetectionHttpReport {
-    pub response_bytes: u64,
-    pub completion: DetectionHttpCompletion,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exhaustion: Option<AllowanceExhaustion>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -139,9 +143,22 @@ pub enum DetectionProfileRejectionKind {
 #[serde(tag = "type", content = "kind", rename_all = "snake_case")]
 pub enum DetectionProfileExecutionFailureKind {
     Acquisition(ProfileHttpFailureKind),
+    BrowserAcquisition(DetectionBrowserFailureKind),
+    BrowserInfrastructure,
     Render,
     Reconciliation,
     Proposal,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DetectionBrowserFailureKind {
+    RuntimeLaunch,
+    Navigation,
+    Wait,
+    Interaction,
+    ContentRead,
+    Deadline,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -168,17 +185,17 @@ pub struct DetectionProfileOutcome {
 }
 
 #[derive(Clone, Debug)]
-pub struct UrlHttpDetectionOperationResult {
+pub struct DetectionOperationResult {
     pub attempts: Vec<DetectionAttempt>,
     pub profile_outcomes: Vec<DetectionProfileOutcome>,
     pub run_result: ReconciledDetectionRunResult,
     pub diagnostics: Diagnostics,
-    pub report: DetectionHttpReport,
+    pub report: PhaseExecutionReport,
 }
 
-pub fn compile_url_http_detection_plan(
+pub fn compile_detection_plan(
     profile: &SourceProfileDocument,
-) -> Result<CompiledUrlHttpDetectionPlan, Diagnostics> {
+) -> Result<CompiledDetectionPlan, Diagnostics> {
     let context = DetectionProfileContext::compile(profile)?;
     let detection = profile.detection.as_ref().ok_or_else(|| {
         vec![compiler_error(
@@ -200,7 +217,7 @@ pub fn compile_url_http_detection_plan(
     if detection.policy != Some(StrategyPolicy::AllRequired) {
         return Err(vec![compiler_error(
             "invalid_detection_policy",
-            "URL/HTTP Detection requires exact all_required policy",
+            "Detection requires exact all_required policy",
             "/detection/policy",
         )]);
     }
@@ -211,19 +228,33 @@ pub fn compile_url_http_detection_plan(
         .ok_or_else(|| {
             vec![compiler_error(
                 "missing_detection_strategies",
-                "URL/HTTP Detection requires a non-empty Strategy Set",
+                "Detection requires a non-empty Strategy Set",
                 "/detection/strategies",
             )]
         })?;
     if !matches!(authored.first(), Some(DetectionStrategy::Url { .. }))
-        || authored
-            .iter()
-            .skip(1)
-            .any(|s| !matches!(s, DetectionStrategy::Http { .. }))
+        || authored.iter().skip(1).any(|s| {
+            !matches!(
+                s,
+                DetectionStrategy::Http { .. } | DetectionStrategy::Browser { .. }
+            )
+        })
     {
         return Err(vec![compiler_error(
             "invalid_detection_strategy_order",
-            "Detection requires one URL Strategy first followed only by HTTP Strategies",
+            "Detection requires one URL Strategy first followed only by HTTP or Browser Strategies",
+            "/detection/strategies",
+        )]);
+    }
+    if authored
+        .iter()
+        .filter(|strategy| matches!(strategy, DetectionStrategy::Browser { .. }))
+        .count()
+        > 2
+    {
+        return Err(vec![compiler_error(
+            "detection_browser_navigation_limit_exceeded",
+            "A Detection profile may define at most two Browser Strategies",
             "/detection/strategies",
         )]);
     }
@@ -396,6 +427,160 @@ pub fn compile_url_http_detection_plan(
                     evidence: evidence.clone(),
                 });
             }
+            DetectionStrategy::Browser {
+                key,
+                fetch,
+                contains,
+                regex,
+                captures,
+                evidence,
+            } => {
+                let descriptor = TemplateDescriptor::new()
+                    .allow_bare("inputUrl")
+                    .allow_namespace("capture", available_captures.iter().cloned());
+                let compiled = compile_browser_fetch_with_descriptor(
+                    fetch,
+                    &format!("{base}/fetch"),
+                    &descriptor,
+                )
+                .map_err(|error| vec![compiler_error(error.code, &error.message, &error.path)])?;
+                let ExecutionPlanFetch::Browser {
+                    url,
+                    timeout_ms,
+                    waits,
+                    interactions,
+                } = compiled
+                else {
+                    unreachable!("Browser compiler returns Browser Fetch")
+                };
+                if !(1..=20_000).contains(&timeout_ms) {
+                    return Err(vec![compiler_error(
+                        "invalid_detection_browser_timeout",
+                        "Detection Browser timeoutMs must be between 1 and 20,000",
+                        &format!("{base}/fetch/timeoutMs"),
+                    )]);
+                }
+                if waits.len() > 4 {
+                    return Err(vec![compiler_error(
+                        "detection_browser_wait_limit_exceeded",
+                        "Detection Browser Strategy permits at most four authored waits",
+                        &format!("{base}/fetch/waits"),
+                    )]);
+                }
+                for (wait_index, wait) in waits.iter().enumerate() {
+                    let wait_timeout = match wait {
+                        ExecutionPlanBrowserWait::Selector { timeout_ms, .. }
+                        | ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } => *timeout_ms,
+                    };
+                    if wait_timeout > 5_000 {
+                        return Err(vec![compiler_error(
+                            "invalid_detection_browser_wait_timeout",
+                            "Detection Browser wait timeoutMs must not exceed 5,000",
+                            &format!("{base}/fetch/waits/{wait_index}/timeoutMs"),
+                        )]);
+                    }
+                }
+                for (interaction_index, interaction) in interactions.iter().enumerate() {
+                    let (max_count, wait_after_ms) = match interaction {
+                        ExecutionPlanBrowserInteraction::ClickIfVisible {
+                            max_count,
+                            wait_after_ms,
+                            ..
+                        }
+                        | ExecutionPlanBrowserInteraction::ClickUntilGone {
+                            max_count,
+                            wait_after_ms,
+                            ..
+                        } => (*max_count, *wait_after_ms),
+                    };
+                    if max_count > 5 {
+                        return Err(vec![compiler_error(
+                            "invalid_detection_browser_action_count",
+                            "Detection Browser interaction maxCount must not exceed five",
+                            &format!("{base}/fetch/interactions/{interaction_index}/maxCount"),
+                        )]);
+                    }
+                    if wait_after_ms.is_some_and(|duration| duration > 5_000) {
+                        return Err(vec![compiler_error(
+                            "invalid_detection_browser_wait_after",
+                            "Detection Browser waitAfterMs must not exceed 5,000",
+                            &format!("{base}/fetch/interactions/{interaction_index}/waitAfterMs"),
+                        )]);
+                    }
+                }
+                if contains.as_ref().is_some_and(|value| value.is_empty()) {
+                    return Err(vec![compiler_error(
+                        "empty_detection_contains",
+                        "contains must not be empty",
+                        &format!("{base}/contains"),
+                    )]);
+                }
+                if regex.as_ref().is_some_and(|value| value.is_empty()) {
+                    return Err(vec![compiler_error(
+                        "empty_detection_regex",
+                        "Detection regex must not be empty",
+                        &format!("{base}/regex"),
+                    )]);
+                }
+                if evidence.as_ref().is_some_and(|value| value.is_empty()) {
+                    return Err(vec![compiler_error(
+                        "empty_detection_evidence",
+                        "Detection evidence must not be empty",
+                        &format!("{base}/evidence"),
+                    )]);
+                }
+                if contains.is_none() && regex.is_none() {
+                    return Err(vec![compiler_error(
+                        "missing_detection_browser_acceptance",
+                        "Detection Browser Strategy requires contains or regex acceptance",
+                        &base,
+                    )]);
+                }
+                let acceptance_regex =
+                    regex
+                        .as_deref()
+                        .map(compile_regex)
+                        .transpose()
+                        .map_err(|_| {
+                            vec![compiler_error(
+                                "invalid_detection_regex",
+                                "Detection regex is invalid Rust regex syntax",
+                                &format!("{base}/regex"),
+                            )]
+                        })?;
+                let capture_keys = captures.clone().unwrap_or_default();
+                if captures.is_some() && regex.is_none() {
+                    return Err(vec![compiler_error(
+                        "detection_captures_require_regex",
+                        "Browser captures require regex",
+                        &format!("{base}/captures"),
+                    )]);
+                }
+                let capture_plan = regex
+                    .as_deref()
+                    .filter(|_| !capture_keys.is_empty())
+                    .map(|pattern| compile_named_pattern(pattern, &capture_keys))
+                    .transpose()
+                    .map_err(|_| {
+                        vec![compiler_error(
+                            "invalid_detection_capture_pattern",
+                            "Detection regex must contain every selected named group",
+                            &format!("{base}/regex"),
+                        )]
+                    })?;
+                available_captures.extend(capture_keys);
+                strategies.push(CompiledDetectionStrategy::Browser {
+                    key: key.clone(),
+                    url,
+                    timeout_ms,
+                    waits,
+                    interactions,
+                    contains: contains.clone(),
+                    acceptance_regex,
+                    captures: capture_plan,
+                    evidence: evidence.clone(),
+                });
+            }
         }
     }
     let proposal_descriptor = TemplateDescriptor::new()
@@ -428,7 +613,7 @@ pub fn compile_url_http_detection_plan(
         &proposal_descriptor,
         "/detection/nameCandidates",
     )?;
-    Ok(CompiledUrlHttpDetectionPlan {
+    Ok(CompiledDetectionPlan {
         profile_key: profile.key.clone(),
         context,
         strategies,
@@ -517,32 +702,37 @@ fn render_detection_json_value(
     }
 }
 
-pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + ?Sized>(
+pub async fn execute_detection_operation<C>(
     input_url: &str,
-    plans: &[CompiledUrlHttpDetectionPlan],
+    plans: &[CompiledDetectionPlan],
     client: &C,
+    browser: PhaseBrowser<&dyn BrowserAcquisition>,
     cancellation: &dyn RuntimeCancellation,
-) -> UrlHttpDetectionOperationResult {
+) -> DetectionOperationResult
+where
+    C: ProfileHttpClient + Sync + ?Sized,
+{
     let canonical_url = match canonical_url(input_url) {
         Ok(url) => url,
         Err(diagnostic) => {
             let diagnostics = vec![diagnostic];
-            return UrlHttpDetectionOperationResult {
+            return DetectionOperationResult {
                 attempts: Vec::new(),
                 profile_outcomes: Vec::new(),
                 run_result: aggregate_detection_attempts(vec![DetectionAttempt::Failed(
                     diagnostics.clone(),
                 )]),
                 diagnostics,
-                report: DetectionHttpReport {
-                    response_bytes: 0,
-                    completion: DetectionHttpCompletion::ExecutionFailed,
-                    exhaustion: None,
-                },
+                report: InvocationAllowance::prestart_failure_report(),
             };
         }
     };
-    let allowance = DetectionHttpAllowance::new();
+    let allowance = InvocationAllowance::new_inactive_with_logical_wait_limit(
+        detection_operation_limits(),
+        false,
+        None,
+        Some(32),
+    );
     let base_context = RuntimeExecutionContext::with_cancellation(cancellation);
     let execution_context = base_context.for_detection_http(&allowance);
     let mut attempts = Vec::new();
@@ -552,15 +742,35 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
     for plan in plans {
         if cancellation.is_cancelled() {
             return terminal_result(
-                allowance,
-                DetectionHttpCompletion::Cancelled,
+                &allowance,
+                PhaseCompletion::Cancelled {
+                    reason: crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                },
                 Vec::new(),
                 Vec::new(),
                 diagnostics,
             );
         }
+        let profile_scope = match allowance.inactive_child_scope(
+            InvocationAllowance::ROOT_SCOPE,
+            detection_profile_limits(),
+            Some(8),
+        ) {
+            Ok(scope) => scope,
+            Err(stop) => {
+                return terminal_result(
+                    &allowance,
+                    completion_for_stop(stop),
+                    Vec::new(),
+                    Vec::new(),
+                    diagnostics,
+                )
+            }
+        };
         let state = Mutex::new(plan.context.initial_state());
         let profile_completion = Mutex::new(None);
+        let allowance_ref = &allowance;
+        let browser_ref = &browser;
         let execution = execute_strategy_set(
             StrategyPolicy::AllRequired,
             &plan.strategies,
@@ -588,6 +798,9 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
                         context,
                         state,
                         client,
+                        browser_ref,
+                        allowance_ref,
+                        profile_scope,
                         execution_context,
                         profile_completion,
                     )
@@ -603,6 +816,19 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
             .collect::<Vec<_>>();
         match execution.terminal {
             StrategySetTerminal::Satisfied => {
+                if cancellation.is_cancelled() {
+                    diagnostics.extend(attempt_diagnostics);
+                    return terminal_result(
+                        &allowance,
+                        PhaseCompletion::Cancelled {
+                            reason:
+                                crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                        },
+                        Vec::new(),
+                        Vec::new(),
+                        diagnostics,
+                    );
+                }
                 let snapshot = state.lock().unwrap_or_else(|p| p.into_inner()).clone();
                 let values = DetectionTemplateValues::from_state(&canonical_url, &snapshot);
                 let rendered_source_config = plan
@@ -650,13 +876,27 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
                     });
                     continue;
                 };
-                match plan.context.prepare_proposal_with_canonical_url(
+                let prepared_proposal = plan.context.prepare_proposal_with_canonical_url(
                     &snapshot,
                     &canonical_url,
                     source_config,
                     key_candidates,
                     name_candidates,
-                ) {
+                );
+                if cancellation.is_cancelled() {
+                    diagnostics.extend(attempt_diagnostics);
+                    return terminal_result(
+                        &allowance,
+                        PhaseCompletion::Cancelled {
+                            reason:
+                                crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                        },
+                        Vec::new(),
+                        Vec::new(),
+                        diagnostics,
+                    );
+                }
+                match prepared_proposal {
                     Ok(PreparedDetectionOutput::Proposal(proposal)) => {
                         attempts.push(DetectionAttempt::Matched(proposal));
                         profile_outcomes.push(DetectionProfileOutcome {
@@ -709,8 +949,10 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
             StrategySetTerminal::Cancelled(_) => {
                 diagnostics.extend(attempt_diagnostics);
                 return terminal_result(
-                    allowance,
-                    DetectionHttpCompletion::Cancelled,
+                    &allowance,
+                    PhaseCompletion::Cancelled {
+                        reason: crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                    },
                     Vec::new(),
                     Vec::new(),
                     diagnostics,
@@ -719,8 +961,8 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
             StrategySetTerminal::Stopped(AllowanceStop::Exhausted(_)) => {
                 diagnostics.extend(attempt_diagnostics);
                 return terminal_result(
-                    allowance,
-                    DetectionHttpCompletion::BudgetExhausted,
+                    &allowance,
+                    completion_for_stop(allowance.stop().unwrap_or(AllowanceStop::Internal)),
                     Vec::new(),
                     Vec::new(),
                     diagnostics,
@@ -729,8 +971,8 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
             StrategySetTerminal::Stopped(AllowanceStop::Internal) => {
                 diagnostics.extend(attempt_diagnostics);
                 return terminal_result(
-                    allowance,
-                    DetectionHttpCompletion::ExecutionFailed,
+                    &allowance,
+                    PhaseCompletion::ExecutionFailed,
                     Vec::new(),
                     Vec::new(),
                     diagnostics,
@@ -738,25 +980,35 @@ pub async fn execute_url_http_detection_operation<C: ProfileHttpClient + Sync + 
             }
         }
     }
+    let completion = allowance
+        .stop()
+        .map(completion_for_stop)
+        .unwrap_or(PhaseCompletion::Accepted);
     terminal_result(
-        allowance,
-        DetectionHttpCompletion::Completed,
+        &allowance,
+        completion,
         attempts,
         profile_outcomes,
         diagnostics,
     )
 }
 
-async fn execute_strategy<C: ProfileHttpClient + Sync + ?Sized>(
+async fn execute_strategy<C>(
     index: usize,
     strategy: &CompiledDetectionStrategy,
     input_url: &str,
     profile: &DetectionProfileContext,
     state: &Mutex<ReconciledDetectionState>,
     client: &C,
+    browser: &PhaseBrowser<&dyn BrowserAcquisition>,
+    allowance: &InvocationAllowance,
+    profile_scope: usize,
     execution_context: RuntimeExecutionContext<'_>,
     profile_completion: &Mutex<Option<DetectionProfileCompletion>>,
-) -> StrategyExecution<()> {
+) -> StrategyExecution<()>
+where
+    C: ProfileHttpClient + Sync + ?Sized,
+{
     let base = format!("/detection/strategies/{index}");
     match strategy {
         CompiledDetectionStrategy::Url {
@@ -1019,6 +1271,223 @@ async fn execute_strategy<C: ProfileHttpClient + Sync + ?Sized>(
                 completion: StrategyAttemptCompletion::Accepted(()),
             }
         }
+        CompiledDetectionStrategy::Browser {
+            key,
+            url,
+            timeout_ms,
+            waits,
+            interactions,
+            contains,
+            acceptance_regex,
+            captures,
+            evidence,
+        } => {
+            let snapshot = state.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            let values = DetectionTemplateValues::from_state(input_url, &snapshot);
+            let target = match render_template(url, &values) {
+                Ok(target) => target,
+                Err(_) => {
+                    set_execution_failure(
+                        profile_completion,
+                        key,
+                        DetectionProfileExecutionFailureKind::Render,
+                    );
+                    return failed(vec![runtime_error(
+                        "detection_browser_template_failed",
+                        "Detection Browser target Template dependency was unavailable",
+                        &format!("{base}/fetch/url"),
+                        key,
+                    )]);
+                }
+            };
+            let PhaseBrowser::Browser(acquisition) = browser else {
+                set_execution_failure(
+                    profile_completion,
+                    key,
+                    DetectionProfileExecutionFailureKind::BrowserAcquisition(
+                        DetectionBrowserFailureKind::RuntimeLaunch,
+                    ),
+                );
+                return failed(vec![runtime_error(
+                    "browser_runtime_unavailable",
+                    "Detection Browser acquisition is unavailable",
+                    &format!("{base}/fetch"),
+                    key,
+                )]);
+            };
+            if let Err(stop) = allowance.activate_scope_chain(profile_scope) {
+                return StrategyExecution {
+                    diagnostics: Vec::new(),
+                    completion: StrategyAttemptCompletion::Stopped(stop),
+                };
+            }
+            let strategy_scope =
+                match allowance.child_scope(profile_scope, detection_strategy_limits(), Some(4)) {
+                    Ok(scope) => scope,
+                    Err(stop) => {
+                        return StrategyExecution {
+                            diagnostics: Vec::new(),
+                            completion: StrategyAttemptCompletion::Stopped(stop),
+                        }
+                    }
+                };
+            let control = execution_context.for_allowance_scope(allowance, strategy_scope);
+            let rendered = match execute_canonical_browser_fetch(
+                *acquisition,
+                RuntimePhase::Detection,
+                BrowserPhaseFetchInput {
+                    target,
+                    timeout_ms: *timeout_ms,
+                    waits: waits.clone(),
+                    interactions: interactions.clone(),
+                    base_path: base.clone(),
+                    strategy_key: key.clone(),
+                    strategy_index: index,
+                    control,
+                },
+            )
+            .await
+            {
+                BrowserPhaseFetchProjection::Rendered(rendered) => rendered,
+                BrowserPhaseFetchProjection::AttemptFailed { diagnostic, kind } => {
+                    set_execution_failure(
+                        profile_completion,
+                        key,
+                        DetectionProfileExecutionFailureKind::BrowserAcquisition(
+                            browser_failure_kind(&kind),
+                        ),
+                    );
+                    return failed(vec![diagnostic]);
+                }
+                BrowserPhaseFetchProjection::PhaseFatal(diagnostic) => {
+                    set_execution_failure(
+                        profile_completion,
+                        key,
+                        DetectionProfileExecutionFailureKind::BrowserInfrastructure,
+                    );
+                    return failed(vec![diagnostic]);
+                }
+                BrowserPhaseFetchProjection::AllowanceStopped => {
+                    return StrategyExecution {
+                        diagnostics: Vec::new(),
+                        completion: StrategyAttemptCompletion::Stopped(
+                            control.stop().unwrap_or(AllowanceStop::Internal),
+                        ),
+                    }
+                }
+                BrowserPhaseFetchProjection::Cancelled(cancellation) => {
+                    return StrategyExecution {
+                        diagnostics: Vec::new(),
+                        completion: StrategyAttemptCompletion::Cancelled(cancellation),
+                    }
+                }
+            };
+            if control.is_cancelled() {
+                return cancelled(index, key);
+            }
+            if contains
+                .as_ref()
+                .is_some_and(|expected| !literal_contains(&rendered, expected))
+            {
+                set_rejection(
+                    profile_completion,
+                    key,
+                    DetectionProfileRejectionKind::Contains,
+                );
+                return rejected(
+                    key,
+                    &base,
+                    "detection_contains_rejected",
+                    "Detection Browser content did not contain the required literal",
+                );
+            }
+            if acceptance_regex
+                .as_ref()
+                .is_some_and(|regex| !regex.is_match(&rendered))
+            {
+                set_rejection(
+                    profile_completion,
+                    key,
+                    DetectionProfileRejectionKind::Regex,
+                );
+                return rejected(
+                    key,
+                    &base,
+                    "detection_regex_rejected",
+                    "Detection Browser content did not match the required regex",
+                );
+            }
+            if let Some(pattern) = captures {
+                match evaluate_named_pattern(pattern, &rendered) {
+                    Ok(Some(outputs)) => {
+                        if control.is_cancelled() {
+                            return cancelled(index, key);
+                        }
+                        if let Err(diagnostics) =
+                            apply_captures(profile, state, key, &format!("{base}/regex"), outputs)
+                        {
+                            set_execution_failure(
+                                profile_completion,
+                                key,
+                                DetectionProfileExecutionFailureKind::Reconciliation,
+                            );
+                            return failed(diagnostics);
+                        }
+                    }
+                    Ok(None) | Err(_) => {
+                        set_rejection(
+                            profile_completion,
+                            key,
+                            DetectionProfileRejectionKind::Capture,
+                        );
+                        return rejected(
+                            key,
+                            &base,
+                            "detection_capture_rejected",
+                            "Detection Browser named captures did not resolve",
+                        );
+                    }
+                }
+            }
+            if control.is_cancelled() {
+                return cancelled(index, key);
+            }
+            let (evidence_path, evidence_message) = evidence.as_ref().map_or_else(
+                || {
+                    (
+                        format!("{base}/fetch"),
+                        "Detection Browser Strategy accepted",
+                    )
+                },
+                |message| (format!("{base}/evidence"), message.as_str()),
+            );
+            let contribution = DetectionContribution::new(
+                DetectionOrigin::new(key, &evidence_path).expect("compiled origin"),
+            )
+            .with_evidence(
+                DetectionEvidenceContribution::new(
+                    DetectionEvidenceKind::Browser,
+                    &evidence_path,
+                    evidence_message,
+                )
+                .expect("compiled evidence"),
+            );
+            if let Err(diagnostics) = apply_one(profile, state, contribution) {
+                set_execution_failure(
+                    profile_completion,
+                    key,
+                    DetectionProfileExecutionFailureKind::Reconciliation,
+                );
+                return failed(diagnostics);
+            }
+            if control.is_cancelled() {
+                return cancelled(index, key);
+            }
+            StrategyExecution {
+                diagnostics: Vec::new(),
+                completion: StrategyAttemptCompletion::Accepted(()),
+            }
+        }
     }
 }
 
@@ -1076,6 +1545,55 @@ impl TemplateValueView for DetectionTemplateValues<'_> {
             Some("capture") => self.captures.get(&reference.key).cloned(),
             _ => None,
         }
+    }
+}
+
+fn detection_operation_limits() -> PhaseLimits {
+    PhaseLimits {
+        max_requests: 8,
+        max_duration_ms: 60_000,
+        max_pages: 32,
+        max_browser_actions: 32,
+        max_response_bytes: 67_108_864,
+        max_browser_rendered_bytes: 16_777_216,
+        ..PhaseLimits::BACKEND
+    }
+}
+
+fn detection_profile_limits() -> PhaseLimits {
+    PhaseLimits {
+        max_requests: 2,
+        max_duration_ms: 30_000,
+        max_pages: 8,
+        max_browser_actions: 10,
+        max_response_bytes: 67_108_864,
+        max_browser_rendered_bytes: 4_194_304,
+        ..PhaseLimits::BACKEND
+    }
+}
+
+fn detection_strategy_limits() -> PhaseLimits {
+    PhaseLimits {
+        max_requests: 1,
+        max_duration_ms: 20_000,
+        max_pages: 4,
+        max_browser_actions: 32,
+        max_response_bytes: 67_108_864,
+        max_browser_rendered_bytes: 2_097_152,
+        ..PhaseLimits::BACKEND
+    }
+}
+
+fn browser_failure_kind(kind: &BrowserAcquisitionFailureKind) -> DetectionBrowserFailureKind {
+    match kind {
+        BrowserAcquisitionFailureKind::RuntimeLaunch => DetectionBrowserFailureKind::RuntimeLaunch,
+        BrowserAcquisitionFailureKind::Navigation => DetectionBrowserFailureKind::Navigation,
+        BrowserAcquisitionFailureKind::Wait { .. } => DetectionBrowserFailureKind::Wait,
+        BrowserAcquisitionFailureKind::Interaction { .. } => {
+            DetectionBrowserFailureKind::Interaction
+        }
+        BrowserAcquisitionFailureKind::ContentRead => DetectionBrowserFailureKind::ContentRead,
+        BrowserAcquisitionFailureKind::Deadline => DetectionBrowserFailureKind::Deadline,
     }
 }
 
@@ -1183,35 +1701,32 @@ fn cancelled(index: usize, key: &str) -> StrategyExecution<()> {
     }
 }
 fn terminal_result(
-    allowance: DetectionHttpAllowance,
-    completion: DetectionHttpCompletion,
+    allowance: &InvocationAllowance,
+    completion: PhaseCompletion,
     attempts: Vec<DetectionAttempt>,
     profile_outcomes: Vec<DetectionProfileOutcome>,
     diagnostics: Diagnostics,
-) -> UrlHttpDetectionOperationResult {
-    let aggregate_attempts = match completion {
-        DetectionHttpCompletion::BudgetExhausted => {
+) -> DetectionOperationResult {
+    let aggregate_attempts = match &completion {
+        PhaseCompletion::BudgetExhausted { .. } => {
             vec![DetectionAttempt::BudgetExhausted(diagnostics.clone())]
         }
-        DetectionHttpCompletion::Cancelled => {
+        PhaseCompletion::Cancelled { .. } => {
             vec![DetectionAttempt::Cancelled(diagnostics.clone())]
         }
-        DetectionHttpCompletion::ExecutionFailed if attempts.is_empty() => {
+        PhaseCompletion::ExecutionFailed if attempts.is_empty() => {
             vec![DetectionAttempt::Failed(diagnostics.clone())]
         }
-        DetectionHttpCompletion::Completed | DetectionHttpCompletion::ExecutionFailed => {
-            attempts.clone()
-        }
+        PhaseCompletion::Accepted
+        | PhaseCompletion::PolicyUnsatisfied
+        | PhaseCompletion::ExecutionFailed => attempts.clone(),
     };
-    UrlHttpDetectionOperationResult {
+    let report = allowance.report(completion);
+    DetectionOperationResult {
         attempts,
         profile_outcomes,
         run_result: aggregate_detection_attempts(aggregate_attempts),
         diagnostics,
-        report: DetectionHttpReport {
-            response_bytes: allowance.response_bytes(),
-            exhaustion: allowance.exhaustion(),
-            completion,
-        },
+        report,
     }
 }

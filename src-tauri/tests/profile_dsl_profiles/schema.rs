@@ -65,7 +65,7 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 }
 
 #[test]
-fn detection_url_http_strategy_set_schema_is_exact_while_legacy_detection_remains_valid() {
+fn detection_url_http_browser_strategy_set_schema_is_exact_while_legacy_detection_remains_valid() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
@@ -77,7 +77,10 @@ fn detection_url_http_strategy_set_schema_is_exact_while_legacy_detection_remain
             { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
             { "type": "http", "key": "probe", "fetch": {
                 "mode": "http", "url": "{{inputUrl}}", "timeoutMs": 1000
-            }, "captures": ["tenant"] , "regex": "(?<tenant>.+)" }
+            }, "captures": ["tenant"] , "regex": "(?<tenant>.+)" },
+            { "type": "browser", "key": "render", "fetch": {
+                "mode": "browser", "url": "{{inputUrl}}", "timeoutMs": 20000
+            }, "contains": "jobs" }
         ]
     });
     profile["detection"] = final_detection.clone();

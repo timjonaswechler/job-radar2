@@ -207,6 +207,47 @@ pub(crate) fn compile_fetch(
     }
 }
 
+pub(crate) fn compile_browser_fetch_with_descriptor(
+    fetch: &Fetch,
+    path: &str,
+    descriptor: &crate::profile_dsl::template::TemplateDescriptor,
+) -> Result<ExecutionPlanFetch, ExecutionPlanBuildError> {
+    let Fetch::Browser {
+        url,
+        timeout_ms,
+        waits,
+        interactions,
+    } = fetch
+    else {
+        return Err(ExecutionPlanBuildError::new(
+            path,
+            "Detection Browser Strategy requires Browser Fetch",
+        ));
+    };
+    Ok(ExecutionPlanFetch::Browser {
+        url: compile_template(url, descriptor).map_err(|error| {
+            ExecutionPlanBuildError::new(format!("{path}/url"), error.to_string())
+        })?,
+        timeout_ms: *timeout_ms,
+        waits: waits
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .map(|(index, wait)| compile_browser_wait(wait, &format!("{path}/waits/{index}")))
+            .collect::<Result<Vec<_>, _>>()?,
+        interactions: interactions
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .map(|(index, interaction)| {
+                compile_browser_interaction(interaction, &format!("{path}/interactions/{index}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    })
+}
+
 fn compile_browser_wait(
     wait: &BrowserWait,
     path: &str,

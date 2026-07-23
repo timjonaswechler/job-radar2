@@ -71,6 +71,10 @@ impl TryFrom<DetectionDocumentWire> for DetectionDocument {
                         captures: Some(_),
                         regex: None,
                         ..
+                    } | DetectionStrategy::Browser {
+                        captures: Some(_),
+                        regex: None,
+                        ..
                     }
                 )
             })
@@ -113,12 +117,24 @@ pub enum DetectionStrategy {
         #[serde(skip_serializing_if = "Option::is_none")]
         evidence: Option<String>,
     },
+    Browser {
+        key: String,
+        fetch: Fetch,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        contains: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        regex: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        captures: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        evidence: Option<String>,
+    },
 }
 
 impl DetectionStrategy {
     pub fn key(&self) -> &str {
         match self {
-            Self::Url { key, .. } | Self::Http { key, .. } => key,
+            Self::Url { key, .. } | Self::Http { key, .. } | Self::Browser { key, .. } => key,
         }
     }
 }

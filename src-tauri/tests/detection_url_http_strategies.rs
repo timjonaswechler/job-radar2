@@ -2,11 +2,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use job_radar_lib::{
-    compile_url_http_detection_plan, execute_url_http_detection_operation, DetectionAttempt,
-    DetectionHttpCompletion, DetectionProfileCompletion, DetectionProfileExecutionFailureKind,
-    DetectionProfileRejectionKind, DetectionRunStatus, ProfileHttpFailureKind, RuntimeCancellation,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceProfileDocument,
-    SupportLevel,
+    compile_detection_plan, execute_detection_operation, DetectionAttempt,
+    DetectionProfileCompletion, DetectionProfileExecutionFailureKind,
+    DetectionProfileRejectionKind, DetectionRunStatus, PhaseBrowser, PhaseCompletion,
+    ProfileHttpFailureKind, RuntimeCancellation, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -74,7 +74,7 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
         ]),
         &["tenant"],
     );
-    let errors = compile_url_http_detection_plan(&malformed).unwrap_err();
+    let errors = compile_detection_plan(&malformed).unwrap_err();
     assert_eq!(errors[0].code, "invalid_detection_capture_pattern");
     assert_eq!(
         errors[0].path,
@@ -90,7 +90,7 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
     wrong_policy.detection.as_mut().unwrap().policy =
         Some(job_radar_lib::StrategyPolicy::FirstAccepted);
     assert_eq!(
-        compile_url_http_detection_plan(&wrong_policy).unwrap_err()[0].code,
+        compile_detection_plan(&wrong_policy).unwrap_err()[0].code,
         "invalid_detection_policy"
     );
 
@@ -101,7 +101,7 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
         &["startUrl"],
     );
     assert_eq!(
-        compile_url_http_detection_plan(&invalid_key).unwrap_err()[0].code,
+        compile_detection_plan(&invalid_key).unwrap_err()[0].code,
         "invalid_detection_strategy_key"
     );
 }
@@ -153,7 +153,7 @@ fn later_templates_reject_capture_not_guaranteed_by_every_url_alternative() {
         ]),
         &["startUrl"],
     );
-    let errors = compile_url_http_detection_plan(&profile).unwrap_err();
+    let errors = compile_detection_plan(&profile).unwrap_err();
     assert_eq!(errors[0].code, "unknown_template_key");
     assert_eq!(errors[0].path, "/detection/strategies/1/fetch/url");
 }
@@ -192,19 +192,20 @@ async fn alternatives_feed_latest_reconciled_capture_to_http_template_and_preser
     );
     detection.key_candidates = Some(vec!["{{capture:tenant}}".into()]);
     detection.name_candidates = Some(vec!["Tenant {{capture:tenant}}".into()]);
-    let plan = compile_url_http_detection_plan(&profile).unwrap();
+    let plan = compile_detection_plan(&profile).unwrap();
     let client =
         ScriptedProfileHttpClient::new([response(404, b"known tenant; tenant=acme".to_vec())]);
-    let result = execute_url_http_detection_operation(
+    let result = execute_detection_operation(
         "  https://example.test/acme  ",
         &[plan],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
 
-    assert_eq!(result.report.completion, DetectionHttpCompletion::Completed);
-    assert_eq!(result.report.response_bytes, 25);
+    assert_eq!(result.report.completion, PhaseCompletion::Accepted);
+    assert_eq!(result.report.usage.response_bytes, 25);
     assert_eq!(result.run_result.status, DetectionRunStatus::Matched);
     assert_eq!(
         result.profile_outcomes[0].completion,
@@ -260,10 +261,11 @@ async fn equal_and_conflicting_http_captures_use_d01_order_and_stop_later_io() {
         response(200, b"tenant=acme".to_vec()),
         response(200, Vec::new()),
     ]);
-    let equal = execute_url_http_detection_operation(
+    let equal = execute_detection_operation(
         "https://example.test/acme",
-        &[compile_url_http_detection_plan(&profile).unwrap()],
+        &[compile_detection_plan(&profile).unwrap()],
         &equal_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -276,10 +278,11 @@ async fn equal_and_conflicting_http_captures_use_d01_order_and_stop_later_io() {
     assert_eq!(equal_client.request_count(), 2);
 
     let conflict_client = ScriptedProfileHttpClient::new([response(200, b"tenant=other".to_vec())]);
-    let conflict = execute_url_http_detection_operation(
+    let conflict = execute_detection_operation(
         "https://example.test/acme",
-        &[compile_url_http_detection_plan(&profile).unwrap()],
+        &[compile_detection_plan(&profile).unwrap()],
         &conflict_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -313,13 +316,14 @@ async fn absent_expected_status_allows_non_2xx_body_acceptance_and_preserves_pro
         response(503, b"usable response".to_vec()),
         response(503, b"usable response".to_vec()),
     ]);
-    let result = execute_url_http_detection_operation(
+    let result = execute_detection_operation(
         "https://example.test/start",
         &[
-            compile_url_http_detection_plan(&unsupported).unwrap(),
-            compile_url_http_detection_plan(&supported).unwrap(),
+            compile_detection_plan(&unsupported).unwrap(),
+            compile_detection_plan(&supported).unwrap(),
         ],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -357,17 +361,18 @@ async fn pass_through_emits_no_synthetic_url_data_and_all_required_stops_after_r
         ]),
         &["startUrl"],
     );
-    let plan = compile_url_http_detection_plan(&profile).unwrap();
+    let plan = compile_detection_plan(&profile).unwrap();
     let client = ScriptedProfileHttpClient::new([response(503, b"bounded but rejected".to_vec())]);
-    let result = execute_url_http_detection_operation(
+    let result = execute_detection_operation(
         "https://example.test/start",
         &[plan],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
 
-    assert_eq!(result.report.completion, DetectionHttpCompletion::Completed);
+    assert_eq!(result.report.completion, PhaseCompletion::Accepted);
     assert_eq!(client.request_count(), 1);
     let DetectionAttempt::Failed(diagnostics) = &result.attempts[0] else {
         panic!("expected failure")
@@ -396,13 +401,14 @@ async fn aggregation_reports_ambiguity_and_all_unsupported_without_reordering() 
     let mut second = profile(strategies.clone(), &["startUrl"]);
     second.key = "second".into();
     let empty_client = ScriptedProfileHttpClient::new([]);
-    let ambiguous = execute_url_http_detection_operation(
+    let ambiguous = execute_detection_operation(
         "https://example.test",
         &[
-            compile_url_http_detection_plan(&first).unwrap(),
-            compile_url_http_detection_plan(&second).unwrap(),
+            compile_detection_plan(&first).unwrap(),
+            compile_detection_plan(&second).unwrap(),
         ],
         &empty_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -413,13 +419,14 @@ async fn aggregation_reports_ambiguity_and_all_unsupported_without_reordering() 
 
     first.support.level = SupportLevel::Unsupported;
     second.support.level = SupportLevel::Unsupported;
-    let unsupported = execute_url_http_detection_operation(
+    let unsupported = execute_detection_operation(
         "https://example.test",
         &[
-            compile_url_http_detection_plan(&first).unwrap(),
-            compile_url_http_detection_plan(&second).unwrap(),
+            compile_detection_plan(&first).unwrap(),
+            compile_detection_plan(&second).unwrap(),
         ],
         &empty_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -455,13 +462,14 @@ async fn transport_and_decode_failures_have_typed_profile_projection() {
         },
         response(200, vec![0xff]),
     ]);
-    let result = execute_url_http_detection_operation(
+    let result = execute_detection_operation(
         "https://example.test",
         &[
-            compile_url_http_detection_plan(&transport).unwrap(),
-            compile_url_http_detection_plan(&decode).unwrap(),
+            compile_detection_plan(&transport).unwrap(),
+            compile_detection_plan(&decode).unwrap(),
         ],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
@@ -497,7 +505,7 @@ async fn mid_stream_cancellation_is_operation_global_and_payload_free() {
         ]),
         &["startUrl"],
     );
-    let plan = compile_url_http_detection_plan(&profile).unwrap();
+    let plan = compile_detection_plan(&profile).unwrap();
     let client = Arc::new(ScriptedProfileHttpClient::new([
         ScriptedHttpEvent::Response {
             status: 200,
@@ -514,10 +522,11 @@ async fn mid_stream_cancellation_is_operation_global_and_payload_free() {
     let task_client = Arc::clone(&client);
     let task_cancellation = Arc::clone(&cancellation);
     let task = tokio::spawn(async move {
-        execute_url_http_detection_operation(
+        execute_detection_operation(
             "https://example.test",
             &[plan],
             task_client.as_ref(),
+            PhaseBrowser::BrowserFree,
             task_cancellation.as_ref(),
         )
         .await
@@ -527,8 +536,11 @@ async fn mid_stream_cancellation_is_operation_global_and_payload_free() {
     }
     cancellation.cancel();
     let result = task.await.unwrap();
-    assert_eq!(result.report.completion, DetectionHttpCompletion::Cancelled);
-    assert_eq!(result.report.response_bytes, 6);
+    assert!(matches!(
+        result.report.completion,
+        PhaseCompletion::Cancelled { .. }
+    ));
+    assert_eq!(result.report.usage.response_bytes, 6);
     assert!(result.attempts.is_empty());
     assert!(result.profile_outcomes.is_empty());
     assert!(result.run_result.proposals.is_empty());
@@ -549,15 +561,16 @@ async fn one_cumulative_64_mib_allowance_accepts_exact_boundary_and_blocks_later
         &["startUrl"],
     );
     let exact_client = ScriptedProfileHttpClient::new([response(200, vec![b'x'; LIMIT])]);
-    let exact = execute_url_http_detection_operation(
+    let exact = execute_detection_operation(
         "https://example.test",
-        &[compile_url_http_detection_plan(&exact_profile).unwrap()],
+        &[compile_detection_plan(&exact_profile).unwrap()],
         &exact_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
-    assert_eq!(exact.report.completion, DetectionHttpCompletion::Completed);
-    assert_eq!(exact.report.response_bytes, LIMIT as u64);
+    assert_eq!(exact.report.completion, PhaseCompletion::Accepted);
+    assert_eq!(exact.report.usage.response_bytes, LIMIT as u64);
 
     let over_profile = profile(
         json!([
@@ -581,18 +594,19 @@ async fn one_cumulative_64_mib_allowance_accepts_exact_boundary_and_blocks_later
             content_length: Some(1),
         },
     ]);
-    let over = execute_url_http_detection_operation(
+    let over = execute_detection_operation(
         "https://example.test",
-        &[compile_url_http_detection_plan(&over_profile).unwrap()],
+        &[compile_detection_plan(&over_profile).unwrap()],
         &over_client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
-    assert_eq!(
+    assert!(matches!(
         over.report.completion,
-        DetectionHttpCompletion::BudgetExhausted
-    );
-    assert_eq!(over.report.response_bytes, LIMIT as u64);
+        PhaseCompletion::BudgetExhausted { .. }
+    ));
+    assert_eq!(over.report.usage.response_bytes, LIMIT as u64);
     assert!(over.attempts.is_empty());
     assert!(over.profile_outcomes.is_empty());
     assert!(over.run_result.proposals.is_empty());
@@ -612,32 +626,31 @@ async fn invalid_input_and_cancellation_start_no_http_work() {
         ]),
         &["startUrl"],
     );
-    let plan = compile_url_http_detection_plan(&profile).unwrap();
+    let plan = compile_detection_plan(&profile).unwrap();
     let client = ScriptedProfileHttpClient::new([]);
-    let invalid = execute_url_http_detection_operation(
+    let invalid = execute_detection_operation(
         "relative",
         &[plan.clone()],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::active(),
     )
     .await;
-    assert_eq!(
-        invalid.report.completion,
-        DetectionHttpCompletion::ExecutionFailed
-    );
+    assert_eq!(invalid.report.completion, PhaseCompletion::ExecutionFailed);
     assert_eq!(client.request_count(), 0);
 
-    let cancelled = execute_url_http_detection_operation(
+    let cancelled = execute_detection_operation(
         "https://example.test",
         &[plan],
         &client,
+        PhaseBrowser::BrowserFree,
         &Cancellation::cancelled(),
     )
     .await;
-    assert_eq!(
+    assert!(matches!(
         cancelled.report.completion,
-        DetectionHttpCompletion::Cancelled
-    );
+        PhaseCompletion::Cancelled { .. }
+    ));
     assert_eq!(cancelled.run_result.status, DetectionRunStatus::Cancelled);
     assert!(cancelled.profile_outcomes.is_empty());
     assert!(cancelled.run_result.proposals.is_empty());

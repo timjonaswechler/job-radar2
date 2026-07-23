@@ -397,7 +397,7 @@ fn project_browser_fetch(
         BrowserPhaseFetchProjection::Rendered(body) => Ok(DiscoveryFetchOutcome::Complete(
             CompleteParseText::BrowserRendered(body),
         )),
-        BrowserPhaseFetchProjection::AttemptFailed(diagnostic)
+        BrowserPhaseFetchProjection::AttemptFailed { diagnostic, .. }
         | BrowserPhaseFetchProjection::PhaseFatal(diagnostic) => {
             diagnostics.push(diagnostic);
             Ok(DiscoveryFetchOutcome::ExecutionFailed)

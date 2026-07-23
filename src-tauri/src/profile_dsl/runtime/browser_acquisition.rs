@@ -142,7 +142,10 @@ impl<'a> BrowserAcquisitionRequest<'a> {
 
     pub(crate) fn admit_wait(&self) -> Result<(), BrowserAcquisitionTerminal> {
         self.control
-            .debit(AllowanceCharge::default())
+            .debit(AllowanceCharge {
+                logical_waits: 1,
+                ..AllowanceCharge::default()
+            })
             .map_err(|_| BrowserAcquisitionTerminal::AllowanceStopped)
     }
 
@@ -741,7 +744,14 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                                 ));
                             continue;
                         }
-                        if request.control.debit(AllowanceCharge::default()).is_err() {
+                        if request
+                            .control
+                            .debit(AllowanceCharge {
+                                logical_waits: 1,
+                                ..AllowanceCharge::default()
+                            })
+                            .is_err()
+                        {
                             primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
                                 BrowserAcquisitionTerminal::AllowanceStopped,
                             );
@@ -788,7 +798,14 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                             if let Some(duration_ms) =
                                 interaction_wait_after(&request.interactions[interaction_index])
                             {
-                                if request.control.debit(AllowanceCharge::default()).is_err() {
+                                if request
+                                    .control
+                                    .debit(AllowanceCharge {
+                                        logical_waits: 1,
+                                        ..AllowanceCharge::default()
+                                    })
+                                    .is_err()
+                                {
                                     primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
                                         BrowserAcquisitionTerminal::AllowanceStopped,
                                     );
@@ -852,7 +869,14 @@ impl BrowserAcquisition for ScriptedBrowserAcquisition {
                                     && wait_index == next_wait
                                     && wait_index < request.waits.len() =>
                             {
-                                if request.control.debit(AllowanceCharge::default()).is_err() {
+                                if request
+                                    .control
+                                    .debit(AllowanceCharge {
+                                        logical_waits: 1,
+                                        ..AllowanceCharge::default()
+                                    })
+                                    .is_err()
+                                {
                                     primary = BrowserAcquisitionTerminalOrSuccess::Terminal(
                                         BrowserAcquisitionTerminal::AllowanceStopped,
                                     );

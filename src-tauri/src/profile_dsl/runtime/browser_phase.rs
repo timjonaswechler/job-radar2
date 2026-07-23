@@ -37,7 +37,10 @@ pub(crate) struct BrowserPhaseFetchInput<'a> {
 
 pub(crate) enum BrowserPhaseFetchProjection {
     Rendered(String),
-    AttemptFailed(Diagnostic),
+    AttemptFailed {
+        diagnostic: Diagnostic,
+        kind: BrowserAcquisitionFailureKind,
+    },
     PhaseFatal(Diagnostic),
     AllowanceStopped,
     Cancelled(TypedCancellation),
@@ -71,13 +74,16 @@ pub(crate) async fn execute_canonical_browser_fetch(
         Ok(rendered) => BrowserPhaseFetchProjection::Rendered(rendered.into_string()),
         Err(BrowserAcquisitionTerminal::Failure(failure)) => {
             let (code, path, details) = failure_diagnostic(&failure.kind, &input.base_path);
-            BrowserPhaseFetchProjection::AttemptFailed(diagnostic(
-                code,
-                "Browser acquisition failed",
-                path,
-                &input.strategy_key,
-                details,
-            ))
+            BrowserPhaseFetchProjection::AttemptFailed {
+                diagnostic: diagnostic(
+                    code,
+                    "Browser acquisition failed",
+                    path,
+                    &input.strategy_key,
+                    details,
+                ),
+                kind: failure.kind,
+            }
         }
         Err(BrowserAcquisitionTerminal::InfrastructureFailure(_)) => {
             input.control.mark_internal_failure();

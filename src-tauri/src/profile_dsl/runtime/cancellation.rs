@@ -7,9 +7,7 @@ use crate::profile_dsl::{
     documents::PhaseLimits,
 };
 
-use super::allowance::{
-    AllowanceCharge, AllowanceStop, DetectionHttpAllowance, InvocationAllowance,
-};
+use super::allowance::{AllowanceCharge, AllowanceStop, InvocationAllowance};
 
 const RUNTIME_EXECUTION_CANCELLED_CODE: &str = "runtime_execution_cancelled";
 
@@ -89,7 +87,8 @@ pub struct RuntimeExecutionContext<'a> {
     cancellation: Option<&'a dyn RuntimeCancellation>,
     caller_limits: Option<PhaseLimits>,
     allowance: Option<&'a InvocationAllowance>,
-    detection_http_allowance: Option<&'a DetectionHttpAllowance>,
+    allowance_scope: usize,
+    debit_enabled: bool,
     page_request: bool,
     pagination_max_requests: Option<u64>,
 }
@@ -100,7 +99,8 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: None,
             caller_limits: None,
             allowance: None,
-            detection_http_allowance: None,
+            allowance_scope: InvocationAllowance::ROOT_SCOPE,
+            debit_enabled: false,
             page_request: false,
             pagination_max_requests: None,
         }
@@ -110,7 +110,8 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: Some(cancellation),
             caller_limits: None,
             allowance: None,
-            detection_http_allowance: None,
+            allowance_scope: InvocationAllowance::ROOT_SCOPE,
+            debit_enabled: false,
             page_request: false,
             pagination_max_requests: None,
         }
@@ -133,14 +134,33 @@ impl<'a> RuntimeExecutionContext<'a> {
             cancellation: self.cancellation,
             caller_limits: self.caller_limits,
             allowance: Some(allowance),
-            detection_http_allowance: None,
+            allowance_scope: InvocationAllowance::ROOT_SCOPE,
+            debit_enabled: true,
+            page_request: self.page_request,
+            pagination_max_requests: self.pagination_max_requests,
+        }
+    }
+    pub(crate) fn for_allowance_scope<'b>(
+        &self,
+        allowance: &'b InvocationAllowance,
+        allowance_scope: usize,
+    ) -> RuntimeExecutionContext<'b>
+    where
+        'a: 'b,
+    {
+        RuntimeExecutionContext {
+            cancellation: self.cancellation,
+            caller_limits: self.caller_limits,
+            allowance: Some(allowance),
+            allowance_scope,
+            debit_enabled: true,
             page_request: self.page_request,
             pagination_max_requests: self.pagination_max_requests,
         }
     }
     pub(crate) fn for_detection_http<'b>(
         &self,
-        allowance: &'b DetectionHttpAllowance,
+        allowance: &'b InvocationAllowance,
     ) -> RuntimeExecutionContext<'b>
     where
         'a: 'b,
@@ -148,12 +168,14 @@ impl<'a> RuntimeExecutionContext<'a> {
         RuntimeExecutionContext {
             cancellation: self.cancellation,
             caller_limits: None,
-            allowance: None,
-            detection_http_allowance: Some(allowance),
+            allowance: Some(allowance),
+            allowance_scope: InvocationAllowance::ROOT_SCOPE,
+            debit_enabled: false,
             page_request: false,
             pagination_max_requests: None,
         }
     }
+
     pub(crate) const fn with_page_request(mut self, page_request: bool) -> Self {
         self.page_request = page_request;
         self
@@ -170,42 +192,35 @@ impl<'a> RuntimeExecutionContext<'a> {
             .is_some_and(RuntimeCancellation::is_cancelled)
     }
     pub(crate) fn debit(self, charge: AllowanceCharge) -> Result<(), AllowanceStop> {
+        if !self.debit_enabled {
+            return Ok(());
+        }
         self.allowance.map_or(Ok(()), |allowance| {
-            allowance.debit_with_pagination_limit(charge, self.pagination_max_requests)
+            allowance.debit_for(self.allowance_scope, charge, self.pagination_max_requests)
         })
     }
     pub(crate) fn stop(self) -> Option<AllowanceStop> {
-        self.detection_http_allowance
-            .and_then(DetectionHttpAllowance::exhaustion)
-            .map(AllowanceStop::Exhausted)
-            .or_else(|| self.allowance.and_then(InvocationAllowance::stop))
+        self.allowance.and_then(InvocationAllowance::stop)
     }
     pub(crate) fn admit_browser_rendered_bytes(self, observed: u64) -> Result<(), AllowanceStop> {
         self.allowance.map_or(Ok(()), |allowance| {
-            allowance.admit_browser_rendered_bytes(observed)
+            allowance.admit_browser_rendered_bytes_for(self.allowance_scope, observed)
         })
     }
     pub(crate) fn remaining_browser_rendered_bytes(self) -> u64 {
         self.allowance.map_or(
             PhaseLimits::BACKEND.max_browser_rendered_bytes,
-            InvocationAllowance::remaining_browser_rendered_bytes,
+            |allowance| allowance.remaining_browser_rendered_bytes_for(self.allowance_scope),
         )
     }
     pub(crate) fn remaining_response_bytes(self) -> u64 {
-        self.detection_http_allowance.map_or_else(
-            || {
-                self.allowance.map_or(
-                    PhaseLimits::BACKEND.max_response_bytes,
-                    InvocationAllowance::remaining_response_bytes,
-                )
-            },
-            DetectionHttpAllowance::remaining_response_bytes,
+        self.allowance.map_or(
+            PhaseLimits::BACKEND.max_response_bytes,
+            InvocationAllowance::remaining_response_bytes,
         )
     }
     pub(crate) fn commit_response_bytes(self, admitted: u64, exceeded: Option<u64>) {
-        if let Some(allowance) = self.detection_http_allowance {
-            allowance.commit_response_bytes(admitted, exceeded);
-        } else if let Some(allowance) = self.allowance {
+        if let Some(allowance) = self.allowance {
             allowance.commit_response_bytes(admitted, exceeded);
         }
     }
@@ -225,10 +240,18 @@ impl<'a> RuntimeExecutionContext<'a> {
         }
     }
     pub(crate) fn effective_limits(self) -> Option<PhaseLimits> {
-        self.allowance.map(InvocationAllowance::effective_limits)
+        self.debit_enabled.then(|| {
+            self.allowance
+                .expect("enabled allowance control has a root")
+                .effective_limits_for(self.allowance_scope)
+        })
     }
     pub(crate) fn deadline(self) -> Option<tokio::time::Instant> {
-        self.allowance.map(InvocationAllowance::deadline)
+        self.debit_enabled.then(|| {
+            self.allowance
+                .expect("enabled allowance control has a root")
+                .deadline_for(self.allowance_scope)
+        })
     }
     pub(crate) fn deadline_is_expired(self) -> bool {
         self.deadline()
@@ -236,19 +259,19 @@ impl<'a> RuntimeExecutionContext<'a> {
     }
     pub(crate) fn browser_work_deadline(self) -> Option<tokio::time::Instant> {
         self.allowance
-            .map(InvocationAllowance::browser_work_deadline)
+            .map(|allowance| allowance.browser_work_deadline_for(self.allowance_scope))
     }
     pub(crate) fn browser_graceful_deadline(self) -> Option<tokio::time::Instant> {
         self.allowance
-            .map(InvocationAllowance::browser_graceful_deadline)
+            .map(|allowance| allowance.browser_graceful_deadline_for(self.allowance_scope))
     }
     pub(crate) fn browser_force_deadline(self) -> Option<tokio::time::Instant> {
         self.allowance
-            .map(InvocationAllowance::browser_force_deadline)
+            .map(|allowance| allowance.browser_force_deadline_for(self.allowance_scope))
     }
     pub(crate) fn browser_handler_deadline(self) -> Option<tokio::time::Instant> {
         self.allowance
-            .map(InvocationAllowance::browser_handler_deadline)
+            .map(|allowance| allowance.browser_handler_deadline_for(self.allowance_scope))
     }
     pub(crate) async fn deadline_reached(self) {
         sleep_until_optional(self.deadline()).await;
