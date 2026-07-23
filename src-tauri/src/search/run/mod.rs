@@ -5,21 +5,18 @@ mod service;
 mod tests;
 mod types;
 
-#[allow(unused_imports)]
 pub(crate) use atomic_persistence::{persist_atomic_search_run, AtomicSearchRunInput};
-#[allow(unused_imports)]
-pub(crate) use execution::source_candidate;
-#[allow(unused_imports)]
-pub use execution::{
-    BoxedSourceExecutionFuture, DefaultSourceExecutor, SourceExecutionInput, SourceExecutionOutput,
-    SourceExecutionSource, SourceExecutor,
+#[cfg(test)]
+pub(crate) use execution::ScriptedResolutionSource;
+pub use execution::SearchRunResolutionRuntime;
+pub(crate) use execution::{
+    cancellation_or_default, production_resolution_ceilings, NeverCancelled,
 };
-#[allow(unused_imports)]
 pub use service::{
     default_search_run_result_artifact, default_search_run_result_path, SearchRunResultArtifact,
     SearchRunService, SourceExecutionError,
 };
 pub use types::{
-    NormalizedPosting, PostingMeta, PostingSource, SearchRunResult, SearchRunStatus,
-    SourceCandidate, SourceRunResult, SourceRunStatus,
+    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceResolutionSummary,
+    SourceRunResult, SourceRunStatus,
 };

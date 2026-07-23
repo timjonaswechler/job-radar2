@@ -1,215 +1,143 @@
-use std::{future::Future, path::PathBuf, pin::Pin};
+use std::path::PathBuf;
 
 use crate::{
     background_tasks::CancellationToken,
     browser_runtime::ManagedBrowserAcquisition,
     profile_dsl::{
-        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        execution_plan::SourceExecutionPlan,
+        compiler::CompiledSource,
+        documents::PhaseLimits,
         runtime::{
-            execute_discovery, BrowserAcquisition, DiscoveryBrowserAdapter, PhaseBrowser,
-            PostingOccurrence, ProfileHttpClient, ReqwestProfileHttpClient,
-            RuntimeExecutionContext,
+            ProfileDslSourceDetailExecution, ReqwestProfileHttpClient, RuntimeCancellation,
+            SourceDetailExecution,
         },
     },
-    source::documents::SourceConfig,
+    search::candidate_resolution::{
+        resolve_source_candidates, CompiledSearchRequirements, ResolutionCeilings, SourceDiscovery,
+        SourceResolution, SourceResolutionError, SourceResolutionRequest,
+    },
 };
 
-use super::{SourceCandidate, SourceExecutionError};
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct SourceExecutionOutput {
-    pub occurrences: Vec<PostingOccurrence>,
-    pub diagnostics: crate::profile_dsl::diagnostics::Diagnostics,
+/// Sealed Search Run runtime. Both productive and deterministic modes enter Q01 through the
+/// single `resolve_with_dependencies` call below; callers cannot inject a prebuilt Resolution.
+pub struct SearchRunResolutionRuntime {
+    mode: ResolutionRuntimeMode,
 }
 
-pub type BoxedSourceExecutionFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<SourceExecutionOutput, SourceExecutionError>> + Send + 'a>>;
-
-/// Public source-execution seam used by Search Runs.
-///
-/// `SearchRunService` resolves selected Source keys through one Source Profile
-/// registry snapshot at run start, compiles active valid Sources into immutable
-/// typed Execution Plans, and passes those plans here. Active Search Runs must
-/// execute compiled Discovery; they must not use adapter routing.
-#[derive(Clone, PartialEq)]
-pub struct SourceExecutionSource {
-    pub key: String,
-    pub name: String,
-    source_config: SourceConfig,
-    pub execution_plan: SourceExecutionPlan,
+enum ResolutionRuntimeMode {
+    Production {
+        browser_runtime_dir: PathBuf,
+    },
+    #[cfg(test)]
+    Scripted(std::collections::HashMap<String, ScriptedResolutionSource>),
 }
 
-impl std::fmt::Debug for SourceExecutionSource {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("SourceExecutionSource")
-            .field("key", &self.key)
-            .field("name", &self.name)
-            .field("execution_plan", &self.execution_plan)
-            .finish_non_exhaustive()
-    }
+#[cfg(test)]
+pub(crate) struct ScriptedResolutionSource {
+    pub(crate) discovery: crate::search::candidate_resolution::ScriptedSourceDiscoveryExecution,
+    pub(crate) detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution,
 }
 
-impl SourceExecutionSource {
-    pub fn new(execution_plan: SourceExecutionPlan, source_config: SourceConfig) -> Self {
+impl SearchRunResolutionRuntime {
+    pub fn production(browser_runtime_dir: impl Into<PathBuf>) -> Self {
         Self {
-            key: execution_plan.source.key.clone(),
-            name: execution_plan.source.name.clone(),
-            source_config,
-            execution_plan,
+            mode: ResolutionRuntimeMode::Production {
+                browser_runtime_dir: browser_runtime_dir.into(),
+            },
         }
     }
 
-    pub(crate) fn source_config(&self) -> &SourceConfig {
-        &self.source_config
-    }
-}
-
-pub struct SourceExecutionInput<'a> {
-    pub source: &'a SourceExecutionSource,
-    /// Cooperative Search Run cancellation token propagated from the background task.
-    /// Executors should stop active runtime work promptly where their local seams allow it.
-    pub cancellation_token: Option<&'a CancellationToken>,
-}
-
-pub trait SourceExecutor: Send + Sync {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a>;
-}
-
-pub struct DefaultSourceExecutor {
-    browser_runtime_dir: PathBuf,
-}
-
-impl DefaultSourceExecutor {
-    pub fn new(browser_runtime_dir: impl Into<PathBuf>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn scripted(
+        sources: impl IntoIterator<Item = (String, ScriptedResolutionSource)>,
+    ) -> Self {
         Self {
-            browser_runtime_dir: browser_runtime_dir.into(),
+            mode: ResolutionRuntimeMode::Scripted(sources.into_iter().collect()),
+        }
+    }
+
+    pub(crate) async fn resolve(
+        &self,
+        compiled_source: &CompiledSource,
+        requirements: &CompiledSearchRequirements<'_>,
+        cancellation: &dyn RuntimeCancellation,
+    ) -> Result<SourceResolution, SourceResolutionError> {
+        match &self.mode {
+            ResolutionRuntimeMode::Production {
+                browser_runtime_dir,
+            } => {
+                let fetcher = ReqwestProfileHttpClient::new();
+                let acquisition = ManagedBrowserAcquisition::new(browser_runtime_dir.clone());
+                let detail = ProfileDslSourceDetailExecution::new(&fetcher, &acquisition);
+                resolve_with_dependencies(
+                    compiled_source,
+                    requirements,
+                    cancellation,
+                    SourceDiscovery::profile_dsl(&fetcher, &acquisition),
+                    &detail,
+                )
+                .await
+            }
+            #[cfg(test)]
+            ResolutionRuntimeMode::Scripted(sources) => {
+                let key = &compiled_source.execution_plan.source.key;
+                let Some(source) = sources.get(key) else {
+                    return Err(SourceResolutionError::Failed {
+                        failure: crate::search::candidate_resolution::ResolutionFailure::DiscoveryExecution,
+                        diagnostics: Vec::new(),
+                    });
+                };
+                resolve_with_dependencies(
+                    compiled_source,
+                    requirements,
+                    cancellation,
+                    SourceDiscovery::scripted(&source.discovery),
+                    &source.detail,
+                )
+                .await
+            }
         }
     }
 }
 
-impl SourceExecutor for DefaultSourceExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            let fetcher = ReqwestProfileHttpClient::new();
-            let acquisition = ManagedBrowserAcquisition::new(self.browser_runtime_dir.clone());
-            execute_discovery_for_source(input, &fetcher, &acquisition).await
-        })
-    }
-}
-
-pub(super) async fn execute_discovery_for_source<F, A>(
-    input: SourceExecutionInput<'_>,
-    fetcher: &F,
-    acquisition: &A,
-) -> Result<SourceExecutionOutput, SourceExecutionError>
-where
-    F: ProfileHttpClient + Sync + ?Sized,
-    A: BrowserAcquisition + Sync,
-{
-    if input
-        .cancellation_token
-        .is_some_and(CancellationToken::is_cancelled)
-    {
-        return Err(source_execution_cancelled_error(Vec::new()));
-    }
-
-    let context = input
-        .cancellation_token
-        .map(|token| RuntimeExecutionContext::with_cancellation(token))
-        .unwrap_or_else(RuntimeExecutionContext::uncancellable);
-    let browser = if input.source.execution_plan.discovery.strategies.iter().any(|strategy| {
-        matches!(strategy.fetch, crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. })
-    }) {
-        PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
-    } else {
-        PhaseBrowser::BrowserFree
-    };
-    let result = execute_discovery(
-        &input.source.execution_plan,
-        input.source.source_config(),
-        fetcher,
-        browser,
-        context,
-    )
-    .await;
-
-    use crate::profile_dsl::runtime::{PhaseOutcome, PhaseRunError, PolicyOutcome};
-
-    let outcome = match result {
-        Ok(outcome) => outcome,
-        Err(PhaseRunError::Cancelled(cancelled)) => {
-            return Err(source_execution_cancelled_error(cancelled.diagnostics));
-        }
-        Err(PhaseRunError::NotStarted { diagnostics, .. }) => {
-            return Err(discovery_failed_error(
-                "Discovery did not start",
-                diagnostics,
-            ));
-        }
-    };
-
-    match outcome {
-        PhaseOutcome::Completed {
-            policy_outcome: PolicyOutcome::Accepted { reduced_payload },
-            diagnostics,
-            ..
-        } => Ok(SourceExecutionOutput {
-            occurrences: reduced_payload.candidates,
-            diagnostics,
-        }),
-        PhaseOutcome::Completed { diagnostics, .. } => Err(discovery_failed_error(
-            "Discovery Policy was unsatisfied",
-            diagnostics,
-        )),
-        PhaseOutcome::BudgetExhausted { diagnostics, .. } => Err(discovery_failed_error(
-            "Discovery budget was exhausted",
-            diagnostics,
-        )),
-        PhaseOutcome::ExecutionFailed { diagnostics, .. } => Err(discovery_failed_error(
-            "Discovery execution failed",
-            diagnostics,
-        )),
-    }
-}
-
-fn discovery_failed_error(
-    message: impl Into<String>,
-    diagnostics: Diagnostics,
-) -> SourceExecutionError {
-    SourceExecutionError::FailedWithDiagnostics {
-        message: message.into(),
-        diagnostics,
-    }
-}
-
-fn source_execution_cancelled_error(mut diagnostics: Diagnostics) -> SourceExecutionError {
-    diagnostics.push(source_execution_cancelled_diagnostic());
-    SourceExecutionError::CancelledWithDiagnostics {
-        message: "Discovery cancelled".to_string(),
-        diagnostics,
-    }
-}
-
-fn source_execution_cancelled_diagnostic() -> Diagnostic {
-    Diagnostic {
-        category: DiagnosticCategory::Runtime,
-        code: "source_execution_cancelled".to_string(),
-        message: "Discovery cancelled".to_string(),
-        severity: DiagnosticSeverity::Error,
-        path: "/discovery".to_string(),
-        strategy_key: None,
-        details: Some(serde_json::json!({ "reason": "search_run_cancelled" })),
-    }
-}
-
-pub(crate) fn source_candidate(occurrence: PostingOccurrence) -> Option<SourceCandidate> {
-    Some(SourceCandidate {
-        title: occurrence.provider_values.title?,
-        company: occurrence.provider_values.company?,
-        url: occurrence.reference.provider_url,
-        locations: occurrence.provider_values.locations,
-        posting_meta: occurrence.posting_meta,
+async fn resolve_with_dependencies(
+    compiled_source: &CompiledSource,
+    requirements: &CompiledSearchRequirements<'_>,
+    cancellation: &dyn RuntimeCancellation,
+    discovery: SourceDiscovery<'_>,
+    detail: &dyn SourceDetailExecution,
+) -> Result<SourceResolution, SourceResolutionError> {
+    resolve_source_candidates(SourceResolutionRequest {
+        compiled_source,
+        requirements,
+        ceilings: production_resolution_ceilings(),
+        cancellation,
+        discovery,
+        detail,
     })
+    .await
+}
+
+pub(crate) fn production_resolution_ceilings() -> ResolutionCeilings {
+    let phase = PhaseLimits::BACKEND;
+    ResolutionCeilings {
+        max_batch_size: phase.max_produced_items,
+        max_discovery_batches: phase.max_pages,
+        max_discovered_items: phase.max_produced_items,
+        max_detail_candidates: phase.max_fan_out,
+        phase,
+    }
+}
+
+pub(crate) struct NeverCancelled;
+impl RuntimeCancellation for NeverCancelled {
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+pub(crate) fn cancellation_or_default<'a>(
+    token: Option<&'a CancellationToken>,
+    fallback: &'a NeverCancelled,
+) -> &'a dyn RuntimeCancellation {
+    token.map_or(fallback as &dyn RuntimeCancellation, |token| token)
 }

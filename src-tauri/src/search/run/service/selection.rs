@@ -7,7 +7,7 @@ use crate::{
     source_profile::registry::SourceProfileRegistrySnapshot,
 };
 
-use super::{super::SourceExecutionSource, SourceExecutionError};
+use super::SourceExecutionError;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct SourceSelectionOptions {
@@ -16,7 +16,7 @@ pub(super) struct SourceSelectionOptions {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum SelectedSearchRunSource {
-    Resolved(Box<SourceExecutionSource>),
+    Resolved(Box<crate::profile_dsl::compiler::CompiledSource>),
     Missing {
         source_key: String,
         error: SourceExecutionError,
@@ -100,12 +100,9 @@ pub(super) fn resolve_selected_sources_with_options(
                 CompileSourceOutcome::Compiled {
                     source: compiled,
                     diagnostics,
-                } if !has_error_diagnostics(&diagnostics) => SelectedSearchRunSource::Resolved(
-                    Box::new(crate::search::run::SourceExecutionSource::new(
-                        compiled.execution_plan,
-                        source.document.source_config.clone(),
-                    )),
-                ),
+                } if !has_error_diagnostics(&diagnostics) => {
+                    SelectedSearchRunSource::Resolved(Box::new(compiled))
+                },
                 CompileSourceOutcome::Compiled { diagnostics, .. }
                 | CompileSourceOutcome::Rejected { diagnostics } => {
                     SelectedSearchRunSource::Failed {

@@ -2,11 +2,10 @@ use super::*;
 use crate::{
     profile_dsl::runtime::{
         BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
-        RequestedFieldDisposition, ScriptedBrowserAcquisition,
-        ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
-        ScriptedBrowserFinalization, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-        ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceDetailOutcome,
-        SourceDetailRequestSnapshot,
+        RequestedFieldDisposition, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+        ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
+        ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
+        SourceDetailOutcome, SourceDetailRequestSnapshot,
     },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
@@ -14,15 +13,13 @@ use crate::{
     source_profile::registry::SourceProfileRegistrySnapshot,
 };
 use serde_json::{from_str, json, Value};
-use std::collections::BTreeMap;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
 };
-
+use std::collections::BTreeMap;
 
 mod detail_loading;
-mod import_and_merge;
 mod listing_and_queues;
 mod state_updates;
 
@@ -68,13 +65,23 @@ fn browser_free_acquisition() -> ScriptedBrowserAcquisition {
     ScriptedBrowserAcquisition::new([])
 }
 
-fn rendered_browser_acquisition(target: &str, timeout_ms: u64, body: &str) -> ScriptedBrowserAcquisition {
+fn rendered_browser_acquisition(
+    target: &str,
+    timeout_ms: u64,
+    body: &str,
+) -> ScriptedBrowserAcquisition {
     ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
         request: BrowserAcquisitionRequestSnapshot {
-            target: target.to_string(), timeout_ms, waits: Vec::new(), interactions: Vec::new(),
+            target: target.to_string(),
+            timeout_ms,
+            waits: Vec::new(),
+            interactions: Vec::new(),
             browser_rendered_bytes_remaining: 67_108_864,
         },
-        events: vec![ScriptedBrowserAcquisitionEvent::Navigate, ScriptedBrowserAcquisitionEvent::Content(body.to_string())],
+        events: vec![
+            ScriptedBrowserAcquisitionEvent::Navigate,
+            ScriptedBrowserAcquisitionEvent::Content(body.to_string()),
+        ],
         finalization: ScriptedBrowserFinalization::default(),
     }])
 }
@@ -289,23 +296,10 @@ fn posting(
 }
 
 fn source(source_key: &str, source_name: &str, url: &str) -> PostingSource {
-    source_with_meta(source_key, source_name, url, [])
-}
-
-fn source_with_meta(
-    source_key: &str,
-    source_name: &str,
-    url: &str,
-    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
-) -> PostingSource {
     PostingSource {
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         url: url.to_string(),
-        posting_meta: posting_meta
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect(),
     }
 }
 

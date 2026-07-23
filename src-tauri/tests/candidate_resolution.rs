@@ -142,7 +142,7 @@ fn ceilings() -> ResolutionCeilings {
         phase: PhaseLimits::BACKEND,
     }
 }
-fn requirements() -> CompiledSearchRequirements {
+fn requirements() -> CompiledSearchRequirements<'static> {
     CompiledSearchRequirements::compile(
         &[SearchRule {
             target: SearchRuleTarget::Title,

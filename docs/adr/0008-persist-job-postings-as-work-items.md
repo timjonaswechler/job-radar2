@@ -1,6 +1,6 @@
-# Persist job postings as work items, not search-run history
+# Persist job postings as work items
 
-Job Radar will persist found job postings as durable work items. A search request remains the editable configuration that can be run again, but individual search runs are not a long-lived product object and are not versioned or historized.
+Job Radar persists found job postings as durable work items. A Search Request remains editable and rerunnable. This ADR's original no-history/no-persisted-Search-Request-link claims are superseded narrowly: terminal Search Runs and their Match relationships are durable, while Job Postings remain the user workflow objects and no criteria snapshot or runtime Resolution history is stored.
 
 ## Context
 
@@ -22,10 +22,11 @@ Persist normalized job postings in SQLite as the primary work items:
 - `job_postings` stores the deduplicated posting and manual workflow state.
 - `job_posting_sources` stores the found source/link occurrences for a posting.
 - `job_postings.primary_source_id` points to the source/link used for the primary “open posting” action.
-- There is no persistent relationship from `job_postings` or `job_posting_sources` to `search_requests`.
-- `search_requests` stores only the current search configuration plus a small overwritten last-run status.
+- `search_runs` records terminal executions linked to `search_requests`.
+- `matches` links each Search Run to each finalized, cross-Source-merged Job Posting exactly once.
+- `search_requests` also retains its small overwritten last-run status for current-state display.
 
-Search runs are not historized. `search_requests.last_run_at`, `last_run_status`, and `last_run_error` describe only the most recent run attempt for that search request.
+Search Run history is intentionally narrow: it does not persist criteria snapshots, Source Runs, runtime Resolutions, Diagnostics, usage, provider payloads, or checkpoints.
 
 ## Job posting state
 
@@ -85,11 +86,11 @@ Running a search request will automatically persist normalized postings. Only ac
 
 Partial source failures still persist successful normalized postings. A fully failed run updates the search request's last-run fields but leaves job postings unchanged.
 
-Persistence of postings, posting sources, and last-run metadata should happen in one database transaction.
+Persistence of the terminal Search Run, finalized merged postings and posting sources, one Match per posting, and last-run metadata happens in exactly one database transaction.
 
 ## Development JSON output
 
-`search-run-result.json` is a development/debug artifact for inspecting the current normalized run result. It is not the production persistence model and should not be written as release behavior.
+`search-run-result.json` is a bounded post-commit development/debug summary. It is never persistence authority or a release prerequisite; write failure cannot roll back committed SQLite state.
 
 ## Consequences
 

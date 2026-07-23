@@ -70,8 +70,8 @@ function SourceRunSummaryItem({ sourceRun }: { sourceRun: SourceRunResult }) {
       </div>
 
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        <Metric label="Kandidaten" value={sourceRun.candidateCount} />
-        <Metric label="Treffer" value={sourceRun.matchedCount} />
+        <Metric label="Kandidaten" value={sourceRun.resolution?.counts.discovered ?? 0} />
+        <Metric label="Finalisiert" value={sourceRun.resolution?.counts.finalized ?? 0} />
       </dl>
 
       {sourceRun.error ? (

@@ -155,8 +155,8 @@ A user-created, saved job-search intent containing search terms, optional locati
 _Avoid_: Source, profile, Search Run
 
 **Search Run**:
-A concrete execution of a Search Request at a specific time. A Search Run may include multiple Source Runs and may complete with errors when only some Sources fail.
-_Avoid_: Search Request, Source, run history
+A durable terminal record of one concrete execution of a Search Request at a specific time. Each executed Source is resolved once through Candidate Resolution; only committed finalized values are normalized/merged across Sources and persisted. A Search Run may complete with errors when only some Sources fail. Runtime Resolution, Diagnostic, usage, provider payload, and criteria-snapshot history is not persisted.
+_Avoid_: Search Request, Source, runtime trace
 
 **Source Run**:
 The part of a Search Run that executes one selected Source and exposes that Source's outcome. Source Runs make partial failures visible.
@@ -187,5 +187,5 @@ The Job Posting Queue for postings that still need a user decision. Read-state i
 _Avoid_: all unread postings, application status, archive
 
 **Match**:
-The relationship that says a specific Job Posting matched a specific Search Request during a specific Search Run. The same Job Posting may be a Match for multiple Search Requests or Search Runs.
+The durable relationship that says a finalized, cross-Source-merged Job Posting matched a specific Search Request during a specific Search Run. Each merged posting creates exactly one Match for that run; reruns create distinct Match sets while reusing durable Job Postings.
 _Avoid_: Job Posting, Source

@@ -68,12 +68,50 @@ export type NormalizedPosting = {
   sources: PostingSource[]
 }
 
+export type ResolutionCounts = {
+  discovered: number
+  processed: number
+  finalized: number
+  rejected: number
+  unresolved: number
+  failed: number
+  budgetSkipped: number
+}
+
+export type ResolutionLimitDimension =
+  | "discovery_batches"
+  | "discovered_items"
+  | "detail_candidates"
+  | "strategy_attempts"
+  | "requests"
+  | "produced_items"
+  | "duration"
+  | "pages"
+  | "browser_actions"
+  | "fan_out"
+  | "response_bytes"
+  | "browser_rendered_bytes"
+
+export type SourceResolutionSummary = {
+  completion:
+    | { type: "complete" }
+    | { type: "partial"; limitReached: ResolutionLimitDimension }
+  counts: ResolutionCounts
+  remaining: number | null
+  usage: Record<string, number>
+  candidateDiagnostics: {
+    countsByCode: Record<string, number>
+    samples: StructuredDiagnostic[]
+    sampleLimit: number
+    candidateDiagnosticsOmitted: number
+  }
+}
+
 export type SourceRunResult = {
   sourceKey: string
   sourceName: string
   status: SourceRunStatus
-  candidateCount: number
-  matchedCount: number
+  resolution: SourceResolutionSummary | null
   diagnostics: StructuredDiagnostic[]
   error: string | null
 }
@@ -110,25 +148,41 @@ export type UpdateSearchRequestInput = CreateSearchRequestInput
 
 export function parseSearchRunResult(value: unknown): SearchRunResult | null {
   if (!isRecord(value)) return null
-  if (typeof value.searchRequestId !== "number") return null
+  if (!isNonNegativeSafeInteger(value.searchRequestId)) return null
   if (!isSearchRunStatus(value.status)) return null
   if (typeof value.generatedAt !== "string") return null
-  if (!Array.isArray(value.diagnostics)) return null
-  if (!Array.isArray(value.sourceRuns)) return null
-
-  const sourceRuns = value.sourceRuns.filter(isSourceRunResult)
-  if (sourceRuns.length !== value.sourceRuns.length) return null
+  if (!isArrayOf(value.diagnostics, isStructuredDiagnostic)) return null
+  if (!isArrayOf(value.sourceRuns, isSourceRunResult)) return null
+  if (!isArrayOf(value.postings, isNormalizedPosting)) return null
 
   return {
     searchRequestId: value.searchRequestId,
     status: value.status,
     generatedAt: value.generatedAt,
-    diagnostics: value.diagnostics as StructuredDiagnostic[],
-    sourceRuns,
-    postings: Array.isArray(value.postings)
-      ? (value.postings as NormalizedPosting[])
-      : [],
+    diagnostics: value.diagnostics,
+    sourceRuns: value.sourceRuns,
+    postings: value.postings,
   }
+}
+
+function isNormalizedPosting(value: unknown): value is NormalizedPosting {
+  return (
+    isRecord(value) &&
+    typeof value.title === "string" &&
+    typeof value.company === "string" &&
+    typeof value.url === "string" &&
+    isArrayOf(value.locations, isString) &&
+    isArrayOf(value.sources, isPostingSource)
+  )
+}
+
+function isPostingSource(value: unknown): value is PostingSource {
+  return (
+    isRecord(value) &&
+    typeof value.sourceKey === "string" &&
+    typeof value.sourceName === "string" &&
+    typeof value.url === "string"
+  )
 }
 
 function isSourceRunResult(value: unknown): value is SourceRunResult {
@@ -137,10 +191,79 @@ function isSourceRunResult(value: unknown): value is SourceRunResult {
     typeof value.sourceKey === "string" &&
     typeof value.sourceName === "string" &&
     isSourceRunStatus(value.status) &&
-    typeof value.candidateCount === "number" &&
-    typeof value.matchedCount === "number" &&
-    Array.isArray(value.diagnostics) &&
+    (value.resolution === null || isSourceResolutionSummary(value.resolution)) &&
+    isArrayOf(value.diagnostics, isStructuredDiagnostic) &&
     (typeof value.error === "string" || value.error === null)
+  )
+}
+
+function isSourceResolutionSummary(value: unknown): value is SourceResolutionSummary {
+  if (!isRecord(value) || !isRecord(value.counts)) return false
+  const countFields = [
+    "discovered", "processed", "finalized", "rejected", "unresolved", "failed", "budgetSkipped",
+  ]
+  const usageFields = [
+    "strategyAttempts", "requests", "producedItems", "durationMs", "pages",
+    "browserActions", "fanOut", "responseBytes", "browserRenderedBytes",
+  ]
+  const counts = value.counts
+  if (!countFields.every((key) => isNonNegativeSafeInteger(counts[key]))) return false
+  if (!isResolutionCompletion(value.completion)) return false
+  if (!(value.remaining === null || isNonNegativeSafeInteger(value.remaining))) return false
+  if (!isRecord(value.usage)) return false
+  const usage = value.usage
+  if (!usageFields.every((key) => isNonNegativeSafeInteger(usage[key]))) return false
+  if (!Object.values(usage).every(isNonNegativeSafeInteger)) return false
+  if (!isRecord(value.candidateDiagnostics)) return false
+  const summary = value.candidateDiagnostics
+  return (
+    isRecord(summary.countsByCode) &&
+    Object.values(summary.countsByCode).every(isNonNegativeSafeInteger) &&
+    Array.isArray(summary.samples) &&
+    summary.samples.every(isStructuredDiagnostic) &&
+    isNonNegativeSafeInteger(summary.sampleLimit) &&
+    isNonNegativeSafeInteger(summary.candidateDiagnosticsOmitted)
+  )
+}
+
+function isResolutionCompletion(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (value.type === "complete") return !("limitReached" in value)
+  return value.type === "partial" && isResolutionLimitDimension(value.limitReached)
+}
+
+function isResolutionLimitDimension(value: unknown): value is ResolutionLimitDimension {
+  return [
+    "discovery_batches", "discovered_items", "detail_candidates", "strategy_attempts",
+    "requests", "produced_items", "duration", "pages", "browser_actions", "fan_out",
+    "response_bytes", "browser_rendered_bytes",
+  ].includes(value as ResolutionLimitDimension)
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+}
+
+function isArrayOf<T>(
+  value: unknown,
+  predicate: (entry: unknown) => entry is T,
+): value is T[] {
+  return Array.isArray(value) && value.every(predicate)
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string"
+}
+
+function isStructuredDiagnostic(value: unknown): value is StructuredDiagnostic {
+  return (
+    isRecord(value) &&
+    ["schema", "registry", "compiler", "runtime", "detection", "source_validation"].includes(value.category as string) &&
+    typeof value.code === "string" &&
+    typeof value.message === "string" &&
+    ["info", "warning", "error"].includes(value.severity as string) &&
+    typeof value.path === "string" &&
+    (value.strategyKey === undefined || typeof value.strategyKey === "string")
   )
 }
 
@@ -163,7 +286,7 @@ function isSourceRunStatus(value: unknown): value is SourceRunStatus {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 export function createSearchRequest(input: CreateSearchRequestInput) {

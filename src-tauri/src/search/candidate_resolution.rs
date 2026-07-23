@@ -1,7 +1,4 @@
-//! Dormant Source-scoped Candidate Resolution boundary.
-//!
-//! This module intentionally has no productive Search Run caller. It is the final-only
-//! boundary that a later activation may consume without recovering Discovery occurrences.
+//! Source-scoped Candidate Resolution and finalized-only Search Run boundary.
 
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
@@ -13,6 +10,10 @@ use serde::Serialize;
 use url::Url;
 
 use crate::{
+    geo::{
+        GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason,
+        LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter,
+    },
     profile_dsl::{
         compiler::CompiledSource,
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
@@ -29,7 +30,7 @@ use crate::{
         },
     },
     search::{
-        normalization::{collapse_whitespace, normalize_locations, normalized_text_key},
+        normalization::{collapse_whitespace, normalize_locations},
         request::{SearchRule, SearchRuleKind, SearchRuleTarget},
     },
 };
@@ -85,10 +86,27 @@ impl ResolutionCeilings {
 }
 
 #[derive(Clone, Debug)]
-pub struct CompiledSearchRequirements {
+pub struct CompiledSearchRequirements<'a> {
     include: Vec<CompiledRule>,
     exclude: Vec<CompiledRule>,
-    locations: Vec<String>,
+    geo: Option<GeoRequirements<'a>>,
+    missing_radius: bool,
+    geo_runtime_failure: bool,
+}
+
+#[derive(Clone)]
+struct GeoRequirements<'a> {
+    filter: PreparedLocationFilter,
+    resolver: &'a dyn GeoResolver,
+}
+
+impl std::fmt::Debug for GeoRequirements<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GeoRequirements")
+            .field("filter", &self.filter)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -102,9 +120,9 @@ enum CompiledRuleMatcher {
     Regex(Regex),
 }
 
-impl CompiledSearchRequirements {
-    /// Compiles immutable final-value matching. Radius requires the productive GeoResolver
-    /// and is rejected here rather than being weakened to text matching.
+impl<'a> CompiledSearchRequirements<'a> {
+    /// Compiles matching when no radius is configured. Configured locations without a radius
+    /// deliberately do not apply a location filter, preserving established Search Run semantics.
     pub fn compile(
         include: &[SearchRule],
         exclude: &[SearchRule],
@@ -117,10 +135,37 @@ impl CompiledSearchRequirements {
         Ok(Self {
             include: compile_rules(include, false)?,
             exclude: compile_rules(exclude, true)?,
-            locations: normalize_locations(locations.to_vec())
-                .into_iter()
-                .map(|value| normalized_text_key(&value))
-                .collect(),
+            geo: None,
+            missing_radius: !locations.is_empty(),
+            geo_runtime_failure: false,
+        })
+    }
+
+    /// Compiles radius matching using the same prepared filter and resolver as the existing
+    /// Search Request geo semantics. Geo matching remains inside final Candidate Resolution.
+    pub async fn compile_with_geo(
+        include: &[SearchRule],
+        exclude: &[SearchRule],
+        locations: &[String],
+        radius_km: Option<i64>,
+        resolver: &'a dyn GeoResolver,
+    ) -> Result<Self, String> {
+        let (geo, geo_runtime_failure) =
+            match crate::geo::prepare_location_filter(resolver, locations, radius_km).await {
+                Ok(filter) => (Some(GeoRequirements { filter, resolver }), false),
+                Err(error)
+                    if error.starts_with("Search Request location could not be resolved:") =>
+                {
+                    return Err(error);
+                }
+                Err(_) => (None, true),
+            };
+        Ok(Self {
+            include: compile_rules(include, false).map_err(requirements_error)?,
+            exclude: compile_rules(exclude, true).map_err(requirements_error)?,
+            geo,
+            missing_radius: false,
+            geo_runtime_failure,
         })
     }
 
@@ -129,13 +174,34 @@ impl CompiledSearchRequirements {
         included && !self.exclude.iter().any(|rule| rule.matches(title))
     }
 
-    fn matches_locations(&self, locations: &[String]) -> bool {
-        self.locations.is_empty()
-            || locations
-                .iter()
-                .map(|value| normalized_text_key(value))
-                .any(|candidate| self.locations.contains(&candidate))
+    async fn matches_locations(
+        &self,
+        locations: &[String],
+    ) -> Result<(bool, Option<LocationFilterMatchReport>), String> {
+        if let Some(geo) = &self.geo {
+            let report = geo
+                .filter
+                .matches_candidate_with_report(geo.resolver, locations)
+                .await?;
+            let matched = matches!(
+                report.outcome,
+                LocationMatchOutcome::Applied { matched: true }
+                    | LocationMatchOutcome::NotApplied { .. }
+            );
+            return Ok((matched, Some(report)));
+        }
+        Ok((true, None))
     }
+
+    fn requires_locations(&self) -> bool {
+        self.geo
+            .as_ref()
+            .is_some_and(|geo| geo.filter.not_applied_reason().is_none())
+    }
+}
+
+fn requirements_error(failure: RequirementsCompilationFailure) -> String {
+    format!("Search Request matching requirements are invalid: {failure:?}")
 }
 
 impl CompiledRule {
@@ -268,6 +334,7 @@ pub enum ResolutionFailure {
     InvalidInput,
     DiscoveryExecution,
     SourceDetailExecution,
+    GeoResolution,
     SourceMismatch,
     ProtocolInvariant,
     ArithmeticInvariant,
@@ -285,7 +352,7 @@ pub enum SourceResolutionError {
 
 pub struct SourceResolutionRequest<'a> {
     pub compiled_source: &'a CompiledSource,
-    pub requirements: &'a CompiledSearchRequirements,
+    pub requirements: &'a CompiledSearchRequirements<'a>,
     pub ceilings: ResolutionCeilings,
     pub cancellation: &'a dyn RuntimeCancellation,
     pub discovery: SourceDiscovery<'a>,
@@ -676,8 +743,11 @@ pub async fn resolve_source_candidates(
         .ceilings
         .validate()
         .map_err(|failure| failed(failure, Vec::new()))?;
+    if request.requirements.geo_runtime_failure {
+        return Err(geo_resolution_failed(String::new()));
+    }
     let source_key = request.compiled_source.execution_plan.source.key.clone();
-    let mut state = ResolutionState::new(source_key.clone(), ceilings.phase);
+    let mut state = ResolutionState::new(source_key.clone(), ceilings.phase, request.requirements);
     let mut continuation: Option<DiscoveryContinuation> = None;
     let mut used_tokens = HashSet::new();
     let mut identities = HashSet::new();
@@ -847,20 +917,39 @@ struct ResolutionState {
     sampler: DiagnosticSampler,
     detail_candidates: u64,
     partial: Option<ResolutionLimitDimension>,
+    location_diagnostics: LocationDiagnosticSummary,
 }
 
 impl ResolutionState {
-    fn new(source_key: String, limits: PhaseLimits) -> Self {
+    fn new(
+        source_key: String,
+        limits: PhaseLimits,
+        requirements: &CompiledSearchRequirements<'_>,
+    ) -> Self {
+        let mut diagnostics = Vec::new();
+        if requirements.missing_radius
+            || requirements.geo.as_ref().is_some_and(|geo| {
+                geo.filter.not_applied_reason()
+                    == Some(LocationFilterNotAppliedReason::MissingRadiusKm)
+            })
+        {
+            diagnostics.push(location_filter_missing_radius_diagnostic());
+        }
+        let mut location_diagnostics = LocationDiagnosticSummary::default();
+        if let Some(geo) = &requirements.geo {
+            location_diagnostics.observe_request_ambiguities(geo.filter.request_ambiguities());
+        }
         Self {
             source_key,
             finalized: Vec::new(),
             counts: ResolutionCounts::default(),
             remaining: None,
             parent: ParentAllowance::new(limits),
-            diagnostics: Vec::new(),
+            diagnostics,
             sampler: DiagnosticSampler::new(CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT),
             detail_candidates: 0,
             partial: None,
+            location_diagnostics,
         }
     }
 
@@ -882,7 +971,13 @@ impl ResolutionState {
             }
             let mut values = CandidateValues::from_occurrence(occurrence);
             if values.is_complete(request.requirements) {
-                if values.final_matches(request.requirements) {
+                let matches = values
+                    .final_matches(request.requirements)
+                    .await
+                    .map_err(geo_resolution_failed)?;
+                self.location_diagnostics
+                    .observe_match_report(matches.1.as_ref());
+                if matches.0 {
                     self.finalized
                         .push(values.finalize(&self.source_key, occurrence)?);
                     self.counts.finalized = checked_add(self.counts.finalized, 1)?;
@@ -983,11 +1078,18 @@ impl ResolutionState {
                         || !values.is_complete(request.requirements)
                     {
                         self.counts.unresolved = checked_add(self.counts.unresolved, 1)?;
-                    } else if values.final_matches(request.requirements) {
-                        self.finalized.push(values.finalize(&self.source_key, occurrence)?);
-                        self.counts.finalized = checked_add(self.counts.finalized, 1)?;
                     } else {
-                        self.counts.rejected = checked_add(self.counts.rejected, 1)?;
+                        let matches = values
+                            .final_matches(request.requirements)
+                            .await
+                            .map_err(geo_resolution_failed)?;
+                        self.location_diagnostics.observe_match_report(matches.1.as_ref());
+                        if matches.0 {
+                            self.finalized.push(values.finalize(&self.source_key, occurrence)?);
+                            self.counts.finalized = checked_add(self.counts.finalized, 1)?;
+                        } else {
+                            self.counts.rejected = checked_add(self.counts.rejected, 1)?;
+                        }
                     }
                 }
                 SourceDetailOutcome::CandidateExecutionFailed { .. } => {
@@ -1034,6 +1136,8 @@ impl ResolutionState {
     ) -> Result<SourceResolution, SourceResolutionError> {
         // Final commit boundary: cancellation releases no counts, completion, or finalized values.
         cancelled(cancellation)?;
+        self.diagnostics
+            .extend(self.location_diagnostics.into_diagnostics());
         cancelled_counts(&mut self.counts)?;
         validate_counts(&self.counts, self.finalized.len())?;
         Ok(SourceResolution {
@@ -1171,7 +1275,7 @@ impl CandidateValues {
             url: absolute_url(&o.reference.provider_url),
         }
     }
-    fn needed(&self, requirements: &CompiledSearchRequirements) -> Vec<DetailField> {
+    fn needed(&self, requirements: &CompiledSearchRequirements<'_>) -> Vec<DetailField> {
         let mut out = Vec::new();
         if self.title.is_none() {
             out.push(DetailField::Title);
@@ -1179,24 +1283,29 @@ impl CandidateValues {
         if self.company.is_none() {
             out.push(DetailField::Company);
         }
-        if !requirements.locations.is_empty() && self.locations.is_empty() {
+        if requirements.requires_locations() && self.locations.is_empty() {
             out.push(DetailField::Locations);
         }
         out
     }
-    fn is_complete(&self, requirements: &CompiledSearchRequirements) -> bool {
+    fn is_complete(&self, requirements: &CompiledSearchRequirements<'_>) -> bool {
         self.title.is_some()
             && self.company.is_some()
             && self.url.is_some()
-            && (requirements.locations.is_empty() || !self.locations.is_empty())
+            && (!requirements.requires_locations() || !self.locations.is_empty())
     }
-    fn final_matches(&self, requirements: &CompiledSearchRequirements) -> bool {
-        self.title
+    async fn final_matches(
+        &self,
+        requirements: &CompiledSearchRequirements<'_>,
+    ) -> Result<(bool, Option<LocationFilterMatchReport>), String> {
+        let title_matches = self
+            .title
             .as_deref()
-            .is_some_and(|title| requirements.matches_title(title))
-            && self.company.is_some()
-            && self.url.is_some()
-            && requirements.matches_locations(&self.locations)
+            .is_some_and(|title| requirements.matches_title(title));
+        if !title_matches || self.company.is_none() || self.url.is_none() {
+            return Ok((false, None));
+        }
+        requirements.matches_locations(&self.locations).await
     }
     fn apply(&mut self, patch: DetailPatch, requested: &[DetailField]) -> bool {
         let mut progress = false;
@@ -1268,7 +1377,7 @@ fn absolute_url(value: &str) -> Option<String> {
         .filter(|url| matches!(url.scheme(), "http" | "https") && url.host().is_some())
         .map(Into::into)
 }
-fn hint_rejects(o: &PostingOccurrence, requirements: &CompiledSearchRequirements) -> bool {
+fn hint_rejects(o: &PostingOccurrence, requirements: &CompiledSearchRequirements<'_>) -> bool {
     o.hints
         .get("title")
         .filter(|h| h.hint_use == Some(crate::profile_dsl::runtime::HintUse::SearchPrefilter))
@@ -1470,6 +1579,139 @@ impl DiagnosticSampler {
         }
     }
 }
+#[derive(Default)]
+struct LocationDiagnosticSummary {
+    unresolved_location_count: u64,
+    affected_candidate_count: u64,
+    unresolved_samples: Vec<String>,
+    request_ambiguity_count: u64,
+    request_ambiguities: Vec<LocationResolutionAmbiguity>,
+    candidate_ambiguity_count: u64,
+    candidate_ambiguity_samples: Vec<LocationResolutionAmbiguity>,
+}
+
+impl LocationDiagnosticSummary {
+    fn observe_request_ambiguities(&mut self, values: &[LocationResolutionAmbiguity]) {
+        self.request_ambiguity_count = u64::try_from(values.len()).unwrap_or(u64::MAX);
+        self.request_ambiguities = values.iter().take(5).map(sanitize_ambiguity).collect();
+    }
+
+    fn observe_match_report(&mut self, report: Option<&LocationFilterMatchReport>) {
+        let Some(report) = report else { return };
+        if !report.unresolved_candidate_locations.is_empty() {
+            self.affected_candidate_count = self.affected_candidate_count.saturating_add(1);
+            self.unresolved_location_count = self.unresolved_location_count.saturating_add(
+                u64::try_from(report.unresolved_candidate_locations.len()).unwrap_or(u64::MAX),
+            );
+            for value in &report.unresolved_candidate_locations {
+                let value = sanitize_geo_value(value);
+                if self.unresolved_samples.len() < 5 && !self.unresolved_samples.contains(&value) {
+                    self.unresolved_samples.push(value);
+                }
+            }
+        }
+        self.candidate_ambiguity_count = self
+            .candidate_ambiguity_count
+            .saturating_add(u64::try_from(report.candidate_ambiguities.len()).unwrap_or(u64::MAX));
+        for ambiguity in &report.candidate_ambiguities {
+            if self.candidate_ambiguity_samples.len() < 5 {
+                self.candidate_ambiguity_samples
+                    .push(sanitize_ambiguity(ambiguity));
+            }
+        }
+    }
+
+    fn into_diagnostics(self) -> Diagnostics {
+        let mut diagnostics = Vec::new();
+        if self.unresolved_location_count > 0 {
+            diagnostics.push(Diagnostic {
+                category: DiagnosticCategory::Runtime,
+                code: "location_filter_candidate_locations_unresolved".to_string(),
+                message: "Some candidate location values could not be resolved and did not contribute to active location filter matches.".to_string(),
+                severity: DiagnosticSeverity::Warning,
+                path: "/candidates/*/locations".to_string(),
+                strategy_key: None,
+                details: Some(serde_json::json!({
+                    "unresolvedLocationCount": self.unresolved_location_count,
+                    "affectedCandidateCount": self.affected_candidate_count,
+                    "samples": self.unresolved_samples,
+                    "sampleLimit": 5
+                })),
+            });
+        }
+        if self.request_ambiguity_count > 0 || self.candidate_ambiguity_count > 0 {
+            diagnostics.push(Diagnostic {
+                category: DiagnosticCategory::Runtime,
+                code: "location_filter_ambiguous_locations".to_string(),
+                message: "Some locations resolved to multiple geo points; location filtering considered all resolved locations.".to_string(),
+                severity: DiagnosticSeverity::Info,
+                path: "/locations".to_string(),
+                strategy_key: None,
+                details: Some(serde_json::json!({
+                    "requestLocationAmbiguityCount": self.request_ambiguity_count,
+                    "candidateLocationAmbiguityCount": self.candidate_ambiguity_count,
+                    "requestSamples": ambiguity_json(&self.request_ambiguities),
+                    "candidateSamples": ambiguity_json(&self.candidate_ambiguity_samples),
+                    "sampleLimit": 5
+                })),
+            });
+        }
+        diagnostics
+    }
+}
+
+fn sanitize_geo_value(value: &str) -> String {
+    collapse_whitespace(value).chars().take(120).collect()
+}
+fn sanitize_ambiguity(value: &LocationResolutionAmbiguity) -> LocationResolutionAmbiguity {
+    LocationResolutionAmbiguity {
+        input: sanitize_geo_value(&value.input),
+        resolved_labels: value
+            .resolved_labels
+            .iter()
+            .take(5)
+            .map(|v| sanitize_geo_value(v))
+            .collect(),
+    }
+}
+fn ambiguity_json(values: &[LocationResolutionAmbiguity]) -> Vec<serde_json::Value> {
+    values
+        .iter()
+        .take(5)
+        .map(|value| {
+            serde_json::json!({
+                "input": value.input,
+                "resolvedLabels": value.resolved_labels,
+            })
+        })
+        .collect()
+}
+fn location_filter_missing_radius_diagnostic() -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Runtime,
+        code: "location_filter_not_applied_missing_radius_km".to_string(),
+        message: "Search Request locations were configured, but radiusKm is missing; location filtering was not applied.".to_string(),
+        severity: DiagnosticSeverity::Warning,
+        path: "/radiusKm".to_string(),
+        strategy_key: None,
+        details: None,
+    }
+}
+fn geo_resolution_failed(_error: String) -> SourceResolutionError {
+    failed(
+        ResolutionFailure::GeoResolution,
+        vec![Diagnostic {
+            category: DiagnosticCategory::Runtime,
+            code: "location_filter_geo_resolution_failed".to_string(),
+            message: "Candidate location resolution failed at runtime".to_string(),
+            severity: DiagnosticSeverity::Error,
+            path: "/candidates/*/locations".to_string(),
+            strategy_key: None,
+            details: None,
+        }],
+    )
+}
+
 fn sanitized_diagnostic(code: &str, message: &str, severity: DiagnosticSeverity) -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Runtime,

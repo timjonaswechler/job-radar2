@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use sqlx::SqlitePool;
 
 use super::super::{SearchRunResult, SearchRunStatus, SourceRunStatus};
 
@@ -30,32 +30,10 @@ pub(super) async fn generated_at_timestamp(pool: &SqlitePool) -> Result<String, 
     sqlx::query_scalar::<_, String>("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
         .fetch_one(pool)
         .await
-        .map_err(db_error)
+        .map_err(|error| error.to_string())
 }
 
-pub(super) async fn update_search_request_last_run(
-    transaction: &mut Transaction<'_, Sqlite>,
-    result: &SearchRunResult,
-) -> Result<(), String> {
-    sqlx::query(
-        "UPDATE search_requests
-         SET last_run_at = ?1,
-             last_run_status = ?2,
-             last_run_error = ?3
-         WHERE id = ?4",
-    )
-    .bind(&result.generated_at)
-    .bind(result.status.as_str())
-    .bind(last_run_error_summary(result))
-    .bind(result.search_request_id)
-    .execute(&mut **transaction)
-    .await
-    .map_err(db_error)?;
-
-    Ok(())
-}
-
-fn last_run_error_summary(result: &SearchRunResult) -> Option<String> {
+pub(super) fn last_run_error_summary(result: &SearchRunResult) -> Option<String> {
     if result.status == SearchRunStatus::Completed {
         return None;
     }
@@ -116,12 +94,24 @@ pub(super) async fn write_search_run_result(
         }
     }
 
-    let json = serde_json::to_string_pretty(result).map_err(|error| error.to_string())?;
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct BoundedSearchRunSummary<'a> {
+        search_request_id: i64,
+        status: SearchRunStatus,
+        generated_at: &'a str,
+        source_runs: &'a [super::super::SourceRunResult],
+        posting_count: usize,
+    }
+    let summary = BoundedSearchRunSummary {
+        search_request_id: result.search_request_id,
+        status: result.status,
+        generated_at: &result.generated_at,
+        source_runs: &result.source_runs,
+        posting_count: result.postings.len(),
+    };
+    let json = serde_json::to_string_pretty(&summary).map_err(|error| error.to_string())?;
     tokio::fs::write(path, json)
         .await
         .map_err(|error| error.to_string())
-}
-
-pub(super) fn db_error(error: sqlx::Error) -> String {
-    error.to_string()
 }

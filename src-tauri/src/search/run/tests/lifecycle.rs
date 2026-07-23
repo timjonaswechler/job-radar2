@@ -7,7 +7,7 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
         let running_search_runs = RunningSearchRuns::default();
         let service = SearchRequestService::new(&pool, &running_search_runs);
         let temp_dir = tempfile::tempdir().unwrap();
-        let executor = FixtureSourceExecutor::new([("test_source", Ok(vec![]))]);
+        let executor = fixture_resolution_runtime([("test_source", Ok(vec![]))]);
 
         for status in [
             SearchRequestStatus::Draft,
@@ -62,7 +62,7 @@ fn completed_run_persists_postings_and_records_last_run_success() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
                 "Laser Engineer",

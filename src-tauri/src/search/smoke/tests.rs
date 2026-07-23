@@ -1,11 +1,17 @@
 use super::*;
 use crate::{
-    search::request::{
-        RunningSearchRuns, SearchRequestService, SearchRule, SearchRuleKind, SearchRuleTarget,
+    profile_dsl::runtime::{
+        PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
     },
-    search::run::{
-        BoxedSourceExecutionFuture, SourceCandidate, SourceExecutionError, SourceExecutionInput,
-        SourceExecutor, SourceRunStatus,
+    search::{
+        candidate_resolution::{ScriptedDiscoveryBatch, ScriptedSourceDiscoveryExecution},
+        request::{
+            RunningSearchRuns, SearchRequestService, SearchRule, SearchRuleKind, SearchRuleTarget,
+        },
+        run::{
+            ScriptedResolutionSource, SearchRunResolutionRuntime, SourceExecutionError,
+            SourceRunStatus,
+        },
     },
 };
 use serde_json::Value;
@@ -13,55 +19,68 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::BTreeMap;
 
-struct FixtureSourceExecutor {
-    responses: Mutex<HashMap<String, Result<Vec<SourceCandidate>, SourceExecutionError>>>,
+#[derive(Clone)]
+struct FixtureCandidate {
+    title: String,
+    company: String,
+    url: String,
+    locations: Vec<String>,
+    posting_meta: BTreeMap<String, String>,
 }
-
-impl FixtureSourceExecutor {
-    fn new(
-        responses: impl IntoIterator<
-            Item = (
-                &'static str,
-                Result<Vec<SourceCandidate>, SourceExecutionError>,
-            ),
-        >,
-    ) -> Self {
-        Self {
-            responses: Mutex::new(
-                responses
-                    .into_iter()
-                    .map(|(key, response)| (key.to_string(), response))
-                    .collect(),
-            ),
-        }
-    }
-}
-
-impl SourceExecutor for FixtureSourceExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            self.responses
-                .lock()
-                .unwrap()
-                .get(&input.source.key)
-                .cloned()
-                .unwrap_or_else(|| {
-                    Err(SourceExecutionError::Failed(format!(
-                        "missing fixture response for {}",
-                        input.source.key
-                    )))
-                })
-                .map(|candidates| crate::search::run::SourceExecutionOutput {
+fn fixture_resolution_runtime(
+    responses: impl IntoIterator<
+        Item = (
+            &'static str,
+            Result<Vec<FixtureCandidate>, SourceExecutionError>,
+        ),
+    >,
+) -> SearchRunResolutionRuntime {
+    let limits = crate::search::run::production_resolution_ceilings();
+    SearchRunResolutionRuntime::scripted(responses.into_iter().map(|(key, response)| {
+        let outcome = match response {
+            Ok(candidates) => crate::search::candidate_resolution::ScriptedDiscoveryOutcome::Batch(
+                ScriptedDiscoveryBatch {
+                    expected_continuation: None,
+                    expected_maximum: limits.max_batch_size,
+                    expected_limits: limits.phase,
                     occurrences: candidates
                         .into_iter()
-                        .map(|candidate| occurrence(&input.source.key, candidate))
+                        .map(|candidate| occurrence(key, candidate))
                         .collect(),
+                    exhausted: true,
+                    remaining: Some(0),
+                    continuation: None,
+                    continuation_source_key: None,
+                    complete_budget_report: PhaseExecutionReport {
+                        usage: PhaseUsage::default(),
+                        completion: PhaseCompletion::Accepted,
+                    },
                     diagnostics: Vec::new(),
-                })
-        })
-    }
+                },
+            ),
+            Err(_) => {
+                crate::search::candidate_resolution::ScriptedDiscoveryOutcome::ExecutionFailed {
+                    expected_continuation: None,
+                    expected_maximum: limits.max_batch_size,
+                    expected_limits: limits.phase,
+                    complete_budget_report: PhaseExecutionReport {
+                        usage: PhaseUsage::default(),
+                        completion: PhaseCompletion::ExecutionFailed,
+                    },
+                    diagnostics: Vec::new(),
+                }
+            }
+        };
+        (
+            key.to_string(),
+            ScriptedResolutionSource {
+                discovery: ScriptedSourceDiscoveryExecution::new_outcomes(key, [outcome]),
+                detail: ScriptedSourceDetailExecution::new([]),
+            },
+        )
+    }))
 }
 
 #[test]
@@ -72,7 +91,7 @@ fn smoke_path_creates_exact_request_filters_results() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_schott_smoke_source_file(temp_dir.path()).unwrap();
         let running_search_runs = RunningSearchRuns::default();
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 SCHOTT_SOURCE_KEY,
                 Ok(vec![
@@ -162,8 +181,24 @@ fn smoke_path_creates_exact_request_filters_results() {
             summary.result.source_runs[0].status,
             SourceRunStatus::Completed
         );
-        assert_eq!(summary.result.source_runs[0].candidate_count, 7);
-        assert_eq!(summary.result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            summary.result.source_runs[0]
+                .resolution
+                .as_ref()
+                .unwrap()
+                .counts
+                .discovered,
+            7
+        );
+        assert_eq!(
+            summary.result.source_runs[0]
+                .resolution
+                .as_ref()
+                .unwrap()
+                .counts
+                .finalized,
+            1
+        );
         assert_eq!(summary.result.source_runs.len(), 1);
         assert_eq!(summary.result.postings.len(), 1);
         assert_eq!(
@@ -231,7 +266,7 @@ fn smoke_path_can_target_multiple_existing_sources() {
         write_successfactors_source_file(temp_dir.path(), "schott", "SCHOTT");
         write_successfactors_source_file(temp_dir.path(), "second_sap", "Second SAP");
         let running_search_runs = RunningSearchRuns::default();
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 "schott",
                 Ok(vec![candidate(
@@ -277,21 +312,17 @@ fn smoke_path_can_target_multiple_existing_sources() {
         assert_eq!(summary.result.source_runs[1].source_key, "second_sap");
         assert_eq!(summary.result.postings.len(), 2);
 
-        let candidates_json: Value = serde_json::from_str(
-            &std::fs::read_to_string(temp_dir.path().join("search-run-candidates.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(candidates_json["sources"].as_array().unwrap().len(), 2);
-        assert_eq!(candidates_json["sources"][0]["sourceKey"], "schott");
-        assert_eq!(
-            candidates_json["sources"][0]["candidates"][0]["title"],
-            "Laser Entwicklungsingenieur"
-        );
-        assert_eq!(candidates_json["sources"][1]["sourceKey"], "second_sap");
-        assert_eq!(
-            candidates_json["sources"][1]["candidates"][0]["title"],
-            "Physik Ingenieur"
-        );
+        assert!(!temp_dir.path().join("search-run-candidates.json").exists());
+        let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM search_runs")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let match_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM matches")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(run_count, 1);
+        assert_eq!(match_count, 2);
     });
 }
 
@@ -307,7 +338,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
             "draft",
         );
         let running_search_runs = RunningSearchRuns::default();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             "draft_sap",
             Ok(vec![candidate(
                 "Laser Ingenieur",
@@ -347,7 +378,15 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
             allowed.result.source_runs[0].status,
             SourceRunStatus::Completed
         );
-        assert_eq!(allowed.result.source_runs[0].candidate_count, 1);
+        assert_eq!(
+            allowed.result.source_runs[0]
+                .resolution
+                .as_ref()
+                .unwrap()
+                .counts
+                .discovered,
+            1
+        );
 
         let persisted_source: Value = serde_json::from_str(
             &std::fs::read_to_string(temp_dir.path().join("sources/draft_sap.json")).unwrap(),
@@ -365,7 +404,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_schott_smoke_source_file(temp_dir.path()).unwrap();
         let running_search_runs = RunningSearchRuns::default();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             SCHOTT_SOURCE_KEY,
             Ok(vec![candidate(
                 "Laser Ingenieur",
@@ -454,7 +493,7 @@ fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {
 
 fn occurrence(
     source_key: &str,
-    candidate: SourceCandidate,
+    candidate: FixtureCandidate,
 ) -> crate::profile_dsl::occurrence::PostingOccurrence {
     let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
         source_key,
@@ -476,8 +515,8 @@ fn occurrence(
     }
 }
 
-fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> SourceCandidate {
-    SourceCandidate {
+fn candidate(title: &str, company: &str, url: &str, locations: &[&str]) -> FixtureCandidate {
+    FixtureCandidate {
         title: title.to_string(),
         company: company.to_string(),
         url: url.to_string(),

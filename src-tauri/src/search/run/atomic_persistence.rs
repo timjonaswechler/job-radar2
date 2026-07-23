@@ -1,8 +1,7 @@
-//! Dormant atomic persistence for terminal Search Runs and their Matches.
+//! Atomic persistence for terminal Search Runs and their Matches.
 //!
 //! The operation accepts only terminal facts and already cross-Source-merged posting rows. It
-//! deliberately performs no Candidate conversion, matching, normalization, or merge work and has
-//! no productive caller until the finalized-only Search Run flow is activated.
+//! deliberately performs no Candidate conversion, matching, normalization, or merge work.
 
 use sqlx::SqlitePool;
 
@@ -10,7 +9,6 @@ use crate::search::posting::{persist_merged_posting_in_transaction, validate_mer
 
 use super::{NormalizedPosting, SearchRunStatus};
 
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct AtomicSearchRunInput<'a> {
     pub(crate) search_request_id: i64,
     pub(crate) status: SearchRunStatus,
@@ -19,7 +17,6 @@ pub(crate) struct AtomicSearchRunInput<'a> {
     pub(crate) postings: &'a [NormalizedPosting],
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn persist_atomic_search_run(
     pool: &SqlitePool,
     input: AtomicSearchRunInput<'_>,

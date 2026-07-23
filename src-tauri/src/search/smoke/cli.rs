@@ -3,7 +3,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::{
     app::paths::AppPaths,
-    search::run::{default_search_run_result_path, DefaultSourceExecutor},
+    search::run::{default_search_run_result_path, SearchRunResolutionRuntime},
 };
 
 use super::{
@@ -51,7 +51,8 @@ where
         }
 
         let result_path = default_search_run_result_path();
-        let source_executor = DefaultSourceExecutor::new(state.paths.browser_runtime_dir.clone());
+        let source_resolver =
+            SearchRunResolutionRuntime::production(state.paths.browser_runtime_dir.clone());
         let source_keys = if options.source_keys.is_empty() {
             super::request::smoke_source_keys()
         } else {
@@ -60,7 +61,7 @@ where
         let summary = run_search_run_smoke_with_options(
             &state.db,
             &state.running_search_runs,
-            &source_executor,
+            &source_resolver,
             result_path,
             state.paths.app_data_dir.clone(),
             source_keys,
@@ -150,7 +151,7 @@ fn push_source_key(source_keys: &mut Vec<String>, value: &str) -> Result<(), Str
 }
 
 fn smoke_cli_help() -> &'static str {
-    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source] [--source-key <key> ...] [--allow-draft]\n\nRuns the network-dependent development smoke Search Run and overwrites search-run-result.json plus search-run-candidates.json in the repository root. By default it targets the SCHOTT smoke Source. Use --source-key repeatedly to target existing local Sources. Use --allow-draft to execute selected draft Sources for this smoke run without changing their persisted Source Status. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
+    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source] [--source-key <key> ...] [--allow-draft]\n\nRuns the network-dependent development smoke Search Run and overwrites the bounded search-run-result.json summary in the repository root. By default it targets the SCHOTT smoke Source. Use --source-key repeatedly to target existing local Sources. Use --allow-draft to execute selected draft Sources for this smoke run without changing their persisted Source Status. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
 }
 
 fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
@@ -165,7 +166,6 @@ fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
         }
     );
     println!("Result path: {}", summary.result_path);
-    println!("Candidates path: {}", summary.candidates_path);
     println!(
         "Overall status: {}",
         serialized_label(&summary.result.status)
@@ -174,12 +174,11 @@ fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
     println!("Source runs:");
     for source_run in &summary.result.source_runs {
         let error = source_run.error.as_deref().unwrap_or("-");
+        let counts = source_run.resolution.as_ref().map(|summary| summary.counts);
         println!(
-            "- {}: status={}, candidates={}, matched={}, error={}",
+            "- {}: status={}, resolution_counts={counts:?}, error={}",
             source_run.source_key,
             serialized_label(&source_run.status),
-            source_run.candidate_count,
-            source_run.matched_count,
             error
         );
     }

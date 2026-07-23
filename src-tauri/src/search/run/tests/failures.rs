@@ -17,7 +17,7 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
         )
         .await;
         let result_path = temp_dir.path().join("search-run-result.json");
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![candidate(
@@ -30,7 +30,7 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
             (
                 source_keys[1].clone(),
                 Err(SourceExecutionError::Failed(
-                    "fixture source failed".to_string(),
+                    "Candidate Resolution failed: DiscoveryExecution".to_string(),
                 )),
             ),
         ]);
@@ -53,7 +53,7 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
         assert_eq!(result.source_runs[1].status, SourceRunStatus::Failed);
         assert_eq!(
             result.source_runs[1].error.as_deref(),
-            Some("fixture source failed")
+            Some("Candidate Resolution failed: DiscoveryExecution")
         );
         let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
             .fetch_one(&pool)
@@ -71,14 +71,14 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
         );
         let last_run_error = reloaded.last_run_error.unwrap();
         assert!(last_run_error.contains("source_two"));
-        assert!(last_run_error.contains("fixture source failed"));
+        assert!(last_run_error.contains("Candidate Resolution failed: DiscoveryExecution"));
 
         let result_json: Value =
             serde_json::from_str(&std::fs::read_to_string(result_path).unwrap()).unwrap();
         assert_eq!(result_json["status"], "completed_with_errors");
         assert_eq!(
             result_json["sourceRuns"][1]["error"],
-            "fixture source failed"
+            "Candidate Resolution failed: DiscoveryExecution"
         );
     });
 }
@@ -99,7 +99,7 @@ fn total_source_failure_produces_failed_result_without_postings() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Err(SourceExecutionError::Failed("first failed".to_string())),
@@ -141,9 +141,8 @@ fn total_source_failure_produces_failed_result_without_postings() {
         assert_eq!(reloaded.last_run_status, Some(SearchRunStatus::Failed));
         let last_run_error = reloaded.last_run_error.unwrap();
         assert!(last_run_error.contains("source_one"));
-        assert!(last_run_error.contains("first failed"));
+        assert!(last_run_error.contains("Candidate Resolution failed"));
         assert!(last_run_error.contains("source_two"));
-        assert!(last_run_error.contains("second failed"));
     });
 }
 
@@ -180,7 +179,7 @@ fn persistence_failure_rolls_back_last_run_update() {
         .execute(&pool)
         .await
         .unwrap();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
                 "Laser Engineer",
@@ -190,11 +189,12 @@ fn persistence_failure_rolls_back_last_run_update() {
             )]),
         )]);
 
+        let artifact_path = temp_dir.path().join("search-run-result.json");
         let error = SearchRunService::new(
             &pool,
             &running_search_runs,
             &executor,
-            temp_dir.path().join("search-run-result.json"),
+            artifact_path.clone(),
             temp_dir.path(),
         )
         .run(search_request.id)
@@ -219,5 +219,9 @@ fn persistence_failure_rolls_back_last_run_update() {
         assert!(reloaded.last_run_at.is_none());
         assert!(reloaded.last_run_status.is_none());
         assert!(reloaded.last_run_error.is_none());
+        assert!(
+            !artifact_path.exists(),
+            "DB failure must not write an artifact"
+        );
     });
 }

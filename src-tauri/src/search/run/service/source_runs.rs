@@ -1,49 +1,53 @@
-use crate::profile_dsl::diagnostics::Diagnostics;
-
-use super::{
-    super::{
-        PostingSource, SearchRunStatus, SourceExecutionSource, SourceRunResult, SourceRunStatus,
-    },
-    SourceExecutionError,
+use crate::{
+    profile_dsl::{compiler::CompiledSource, diagnostics::Diagnostics},
+    search::candidate_resolution::{SourceResolution, SourceResolutionError},
 };
 
-pub(super) fn posting_source(source: &SourceExecutionSource, url: Option<String>) -> PostingSource {
-    PostingSource {
-        source_key: source.key.clone(),
-        source_name: source.name.clone(),
-        url: url.unwrap_or_default(),
-        posting_meta: Default::default(),
-    }
+use super::super::{SearchRunStatus, SourceResolutionSummary, SourceRunResult, SourceRunStatus};
+use super::SourceExecutionError;
+
+fn source_identity(source: &CompiledSource) -> (&str, &str) {
+    (
+        &source.execution_plan.source.key,
+        &source.execution_plan.source.name,
+    )
 }
 
 pub(super) fn source_run_completed(
-    source: &SourceExecutionSource,
-    candidate_count: usize,
-    diagnostics: Diagnostics,
+    source: &CompiledSource,
+    resolution: &SourceResolution,
 ) -> SourceRunResult {
+    let (source_key, source_name) = source_identity(source);
     SourceRunResult {
-        source_key: source.key.clone(),
-        source_name: source.name.clone(),
+        source_key: source_key.to_string(),
+        source_name: source_name.to_string(),
         status: SourceRunStatus::Completed,
-        candidate_count,
-        matched_count: 0,
-        diagnostics,
+        resolution: Some(SourceResolutionSummary::from(resolution)),
+        diagnostics: resolution.diagnostics.clone(),
         error: None,
     }
 }
 
-pub(super) fn source_run_failed(
-    source: &SourceExecutionSource,
-    error: SourceExecutionError,
+pub(super) fn source_run_resolution_failed(
+    source: &CompiledSource,
+    error: SourceResolutionError,
 ) -> SourceRunResult {
-    SourceRunResult {
-        source_key: source.key.clone(),
-        source_name: source.name.clone(),
-        status: error.status(),
-        candidate_count: 0,
-        matched_count: 0,
-        diagnostics: error.diagnostics(),
-        error: Some(error.message()),
+    let (source_key, source_name) = source_identity(source);
+    match error {
+        SourceResolutionError::Cancelled => {
+            source_run_cancelled_for_source(source_key, source_name)
+        }
+        SourceResolutionError::Failed {
+            failure,
+            diagnostics,
+        } => SourceRunResult {
+            source_key: source_key.to_string(),
+            source_name: source_name.to_string(),
+            status: SourceRunStatus::Failed,
+            resolution: None,
+            diagnostics,
+            error: Some(format!("Candidate Resolution failed: {failure:?}")),
+        },
     }
 }
 
@@ -66,8 +70,7 @@ pub(super) fn source_run_cancelled_for_source(
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         status: SourceRunStatus::Cancelled,
-        candidate_count: 0,
-        matched_count: 0,
+        resolution: None,
         diagnostics: Vec::new(),
         error: Some("search run cancelled".to_string()),
     }
@@ -82,8 +85,7 @@ pub(super) fn source_run_failed_for_source(
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         status: error.status(),
-        candidate_count: 0,
-        matched_count: 0,
+        resolution: None,
         diagnostics: error.diagnostics(),
         error: Some(error.message()),
     }
@@ -99,8 +101,7 @@ pub(super) fn source_run_skipped_for_source(
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         status: SourceRunStatus::Skipped,
-        candidate_count: 0,
-        matched_count: 0,
+        resolution: None,
         diagnostics,
         error: Some(summary),
     }
@@ -109,18 +110,15 @@ pub(super) fn source_run_skipped_for_source(
 pub(super) fn overall_status(source_runs: &[SourceRunResult]) -> SearchRunStatus {
     if source_runs
         .iter()
-        .any(|source_run| source_run.status == SourceRunStatus::Cancelled)
+        .any(|run| run.status == SourceRunStatus::Cancelled)
     {
         return SearchRunStatus::Cancelled;
     }
-
-    let completed_count = source_runs
+    let completed = source_runs
         .iter()
-        .filter(|source_run| source_run.status == SourceRunStatus::Completed)
+        .filter(|run| run.status == SourceRunStatus::Completed)
         .count();
-    let failed_or_cancelled_or_skipped_count = source_runs.len().saturating_sub(completed_count);
-
-    match (completed_count, failed_or_cancelled_or_skipped_count) {
+    match (completed, source_runs.len().saturating_sub(completed)) {
         (0, _) => SearchRunStatus::Failed,
         (_, 0) => SearchRunStatus::Completed,
         _ => SearchRunStatus::CompletedWithErrors,

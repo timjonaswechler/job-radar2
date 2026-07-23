@@ -635,9 +635,8 @@ where
     }
 
     if !compile_diagnostics.is_empty() {
-        let attempt = crate::source_profile::detection::DetectionAttempt::Failed(
-            compile_diagnostics.clone(),
-        );
+        let attempt =
+            crate::source_profile::detection::DetectionAttempt::Failed(compile_diagnostics.clone());
         return crate::source_profile::detection::DetectionOperationResult {
             attempts: vec![attempt.clone()],
             profile_outcomes: Vec::new(),
@@ -841,14 +840,14 @@ fn schedule_search_request_run(
         crate::background_tasks::BackgroundTaskSpec::search_run(),
         move |context| async move {
             let _ = context.progress.report("running Search Run", None, None);
-            let source_executor =
-                crate::search::run::DefaultSourceExecutor::new(browser_runtime_dir);
+            let source_resolver =
+                crate::search::run::SearchRunResolutionRuntime::production(browser_runtime_dir);
             let result = match crate::geo::GeoDbResolver::connect(&geo_db_path).await {
                 Ok(geo_resolver) => {
                     crate::search::run::SearchRunService::new_with_result_artifact(
                         &pool,
                         running_search_runs.as_ref(),
-                        &source_executor,
+                        &source_resolver,
                         crate::search::run::default_search_run_result_artifact(),
                         app_data_dir,
                     )

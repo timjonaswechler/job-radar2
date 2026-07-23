@@ -14,7 +14,7 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
         )
         .await;
         let result_path = temp_dir.path().join("search-run-result.json");
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
                 candidate(
@@ -58,8 +58,20 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].candidate_count, 5);
-        assert_eq!(result.source_runs[0].matched_count, 2);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.discovered as usize),
+            5
+        );
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            2
+        );
         assert_eq!(
             result
                 .postings
@@ -73,7 +85,10 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
         )
         .unwrap();
         assert_eq!(result_json["status"], "completed");
-        assert_eq!(result_json["sourceRuns"][0]["matchedCount"], 2);
+        assert_eq!(
+            result_json["sourceRuns"][0]["resolution"]["counts"]["finalized"],
+            2
+        );
     });
 }
 
@@ -90,7 +105,7 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
             vec![regex_rule("praktik(um|ant)")],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
                 candidate(
@@ -127,8 +142,20 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].candidate_count, 3);
-        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.discovered as usize),
+            3
+        );
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            1
+        );
         assert_eq!(
             result
                 .postings
@@ -153,7 +180,7 @@ fn normalizes_source_candidates_before_matching_and_merging() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
                 candidate(
@@ -184,8 +211,20 @@ fn normalizes_source_candidates_before_matching_and_merging() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].candidate_count, 2);
-        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.discovered as usize),
+            2
+        );
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            1
+        );
         assert_eq!(result.postings.len(), 1);
         let posting = &result.postings[0];
         assert_eq!(posting.title, "Senior Laser Engineer");
@@ -209,7 +248,9 @@ fn filters_search_run_matches_by_request_location_radius() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([(
+        sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
+            .bind(search_request.id).execute(&pool).await.unwrap();
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
                 candidate(
@@ -246,8 +287,20 @@ fn filters_search_run_matches_by_request_location_radius() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].candidate_count, 2);
-        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.discovered as usize),
+            2
+        );
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            1
+        );
         assert_eq!(result.postings.len(), 1);
         assert_eq!(result.postings[0].title, "Laser Engineer Wiesbaden");
         assert_eq!(result.postings[0].locations, vec!["Wiesbaden"]);
@@ -255,7 +308,7 @@ fn filters_search_run_matches_by_request_location_radius() {
 }
 
 #[test]
-fn reports_when_request_location_filter_is_not_applied_without_radius() {
+fn request_locations_without_radius_do_not_apply_filter_and_emit_warning() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
@@ -272,7 +325,7 @@ fn reports_when_request_location_filter_is_not_applied_without_radius() {
             })
             .await
             .unwrap();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
                 "Laser Engineer Köln",
@@ -300,13 +353,16 @@ fn reports_when_request_location_filter_is_not_applied_without_radius() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            1
+        );
         assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].title, "Laser Engineer Köln");
-        assert!(result.diagnostics.iter().any(|diagnostic| {
+        assert!(result.source_runs[0].diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "location_filter_not_applied_missing_radius_km"
-                && diagnostic.severity
-                    == crate::profile_dsl::diagnostics::DiagnosticSeverity::Warning
         }));
     });
 }
@@ -329,7 +385,7 @@ fn leaves_matching_unchanged_without_request_locations() {
             })
             .await
             .unwrap();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
                 "Laser Engineer Köln",
@@ -357,7 +413,13 @@ fn leaves_matching_unchanged_without_request_locations() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].matched_count, 1);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            1
+        );
         assert_eq!(result.postings.len(), 1);
         assert_eq!(result.postings[0].title, "Laser Engineer Köln");
         assert!(result.diagnostics.is_empty());
@@ -365,7 +427,58 @@ fn leaves_matching_unchanged_without_request_locations() {
 }
 
 #[test]
-fn reports_unresolved_and_ambiguous_candidate_location_diagnostics() {
+fn radius_without_request_locations_does_not_require_candidate_locations_or_detail() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let running = RunningSearchRuns::default();
+        let request = SearchRequestService::new(&pool, &running)
+            .create(CreateSearchRequestInput {
+                status: SearchRequestStatus::Active,
+                include_rules: vec![text_rule("Laser")],
+                exclude_rules: vec![],
+                locations: vec![],
+                radius_km: Some(30),
+                source_keys: source_keys.clone(),
+            })
+            .await
+            .unwrap();
+        let runtime = fixture_resolution_runtime([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/no-location",
+                &[],
+            )]),
+        )]);
+        let geo_resolver = FixtureGeoResolver::new(std::iter::empty::<(
+            &'static str,
+            Vec<crate::geo::ResolvedLocation>,
+        )>());
+
+        let result = SearchRunService::new_with_result_artifact(
+            &pool,
+            &running,
+            &runtime,
+            SearchRunResultArtifact::Disabled,
+            temp_dir.path(),
+        )
+        .with_geo_resolver(&geo_resolver)
+        .run(request.id)
+        .await
+        .unwrap();
+
+        let resolution = result.source_runs[0].resolution.as_ref().unwrap();
+        assert_eq!(resolution.counts.finalized, 1);
+        assert_eq!(resolution.counts.unresolved, 0);
+        assert_eq!(result.postings[0].locations, Vec::<String>::new());
+    });
+}
+
+#[test]
+fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
@@ -377,7 +490,9 @@ fn reports_unresolved_and_ambiguous_candidate_location_diagnostics() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([(
+        sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
+            .bind(search_request.id).execute(&pool).await.unwrap();
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
                 candidate(
@@ -436,7 +551,13 @@ fn reports_unresolved_and_ambiguous_candidate_location_diagnostics() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.source_runs[0].matched_count, 2);
+        assert_eq!(
+            result.source_runs[0]
+                .resolution
+                .as_ref()
+                .map_or(0, |r| r.counts.finalized as usize),
+            2
+        );
         assert_eq!(result.postings.len(), 2);
         assert!(result
             .postings
@@ -451,46 +572,79 @@ fn reports_unresolved_and_ambiguous_candidate_location_diagnostics() {
             .iter()
             .any(|posting| posting.title == "Laser Engineer Atlantis"));
 
-        let unresolved = result
+        assert!(result.diagnostics.is_empty());
+        assert!(result.source_runs[0].diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "location_filter_candidate_locations_unresolved"
+        }));
+        assert!(result.source_runs[0]
             .diagnostics
             .iter()
-            .find(|diagnostic| diagnostic.code == "location_filter_candidate_locations_unresolved")
-            .expect("unresolved candidate location diagnostic");
-        assert_eq!(
-            unresolved.severity,
-            crate::profile_dsl::diagnostics::DiagnosticSeverity::Warning
-        );
-        assert_eq!(
-            unresolved.details.as_ref().unwrap()["unresolvedLocationCount"],
-            json!(1)
-        );
-        assert_eq!(
-            unresolved.details.as_ref().unwrap()["affectedCandidateCount"],
-            json!(1)
-        );
-        assert_eq!(
-            unresolved.details.as_ref().unwrap()["samples"],
-            json!(["Atlantis"])
-        );
+            .any(|diagnostic| { diagnostic.code == "location_filter_ambiguous_locations" }));
+    });
+}
 
-        let ambiguous = result
-            .diagnostics
-            .iter()
-            .find(|diagnostic| diagnostic.code == "location_filter_ambiguous_locations")
-            .expect("ambiguous location diagnostic");
+#[test]
+fn candidate_geo_resolver_failure_is_a_truthful_source_runtime_failure_without_resolution() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
+        let request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("Laser")],
+            vec![],
+        )
+        .await;
+        sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
+            .bind(request.id).execute(&pool).await.unwrap();
+        let runtime = fixture_resolution_runtime([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/broken",
+                &["Broken"],
+            )]),
+        )]);
+        let resolver = FailingCandidateGeoResolver;
+
+        let result = SearchRunService::new_with_result_artifact(
+            &pool,
+            &RunningSearchRuns::default(),
+            &runtime,
+            SearchRunResultArtifact::Disabled,
+            temp_dir.path(),
+        )
+        .with_geo_resolver(&resolver)
+        .run(request.id)
+        .await
+        .unwrap();
+
+        assert_eq!(result.status, SearchRunStatus::Failed);
+        assert!(result.source_runs[0].resolution.is_none());
+        assert!(result.source_runs[0]
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("GeoResolution")));
         assert_eq!(
-            ambiguous.severity,
-            crate::profile_dsl::diagnostics::DiagnosticSeverity::Info
-        );
-        assert_eq!(
-            ambiguous.details.as_ref().unwrap()["requestLocationAmbiguityCount"],
-            json!(1)
-        );
-        assert_eq!(
-            ambiguous.details.as_ref().unwrap()["candidateLocationAmbiguityCount"],
-            json!(1)
+            result.source_runs[0].diagnostics[0].code,
+            "location_filter_geo_resolution_failed"
         );
     });
+}
+
+struct FailingCandidateGeoResolver;
+impl crate::geo::GeoResolver for FailingCandidateGeoResolver {
+    fn resolve<'a>(&'a self, input: &'a str) -> crate::geo::GeoResolveFuture<'a> {
+        Box::pin(async move {
+            if input == "Mainz" {
+                Ok(vec![resolved_location("Mainz", "Mainz", 49.99, 8.24)])
+            } else {
+                Err("fixture database unavailable".to_string())
+            }
+        })
+    }
 }
 
 #[test]
@@ -511,7 +665,7 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
             })
             .await
             .unwrap();
-        let executor = FixtureSourceExecutor::new([(
+        let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
                 "Laser Engineer Wiesbaden",

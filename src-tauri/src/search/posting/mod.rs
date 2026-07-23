@@ -14,47 +14,13 @@ pub use types::{
 
 use std::collections::HashSet;
 
-use sqlx::{Row, Sqlite, SqlitePool, Transaction};
+use sqlx::{Row, Sqlite, Transaction};
 
 use crate::search::{
     normalization::normalized_text_key,
     posting::matching::same_job_posting,
-    run::{NormalizedPosting, PostingSource, SearchRunResult},
+    run::{NormalizedPosting, PostingSource},
 };
-
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) struct JobPostingImportService<'a> {
-    pool: &'a SqlitePool,
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-impl<'a> JobPostingImportService<'a> {
-    pub(crate) fn new(pool: &'a SqlitePool) -> Self {
-        Self { pool }
-    }
-
-    pub(crate) async fn import_search_run_result(
-        &self,
-        result: &SearchRunResult,
-    ) -> Result<(), String> {
-        let mut transaction = self.pool.begin().await.map_err(db_error)?;
-        import_search_run_result_in_transaction(&mut transaction, result).await?;
-        transaction.commit().await.map_err(db_error)
-    }
-}
-
-pub(crate) async fn import_search_run_result_in_transaction(
-    transaction: &mut Transaction<'_, Sqlite>,
-    result: &SearchRunResult,
-) -> Result<(), String> {
-    validate_merged_postings(&result.postings)?;
-
-    for posting in &result.postings {
-        persist_merged_posting_in_transaction(transaction, posting, &result.generated_at).await?;
-    }
-
-    Ok(())
-}
 
 pub(crate) fn validate_merged_postings(postings: &[NormalizedPosting]) -> Result<(), String> {
     for posting in postings {
@@ -110,7 +76,7 @@ async fn find_posting_by_source_url(
 ) -> Result<Option<i64>, String> {
     for source in &posting.sources {
         let rows = sqlx::query(
-            "SELECT posting_id, posting_meta_json
+            "SELECT posting_id
              FROM job_posting_sources
              WHERE source_key = ?1 AND url = ?2
              ORDER BY id",
@@ -121,30 +87,15 @@ async fn find_posting_by_source_url(
         .await
         .map_err(db_error)?;
 
-        for row in rows {
-            let existing_posting_meta_json = row
-                .try_get::<String, _>("posting_meta_json")
-                .map_err(db_error)?;
-            if posting_meta_identity_matches(&existing_posting_meta_json, source)? {
-                return row
-                    .try_get::<i64, _>("posting_id")
-                    .map(Some)
-                    .map_err(db_error);
-            }
+        if let Some(row) = rows.first() {
+            return row
+                .try_get::<i64, _>("posting_id")
+                .map(Some)
+                .map_err(db_error);
         }
     }
 
     Ok(None)
-}
-
-fn posting_meta_identity_matches(
-    existing_posting_meta_json: &str,
-    source: &PostingSource,
-) -> Result<bool, String> {
-    let existing_posting_meta: crate::search::run::PostingMeta =
-        serde_json::from_str(existing_posting_meta_json).map_err(json_error)?;
-
-    Ok(existing_posting_meta == source.posting_meta)
 }
 
 async fn find_posting_by_dedupe(
@@ -280,7 +231,7 @@ async fn upsert_posting_source(
     .await
     .map_err(db_error)?;
 
-    let posting_meta_json = serde_json::to_string(&source.posting_meta).map_err(json_error)?;
+    let posting_meta_json = "{}";
 
     if let Some(source_id) = existing_source_id {
         sqlx::query(

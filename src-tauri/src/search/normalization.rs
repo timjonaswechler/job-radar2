@@ -1,47 +1,6 @@
-//! Shared candidate normalization for the Suchlauf funnel.
-//!
-//! Adapters may still perform parser-specific cleanup before returning
-//! `SourceCandidate`s. The final generic shape used for matching, exclusion,
-//! and Stellenanzeige merging belongs here.
+//! Shared normalization primitives used by Candidate Resolution and posting matching.
 
 use std::collections::HashSet;
-
-use crate::search::run::SourceCandidate;
-
-pub(crate) fn normalize_source_candidate(candidate: SourceCandidate) -> Option<SourceCandidate> {
-    let title = collapse_whitespace(&candidate.title);
-    let company = collapse_whitespace(&candidate.company);
-    let url = candidate.url.trim().to_string();
-    let locations = normalize_locations(candidate.locations);
-
-    if title.is_empty() || company.is_empty() || url.is_empty() {
-        return None;
-    }
-
-    Some(SourceCandidate {
-        title,
-        company,
-        url,
-        locations,
-        posting_meta: normalize_posting_meta(candidate.posting_meta),
-    })
-}
-
-fn normalize_posting_meta(
-    posting_meta: crate::search::run::PostingMeta,
-) -> crate::search::run::PostingMeta {
-    posting_meta
-        .into_iter()
-        .filter_map(|(key, value)| {
-            let value = value.trim();
-            if value.is_empty() {
-                None
-            } else {
-                Some((key, value.to_string()))
-            }
-        })
-        .collect()
-}
 
 pub(crate) fn normalize_locations(locations: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();

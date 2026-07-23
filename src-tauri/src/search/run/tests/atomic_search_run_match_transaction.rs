@@ -778,7 +778,6 @@ fn source(source_key: &str, source_name: &str, url: &str) -> PostingSource {
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         url: url.to_string(),
-        posting_meta: Default::default(),
     }
 }
 

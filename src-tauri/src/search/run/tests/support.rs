@@ -1,240 +1,104 @@
-pub(super) use crate::background_tasks::CancellationToken;
 pub(super) use crate::search::request::{
     CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
     SearchRequestStatus, SearchRuleInput,
 };
 pub(super) use crate::search::run::{
-    BoxedSourceExecutionFuture, SearchRunResultArtifact, SearchRunService, SearchRunStatus,
-    SourceCandidate, SourceExecutionError, SourceExecutionInput, SourceExecutor, SourceRunStatus,
+    SearchRunResolutionRuntime, SearchRunResultArtifact, SearchRunService, SearchRunStatus,
+    SourceExecutionError, SourceRunStatus,
 };
 pub(super) use serde_json::{json, Value};
 pub(super) use sqlx::{Row, SqlitePool};
 pub(super) use std::collections::BTreeMap;
 
-use crate::profile_dsl::runtime::{
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+use crate::{
+    profile_dsl::runtime::{
+        PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
+    },
+    search::{
+        candidate_resolution::{
+            ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
+        },
+        run::ScriptedResolutionSource,
+    },
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::path::Path;
 
-pub(super) struct FixtureSourceExecutor {
-    responses: Mutex<HashMap<String, Result<Vec<SourceCandidate>, SourceExecutionError>>>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct FixtureCandidate {
+    pub title: String,
+    pub company: String,
+    pub url: String,
+    pub locations: Vec<String>,
+    pub posting_meta: BTreeMap<String, String>,
 }
 
-impl FixtureSourceExecutor {
-    pub(super) fn new<K: ToString>(
-        responses: impl IntoIterator<Item = (K, Result<Vec<SourceCandidate>, SourceExecutionError>)>,
-    ) -> Self {
-        Self {
-            responses: Mutex::new(
-                responses
+pub(super) fn fixture_resolution_runtime<K: ToString>(
+    responses: impl IntoIterator<Item = (K, Result<Vec<FixtureCandidate>, SourceExecutionError>)>,
+) -> SearchRunResolutionRuntime {
+    let limits = super::super::execution::production_resolution_ceilings();
+    let sources = responses.into_iter().map(|(key, response)| {
+        let key = key.to_string();
+        let outcome = match response {
+            Ok(candidates) => ScriptedDiscoveryOutcome::Batch(ScriptedDiscoveryBatch {
+                expected_continuation: None,
+                expected_maximum: limits.max_batch_size,
+                expected_limits: limits.phase,
+                occurrences: candidates
                     .into_iter()
-                    .map(|(key, response)| (key.to_string(), response))
+                    .map(|candidate| occurrence(&key, candidate))
                     .collect(),
-            ),
-        }
-    }
-}
-
-impl SourceExecutor for FixtureSourceExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            self.responses
-                .lock()
-                .unwrap()
-                .get(&input.source.key)
-                .cloned()
-                .unwrap_or_else(|| {
-                    Err(SourceExecutionError::Failed(format!(
-                        "missing fixture response for source {}",
-                        input.source.key
-                    )))
-                })
-                .map(|candidates| crate::search::run::SourceExecutionOutput {
-                    occurrences: candidates
-                        .into_iter()
-                        .map(|candidate| occurrence(&input.source.key, candidate))
-                        .collect(),
-                    diagnostics: Vec::new(),
-                })
-        })
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(super) enum RuntimeCancellationTiming {
-    BeforePhase,
-    DuringFetch,
-}
-
-pub(super) struct CancellingRuntimeDiscoveryExecutor {
-    timing: RuntimeCancellationTiming,
-}
-
-impl CancellingRuntimeDiscoveryExecutor {
-    pub(super) fn new(timing: RuntimeCancellationTiming) -> Self {
-        Self { timing }
-    }
-}
-
-impl SourceExecutor for CancellingRuntimeDiscoveryExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            let cancellation = input
-                .cancellation_token
-                .expect("cancellation test executor requires a token");
-            if matches!(self.timing, RuntimeCancellationTiming::BeforePhase) {
-                cancellation.cancel();
-            }
-            let during_fetch = matches!(self.timing, RuntimeCancellationTiming::DuringFetch);
-            let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
-                status: 200,
-                final_url: "https://example.test/jobs".to_string(),
-                headers: Vec::new(),
-                body: if during_fetch {
-                    vec![ScriptedHttpBodyEvent::Gate(
-                        "active-search-run-fetch".to_string(),
-                    )]
-                } else {
-                    vec![ScriptedHttpBodyEvent::Chunk(
-                        json!({ "jobs": [] }).to_string().into_bytes(),
-                    )]
+                exhausted: true,
+                remaining: Some(0),
+                continuation: None,
+                continuation_source_key: None,
+                complete_budget_report: PhaseExecutionReport {
+                    usage: PhaseUsage::default(),
+                    completion: PhaseCompletion::Accepted,
                 },
-                content_length: None,
-            }]);
-            let acquisition = crate::profile_dsl::runtime::ScriptedBrowserAcquisition::new([]);
-            let execute = super::super::execution::execute_discovery_for_source(
-                input, &fetcher, &acquisition,
-            );
-            if during_fetch {
-                let cancel = async {
-                    while !fetcher.gate_is_waiting("active-search-run-fetch") {
-                        tokio::task::yield_now().await;
-                    }
-                    cancellation.cancel();
-                };
-                let (_, result) = tokio::join!(cancel, execute);
-                result
-            } else {
-                execute.await
-            }
-        })
-    }
-}
-
-pub(super) struct RuntimeDiscoveryExecutor {
-    response_body: String,
-}
-
-impl RuntimeDiscoveryExecutor {
-    pub(super) fn new(response_body: impl Into<String>) -> Self {
-        Self {
-            response_body: response_body.into(),
-        }
-    }
-}
-
-impl SourceExecutor for RuntimeDiscoveryExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            let fetcher = ScriptedProfileHttpClient::new([ScriptedHttpEvent::Response {
-                status: 200,
-                final_url: "https://example.test/jobs".to_string(),
-                headers: Vec::new(),
-                body: vec![ScriptedHttpBodyEvent::Chunk(
-                    self.response_body.clone().into_bytes(),
-                )],
-                content_length: None,
-            }]);
-            let result = crate::profile_dsl::runtime::execute_discovery(
-                &input.source.execution_plan,
-                input.source.source_config(),
-                &fetcher,
-                crate::profile_dsl::runtime::PhaseBrowser::BrowserFree,
-                crate::profile_dsl::runtime::RuntimeExecutionContext::uncancellable(),
-            )
-            .await;
-            use crate::profile_dsl::runtime::{PhaseOutcome, PolicyOutcome};
-            match result {
-                Ok(PhaseOutcome::Completed {
-                    policy_outcome: PolicyOutcome::Accepted { reduced_payload },
-                    diagnostics,
-                    ..
-                }) => Ok(crate::search::run::SourceExecutionOutput {
-                    occurrences: reduced_payload.candidates,
-                    diagnostics,
-                }),
-                Ok(outcome) => Err(SourceExecutionError::FailedWithDiagnostics {
-                    message: "Discovery failed".to_string(),
-                    diagnostics: outcome.diagnostics().clone(),
-                }),
-                Err(error) => Err(SourceExecutionError::FailedWithDiagnostics {
-                    message: "Discovery failed".to_string(),
-                    diagnostics: error.diagnostics().clone(),
-                }),
-            }
-        })
-    }
-}
-
-pub(super) struct RegistryMutatingPlanCaptureExecutor {
-    profile_path: PathBuf,
-    seen_discovery_markers: Mutex<Vec<(String, String)>>,
-}
-
-impl RegistryMutatingPlanCaptureExecutor {
-    pub(super) fn new(profile_path: PathBuf) -> Self {
-        Self {
-            profile_path,
-            seen_discovery_markers: Mutex::new(Vec::new()),
-        }
-    }
-
-    pub(super) fn seen_discovery_markers(&self) -> Vec<(String, String)> {
-        self.seen_discovery_markers.lock().unwrap().clone()
-    }
-}
-
-impl SourceExecutor for RegistryMutatingPlanCaptureExecutor {
-    fn execute<'a>(&'a self, input: SourceExecutionInput<'a>) -> BoxedSourceExecutionFuture<'a> {
-        Box::pin(async move {
-            let marker = input
-                .source
-                .execution_plan
-                .discovery
-                .strategies
-                .first()
-                .and_then(|strategy| strategy.description.as_deref())
-                .unwrap_or("missing")
-                .to_string();
-            self.seen_discovery_markers
-                .lock()
-                .unwrap()
-                .push((input.source.key.clone(), marker));
-
-            if input.source.key == "first_source" {
-                std::fs::write(&self.profile_path, mutable_profile_json("changed"))
-                    .map_err(|error| SourceExecutionError::Failed(error.to_string()))?;
-            }
-
-            Ok(crate::search::run::SourceExecutionOutput {
-                occurrences: vec![occurrence(
-                    &input.source.key,
-                    candidate(
-                        "Laser Engineer",
-                        input.source.name.as_str(),
-                        &format!("https://example.test/{}/laser", input.source.key),
-                        &[],
-                    ),
-                )],
                 diagnostics: Vec::new(),
-            })
-        })
-    }
+            }),
+            Err(
+                SourceExecutionError::Cancelled(_)
+                | SourceExecutionError::CancelledWithDiagnostics { .. },
+            ) => ScriptedDiscoveryOutcome::Cancelled {
+                expected_continuation: None,
+                expected_maximum: limits.max_batch_size,
+                expected_limits: limits.phase,
+                complete_budget_report: PhaseExecutionReport {
+                    usage: PhaseUsage::default(),
+                    completion: PhaseCompletion::Cancelled {
+                        reason: crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                    },
+                },
+                diagnostics: Vec::new(),
+            },
+            Err(error) => {
+                let diagnostics = match error {
+                    SourceExecutionError::FailedWithDiagnostics { diagnostics, .. } => diagnostics,
+                    _ => Vec::new(),
+                };
+                ScriptedDiscoveryOutcome::ExecutionFailed {
+                    expected_continuation: None,
+                    expected_maximum: limits.max_batch_size,
+                    expected_limits: limits.phase,
+                    complete_budget_report: PhaseExecutionReport {
+                        usage: PhaseUsage::default(),
+                        completion: PhaseCompletion::ExecutionFailed,
+                    },
+                    diagnostics,
+                }
+            }
+        };
+        (
+            key.clone(),
+            ScriptedResolutionSource {
+                discovery: ScriptedSourceDiscoveryExecution::new_outcomes(key, [outcome]),
+                detail: ScriptedSourceDetailExecution::new([]),
+            },
+        )
+    });
+    SearchRunResolutionRuntime::scripted(sources)
 }
 
 pub(super) async fn create_test_search_request(
@@ -249,8 +113,8 @@ pub(super) async fn create_test_search_request(
             status: SearchRequestStatus::Active,
             include_rules,
             exclude_rules,
-            locations: vec!["Mainz".to_string()],
-            radius_km: Some(30),
+            locations: vec![],
+            radius_km: None,
             source_keys,
         })
         .await
@@ -293,6 +157,12 @@ pub(super) fn source_json_with_status(key: &str, name: &str, status: &str) -> St
         }
     })
     .to_string()
+}
+
+pub(super) fn source_json_with_detail(key: &str, name: &str) -> String {
+    let mut source: Value = serde_json::from_str(&source_json(key, name)).unwrap();
+    source["selectedAccessPath"]["detail"] = minimal_detail();
+    source.to_string()
 }
 
 pub(super) fn text_rule(value: &str) -> SearchRuleInput {
@@ -348,6 +218,32 @@ pub(super) fn mutable_profile_source_json(key: &str, name: &str) -> String {
         }
     })
     .to_string()
+}
+
+pub(super) fn minimal_detail() -> Value {
+    json!({
+        "policy": { "type": "first_accepted" },
+        "strategies": [
+            {
+                "key": "detail",
+                "fetch": {
+                    "mode": "http",
+                    "method": "GET",
+                    "url": "https://example.test/detail.json",
+                    "timeoutMs": 1000
+                },
+                "parse": { "type": "json" },
+                "select": { "type": "document" },
+                "extract": {
+                    "fields": {
+                        "title": { "type": "json_path", "jsonPath": "$.title" },
+                        "company": { "type": "json_path", "jsonPath": "$.company" },
+                        "locations": { "type": "json_path", "jsonPath": "$.locations" }
+                    }
+                }
+            }
+        ]
+    })
 }
 
 pub(super) fn minimal_discovery(marker: &str) -> Value {
@@ -434,7 +330,7 @@ pub(super) fn candidate(
     company: &str,
     url: &str,
     locations: &[&str],
-) -> SourceCandidate {
+) -> FixtureCandidate {
     candidate_with_meta(title, company, url, locations, [])
 }
 
@@ -444,8 +340,8 @@ pub(super) fn candidate_with_meta(
     url: &str,
     locations: &[&str],
     posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
-) -> SourceCandidate {
-    SourceCandidate {
+) -> FixtureCandidate {
+    FixtureCandidate {
         title: title.to_string(),
         company: company.to_string(),
         url: url.to_string(),
@@ -460,9 +356,9 @@ pub(super) fn candidate_with_meta(
     }
 }
 
-fn occurrence(
+pub(super) fn occurrence(
     source_key: &str,
-    candidate: SourceCandidate,
+    candidate: FixtureCandidate,
 ) -> crate::profile_dsl::occurrence::PostingOccurrence {
     let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
         source_key,

@@ -1,19 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
-use crate::profile_dsl::diagnostics::Diagnostics;
-
-pub type PostingMeta = BTreeMap<String, String>;
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SourceCandidate {
-    pub title: String,
-    pub company: String,
-    pub url: String,
-    pub locations: Vec<String>,
-    pub posting_meta: PostingMeta,
-}
+use crate::{
+    profile_dsl::{diagnostics::Diagnostics, runtime::PhaseUsage},
+    search::candidate_resolution::{
+        CandidateDiagnosticSummary, ResolutionCompletion, ResolutionCounts, SourceResolution,
+    },
+};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -88,10 +80,32 @@ pub struct SourceRunResult {
     pub source_key: String,
     pub source_name: String,
     pub status: SourceRunStatus,
-    pub candidate_count: usize,
-    pub matched_count: usize,
+    pub resolution: Option<SourceResolutionSummary>,
     pub diagnostics: Diagnostics,
     pub error: Option<String>,
+}
+
+/// Bounded, non-authoritative projection of one committed Q01 Resolution.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceResolutionSummary {
+    pub completion: ResolutionCompletion,
+    pub counts: ResolutionCounts,
+    pub remaining: Option<u64>,
+    pub usage: PhaseUsage,
+    pub candidate_diagnostics: CandidateDiagnosticSummary,
+}
+
+impl From<&SourceResolution> for SourceResolutionSummary {
+    fn from(resolution: &SourceResolution) -> Self {
+        Self {
+            completion: resolution.completion.clone(),
+            counts: resolution.counts,
+            remaining: resolution.remaining,
+            usage: resolution.report.usage,
+            candidate_diagnostics: resolution.candidate_diagnostics.clone(),
+        }
+    }
 }
 
 /// Normalized Stellenanzeige after Trefferregel/Ausschlussregel filtering and dedupe.
@@ -111,6 +125,4 @@ pub struct PostingSource {
     pub source_key: String,
     pub source_name: String,
     pub url: String,
-    #[serde(skip_serializing)]
-    pub posting_meta: PostingMeta,
 }

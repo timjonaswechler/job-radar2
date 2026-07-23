@@ -16,7 +16,7 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![
@@ -120,7 +120,7 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
 }
 
 #[test]
-fn merging_and_import_preserve_per_source_posting_meta() {
+fn keyed_posting_meta_never_crosses_finalization() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
@@ -135,7 +135,7 @@ fn merging_and_import_preserve_per_source_posting_meta() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![candidate_with_meta(
@@ -173,14 +173,9 @@ fn merging_and_import_preserve_per_source_posting_meta() {
         assert_eq!(result.status, SearchRunStatus::Completed);
         assert_eq!(result.postings.len(), 1);
         assert_eq!(result.postings[0].sources.len(), 2);
-        assert_eq!(
-            result.postings[0].sources[0].posting_meta,
-            BTreeMap::from([("jobId".to_string(), "source-one-42".to_string())])
-        );
-        assert_eq!(
-            result.postings[0].sources[1].posting_meta,
-            BTreeMap::from([("jobId".to_string(), "source-two-99".to_string())])
-        );
+        let serialized = serde_json::to_string(&result).unwrap();
+        assert!(!serialized.contains("source-one-42"));
+        assert!(!serialized.contains("source-two-99"));
 
         let rows = sqlx::query(
             "SELECT source_key, posting_meta_json
@@ -192,15 +187,9 @@ fn merging_and_import_preserve_per_source_posting_meta() {
         .unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].get::<String, _>("source_key"), "source_one");
-        assert_eq!(
-            rows[0].get::<String, _>("posting_meta_json"),
-            r#"{"jobId":"source-one-42"}"#
-        );
+        assert_eq!(rows[0].get::<String, _>("posting_meta_json"), "{}");
         assert_eq!(rows[1].get::<String, _>("source_key"), "source_two");
-        assert_eq!(
-            rows[1].get::<String, _>("posting_meta_json"),
-            r#"{"jobId":"source-two-99"}"#
-        );
+        assert_eq!(rows[1].get::<String, _>("posting_meta_json"), "{}");
     });
 }
 
@@ -220,7 +209,7 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![candidate(
@@ -291,7 +280,7 @@ fn fuzzy_dedupe_keeps_different_roles_at_same_company_and_location_separate() {
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![candidate(
@@ -353,7 +342,7 @@ fn location_compatibility_allows_whole_phrase_overlap_but_blocks_contradictions(
             vec![],
         )
         .await;
-        let executor = FixtureSourceExecutor::new([
+        let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
                 Ok(vec![
