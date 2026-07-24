@@ -240,40 +240,26 @@ fn compiler_allows_public_headers_and_static_technical_body_parameters() {
 }
 
 #[test]
-fn compiler_rejects_forbidden_headers_before_building_a_plan() {
-    let mut profile = simple_profile_value();
-    let fetch = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"];
-    fetch["headers"] = json!({
-        "authorization": "Bearer secret",
-        "cookie": "session=secret",
-        "set-cookie": "session=secret",
-        "x-api-key": "secret",
-        "proxy-authorization": "Basic secret"
-    });
-    fetch["method"] = json!("POST");
-    fetch["body"] = json!({
-        "type": "json",
-        "value": {
-            "limit": 25,
-            "password": "secret",
-            "nested": {
-                "apiKey": "secret",
-                "sessionToken": "secret"
-            }
-        }
-    });
-    let result = compile_profile_value(profile);
-
-    assert_eq!(result.execution_plan, None);
-    assert_compiler_error(
-        &result,
-        "forbidden_request_header",
-        "/accessPaths/0/discovery/strategies/0/fetch/headers/authorization",
-    );
+fn direct_serde_rejects_forbidden_headers_before_building_a_plan() {
+    for header in [
+        "authorization",
+        "cookie",
+        "set-cookie",
+        "x-api-key",
+        "proxy-authorization",
+    ] {
+        let mut profile = simple_profile_value();
+        profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["headers"] =
+            json!({ header: "secret" });
+        assert!(
+            serde_json::from_value::<SourceProfileDocument>(profile).is_err(),
+            "forbidden header {header} must fail direct admission"
+        );
+    }
 }
 
 #[test]
-fn compiler_validates_security_and_boundedness_after_direct_specialization() {
+fn direct_specialization_rejects_forbidden_headers_before_compilation() {
     let profile = simple_profile_value();
     let mut source: Value =
         read_fixture("tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
@@ -298,8 +284,8 @@ fn compiler_validates_security_and_boundedness_after_direct_specialization() {
     assert_eq!(result.execution_plan, None);
     assert_compiler_error(
         &result,
-        "forbidden_request_header",
-        "/accessPaths/0/discovery/strategies/0/fetch/headers/authorization",
+        "invalid_effective_profile_fragment",
+        "/accessPaths",
     );
 }
 
@@ -429,7 +415,10 @@ fn assert_compiler_error(result: &TestCompileResult, expected_code: &str, expect
 
     assert_eq!(diagnostic.category, DiagnosticCategory::Compiler);
     assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
-    if expected_code != "empty_fallback_strategy_list" {
+    if !matches!(
+        expected_code,
+        "empty_fallback_strategy_list" | "invalid_effective_profile_fragment"
+    ) {
         assert_eq!(diagnostic.strategy_key.as_deref(), Some("json_api"));
     }
     assert!(

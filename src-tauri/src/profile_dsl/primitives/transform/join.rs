@@ -8,7 +8,7 @@ pub struct Join {
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct JoinPlan {
-    separator: String,
+    pub(super) separator: String,
 }
 pub const DESCRIPTOR: TransformDescriptor = TransformDescriptor { key: "join" };
 pub(super) fn compile(value: &Join) -> JoinPlan {

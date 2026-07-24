@@ -7,3 +7,4 @@ mod lifecycle;
 mod matching;
 mod scheduling_artifacts;
 mod source_execution;
+mod typed_entrypoint;

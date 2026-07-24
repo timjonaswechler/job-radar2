@@ -658,3 +658,177 @@ fn pagination_json_value(value: &str) -> Value {
         .map(Value::Number)
         .unwrap_or_else(|_| Value::String(value.to_string()))
 }
+
+fn witness_http() {
+    fn check(v: &CompiledHttpFetch) {
+        let _ = (&v.method, &v.url, &v.headers, &v.body, &v.timeout_ms);
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+fn witness_http_get() {
+    fn check(v: &CompiledHttpFetch) {
+        if let HttpMethod::Get = v.method {}
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+fn witness_http_post() {
+    fn check(v: &CompiledHttpFetch) {
+        if let HttpMethod::Post = v.method {}
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+fn witness_body_json() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Json { .. } = v {}
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_body_text() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Text { .. } = v {}
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_body_form() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Form { .. } = v {}
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_body_json_value() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Json { value } = v {
+            let _ = value;
+        }
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_body_text_value() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Text { value } = v {
+            let _ = value;
+        }
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_body_form_fields() {
+    fn check(v: &CompiledHttpRequestBody) {
+        if let CompiledHttpRequestBody::Form { fields } = v {
+            let _ = fields;
+        }
+    }
+    let _ = check as fn(&CompiledHttpRequestBody);
+}
+fn witness_http_url() {
+    fn check(v: &CompiledHttpFetch) {
+        let _ = &v.url;
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+fn witness_http_headers() {
+    fn check(v: &CompiledHttpFetch) {
+        let _ = &v.headers;
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+fn witness_http_timeout() {
+    fn check(v: &CompiledHttpFetch) {
+        let _ = &v.timeout_ms;
+    }
+    let _ = check as fn(&CompiledHttpFetch);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged},
+        CompiledRegistration,
+        Family::Fetch,
+        Owner::P09,
+        PrimitiveContext::{Detail, DetectionHttp, Discovery},
+    };
+    macro_rules! row {
+        ($key:literal,$shape:expr,$identity:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Fetch,
+                key: $key,
+                contexts: &[Discovery, Detail, DetectionHttp],
+                owner: P09,
+                canonical_file: "src-tauri/src/profile_dsl/primitives/fetch/http.rs",
+                shape: $shape,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!("http", Tagged, "CompiledHttpFetch", witness_http),
+        row!(
+            "http.method.GET",
+            ParentOption,
+            "CompiledHttpFetch.method::Get",
+            witness_http_get
+        ),
+        row!(
+            "http.method.POST",
+            ParentOption,
+            "CompiledHttpFetch.method::Post",
+            witness_http_post
+        ),
+        row!(
+            "http.body.json",
+            ParentOption,
+            "CompiledHttpRequestBody::Json",
+            witness_body_json
+        ),
+        row!(
+            "http.body.text",
+            ParentOption,
+            "CompiledHttpRequestBody::Text",
+            witness_body_text
+        ),
+        row!(
+            "http.body.form",
+            ParentOption,
+            "CompiledHttpRequestBody::Form",
+            witness_body_form
+        ),
+        row!(
+            "http.body.json.value",
+            ParentOption,
+            "CompiledHttpRequestBody::Json.value",
+            witness_body_json_value
+        ),
+        row!(
+            "http.body.text.value",
+            ParentOption,
+            "CompiledHttpRequestBody::Text.value",
+            witness_body_text_value
+        ),
+        row!(
+            "http.body.form.fields",
+            ParentOption,
+            "CompiledHttpRequestBody::Form.fields",
+            witness_body_form_fields
+        ),
+        row!(
+            "http.url",
+            ParentOption,
+            "CompiledHttpFetch.url",
+            witness_http_url
+        ),
+        row!(
+            "http.headers",
+            ParentOption,
+            "CompiledHttpFetch.headers",
+            witness_http_headers
+        ),
+        row!(
+            "http.timeoutMs",
+            ParentOption,
+            "CompiledHttpFetch.timeout_ms",
+            witness_http_timeout
+        ),
+    ]
+}

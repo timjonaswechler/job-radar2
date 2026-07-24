@@ -622,3 +622,226 @@ fn require_non_empty(value: &str, path: &str) -> Result<String, BrowserCompileEr
         Ok(value.to_string())
     }
 }
+
+fn witness_browser_fetch() {
+    fn check(v: &crate::ExecutionPlanFetch) {
+        if let crate::ExecutionPlanFetch::Browser { .. } = v {}
+    }
+    let _ = check as fn(&crate::ExecutionPlanFetch);
+}
+macro_rules! browser_fetch_field_witness {
+    ($name:ident,$field:ident) => {
+        fn $name() {
+            fn check(v: &crate::ExecutionPlanFetch) {
+                if let crate::ExecutionPlanFetch::Browser { $field, .. } = v {
+                    let _ = $field;
+                }
+            }
+            let _ = check as fn(&crate::ExecutionPlanFetch);
+        }
+    };
+}
+browser_fetch_field_witness!(witness_browser_url, url);
+browser_fetch_field_witness!(witness_browser_timeout, timeout_ms);
+browser_fetch_field_witness!(witness_browser_waits, waits);
+browser_fetch_field_witness!(witness_browser_interactions, interactions);
+fn witness_wait_selector() {
+    fn check(v: &ExecutionPlanBrowserWait) {
+        if let ExecutionPlanBrowserWait::Selector { .. } = v {}
+    }
+    let _ = check as fn(&ExecutionPlanBrowserWait);
+}
+fn witness_wait_selector_field() {
+    fn check(v: &ExecutionPlanBrowserWait) {
+        if let ExecutionPlanBrowserWait::Selector { selector, .. } = v {
+            let _ = selector;
+        }
+    }
+    let _ = check as fn(&ExecutionPlanBrowserWait);
+}
+fn witness_wait_selector_timeout() {
+    fn check(v: &ExecutionPlanBrowserWait) {
+        if let ExecutionPlanBrowserWait::Selector { timeout_ms, .. } = v {
+            let _ = timeout_ms;
+        }
+    }
+    let _ = check as fn(&ExecutionPlanBrowserWait);
+}
+fn witness_wait_idle() {
+    fn check(v: &ExecutionPlanBrowserWait) {
+        if let ExecutionPlanBrowserWait::NetworkIdle { .. } = v {}
+    }
+    let _ = check as fn(&ExecutionPlanBrowserWait);
+}
+fn witness_wait_idle_timeout() {
+    fn check(v: &ExecutionPlanBrowserWait) {
+        if let ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } = v {
+            let _ = timeout_ms;
+        }
+    }
+    let _ = check as fn(&ExecutionPlanBrowserWait);
+}
+macro_rules! interaction_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &ExecutionPlanBrowserInteraction) {
+                if let ExecutionPlanBrowserInteraction::$variant { .. } = v {}
+            }
+            let _ = check as fn(&ExecutionPlanBrowserInteraction);
+        }
+    };
+    ($name:ident,$variant:ident,$field:ident) => {
+        fn $name() {
+            fn check(v: &ExecutionPlanBrowserInteraction) {
+                if let ExecutionPlanBrowserInteraction::$variant { $field, .. } = v {
+                    let _ = $field;
+                }
+            }
+            let _ = check as fn(&ExecutionPlanBrowserInteraction);
+        }
+    };
+}
+interaction_witness!(witness_click_visible, ClickIfVisible);
+interaction_witness!(witness_click_visible_selector, ClickIfVisible, selector);
+interaction_witness!(witness_click_visible_count, ClickIfVisible, max_count);
+interaction_witness!(witness_click_visible_wait, ClickIfVisible, wait_after_ms);
+interaction_witness!(witness_click_gone, ClickUntilGone);
+interaction_witness!(witness_click_gone_selector, ClickUntilGone, selector);
+interaction_witness!(witness_click_gone_count, ClickUntilGone, max_count);
+interaction_witness!(witness_click_gone_wait, ClickUntilGone, wait_after_ms);
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged},
+        CompiledRegistration,
+        Family::Browser,
+        Owner::B03a,
+        PrimitiveContext::{Detail, DetectionBrowser, Discovery},
+    };
+    macro_rules! row {
+        ($key:literal,$shape:expr,$identity:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Browser,
+                key: $key,
+                contexts: &[Discovery, Detail, DetectionBrowser],
+                owner: B03a,
+                canonical_file: "src-tauri/src/profile_dsl/primitives/fetch/browser.rs",
+                shape: $shape,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!(
+            "browser",
+            Tagged,
+            "ExecutionPlanFetch::Browser",
+            witness_browser_fetch
+        ),
+        row!(
+            "browser.url",
+            ParentOption,
+            "ExecutionPlanFetch::Browser.url",
+            witness_browser_url
+        ),
+        row!(
+            "browser.timeoutMs",
+            ParentOption,
+            "ExecutionPlanFetch::Browser.timeout_ms",
+            witness_browser_timeout
+        ),
+        row!(
+            "browser.waits",
+            ParentOption,
+            "ExecutionPlanFetch::Browser.waits",
+            witness_browser_waits
+        ),
+        row!(
+            "browser.interactions",
+            ParentOption,
+            "ExecutionPlanFetch::Browser.interactions",
+            witness_browser_interactions
+        ),
+        row!(
+            "selector",
+            Tagged,
+            "ExecutionPlanBrowserWait::Selector",
+            witness_wait_selector
+        ),
+        row!(
+            "selector.selector",
+            ParentOption,
+            "ExecutionPlanBrowserWait::Selector.selector",
+            witness_wait_selector_field
+        ),
+        row!(
+            "selector.timeoutMs",
+            ParentOption,
+            "ExecutionPlanBrowserWait::Selector.timeout_ms",
+            witness_wait_selector_timeout
+        ),
+        row!(
+            "network_idle",
+            Tagged,
+            "ExecutionPlanBrowserWait::NetworkIdle",
+            witness_wait_idle
+        ),
+        row!(
+            "network_idle.timeoutMs",
+            ParentOption,
+            "ExecutionPlanBrowserWait::NetworkIdle.timeout_ms",
+            witness_wait_idle_timeout
+        ),
+        row!(
+            "click_if_visible",
+            Tagged,
+            "ExecutionPlanBrowserInteraction::ClickIfVisible",
+            witness_click_visible
+        ),
+        row!(
+            "click_if_visible.selector",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickIfVisible.selector",
+            witness_click_visible_selector
+        ),
+        row!(
+            "click_if_visible.maxCount",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickIfVisible.max_count",
+            witness_click_visible_count
+        ),
+        row!(
+            "click_if_visible.waitAfterMs",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickIfVisible.wait_after_ms",
+            witness_click_visible_wait
+        ),
+        row!(
+            "click_until_gone",
+            Tagged,
+            "ExecutionPlanBrowserInteraction::ClickUntilGone",
+            witness_click_gone
+        ),
+        row!(
+            "click_until_gone.selector",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickUntilGone.selector",
+            witness_click_gone_selector
+        ),
+        row!(
+            "click_until_gone.maxCount",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickUntilGone.max_count",
+            witness_click_gone_count
+        ),
+        row!(
+            "click_until_gone.waitAfterMs",
+            ParentOption,
+            "ExecutionPlanBrowserInteraction::ClickUntilGone.wait_after_ms",
+            witness_click_gone_wait
+        ),
+    ]
+}

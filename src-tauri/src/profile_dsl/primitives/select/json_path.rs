@@ -14,7 +14,7 @@ pub struct JsonPathSelect {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonPathSelectPlan {
-    segments: Vec<String>,
+    pub(super) segments: Vec<String>,
 }
 
 impl<'de> Deserialize<'de> for JsonPathSelectPlan {

@@ -302,3 +302,83 @@ pub(crate) fn mismatch(expected: &'static str, actual_count: usize) -> Cardinali
         actual_count,
     }
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::Tagged,
+        Family::Cardinality,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    crate::profile_dsl::primitives::cardinality::Cardinality::ALL
+        .into_iter()
+        .map(|value| {
+            serde_shape(
+                Cardinality,
+                value.key(),
+                &[Discovery, Detail],
+                Tagged,
+                "src-tauri/src/profile_dsl/documents/extract.rs",
+            )
+        })
+        .collect()
+}
+
+macro_rules! cardinality_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &CompiledCardinality) {
+                if let CompiledCardinality::$variant(plan) = v {
+                    let _ = plan;
+                }
+            }
+            let _ = check as fn(&CompiledCardinality);
+        }
+    };
+}
+cardinality_witness!(witness_cardinality_one, One);
+cardinality_witness!(witness_cardinality_first, First);
+cardinality_witness!(witness_cardinality_optional, Optional);
+cardinality_witness!(witness_cardinality_all, All);
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::Tagged,
+        CompiledRegistration,
+        Family::Cardinality,
+        Owner::P04,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    macro_rules! row {
+        ($key:literal,$variant:literal,$file:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Cardinality,
+                key: $key,
+                contexts: &[Discovery, Detail],
+                owner: P04,
+                canonical_file: concat!(
+                    "src-tauri/src/profile_dsl/primitives/cardinality/",
+                    $file,
+                    ".rs"
+                ),
+                shape: Tagged,
+                compiled_identity: concat!("CompiledCardinality::", $variant),
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!("one", "One", "one", witness_cardinality_one),
+        row!("first", "First", "first", witness_cardinality_first),
+        row!(
+            "optional",
+            "Optional",
+            "optional",
+            witness_cardinality_optional
+        ),
+        row!("all", "All", "all", witness_cardinality_all),
+    ]
+}

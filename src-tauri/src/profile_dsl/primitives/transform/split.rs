@@ -16,9 +16,9 @@ fn is_false(value: &bool) -> bool {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SplitPlan {
-    separator: String,
-    trim_parts: bool,
-    drop_empty: bool,
+    pub(super) separator: String,
+    pub(super) trim_parts: bool,
+    pub(super) drop_empty: bool,
 }
 pub const DESCRIPTOR: TransformDescriptor = TransformDescriptor { key: "split" };
 pub(super) fn compile(value: &Split) -> Result<SplitPlan, String> {

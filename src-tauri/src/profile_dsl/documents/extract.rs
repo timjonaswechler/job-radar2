@@ -113,6 +113,25 @@ pub enum FieldExpression {
 }
 
 impl FieldExpression {
+    /// Exhaustive Serde-inventory tie used by the implementation-free completeness gate.
+    pub(crate) const fn completeness_key(&self) -> &'static str {
+        match self {
+            Self::Const { .. } => "const",
+            Self::Template { .. } => "template",
+            Self::SourceConfig { .. } => "source_config",
+            Self::PostingMeta { .. } => "posting_meta",
+            Self::Capture { .. } => "capture",
+            Self::ItemField { .. } => "item_field",
+            Self::JsonPath { .. } => "json_path",
+            Self::XmlText { .. } => "xml_text",
+            Self::XmlElement { .. } => "xml_element",
+            Self::CssText { .. } => "css_text",
+            Self::CssAttribute { .. } => "css_attribute",
+            Self::Combine { .. } => "combine",
+            Self::FirstNonEmpty { .. } => "first_non_empty",
+        }
+    }
+
     pub(crate) fn transforms(&self) -> Option<&[Transform]> {
         match self {
             Self::Const { transforms, .. }
@@ -157,10 +176,29 @@ pub enum ListFieldExpression {
     Multiple(Vec<FieldExpression>),
 }
 
+impl ListFieldExpression {
+    /// Exhaustive Serde-inventory tie for the untagged list carrier.
+    pub(crate) const fn completeness_key(&self) -> &'static str {
+        match self {
+            Self::Single(_) => "list.single",
+            Self::Multiple(_) => "list.multiple",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CombinePart {
     pub value: Box<FieldExpression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub optional: Option<bool>,
+}
+
+impl CombinePart {
+    /// Structural Serde tie: adding a field makes this exhaustive destructure fail to compile.
+    pub(crate) fn completeness_keys(&self) -> [&'static str; 2] {
+        let Self { value, optional } = self;
+        let _ = (value, optional);
+        ["combine.part.value", "combine.part.optional"]
+    }
 }

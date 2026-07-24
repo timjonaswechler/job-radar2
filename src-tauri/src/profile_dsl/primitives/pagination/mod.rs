@@ -803,3 +803,395 @@ fn duplicates(values: &[String]) -> Vec<String> {
         .filter_map(|(key, count)| (count > 1).then_some(key))
         .collect()
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{ParentOption, Tagged},
+        Family::{Pagination, PaginationLocation},
+        PrimitiveContext::Discovery,
+    };
+    let mut out = Vec::new();
+    for descriptor in pagination_descriptors() {
+        out.push(serde_shape(
+            Pagination,
+            descriptor.key,
+            &[Discovery],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/pagination.rs",
+        ));
+        for option in descriptor.options.iter().copied().filter(|v| *v != "type") {
+            out.push(serde_shape(
+                Pagination,
+                format!("{}.{}", descriptor.key, option),
+                &[Discovery],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/pagination.rs",
+            ));
+        }
+    }
+    for key in pagination_parameter_locations() {
+        out.push(serde_shape(
+            PaginationLocation,
+            *key,
+            &[Discovery],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/pagination.rs",
+        ));
+    }
+    out
+}
+
+macro_rules! pagination_variant_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &CompiledPagination) {
+                if let CompiledPagination::$variant(plan) = v {
+                    let _ = plan;
+                }
+            }
+            let _ = check as fn(&CompiledPagination);
+        }
+    };
+}
+macro_rules! pagination_field_witness {
+    ($name:ident,$variant:ident,$field:ident) => {
+        fn $name() {
+            fn check(v: &CompiledPagination) {
+                if let CompiledPagination::$variant(plan) = v {
+                    let _ = &plan.$field;
+                }
+            }
+            let _ = check as fn(&CompiledPagination);
+        }
+    };
+}
+macro_rules! pagination_limit_witness {
+    ($name:ident,$variant:ident,$field:ident) => {
+        fn $name() {
+            fn check(v: &CompiledPagination) {
+                if let CompiledPagination::$variant(plan) = v {
+                    let _ = &plan.limits.$field;
+                }
+            }
+            let _ = check as fn(&CompiledPagination);
+        }
+    };
+}
+pagination_variant_witness!(witness_page, Page);
+pagination_field_witness!(witness_page_param, Page, page_param);
+pagination_field_witness!(witness_page_location, Page, parameter_location);
+pagination_field_witness!(witness_page_first, Page, first_page);
+pagination_field_witness!(witness_page_size_param, Page, page_size_param);
+pagination_field_witness!(witness_page_size, Page, page_size);
+pagination_field_witness!(witness_page_total, Page, total_path);
+pagination_field_witness!(witness_page_limits, Page, limits);
+pagination_limit_witness!(witness_page_requests, Page, max_requests);
+pagination_limit_witness!(witness_page_items, Page, max_items);
+pagination_limit_witness!(witness_page_depth, Page, max_depth);
+pagination_variant_witness!(witness_offset, OffsetLimit);
+pagination_field_witness!(witness_offset_param, OffsetLimit, offset_param);
+pagination_field_witness!(witness_offset_limit_param, OffsetLimit, limit_param);
+pagination_field_witness!(witness_offset_location, OffsetLimit, parameter_location);
+pagination_field_witness!(witness_offset_start, OffsetLimit, start_offset);
+pagination_field_witness!(witness_offset_limit, OffsetLimit, limit);
+pagination_field_witness!(witness_offset_total, OffsetLimit, total_path);
+pagination_field_witness!(witness_offset_limits, OffsetLimit, limits);
+pagination_limit_witness!(witness_offset_requests, OffsetLimit, max_requests);
+pagination_limit_witness!(witness_offset_items, OffsetLimit, max_items);
+pagination_limit_witness!(witness_offset_depth, OffsetLimit, max_depth);
+pagination_variant_witness!(witness_cursor, Cursor);
+pagination_field_witness!(witness_cursor_param, Cursor, cursor_param);
+pagination_field_witness!(witness_cursor_location, Cursor, parameter_location);
+pagination_field_witness!(witness_cursor_next, Cursor, next_cursor_path);
+pagination_field_witness!(witness_cursor_limits, Cursor, limits);
+pagination_limit_witness!(witness_cursor_requests, Cursor, max_requests);
+pagination_limit_witness!(witness_cursor_items, Cursor, max_items);
+pagination_limit_witness!(witness_cursor_depth, Cursor, max_depth);
+pagination_variant_witness!(witness_sitemap, Sitemap);
+pagination_field_witness!(witness_sitemap_child, Sitemap, child_sitemap_selector);
+pagination_field_witness!(witness_sitemap_posting, Sitemap, posting_url_selector);
+pagination_field_witness!(witness_sitemap_limits, Sitemap, limits);
+pagination_limit_witness!(witness_sitemap_requests, Sitemap, max_requests);
+pagination_limit_witness!(witness_sitemap_items, Sitemap, max_items);
+pagination_limit_witness!(witness_sitemap_depth, Sitemap, max_depth);
+fn witness_location_query() {
+    fn check(v: &PaginationParameterLocation) {
+        if let PaginationParameterLocation::Query = v {}
+    }
+    let _ = check as fn(&PaginationParameterLocation);
+}
+fn witness_location_json() {
+    fn check(v: &PaginationParameterLocation) {
+        if let PaginationParameterLocation::JsonBody = v {}
+    }
+    let _ = check as fn(&PaginationParameterLocation);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged},
+        CompiledRegistration,
+        Family::{Pagination, PaginationLocation},
+        Owner::P10,
+        PrimitiveContext::Discovery,
+    };
+    macro_rules! row {
+        ($key:literal,$shape:expr,$identity:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Pagination,
+                key: $key,
+                contexts: &[Discovery],
+                owner: P10,
+                canonical_file: "src-tauri/src/profile_dsl/primitives/pagination/mod.rs",
+                shape: $shape,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!("page", Tagged, "CompiledPagination::Page", witness_page),
+        row!(
+            "page.pageParam",
+            ParentOption,
+            "CompiledPagination::Page.page_param",
+            witness_page_param
+        ),
+        row!(
+            "page.parameterLocation",
+            ParentOption,
+            "CompiledPagination::Page.parameter_location",
+            witness_page_location
+        ),
+        row!(
+            "page.firstPage",
+            ParentOption,
+            "CompiledPagination::Page.first_page",
+            witness_page_first
+        ),
+        row!(
+            "page.pageSizeParam",
+            ParentOption,
+            "CompiledPagination::Page.page_size_param",
+            witness_page_size_param
+        ),
+        row!(
+            "page.pageSize",
+            ParentOption,
+            "CompiledPagination::Page.page_size",
+            witness_page_size
+        ),
+        row!(
+            "page.totalPath",
+            ParentOption,
+            "CompiledPagination::Page.total_path",
+            witness_page_total
+        ),
+        row!(
+            "page.limits",
+            ParentOption,
+            "CompiledPagination::Page.limits",
+            witness_page_limits
+        ),
+        row!(
+            "page.limits.maxRequests",
+            ParentOption,
+            "CompiledPagination::Page.limits.max_requests",
+            witness_page_requests
+        ),
+        row!(
+            "page.limits.maxItems",
+            ParentOption,
+            "CompiledPagination::Page.limits.max_items",
+            witness_page_items
+        ),
+        row!(
+            "page.limits.maxDepth",
+            ParentOption,
+            "CompiledPagination::Page.limits.max_depth",
+            witness_page_depth
+        ),
+        row!(
+            "offset_limit",
+            Tagged,
+            "CompiledPagination::OffsetLimit",
+            witness_offset
+        ),
+        row!(
+            "offset_limit.offsetParam",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.offset_param",
+            witness_offset_param
+        ),
+        row!(
+            "offset_limit.limitParam",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limit_param",
+            witness_offset_limit_param
+        ),
+        row!(
+            "offset_limit.parameterLocation",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.parameter_location",
+            witness_offset_location
+        ),
+        row!(
+            "offset_limit.startOffset",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.start_offset",
+            witness_offset_start
+        ),
+        row!(
+            "offset_limit.limit",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limit",
+            witness_offset_limit
+        ),
+        row!(
+            "offset_limit.totalPath",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.total_path",
+            witness_offset_total
+        ),
+        row!(
+            "offset_limit.limits",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limits",
+            witness_offset_limits
+        ),
+        row!(
+            "offset_limit.limits.maxRequests",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limits.max_requests",
+            witness_offset_requests
+        ),
+        row!(
+            "offset_limit.limits.maxItems",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limits.max_items",
+            witness_offset_items
+        ),
+        row!(
+            "offset_limit.limits.maxDepth",
+            ParentOption,
+            "CompiledPagination::OffsetLimit.limits.max_depth",
+            witness_offset_depth
+        ),
+        row!(
+            "cursor",
+            Tagged,
+            "CompiledPagination::Cursor",
+            witness_cursor
+        ),
+        row!(
+            "cursor.cursorParam",
+            ParentOption,
+            "CompiledPagination::Cursor.cursor_param",
+            witness_cursor_param
+        ),
+        row!(
+            "cursor.parameterLocation",
+            ParentOption,
+            "CompiledPagination::Cursor.parameter_location",
+            witness_cursor_location
+        ),
+        row!(
+            "cursor.nextCursorPath",
+            ParentOption,
+            "CompiledPagination::Cursor.next_cursor_path",
+            witness_cursor_next
+        ),
+        row!(
+            "cursor.limits",
+            ParentOption,
+            "CompiledPagination::Cursor.limits",
+            witness_cursor_limits
+        ),
+        row!(
+            "cursor.limits.maxRequests",
+            ParentOption,
+            "CompiledPagination::Cursor.limits.max_requests",
+            witness_cursor_requests
+        ),
+        row!(
+            "cursor.limits.maxItems",
+            ParentOption,
+            "CompiledPagination::Cursor.limits.max_items",
+            witness_cursor_items
+        ),
+        row!(
+            "cursor.limits.maxDepth",
+            ParentOption,
+            "CompiledPagination::Cursor.limits.max_depth",
+            witness_cursor_depth
+        ),
+        row!(
+            "sitemap",
+            Tagged,
+            "CompiledPagination::Sitemap",
+            witness_sitemap
+        ),
+        row!(
+            "sitemap.childSitemapSelector",
+            ParentOption,
+            "CompiledPagination::Sitemap.child_sitemap_selector",
+            witness_sitemap_child
+        ),
+        row!(
+            "sitemap.postingUrlSelector",
+            ParentOption,
+            "CompiledPagination::Sitemap.posting_url_selector",
+            witness_sitemap_posting
+        ),
+        row!(
+            "sitemap.limits",
+            ParentOption,
+            "CompiledPagination::Sitemap.limits",
+            witness_sitemap_limits
+        ),
+        row!(
+            "sitemap.limits.maxRequests",
+            ParentOption,
+            "CompiledPagination::Sitemap.limits.max_requests",
+            witness_sitemap_requests
+        ),
+        row!(
+            "sitemap.limits.maxItems",
+            ParentOption,
+            "CompiledPagination::Sitemap.limits.max_items",
+            witness_sitemap_items
+        ),
+        row!(
+            "sitemap.limits.maxDepth",
+            ParentOption,
+            "CompiledPagination::Sitemap.limits.max_depth",
+            witness_sitemap_depth
+        ),
+        CompiledRegistration {
+            family: PaginationLocation,
+            key: "query",
+            contexts: &[Discovery],
+            owner: P10,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/pagination/mod.rs",
+            shape: Tagged,
+            compiled_identity: "PaginationParameterLocation::Query",
+            witness: witness_location_query,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: PaginationLocation,
+            key: "json_body",
+            contexts: &[Discovery],
+            owner: P10,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/pagination/mod.rs",
+            shape: Tagged,
+            compiled_identity: "PaginationParameterLocation::JsonBody",
+            witness: witness_location_json,
+            behavior_bearing: false,
+        },
+    ]
+}

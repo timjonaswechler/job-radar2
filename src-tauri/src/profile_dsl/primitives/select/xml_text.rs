@@ -12,8 +12,8 @@ pub struct XmlTextSelect {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct XmlTextSelectPlan {
-    current: bool,
-    segments: Vec<String>,
+    pub(super) current: bool,
+    pub(super) segments: Vec<String>,
 }
 
 pub(crate) fn compile(text_path: &str) -> Result<XmlTextSelectPlan, String> {

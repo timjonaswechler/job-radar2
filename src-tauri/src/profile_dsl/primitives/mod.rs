@@ -1,6 +1,7 @@
 pub mod acceptance;
 pub mod capture;
 pub mod cardinality;
+pub mod completeness;
 pub mod fetch;
 pub mod pagination;
 pub mod parse;

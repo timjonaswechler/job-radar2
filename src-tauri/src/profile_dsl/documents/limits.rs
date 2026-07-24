@@ -177,3 +177,49 @@ impl<'de> Deserialize<'de> for PhaseLimitsFragment {
         })
     }
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::ParentOption,
+        Family::PhaseLimit,
+        PrimitiveContext::{DetailPhaseLimit, DiscoveryPhaseLimit},
+    };
+    vec![serde_shape(
+        PhaseLimit,
+        "maxBrowserRenderedBytes",
+        &[DiscoveryPhaseLimit, DetailPhaseLimit],
+        ParentOption,
+        "src-tauri/src/profile_dsl/documents/limits.rs",
+    )]
+}
+
+fn witness_phase_browser_bytes() {
+    fn check(v: &PhaseLimits) {
+        let _ = &v.max_browser_rendered_bytes;
+    }
+    let _ = check as fn(&PhaseLimits);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::ParentOption,
+        CompiledRegistration,
+        Family::PhaseLimit,
+        Owner::B01,
+        PrimitiveContext::{DetailPhaseLimit, DiscoveryPhaseLimit},
+    };
+    vec![CompiledRegistration {
+        family: PhaseLimit,
+        key: "maxBrowserRenderedBytes",
+        contexts: &[DiscoveryPhaseLimit, DetailPhaseLimit],
+        owner: B01,
+        canonical_file: "src-tauri/src/profile_dsl/documents/limits.rs",
+        shape: ParentOption,
+        compiled_identity: "PhaseLimits.max_browser_rendered_bytes",
+        witness: witness_phase_browser_bytes,
+        behavior_bearing: false,
+    }]
+}

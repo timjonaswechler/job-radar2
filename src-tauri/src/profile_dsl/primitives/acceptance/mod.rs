@@ -508,3 +508,101 @@ fn acceptance_diagnostic(
         details: Some(details),
     }
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::ParentOption,
+        Family::Acceptance,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    vec![
+        serde_shape(
+            Acceptance,
+            "requiredFields",
+            &[Discovery, Detail],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/strategy.rs",
+        ),
+        serde_shape(
+            Acceptance,
+            "minDescriptionLength",
+            &[Discovery, Detail],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/strategy.rs",
+        ),
+        serde_shape(
+            Acceptance,
+            "minResults",
+            &[Discovery],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/strategy.rs",
+        ),
+    ]
+}
+
+fn witness_acceptance_required() {
+    fn check(v: &CompiledAcceptance) {
+        let _ = &v.required_fields;
+    }
+    let _ = check as fn(&CompiledAcceptance);
+}
+fn witness_acceptance_description() {
+    fn check(v: &CompiledAcceptance) {
+        let _ = &v.min_description_length;
+    }
+    let _ = check as fn(&CompiledAcceptance);
+}
+fn witness_acceptance_results() {
+    fn check(v: &CompiledAcceptance) {
+        let _ = &v.min_results;
+    }
+    let _ = check as fn(&CompiledAcceptance);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::ParentOption,
+        CompiledRegistration,
+        Family::Acceptance,
+        Owner::P11,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    vec![
+        CompiledRegistration {
+            family: Acceptance,
+            key: "requiredFields",
+            contexts: &[Discovery, Detail],
+            owner: P11,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/acceptance/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledAcceptance.required_fields",
+            witness: witness_acceptance_required,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Acceptance,
+            key: "minDescriptionLength",
+            contexts: &[Discovery, Detail],
+            owner: P11,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/acceptance/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledAcceptance.min_description_length",
+            witness: witness_acceptance_description,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Acceptance,
+            key: "minResults",
+            contexts: &[Discovery],
+            owner: P11,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/acceptance/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledAcceptance.min_results",
+            witness: witness_acceptance_results,
+            behavior_bearing: false,
+        },
+    ]
+}

@@ -35,6 +35,15 @@ pub struct CompiledNamedPattern {
     regex: Regex,
 }
 
+impl CompiledNamedPattern {
+    pub(crate) fn authored_pattern(&self) -> &str {
+        &self.pattern
+    }
+    pub(crate) fn capture_keys(&self) -> &[String] {
+        &self.keys
+    }
+}
+
 impl PartialEq for CompiledNamedPattern {
     fn eq(&self, other: &Self) -> bool {
         self.pattern == other.pattern && self.keys == other.keys

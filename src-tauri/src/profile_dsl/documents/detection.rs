@@ -412,3 +412,170 @@ pub enum DetectionEvidenceKind {
     Html,
     Browser,
 }
+
+fn authored_detection_strategy_shape(
+    value: &DetectionStrategy,
+) -> (&'static str, &'static [&'static str]) {
+    match value {
+        DetectionStrategy::Url { key: _, input: _ } => ("url", &["key", "input"]),
+        DetectionStrategy::Http {
+            key: _,
+            fetch: _,
+            expect_status: _,
+            contains: _,
+            regex: _,
+            captures: _,
+            evidence: _,
+        } => (
+            "http",
+            &[
+                "key",
+                "fetch",
+                "expectStatus",
+                "contains",
+                "regex",
+                "captures",
+                "evidence",
+            ],
+        ),
+        DetectionStrategy::Browser {
+            key: _,
+            fetch: _,
+            contains: _,
+            regex: _,
+            captures: _,
+            evidence: _,
+        } => (
+            "browser",
+            &["key", "fetch", "contains", "regex", "captures", "evidence"],
+        ),
+    }
+}
+
+fn authored_detection_input_shape(
+    value: &DetectionUrlInput,
+) -> (&'static str, &'static [&'static str]) {
+    match value {
+        DetectionUrlInput::PatternAlternatives { alternatives: _ } => {
+            ("pattern_alternatives", &["alternatives"])
+        }
+        DetectionUrlInput::AbsoluteUrl => ("absolute_url", &[]),
+    }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{Keyed, ParentOption, Tagged},
+        Family::Detection,
+        PrimitiveContext::Detection as DetectionContext,
+    };
+    let mut out = Vec::new();
+    let strategies = [
+        DetectionStrategy::Url {
+            key: String::new(),
+            input: DetectionUrlInput::AbsoluteUrl,
+        },
+        DetectionStrategy::Http {
+            key: String::new(),
+            fetch: Fetch::Http {
+                method: None,
+                url: String::new(),
+                headers: None,
+                body: None,
+                timeout_ms: 1,
+            },
+            expect_status: Some(200),
+            contains: Some(String::new()),
+            regex: Some(String::new()),
+            captures: Some(Vec::new()),
+            evidence: Some(String::new()),
+        },
+        DetectionStrategy::Browser {
+            key: String::new(),
+            fetch: Fetch::Browser {
+                url: String::new(),
+                timeout_ms: 1,
+                waits: Some(Vec::new()),
+                interactions: Some(Vec::new()),
+            },
+            contains: Some(String::new()),
+            regex: Some(String::new()),
+            captures: Some(Vec::new()),
+            evidence: Some(String::new()),
+        },
+    ];
+    for strategy in &strategies {
+        let (key, options) = authored_detection_strategy_shape(strategy);
+        out.push(serde_shape(
+            Detection,
+            key,
+            &[DetectionContext],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/detection.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Detection,
+                format!("{key}.{option}"),
+                &[DetectionContext],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/detection.rs",
+            ));
+        }
+    }
+    let inputs = [
+        DetectionUrlInput::PatternAlternatives {
+            alternatives: vec![InputUrlPattern {
+                pattern: String::new(),
+                captures: Some(Vec::new()),
+            }],
+        },
+        DetectionUrlInput::AbsoluteUrl,
+    ];
+    for input in &inputs {
+        let (key, options) = authored_detection_input_shape(input);
+        out.push(serde_shape(
+            Detection,
+            key,
+            &[DetectionContext],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/detection.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Detection,
+                format!("{key}.{option}"),
+                &[DetectionContext],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/detection.rs",
+            ));
+        }
+    }
+    let pattern = InputUrlPattern {
+        pattern: String::new(),
+        captures: Some(Vec::new()),
+    };
+    let InputUrlPattern {
+        pattern: _,
+        captures: _,
+    } = pattern;
+    out.push(serde_shape(
+        Detection,
+        "input_url_pattern",
+        &[DetectionContext],
+        Keyed,
+        "src-tauri/src/profile_dsl/documents/detection.rs",
+    ));
+    for option in ["pattern", "captures"] {
+        out.push(serde_shape(
+            Detection,
+            format!("input_url_pattern.{option}"),
+            &[DetectionContext],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/detection.rs",
+        ));
+    }
+    out
+}

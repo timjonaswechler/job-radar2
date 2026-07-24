@@ -136,3 +136,212 @@ pub enum RequestBody {
     Text { value: String },
     Form { fields: BTreeMap<String, String> },
 }
+
+fn authored_fetch_shape(value: &Fetch) -> (&'static str, &'static [&'static str]) {
+    match value {
+        Fetch::Http {
+            method: _,
+            url: _,
+            headers: _,
+            body: _,
+            timeout_ms: _,
+        } => ("http", &["url", "headers", "timeoutMs"]),
+        Fetch::Browser {
+            url: _,
+            timeout_ms: _,
+            waits: _,
+            interactions: _,
+        } => ("browser", &["url", "timeoutMs", "waits", "interactions"]),
+    }
+}
+
+fn authored_method_key(value: HttpMethod) -> &'static str {
+    match value {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+    }
+}
+
+fn authored_body_shape(value: &RequestBody) -> (&'static str, &'static [&'static str]) {
+    match value {
+        RequestBody::Json { value: _ } => ("json", &["value"]),
+        RequestBody::Text { value: _ } => ("text", &["value"]),
+        RequestBody::Form { fields: _ } => ("form", &["fields"]),
+    }
+}
+
+fn authored_wait_shape(value: &BrowserWait) -> (&'static str, &'static [&'static str]) {
+    match value {
+        BrowserWait::Selector {
+            selector: _,
+            timeout_ms: _,
+        } => ("selector", &["selector", "timeoutMs"]),
+        BrowserWait::NetworkIdle { timeout_ms: _ } => ("network_idle", &["timeoutMs"]),
+    }
+}
+
+fn authored_interaction_shape(
+    value: &BrowserInteraction,
+) -> (&'static str, &'static [&'static str]) {
+    match value {
+        BrowserInteraction::ClickIfVisible {
+            selector: _,
+            max_count: _,
+            wait_after_ms: _,
+        } => ("click_if_visible", &["selector", "maxCount", "waitAfterMs"]),
+        BrowserInteraction::ClickUntilGone {
+            selector: _,
+            max_count: _,
+            wait_after_ms: _,
+        } => ("click_until_gone", &["selector", "maxCount", "waitAfterMs"]),
+    }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{ParentOption, Tagged},
+        Family,
+        PrimitiveContext::{Detail, DetectionBrowser, DetectionHttp, Discovery},
+    };
+    let mut out = Vec::new();
+    let authored_fetches = [
+        Fetch::Http {
+            method: Some(HttpMethod::Post),
+            url: String::new(),
+            headers: Some(BTreeMap::new()),
+            body: Some(RequestBody::Json {
+                value: JsonObject::new(),
+            }),
+            timeout_ms: 1,
+        },
+        Fetch::Browser {
+            url: String::new(),
+            timeout_ms: 1,
+            waits: Some(Vec::new()),
+            interactions: Some(Vec::new()),
+        },
+    ];
+    for authored in &authored_fetches {
+        let (key, options) = authored_fetch_shape(authored);
+        let (family, contexts) = if key == "http" {
+            (Family::Fetch, &[Discovery, Detail, DetectionHttp][..])
+        } else {
+            (Family::Browser, &[Discovery, Detail, DetectionBrowser][..])
+        };
+        out.push(serde_shape(
+            family,
+            key,
+            contexts,
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/fetch.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                family,
+                format!("{key}.{option}"),
+                contexts,
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/fetch.rs",
+            ));
+        }
+    }
+    for method in [HttpMethod::Get, HttpMethod::Post] {
+        out.push(serde_shape(
+            Family::Fetch,
+            format!("http.method.{}", authored_method_key(method)),
+            &[Discovery, Detail, DetectionHttp],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/fetch.rs",
+        ));
+    }
+    let bodies = [
+        RequestBody::Json {
+            value: JsonObject::new(),
+        },
+        RequestBody::Text {
+            value: String::new(),
+        },
+        RequestBody::Form {
+            fields: BTreeMap::new(),
+        },
+    ];
+    for body in &bodies {
+        let (key, options) = authored_body_shape(body);
+        out.push(serde_shape(
+            Family::Fetch,
+            format!("http.body.{key}"),
+            &[Discovery, Detail, DetectionHttp],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/fetch.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Family::Fetch,
+                format!("http.body.{key}.{option}"),
+                &[Discovery, Detail, DetectionHttp],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/fetch.rs",
+            ));
+        }
+    }
+    let waits = [
+        BrowserWait::Selector {
+            selector: String::new(),
+            timeout_ms: 1,
+        },
+        BrowserWait::NetworkIdle { timeout_ms: 1 },
+    ];
+    for authored in &waits {
+        let (key, options) = authored_wait_shape(authored);
+        out.push(serde_shape(
+            Family::Browser,
+            key,
+            &[Discovery, Detail, DetectionBrowser],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/fetch.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Family::Browser,
+                format!("{key}.{option}"),
+                &[Discovery, Detail, DetectionBrowser],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/fetch.rs",
+            ));
+        }
+    }
+    let interactions = [
+        BrowserInteraction::ClickIfVisible {
+            selector: String::new(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+        BrowserInteraction::ClickUntilGone {
+            selector: String::new(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+    ];
+    for authored in &interactions {
+        let (key, options) = authored_interaction_shape(authored);
+        out.push(serde_shape(
+            Family::Browser,
+            key,
+            &[Discovery, Detail, DetectionBrowser],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/fetch.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Family::Browser,
+                format!("{key}.{option}"),
+                &[Discovery, Detail, DetectionBrowser],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/fetch.rs",
+            ));
+        }
+    }
+    out
+}

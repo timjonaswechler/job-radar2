@@ -260,3 +260,101 @@ fn compile_value_source(
     }
     Ok(value)
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{Keyed, ParentOption},
+        Family::Capture,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    vec![
+        serde_shape(
+            Capture,
+            "named",
+            &[Discovery, Detail],
+            Keyed,
+            "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+        ),
+        serde_shape(
+            Capture,
+            "entry.from",
+            &[Discovery, Detail],
+            ParentOption,
+            "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+        ),
+        serde_shape(
+            Capture,
+            "entry.pattern",
+            &[Discovery, Detail],
+            ParentOption,
+            "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+        ),
+    ]
+}
+
+fn witness_capture_named() {
+    fn check(v: &CompiledCaptureRule) {
+        let _ = v.key();
+    }
+    let _ = check as fn(&CompiledCaptureRule);
+}
+fn witness_capture_from() {
+    fn check(v: &CompiledCaptureRule) {
+        let _ = v.from();
+    }
+    let _ = check as fn(&CompiledCaptureRule);
+}
+fn witness_capture_pattern() {
+    fn check(v: &CompiledCaptureRule) {
+        let _ = v.pattern();
+    }
+    let _ = check as fn(&CompiledCaptureRule);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{Keyed, ParentOption},
+        CompiledRegistration,
+        Family::Capture,
+        Owner::P08,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    vec![
+        CompiledRegistration {
+            family: Capture,
+            key: "named",
+            contexts: &[Discovery, Detail],
+            owner: P08,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+            shape: Keyed,
+            compiled_identity: "CompiledCaptureRule.key",
+            witness: witness_capture_named,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Capture,
+            key: "entry.from",
+            contexts: &[Discovery, Detail],
+            owner: P08,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledCaptureRule.from",
+            witness: witness_capture_from,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Capture,
+            key: "entry.pattern",
+            contexts: &[Discovery, Detail],
+            owner: P08,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/capture/named.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledCaptureRule.pattern",
+            witness: witness_capture_pattern,
+            behavior_bearing: false,
+        },
+    ]
+}

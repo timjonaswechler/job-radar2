@@ -16,7 +16,7 @@ pub struct SitemapUrlsSelect {
 
 #[derive(Clone, Debug)]
 pub struct SitemapUrlsSelectPlan {
-    url_pattern: Option<String>,
+    pub(super) url_pattern: Option<String>,
     pattern: Option<Regex>,
 }
 

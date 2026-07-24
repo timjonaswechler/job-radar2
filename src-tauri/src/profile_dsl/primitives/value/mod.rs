@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::profile_dsl::{
-    documents::{AuthoredScalar, FieldExpression, ParseType},
+    documents::{AuthoredScalar, CombinePart, FieldExpression, ListFieldExpression, ParseType},
     primitives::{
         cardinality::{compile_cardinality, Cardinality, CardinalityOutcome, CompiledCardinality},
         select::{
@@ -1175,4 +1175,479 @@ fn eval_error(kind: ValueEvaluationErrorKind, path: &str, message: &str) -> Valu
         actual_count: None,
         message: message.to_string(),
     }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{ParentOption, Tagged, Untagged},
+        Family::{Value, ValuePlacement},
+        PrimitiveContext::{
+            DetailCaptureSource, DetailMatchFilterOutput, DiscoveryCaptureSource,
+            DiscoveryFilterOutput,
+        },
+    };
+    let all = &[
+        DiscoveryCaptureSource,
+        DiscoveryFilterOutput,
+        DetailCaptureSource,
+        DetailMatchFilterOutput,
+    ];
+    let none = || (None, None);
+    let (cardinality, transforms) = none();
+    let authored = vec![
+        FieldExpression::Const {
+            value: AuthoredScalar::Boolean(true),
+            cardinality,
+            transforms,
+        },
+        FieldExpression::Template {
+            template: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::SourceConfig {
+            key: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::PostingMeta {
+            key: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::Capture {
+            key: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::ItemField {
+            key: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::JsonPath {
+            json_path: "$.x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::XmlText {
+            text_path: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::XmlElement {
+            element: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::CssText {
+            selector: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::CssAttribute {
+            selector: "x".into(),
+            attribute: "x".into(),
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::Combine {
+            parts: Vec::new(),
+            join: None,
+            cardinality: None,
+            transforms: None,
+        },
+        FieldExpression::FirstNonEmpty {
+            candidates: Vec::new(),
+            transforms: None,
+        },
+    ];
+    let mut out: Vec<_> = authored
+        .iter()
+        .map(|value| {
+            serde_shape(
+                Value,
+                value.completeness_key(),
+                all,
+                Tagged,
+                "src-tauri/src/profile_dsl/documents/extract.rs",
+            )
+        })
+        .collect();
+    for descriptor in value_placement_descriptors() {
+        let context = match descriptor.key {
+            "discovery_capture_source" => DiscoveryCaptureSource,
+            "discovery_filter_output" => DiscoveryFilterOutput,
+            "detail_capture_source" => DetailCaptureSource,
+            "detail_match_filter_output" => DetailMatchFilterOutput,
+            _ => unreachable!("closed placement"),
+        };
+        out.push(serde_shape(
+            ValuePlacement,
+            descriptor.key,
+            &[context],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/extract.rs",
+        ));
+    }
+    let list_examples = [
+        ListFieldExpression::Single(FieldExpression::Const {
+            value: AuthoredScalar::Boolean(true),
+            cardinality: None,
+            transforms: None,
+        }),
+        ListFieldExpression::Multiple(Vec::new()),
+    ];
+    for value in &list_examples {
+        out.push(serde_shape(
+            Value,
+            value.completeness_key(),
+            &[DiscoveryFilterOutput, DetailMatchFilterOutput],
+            Untagged,
+            "src-tauri/src/profile_dsl/documents/extract.rs",
+        ));
+    }
+    let combine_part = CombinePart {
+        value: Box::new(FieldExpression::Const {
+            value: AuthoredScalar::Boolean(true),
+            cardinality: None,
+            transforms: None,
+        }),
+        optional: Some(true),
+    };
+    for key in combine_part.completeness_keys() {
+        out.push(serde_shape(
+            Value,
+            key,
+            all,
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/extract.rs",
+        ));
+    }
+    for key in ["combine.join", "first_non_empty.candidates"] {
+        out.push(serde_shape(
+            Value,
+            key,
+            all,
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/extract.rs",
+        ));
+    }
+    out
+}
+
+macro_rules! value_variant_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &CompiledValue) {
+                if let CompiledValue::$variant { .. } = v {}
+            }
+            let _ = check as fn(&CompiledValue);
+        }
+    };
+}
+value_variant_witness!(witness_value_const, Const);
+value_variant_witness!(witness_value_template, Template);
+value_variant_witness!(witness_value_source_config, SourceConfig);
+value_variant_witness!(witness_value_posting_meta, PostingMeta);
+value_variant_witness!(witness_value_capture, Capture);
+value_variant_witness!(witness_value_item_field, ItemField);
+value_variant_witness!(witness_value_json_path, JsonPath);
+value_variant_witness!(witness_value_xml_text, XmlText);
+value_variant_witness!(witness_value_xml_element, XmlElement);
+value_variant_witness!(witness_value_css_text, CssText);
+value_variant_witness!(witness_value_css_attribute, CssAttribute);
+value_variant_witness!(witness_value_combine, Combine);
+value_variant_witness!(witness_value_first, FirstNonEmpty);
+fn witness_list_single() {
+    fn check(v: &CompiledListValue) {
+        if let CompiledListValue::Single(value) = v {
+            let _ = value;
+        }
+    }
+    let _ = check as fn(&CompiledListValue);
+}
+fn witness_list_multiple() {
+    fn check(v: &CompiledListValue) {
+        if let CompiledListValue::Multiple(values) = v {
+            let _ = values;
+        }
+    }
+    let _ = check as fn(&CompiledListValue);
+}
+fn witness_combine_part_value() {
+    fn check(v: &CompiledCombinePart) {
+        let _ = &v.value;
+    }
+    let _ = check as fn(&CompiledCombinePart);
+}
+fn witness_combine_part_optional() {
+    fn check(v: &CompiledCombinePart) {
+        let _ = &v.optional;
+    }
+    let _ = check as fn(&CompiledCombinePart);
+}
+fn witness_combine_join() {
+    fn check(v: &CompiledValue) {
+        if let CompiledValue::Combine { join, .. } = v {
+            let _ = join;
+        }
+    }
+    let _ = check as fn(&CompiledValue);
+}
+fn witness_first_candidates() {
+    fn check(v: &CompiledValue) {
+        if let CompiledValue::FirstNonEmpty { candidates, .. } = v {
+            let _ = candidates;
+        }
+    }
+    let _ = check as fn(&CompiledValue);
+}
+macro_rules! placement_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &ValueCompileContext) {
+                if let ValuePlacement::$variant = v.placement {}
+            }
+            let _ = check as fn(&ValueCompileContext);
+        }
+    };
+}
+placement_witness!(witness_placement_discovery_capture, DiscoveryCaptureSource);
+placement_witness!(witness_placement_discovery_filter, DiscoveryFilterOutput);
+placement_witness!(witness_placement_detail_capture, DetailCaptureSource);
+placement_witness!(witness_placement_detail_match, DetailMatchFilterOutput);
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged, Untagged},
+        CompiledRegistration,
+        Family::{Value, ValuePlacement},
+        Owner::{P06a, P06bc},
+        PrimitiveContext::{
+            DetailCaptureSource, DetailMatchFilterOutput, DiscoveryCaptureSource,
+            DiscoveryFilterOutput,
+        },
+    };
+    const ALL: &[crate::profile_dsl::primitives::completeness::PrimitiveContext] = &[
+        DiscoveryCaptureSource,
+        DiscoveryFilterOutput,
+        DetailCaptureSource,
+        DetailMatchFilterOutput,
+    ];
+    macro_rules! row {
+        ($key:literal,$variant:literal,$file:literal,$shape:expr,$witness:expr) => {
+            CompiledRegistration {
+                family: Value,
+                key: $key,
+                contexts: ALL,
+                owner: P06bc,
+                canonical_file: concat!(
+                    "src-tauri/src/profile_dsl/primitives/value/",
+                    $file,
+                    ".rs"
+                ),
+                shape: $shape,
+                compiled_identity: concat!("CompiledValue::", $variant),
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    let mut out = vec![
+        row!("const", "Const", "const_value", Tagged, witness_value_const),
+        row!(
+            "template",
+            "Template",
+            "template",
+            Tagged,
+            witness_value_template
+        ),
+        row!(
+            "source_config",
+            "SourceConfig",
+            "source_config",
+            Tagged,
+            witness_value_source_config
+        ),
+        row!(
+            "posting_meta",
+            "PostingMeta",
+            "posting_meta",
+            Tagged,
+            witness_value_posting_meta
+        ),
+        row!(
+            "capture",
+            "Capture",
+            "capture",
+            Tagged,
+            witness_value_capture
+        ),
+        row!(
+            "item_field",
+            "ItemField",
+            "item_field",
+            Tagged,
+            witness_value_item_field
+        ),
+        row!(
+            "json_path",
+            "JsonPath",
+            "json_path",
+            Tagged,
+            witness_value_json_path
+        ),
+        row!(
+            "xml_text",
+            "XmlText",
+            "xml_text",
+            Tagged,
+            witness_value_xml_text
+        ),
+        row!(
+            "xml_element",
+            "XmlElement",
+            "xml_element",
+            Tagged,
+            witness_value_xml_element
+        ),
+        row!(
+            "css_text",
+            "CssText",
+            "css_text",
+            Tagged,
+            witness_value_css_text
+        ),
+        row!(
+            "css_attribute",
+            "CssAttribute",
+            "css_attribute",
+            Tagged,
+            witness_value_css_attribute
+        ),
+        row!(
+            "combine",
+            "Combine",
+            "combine",
+            Tagged,
+            witness_value_combine
+        ),
+        row!(
+            "first_non_empty",
+            "FirstNonEmpty",
+            "first_non_empty",
+            Tagged,
+            witness_value_first
+        ),
+    ];
+    macro_rules! local {
+        ($key:literal,$contexts:expr,$shape:expr,$identity:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Value,
+                key: $key,
+                contexts: $contexts,
+                owner: P06bc,
+                canonical_file: "src-tauri/src/profile_dsl/primitives/value/mod.rs",
+                shape: $shape,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    out.extend([
+        local!(
+            "list.single",
+            &[DiscoveryFilterOutput, DetailMatchFilterOutput],
+            Untagged,
+            "CompiledListValue::Single",
+            witness_list_single
+        ),
+        local!(
+            "list.multiple",
+            &[DiscoveryFilterOutput, DetailMatchFilterOutput],
+            Untagged,
+            "CompiledListValue::Multiple",
+            witness_list_multiple
+        ),
+        local!(
+            "combine.part.value",
+            ALL,
+            ParentOption,
+            "CompiledCombinePart.value",
+            witness_combine_part_value
+        ),
+        local!(
+            "combine.part.optional",
+            ALL,
+            ParentOption,
+            "CompiledCombinePart.optional",
+            witness_combine_part_optional
+        ),
+        local!(
+            "combine.join",
+            ALL,
+            ParentOption,
+            "CompiledValue::Combine.join",
+            witness_combine_join
+        ),
+        local!(
+            "first_non_empty.candidates",
+            ALL,
+            ParentOption,
+            "CompiledValue::FirstNonEmpty.candidates",
+            witness_first_candidates
+        ),
+    ]);
+    out.extend([
+        CompiledRegistration {
+            family: ValuePlacement,
+            key: "discovery_capture_source",
+            contexts: &[DiscoveryCaptureSource],
+            owner: P06a,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/value/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ValueCompileContext.placement::DiscoveryCaptureSource",
+            witness: witness_placement_discovery_capture,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: ValuePlacement,
+            key: "discovery_filter_output",
+            contexts: &[DiscoveryFilterOutput],
+            owner: P06a,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/value/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ValueCompileContext.placement::DiscoveryFilterOutput",
+            witness: witness_placement_discovery_filter,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: ValuePlacement,
+            key: "detail_capture_source",
+            contexts: &[DetailCaptureSource],
+            owner: P06a,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/value/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ValueCompileContext.placement::DetailCaptureSource",
+            witness: witness_placement_detail_capture,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: ValuePlacement,
+            key: "detail_match_filter_output",
+            contexts: &[DetailMatchFilterOutput],
+            owner: P06a,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/value/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ValueCompileContext.placement::DetailMatchFilterOutput",
+            witness: witness_placement_detail_match,
+            behavior_bearing: false,
+        },
+    ]);
+    out
 }

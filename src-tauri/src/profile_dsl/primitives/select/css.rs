@@ -13,7 +13,7 @@ pub struct CssSelect {
 
 #[derive(Clone, Debug)]
 pub struct CssSelectPlan {
-    selector: String,
+    pub(super) selector: String,
     matcher: Matcher,
 }
 

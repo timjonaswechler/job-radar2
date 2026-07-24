@@ -2031,3 +2031,292 @@ fn terminal_result(
         report,
     }
 }
+
+macro_rules! detection_variant_witness {
+    ($name:ident,$variant:ident) => {
+        fn $name() {
+            fn check(v: &CompiledDetectionStrategy) {
+                if let CompiledDetectionStrategy::$variant { .. } = v {}
+            }
+            let _ = check as fn(&CompiledDetectionStrategy);
+        }
+    };
+    ($name:ident,$variant:ident,$field:ident) => {
+        fn $name() {
+            fn check(v: &CompiledDetectionStrategy) {
+                if let CompiledDetectionStrategy::$variant { $field, .. } = v {
+                    let _ = $field;
+                }
+            }
+            let _ = check as fn(&CompiledDetectionStrategy);
+        }
+    };
+}
+detection_variant_witness!(witness_detection_url, Url);
+detection_variant_witness!(witness_detection_url_key, Url, key);
+detection_variant_witness!(witness_detection_url_input, Url, input);
+fn witness_url_patterns() {
+    fn check(v: &CompiledUrlInput) {
+        if let CompiledUrlInput::PatternAlternatives(values) = v {
+            let _ = values;
+        }
+    }
+    let _ = check as fn(&CompiledUrlInput);
+}
+fn witness_url_alternatives() {
+    fn check(v: &CompiledUrlInput) {
+        if let CompiledUrlInput::PatternAlternatives(alternatives) = v {
+            let _ = alternatives;
+        }
+    }
+    let _ = check as fn(&CompiledUrlInput);
+}
+fn witness_url_pattern_entry() {
+    fn check(v: &CompiledUrlAlternative) {
+        let _ = &v.pattern;
+    }
+    let _ = check as fn(&CompiledUrlAlternative);
+}
+fn witness_url_pattern_pattern() {
+    fn check(v: &CompiledUrlAlternative) {
+        let _ = v.pattern.authored_pattern();
+    }
+    let _ = check as fn(&CompiledUrlAlternative);
+}
+fn witness_url_pattern_captures() {
+    fn check(v: &CompiledUrlAlternative) {
+        let _ = v.pattern.capture_keys();
+    }
+    let _ = check as fn(&CompiledUrlAlternative);
+}
+fn witness_absolute_url() {
+    fn check(v: &CompiledUrlInput) {
+        if let CompiledUrlInput::AbsoluteUrl = v {}
+    }
+    let _ = check as fn(&CompiledUrlInput);
+}
+detection_variant_witness!(witness_detection_http, Http);
+detection_variant_witness!(witness_detection_http_key, Http, key);
+detection_variant_witness!(witness_detection_http_fetch, Http, fetch);
+detection_variant_witness!(witness_detection_http_status, Http, expect_status);
+detection_variant_witness!(witness_detection_http_contains, Http, contains);
+detection_variant_witness!(witness_detection_http_regex, Http, acceptance_regex);
+detection_variant_witness!(witness_detection_http_captures, Http, captures);
+detection_variant_witness!(witness_detection_http_evidence, Http, evidence);
+detection_variant_witness!(witness_detection_browser, Browser);
+detection_variant_witness!(witness_detection_browser_key, Browser, key);
+fn witness_detection_browser_fetch() {
+    fn check(v: &CompiledDetectionStrategy) {
+        if let CompiledDetectionStrategy::Browser {
+            url,
+            timeout_ms,
+            waits,
+            interactions,
+            ..
+        } = v
+        {
+            let _ = (url, timeout_ms, waits, interactions);
+        }
+    }
+    let _ = check as fn(&CompiledDetectionStrategy);
+}
+detection_variant_witness!(witness_detection_browser_contains, Browser, contains);
+detection_variant_witness!(witness_detection_browser_regex, Browser, acceptance_regex);
+detection_variant_witness!(witness_detection_browser_captures, Browser, captures);
+detection_variant_witness!(witness_detection_browser_evidence, Browser, evidence);
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{Keyed, ParentOption, Tagged},
+        CompiledRegistration,
+        Family::Detection,
+        Owner::{D02, D03},
+        PrimitiveContext::Detection as DetectionContext,
+    };
+    macro_rules! row {
+        ($key:literal,$owner:expr,$shape:expr,$identity:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Detection,
+                key: $key,
+                contexts: &[DetectionContext],
+                owner: $owner,
+                canonical_file: "src-tauri/src/source_profile/detection/strategy.rs",
+                shape: $shape,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!(
+            "url",
+            D02,
+            Tagged,
+            "CompiledDetectionStrategy::Url",
+            witness_detection_url
+        ),
+        row!(
+            "url.key",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Url.key",
+            witness_detection_url_key
+        ),
+        row!(
+            "url.input",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Url.input",
+            witness_detection_url_input
+        ),
+        row!(
+            "pattern_alternatives",
+            D02,
+            Tagged,
+            "CompiledUrlInput::PatternAlternatives",
+            witness_url_patterns
+        ),
+        row!(
+            "pattern_alternatives.alternatives",
+            D02,
+            ParentOption,
+            "CompiledUrlInput::PatternAlternatives.0",
+            witness_url_alternatives
+        ),
+        row!(
+            "input_url_pattern",
+            D02,
+            Keyed,
+            "CompiledUrlAlternative.pattern",
+            witness_url_pattern_entry
+        ),
+        row!(
+            "input_url_pattern.pattern",
+            D02,
+            ParentOption,
+            "CompiledUrlAlternative.pattern.authored_pattern",
+            witness_url_pattern_pattern
+        ),
+        row!(
+            "input_url_pattern.captures",
+            D02,
+            ParentOption,
+            "CompiledUrlAlternative.pattern.capture_keys",
+            witness_url_pattern_captures
+        ),
+        row!(
+            "absolute_url",
+            D02,
+            Tagged,
+            "CompiledUrlInput::AbsoluteUrl",
+            witness_absolute_url
+        ),
+        row!(
+            "http",
+            D02,
+            Tagged,
+            "CompiledDetectionStrategy::Http",
+            witness_detection_http
+        ),
+        row!(
+            "http.key",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.key",
+            witness_detection_http_key
+        ),
+        row!(
+            "http.fetch",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.fetch",
+            witness_detection_http_fetch
+        ),
+        row!(
+            "http.expectStatus",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.expect_status",
+            witness_detection_http_status
+        ),
+        row!(
+            "http.contains",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.contains",
+            witness_detection_http_contains
+        ),
+        row!(
+            "http.regex",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.acceptance_regex",
+            witness_detection_http_regex
+        ),
+        row!(
+            "http.captures",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.captures",
+            witness_detection_http_captures
+        ),
+        row!(
+            "http.evidence",
+            D02,
+            ParentOption,
+            "CompiledDetectionStrategy::Http.evidence",
+            witness_detection_http_evidence
+        ),
+        row!(
+            "browser",
+            D03,
+            Tagged,
+            "CompiledDetectionStrategy::Browser",
+            witness_detection_browser
+        ),
+        row!(
+            "browser.key",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.key",
+            witness_detection_browser_key
+        ),
+        row!(
+            "browser.fetch",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.{url,timeout_ms,waits,interactions}",
+            witness_detection_browser_fetch
+        ),
+        row!(
+            "browser.contains",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.contains",
+            witness_detection_browser_contains
+        ),
+        row!(
+            "browser.regex",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.acceptance_regex",
+            witness_detection_browser_regex
+        ),
+        row!(
+            "browser.captures",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.captures",
+            witness_detection_browser_captures
+        ),
+        row!(
+            "browser.evidence",
+            D03,
+            ParentOption,
+            "CompiledDetectionStrategy::Browser.evidence",
+            witness_detection_browser_evidence
+        ),
+    ]
+}

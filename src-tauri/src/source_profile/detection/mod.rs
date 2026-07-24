@@ -1,5 +1,6 @@
 mod reconciliation;
 mod strategy;
+pub(crate) use strategy::completeness_compiled_registrations;
 
 pub use reconciliation::{
     aggregate_detection_attempts, DetectionAttempt, DetectionConfigContribution,

@@ -72,6 +72,16 @@ pub use profile_dsl::primitives::cardinality::{
     CardinalityOutcome, CardinalityRegistryError, CardinalitySequence, CompiledCardinality, First,
     FirstPlan, One, OnePlan, Optional, OptionalPlan,
 };
+pub use profile_dsl::primitives::completeness::{
+    classify_tagged_variant_keys, escape_json_pointer_token, production_compiled_inventory,
+    production_primitive_inventories, production_schema_inventory, production_serde_inventory,
+    missing_witness, schema_inventory_from_documents, traverse_schema_root,
+    validate_primitive_completeness,
+    AuthoredShapeKind, CompiledRegistration,
+    CompletenessPolicy, Family, InventoryLayer, Owner, PrimitiveCompletenessError,
+    PrimitiveCompletenessInventories, PrimitiveCompletenessRecord, PrimitiveContext,
+    SchemaPointerContext, SchemaShape, SchemaTraversalError, SchemaTraversalEvidence, SerdeShape,
+};
 pub use profile_dsl::primitives::fetch::browser::{
     browser_primitive_descriptors, validate_browser_primitive_descriptors, BrowserOptionDescriptor,
     BrowserPrimitiveDescriptor, BrowserShapeKind, BROWSER_CLICK_IF_VISIBLE_DESCRIPTOR,

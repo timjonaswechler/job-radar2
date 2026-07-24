@@ -418,8 +418,169 @@ pub fn compile_parse(
     }
 
     Ok(match authored {
-        Parse::Json(authored) => CompiledParse::Json(json::compile(authored, input_kind)),
-        Parse::Xml(authored) => CompiledParse::Xml(xml::compile(authored, input_kind)),
-        Parse::Html(authored) => CompiledParse::Html(html::compile(authored, input_kind)),
+        crate::profile_dsl::primitives::parse::Parse::Json(authored) => {
+            CompiledParse::Json(json::compile(authored, input_kind))
+        }
+        crate::profile_dsl::primitives::parse::Parse::Xml(authored) => {
+            CompiledParse::Xml(xml::compile(authored, input_kind))
+        }
+        crate::profile_dsl::primitives::parse::Parse::Html(authored) => {
+            CompiledParse::Html(html::compile(authored, input_kind))
+        }
     })
+}
+
+fn authored_parse_shape(value: &Parse) -> (&'static str, bool) {
+    match value {
+        crate::profile_dsl::primitives::parse::Parse::Json(JsonParse { charset }) => {
+            ("json", charset.is_some())
+        }
+        crate::profile_dsl::primitives::parse::Parse::Xml(XmlParse { charset }) => {
+            ("xml", charset.is_some())
+        }
+        crate::profile_dsl::primitives::parse::Parse::Html(HtmlParse { charset }) => {
+            ("html", charset.is_some())
+        }
+    }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::Tagged,
+        Family::Parse,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    let fixtures = [
+        crate::profile_dsl::primitives::parse::Parse::Json(JsonParse {
+            charset: Some("utf-8".into()),
+        }),
+        crate::profile_dsl::primitives::parse::Parse::Xml(XmlParse {
+            charset: Some("utf-8".into()),
+        }),
+        crate::profile_dsl::primitives::parse::Parse::Html(HtmlParse {
+            charset: Some("utf-8".into()),
+        }),
+    ];
+    let mut out = fixtures
+        .iter()
+        .map(|value| {
+            let (key, _) = authored_parse_shape(value);
+            serde_shape(
+                Parse,
+                key,
+                &[Discovery, Detail],
+                Tagged,
+                "src-tauri/src/profile_dsl/documents/parse.rs",
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(fixtures.iter().all(|value| authored_parse_shape(value).1));
+    out.push(serde_shape(
+        Parse,
+        "charset",
+        &[Discovery, Detail],
+        crate::profile_dsl::primitives::completeness::AuthoredShapeKind::ParentOption,
+        "src-tauri/src/profile_dsl/documents/parse.rs",
+    ));
+    out
+}
+
+fn witness_parse_json() {
+    fn check(value: &CompiledParse) {
+        if let CompiledParse::Json(plan) = value {
+            let _ = &plan.context;
+        }
+    }
+    let _ = check as fn(&CompiledParse);
+}
+fn witness_parse_xml() {
+    fn check(value: &CompiledParse) {
+        if let CompiledParse::Xml(plan) = value {
+            let _ = &plan.context;
+        }
+    }
+    let _ = check as fn(&CompiledParse);
+}
+fn witness_parse_html() {
+    fn check(value: &CompiledParse) {
+        if let CompiledParse::Html(plan) = value {
+            let _ = &plan.context;
+        }
+    }
+    let _ = check as fn(&CompiledParse);
+}
+fn witness_parse_charset() {
+    fn check(value: &CompiledParse) {
+        match value {
+            CompiledParse::Json(plan) => {
+                let _ = &plan.context.charset;
+            }
+            CompiledParse::Xml(plan) => {
+                let _ = &plan.context.charset;
+            }
+            CompiledParse::Html(plan) => {
+                let _ = &plan.context.charset;
+            }
+        }
+    }
+    let _ = check as fn(&CompiledParse);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::Tagged,
+        CompiledRegistration,
+        Family::Parse,
+        Owner::P02,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    vec![
+        CompiledRegistration {
+            family: Parse,
+            key: "json",
+            contexts: &[Discovery, Detail],
+            owner: P02,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/parse/json.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledParse::Json",
+            witness: witness_parse_json,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Parse,
+            key: "xml",
+            contexts: &[Discovery, Detail],
+            owner: P02,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/parse/xml.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledParse::Xml",
+            witness: witness_parse_xml,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Parse,
+            key: "html",
+            contexts: &[Discovery, Detail],
+            owner: P02,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/parse/html.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledParse::Html",
+            witness: witness_parse_html,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Parse,
+            key: "charset",
+            contexts: &[Discovery, Detail],
+            owner: P02,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/parse/mod.rs",
+            shape: crate::profile_dsl::primitives::completeness::AuthoredShapeKind::ParentOption,
+            compiled_identity: "CompiledParse::{Json|Xml|Html}.context.charset",
+            witness: witness_parse_charset,
+            behavior_bearing: false,
+        },
+    ]
 }

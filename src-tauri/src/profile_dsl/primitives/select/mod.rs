@@ -300,22 +300,28 @@ pub fn compile_select(
         (_, _, _) => return Err(error(CompileSelectErrorKind::Placement, "only sitemap_urls is valid in a sitemap selector placement")),
     }
     let compiled = match authored {
-        Select::Document(_) => CompiledSelect::Document(DocumentSelectPlan),
-        Select::JsonPath(authored) => {
+        crate::profile_dsl::primitives::select::Select::Document(_) => {
+            CompiledSelect::Document(DocumentSelectPlan)
+        }
+        crate::profile_dsl::primitives::select::Select::JsonPath(authored) => {
             CompiledSelect::JsonPath(json_path::compile(&authored.json_path).map_err(syntax_error)?)
         }
-        Select::XmlElement(authored) => CompiledSelect::XmlElement(
-            xml_element::compile(&authored.element).map_err(syntax_error)?,
-        ),
-        Select::XmlText(authored) => {
+        crate::profile_dsl::primitives::select::Select::XmlElement(authored) => {
+            CompiledSelect::XmlElement(
+                xml_element::compile(&authored.element).map_err(syntax_error)?,
+            )
+        }
+        crate::profile_dsl::primitives::select::Select::XmlText(authored) => {
             CompiledSelect::XmlText(xml_text::compile(&authored.text_path).map_err(syntax_error)?)
         }
-        Select::Css(authored) => {
+        crate::profile_dsl::primitives::select::Select::Css(authored) => {
             CompiledSelect::Css(css::compile(&authored.selector).map_err(syntax_error)?)
         }
-        Select::SitemapUrls(authored) => CompiledSelect::SitemapUrls(
-            sitemap_urls::compile(authored.url_pattern.as_deref()).map_err(syntax_error)?,
-        ),
+        crate::profile_dsl::primitives::select::Select::SitemapUrls(authored) => {
+            CompiledSelect::SitemapUrls(
+                sitemap_urls::compile(authored.url_pattern.as_deref()).map_err(syntax_error)?,
+            )
+        }
     };
     Ok(compiled)
 }
@@ -332,12 +338,12 @@ fn error(kind: CompileSelectErrorKind, message: impl Into<String>) -> CompileSel
 }
 const fn select_kind(select: &Select) -> SelectKind {
     match select {
-        Select::Document(_) => SelectKind::Document,
-        Select::JsonPath(_) => SelectKind::JsonPath,
-        Select::XmlElement(_) => SelectKind::XmlElement,
-        Select::XmlText(_) => SelectKind::XmlText,
-        Select::Css(_) => SelectKind::Css,
-        Select::SitemapUrls(_) => SelectKind::SitemapUrls,
+        crate::profile_dsl::primitives::select::Select::Document(_) => SelectKind::Document,
+        crate::profile_dsl::primitives::select::Select::JsonPath(_) => SelectKind::JsonPath,
+        crate::profile_dsl::primitives::select::Select::XmlElement(_) => SelectKind::XmlElement,
+        crate::profile_dsl::primitives::select::Select::XmlText(_) => SelectKind::XmlText,
+        crate::profile_dsl::primitives::select::Select::Css(_) => SelectKind::Css,
+        crate::profile_dsl::primitives::select::Select::SitemapUrls(_) => SelectKind::SitemapUrls,
     }
 }
 
@@ -381,4 +387,271 @@ impl<'doc, 'body> SelectedSequence<'doc, 'body> {
     pub fn into_vec(self) -> Vec<SelectedItem<'doc, 'body>> {
         self.0
     }
+}
+
+fn authored_select_shape(value: &Select) -> (&'static str, &'static [&'static str]) {
+    match value {
+        crate::profile_dsl::primitives::select::Select::Document(DocumentSelect {}) => {
+            ("document", &[])
+        }
+        crate::profile_dsl::primitives::select::Select::JsonPath(JsonPathSelect {
+            json_path: _,
+        }) => ("json_path", &["jsonPath"]),
+        crate::profile_dsl::primitives::select::Select::XmlElement(XmlElementSelect {
+            element: _,
+        }) => ("xml_element", &["element"]),
+        crate::profile_dsl::primitives::select::Select::XmlText(XmlTextSelect { text_path: _ }) => {
+            ("xml_text", &["textPath"])
+        }
+        crate::profile_dsl::primitives::select::Select::Css(CssSelect { selector: _ }) => {
+            ("css", &["selector"])
+        }
+        crate::profile_dsl::primitives::select::Select::SitemapUrls(SitemapUrlsSelect {
+            url_pattern: _,
+        }) => ("sitemap_urls", &["urlPattern"]),
+    }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::Tagged,
+        Family::Select,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    let fixtures = [
+        crate::profile_dsl::primitives::select::Select::Document(DocumentSelect {}),
+        crate::profile_dsl::primitives::select::Select::JsonPath(JsonPathSelect {
+            json_path: "x".into(),
+        }),
+        crate::profile_dsl::primitives::select::Select::XmlElement(XmlElementSelect {
+            element: "x".into(),
+        }),
+        crate::profile_dsl::primitives::select::Select::XmlText(XmlTextSelect {
+            text_path: "x".into(),
+        }),
+        crate::profile_dsl::primitives::select::Select::Css(CssSelect {
+            selector: "x".into(),
+        }),
+        crate::profile_dsl::primitives::select::Select::SitemapUrls(SitemapUrlsSelect {
+            url_pattern: Some("x".into()),
+        }),
+    ];
+    let mut out = Vec::new();
+    for value in &fixtures {
+        let (key, options) = authored_select_shape(value);
+        out.push(serde_shape(
+            Select,
+            key,
+            &[Discovery, Detail],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/select.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Select,
+                format!("{key}.{option}"),
+                &[Discovery, Detail],
+                crate::profile_dsl::primitives::completeness::AuthoredShapeKind::ParentOption,
+                "src-tauri/src/profile_dsl/documents/select.rs",
+            ));
+        }
+    }
+    out
+}
+
+fn witness_select_document() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::Document(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_json_path() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::JsonPath(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_json_path_path() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::JsonPath(plan) = v {
+            let _ = &plan.segments;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_xml_element() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::XmlElement(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_xml_element_element() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::XmlElement(plan) = v {
+            let _ = &plan.element;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_xml_text() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::XmlText(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_xml_text_path() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::XmlText(plan) = v {
+            let _ = (&plan.current, &plan.segments);
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_css() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::Css(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_css_selector() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::Css(plan) = v {
+            let _ = &plan.selector;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_sitemap() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::SitemapUrls(plan) = v {
+            let _ = plan;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+fn witness_select_sitemap_pattern() {
+    fn check(v: &CompiledSelect) {
+        if let CompiledSelect::SitemapUrls(plan) = v {
+            let _ = &plan.url_pattern;
+        }
+    }
+    let _ = check as fn(&CompiledSelect);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::Tagged,
+        CompiledRegistration,
+        Family::Select,
+        Owner::P03,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    macro_rules! row {
+        ($key:literal,$variant:literal,$file:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Select,
+                key: $key,
+                contexts: &[Discovery, Detail],
+                owner: P03,
+                canonical_file: concat!(
+                    "src-tauri/src/profile_dsl/primitives/select/",
+                    $file,
+                    ".rs"
+                ),
+                shape: Tagged,
+                compiled_identity: concat!("CompiledSelect::", $variant),
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    let mut out = vec![
+        row!("document", "Document", "document", witness_select_document),
+        row!(
+            "json_path",
+            "JsonPath",
+            "json_path",
+            witness_select_json_path
+        ),
+        row!(
+            "xml_element",
+            "XmlElement",
+            "xml_element",
+            witness_select_xml_element
+        ),
+        row!("xml_text", "XmlText", "xml_text", witness_select_xml_text),
+        row!("css", "Css", "css", witness_select_css),
+        row!(
+            "sitemap_urls",
+            "SitemapUrls",
+            "sitemap_urls",
+            witness_select_sitemap
+        ),
+    ];
+    macro_rules! option {
+        ($key:literal,$identity:literal,$file:literal,$witness:expr) => {
+            CompiledRegistration {
+                family: Select,
+                key: $key,
+                contexts: &[Discovery, Detail],
+                owner: P03,
+                canonical_file: concat!(
+                    "src-tauri/src/profile_dsl/primitives/select/",
+                    $file,
+                    ".rs"
+                ),
+                shape:
+                    crate::profile_dsl::primitives::completeness::AuthoredShapeKind::ParentOption,
+                compiled_identity: $identity,
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    out.extend([
+        option!(
+            "json_path.jsonPath",
+            "CompiledSelect::JsonPath.segments",
+            "json_path",
+            witness_select_json_path_path
+        ),
+        option!(
+            "xml_element.element",
+            "CompiledSelect::XmlElement.element",
+            "xml_element",
+            witness_select_xml_element_element
+        ),
+        option!(
+            "xml_text.textPath",
+            "CompiledSelect::XmlText.{current,segments}",
+            "xml_text",
+            witness_select_xml_text_path
+        ),
+        option!(
+            "css.selector",
+            "CompiledSelect::Css.selector",
+            "css",
+            witness_select_css_selector
+        ),
+        option!(
+            "sitemap_urls.urlPattern",
+            "CompiledSelect::SitemapUrls.url_pattern",
+            "sitemap_urls",
+            witness_select_sitemap_pattern
+        ),
+    ]);
+    out
 }

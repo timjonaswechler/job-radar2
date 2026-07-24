@@ -10,8 +10,8 @@ pub struct RegexReplace {
 }
 #[derive(Clone, Debug)]
 pub struct RegexReplacePlan {
-    pattern: String,
-    replacement: String,
+    pub(super) pattern: String,
+    pub(super) replacement: String,
     regex: Regex,
 }
 impl PartialEq for RegexReplacePlan {

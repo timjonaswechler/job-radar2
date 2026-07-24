@@ -251,20 +251,28 @@ pub fn compile_transform_pipeline(
     let mut plans = Vec::with_capacity(authored.len());
     for (transform_index, transform) in authored.iter().enumerate() {
         let plan = match transform {
-            Transform::Trim(value) => CompiledTransform::Trim(trim::compile(value)),
-            Transform::NormalizeWhitespace(value) => {
+            crate::profile_dsl::primitives::transform::Transform::Trim(value) => {
+                CompiledTransform::Trim(trim::compile(value))
+            }
+            crate::profile_dsl::primitives::transform::Transform::NormalizeWhitespace(value) => {
                 CompiledTransform::NormalizeWhitespace(normalize_whitespace::compile(value))
             }
-            Transform::HtmlToText(value) => {
+            crate::profile_dsl::primitives::transform::Transform::HtmlToText(value) => {
                 CompiledTransform::HtmlToText(html_to_text::compile(value))
             }
-            Transform::UrlDecode(value) => CompiledTransform::UrlDecode(url_decode::compile(value)),
-            Transform::SlugToTitle(value) => {
+            crate::profile_dsl::primitives::transform::Transform::UrlDecode(value) => {
+                CompiledTransform::UrlDecode(url_decode::compile(value))
+            }
+            crate::profile_dsl::primitives::transform::Transform::SlugToTitle(value) => {
                 CompiledTransform::SlugToTitle(slug_to_title::compile(value))
             }
-            Transform::Dedupe(value) => CompiledTransform::Dedupe(dedupe::compile(value)),
-            Transform::ToString(value) => CompiledTransform::ToString(to_string::compile(value)),
-            Transform::Split(value) => {
+            crate::profile_dsl::primitives::transform::Transform::Dedupe(value) => {
+                CompiledTransform::Dedupe(dedupe::compile(value))
+            }
+            crate::profile_dsl::primitives::transform::Transform::ToString(value) => {
+                CompiledTransform::ToString(to_string::compile(value))
+            }
+            crate::profile_dsl::primitives::transform::Transform::Split(value) => {
                 CompiledTransform::Split(split::compile(value).map_err(|message| {
                     CompileTransformError {
                         kind: CompileTransformErrorKind::EmptySeparator,
@@ -273,14 +281,18 @@ pub fn compile_transform_pipeline(
                     }
                 })?)
             }
-            Transform::Join(value) => CompiledTransform::Join(join::compile(value)),
-            Transform::RegexReplace(value) => CompiledTransform::RegexReplace(
-                regex_replace::compile(value).map_err(|message| CompileTransformError {
-                    kind: CompileTransformErrorKind::InvalidRegex,
-                    transform_index,
-                    message,
-                })?,
-            ),
+            crate::profile_dsl::primitives::transform::Transform::Join(value) => {
+                CompiledTransform::Join(join::compile(value))
+            }
+            crate::profile_dsl::primitives::transform::Transform::RegexReplace(value) => {
+                CompiledTransform::RegexReplace(regex_replace::compile(value).map_err(
+                    |message| CompileTransformError {
+                        kind: CompileTransformErrorKind::InvalidRegex,
+                        transform_index,
+                        message,
+                    },
+                )?)
+            }
         };
         plans.push(plan);
     }
@@ -449,4 +461,289 @@ fn error_message(kind: TransformErrorKind) -> &'static str {
         }
         TransformErrorKind::InvalidUtf8 => "url_decode decoded bytes are not valid UTF-8",
     }
+}
+
+fn authored_transform_shape(value: &Transform) -> (&'static str, &'static [&'static str]) {
+    match value {
+        crate::profile_dsl::primitives::transform::Transform::Trim(Trim {}) => ("trim", &[]),
+        crate::profile_dsl::primitives::transform::Transform::NormalizeWhitespace(
+            NormalizeWhitespace {},
+        ) => ("normalize_whitespace", &[]),
+        crate::profile_dsl::primitives::transform::Transform::HtmlToText(HtmlToText {}) => {
+            ("html_to_text", &[])
+        }
+        crate::profile_dsl::primitives::transform::Transform::UrlDecode(UrlDecode {}) => {
+            ("url_decode", &[])
+        }
+        crate::profile_dsl::primitives::transform::Transform::SlugToTitle(SlugToTitle {}) => {
+            ("slug_to_title", &[])
+        }
+        crate::profile_dsl::primitives::transform::Transform::Dedupe(Dedupe {}) => ("dedupe", &[]),
+        crate::profile_dsl::primitives::transform::Transform::ToString(ToStringTransform {}) => {
+            ("to_string", &[])
+        }
+        crate::profile_dsl::primitives::transform::Transform::Split(Split {
+            separator: _,
+            trim_parts: _,
+            drop_empty: _,
+        }) => ("split", &["separator", "trimParts", "dropEmpty"]),
+        crate::profile_dsl::primitives::transform::Transform::Join(Join { separator: _ }) => {
+            ("join", &["separator"])
+        }
+        crate::profile_dsl::primitives::transform::Transform::RegexReplace(RegexReplace {
+            pattern: _,
+            replacement: _,
+        }) => ("regex_replace", &["pattern", "replacement"]),
+    }
+}
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{ParentOption, Tagged},
+        Family::Transform,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    let fixtures = [
+        crate::profile_dsl::primitives::transform::Transform::Trim(Trim {}),
+        crate::profile_dsl::primitives::transform::Transform::NormalizeWhitespace(
+            NormalizeWhitespace {},
+        ),
+        crate::profile_dsl::primitives::transform::Transform::HtmlToText(HtmlToText {}),
+        crate::profile_dsl::primitives::transform::Transform::UrlDecode(UrlDecode {}),
+        crate::profile_dsl::primitives::transform::Transform::SlugToTitle(SlugToTitle {}),
+        crate::profile_dsl::primitives::transform::Transform::Dedupe(Dedupe {}),
+        crate::profile_dsl::primitives::transform::Transform::ToString(ToStringTransform {}),
+        crate::profile_dsl::primitives::transform::Transform::Split(Split {
+            separator: ",".into(),
+            trim_parts: true,
+            drop_empty: true,
+        }),
+        crate::profile_dsl::primitives::transform::Transform::Join(Join {
+            separator: ",".into(),
+        }),
+        crate::profile_dsl::primitives::transform::Transform::RegexReplace(RegexReplace {
+            pattern: "x".into(),
+            replacement: "y".into(),
+        }),
+    ];
+    let mut out = Vec::new();
+    for value in &fixtures {
+        let (key, options) = authored_transform_shape(value);
+        out.push(serde_shape(
+            Transform,
+            key,
+            &[Discovery, Detail],
+            Tagged,
+            "src-tauri/src/profile_dsl/documents/extract.rs",
+        ));
+        for option in options {
+            out.push(serde_shape(
+                Transform,
+                format!("{key}.{option}"),
+                &[Discovery, Detail],
+                ParentOption,
+                "src-tauri/src/profile_dsl/documents/extract.rs",
+            ));
+        }
+    }
+    out
+}
+
+macro_rules! transform_variant_witness {
+    ($name:ident, $variant:ident) => {
+        fn $name() {
+            fn check(v: &CompiledTransform) {
+                if let CompiledTransform::$variant(plan) = v {
+                    let _ = plan;
+                }
+            }
+            let _ = check as fn(&CompiledTransform);
+        }
+    };
+}
+transform_variant_witness!(witness_transform_trim, Trim);
+transform_variant_witness!(witness_transform_normalize, NormalizeWhitespace);
+transform_variant_witness!(witness_transform_html, HtmlToText);
+transform_variant_witness!(witness_transform_url, UrlDecode);
+transform_variant_witness!(witness_transform_slug, SlugToTitle);
+transform_variant_witness!(witness_transform_dedupe, Dedupe);
+transform_variant_witness!(witness_transform_string, ToString);
+transform_variant_witness!(witness_transform_split, Split);
+transform_variant_witness!(witness_transform_join, Join);
+transform_variant_witness!(witness_transform_regex, RegexReplace);
+fn witness_split_separator() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::Split(p) = v {
+            let _ = &p.separator;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+fn witness_split_trim() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::Split(p) = v {
+            let _ = &p.trim_parts;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+fn witness_split_drop() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::Split(p) = v {
+            let _ = &p.drop_empty;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+fn witness_join_separator() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::Join(p) = v {
+            let _ = &p.separator;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+fn witness_regex_pattern() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::RegexReplace(p) = v {
+            let _ = &p.pattern;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+fn witness_regex_replacement() {
+    fn check(v: &CompiledTransform) {
+        if let CompiledTransform::RegexReplace(p) = v {
+            let _ = &p.replacement;
+        }
+    }
+    let _ = check as fn(&CompiledTransform);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged},
+        CompiledRegistration,
+        Family::Transform,
+        Owner::P05,
+        PrimitiveContext::{Detail, Discovery},
+    };
+    macro_rules! row {
+        ($key:literal,$variant:literal,$file:literal,$shape:expr,$witness:expr) => {
+            CompiledRegistration {
+                family: Transform,
+                key: $key,
+                contexts: &[Discovery, Detail],
+                owner: P05,
+                canonical_file: concat!(
+                    "src-tauri/src/profile_dsl/primitives/transform/",
+                    $file,
+                    ".rs"
+                ),
+                shape: $shape,
+                compiled_identity: concat!("CompiledTransform::", $variant),
+                witness: $witness,
+                behavior_bearing: false,
+            }
+        };
+    }
+    vec![
+        row!("trim", "Trim", "trim", Tagged, witness_transform_trim),
+        row!(
+            "normalize_whitespace",
+            "NormalizeWhitespace",
+            "normalize_whitespace",
+            Tagged,
+            witness_transform_normalize
+        ),
+        row!(
+            "html_to_text",
+            "HtmlToText",
+            "html_to_text",
+            Tagged,
+            witness_transform_html
+        ),
+        row!(
+            "url_decode",
+            "UrlDecode",
+            "url_decode",
+            Tagged,
+            witness_transform_url
+        ),
+        row!(
+            "slug_to_title",
+            "SlugToTitle",
+            "slug_to_title",
+            Tagged,
+            witness_transform_slug
+        ),
+        row!(
+            "dedupe",
+            "Dedupe",
+            "dedupe",
+            Tagged,
+            witness_transform_dedupe
+        ),
+        row!(
+            "to_string",
+            "ToString",
+            "to_string",
+            Tagged,
+            witness_transform_string
+        ),
+        row!("split", "Split", "split", Tagged, witness_transform_split),
+        row!("join", "Join", "join", Tagged, witness_transform_join),
+        row!(
+            "regex_replace",
+            "RegexReplace",
+            "regex_replace",
+            Tagged,
+            witness_transform_regex
+        ),
+        row!(
+            "split.separator",
+            "Split.separator",
+            "split",
+            ParentOption,
+            witness_split_separator
+        ),
+        row!(
+            "split.trimParts",
+            "Split.trim_parts",
+            "split",
+            ParentOption,
+            witness_split_trim
+        ),
+        row!(
+            "split.dropEmpty",
+            "Split.drop_empty",
+            "split",
+            ParentOption,
+            witness_split_drop
+        ),
+        row!(
+            "join.separator",
+            "Join.separator",
+            "join",
+            ParentOption,
+            witness_join_separator
+        ),
+        row!(
+            "regex_replace.pattern",
+            "RegexReplace.pattern",
+            "regex_replace",
+            ParentOption,
+            witness_regex_pattern
+        ),
+        row!(
+            "regex_replace.replacement",
+            "RegexReplace.replacement",
+            "regex_replace",
+            ParentOption,
+            witness_regex_replacement
+        ),
+    ]
 }

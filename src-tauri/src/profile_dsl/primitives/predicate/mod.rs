@@ -284,3 +284,284 @@ pub fn evaluate_detail_predicate(
         evaluate_detail_output_value(value, context)
     })
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape,
+        AuthoredShapeKind::{ParentOption, Tagged},
+        Family::Predicate,
+        PrimitiveContext::*,
+    };
+    vec![
+        serde_shape(
+            Predicate,
+            "non_empty",
+            &[
+                DiscoveryWhere,
+                DetailWhere,
+                DetectionHttpContains,
+                DetectionBrowserContains,
+            ],
+            Tagged,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "regex",
+            &[
+                DiscoveryWhere,
+                DetailWhere,
+                DetectionHttpRegex,
+                DetectionBrowserRegex,
+            ],
+            Tagged,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "equal",
+            &[DetailMatch, DetectionHttpStatus],
+            Tagged,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "non_empty.field",
+            &[DiscoveryWhere, DetailWhere],
+            ParentOption,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "regex.field",
+            &[DiscoveryWhere, DetailWhere],
+            ParentOption,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "regex.pattern",
+            &[DiscoveryWhere, DetailWhere],
+            ParentOption,
+            "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "detail.match",
+            &[DetailMatch],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/detail.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "detail.match.left",
+            &[DetailMatch],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/detail.rs",
+        ),
+        serde_shape(
+            Predicate,
+            "detail.match.right",
+            &[DetailMatch],
+            ParentOption,
+            "src-tauri/src/profile_dsl/documents/detail.rs",
+        ),
+    ]
+}
+
+fn witness_non_empty() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::NonEmpty(plan) = value {
+            let _ = plan.field();
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+
+fn witness_regex() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::Regex(plan) = value {
+            let _ = (plan.field(), plan.pattern());
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+
+fn witness_equal() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::Equal(plan) = value {
+            let _ = (plan.left(), plan.right());
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+
+fn witness_non_empty_field() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::NonEmpty(plan) = value {
+            let _ = plan.field();
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+fn witness_regex_field() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::Regex(plan) = value {
+            let _ = plan.field();
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+fn witness_regex_pattern() {
+    fn check(value: &CompiledPredicate) {
+        if let CompiledPredicate::Regex(plan) = value {
+            let _ = plan.pattern();
+        }
+    }
+    let _ = check as fn(&CompiledPredicate);
+}
+fn witness_detail_match() {
+    fn check(value: &crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy) {
+        let _ = &value.field_match;
+    }
+    let _ = check as fn(&crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy);
+}
+fn witness_detail_match_left() {
+    fn check(value: &crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy) {
+        if let Some(CompiledPredicate::Equal(plan)) = &value.field_match {
+            let _ = plan.left();
+        }
+    }
+    let _ = check as fn(&crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy);
+}
+fn witness_detail_match_right() {
+    fn check(value: &crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy) {
+        if let Some(CompiledPredicate::Equal(plan)) = &value.field_match {
+            let _ = plan.right();
+        }
+    }
+    let _ = check as fn(&crate::profile_dsl::execution_plan::detail::ExecutionPlanDetailStrategy);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::{ParentOption, Tagged},
+        CompiledRegistration,
+        Family::Predicate,
+        Owner::P07,
+        PrimitiveContext::*,
+    };
+    vec![
+        CompiledRegistration {
+            family: Predicate,
+            key: "non_empty",
+            contexts: &[
+                DiscoveryWhere,
+                DetailWhere,
+                DetectionHttpContains,
+                DetectionBrowserContains,
+            ],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/non_empty.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledPredicate::NonEmpty",
+            witness: witness_non_empty,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "regex",
+            contexts: &[
+                DiscoveryWhere,
+                DetailWhere,
+                DetectionHttpRegex,
+                DetectionBrowserRegex,
+            ],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/regex.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledPredicate::Regex",
+            witness: witness_regex,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "equal",
+            contexts: &[DetailMatch, DetectionHttpStatus],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/equal.rs",
+            shape: Tagged,
+            compiled_identity: "CompiledPredicate::Equal",
+            witness: witness_equal,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "non_empty.field",
+            contexts: &[DiscoveryWhere, DetailWhere],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/non_empty.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledPredicate::NonEmpty.field",
+            witness: witness_non_empty_field,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "regex.field",
+            contexts: &[DiscoveryWhere, DetailWhere],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/regex.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledPredicate::Regex.field",
+            witness: witness_regex_field,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "regex.pattern",
+            contexts: &[DiscoveryWhere, DetailWhere],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/regex.rs",
+            shape: ParentOption,
+            compiled_identity: "CompiledPredicate::Regex.pattern",
+            witness: witness_regex_pattern,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "detail.match",
+            contexts: &[DetailMatch],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ExecutionPlanDetailStrategy.field_match::Equal",
+            witness: witness_detail_match,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "detail.match.left",
+            contexts: &[DetailMatch],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ExecutionPlanDetailStrategy.field_match::Equal.left",
+            witness: witness_detail_match_left,
+            behavior_bearing: false,
+        },
+        CompiledRegistration {
+            family: Predicate,
+            key: "detail.match.right",
+            contexts: &[DetailMatch],
+            owner: P07,
+            canonical_file: "src-tauri/src/profile_dsl/primitives/predicate/mod.rs",
+            shape: ParentOption,
+            compiled_identity: "ExecutionPlanDetailStrategy.field_match::Equal.right",
+            witness: witness_detail_match_right,
+            behavior_bearing: false,
+        },
+    ]
+}

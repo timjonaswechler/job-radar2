@@ -595,3 +595,71 @@ mod inventory_tests {
         .is_err());
     }
 }
+
+pub(crate) fn completeness_serde_shapes(
+) -> Vec<crate::profile_dsl::primitives::completeness::SerdeShape> {
+    use crate::profile_dsl::primitives::completeness::{
+        serde_shape, AuthoredShapeKind::Keyed, Family::Template, PrimitiveContext::*,
+    };
+    vec![serde_shape(
+        Template,
+        "template",
+        &[
+            DiscoveryValue,
+            DetailValue,
+            DiscoveryHttpUrl,
+            DiscoveryHttpHeader,
+            DiscoveryHttpBody,
+            DetailHttpUrl,
+            DetailHttpHeader,
+            DetailHttpBody,
+            DiscoveryBrowserUrl,
+            DetailBrowserUrl,
+            DetectionHttpUrl,
+            DetectionBrowserUrl,
+            DetectionProposal,
+        ],
+        Keyed,
+        "src-tauri/src/profile_dsl/template.rs",
+    )]
+}
+
+fn witness_compiled_template() {
+    fn check(v: &CompiledTemplate) {
+        let _ = &v.0;
+    }
+    let _ = check as fn(&CompiledTemplate);
+}
+
+pub(crate) fn completeness_compiled_registrations(
+) -> Vec<crate::profile_dsl::primitives::completeness::CompiledRegistration> {
+    use crate::profile_dsl::primitives::completeness::{
+        AuthoredShapeKind::Keyed, CompiledRegistration, Family::Template, Owner::P01,
+        PrimitiveContext::*,
+    };
+    vec![CompiledRegistration {
+        family: Template,
+        key: "template",
+        contexts: &[
+            DiscoveryValue,
+            DetailValue,
+            DiscoveryHttpUrl,
+            DiscoveryHttpHeader,
+            DiscoveryHttpBody,
+            DetailHttpUrl,
+            DetailHttpHeader,
+            DetailHttpBody,
+            DiscoveryBrowserUrl,
+            DetailBrowserUrl,
+            DetectionHttpUrl,
+            DetectionBrowserUrl,
+            DetectionProposal,
+        ],
+        owner: P01,
+        canonical_file: "src-tauri/src/profile_dsl/template.rs",
+        shape: Keyed,
+        compiled_identity: "CompiledTemplate",
+        witness: witness_compiled_template,
+        behavior_bearing: false,
+    }]
+}

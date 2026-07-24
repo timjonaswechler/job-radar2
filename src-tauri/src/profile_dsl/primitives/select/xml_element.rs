@@ -13,7 +13,7 @@ pub struct XmlElementSelect {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct XmlElementSelectPlan {
-    element: String,
+    pub(super) element: String,
 }
 
 pub(crate) fn compile(element: &str) -> Result<XmlElementSelectPlan, String> {
