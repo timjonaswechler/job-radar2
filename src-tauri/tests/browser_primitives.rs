@@ -1,6 +1,12 @@
+use std::collections::BTreeSet;
+
 use job_radar_lib::{
-    BrowserInteraction, BrowserWait, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    Fetch,
+    browser_primitive_descriptors, compile_template, validate_browser_primitive_descriptors,
+    BrowserInteraction, BrowserPrimitiveDescriptor, BrowserWait, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, ExecutionPlanFetch, Fetch, TemplateDescriptor,
+    BROWSER_CLICK_IF_VISIBLE_DESCRIPTOR, BROWSER_CLICK_UNTIL_GONE_DESCRIPTOR,
+    BROWSER_FETCH_DESCRIPTOR, BROWSER_NETWORK_IDLE_WAIT_DESCRIPTOR,
+    BROWSER_SELECTOR_WAIT_DESCRIPTOR,
 };
 use serde_json::{json, Value};
 
@@ -109,6 +115,156 @@ fn compiled_browser_primitives_are_closed_and_disjoint() {
     );
     assert_rejected::<ExecutionPlanBrowserInteraction>(
         json!({ "type": "click_until_gone", "selector": ".more", "maxCount": 51 }),
+    );
+}
+
+#[test]
+fn browser_descriptor_catalogue_is_exact_exhaustive_and_rejects_synthetic_faults() {
+    let descriptors = browser_primitive_descriptors();
+    assert_eq!(
+        descriptors,
+        &[
+            BROWSER_FETCH_DESCRIPTOR,
+            BROWSER_SELECTOR_WAIT_DESCRIPTOR,
+            BROWSER_NETWORK_IDLE_WAIT_DESCRIPTOR,
+            BROWSER_CLICK_IF_VISIBLE_DESCRIPTOR,
+            BROWSER_CLICK_UNTIL_GONE_DESCRIPTOR,
+        ]
+    );
+    validate_browser_primitive_descriptors(descriptors).unwrap();
+    assert!(descriptors
+        .iter()
+        .all(|descriptor| descriptor.owner == "B03a"
+            && descriptor
+                .canonical_file
+                .ends_with("profile_dsl/primitives/fetch/browser.rs")));
+
+    let authored_waits = [
+        BrowserWait::Selector {
+            selector: "main".into(),
+            timeout_ms: 1,
+        },
+        BrowserWait::NetworkIdle { timeout_ms: 1 },
+    ];
+    let compiled_waits = [
+        ExecutionPlanBrowserWait::Selector {
+            selector: "main".into(),
+            timeout_ms: 1,
+        },
+        ExecutionPlanBrowserWait::NetworkIdle { timeout_ms: 1 },
+    ];
+    assert_eq!(
+        authored_waits
+            .iter()
+            .map(|value| value.descriptor().key)
+            .collect::<Vec<_>>(),
+        compiled_waits
+            .iter()
+            .map(|value| value.descriptor().key)
+            .collect::<Vec<_>>()
+    );
+    for wait in &authored_waits {
+        assert_descriptor_shape(wait, wait.descriptor(), "type");
+    }
+
+    let authored_interactions = [
+        BrowserInteraction::ClickIfVisible {
+            selector: ".x".into(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+        BrowserInteraction::ClickUntilGone {
+            selector: ".x".into(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+    ];
+    let compiled_interactions = [
+        ExecutionPlanBrowserInteraction::ClickIfVisible {
+            selector: ".x".into(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+        ExecutionPlanBrowserInteraction::ClickUntilGone {
+            selector: ".x".into(),
+            max_count: 1,
+            wait_after_ms: Some(0),
+        },
+    ];
+    assert_eq!(
+        authored_interactions
+            .iter()
+            .map(|value| value.descriptor().key)
+            .collect::<Vec<_>>(),
+        compiled_interactions
+            .iter()
+            .map(|value| value.descriptor().key)
+            .collect::<Vec<_>>()
+    );
+    for interaction in &authored_interactions {
+        assert_descriptor_shape(interaction, interaction.descriptor(), "type");
+    }
+    assert!(descriptors
+        .iter()
+        .filter(|descriptor| descriptor
+            .options
+            .iter()
+            .any(|option| option.key == "selector"))
+        .all(|descriptor| descriptor
+            .options
+            .iter()
+            .find(|option| option.key == "selector")
+            .is_some_and(|option| option.non_empty)));
+
+    let authored: Fetch = serde_json::from_value(json!({
+        "mode": "browser",
+        "url": "https://example.test",
+        "timeoutMs": 1,
+        "waits": [],
+        "interactions": []
+    }))
+    .unwrap();
+    let compiled = ExecutionPlanFetch::Browser {
+        url: compile_template("https://example.test", &TemplateDescriptor::new()).unwrap(),
+        timeout_ms: 1,
+        waits: vec![],
+        interactions: vec![],
+    };
+    assert_eq!(authored.browser_descriptor(), compiled.browser_descriptor());
+    assert_descriptor_shape(&authored, authored.browser_descriptor().unwrap(), "mode");
+
+    assert!(validate_browser_primitive_descriptors(&descriptors[..4]).is_err());
+    let mut duplicate = descriptors.to_vec();
+    duplicate.push(descriptors[0]);
+    assert!(validate_browser_primitive_descriptors(&duplicate).is_err());
+    let mut conflict = descriptors.to_vec();
+    conflict[0].owner = "wrong";
+    assert!(validate_browser_primitive_descriptors(&conflict).is_err());
+}
+
+fn assert_descriptor_shape<T>(
+    value: &T,
+    descriptor: &BrowserPrimitiveDescriptor,
+    discriminator: &str,
+) where
+    T: serde::Serialize,
+{
+    let mut object = serde_json::to_value(value)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone();
+    object.remove(discriminator);
+    let actual = object.keys().cloned().collect::<BTreeSet<_>>();
+    let expected = descriptor
+        .options
+        .iter()
+        .map(|option| option.key.to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        actual, expected,
+        "descriptor {} option drift",
+        descriptor.key
     );
 }
 

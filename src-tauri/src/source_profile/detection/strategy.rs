@@ -8,7 +8,8 @@ use crate::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 use crate::profile_dsl::documents::{
-    DetectionEvidenceKind, DetectionStrategy, DetectionUrlInput, PhaseLimits,
+    DetectionEvidenceKind, DetectionStrategy, DetectionStrategyKind, DetectionUrlInput,
+    DetectionUrlInputKind, PhaseLimits,
 };
 use crate::profile_dsl::execution_plan::capabilities::{
     compile_browser_fetch_with_descriptor, ExecutionPlanBrowserInteraction,
@@ -55,6 +56,231 @@ use super::reconciliation::{
     PreparedDetectionOutput, ReconciledDetectionRunResult, ReconciledDetectionState,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DetectionDescriptorShape {
+    Tagged,
+    Entry,
+    ParentOption,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DetectionOptionDescriptor {
+    pub key: &'static str,
+    pub required: bool,
+    pub minimum: Option<u64>,
+    pub maximum: Option<u64>,
+    pub shape: DetectionDescriptorShape,
+    pub compiled_identity: &'static str,
+}
+
+const fn option(
+    key: &'static str,
+    required: bool,
+    compiled_identity: &'static str,
+) -> DetectionOptionDescriptor {
+    bounded_option(key, required, None, None, compiled_identity)
+}
+
+const fn bounded_option(
+    key: &'static str,
+    required: bool,
+    minimum: Option<u64>,
+    maximum: Option<u64>,
+    compiled_identity: &'static str,
+) -> DetectionOptionDescriptor {
+    DetectionOptionDescriptor {
+        key,
+        required,
+        minimum,
+        maximum,
+        shape: DetectionDescriptorShape::ParentOption,
+        compiled_identity,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DetectionShapeDescriptor {
+    pub key: &'static str,
+    pub owner: &'static str,
+    pub canonical_file: &'static str,
+    pub shape: DetectionDescriptorShape,
+    pub compiled_identity: &'static str,
+    pub options: &'static [DetectionOptionDescriptor],
+}
+
+const URL_OPTIONS: &[DetectionOptionDescriptor] = &[
+    option("key", true, "CompiledDetectionStrategy::Url.key"),
+    option("input", true, "CompiledDetectionStrategy::Url.input"),
+];
+const URL_PATTERN_ALTERNATIVES_OPTIONS: &[DetectionOptionDescriptor] = &[bounded_option(
+    "alternatives",
+    true,
+    Some(1),
+    None,
+    "CompiledUrlInput::PatternAlternatives.alternatives",
+)];
+const INPUT_URL_PATTERN_OPTIONS: &[DetectionOptionDescriptor] = &[
+    option("pattern", true, "CompiledUrlAlternative.pattern"),
+    option("captures", false, "CompiledUrlAlternative.pattern.keys"),
+];
+const URL_ABSOLUTE_OPTIONS: &[DetectionOptionDescriptor] = &[];
+const HTTP_OPTIONS: &[DetectionOptionDescriptor] = &[
+    option("key", true, "CompiledDetectionStrategy::Http.key"),
+    option("fetch", true, "CompiledDetectionStrategy::Http.fetch"),
+    bounded_option(
+        "expectStatus",
+        false,
+        Some(100),
+        Some(599),
+        "CompiledDetectionStrategy::Http.expect_status",
+    ),
+    option(
+        "contains",
+        false,
+        "CompiledDetectionStrategy::Http.contains",
+    ),
+    option(
+        "regex",
+        false,
+        "CompiledDetectionStrategy::Http.acceptance_regex",
+    ),
+    option(
+        "captures",
+        false,
+        "CompiledDetectionStrategy::Http.captures",
+    ),
+    option(
+        "evidence",
+        false,
+        "CompiledDetectionStrategy::Http.evidence",
+    ),
+];
+const BROWSER_OPTIONS: &[DetectionOptionDescriptor] = &[
+    option("key", true, "CompiledDetectionStrategy::Browser.key"),
+    option("fetch", true, "ExecutionPlanFetch::Browser"),
+    option(
+        "contains",
+        false,
+        "CompiledDetectionStrategy::Browser.contains",
+    ),
+    option(
+        "regex",
+        false,
+        "CompiledDetectionStrategy::Browser.acceptance_regex",
+    ),
+    option(
+        "captures",
+        false,
+        "CompiledDetectionStrategy::Browser.captures",
+    ),
+    option(
+        "evidence",
+        false,
+        "CompiledDetectionStrategy::Browser.evidence",
+    ),
+];
+
+pub const DETECTION_URL_DESCRIPTOR: DetectionShapeDescriptor = DetectionShapeDescriptor {
+    key: "url",
+    owner: "D02",
+    canonical_file: file!(),
+    shape: DetectionDescriptorShape::Tagged,
+    compiled_identity: "CompiledDetectionStrategy::Url",
+    options: URL_OPTIONS,
+};
+pub const DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR: DetectionShapeDescriptor =
+    DetectionShapeDescriptor {
+        key: "pattern_alternatives",
+        owner: "D02",
+        canonical_file: file!(),
+        shape: DetectionDescriptorShape::Tagged,
+        compiled_identity: "CompiledUrlInput::PatternAlternatives",
+        options: URL_PATTERN_ALTERNATIVES_OPTIONS,
+    };
+pub const DETECTION_INPUT_URL_PATTERN_DESCRIPTOR: DetectionShapeDescriptor =
+    DetectionShapeDescriptor {
+        key: "input_url_pattern",
+        owner: "D02",
+        canonical_file: file!(),
+        shape: DetectionDescriptorShape::Entry,
+        compiled_identity: "CompiledUrlAlternative",
+        options: INPUT_URL_PATTERN_OPTIONS,
+    };
+pub const DETECTION_URL_ABSOLUTE_DESCRIPTOR: DetectionShapeDescriptor = DetectionShapeDescriptor {
+    key: "absolute_url",
+    owner: "D02",
+    canonical_file: file!(),
+    shape: DetectionDescriptorShape::Tagged,
+    compiled_identity: "CompiledUrlInput::AbsoluteUrl",
+    options: URL_ABSOLUTE_OPTIONS,
+};
+pub const DETECTION_HTTP_DESCRIPTOR: DetectionShapeDescriptor = DetectionShapeDescriptor {
+    key: "http",
+    owner: "D02",
+    canonical_file: file!(),
+    shape: DetectionDescriptorShape::Tagged,
+    compiled_identity: "CompiledDetectionStrategy::Http",
+    options: HTTP_OPTIONS,
+};
+pub const DETECTION_BROWSER_DESCRIPTOR: DetectionShapeDescriptor = DetectionShapeDescriptor {
+    key: "browser",
+    owner: "D03",
+    canonical_file: file!(),
+    shape: DetectionDescriptorShape::Tagged,
+    compiled_identity: "CompiledDetectionStrategy::Browser",
+    options: BROWSER_OPTIONS,
+};
+
+const DETECTION_DESCRIPTORS: [DetectionShapeDescriptor; 6] = [
+    DETECTION_URL_DESCRIPTOR,
+    DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
+    DETECTION_INPUT_URL_PATTERN_DESCRIPTOR,
+    DETECTION_URL_ABSOLUTE_DESCRIPTOR,
+    DETECTION_HTTP_DESCRIPTOR,
+    DETECTION_BROWSER_DESCRIPTOR,
+];
+
+pub fn detection_shape_descriptors() -> &'static [DetectionShapeDescriptor] {
+    &DETECTION_DESCRIPTORS
+}
+
+pub fn validate_detection_shape_descriptors(
+    descriptors: &[DetectionShapeDescriptor],
+) -> Result<(), &'static str> {
+    let mut actual = descriptors.to_vec();
+    actual.sort_by_key(|descriptor| descriptor.key);
+    if actual.windows(2).any(|pair| pair[0].key == pair[1].key) {
+        return Err("duplicate Detection shape descriptor key");
+    }
+    let mut expected = DETECTION_DESCRIPTORS.to_vec();
+    expected.sort_by_key(|descriptor| descriptor.key);
+    if actual != expected {
+        return Err("Detection shape descriptors conflict with the canonical catalogue");
+    }
+    Ok(())
+}
+
+pub fn detection_descriptor_for_authored_kind(
+    kind: DetectionStrategyKind,
+) -> &'static DetectionShapeDescriptor {
+    match kind {
+        DetectionStrategyKind::Url => &DETECTION_URL_DESCRIPTOR,
+        DetectionStrategyKind::Http => &DETECTION_HTTP_DESCRIPTOR,
+        DetectionStrategyKind::Browser => &DETECTION_BROWSER_DESCRIPTOR,
+    }
+}
+
+pub fn detection_descriptor_for_url_input_kind(
+    kind: DetectionUrlInputKind,
+) -> &'static DetectionShapeDescriptor {
+    match kind {
+        DetectionUrlInputKind::PatternAlternatives => {
+            &DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR
+        }
+        DetectionUrlInputKind::AbsoluteUrl => &DETECTION_URL_ABSOLUTE_DESCRIPTOR,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CompiledDetectionPlan {
     profile_key: String,
@@ -79,6 +305,46 @@ impl CompiledDetectionPlan {
     }
     pub fn strategy_keys(&self) -> impl Iterator<Item = &str> {
         self.strategies.iter().map(CompiledDetectionStrategy::key)
+    }
+
+    pub fn strategy_descriptors(
+        &self,
+    ) -> impl Iterator<Item = &'static DetectionShapeDescriptor> + '_ {
+        self.strategies
+            .iter()
+            .map(CompiledDetectionStrategy::descriptor)
+    }
+
+    pub fn url_input_descriptors(
+        &self,
+    ) -> impl Iterator<Item = &'static DetectionShapeDescriptor> + '_ {
+        self.strategies
+            .iter()
+            .filter_map(|strategy| match strategy {
+                CompiledDetectionStrategy::Url { input, .. } => Some(input.descriptor()),
+                CompiledDetectionStrategy::Http { .. }
+                | CompiledDetectionStrategy::Browser { .. } => None,
+            })
+    }
+
+    pub fn input_url_pattern_descriptors(
+        &self,
+    ) -> impl Iterator<Item = &'static DetectionShapeDescriptor> + '_ {
+        self.strategies.iter().flat_map(|strategy| match strategy {
+            CompiledDetectionStrategy::Url {
+                input: CompiledUrlInput::PatternAlternatives(alternatives),
+                ..
+            } => alternatives
+                .iter()
+                .map(CompiledUrlAlternative::descriptor)
+                .collect::<Vec<_>>(),
+            CompiledDetectionStrategy::Url {
+                input: CompiledUrlInput::AbsoluteUrl,
+                ..
+            }
+            | CompiledDetectionStrategy::Http { .. }
+            | CompiledDetectionStrategy::Browser { .. } => Vec::new(),
+        })
     }
 }
 
@@ -116,6 +382,14 @@ impl CompiledDetectionStrategy {
             Self::Url { key, .. } | Self::Http { key, .. } | Self::Browser { key, .. } => key,
         }
     }
+
+    const fn descriptor(&self) -> &'static DetectionShapeDescriptor {
+        match self {
+            Self::Url { .. } => &DETECTION_URL_DESCRIPTOR,
+            Self::Http { .. } => &DETECTION_HTTP_DESCRIPTOR,
+            Self::Browser { .. } => &DETECTION_BROWSER_DESCRIPTOR,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -124,9 +398,24 @@ enum CompiledUrlInput {
     AbsoluteUrl,
 }
 
+impl CompiledUrlInput {
+    const fn descriptor(&self) -> &'static DetectionShapeDescriptor {
+        match self {
+            Self::PatternAlternatives(_) => &DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
+            Self::AbsoluteUrl => &DETECTION_URL_ABSOLUTE_DESCRIPTOR,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct CompiledUrlAlternative {
     pattern: CompiledNamedPattern,
+}
+
+impl CompiledUrlAlternative {
+    const fn descriptor(&self) -> &'static DetectionShapeDescriptor {
+        &DETECTION_INPUT_URL_PATTERN_DESCRIPTOR
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

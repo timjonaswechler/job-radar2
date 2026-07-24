@@ -2,13 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use job_radar_lib::{
-    compile_detection_plan, execute_detection_operation, AllowanceDimension,
-    BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequestSnapshot,
-    BrowserLifecycleEvent, DetectionProfileCompletion, DetectionProfileExecutionFailureKind,
-    DetectionProfileRejectionKind, DetectionRunStatus, ExecutionPlanBrowserInteraction,
-    PhaseBrowser, PhaseCompletion, RuntimeCancellation, ScriptedBrowserAcquisition,
-    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
-    ScriptedBrowserFinalization, ScriptedProfileHttpClient, SourceProfileDocument,
+    compile_detection_plan, detection_descriptor_for_authored_kind, execute_detection_operation,
+    AllowanceDimension, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
+    BrowserAcquisitionRequestSnapshot, BrowserLifecycleEvent, DetectionProfileCompletion,
+    DetectionProfileExecutionFailureKind, DetectionProfileRejectionKind, DetectionRunStatus,
+    DetectionStrategy, ExecutionPlanBrowserInteraction, PhaseBrowser, PhaseCompletion,
+    RuntimeCancellation, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedProfileHttpClient,
+    SourceProfileDocument, DETECTION_BROWSER_DESCRIPTOR,
 };
 use serde_json::{json, Value};
 
@@ -23,6 +24,113 @@ impl RuntimeCancellation for Cancellation {
     fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Relaxed)
     }
+}
+
+#[test]
+fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
+    assert_eq!(DETECTION_BROWSER_DESCRIPTOR.owner, "D03");
+    assert!(DETECTION_BROWSER_DESCRIPTOR
+        .canonical_file
+        .ends_with("source_profile/detection/strategy.rs"));
+    assert_eq!(
+        DETECTION_BROWSER_DESCRIPTOR
+            .options
+            .iter()
+            .map(|option| {
+                (
+                    option.key,
+                    option.required,
+                    option.minimum,
+                    option.maximum,
+                    option.compiled_identity,
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "key",
+                true,
+                None,
+                None,
+                "CompiledDetectionStrategy::Browser.key"
+            ),
+            ("fetch", true, None, None, "ExecutionPlanFetch::Browser"),
+            (
+                "contains",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Browser.contains"
+            ),
+            (
+                "regex",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Browser.acceptance_regex"
+            ),
+            (
+                "captures",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Browser.captures"
+            ),
+            (
+                "evidence",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Browser.evidence"
+            ),
+        ]
+    );
+
+    let authored_value = json!({
+        "type": "browser", "key": "browser",
+        "fetch": {
+            "mode": "browser", "url": "https://example.test", "timeoutMs": 2000,
+            "waits": [{ "type": "network_idle", "timeoutMs": 1 }],
+            "interactions": [{ "type": "click_if_visible", "selector": ".more", "maxCount": 1 }]
+        },
+        "contains": "known", "regex": "(?<tenant>known)",
+        "captures": ["tenant"], "evidence": "known"
+    });
+    let authored: DetectionStrategy = serde_json::from_value(authored_value).unwrap();
+    assert_eq!(
+        detection_descriptor_for_authored_kind(authored.kind()),
+        &DETECTION_BROWSER_DESCRIPTOR
+    );
+    let serialized = serde_json::to_value(&authored).unwrap();
+    let structural_keys = serialized
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|key| key.as_str() != "type")
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let descriptor_keys = DETECTION_BROWSER_DESCRIPTOR
+        .options
+        .iter()
+        .map(|option| option.key)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(structural_keys, descriptor_keys);
+    let plan = compile_detection_plan(&profile(
+        "descriptor",
+        vec![json!({
+            "type": "browser", "key": "browser",
+            "fetch": { "mode": "browser", "url": "https://example.test", "timeoutMs": 2000 },
+            "contains": "known"
+        })],
+    ))
+    .unwrap();
+    assert_eq!(
+        plan.strategy_descriptors().copied().collect::<Vec<_>>(),
+        vec![
+            job_radar_lib::DETECTION_URL_DESCRIPTOR,
+            DETECTION_BROWSER_DESCRIPTOR
+        ]
+    );
 }
 
 fn profile(key: &str, browser_strategies: Vec<Value>) -> SourceProfileDocument {
@@ -758,8 +866,14 @@ async fn cumulative_profile_and_operation_byte_excess_consumes_all_remaining_sco
     let PhaseCompletion::BudgetExhausted { exhaustion } = &profile_result.report.completion else {
         panic!("expected cumulative profile byte exhaustion")
     };
-    assert_eq!(exhaustion.dimension, AllowanceDimension::BrowserRenderedBytes);
-    assert_eq!(profile_result.report.usage.browser_rendered_bytes, 16_777_216);
+    assert_eq!(
+        exhaustion.dimension,
+        AllowanceDimension::BrowserRenderedBytes
+    );
+    assert_eq!(
+        profile_result.report.usage.browser_rendered_bytes,
+        16_777_216
+    );
     assert!(profile_result.run_result.proposals.is_empty());
 
     let mut plans = Vec::new();
@@ -777,7 +891,11 @@ async fn cumulative_profile_and_operation_byte_excess_consumes_all_remaining_sco
         );
         expectations.push(successful_expectation(exact.clone(), 2_097_152));
         expectations.push(successful_expectation(
-            if index == 3 { over.clone() } else { exact.clone() },
+            if index == 3 {
+                over.clone()
+            } else {
+                exact.clone()
+            },
             2_097_152,
         ));
     }
@@ -790,11 +908,18 @@ async fn cumulative_profile_and_operation_byte_excess_consumes_all_remaining_sco
         &Cancellation::default(),
     )
     .await;
-    let PhaseCompletion::BudgetExhausted { exhaustion } = &operation_result.report.completion else {
+    let PhaseCompletion::BudgetExhausted { exhaustion } = &operation_result.report.completion
+    else {
         panic!("expected cumulative operation byte exhaustion")
     };
-    assert_eq!(exhaustion.dimension, AllowanceDimension::BrowserRenderedBytes);
-    assert_eq!(operation_result.report.usage.browser_rendered_bytes, 16_777_216);
+    assert_eq!(
+        exhaustion.dimension,
+        AllowanceDimension::BrowserRenderedBytes
+    );
+    assert_eq!(
+        operation_result.report.usage.browser_rendered_bytes,
+        16_777_216
+    );
     assert_eq!(operation_result.report.usage.requests, 8);
     assert!(operation_result.run_result.proposals.is_empty());
 }

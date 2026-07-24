@@ -39,8 +39,8 @@ pub use profile_dsl::diagnostics::{
 pub use profile_dsl::documents::{
     Acceptance, AccessPathFragment, AuthoredScalar, BrowserInteraction, BrowserWait, CaptureRule,
     Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionDocument,
-    DetectionEvidence, DetectionEvidenceKind, DetectionStrategy, DetectionUrlInput, DiscoveryStep,
-    DiscoveryStepFragment,
+    DetectionEvidence, DetectionEvidenceKind, DetectionStrategy, DetectionStrategyKind,
+    DetectionUrlInput, DetectionUrlInputKind, DiscoveryStep, DiscoveryStepFragment,
     DiscoveryStrategyFragment, Fetch, FieldExpression, HttpMethod, InputUrlPattern,
     ListFieldExpression, PaginationFragment, PaginationTypeFragment, Parse, ParseFragment,
     ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
@@ -71,6 +71,12 @@ pub use profile_dsl::primitives::cardinality::{
     AllPlan, Cardinality, CardinalityDescriptor, CardinalityDiagnosticContext, CardinalityError,
     CardinalityOutcome, CardinalityRegistryError, CardinalitySequence, CompiledCardinality, First,
     FirstPlan, One, OnePlan, Optional, OptionalPlan,
+};
+pub use profile_dsl::primitives::fetch::browser::{
+    browser_primitive_descriptors, validate_browser_primitive_descriptors, BrowserOptionDescriptor,
+    BrowserPrimitiveDescriptor, BrowserShapeKind, BROWSER_CLICK_IF_VISIBLE_DESCRIPTOR,
+    BROWSER_CLICK_UNTIL_GONE_DESCRIPTOR, BROWSER_FETCH_DESCRIPTOR,
+    BROWSER_NETWORK_IDLE_WAIT_DESCRIPTOR, BROWSER_SELECTOR_WAIT_DESCRIPTOR,
 };
 pub use profile_dsl::primitives::fetch::http::{
     http_fetch_descriptors, validate_http_fetch_descriptors, CompiledHttpFetch,
@@ -129,30 +135,28 @@ pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_ph
 #[doc(hidden)]
 pub use profile_dsl::runtime::__TestBrowserAcquisitionInvocation;
 pub use profile_dsl::runtime::{
-    execute_discovery, validate_posting_reference,
-    AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource, BrowserAcquisition,
-    BrowserAcquisitionCancellation, BrowserAcquisitionCancellationReason,
-    BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequest,
-    BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
-    BrowserLifecycleEvent, BrowserRenderedContent, CandidateDetailFailure, ContributionOrigin,
-    DetailBrowserAdapter, DetailCancelled, DetailContributionEvidence, DetailField,
-    DetailFieldCapabilities, DetailPatch, DetailPhasePayload, DetailRejection,
-    DiscoveryBrowserAdapter, DiscoveryContributionEvidence, DiscoveryHint, DiscoveryPhasePayload,
-    DiscoveryRejection, DiscoveryResponsibility, HintUse,
+    execute_discovery, validate_posting_reference, AllowanceDimension, AllowanceExhaustion,
+    AllowanceLimitSource, BrowserAcquisition, BrowserAcquisitionCancellation,
+    BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
+    BrowserAcquisitionRequest, BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal,
+    BrowserInfrastructureFailure, BrowserLifecycleEvent, BrowserRenderedContent,
+    CandidateDetailFailure, ContributionOrigin, DetailBrowserAdapter, DetailCancelled,
+    DetailContributionEvidence, DetailField, DetailFieldCapabilities, DetailPatch,
+    DetailPhasePayload, DetailRejection, DiscoveryBrowserAdapter, DiscoveryContributionEvidence,
+    DiscoveryHint, DiscoveryPhasePayload, DiscoveryRejection, DiscoveryResponsibility, HintUse,
     OccurrenceReferenceError, PhaseBrowser, PhaseCancellationReason, PhaseCancelled,
     PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
     PhasePreStartFailure, PhaseRunError, PhaseRunResult, PhaseUsage, PolicyOutcome,
     PolicyUnsatisfiedCause, PostingOccurrence, PostingOccurrenceIdentity, PostingReference,
-    ProfileDslSourceDetailExecution,
-    ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind, ProfileHttpHeader,
-    ProfileHttpRequest, ProfileHttpResponse, ProviderValues, RequestedDetailFields,
-    RequestedFieldDisposition, ReqwestProfileHttpClient, RuntimeCancellation,
-    RuntimeExecutionContext, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
-    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
-    SensitiveRequestBody, SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome,
-    SourceDetailPhaseEvidence, SourceDetailRequest, SourceDetailRequestSnapshot,
-    SourceDetailResult,
+    ProfileDslSourceDetailExecution, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
+    ProfileHttpHeader, ProfileHttpRequest, ProfileHttpResponse, ProviderValues,
+    RequestedDetailFields, RequestedFieldDisposition, ReqwestProfileHttpClient,
+    RuntimeCancellation, RuntimeExecutionContext, ScriptedBrowserAcquisition,
+    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
+    ScriptedBrowserFinalization, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SensitiveRequestBody,
+    SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome, SourceDetailPhaseEvidence,
+    SourceDetailRequest, SourceDetailRequestSnapshot, SourceDetailResult,
 };
 
 pub use profile_dsl::template::{
@@ -173,17 +177,22 @@ pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
-    aggregate_detection_attempts, compile_detection_plan, execute_detection_operation,
-    CompiledDetectionPlan, DetectionAttempt, DetectionBrowserFailureKind,
-    DetectionConfigContribution, DetectionContribution, DetectionDefinitionError,
-    DetectionEvidenceContribution, DetectionOperationResult, DetectionOrigin,
-    DetectionProfileCompletion, DetectionProfileContext, DetectionProfileExecutionFailureKind,
-    DetectionProfileOutcome, DetectionProfileRejectionKind, DetectionProposalProvenance,
-    DetectionReconciliationError, DetectionRunStatus, DetectionStateConflict,
-    DetectionStateConflictKind, PreparedDetectionOutput, ProposalEvidence, ReconciledCapture,
-    ReconciledDetectionRunResult, ReconciledDetectionState, ReconciledEvidence,
-    ReconciledRecommendation, ReconciledSourceConfigValue, ReconciledSourceProposal,
-    UnsupportedReconciledDetection,
+    aggregate_detection_attempts, compile_detection_plan, detection_descriptor_for_authored_kind,
+    detection_descriptor_for_url_input_kind, detection_shape_descriptors,
+    execute_detection_operation, validate_detection_shape_descriptors, CompiledDetectionPlan,
+    DetectionAttempt, DetectionBrowserFailureKind, DetectionConfigContribution,
+    DetectionContribution, DetectionDefinitionError, DetectionDescriptorShape,
+    DetectionEvidenceContribution, DetectionOperationResult, DetectionOptionDescriptor,
+    DetectionOrigin, DetectionProfileCompletion, DetectionProfileContext,
+    DetectionProfileExecutionFailureKind, DetectionProfileOutcome, DetectionProfileRejectionKind,
+    DetectionProposalProvenance, DetectionReconciliationError, DetectionRunStatus,
+    DetectionShapeDescriptor, DetectionStateConflict, DetectionStateConflictKind,
+    PreparedDetectionOutput, ProposalEvidence, ReconciledCapture, ReconciledDetectionRunResult,
+    ReconciledDetectionState, ReconciledEvidence, ReconciledRecommendation,
+    ReconciledSourceConfigValue, ReconciledSourceProposal, UnsupportedReconciledDetection,
+    DETECTION_BROWSER_DESCRIPTOR, DETECTION_HTTP_DESCRIPTOR,
+    DETECTION_INPUT_URL_PATTERN_DESCRIPTOR, DETECTION_URL_ABSOLUTE_DESCRIPTOR,
+    DETECTION_URL_DESCRIPTOR, DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
 };
 pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{

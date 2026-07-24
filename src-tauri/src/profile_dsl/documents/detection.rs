@@ -155,10 +155,25 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum DetectionStrategyKind {
+    Url,
+    Http,
+    Browser,
+}
+
 impl DetectionStrategy {
     pub fn key(&self) -> &str {
         match self {
             Self::Url { key, .. } | Self::Http { key, .. } | Self::Browser { key, .. } => key,
+        }
+    }
+
+    pub const fn kind(&self) -> DetectionStrategyKind {
+        match self {
+            Self::Url { .. } => DetectionStrategyKind::Url,
+            Self::Http { .. } => DetectionStrategyKind::Http,
+            Self::Browser { .. } => DetectionStrategyKind::Browser,
         }
     }
 }
@@ -168,6 +183,21 @@ impl DetectionStrategy {
 pub enum DetectionUrlInput {
     PatternAlternatives { alternatives: Vec<InputUrlPattern> },
     AbsoluteUrl,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum DetectionUrlInputKind {
+    PatternAlternatives,
+    AbsoluteUrl,
+}
+
+impl DetectionUrlInput {
+    pub const fn kind(&self) -> DetectionUrlInputKind {
+        match self {
+            Self::PatternAlternatives { .. } => DetectionUrlInputKind::PatternAlternatives,
+            Self::AbsoluteUrl => DetectionUrlInputKind::AbsoluteUrl,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

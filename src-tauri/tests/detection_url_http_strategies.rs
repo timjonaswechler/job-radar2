@@ -2,11 +2,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use job_radar_lib::{
-    compile_detection_plan, execute_detection_operation, DetectionAttempt,
+    compile_detection_plan, detection_descriptor_for_authored_kind,
+    detection_descriptor_for_url_input_kind, detection_shape_descriptors,
+    execute_detection_operation, validate_detection_shape_descriptors, DetectionAttempt,
     DetectionProfileCompletion, DetectionProfileExecutionFailureKind,
-    DetectionProfileRejectionKind, DetectionRunStatus, PhaseBrowser, PhaseCompletion,
-    ProfileHttpFailureKind, RuntimeCancellation, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceProfileDocument, SupportLevel,
+    DetectionProfileRejectionKind, DetectionRunStatus, DetectionStrategy, DetectionUrlInput,
+    PhaseBrowser, PhaseCompletion, ProfileHttpFailureKind, RuntimeCancellation,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceProfileDocument,
+    SupportLevel, DETECTION_HTTP_DESCRIPTOR, DETECTION_INPUT_URL_PATTERN_DESCRIPTOR,
+    DETECTION_URL_ABSOLUTE_DESCRIPTOR, DETECTION_URL_DESCRIPTOR,
+    DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
 };
 use serde_json::{json, Value};
 
@@ -51,6 +56,274 @@ fn profile(strategies: Value, required: &[&str]) -> SourceProfileDocument {
         "strategies": strategies
     });
     serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
+    let descriptors = detection_shape_descriptors();
+    validate_detection_shape_descriptors(descriptors).unwrap();
+    for descriptor in [
+        DETECTION_URL_DESCRIPTOR,
+        DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
+        DETECTION_INPUT_URL_PATTERN_DESCRIPTOR,
+        DETECTION_URL_ABSOLUTE_DESCRIPTOR,
+        DETECTION_HTTP_DESCRIPTOR,
+    ] {
+        assert_eq!(descriptor.owner, "D02");
+        assert!(descriptor
+            .canonical_file
+            .ends_with("source_profile/detection/strategy.rs"));
+    }
+
+    let authored_url_value = json!({
+        "type": "url", "key": "url", "input": {
+            "type": "pattern_alternatives",
+            "alternatives": [{ "pattern": "(?<tenant>.+)", "captures": ["tenant"] }]
+        }
+    });
+    let authored_url: DetectionStrategy =
+        serde_json::from_value(authored_url_value.clone()).unwrap();
+    let authored_http_value = json!({
+        "type": "http", "key": "http",
+        "fetch": { "mode": "http", "method": "GET", "url": "https://example.test", "headers": { "x-test": "yes" }, "timeoutMs": 1 },
+        "expectStatus": 200, "contains": "known", "regex": "(?<tenant>known)",
+        "captures": ["tenant"], "evidence": "known"
+    });
+    let authored_http: DetectionStrategy =
+        serde_json::from_value(authored_http_value.clone()).unwrap();
+    assert_eq!(
+        detection_descriptor_for_authored_kind(authored_url.kind()),
+        &DETECTION_URL_DESCRIPTOR
+    );
+    assert_eq!(
+        detection_descriptor_for_authored_kind(authored_http.kind()),
+        &DETECTION_HTTP_DESCRIPTOR
+    );
+    let absolute = DetectionUrlInput::AbsoluteUrl;
+    let alternatives = DetectionUrlInput::PatternAlternatives {
+        alternatives: vec![job_radar_lib::InputUrlPattern {
+            pattern: "(?<tenant>.+)".into(),
+            captures: Some(vec!["tenant".into()]),
+        }],
+    };
+    assert_eq!(
+        detection_descriptor_for_url_input_kind(absolute.kind()),
+        &DETECTION_URL_ABSOLUTE_DESCRIPTOR
+    );
+    assert_eq!(
+        detection_descriptor_for_url_input_kind(alternatives.kind()),
+        &DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR
+    );
+
+    let option_inventory = |descriptor: &job_radar_lib::DetectionShapeDescriptor| {
+        descriptor
+            .options
+            .iter()
+            .map(|option| {
+                (
+                    option.key,
+                    option.required,
+                    option.minimum,
+                    option.maximum,
+                    option.compiled_identity,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        option_inventory(&DETECTION_URL_DESCRIPTOR),
+        vec![
+            (
+                "key",
+                true,
+                None,
+                None,
+                "CompiledDetectionStrategy::Url.key"
+            ),
+            (
+                "input",
+                true,
+                None,
+                None,
+                "CompiledDetectionStrategy::Url.input"
+            ),
+        ]
+    );
+    assert_eq!(
+        option_inventory(&DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR),
+        vec![(
+            "alternatives",
+            true,
+            Some(1),
+            None,
+            "CompiledUrlInput::PatternAlternatives.alternatives"
+        ),]
+    );
+    assert_eq!(
+        option_inventory(&DETECTION_INPUT_URL_PATTERN_DESCRIPTOR),
+        vec![
+            (
+                "pattern",
+                true,
+                None,
+                None,
+                "CompiledUrlAlternative.pattern"
+            ),
+            (
+                "captures",
+                false,
+                None,
+                None,
+                "CompiledUrlAlternative.pattern.keys"
+            ),
+        ]
+    );
+    assert_eq!(
+        option_inventory(&DETECTION_HTTP_DESCRIPTOR),
+        vec![
+            (
+                "key",
+                true,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.key"
+            ),
+            (
+                "fetch",
+                true,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.fetch"
+            ),
+            (
+                "expectStatus",
+                false,
+                Some(100),
+                Some(599),
+                "CompiledDetectionStrategy::Http.expect_status"
+            ),
+            (
+                "contains",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.contains"
+            ),
+            (
+                "regex",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.acceptance_regex"
+            ),
+            (
+                "captures",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.captures"
+            ),
+            (
+                "evidence",
+                false,
+                None,
+                None,
+                "CompiledDetectionStrategy::Http.evidence"
+            ),
+        ]
+    );
+
+    let structural_keys = |value: &Value| {
+        value
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|key| key.as_str() != "type")
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let descriptor_keys = |descriptor: &job_radar_lib::DetectionShapeDescriptor| {
+        descriptor
+            .options
+            .iter()
+            .map(|option| option.key.to_string())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let serialized_url = serde_json::to_value(&authored_url).unwrap();
+    let serialized_http = serde_json::to_value(&authored_http).unwrap();
+    assert_eq!(
+        structural_keys(&serialized_url),
+        descriptor_keys(&DETECTION_URL_DESCRIPTOR)
+    );
+    assert_eq!(
+        structural_keys(&serialized_url["input"]),
+        descriptor_keys(&DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR)
+    );
+    assert_eq!(
+        structural_keys(&serialized_url["input"]["alternatives"][0]),
+        descriptor_keys(&DETECTION_INPUT_URL_PATTERN_DESCRIPTOR)
+    );
+    assert_eq!(
+        structural_keys(&serialized_http),
+        descriptor_keys(&DETECTION_HTTP_DESCRIPTOR)
+    );
+
+    let plan = compile_detection_plan(&profile(
+        json!([
+            { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
+            { "type": "http", "key": "http", "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1 } }
+        ]),
+        &[],
+    )).unwrap();
+    assert_eq!(
+        plan.strategy_descriptors().copied().collect::<Vec<_>>(),
+        vec![DETECTION_URL_DESCRIPTOR, DETECTION_HTTP_DESCRIPTOR]
+    );
+    assert_eq!(
+        plan.url_input_descriptors().copied().collect::<Vec<_>>(),
+        vec![DETECTION_URL_ABSOLUTE_DESCRIPTOR]
+    );
+
+    let alternatives_plan =
+        compile_detection_plan(&profile(json!([authored_url_value]), &["tenant"])).unwrap();
+    assert_eq!(
+        alternatives_plan
+            .input_url_pattern_descriptors()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![DETECTION_INPUT_URL_PATTERN_DESCRIPTOR]
+    );
+
+    let omitted_nested = descriptors
+        .iter()
+        .copied()
+        .filter(|descriptor| descriptor.key != "input_url_pattern")
+        .collect::<Vec<_>>();
+    assert!(validate_detection_shape_descriptors(&omitted_nested).is_err());
+    let mut omitted_option_descriptor = DETECTION_HTTP_DESCRIPTOR;
+    omitted_option_descriptor.options = Box::leak(
+        DETECTION_HTTP_DESCRIPTOR.options[..6]
+            .to_vec()
+            .into_boxed_slice(),
+    );
+    let omitted_option = descriptors
+        .iter()
+        .copied()
+        .map(|descriptor| {
+            if descriptor.key == "http" {
+                omitted_option_descriptor
+            } else {
+                descriptor
+            }
+        })
+        .collect::<Vec<_>>();
+    assert!(validate_detection_shape_descriptors(&omitted_option).is_err());
+    let mut duplicate = descriptors.to_vec();
+    duplicate.push(descriptors[0]);
+    assert!(validate_detection_shape_descriptors(&duplicate).is_err());
+    let mut conflict = descriptors.to_vec();
+    conflict[0].owner = "wrong";
+    assert!(validate_detection_shape_descriptors(&conflict).is_err());
 }
 
 fn response(status: u16, body: impl Into<Vec<u8>>) -> ScriptedHttpEvent {
@@ -251,8 +524,14 @@ async fn alternatives_feed_latest_reconciled_capture_to_http_template_and_preser
         .any(|item| item.kind == job_radar_lib::DetectionEvidenceKind::Http));
 
     let serialized = serde_json::to_value(&result).unwrap();
-    assert_eq!(serialized["report"], serde_json::to_value(&result.report).unwrap());
-    assert_eq!(serialized["runResult"], serde_json::to_value(&result.run_result).unwrap());
+    assert_eq!(
+        serialized["report"],
+        serde_json::to_value(&result.report).unwrap()
+    );
+    assert_eq!(
+        serialized["runResult"],
+        serde_json::to_value(&result.run_result).unwrap()
+    );
     assert_eq!(
         serde_json::from_value::<job_radar_lib::DetectionOperationResult>(serialized).unwrap(),
         result
@@ -679,13 +958,25 @@ async fn invalid_input_and_cancellation_start_no_http_work() {
 #[test]
 fn built_in_profiles_compile_only_the_final_detection_strategy_shape() {
     for (key, document) in [
-        ("greenhouse", include_str!("../resources/profiles/greenhouse.json")),
-        ("workday", include_str!("../resources/profiles/workday.json")),
-        ("successfactors", include_str!("../resources/profiles/successfactors.json")),
+        (
+            "greenhouse",
+            include_str!("../resources/profiles/greenhouse.json"),
+        ),
+        (
+            "workday",
+            include_str!("../resources/profiles/workday.json"),
+        ),
+        (
+            "successfactors",
+            include_str!("../resources/profiles/successfactors.json"),
+        ),
     ] {
-        let profile: SourceProfileDocument = serde_json::from_str(document)
-            .unwrap_or_else(|error| panic!("{key} final Detection document must deserialize: {error}"));
-        compile_detection_plan(&profile)
-            .unwrap_or_else(|diagnostics| panic!("{key} final Detection plan must compile: {diagnostics:?}"));
+        let profile: SourceProfileDocument =
+            serde_json::from_str(document).unwrap_or_else(|error| {
+                panic!("{key} final Detection document must deserialize: {error}")
+            });
+        compile_detection_plan(&profile).unwrap_or_else(|diagnostics| {
+            panic!("{key} final Detection plan must compile: {diagnostics:?}")
+        });
     }
 }
