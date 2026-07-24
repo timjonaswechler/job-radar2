@@ -2,8 +2,8 @@ use std::{fs, path::Path};
 
 use job_radar_lib::{
     compile_source, http_fetch_descriptors, validate_http_fetch_descriptors, CompileSourceOutcome,
-    ExecutionPlanFetch, HttpMethod, RegistrySourceProfile, SourceDocument, SourceProfileDocument,
-    SourceProfileRegistrySnapshot, HTTP_FETCH_DESCRIPTOR,
+    ExecutionPlanFetch, Fetch, HttpMethod, RegistrySourceProfile, SourceDocument,
+    SourceProfileDocument, SourceProfileRegistrySnapshot, HTTP_FETCH_DESCRIPTOR,
 };
 use serde_json::{json, Value};
 
@@ -53,6 +53,35 @@ fn direct_serde_requires_http_timeout_within_the_authored_ceiling() {
 }
 
 #[test]
+fn direct_serde_admits_only_the_canonical_public_header_allowlist() {
+    for header in HTTP_FETCH_DESCRIPTOR.public_headers {
+        let value = json!({
+            "mode": "http",
+            "url": "https://example.test",
+            "headers": { (header.to_string()): "value" },
+            "timeoutMs": 1
+        });
+        assert!(
+            serde_json::from_value::<Fetch>(value).is_ok(),
+            "canonical public header {header} must deserialize"
+        );
+    }
+
+    for header in ["authorization", "x-test", "Accept", "cookie"] {
+        let value = json!({
+            "mode": "http",
+            "url": "https://example.test",
+            "headers": { (header.to_string()): "value" },
+            "timeoutMs": 1
+        });
+        assert!(
+            serde_json::from_value::<Fetch>(value).is_err(),
+            "non-public header {header} must reject in direct Serde"
+        );
+    }
+}
+
+#[test]
 fn compiler_defaults_omitted_method_to_concrete_get_and_rejects_get_body() {
     let mut profile = profile_value();
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
@@ -78,15 +107,7 @@ fn compiler_defaults_omitted_method_to_concrete_get_and_rejects_get_body() {
 }
 
 #[test]
-fn compiler_owns_public_header_and_recursive_json_body_security() {
-    let mut profile = profile_value();
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]["headers"] =
-        json!({ "Accept": "application/json" });
-    let CompileSourceOutcome::Rejected { diagnostics } = compile_profile(profile) else {
-        panic!("mixed-case header outside the exact authored allowlist must reject");
-    };
-    assert_eq!(diagnostics[0].code, "forbidden_request_header");
-
+fn compiler_owns_recursive_json_body_security() {
     let mut profile = profile_value();
     let fetch = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"];
     fetch["method"] = json!("POST");

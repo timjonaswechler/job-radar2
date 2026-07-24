@@ -67,6 +67,7 @@ pub enum DetectionDescriptorShape {
 pub struct DetectionOptionDescriptor {
     pub key: &'static str,
     pub required: bool,
+    pub non_empty: bool,
     pub minimum: Option<u64>,
     pub maximum: Option<u64>,
     pub shape: DetectionDescriptorShape,
@@ -78,7 +79,15 @@ const fn option(
     required: bool,
     compiled_identity: &'static str,
 ) -> DetectionOptionDescriptor {
-    bounded_option(key, required, None, None, compiled_identity)
+    constrained_option(key, required, false, None, None, compiled_identity)
+}
+
+const fn non_empty_option(
+    key: &'static str,
+    required: bool,
+    compiled_identity: &'static str,
+) -> DetectionOptionDescriptor {
+    constrained_option(key, required, true, None, None, compiled_identity)
 }
 
 const fn bounded_option(
@@ -88,9 +97,21 @@ const fn bounded_option(
     maximum: Option<u64>,
     compiled_identity: &'static str,
 ) -> DetectionOptionDescriptor {
+    constrained_option(key, required, false, minimum, maximum, compiled_identity)
+}
+
+const fn constrained_option(
+    key: &'static str,
+    required: bool,
+    non_empty: bool,
+    minimum: Option<u64>,
+    maximum: Option<u64>,
+    compiled_identity: &'static str,
+) -> DetectionOptionDescriptor {
     DetectionOptionDescriptor {
         key,
         required,
+        non_empty,
         minimum,
         maximum,
         shape: DetectionDescriptorShape::ParentOption,
@@ -120,7 +141,7 @@ const URL_PATTERN_ALTERNATIVES_OPTIONS: &[DetectionOptionDescriptor] = &[bounded
     "CompiledUrlInput::PatternAlternatives.alternatives",
 )];
 const INPUT_URL_PATTERN_OPTIONS: &[DetectionOptionDescriptor] = &[
-    option("pattern", true, "CompiledUrlAlternative.pattern"),
+    non_empty_option("pattern", true, "CompiledUrlAlternative.pattern"),
     option("captures", false, "CompiledUrlAlternative.pattern.keys"),
 ];
 const URL_ABSOLUTE_OPTIONS: &[DetectionOptionDescriptor] = &[];
@@ -134,12 +155,12 @@ const HTTP_OPTIONS: &[DetectionOptionDescriptor] = &[
         Some(599),
         "CompiledDetectionStrategy::Http.expect_status",
     ),
-    option(
+    non_empty_option(
         "contains",
         false,
         "CompiledDetectionStrategy::Http.contains",
     ),
-    option(
+    non_empty_option(
         "regex",
         false,
         "CompiledDetectionStrategy::Http.acceptance_regex",
@@ -149,7 +170,7 @@ const HTTP_OPTIONS: &[DetectionOptionDescriptor] = &[
         false,
         "CompiledDetectionStrategy::Http.captures",
     ),
-    option(
+    non_empty_option(
         "evidence",
         false,
         "CompiledDetectionStrategy::Http.evidence",
@@ -158,12 +179,12 @@ const HTTP_OPTIONS: &[DetectionOptionDescriptor] = &[
 const BROWSER_OPTIONS: &[DetectionOptionDescriptor] = &[
     option("key", true, "CompiledDetectionStrategy::Browser.key"),
     option("fetch", true, "ExecutionPlanFetch::Browser"),
-    option(
+    non_empty_option(
         "contains",
         false,
         "CompiledDetectionStrategy::Browser.contains",
     ),
-    option(
+    non_empty_option(
         "regex",
         false,
         "CompiledDetectionStrategy::Browser.acceptance_regex",
@@ -173,7 +194,7 @@ const BROWSER_OPTIONS: &[DetectionOptionDescriptor] = &[
         false,
         "CompiledDetectionStrategy::Browser.captures",
     ),
-    option(
+    non_empty_option(
         "evidence",
         false,
         "CompiledDetectionStrategy::Browser.evidence",

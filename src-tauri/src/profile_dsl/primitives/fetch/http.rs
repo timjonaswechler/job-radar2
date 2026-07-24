@@ -15,7 +15,7 @@ use crate::profile_dsl::template::{
     TemplateCompileError, TemplateCompileErrorKind, TemplateDescriptor, TemplateValueView,
 };
 
-const PUBLIC_HEADERS: [&str; 6] = [
+pub(crate) const PUBLIC_HTTP_HEADERS: [&str; 6] = [
     "accept",
     "accept-language",
     "content-type",
@@ -23,6 +23,10 @@ const PUBLIC_HEADERS: [&str; 6] = [
     "user-agent",
     "x-requested-with",
 ];
+
+pub(crate) fn is_public_http_header(name: &str) -> bool {
+    PUBLIC_HTTP_HEADERS.contains(&name)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct HttpFetchDescriptor {
@@ -38,7 +42,7 @@ pub const HTTP_FETCH_DESCRIPTOR: HttpFetchDescriptor = HttpFetchDescriptor {
     mode: "http",
     methods: &["GET", "POST"],
     body_types: &["json", "text", "form"],
-    public_headers: &PUBLIC_HEADERS,
+    public_headers: &PUBLIC_HTTP_HEADERS,
     timeout_ms_minimum: 1,
     timeout_ms_maximum: 60_000,
 };
@@ -68,7 +72,7 @@ pub(crate) struct HttpFetchSecurityBehavior {
 
 pub(crate) fn http_fetch_security_behavior() -> HttpFetchSecurityBehavior {
     HttpFetchSecurityBehavior {
-        public_headers: &PUBLIC_HEADERS,
+        public_headers: &PUBLIC_HTTP_HEADERS,
         secret_like_applicability: &["form_body_field_names", "json_object_keys"],
     }
 }
@@ -200,7 +204,7 @@ pub fn compile_http_fetch(
 
     let mut compiled_headers = BTreeMap::new();
     for (name, value) in headers.into_iter().flatten() {
-        if !PUBLIC_HEADERS.contains(&name.as_str()) {
+        if !is_public_http_header(name) {
             return Err(HttpFetchCompileError::new(
                 format!("/headers/{}", json_pointer_segment(name)),
                 "forbidden_request_header",

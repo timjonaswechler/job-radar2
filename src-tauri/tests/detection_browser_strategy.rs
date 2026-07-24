@@ -86,6 +86,14 @@ fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
         ]
     );
 
+    for key in ["contains", "regex", "evidence"] {
+        assert!(DETECTION_BROWSER_DESCRIPTOR
+            .options
+            .iter()
+            .find(|option| option.key == key)
+            .is_some_and(|option| option.non_empty));
+    }
+
     let authored_value = json!({
         "type": "browser", "key": "browser",
         "fetch": {
@@ -193,6 +201,24 @@ fn direct_serde_rejects_invalid_browser_detection_shapes() {
         .unwrap()
         .retain(|key, _| key != "contains" && key != "regex" && key != "captures");
     assert!(serde_json::from_value::<SourceProfileDocument>(no_acceptance).is_err());
+}
+
+#[test]
+fn direct_serde_enforces_d03_non_empty_and_capture_shapes() {
+    for field in ["contains", "regex", "evidence"] {
+        let mut value = browser_strategy("render", "known");
+        value[field] = json!("");
+        assert!(
+            serde_json::from_value::<DetectionStrategy>(value).is_err(),
+            "empty {field} must reject"
+        );
+    }
+
+    for captures in [json!(["tenant", "tenant"]), json!(["bad-key"])] {
+        let mut value = browser_strategy("render", "known");
+        value["captures"] = captures;
+        assert!(serde_json::from_value::<DetectionStrategy>(value).is_err());
+    }
 }
 
 fn request(remaining: u64) -> BrowserAcquisitionRequestSnapshot {

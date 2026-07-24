@@ -75,6 +75,15 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
             .ends_with("source_profile/detection/strategy.rs"));
     }
 
+    assert!(DETECTION_INPUT_URL_PATTERN_DESCRIPTOR.options[0].non_empty);
+    for key in ["contains", "regex", "evidence"] {
+        assert!(DETECTION_HTTP_DESCRIPTOR
+            .options
+            .iter()
+            .find(|option| option.key == key)
+            .is_some_and(|option| option.non_empty));
+    }
+
     let authored_url_value = json!({
         "type": "url", "key": "url", "input": {
             "type": "pattern_alternatives",
@@ -85,7 +94,7 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
         serde_json::from_value(authored_url_value.clone()).unwrap();
     let authored_http_value = json!({
         "type": "http", "key": "http",
-        "fetch": { "mode": "http", "method": "GET", "url": "https://example.test", "headers": { "x-test": "yes" }, "timeoutMs": 1 },
+        "fetch": { "mode": "http", "method": "GET", "url": "https://example.test", "headers": { "x-requested-with": "yes" }, "timeoutMs": 1 },
         "expectStatus": 200, "contains": "known", "regex": "(?<tenant>known)",
         "captures": ["tenant"], "evidence": "known"
     });
@@ -367,12 +376,23 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
         "invalid_detection_policy"
     );
 
-    let invalid_key = profile(
+    let mut invalid_key = profile(
         json!([
-            { "type": "url", "key": "bad key", "input": { "type": "absolute_url" } }
+            { "type": "url", "key": "url", "input": { "type": "absolute_url" } }
         ]),
         &["startUrl"],
     );
+    let DetectionStrategy::Url { key, .. } = &mut invalid_key
+        .detection
+        .as_mut()
+        .unwrap()
+        .strategies
+        .as_mut()
+        .unwrap()[0]
+    else {
+        panic!("expected URL strategy");
+    };
+    *key = "bad key".into();
     assert_eq!(
         compile_detection_plan(&invalid_key).unwrap_err()[0].code,
         "invalid_detection_strategy_key"
@@ -381,6 +401,34 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
 
 #[test]
 fn direct_serde_rejects_partial_or_mixed_final_detection_shapes() {
+    for detection in [
+        json!({}),
+        json!({ "policy": { "type": "all_required" }, "strategies": [] }),
+        json!({
+            "policy": { "type": "first_accepted" },
+            "strategies": [
+                { "type": "url", "key": "url", "input": { "type": "absolute_url" } }
+            ]
+        }),
+        json!({
+            "policy": { "type": "all_required" },
+            "strategies": [
+                { "type": "http", "key": "probe", "fetch": {
+                    "mode": "http", "url": "https://example.test", "timeoutMs": 1000
+                } }
+            ]
+        }),
+        json!({
+            "policy": { "type": "all_required" },
+            "strategies": [
+                { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
+                { "type": "url", "key": "second_url", "input": { "type": "absolute_url" } }
+            ]
+        }),
+    ] {
+        assert!(serde_json::from_value::<job_radar_lib::DetectionDocument>(detection).is_err());
+    }
+
     let mut value: Value =
         serde_json::from_str(include_str!("../resources/profiles/greenhouse.json")).unwrap();
     value["detection"] = json!({
@@ -418,6 +466,94 @@ fn direct_serde_rejects_partial_or_mixed_final_detection_shapes() {
         ]
     });
     assert!(serde_json::from_value::<SourceProfileDocument>(value).is_err());
+}
+
+#[test]
+fn direct_serde_enforces_d02_schema_bounds_and_string_shapes() {
+    for key in ["", "Bad", "bad-key"] {
+        assert!(serde_json::from_value::<DetectionStrategy>(json!({
+            "type": "url",
+            "key": key,
+            "input": { "type": "absolute_url" }
+        }))
+        .is_err());
+        assert!(
+            serde_json::from_value::<job_radar_lib::DetectionDocument>(json!({
+                "recommendedAccessPathKey": key
+            }))
+            .is_err()
+        );
+    }
+
+    for evidence in [
+        json!({ "kind": "url", "message": "" }),
+        json!({ "kind": "url", "message": "known", "path": "" }),
+    ] {
+        assert!(serde_json::from_value::<job_radar_lib::DetectionEvidence>(evidence).is_err());
+    }
+
+    assert!(serde_json::from_value::<DetectionUrlInput>(json!({
+        "type": "pattern_alternatives",
+        "alternatives": []
+    }))
+    .is_err());
+
+    for status in [99, 600] {
+        assert!(serde_json::from_value::<DetectionStrategy>(json!({
+            "type": "http",
+            "key": "probe",
+            "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1 },
+            "expectStatus": status
+        }))
+        .is_err());
+    }
+    for status in [100, 599] {
+        assert!(serde_json::from_value::<DetectionStrategy>(json!({
+            "type": "http",
+            "key": "probe",
+            "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1 },
+            "expectStatus": status
+        }))
+        .is_ok());
+    }
+
+    assert!(
+        serde_json::from_value::<job_radar_lib::InputUrlPattern>(json!({
+            "pattern": ""
+        }))
+        .is_err()
+    );
+
+    for field in ["contains", "regex", "evidence"] {
+        let mut value = json!({
+            "type": "http",
+            "key": "probe",
+            "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1 }
+        });
+        value[field] = json!("");
+        assert!(
+            serde_json::from_value::<DetectionStrategy>(value).is_err(),
+            "empty {field} must reject"
+        );
+    }
+
+    for captures in [json!(["tenant", "tenant"]), json!(["bad-key"])] {
+        assert!(serde_json::from_value::<DetectionStrategy>(json!({
+            "type": "http",
+            "key": "probe",
+            "fetch": { "mode": "http", "url": "https://example.test", "timeoutMs": 1 },
+            "regex": "(?<tenant>.+)",
+            "captures": captures.clone()
+        }))
+        .is_err());
+        assert!(
+            serde_json::from_value::<job_radar_lib::InputUrlPattern>(json!({
+                "pattern": "(?<tenant>.+)",
+                "captures": captures
+            }))
+            .is_err()
+        );
+    }
 }
 
 #[test]

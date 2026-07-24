@@ -10,6 +10,25 @@ pub(crate) use crate::profile_dsl::primitives::fetch::browser::{
     MAX_BROWSER_WAIT_TIMEOUT_MS,
 };
 
+fn deserialize_public_http_headers<'de, D>(
+    deserializer: D,
+) -> Result<Option<BTreeMap<String, String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let headers = Option::<BTreeMap<String, String>>::deserialize(deserializer)?;
+    if let Some(name) = headers.as_ref().and_then(|headers| {
+        headers
+            .keys()
+            .find(|name| !crate::profile_dsl::primitives::fetch::http::is_public_http_header(name))
+    }) {
+        return Err(serde::de::Error::custom(format!(
+            "HTTP header {name} is not in the canonical public allowlist"
+        )));
+    }
+    Ok(headers)
+}
+
 fn deserialize_http_timeout<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -31,7 +50,11 @@ pub enum Fetch {
         #[serde(skip_serializing_if = "Option::is_none")]
         method: Option<HttpMethod>,
         url: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            deserialize_with = "deserialize_public_http_headers",
+            skip_serializing_if = "Option::is_none"
+        )]
         headers: Option<BTreeMap<String, String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<RequestBody>,
