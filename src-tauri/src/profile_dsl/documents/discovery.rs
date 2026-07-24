@@ -12,7 +12,7 @@ use crate::profile_dsl::documents::select::{Captures, Select};
 use crate::profile_dsl::documents::strategy::Acceptance;
 use crate::profile_dsl::occurrence::HintUse;
 use crate::profile_dsl::policy::StrategyPolicy;
-use crate::profile_dsl::primitives::predicate::Predicate;
+use crate::profile_dsl::primitives::predicate::{deserialize_where_predicates, Predicate};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -36,7 +36,12 @@ pub struct DiscoveryStrategy {
     pub pagination: Option<Pagination>,
     pub parse: Parse,
     pub select: Select,
-    #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "where",
+        default,
+        deserialize_with = "deserialize_where_predicates",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub conditions: Option<Vec<Predicate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub captures: Option<Captures>,

@@ -4,12 +4,48 @@ use job_radar_lib::{
     compile_predicate, evaluate_compiled_predicate, literal_contains, predicate_descriptors,
     validate_predicate_registration_keys, values_equal, CompiledValueResult, ParseType, Predicate,
     PredicateCompileContext, PredicateCompileErrorKind, PredicateKind, PredicatePlacement,
-    PredicateRegistryError, ValueCompileContext, ValuePlacement,
+    PredicateRegistryError, SourceProfileDocument, ValueCompileContext, ValuePlacement,
 };
 use serde_json::json;
 
 fn predicate(value: serde_json::Value) -> Predicate {
     serde_json::from_value(value).unwrap()
+}
+
+fn profile_with_strategy_member(
+    phase: &str,
+    member: &str,
+    value: serde_json::Value,
+) -> serde_json::Value {
+    let mut profile: serde_json::Value =
+        serde_json::from_str(include_str!("../../resources/profiles/greenhouse.json")).unwrap();
+    profile["accessPaths"][0][phase]["strategies"][0][member] = value;
+    profile
+}
+
+#[test]
+fn direct_serde_rejects_predicates_outside_their_authored_placements() {
+    let equal = json!({
+        "type": "equal",
+        "left": {"type": "const", "value": "a"},
+        "right": {"type": "const", "value": "a"}
+    });
+    for phase in ["discovery", "detail"] {
+        let profile = profile_with_strategy_member(phase, "where", json!([equal.clone()]));
+        assert!(serde_json::from_value::<SourceProfileDocument>(profile).is_err());
+    }
+
+    for invalid_match in [
+        json!({"type": "non_empty", "field": {"type": "const", "value": "a"}}),
+        json!({
+            "type": "regex",
+            "field": {"type": "const", "value": "a"},
+            "pattern": "a"
+        }),
+    ] {
+        let profile = profile_with_strategy_member("detail", "match", invalid_match);
+        assert!(serde_json::from_value::<SourceProfileDocument>(profile).is_err());
+    }
 }
 
 fn context(placement: PredicatePlacement) -> PredicateCompileContext {

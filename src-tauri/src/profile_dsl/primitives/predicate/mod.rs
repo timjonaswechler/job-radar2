@@ -43,6 +43,41 @@ impl PredicateKind {
         }
     }
 }
+pub(crate) fn deserialize_where_predicates<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<Predicate>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let predicates = Vec::<Predicate>::deserialize(deserializer)?;
+    if predicates
+        .iter()
+        .all(|predicate| matches!(predicate, Predicate::NonEmpty(_) | Predicate::Regex(_)))
+    {
+        Ok(Some(predicates))
+    } else {
+        Err(serde::de::Error::custom(
+            "where admits only non_empty and regex predicates",
+        ))
+    }
+}
+
+pub(crate) fn deserialize_detail_match<'de, D>(
+    deserializer: D,
+) -> Result<Option<Predicate>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let predicate = Predicate::deserialize(deserializer)?;
+    if matches!(predicate, Predicate::Equal(_)) {
+        Ok(Some(predicate))
+    } else {
+        Err(serde::de::Error::custom(
+            "detail match admits only the equal predicate",
+        ))
+    }
+}
+
 impl Predicate {
     pub const fn kind(&self) -> PredicateKind {
         match self {

@@ -62,7 +62,21 @@ impl TryFrom<DetectionDocumentWire> for DetectionDocument {
                 )
             })
         }) {
-            return Err("Detection HTTP captures require regex");
+            return Err("Detection HTTP and Browser captures require regex");
+        }
+        if value.strategies.as_deref().is_some_and(|strategies| {
+            strategies.iter().any(|strategy| {
+                matches!(
+                    strategy,
+                    DetectionStrategy::Browser {
+                        contains: None,
+                        regex: None,
+                        ..
+                    }
+                )
+            })
+        }) {
+            return Err("Detection Browser requires contains or regex");
         }
         Ok(Self {
             policy: value.policy,
@@ -85,6 +99,7 @@ pub enum DetectionStrategy {
     },
     Http {
         key: String,
+        #[serde(deserialize_with = "deserialize_http_fetch")]
         fetch: Fetch,
         #[serde(rename = "expectStatus", skip_serializing_if = "Option::is_none")]
         expect_status: Option<u16>,
@@ -99,6 +114,7 @@ pub enum DetectionStrategy {
     },
     Browser {
         key: String,
+        #[serde(deserialize_with = "deserialize_browser_fetch")]
         fetch: Fetch,
         #[serde(skip_serializing_if = "Option::is_none")]
         contains: Option<String>,
@@ -109,6 +125,34 @@ pub enum DetectionStrategy {
         #[serde(skip_serializing_if = "Option::is_none")]
         evidence: Option<String>,
     },
+}
+
+fn deserialize_http_fetch<'de, D>(deserializer: D) -> Result<Fetch, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let fetch = Fetch::deserialize(deserializer)?;
+    if matches!(fetch, Fetch::Http { .. }) {
+        Ok(fetch)
+    } else {
+        Err(serde::de::Error::custom(
+            "Detection HTTP requires an HTTP Fetch",
+        ))
+    }
+}
+
+fn deserialize_browser_fetch<'de, D>(deserializer: D) -> Result<Fetch, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let fetch = Fetch::deserialize(deserializer)?;
+    if matches!(fetch, Fetch::Browser { .. }) {
+        Ok(fetch)
+    } else {
+        Err(serde::de::Error::custom(
+            "Detection Browser requires a Browser Fetch",
+        ))
+    }
 }
 
 impl DetectionStrategy {

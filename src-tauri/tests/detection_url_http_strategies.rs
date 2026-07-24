@@ -133,6 +133,17 @@ fn direct_serde_rejects_partial_or_mixed_final_detection_shapes() {
             }, "captures": [] }
         ]
     });
+    assert!(serde_json::from_value::<SourceProfileDocument>(value.clone()).is_err());
+
+    value["detection"] = json!({
+        "policy": { "type": "all_required" },
+        "strategies": [
+            { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
+            { "type": "http", "key": "probe", "fetch": {
+                "mode": "browser", "url": "https://example.test", "timeoutMs": 1000
+            } }
+        ]
+    });
     assert!(serde_json::from_value::<SourceProfileDocument>(value).is_err());
 }
 

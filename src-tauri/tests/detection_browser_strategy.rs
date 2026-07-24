@@ -69,6 +69,24 @@ fn browser_strategy(key: &str, contains: &str) -> Value {
     })
 }
 
+#[test]
+fn direct_serde_rejects_invalid_browser_detection_shapes() {
+    let valid = profile("serde", vec![browser_strategy("render", "known")]);
+
+    let mut wrong_mode = serde_json::to_value(&valid).unwrap();
+    wrong_mode["detection"]["strategies"][1]["fetch"] = json!({
+        "mode": "http", "url": "https://example.test", "timeoutMs": 1000
+    });
+    assert!(serde_json::from_value::<SourceProfileDocument>(wrong_mode).is_err());
+
+    let mut no_acceptance = serde_json::to_value(valid).unwrap();
+    no_acceptance["detection"]["strategies"][1]
+        .as_object_mut()
+        .unwrap()
+        .retain(|key, _| key != "contains" && key != "regex" && key != "captures");
+    assert!(serde_json::from_value::<SourceProfileDocument>(no_acceptance).is_err());
+}
+
 fn request(remaining: u64) -> BrowserAcquisitionRequestSnapshot {
     BrowserAcquisitionRequestSnapshot {
         target: "https://example.test/".into(),
@@ -98,13 +116,6 @@ fn compiler_accepts_only_bounded_browser_detection_and_compiles_dependencies_bef
         plan.strategy_keys().collect::<Vec<_>>(),
         vec!["url", "render"]
     );
-
-    let mut wrong_mode = browser_strategy("render", "known");
-    wrong_mode["fetch"] = json!({
-        "mode": "http", "url": "https://example.test", "timeoutMs": 1000
-    });
-    let error = compile_detection_plan(&profile("wrong", vec![wrong_mode])).unwrap_err();
-    assert_eq!(error[0].code, "compiled_execution_plan_invariant_violation");
 
     let mut minimum_timeout = browser_strategy("minimum", "known");
     minimum_timeout["fetch"]["timeoutMs"] = json!(1);
