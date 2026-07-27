@@ -5,20 +5,20 @@ use serde_json::{json, Value};
 
 const SCHEMA_FILES: &[&str] = &[
     "src/schema/check-report.schema.json",
-    "src/schema/source-profile.schema.json",
-    "src/schema/source.schema.json",
-    "src/schema/profile-dsl/common.schema.json",
-    "src/schema/profile-dsl/fetch.schema.json",
-    "src/schema/profile-dsl/parse.schema.json",
-    "src/schema/profile-dsl/predicate.schema.json",
-    "src/schema/profile-dsl/select.schema.json",
-    "src/schema/profile-dsl/extract.schema.json",
-    "src/schema/profile-dsl/transform.schema.json",
-    "src/schema/profile-dsl/pagination.schema.json",
-    "src/schema/profile-dsl/strategy.schema.json",
-    "src/schema/profile-dsl/policy.schema.json",
-    "src/schema/profile-dsl/fragments.schema.json",
-    "src/schema/profile-dsl/diagnostics.schema.json",
+    "crates/source-profile-dsl/src/schema/source-profile.schema.json",
+    "crates/source-profile-dsl/src/schema/source.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/common.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/fetch.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/parse.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/predicate.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/extract.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/transform.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/pagination.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/strategy.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/fragments.schema.json",
+    "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
 ];
 
 #[derive(Clone, Copy)]
@@ -34,10 +34,14 @@ impl SchemaEntrypoint {
     fn path(self) -> &'static str {
         match self {
             Self::CheckReport => "src/schema/check-report.schema.json",
-            Self::PolicyStrategySet => "src/schema/profile-dsl/policy.schema.json",
-            Self::Select => "src/schema/profile-dsl/select.schema.json",
-            Self::SourceProfile => "src/schema/source-profile.schema.json",
-            Self::Source => "src/schema/source.schema.json",
+            Self::PolicyStrategySet => {
+                "crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json"
+            }
+            Self::Select => "crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json",
+            Self::SourceProfile => {
+                "crates/source-profile-dsl/src/schema/source-profile.schema.json"
+            }
+            Self::Source => "crates/source-profile-dsl/src/schema/source.schema.json",
         }
     }
 }
@@ -799,7 +803,7 @@ impl SchemaHarness {
 
     fn assert_diagnostics_valid(&self, diagnostics: Value) {
         let errors = self.validate_instance(
-            "src/schema/profile-dsl/diagnostics.schema.json",
+            "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
             json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
             diagnostics,
         );
@@ -812,7 +816,7 @@ impl SchemaHarness {
 
     fn assert_diagnostics_invalid(&self, diagnostics: Value, expected_fragments: &[&str]) {
         let errors = self.validate_instance(
-            "src/schema/profile-dsl/diagnostics.schema.json",
+            "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
             json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
             diagnostics,
         );

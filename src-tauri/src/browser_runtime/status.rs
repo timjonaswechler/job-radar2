@@ -20,7 +20,9 @@ pub async fn check_runtime(
     }
 
     let acquisition = ManagedBrowserAcquisition::new(runtime_dir);
-    match crate::profile_dsl::runtime::browser_acquisition::probe_browser_acquisition(&acquisition).await {
+    match crate::profile_dsl::runtime::browser_acquisition::probe_browser_acquisition(&acquisition)
+        .await
+    {
         Ok(()) => BrowserRuntimeCheckResult {
             ok: true,
             message: "Managed browser runtime smoke test passed".to_string(),

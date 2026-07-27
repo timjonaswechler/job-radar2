@@ -56,7 +56,11 @@ fn get_job_posting_executes_compiled_browser_detail_plan_through_browser_client(
 
         assert!(fetcher.requested_urls().is_empty());
         assert_eq!(browser.requests().len(), 1);
-        assert!(browser.expectations_satisfied(), "{:?}", browser.mismatches());
+        assert!(
+            browser.expectations_satisfied(),
+            "{:?}",
+            browser.mismatches()
+        );
         assert_eq!(
             detail.description_state,
             PostingDescriptionState::Loaded {

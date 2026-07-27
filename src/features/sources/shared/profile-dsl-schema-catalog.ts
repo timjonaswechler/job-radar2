@@ -1,16 +1,16 @@
-import commonSchema from "../../../../src-tauri/src/schema/profile-dsl/common.schema.json";
-import diagnosticsSchema from "../../../../src-tauri/src/schema/profile-dsl/diagnostics.schema.json";
-import extractSchema from "../../../../src-tauri/src/schema/profile-dsl/extract.schema.json";
-import fetchSchema from "../../../../src-tauri/src/schema/profile-dsl/fetch.schema.json";
-import fragmentsSchema from "../../../../src-tauri/src/schema/profile-dsl/fragments.schema.json";
-import policySchema from "../../../../src-tauri/src/schema/profile-dsl/policy.schema.json";
-import paginationSchema from "../../../../src-tauri/src/schema/profile-dsl/pagination.schema.json";
-import parseSchema from "../../../../src-tauri/src/schema/profile-dsl/parse.schema.json";
-import selectSchema from "../../../../src-tauri/src/schema/profile-dsl/select.schema.json";
-import strategySchema from "../../../../src-tauri/src/schema/profile-dsl/strategy.schema.json";
-import transformSchema from "../../../../src-tauri/src/schema/profile-dsl/transform.schema.json";
-import sourceProfileSchema from "../../../../src-tauri/src/schema/source-profile.schema.json";
-import sourceSchema from "../../../../src-tauri/src/schema/source.schema.json";
+import commonSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/common.schema.json";
+import diagnosticsSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json";
+import extractSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/extract.schema.json";
+import fetchSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/fetch.schema.json";
+import fragmentsSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/fragments.schema.json";
+import policySchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json";
+import paginationSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/pagination.schema.json";
+import parseSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/parse.schema.json";
+import selectSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json";
+import strategySchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/strategy.schema.json";
+import transformSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/profile-dsl/transform.schema.json";
+import sourceProfileSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/source-profile.schema.json";
+import sourceSchema from "../../../../src-tauri/crates/source-profile-dsl/src/schema/source.schema.json";
 
 import {
   createSchemaCatalog,

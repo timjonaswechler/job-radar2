@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 fn schema_inventory() -> PaginationInventory {
     let schema: Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/pagination.schema.json"
+        "../crates/source-profile-dsl/src/schema/profile-dsl/pagination.schema.json"
     ))
     .unwrap();
     let mut variants = Vec::new();
@@ -93,7 +93,7 @@ fn serde_inventory() -> PaginationInventory {
 
 fn fragment_schema_options() -> Vec<String> {
     let schema: Value = serde_json::from_str(include_str!(
-        "../src/schema/profile-dsl/fragments.schema.json"
+        "../crates/source-profile-dsl/src/schema/profile-dsl/fragments.schema.json"
     ))
     .unwrap();
     schema["$defs"]["paginationFragment"]["properties"]

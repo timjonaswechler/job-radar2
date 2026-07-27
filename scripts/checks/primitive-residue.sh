@@ -42,13 +42,18 @@ from pathlib import Path
 
 roots = ["src-tauri/src", "src-tauri/tests", "src-tauri/resources", "src", "docs", "research"]
 extensions = {".rs", ".json", ".ts", ".tsx", ".md"}
-paths = []
-for root in roots:
-    for directory, _, files in os.walk(root):
-        for name in files:
-            path = os.path.join(directory, name)
-            if Path(name).suffix in extensions:
-                paths.append(path)
+tracked = subprocess.run(
+    ["git", "ls-files", "--", *roots],
+    stdout=subprocess.PIPE,
+    check=True,
+).stdout.decode().splitlines()
+paths = [path for path in tracked if Path(path).suffix in extensions and Path(path).is_file()]
+# The new package may be unstaged while this check runs locally; its source and tests are always scanned.
+for directory, _, files in os.walk("src-tauri/crates/source-profile-dsl"):
+    for name in files:
+        path = os.path.join(directory, name)
+        if Path(name).suffix in extensions:
+            paths.append(path)
 
 def field(value):
     if "text" in value:
@@ -85,7 +90,7 @@ for offset in range(0, len(paths), 200):
 PY
 done
 # The registry file itself is classified even when it contains no searchable behavior token.
-printf '%s\n' 'src-tauri/src/profile_dsl/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
+printf '%s\n' 'src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
 LC_ALL=C sort "$TMP" -o "$TMP"
 
 if [[ ${1:-} == --emit ]]; then
@@ -94,7 +99,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='2fd8059aee7857e010a9d05ec7dde0bddda071db3b54ad3f3580bc1c12be3865'
+FROZEN_MANIFEST_SHA256='a242cf36aca432388f367380cb2f7476905da45bd6d9b66564915ad7f3b974bd'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

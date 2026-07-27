@@ -41,8 +41,12 @@ where
     A: BrowserAcquisition + Sync,
 {
     check_and_set_source_active(
-        app_data_dir, source_key, SourceActivationFlow::Activate,
-        discovery_fetcher, detail_fetcher, acquisition,
+        app_data_dir,
+        source_key,
+        SourceActivationFlow::Activate,
+        discovery_fetcher,
+        detail_fetcher,
+        acquisition,
     )
 }
 
@@ -59,8 +63,12 @@ where
     A: BrowserAcquisition + Sync,
 {
     check_and_set_source_active(
-        app_data_dir, source_key, SourceActivationFlow::Reactivate,
-        discovery_fetcher, detail_fetcher, acquisition,
+        app_data_dir,
+        source_key,
+        SourceActivationFlow::Reactivate,
+        discovery_fetcher,
+        detail_fetcher,
+        acquisition,
     )
 }
 

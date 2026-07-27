@@ -325,51 +325,61 @@ fn checked_in_schemas() -> BTreeMap<String, serde_json::Value> {
     [
         (
             "source-profile.schema.json",
-            include_str!("../src/schema/source-profile.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/source-profile.schema.json"),
         ),
         (
             "profile-dsl/common.schema.json",
-            include_str!("../src/schema/profile-dsl/common.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/common.schema.json"),
         ),
         (
             "profile-dsl/diagnostics.schema.json",
-            include_str!("../src/schema/profile-dsl/diagnostics.schema.json"),
+            include_str!(
+                "../crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json"
+            ),
         ),
         (
             "profile-dsl/extract.schema.json",
-            include_str!("../src/schema/profile-dsl/extract.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/extract.schema.json"),
         ),
         (
             "profile-dsl/fetch.schema.json",
-            include_str!("../src/schema/profile-dsl/fetch.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/fetch.schema.json"),
         ),
         (
             "profile-dsl/pagination.schema.json",
-            include_str!("../src/schema/profile-dsl/pagination.schema.json"),
+            include_str!(
+                "../crates/source-profile-dsl/src/schema/profile-dsl/pagination.schema.json"
+            ),
         ),
         (
             "profile-dsl/parse.schema.json",
-            include_str!("../src/schema/profile-dsl/parse.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/parse.schema.json"),
         ),
         (
             "profile-dsl/policy.schema.json",
-            include_str!("../src/schema/profile-dsl/policy.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json"),
         ),
         (
             "profile-dsl/predicate.schema.json",
-            include_str!("../src/schema/profile-dsl/predicate.schema.json"),
+            include_str!(
+                "../crates/source-profile-dsl/src/schema/profile-dsl/predicate.schema.json"
+            ),
         ),
         (
             "profile-dsl/select.schema.json",
-            include_str!("../src/schema/profile-dsl/select.schema.json"),
+            include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json"),
         ),
         (
             "profile-dsl/strategy.schema.json",
-            include_str!("../src/schema/profile-dsl/strategy.schema.json"),
+            include_str!(
+                "../crates/source-profile-dsl/src/schema/profile-dsl/strategy.schema.json"
+            ),
         ),
         (
             "profile-dsl/transform.schema.json",
-            include_str!("../src/schema/profile-dsl/transform.schema.json"),
+            include_str!(
+                "../crates/source-profile-dsl/src/schema/profile-dsl/transform.schema.json"
+            ),
         ),
     ]
     .into_iter()

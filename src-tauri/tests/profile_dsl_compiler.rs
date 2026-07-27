@@ -1,23 +1,22 @@
-#[path = "profile_dsl_compiler/effective_profile.rs"]
-mod effective_profile;
+#[test]
+fn desktop_exports_are_the_canonical_core_types() {
+    fn accepts_core_source(_: source_profile_dsl::SourceDocument) {}
+    fn accepts_core_profile(_: source_profile_dsl::SourceProfileDocument) {}
+    fn accepts_core_plan(_: source_profile_dsl::SourceExecutionPlan) {}
 
-#[path = "profile_dsl_compiler/phase_naming.rs"]
-mod phase_naming;
+    let source: job_radar_lib::SourceDocument = serde_json::from_str(include_str!(
+        "fixtures/source-profile-dsl/valid/source-owned-access-path.json"
+    ))
+    .expect("valid Source fixture");
+    let profile: job_radar_lib::SourceProfileDocument = serde_json::from_str(include_str!(
+        "fixtures/source-profile-dsl/valid/simple-source-profile.json"
+    ))
+    .expect("valid Source Profile fixture");
+    let plan: Option<job_radar_lib::SourceExecutionPlan> = None;
 
-#[path = "profile_dsl_compiler/provenance.rs"]
-mod provenance;
-
-#[path = "profile_dsl_compiler/resolution.rs"]
-mod resolution;
-
-#[path = "profile_dsl_compiler/schema_v3.rs"]
-mod schema_v3;
-
-#[path = "profile_dsl_compiler/security_boundedness.rs"]
-mod security_boundedness;
-
-#[path = "profile_dsl_compiler/semantic_validation.rs"]
-mod semantic_validation;
-
-#[path = "support/mod.rs"]
-mod support;
+    accepts_core_source(source);
+    accepts_core_profile(profile);
+    if let Some(plan) = plan {
+        accepts_core_plan(plan);
+    }
+}

@@ -331,7 +331,9 @@ pub(crate) async fn probe_browser_acquisition(
 ) -> Result<(), BrowserAcquisitionTerminal> {
     struct Uncancelled;
     impl RuntimeCancellation for Uncancelled {
-        fn is_cancelled(&self) -> bool { false }
+        fn is_cancelled(&self) -> bool {
+            false
+        }
     }
     let limits = PhaseLimits {
         max_requests: 1,
@@ -341,11 +343,16 @@ pub(crate) async fn probe_browser_acquisition(
     };
     let allowance = InvocationAllowance::new(limits, false, None);
     let cancellation = Uncancelled;
-    let context = RuntimeExecutionContext::with_cancellation(&cancellation)
-        .for_invocation(&allowance);
+    let context =
+        RuntimeExecutionContext::with_cancellation(&cancellation).for_invocation(&allowance);
     let request = BrowserAcquisitionRequest::new(
-        "about:blank".to_string(), 10_000, Vec::new(), Vec::new(), context,
-    ).map_err(BrowserAcquisitionTerminal::Failure)?;
+        "about:blank".to_string(),
+        10_000,
+        Vec::new(),
+        Vec::new(),
+        context,
+    )
+    .map_err(BrowserAcquisitionTerminal::Failure)?;
     acquisition.acquire(request).await.map(|_| ())
 }
 

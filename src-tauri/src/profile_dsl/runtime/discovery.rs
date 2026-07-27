@@ -83,23 +83,22 @@ where
         .strategies
         .iter()
         .any(|strategy| uses_browser(&strategy.fetch));
-    let backend: DiscoveryBrowserBackend<'_> =
-        match (requires_browser, browser) {
-            (false, PhaseBrowser::BrowserFree) => DiscoveryBrowserBackend::BrowserFree,
-            (true, PhaseBrowser::Browser(adapter)) => DiscoveryBrowserBackend::Canonical(adapter),
-            _ => {
-                return Err(PhaseRunError::NotStarted {
-                    failure: PhasePreStartFailure::PlanMismatch,
-                    diagnostics: vec![runtime_error(
-                        "discovery_browser_capability_mismatch",
-                        "Discovery Browser capability does not match the compiled plan",
-                        "/discovery/strategies",
-                        None,
-                        json!({}),
-                    )],
-                });
-            }
-        };
+    let backend: DiscoveryBrowserBackend<'_> = match (requires_browser, browser) {
+        (false, PhaseBrowser::BrowserFree) => DiscoveryBrowserBackend::BrowserFree,
+        (true, PhaseBrowser::Browser(adapter)) => DiscoveryBrowserBackend::Canonical(adapter),
+        _ => {
+            return Err(PhaseRunError::NotStarted {
+                failure: PhasePreStartFailure::PlanMismatch,
+                diagnostics: vec![runtime_error(
+                    "discovery_browser_capability_mismatch",
+                    "Discovery Browser capability does not match the compiled plan",
+                    "/discovery/strategies",
+                    None,
+                    json!({}),
+                )],
+            });
+        }
+    };
     execute_discovery_with_backend(plan, source_config, fetcher, backend, context).await
 }
 

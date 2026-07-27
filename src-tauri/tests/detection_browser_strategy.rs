@@ -31,7 +31,7 @@ fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
     assert_eq!(DETECTION_BROWSER_DESCRIPTOR.owner, "D03");
     assert!(DETECTION_BROWSER_DESCRIPTOR
         .canonical_file
-        .ends_with("source_profile/detection/strategy.rs"));
+        .ends_with("source_profile/detection/plan.rs"));
     assert_eq!(
         DETECTION_BROWSER_DESCRIPTOR
             .options

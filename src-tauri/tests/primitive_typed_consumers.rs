@@ -201,12 +201,15 @@ fn positive_catalogue_distinguishes_http_and_browser_byte_dimensions() {
     assert!(catalogue.iter().any(
         |record| record.family == Family::PhaseLimit && record.key == "maxBrowserRenderedBytes"
     ));
-    let phase_schema = include_str!("../src/schema/profile-dsl/policy.schema.json");
+    let phase_schema =
+        include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json");
     let detection_source = include_str!("../src/source_profile/detection/strategy.rs");
     assert!(phase_schema.contains("maxBrowserRenderedBytes"));
     assert!(detection_source.contains("response_bytes"));
     assert!(detection_source.contains("browser_rendered_bytes"));
     assert_ne!("response_bytes", "browser_rendered_bytes");
-    assert!(!include_str!("../src/schema/profile-dsl/fetch.schema.json")
-        .contains("maxBrowserRenderedBytes"));
+    assert!(
+        !include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/fetch.schema.json")
+            .contains("maxBrowserRenderedBytes")
+    );
 }

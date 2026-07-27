@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::compiler::CompileSourceOutcome;
+use crate::profile_dsl::compiler::{CompileSourceOutcome, SourceProfileLookup};
 use crate::profile_dsl::diagnostics::Diagnostics;
 use crate::source::documents::SourceDocument;
 use crate::source::validation::SourceValidationState;
@@ -36,6 +36,15 @@ pub struct SourceProfileRegistrySnapshot {
     pub profiles: Vec<RegistrySourceProfile>,
     pub sources: Vec<RegistrySource>,
     pub diagnostics: Diagnostics,
+}
+
+impl SourceProfileLookup for SourceProfileRegistrySnapshot {
+    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.profiles
+            .iter()
+            .find(|profile| profile.document.key == key)
+            .map(|profile| &profile.document)
+    }
 }
 
 impl SourceProfileRegistrySnapshot {

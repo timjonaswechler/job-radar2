@@ -212,7 +212,10 @@ pub struct ProfileDslSourceDetailExecution<'a, F: ?Sized, A: ?Sized> {
 
 impl<'a, F: ?Sized, A: ?Sized> ProfileDslSourceDetailExecution<'a, F, A> {
     pub fn new(fetcher: &'a F, acquisition: &'a A) -> Self {
-        Self { fetcher, acquisition }
+        Self {
+            fetcher,
+            acquisition,
+        }
     }
 }
 
@@ -271,9 +274,18 @@ where
             request.occurrence,
             phase_request,
             self.fetcher,
-            if request.compiled_source.execution_plan.detail.as_ref().is_some_and(|detail| {
-                detail.strategies.iter().any(|strategy| super::allowance::uses_browser(&strategy.fetch))
-            }) {
+            if request
+                .compiled_source
+                .execution_plan
+                .detail
+                .as_ref()
+                .is_some_and(|detail| {
+                    detail
+                        .strategies
+                        .iter()
+                        .any(|strategy| super::allowance::uses_browser(&strategy.fetch))
+                })
+            {
                 PhaseBrowser::Browser(DetailBrowserAdapter::new(self.acquisition))
             } else {
                 PhaseBrowser::BrowserFree

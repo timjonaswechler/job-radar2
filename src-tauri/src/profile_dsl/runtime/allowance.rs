@@ -13,10 +13,15 @@ pub(crate) const BROWSER_GRACEFUL_CLOSE_MS: u64 = 500;
 pub(crate) const BROWSER_FORCE_TERMINATE_REAP_MS: u64 = 1_000;
 pub(crate) const BROWSER_HANDLER_COMPLETION_MS: u64 = 250;
 pub(crate) const BROWSER_SESSION_FINALIZATION_MS: u64 = 250;
-pub(crate) const BROWSER_TEARDOWN_RESERVE_MS: u64 = BROWSER_GRACEFUL_CLOSE_MS
-    + BROWSER_FORCE_TERMINATE_REAP_MS
-    + BROWSER_HANDLER_COMPLETION_MS
-    + BROWSER_SESSION_FINALIZATION_MS;
+pub(crate) use crate::profile_dsl::documents::limits::BROWSER_TEARDOWN_RESERVE_MS;
+
+const _: () = assert!(
+    BROWSER_TEARDOWN_RESERVE_MS
+        == BROWSER_GRACEFUL_CLOSE_MS
+            + BROWSER_FORCE_TERMINATE_REAP_MS
+            + BROWSER_HANDLER_COMPLETION_MS
+            + BROWSER_SESSION_FINALIZATION_MS
+);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

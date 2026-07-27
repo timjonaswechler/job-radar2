@@ -15,9 +15,8 @@ use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
 use crate::profile_dsl::runtime::{
     execute_discovery, BrowserAcquisition, DetailField, DiscoveryBrowserAdapter, PhaseBrowser,
     PhaseOutcome, PolicyOutcome, PostingOccurrence, ProfileDslSourceDetailExecution,
-    ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition,
-    RuntimeExecutionContext, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
-    SourceDetailResult,
+    ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition, RuntimeExecutionContext,
+    SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest, SourceDetailResult,
 };
 use crate::source::documents::SelectedAccessPath;
 use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
@@ -158,7 +157,10 @@ where
             ..execution_plan.discovery.limits
         });
         let discovery_browser = if execution_plan.discovery.strategies.iter().any(|strategy| {
-            matches!(strategy.fetch, crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. })
+            matches!(
+                strategy.fetch,
+                crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. }
+            )
         }) {
             PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
         } else {

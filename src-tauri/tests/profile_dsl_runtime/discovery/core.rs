@@ -1,6 +1,46 @@
 use super::*;
 
 #[test]
+fn resolved_source_config_is_ephemeral_plan_data_and_runtime_input() {
+    const SENTINEL: &str = "https://resolved-source-config-sentinel.invalid/jobs";
+    let mut profile: SourceProfileDocument = serde_json::from_str(include_str!(
+        "../../fixtures/source-profile-dsl/valid/simple-source-profile.json"
+    ))
+    .unwrap();
+    profile.access_paths[0].discovery.strategies[0].pagination = None;
+    let mut source: SourceDocument = serde_json::from_str(include_str!(
+        "../../fixtures/source-profile-dsl/valid/source-selecting-access-path.json"
+    ))
+    .unwrap();
+    source
+        .source_config
+        .insert("feedUrl".to_string(), json!(SENTINEL));
+    let plan = unwrap_plan(compile_test_source(&source, Some(profile)));
+
+    assert!(!serde_json::to_string(&plan).unwrap().contains(SENTINEL));
+    let fetcher = fake_fetcher([(
+        SENTINEL,
+        json!({
+            "jobs": [{
+                "id": "42",
+                "title": "Rust Engineer",
+                "url": "https://example.test/jobs/42",
+                "locations": []
+            }]
+        })
+        .to_string(),
+    )]);
+    let result = block_on(execute_discovery_test_with_config(
+        &plan,
+        &source.source_config,
+        &fetcher,
+    ));
+
+    assert_eq!(result.payload.candidates.len(), 1);
+    assert_eq!(fetcher.requests()[0].url, SENTINEL);
+}
+
+#[test]
 fn compiled_discovery_runtime_returns_one_normalized_candidate() {
     let plan = compiled_json_discovery_plan(default_fields(), default_select());
     let fetcher = fake_fetcher([(

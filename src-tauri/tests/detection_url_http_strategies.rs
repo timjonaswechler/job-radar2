@@ -72,7 +72,7 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
         assert_eq!(descriptor.owner, "D02");
         assert!(descriptor
             .canonical_file
-            .ends_with("source_profile/detection/strategy.rs"));
+            .ends_with("source_profile/detection/plan.rs"));
     }
 
     assert!(DETECTION_INPUT_URL_PATTERN_DESCRIPTOR.options[0].non_empty);

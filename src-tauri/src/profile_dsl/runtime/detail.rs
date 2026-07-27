@@ -86,23 +86,22 @@ where
             .iter()
             .any(|strategy| uses_browser(&strategy.fetch))
     });
-    let backend: DetailBrowserBackend<'_> =
-        match (requires_browser, browser) {
-            (false, PhaseBrowser::BrowserFree) => DetailBrowserBackend::BrowserFree,
-            (true, PhaseBrowser::Browser(adapter)) => DetailBrowserBackend::Canonical(adapter),
-            _ => {
-                return Err(PhaseRunError::NotStarted {
-                    failure: PhasePreStartFailure::PlanMismatch,
-                    diagnostics: vec![runtime_error(
-                        "detail_browser_capability_mismatch",
-                        "Detail Browser capability does not match the compiled plan",
-                        "/detail/strategies",
-                        None,
-                        json!({}),
-                    )],
-                });
-            }
-        };
+    let backend: DetailBrowserBackend<'_> = match (requires_browser, browser) {
+        (false, PhaseBrowser::BrowserFree) => DetailBrowserBackend::BrowserFree,
+        (true, PhaseBrowser::Browser(adapter)) => DetailBrowserBackend::Canonical(adapter),
+        _ => {
+            return Err(PhaseRunError::NotStarted {
+                failure: PhasePreStartFailure::PlanMismatch,
+                diagnostics: vec![runtime_error(
+                    "detail_browser_capability_mismatch",
+                    "Detail Browser capability does not match the compiled plan",
+                    "/detail/strategies",
+                    None,
+                    json!({}),
+                )],
+            });
+        }
+    };
     execute_detail_with_backend(
         plan,
         source_config,

@@ -27,16 +27,25 @@ pub use geo::{
     GeoResolveFuture, GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason,
     LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
-pub use profile_dsl::compiler::{
-    compile_source, CompileSourceOutcome, CompiledSource, CompiledSourceAccess,
-    CompiledSourceProvenance, EffectiveSourceProfile, ProvenanceEntry, ProvenanceOrigin,
-    ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath, SourceRuntimeBinding,
-    SourceRuntimeBindingDependencies,
+pub use profile_dsl::primitives::completeness::{
+    classify_tagged_variant_keys, escape_json_pointer_token, missing_witness,
+    production_compiled_inventory, production_primitive_inventories, production_schema_inventory,
+    production_serde_inventory, schema_inventory_from_documents, traverse_schema_root,
+    validate_primitive_completeness, AuthoredShapeKind, CompiledRegistration, CompletenessPolicy,
+    Family, InventoryLayer, Owner, PrimitiveCompletenessError, PrimitiveCompletenessInventories,
+    PrimitiveCompletenessRecord, PrimitiveContext, SchemaPointerContext, SchemaShape,
+    SchemaTraversalError, SchemaTraversalEvidence, SerdeShape,
 };
-pub use profile_dsl::diagnostics::{
+pub use source_profile_dsl::profile_dsl::compiler::{
+    compile_source, CompileSourceOutcome, CompiledSource, CompiledSourceAccess,
+    CompiledSourceProvenance, EffectiveSourceProfile, ProfileCompilerInput, ProvenanceEntry,
+    ProvenanceOrigin, ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath,
+    SourceProfileLookup, SourceRuntimeBinding, SourceRuntimeBindingDependencies,
+};
+pub use source_profile_dsl::profile_dsl::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-pub use profile_dsl::documents::{
+pub use source_profile_dsl::profile_dsl::documents::{
     Acceptance, AccessPathFragment, AuthoredScalar, BrowserInteraction, BrowserWait, CaptureRule,
     Captures, DetailStep, DetailStepFragment, DetailStrategyFragment, DetectionDocument,
     DetectionEvidence, DetectionEvidenceKind, DetectionStrategy, DetectionStrategyKind,
@@ -46,65 +55,55 @@ pub use profile_dsl::documents::{
     ParseType, ParseTypeFragment, PhaseLimits, PhaseLimitsFragment, RequestBody,
     ReusableAccessPathDocument, Select, SelectTypeFragment, SupportLevel,
 };
-pub use profile_dsl::execution_plan::capabilities::{
+pub use source_profile_dsl::profile_dsl::execution_plan::capabilities::{
     ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch,
 };
-pub use profile_dsl::execution_plan::{
+pub use source_profile_dsl::profile_dsl::execution_plan::{
     ExecutionPlanAccessPath, ExecutionPlanSource, SourceExecutionPlan,
 };
-pub use profile_dsl::policy::StrategyPolicy;
-pub use profile_dsl::primitives::acceptance::{
+pub use source_profile_dsl::profile_dsl::policy::StrategyPolicy;
+pub use source_profile_dsl::profile_dsl::primitives::acceptance::{
     acceptance_context_registrations, acceptance_descriptors, compile_acceptance,
     validate_acceptance_context_registrations, validate_acceptance_registration_keys,
     AcceptanceCompileContext, AcceptanceCompileError, AcceptanceContextRegistration,
     AcceptanceContextRegistryError, AcceptanceDescriptor, AcceptanceField, AcceptancePhase,
     AcceptanceRegistryError, CompiledAcceptance,
 };
-pub use profile_dsl::primitives::capture::{
+pub use source_profile_dsl::profile_dsl::primitives::capture::{
     capture_descriptors, compile_captures, compile_named_capture_rule, evaluate_compiled_captures,
     validate_capture_registration_keys, CaptureCompileError, CaptureCompileErrorKind,
     CaptureDescriptor, CaptureEvaluationError, CaptureEvaluationErrorKind, CaptureOutput,
     CaptureRegistryError, CompiledCapturePlan, CompiledCaptureRule, CAPTURE_DESCRIPTOR,
 };
-pub use profile_dsl::primitives::cardinality::{
+pub use source_profile_dsl::profile_dsl::primitives::cardinality::{
     cardinality_descriptors, compile_cardinality, validate_cardinality_registration_keys, All,
     AllPlan, Cardinality, CardinalityDescriptor, CardinalityDiagnosticContext, CardinalityError,
     CardinalityOutcome, CardinalityRegistryError, CardinalitySequence, CompiledCardinality, First,
     FirstPlan, One, OnePlan, Optional, OptionalPlan,
 };
-pub use profile_dsl::primitives::completeness::{
-    classify_tagged_variant_keys, escape_json_pointer_token, production_compiled_inventory,
-    production_primitive_inventories, production_schema_inventory, production_serde_inventory,
-    missing_witness, schema_inventory_from_documents, traverse_schema_root,
-    validate_primitive_completeness,
-    AuthoredShapeKind, CompiledRegistration,
-    CompletenessPolicy, Family, InventoryLayer, Owner, PrimitiveCompletenessError,
-    PrimitiveCompletenessInventories, PrimitiveCompletenessRecord, PrimitiveContext,
-    SchemaPointerContext, SchemaShape, SchemaTraversalError, SchemaTraversalEvidence, SerdeShape,
-};
-pub use profile_dsl::primitives::fetch::browser::{
+pub use source_profile_dsl::profile_dsl::primitives::fetch::browser::{
     browser_primitive_descriptors, validate_browser_primitive_descriptors, BrowserOptionDescriptor,
     BrowserPrimitiveDescriptor, BrowserShapeKind, BROWSER_CLICK_IF_VISIBLE_DESCRIPTOR,
     BROWSER_CLICK_UNTIL_GONE_DESCRIPTOR, BROWSER_FETCH_DESCRIPTOR,
     BROWSER_NETWORK_IDLE_WAIT_DESCRIPTOR, BROWSER_SELECTOR_WAIT_DESCRIPTOR,
 };
-pub use profile_dsl::primitives::fetch::http::{
+pub use source_profile_dsl::profile_dsl::primitives::fetch::http::{
     http_fetch_descriptors, validate_http_fetch_descriptors, CompiledHttpFetch,
     CompiledHttpJsonValue, CompiledHttpRequestBody, HttpFetchDescriptor, HTTP_FETCH_DESCRIPTOR,
 };
-pub use profile_dsl::primitives::pagination::{
+pub use source_profile_dsl::profile_dsl::primitives::pagination::{
     compile_pagination_plan, pagination_descriptors, pagination_limit_options,
     pagination_parameter_locations, validate_pagination_inventories, CompiledPagination,
     CursorPaginationPlan, OffsetLimitPaginationPlan, PagePaginationPlan, Pagination,
     PaginationDescriptor, PaginationInventory, PaginationLimits, PaginationOverlay,
     PaginationParameterLocation, PaginationRegistryError, SitemapPaginationPlan,
 };
-pub use profile_dsl::primitives::parse::{
+pub use source_profile_dsl::profile_dsl::primitives::parse::{
     compile_parse, parse_descriptors, validate_parse_registration_keys, BrowserRenderedText,
     CompileParseError, CompiledParse, DecodedHttpText, ParseDescriptor, ParseFailure,
     ParseFailureKind, ParseInput, ParseInputKind, ParseRegistryError, ParsedDocument,
 };
-pub use profile_dsl::primitives::predicate::{
+pub use source_profile_dsl::profile_dsl::primitives::predicate::{
     compile_predicate, evaluate_compiled_predicate, evaluate_detail_predicate,
     evaluate_discovery_predicate, literal_contains, predicate_descriptors,
     validate_predicate_registration_keys, values_equal, CompiledPredicate, Equal, EqualPlan,
@@ -112,19 +111,19 @@ pub use profile_dsl::primitives::predicate::{
     PredicateCompileErrorKind, PredicateDescriptor, PredicateEvaluationError, PredicateKind,
     PredicatePlacement, PredicateRegistryError, RegexPredicate, RegexPredicatePlan,
 };
-pub use profile_dsl::primitives::select::{
+pub use source_profile_dsl::profile_dsl::primitives::select::{
     compile_select, select_descriptors, selected_document_is_compatible,
     validate_select_registration_keys, CompileSelectError, CompileSelectErrorKind, CompiledSelect,
     SelectCompileContext, SelectDescriptor, SelectExecutionError, SelectKind, SelectPhase,
     SelectPlacement, SelectRegistryError, SelectedDocumentType, SelectedItem, SelectedSequence,
 };
-pub use profile_dsl::primitives::transform::{
+pub use source_profile_dsl::profile_dsl::primitives::transform::{
     compile_transform_pipeline, transform_descriptors, validate_transform_registration_keys,
     CompileTransformError, CompileTransformErrorKind, CompiledTransform, CompiledTransformPipeline,
     Transform, TransformDescriptor, TransformError, TransformErrorKind, TransformKind,
     TransformRegistryError, TransformShape, TransformShapeKind, TransformValue,
 };
-pub use profile_dsl::primitives::value::{
+pub use source_profile_dsl::profile_dsl::primitives::value::{
     compile_list_value, compile_value, evaluate_detail_capture_value, evaluate_detail_output_value,
     evaluate_discovery_capture_value, evaluate_discovery_output_value,
     validate_value_placement_registration_keys, validate_value_registration_keys,
@@ -169,11 +168,6 @@ pub use profile_dsl::runtime::{
     SourceDetailRequest, SourceDetailRequestSnapshot, SourceDetailResult,
 };
 
-pub use profile_dsl::template::{
-    compile_template, render_template, CompiledTemplate, TemplateCompileError,
-    TemplateCompileErrorKind, TemplateDescriptor, TemplateReference, TemplateRenderError,
-    TemplateSegment, TemplateValueView,
-};
 pub use search::candidate_resolution::{
     resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
     FinalizedCandidate, RequirementsCompilationFailure, ResolutionCeilings, ResolutionCompletion,
@@ -184,7 +178,6 @@ pub use search::candidate_resolution::{
 };
 pub use search::request::{SearchRule, SearchRuleKind, SearchRuleTarget};
 pub use search::smoke::run_dev_search_run_smoke_cli;
-pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
     aggregate_detection_attempts, compile_detection_plan, detection_descriptor_for_authored_kind,
@@ -204,11 +197,17 @@ pub use source_profile::detection::{
     DETECTION_INPUT_URL_PATTERN_DESCRIPTOR, DETECTION_URL_ABSOLUTE_DESCRIPTOR,
     DETECTION_URL_DESCRIPTOR, DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR,
 };
-pub use source_profile::documents::SourceProfileDocument;
 pub use source_profile::registry::{
     load_snapshot as load_source_profile_registry_snapshot, RegistrySource, RegistrySourceProfile,
     SourceProfileRegistrySnapshot,
 };
+pub use source_profile_dsl::profile_dsl::template::{
+    compile_template, render_template, CompiledTemplate, TemplateCompileError,
+    TemplateCompileErrorKind, TemplateDescriptor, TemplateReference, TemplateRenderError,
+    TemplateSegment, TemplateValueView,
+};
+pub use source_profile_dsl::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
+pub use source_profile_dsl::source_profile::documents::SourceProfileDocument;
 
 use tauri::{Emitter, Manager};
 
