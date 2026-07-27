@@ -36,7 +36,7 @@ where
         .or_else(|| std::env::var_os(SMOKE_APP_DATA_DIR_ENV).map(PathBuf::from))
         .ok_or_else(|| {
             format!(
-                "missing --app-data-dir <path> or {SMOKE_APP_DATA_DIR_ENV}; see docs/dev-search-run-smoke.md"
+                "missing --app-data-dir <path> or {SMOKE_APP_DATA_DIR_ENV}; see docs/development/search-run-smoke.md"
             )
         })?;
 

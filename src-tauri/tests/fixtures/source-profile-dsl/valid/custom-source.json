@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 3,
+  "key": "example_jobs",
+  "name": "Example Jobs",
+  "status": "draft",
+  "selectedAccessPath": {
+    "type": "profile_access_path",
+    "profileKey": "example_jobs_api",
+    "pathKey": "api"
+  },
+  "sourceConfig": {
+    "apiBaseUrl": "https://jobs.example.com/api"
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 3,
+  "key": "example_jobs_api",
+  "name": "Example Jobs API",
+  "kind": "career_site",
+  "description": "Declarative profile for Example's public jobs API.",
+  "support": {
+    "level": "best_effort",
+    "summary": "Manual review found a public JSON jobs endpoint. Live reliability should be judged through concrete Source Live Checks.",
+    "evidence": [
+      {
+        "kind": "manual_review",
+        "reference": "https://jobs.example.com/api/jobs",
+        "summary": "Public endpoint exposed title, company, location, URL, and job ID fields."
+      }
+    ]
+  },
+  "sourceConfigSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "apiBaseUrl"
+    ],
+    "properties": {
+      "apiBaseUrl": {
+        "type": "string",
+        "format": "uri",
+        "title": "API Base URL"
+      }
+    }
+  },
+  "detection": {
+    "policy": { "type": "all_required" },
+    "strategies": [
+      {
+        "type": "url",
+        "key": "input_url",
+        "input": {
+          "type": "pattern_alternatives",
+          "alternatives": [
+            { "pattern": "^https://jobs\\.example\\.com(?:/.*)?$" }
+          ]
+        }
+      }
+    ],
+    "recommendedAccessPathKey": "api",
+    "sourceConfig": {
+      "apiBaseUrl": "https://jobs.example.com/api"
+    },
+    "evidence": [
+      {
+        "kind": "url",
+        "message": "Example jobs URLs map to the public jobs API."
+      }
+    ]
+  },
+  "accessPaths": [
+    {
+      "key": "api",
+      "name": "Public jobs API",
+      "discovery": {
+        "policy": {
+          "type": "first_accepted"
+        },
+        "strategies": [
+          {
+            "key": "jobs_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{sourceConfig:apiBaseUrl}}/jobs",
+              "timeoutMs": 10000
+            },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "json_path",
+              "jsonPath": "$.jobs"
+            },
+            "extract": {
+              "reference": {
+                "url": {
+                  "type": "json_path",
+                  "jsonPath": "$.url",
+                  "cardinality": "one"
+                }
+              },
+              "providerValues": {
+                "title": {
+                  "type": "json_path",
+                  "jsonPath": "$.title",
+                  "cardinality": "one"
+                },
+                "company": {
+                  "type": "json_path",
+                  "jsonPath": "$.company",
+                  "cardinality": "one"
+                }
+              },
+              "postingMeta": {
+                "jobId": {
+                  "type": "json_path",
+                  "jsonPath": "$.id",
+                  "cardinality": "one"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "detail": {
+        "policy": {
+          "type": "first_accepted"
+        },
+        "strategies": [
+          {
+            "key": "detail_api",
+            "fetch": {
+              "mode": "http",
+              "method": "GET",
+              "url": "{{sourceConfig:apiBaseUrl}}/jobs/{{postingMeta:jobId}}",
+              "timeoutMs": 10000
+            },
+            "parse": {
+              "type": "json"
+            },
+            "select": {
+              "type": "document"
+            },
+            "extract": {
+              "fields": {
+                "descriptionText": {
+                  "type": "json_path",
+                  "jsonPath": "$.descriptionText",
+                  "cardinality": "one"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

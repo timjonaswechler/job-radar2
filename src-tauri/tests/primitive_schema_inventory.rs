@@ -169,7 +169,7 @@ fn checked_in_schema_extraction_discovers_keys_and_options_independently() {
         .join("\n");
     assert_eq!(
         exact,
-        include_str!("../../docs/agents/primitive-positive-catalogue.txt")
+        include_str!("fixtures/primitive_completeness/primitive-positive-catalogue.txt")
             .trim_end()
             .lines()
             .filter(|line| !line.starts_with('#'))

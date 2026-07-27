@@ -84,7 +84,7 @@ fn frozen_nul_safe_residue_pass_matches_every_checked_in_path_line_classificatio
         .parent()
         .unwrap();
     let output = Command::new("bash")
-        .arg("scripts/check-primitive-residue.sh")
+        .arg("scripts/checks/primitive-residue.sh")
         .current_dir(root)
         .output()
         .unwrap();
@@ -94,7 +94,8 @@ fn frozen_nul_safe_residue_pass_matches_every_checked_in_path_line_classificatio
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let manifest = include_str!("../../docs/agents/primitive-residue-classification.txt");
+    let manifest =
+        include_str!("fixtures/primitive_completeness/primitive-residue-classification.txt");
     let entries = manifest
         .lines()
         .filter(|v| !v.is_empty() && !v.starts_with('#'))
@@ -144,7 +145,7 @@ fn residue_validator_rejects_path_based_historical_auto_classification() {
         .parent()
         .unwrap();
     let emitted = Command::new("bash")
-        .args(["scripts/check-primitive-residue.sh", "--emit"])
+        .args(["scripts/checks/primitive-residue.sh", "--emit"])
         .current_dir(root)
         .output()
         .unwrap();
@@ -166,7 +167,7 @@ fn residue_validator_rejects_path_based_historical_auto_classification() {
     ));
     std::fs::write(&path, forged).unwrap();
     let output = Command::new("bash")
-        .arg("scripts/check-primitive-residue.sh")
+        .arg("scripts/checks/primitive-residue.sh")
         .env("PRIMITIVE_RESIDUE_MANIFEST", &path)
         .current_dir(root)
         .output()

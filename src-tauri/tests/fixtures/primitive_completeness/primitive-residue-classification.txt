@@ -1,0 +1,946 @@
+docs/adr/0009-declarative-source-profile-dsl.md:11:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
+docs/adr/0009-declarative-source-profile-dsl.md:11:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0009-declarative-source-profile-dsl.md:11:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0009-declarative-source-profile-dsl.md:11:386:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
+docs/adr/0009-declarative-source-profile-dsl.md:11:386:retry_after:Retry-After	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0009-declarative-source-profile-dsl.md:11:412:bot:Bot	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0011-minimal-agent-conversation-contract.md:121:227:rate_limit:rate-limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0011-minimal-agent-conversation-contract.md:133:9:retry:retry	unrelated_agent_provider_retry	Accepted Agent provider retry lifecycle, outside Profile DSL Retry.
+docs/adr/0011-minimal-agent-conversation-contract.md:133:9:retry_after:retry_after	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0011-minimal-agent-conversation-contract.md:140:5:rate_limit:RateLimit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/adr/0011-minimal-agent-conversation-contract.md:146:332:retry:retry	unrelated_agent_provider_retry	Accepted Agent provider retry lifecycle, outside Profile DSL Retry.
+docs/adr/0011-minimal-agent-conversation-contract.md:146:332:retry_after:retry_after	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/development/agent/openai-codex-streaming.md:13:40:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Profile DSL residue.
+docs/development/agent/openai-codex-streaming.md:22:310:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Profile DSL residue.
+docs/development/agent/openai-codex-streaming.md:22:332:retry:retry	unrelated_agent_provider_retry	Agent provider retry contract, outside Profile DSL Retry.
+docs/development/agent/openai-codex-streaming.md:7:40:old_detection:mutable `ModelRegistry` generation per turn, then resolves protected OAuth immediately before transport. Reloads affect later turns while an in-flight turn keeps its capture	active_contract_documentation	Maintained Agent provider contract; not productive Profile DSL residue.
+docs/prd/declarative-profile-strategy-algebra.md:117:125:predicate_composition:negat	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:124:76:retry:retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:162:50:predicate_composition:negat	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:162:94:predicate_composition:count requirement	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:187:516:browser_byte_dimension:maxBrowserRenderedBytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:187:821:browser_byte_dimension:maxBrowserRenderedBytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:187:991:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:188:1088:http_byte_dimension:response_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:188:809:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:191:480:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:1562:browser_byte_dimension:maxBrowserRenderedBytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:1616:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:1695:http_byte_dimension:response_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:590:arbitrary_execution:execute_script	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:590:browser_removed:execute_script	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:192:616:browser_removed:mutate_dom	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:192:630:arbitrary_execution:login_flow	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:630:browser_removed:login_flow	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:192:648:arbitrary_execution:captcha_bypass	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:192:648:browser_removed:captcha_bypass	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:193:775:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:193:810:http_byte_dimension:response_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:194:1231:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:200:350:old_detection:mutable Strategy capture map. Detail capture source admits Source, declared Source Config, the concrete Posting Occurrence, and the Discovery-declared postingMeta key union, but no selected item/document or capture map; Detail match/filter/output additionally admits the selected item/document and complete immutable capture map. `const` is universal. Unknown Source Config, postingMeta, or capture	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:202:1516:retry:retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:204:1250:predicate_composition:negat	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:205:472:old_detection:mutable complete phase capture-source context, which contains no capture map, and results retain authored order. A regex miss, an unmatched selected optional group, a missing source, or a value empty after boundary `trim` is a typed atomic Capture failure%3A all independent rules are evaluated deterministically, but no partial outputs are published. Capture preserves internal whitespace and performs no other implicit normalization; authors use explicit Value transforms for additional normalization. Compiled plans retain only ordered keys, compiled Values, and regex structure. Source text and captured values remain ephemeral and never enter Diagnostics, reports, fingerprints, logs, or persistence. Phase adapters may project a successful complete ordered output into their immutable capture	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:211:154:acceptance_removed:maxErrorRatio	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:218:92:product_dispatch:profile_dsl/primitives/<family>/<dsl_type>.rs`. The file owns its primitive-specific authored configuration, compilation, context/capability validation, bounds/security checks, execution semantics, and narrow edge-case tests as applicable. Shared infrastructure must not hide primitive-specific dispatch	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:221:1152:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:221:1197:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:236:482:old_detection:mutable `ReconciledDetectionState`%3A exact equal capture	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:239:11:old_detection:mutable backend-owned Candidate Diagnostic Sample Limit is 10. Radius requirements are compiled with the prepared location filter and productive GeoResolver and evaluated inside final Candidate matching. Without a radius, config	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:321:60:registration_residue:duplicate registration, conflicting owner/context/shape/file/compiled identity, omitted nested shape, removed-key resurrection, noncanonical file, and behavior-bearing registration. Input permutations must produce identical normalized output and diagnostics. Removed and compatibility names remain absence assertions, not rejection-only registr	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:323:498:retry:retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:325:389:arbitrary_execution:plugin	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:330:22:arbitrary_execution:plugin	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:330:31:arbitrary_execution:shell	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:330:47:arbitrary_execution:JavaScript	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:343:85:rate_limit:rate-limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:52:765:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:62:373:old_detection:mutable reconciled D01 snapshot. Browser captures require `regex`, and selected named groups compile through P08 before acquisition. Literal containment and regex acceptance use P07. Accepted capture	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-profile-strategy-algebra.md:64:1475:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:64:1628:http_byte_dimension:response_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:64:1657:browser_byte_dimension:browser_rendered_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-profile-strategy-algebra.md:70:62:http_byte_dimension:response_bytes	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:151:148:retry:retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-source-profile-dsl.md:151:15:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-source-profile-dsl.md:151:22:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:151:30:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:151:45:retry:Retry	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-source-profile-dsl.md:151:45:retry_after:Retry-After	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:151:71:bot:Bot	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:152:3:bot:Bot	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:161:13:arbitrary_execution:JavaScript	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:24:167:bot:Bot	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:256:13:arbitrary_execution:JavaScript	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:54:197:acceptance_removed:maxErrorRatio	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-source-profile-dsl.md:71:170:arbitrary_execution:JavaScript	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/prd/declarative-source-profile-dsl.md:71:242:registration_residue:rawling. Every network, pagination, browser, and fallback	active_contract_documentation	Active contract or G02 verification documentation.
+docs/prd/declarative-source-profile-dsl.md:86:109:arbitrary_execution:JavaScript	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+research/issue-44-browser-assisted-element-picker.md:11:599:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/issue-44-browser-assisted-element-picker.md:19:699:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/issue-44-browser-assisted-element-picker.md:29:485:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/issue-44-browser-assisted-element-picker.md:69:164:old_detection:mutable capture	historical_documentation	Historical nonproductive evidence.
+research/issue-44-browser-assisted-element-picker.md:73:153:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/issue-44-browser-assisted-element-picker.md:7:186:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/pi-auth-model-registry-behavior.md:17:245:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/pi-auth-model-registry-behavior.md:23:71:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/pi-auth-model-registry-behavior.md:33:211:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/pi-persistent-agent-chat-behavior.md:53:178:registration_residue:registry-behavior.md`, but comments/history could not be independently cited. No Job Radar persistent-chat schema or UI contract exists yet; the destination above is therefore a proposal, not an accept	historical_documentation	Historical nonproductive evidence.
+research/pi-rust-agent-baseline.md:36:889:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/pi-rust-agent-baseline.md:42:63:bot:Bot	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/pi-rust-agent-baseline.md:50:1026:rate_limit:rate-limit	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/pi-rust-agent-baseline.md:50:728:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/pi-rust-agent-baseline.md:57:154:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/pi-rust-agent-baseline.md:81:209:retry:retry	historical_documentation	Historical nonproductive evidence.
+research/rust-agent-capability-gap-inventory.md:102:89:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:19:203:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:20:33:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:37:414:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:37:82:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:45:380:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:55:189:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+research/rust-agent-capability-gap-inventory.md:7:326:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+src-tauri/src/agent/auth.rs:1899:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/chat.rs:589:5:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/chat.rs:816:77:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/chat.rs:872:51:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/chat_application.rs:806:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/chat_application.rs:807:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/chat_application.rs:808:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/configuration.rs:868:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/configuration.rs:868:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/configuration.rs:876:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/configuration.rs:876:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:102:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/error.rs:102:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:18:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/error.rs:18:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:8:5:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:90:19:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:90:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/error.rs:90:32:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:92:43:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:93:32:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/error.rs:94:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/error.rs:94:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex.rs:848:89:predicate_all_any_none:"none"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1016:57:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1032:37:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:112:17:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:112:17:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:112:37:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:112:37:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1209:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1209:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:120:17:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:120:17:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1237:58:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1242:58:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1455:80:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1472:203:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1509:62:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1546:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1548:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1549:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1560:41:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1562:41:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1625:36:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1638:13:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1638:63:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1642:35:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1646:23:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1646:23:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1660:56:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1661:45:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1662:26:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1662:26:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1746:58:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1749:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1749:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1793:44:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1793:83:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1844:51:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1866:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1866:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1940:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1944:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1946:19:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1946:19:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1949:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1950:26:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1950:26:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:1951:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1954:19:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:1954:19:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:281:52:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:349:9:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:386:45:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:489:46:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:489:46:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:504:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:504:32:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:519:48:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:521:28:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:521:41:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:521:41:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:556:10:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:556:10:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/openai_codex/streaming.rs:558:15:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:65:5:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/openai_codex/streaming.rs:65:5:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/registry.rs:1063:33:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/registry.rs:1066:13:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:1153:43:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:1153:50:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:136:14:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:137:23:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:577:30:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:578:61:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:579:48:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:724:18:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:725:40:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/sessions/wire.rs:741:50:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/app/commands.rs:5:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/app/commands.rs:643:59:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/bin/agent_debug.rs:383:9:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/bin/agent_debug.rs:383:9:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:739:25:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/bin/agent_debug.rs:739:25:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:87:29:rate_limit:RateLimit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:87:45:rate_limit:rate limit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/browser_runtime/owned.rs:1514:34:retry:retry	unrelated_browser_install_or_admin_retry	Browser installation or administration retry, outside Profile DSL execution.
+src-tauri/src/browser_runtime/owned.rs:1545:47:retry:retry	unrelated_browser_install_or_admin_retry	Browser installation or administration retry, outside Profile DSL execution.
+src-tauri/src/browser_runtime/owned.rs:1751:31:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1753:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1761:19:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1789:19:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1818:19:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1841:18:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:1871:18:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2060:13:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2066:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2106:13:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2112:25:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
+src-tauri/src/lib.rs:190:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:236:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:236:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:237:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:237:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:44:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/lib.rs:87:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:96:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:125:14:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:126:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:127:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:130:14:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:131:24:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/boundedness.rs:132:38:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/compiler/specialization.rs:691:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/detection.rs:213:17:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:217:30:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:360:27:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:382:12:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:530:32:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:556:19:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/detection.rs:560:9:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/fetch.rs:168:44:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/fetch.rs:81:81:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/documents/limits.rs:103:25:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:103:57:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:104:25:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:104:65:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:126:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:128:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:148:14:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:149:14:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:14:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:15:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:175:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:175:40:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:176:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:176:48:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:191:10:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:200:24:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:216:15:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:221:45:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:27:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:28:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:68:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:68:45:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:68:72:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:69:26:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:71:27:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:73:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:73:53:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:74:29:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:76:26:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:78:27:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:91:25:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/limits.rs:92:25:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/documents/mod.rs:24:70:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/capabilities.rs:185:70:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/capabilities.rs:6:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/capabilities.rs:77:15:registration_residue:compile_fetch	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/detail.rs:153:16:registration_residue:compile_fetch	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/detail.rs:32:27:registration_residue:compile_fetch	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/discovery.rs:191:17:registration_residue:compile_fetch	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/discovery.rs:20:50:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/discovery.rs:210:13:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/execution_plan/discovery.rs:35:27:registration_residue:compile_fetch	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/cardinality/all.rs:3:83:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/cardinality/mod.rs:382:14:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/cardinality/mod.rs:382:28:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/cardinality/mod.rs:84:21:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/cardinality/mod.rs:87:55:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/completeness.rs:329:25:json_text:"text"	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:330:26:retry:retry	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:331:28:arbitrary_execution:execute_script	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:331:28:browser_removed:execute_script	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:332:27:json_eval:"eval"	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:333:28:browser_removed:mutate_dom	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:334:28:arbitrary_execution:login_flow	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:334:28:browser_removed:login_flow	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:335:28:arbitrary_execution:captcha_bypass	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:335:28:browser_removed:captcha_bypass	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:336:30:transform_alias:normalizeWhitespace	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:337:30:transform_alias:htmlToText	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:338:30:transform_alias:urlDecode	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:339:30:transform_alias:slugToTitle	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:340:30:transform_alias:toString	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:341:31:acceptance_removed:maxErrorRatio	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:342:29:predicate_all_any_none:"all"	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:343:29:predicate_all_any_none:"any"	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:344:29:predicate_all_any_none:"none"	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:572:10:browser_byte_dimension:maxBrowserRenderedBytes	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:578:71:browser_byte_dimension:maxBrowserRenderedBytes	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:741:75:browser_byte_dimension:maxBrowserRenderedBytes	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/completeness.rs:745:75:browser_byte_dimension:maxBrowserRenderedBytes	g02_removed_key_metadata	G02 absence metadata or validator evidence; no productive behavior.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:184:44:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:184:73:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:192:52:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:193:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:201:56:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:202:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:210:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:211:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:219:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:220:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:229:36:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:237:60:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:242:27:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:247:21:registration_residue:duplicate Browser Primitive descriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:279:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:325:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:355:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:401:55:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/browser.rs:62:19:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/primitives/fetch/http.rs:44:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/mod.rs:1:1:registry_file:primitives/mod.rs	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/primitives/pagination/mod.rs:277:8:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1039:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1046:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1053:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1104:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1108:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1112:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1123:20:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1137:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1140:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:1141:55:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:430:41:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:431:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:432:47:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:529:33:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:529:58:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:535:25:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:536:20:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:539:25:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:560:22:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:561:53:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:570:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:580:40:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:588:33:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:589:43:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:600:29:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:601:24:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:604:29:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:612:26:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:613:60:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:619:29:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:624:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:625:66:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:628:26:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:631:48:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:632:58:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:633:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:634:40:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:79:9:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:80:9:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:828:57:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:829:64:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:848:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:849:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:887:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:888:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:949:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:953:26:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:963:33:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/allowance.rs:98:16:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:166:20:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:177:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:177:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:253:9:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:339:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/browser_acquisition.rs:859:36:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:205:25:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:207:29:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:210:29:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:212:38:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:213:45:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:216:29:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:218:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:219:44:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:222:26:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/cancellation.rs:224:30:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:500:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:505:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:508:39:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:510:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:519:32:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:525:32:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:531:32:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:535:32:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:543:36:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:762:59:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:787:33:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/profile_dsl/runtime/http.rs:819:33:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/extract.schema.json:8:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/fetch.schema.json:54:28:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/fragments.schema.json:112:10:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/fragments.schema.json:117:10:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/fragments.schema.json:291:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/fragments.schema.json:500:13:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/policy.schema.json:51:142:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/policy.schema.json:51:162:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/policy.schema.json:60:10:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/schema/profile-dsl/policy.schema.json:61:10:browser_byte_dimension:maxBrowserRenderedBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1185:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1185:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1186:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1186:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1420:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1420:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1440:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1440:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1491:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1492:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1493:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1496:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1497:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1498:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1533:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1533:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1534:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1534:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/posting/tests.rs:79:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/request/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/request/tests.rs:209:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/request/tests.rs:301:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/execution.rs:20:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/tests/support.rs:171:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/tests/support.rs:289:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/smoke/request.rs:82:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/mod.rs:6:5:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/source_profile/detection/reconciliation.rs:1091:8:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/source_profile/detection/strategy.rs:1023:29:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/source_profile/detection/strategy.rs:1858:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:1859:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:1870:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:1871:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:1882:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:1883:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/source_profile/detection/strategy.rs:2029:21:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/source_profile/detection/strategy.rs:274:21:registration_residue:duplicate Detection shape descriptor	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/source_profile/detection/strategy.rs:54:5:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/tests/agent/chat_application.rs:395:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chat_application.rs:395:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/chats.rs:1078:17:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chats.rs:1078:17:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/chats.rs:317:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chats.rs:317:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/chats.rs:475:58:retry:Retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chats.rs:504:25:retry:Retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chats.rs:784:307:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/chats.rs:784:307:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/conversation.rs:376:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/conversation.rs:376:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/model_registry.rs:105:29:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/sessions.rs:296:22:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/agent/sessions.rs:403:187:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/agent/sessions.rs:403:194:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:107:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:108:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:115:27:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:186:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:186:76:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:203:33:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:224:38:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:27:9:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:317:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:317:72:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:370:38:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:416:38:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:453:14:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:471:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:49:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:62:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:63:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_acquisition_contract.rs:86:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_managed_adapter.rs:33:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_managed_adapter.rs:44:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_managed_adapter.rs:82:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_managed_adapter.rs:87:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_managed_adapter.rs:99:37:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:237:13:registration_residue:duplicate = descriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:238:5:registration_residue:duplicate.push(descriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:247:25:registration_residue:PrimitiveDescriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:33:10:arbitrary_execution:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:33:10:browser_removed:execute_script	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:34:9:json_eval:"eval"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:35:10:browser_removed:mutate_dom	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:36:10:arbitrary_execution:login_flow	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:36:10:browser_removed:login_flow	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:37:10:arbitrary_execution:captcha_bypass	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:37:10:browser_removed:captcha_bypass	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:38:10:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_primitives.rs:50:84:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:51:101:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_primitives.rs:5:32:registration_residue:PrimitiveDescriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/browser_scripted_adapter.rs:19:68:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_scripted_adapter.rs:19:9:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_scripted_adapter.rs:63:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/browser_scripted_adapter.rs:64:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:101:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:111:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:1165:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:1206:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:161:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:161:54:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/candidate_resolution.rs:468:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:120:16:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:169:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:170:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:183:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:231:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:334:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:366:38:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:380:16:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:383:42:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:438:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:439:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:439:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:467:56:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:480:56:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:514:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:515:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:548:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detail_browser_adapter.rs:99:9:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:230:9:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:342:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:344:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:405:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:406:36:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:863:36:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:900:37:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:946:39:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:974:42:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_browser_strategy.rs:997:41:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_reconciliation.rs:2:5:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_reconciliation.rs:305:18:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_reconciliation.rs:333:21:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_reconciliation.rs:342:21:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:1007:35:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_url_http_strategies.rs:1043:34:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_url_http_strategies.rs:113:43:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:330:13:registration_residue:duplicate = descriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:331:5:registration_residue:duplicate.push(descriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:439:10:old_detection:httpChecks	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:521:49:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:550:53:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/detection_url_http_strategies.rs:628:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/detection_url_http_strategies.rs:977:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:108:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:140:38:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:143:45:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:152:16:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:199:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:200:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:216:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:252:16:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:255:42:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:311:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:312:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:312:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:340:56:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:353:56:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:388:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:389:17:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:419:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:467:52:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/discovery_browser_adapter.rs:88:9:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/fixtures/source-profile-dsl/valid/simple-source-profile.json:100:34:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/pagination_primitives.rs:200:9:registration_residue:compile_pagination	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/pagination_primitives.rs:221:9:registration_residue:compile_pagination	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/pagination_primitives.rs:4:5:registration_residue:compile_pagination	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/posting_occurrence.rs:84:47:arbitrary_execution:javascript	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_compiled_registration_parity.rs:186:31:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_compiled_registration_parity.rs:63:14:registration_residue:duplicate normalized registr	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_completeness_synthetic_failures.rs:217:9:registration_residue:duplicate.compiled.push(registr	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_completeness_synthetic_failures.rs:258:18:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_completeness_synthetic_failures.rs:274:18:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_completeness_synthetic_failures.rs:284:18:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_completeness_synthetic_failures.rs:293:42:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_registry_structure.rs:109:29:predicate_composition:negat	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_registry_structure.rs:111:45:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/primitive_registry_structure.rs:112:55:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/primitive_registry_structure.rs:63:10:transform_alias:normalizeWhitespace	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/primitive_registry_structure.rs:64:10:acceptance_removed:maxErrorRatio	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/primitive_schema_inventory.rs:152:31:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_serde_inventory.rs:102:23:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_serde_inventory.rs:152:33:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_serde_inventory.rs:339:59:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_serde_inventory.rs:342:10:arbitrary_execution:execute_script	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:342:10:browser_removed:execute_script	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:343:9:json_eval:"eval"	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:344:10:browser_removed:mutate_dom	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:345:10:arbitrary_execution:login_flow	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:345:10:browser_removed:login_flow	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:346:10:arbitrary_execution:captcha_bypass	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:346:10:browser_removed:captcha_bypass	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:354:10:transform_alias:normalizeWhitespace	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:355:10:transform_alias:htmlToText	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:356:10:transform_alias:urlDecode	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:357:10:transform_alias:slugToTitle	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:358:10:transform_alias:toString	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:365:25:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:365:32:predicate_all_any_none:"any"	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:365:39:predicate_all_any_none:"none"	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:365:55:predicate_composition:negat	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:371:58:acceptance_removed:maxErrorRatio	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:376:10:retry:retry	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
+src-tauri/tests/primitive_serde_inventory.rs:4:29:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:202:72:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:206:36:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:207:40:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:208:40:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:209:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:209:35:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:211:20:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/phase_naming.rs:68:10:http_byte_dimension:maxResponseBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/phase_naming.rs:69:10:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:16:44:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:44:13:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:45:5:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:45:77:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:47:46:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/schema_v3.rs:47:62:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:104:44:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:114:27:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:134:10:http_byte_dimension:maxResponseBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:135:10:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:158:10:http_byte_dimension:maxResponseBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:159:10:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:360:26:arbitrary_execution:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:360:26:browser_removed:execute_script	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:361:25:json_eval:"eval"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:362:26:browser_removed:mutate_dom	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:363:26:arbitrary_execution:login_flow	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:363:26:browser_removed:login_flow	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:364:26:arbitrary_execution:captcha_bypass	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:364:26:browser_removed:captcha_bypass	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:39:42:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:439:10:http_byte_dimension:maxResponseBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:440:10:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:45:18:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:55:42:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:85:13:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_compiler/security_boundedness.rs:93:43:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/acceptance.rs:41:24:acceptance_removed:maxErrorRatio	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/acceptance.rs:74:10:acceptance_removed:maxErrorRatio	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/acceptance.rs:92:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/acceptance.rs:93:5:registration_residue:duplicate.push(registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:115:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:162:53:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:190:24:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:193:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:60:22:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:62:25:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/cardinality.rs:67:25:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/http_fetch.rs:102:25:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/http_fetch.rs:21:60:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/parse.rs:64:77:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/parse.rs:71:37:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/parse.rs:71:64:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/parse.rs:77:17:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/predicate.rs:108:17:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/predicate.rs:108:24:predicate_all_any_none:"any"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/predicate.rs:108:31:predicate_all_any_none:"none"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/predicate.rs:180:92:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/predicate.rs:90:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/select.rs:58:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/select.rs:77:61:registration_residue:duplicate_fragments, &registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:190:31:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/transform.rs:190:52:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/transform.rs:63:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:77:10:transform_alias:normalizeWhitespace	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:78:10:transform_alias:htmlToText	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:79:10:transform_alias:urlDecode	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:80:10:transform_alias:slugToTitle	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/transform.rs:81:10:transform_alias:toString	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/value.rs:230:69:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/value.rs:403:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_primitives/value.rs:425:25:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_primitives/value.rs:567:109:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:278:86:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:279:77:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:285:87:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:286:69:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:443:10:http_byte_dimension:maxResponseBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:444:10:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:474:20:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:479:20:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:484:20:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:497:26:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:555:24:arbitrary_execution:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:555:24:browser_removed:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:562:12:arbitrary_execution:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:562:12:browser_removed:execute_script	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_profiles/schema.rs:606:71:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/detail.rs:140:99:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/detail.rs:193:99:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/occurrence.rs:39:80:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/post_request_bodies.rs:221:31:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/post_request_bodies.rs:89:25:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/template_validation.rs:8:45:transform_alias:slugToTitle	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
+src-tauri/tests/profile_dsl_runtime/discovery/transforms_and_combine.rs:114:24:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/transforms_and_combine.rs:409:24:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/transforms_and_combine.rs:439:79:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/discovery/transforms_and_combine.rs:79:24:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/http_acquisition.rs:189:55:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:208:26:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:209:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:287:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:304:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:314:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:332:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:346:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:364:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:520:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:615:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:711:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:711:63:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:735:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:736:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:77:18:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:88:64:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/profile_dsl_runtime/strategy_allowances.rs:90:18:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/source_detail_execution.rs:30:95:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/source_detail_execution.rs:339:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/components/ai-elements/context.tsx:82:14:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/context.tsx:91:14:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:122:40:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:124:42:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:126:42:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:1364:38:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:148:40:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:86:40:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:893:56:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/ai-elements/prompt-input.tsx:89:42:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai-elements/prompt-input.tsx:903:52:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/ai-elements/prompt-input.tsx:91:42:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai/sources.tsx:60:50:arbitrary_execution:javascript	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ai/sources.tsx:60:84:arbitrary_execution:JavaScript	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/layout/app-layout.tsx:17:35:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/layout/app-layout.tsx:18:35:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/layout/app-layout.tsx:19:44:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/layout/app-layout.tsx:69:226:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/layout/app-sidebar.tsx:50:36:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/alert.tsx:7:71:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-pagination.tsx:66:33:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-pagination.tsx:67:29:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-pagination.tsx:68:41:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-scroll-area.tsx:300:38:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-scroll-area.tsx:301:44:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table-dnd-rows.tsx:114:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-table-dnd.tsx:134:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-table-dnd.tsx:83:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/data-grid/data-grid-table.tsx:1020:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:1020:36:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:1044:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:1148:18:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:1158:16:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:1237:20:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:293:26:bot:Bot	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:30:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:432:36:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:44:16:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:58:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:604:20:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:604:40:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:631:20:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:833:10:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:833:30:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:841:10:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:885:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:885:36:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/data-grid/data-grid-table.tsx:898:18:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/date-selector.tsx:1220:20:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/filters.tsx:1020:22:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/filters.tsx:1023:14:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/filters.tsx:1529:57:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/filters.tsx:1910:38:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/filters.tsx:469:37:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:32:8:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:33:112:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:33:151:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:33:190:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:33:34:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:33:73:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:34:112:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:34:151:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:34:190:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:34:34:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:34:73:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:36:110:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:36:149:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:36:188:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:36:32:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:36:71:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:37:112:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:37:151:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:37:190:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:37:34:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:37:73:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:49:19:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:50:19:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:51:19:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:62:8:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:72:4:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:80:35:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:84:13:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/frame.tsx:84:22:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/reui/kanban.tsx:475:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/kanban.tsx:595:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/reui/sortable.tsx:311:30:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/components/ui/calendar.tsx:32:92:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:103:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:183:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:193:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:256:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:266:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:15:48:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:28:113:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:28:249:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:73:34:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:84:53:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/card.tsx:84:85:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/carousel.tsx:19:3:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/carousel.tsx:49:3:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/carousel.tsx:59:5:arbitrary_execution:plugin	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/chart.tsx:199:43:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/chart.tsx:298:41:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/combobox.tsx:114:165:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/combobox.tsx:127:42:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/combobox.tsx:127:56:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/combobox.tsx:127:99:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/combobox.tsx:245:26:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/menubar.tsx:59:82:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/native-select.tsx:30:241:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/sidebar.tsx:163:40:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/sidebar.tsx:167:23:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/sidebar.tsx:225:84:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/sidebar.tsx:236:88:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/tabs.tsx:61:324:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:11:6:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:17:4:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:25:4:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:31:6:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:39:13:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:39:22:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:41:26:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:43:70:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:49:34:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:71:13:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:71:30:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:152:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:222:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:323:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:32:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:392:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:463:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:531:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:601:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:685:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:771:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:81:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/components/ui/toggle-group.tsx:73:859:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/list/postings-list-panel.tsx:102:46:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:102:55:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:146:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:149:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:162:35:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:39:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/list/postings-list-panel.tsx:50:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-description.tsx:18:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-description.tsx:22:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-description.tsx:49:14:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-description.tsx:50:74:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-panel.tsx:132:18:bot:Bot	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/preview/posting-preview-panel.tsx:140:18:bot:Bot	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/preview/posting-preview-panel.tsx:44:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-panel.tsx:66:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-panel.tsx:85:11:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/preview/posting-preview-panel.tsx:85:20:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/queues/posting-queues.ts:106:19:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/queues/posting-queues.ts:191:25:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/queues/posting-queues.ts:73:9:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/queues/postings-sidebar.tsx:27:34:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/postings/tests/postings-ui-contract-tests.ts:116:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:117:49:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:118:55:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:119:67:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:120:62:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:121:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:122:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:123:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:124:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:127:15:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui-contract-tests.ts:274:5:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/search-requests/model/search-request-form-model.ts:47:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/registry/profile/profile-registry-grid.tsx:9:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/registry/source/source-live-check-section.tsx:254:58:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/registry/source/source-registry-grid.tsx:7:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/schema-editor/array-editor.tsx:166:30:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/schema-editor/object-editor.tsx:280:30:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/schema-editor/schema-value-control.tsx:137:10:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/shared/schema-value-table.tsx:439:30:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/source-form/source-config/config-value-control.tsx:154:10:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/source-form/source-config/source-config-table.tsx:46:47:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/features/sources/workspace/sources-workspace-tabs.ts:28:31:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/features/sources/workspace/sources-workspace-view.tsx:88:43:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
+src/lib/api/job-postings.ts:11:5:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/search-requests.ts:15:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/search-requests.ts:239:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/search-requests.ts:239:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/search-requests.ts:92:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/search-requests.ts:93:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/sources.ts:120:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/sources.ts:127:55:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/sources.ts:143:58:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/sources.ts:215:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
+src/lib/api/sources.ts:226:64:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.

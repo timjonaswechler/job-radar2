@@ -10,7 +10,7 @@ Source Profiles should continue to extract posting locations as ordinary strings
 
 Job Radar will resolve Search Request locations and posting candidate locations into coordinates, then apply local radius matching during Search Runs.
 
-The first implementation will use a bundled GeoNames-derived SQLite seed database for Germany. The database is generated from the GeoNames postal-code export by `scripts/geo_seeding.py` and bundled as `src-tauri/resources/geo_seed.sqlite`.
+The first implementation will use a bundled GeoNames-derived SQLite seed database for Germany. The database is generated from the GeoNames postal-code export by `scripts/geo/generate-seed.py` and bundled as `src-tauri/resources/geo_seed.sqlite`.
 
 The resolver will support two lookup classes:
 
@@ -163,7 +163,7 @@ Future improvements may add:
 First slice:
 
 ```txt
-GeoNames postal-code export -> scripts/geo_seeding.py -> bundled geo_seed.sqlite
+GeoNames postal-code export -> scripts/geo/generate-seed.py -> bundled geo_seed.sqlite
 ```
 
 Future resolver chain:
@@ -188,7 +188,7 @@ Nominatim should remain optional and cached. The public Nominatim service must n
 
 ## Acceptance Criteria
 
-- `scripts/geo_seeding.py` can regenerate `src-tauri/resources/geo_seed.sqlite` from the GeoNames Germany postal-code export.
+- `just geo-seed` runs `scripts/geo/generate-seed.py` to regenerate `src-tauri/resources/geo_seed.sqlite` from the GeoNames Germany postal-code export.
 - The generated database contains `geo_places`, `geo_postal_codes`, and `geo_place_keys`.
 - `Mainz` resolves through place-name lookup.
 - `55116` resolves through postal-code lookup and uses the postal-code coordinate.

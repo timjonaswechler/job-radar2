@@ -73,8 +73,8 @@ Wenn du neu einsteigst, lies am besten in dieser Reihenfolge:
 3. [`docs/prd/declarative-source-profile-dsl.md`](docs/prd/declarative-source-profile-dsl.md) — Zielbild der aktuellen Source Profile DSL.
 4. [`docs/adr/0001-source-config-as-json-schema.md`](docs/adr/0001-source-config-as-json-schema.md) und [`docs/adr/0009-declarative-source-profile-dsl.md`](docs/adr/0009-declarative-source-profile-dsl.md) — zentrale Architekturentscheidungen zur Source/Profile DSL.
 5. [`docs/adr/`](docs/adr/) — weitere Architekturentscheidungen und ihre Begründungen.
-6. [`docs/dev-search-run-smoke.md`](docs/dev-search-run-smoke.md) — manueller Live-Smoke für einen realen Suchlauf.
-7. [`docs/source-evidence/`](docs/source-evidence/) — katalogisierte Dokumentations-, Fixture-, Endpoint- und Source-Live-Check-Evidenz pro Source Profile.
+6. [`docs/index.md`](docs/index.md) — Einstieg in Produkt-, Architektur- und Entwicklungsdokumentation.
+7. [`docs/development/search-run-smoke.md`](docs/development/search-run-smoke.md) — manueller Live-Smoke für einen realen Suchlauf.
 
 Die eingebauten Source-Profile liegen in:
 

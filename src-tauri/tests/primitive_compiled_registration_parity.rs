@@ -121,7 +121,7 @@ fn exact_compiled_owner_file_and_plan_identity_catalogue_is_frozen() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let expected = include_str!("../../docs/agents/primitive-compiled-catalogue.txt")
+    let expected = include_str!("fixtures/primitive_completeness/primitive-compiled-catalogue.txt")
         .trim_end()
         .lines()
         .filter(|line| !line.starts_with('#'))
