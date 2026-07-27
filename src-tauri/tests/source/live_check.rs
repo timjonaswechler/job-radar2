@@ -1,14 +1,15 @@
-use std::{fs, path::Path};
+use std::{fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    CheckReport, ProfileHttpClient, ScriptedBrowserAcquisition,
     check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
-    check_source_with_runtime, persist_latest_check_report, read_latest_check_report,
-    source_live_check_report_path, source_live_check_report_status, CheckReportFreshnessState,
-    CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubjectType,
-    DiagnosticCategory, DiagnosticSeverity, ProfileHttpRequest, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceLiveCheckReportState,
-    SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    check_source_with_runtime, check_source_with_runtime_context, persist_latest_check_report,
+    read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
+    CheckReport, CheckReportFreshnessState, CheckReportKind, CheckReportResult,
+    CheckReportStaleReason, CheckReportSubjectType, DiagnosticCategory, DiagnosticSeverity,
+    ProfileHttpClient, ProfileHttpRequest, RuntimeCancellation, ScriptedBrowserAcquisition,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceStatus,
+    SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -43,18 +44,97 @@ fn browser_acquisition() -> ScriptedBrowserAcquisition {
     ScriptedBrowserAcquisition::new([])
 }
 
-fn run_check<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
-    check_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+fn block_on<T>(future: impl Future<Output = T>) -> T {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("Source Live Check test runtime should build")
+        .block_on(future)
 }
-fn run_activate<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
-    check_and_activate_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+
+fn run_check<F: ProfileHttpClient + Sync + ?Sized>(
+    app: impl AsRef<std::path::Path>,
+    key: &str,
+    fetcher: &F,
+) -> Result<CheckReport, String> {
+    block_on(check_source_with_runtime(
+        app,
+        key,
+        fetcher,
+        fetcher,
+        &browser_acquisition(),
+    ))
 }
-fn run_reactivate<F: ProfileHttpClient + Sync + ?Sized>(app: impl AsRef<std::path::Path>, key: &str, fetcher: &F) -> Result<CheckReport, String> {
-    check_and_reactivate_source_with_runtime(app, key, fetcher, fetcher, &browser_acquisition())
+fn run_activate<F: ProfileHttpClient + Sync + ?Sized>(
+    app: impl AsRef<std::path::Path>,
+    key: &str,
+    fetcher: &F,
+) -> Result<CheckReport, String> {
+    block_on(check_and_activate_source_with_runtime(
+        app,
+        key,
+        fetcher,
+        fetcher,
+        &browser_acquisition(),
+    ))
 }
-fn run_check_without_io(app: impl AsRef<std::path::Path>, key: &str) -> Result<CheckReport, String> {
+fn run_reactivate<F: ProfileHttpClient + Sync + ?Sized>(
+    app: impl AsRef<std::path::Path>,
+    key: &str,
+    fetcher: &F,
+) -> Result<CheckReport, String> {
+    block_on(check_and_reactivate_source_with_runtime(
+        app,
+        key,
+        fetcher,
+        fetcher,
+        &browser_acquisition(),
+    ))
+}
+fn run_check_without_io(
+    app: impl AsRef<std::path::Path>,
+    key: &str,
+) -> Result<CheckReport, String> {
     let fetcher = ScriptedProfileHttpClient::new([]);
     run_check(app, key, &fetcher)
+}
+
+struct Cancelled;
+
+impl RuntimeCancellation for Cancelled {
+    fn is_cancelled(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn source_live_check_accepts_controlled_time_and_cancellation_without_tauri_runtime() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let client = ScriptedProfileHttpClient::new([]);
+    let browser = browser_acquisition();
+    let cancellation = Cancelled;
+
+    let report = block_on(check_source_with_runtime_context(
+        temp_dir.path(),
+        "example_source",
+        &client,
+        &client,
+        &browser,
+        SourceLiveCheckExecutionContext::default()
+            .with_checked_at("2025-01-02T03:04:05Z")
+            .with_cancellation(&cancellation),
+    ))
+    .unwrap();
+
+    assert_eq!(report.checked_at, "2025-01-02T03:04:05Z");
+    assert_eq!(report.result, CheckReportResult::Failed);
+    assert!(report
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "runtime_execution_cancelled"));
+    assert!(client.requests().is_empty());
 }
 
 #[test]
@@ -187,8 +267,7 @@ fn source_live_check_reports_cumulative_request_exhaustion_without_partial_paylo
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -272,8 +351,7 @@ fn workday_source_live_check_exhausts_after_one_cumulative_request_without_detai
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "workday_smoke", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "workday_smoke", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     let requests = fetcher.discovery_requests();
@@ -326,8 +404,7 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.kind, CheckReportKind::SourceLiveCheck);
     assert_eq!(report.subject.subject_type, CheckReportSubjectType::Source);
@@ -383,8 +460,7 @@ fn check_source_rejects_invalid_source_key_without_writing_outside_report_dir() 
     let temp_dir = tempfile::tempdir().unwrap();
 
     let fetcher = passing_live_check_fetcher();
-    let error =
-        run_check(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
+    let error = run_check(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
 
     assert!(error.contains("invalid Source key `../outside`"));
     assert!(!temp_dir.path().join("outside.json").exists());
@@ -572,8 +648,7 @@ fn check_source_emits_no_candidates_diagnostic_for_empty_live_discovery() {
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -603,8 +678,7 @@ fn check_source_preserves_runtime_diagnostics_from_failed_live_discovery() {
     let fetcher =
         FakeLiveCheckFetcher::new([("https://example.test/jobs.json", "not json".to_string())]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert!(report.diagnostics.iter().any(|diagnostic| {
@@ -643,8 +717,7 @@ fn check_source_does_not_need_search_request_or_match_rule_context() {
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(1));
@@ -676,8 +749,7 @@ fn check_source_emits_detail_failed_when_one_candidate_detail_fails() {
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_failed"));
@@ -748,8 +820,7 @@ fn check_source_passes_detail_when_fallback_strategy_extracts_description() {
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["liveCheckState"], json!("live_check_passed"));
@@ -786,8 +857,7 @@ fn check_source_leaves_detail_unchecked_when_access_path_has_no_detail() {
         .to_string(),
     )]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["detailChecked"], json!(false));
@@ -834,8 +904,7 @@ fn check_source_checks_detail_for_no_more_than_one_candidate() {
         ),
     ]);
 
-    let report =
-        run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(report.details["candidateCount"], json!(2));
@@ -851,9 +920,7 @@ fn check_and_activate_source_changes_draft_to_active_after_passed_live_check() {
     write_source(temp_dir.path(), &simple_source_with_status("draft"));
     let fetcher = passing_live_check_fetcher();
 
-    let report =
-        run_activate(temp_dir.path(), "example_source", fetcher.client())
-            .unwrap();
+    let report = run_activate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(
@@ -884,9 +951,7 @@ fn check_and_activate_source_leaves_draft_unchanged_after_failed_live_check() {
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report =
-        run_activate(temp_dir.path(), "example_source", fetcher.client())
-            .unwrap();
+    let report = run_activate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -921,12 +986,7 @@ fn check_and_reactivate_source_changes_disabled_to_active_after_passed_live_chec
     write_source(temp_dir.path(), &simple_source_with_status("disabled"));
     let fetcher = passing_live_check_fetcher();
 
-    let report = run_reactivate(
-        temp_dir.path(),
-        "example_source",
-        fetcher.client(),
-    )
-    .unwrap();
+    let report = run_reactivate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Passed);
     assert_eq!(
@@ -951,12 +1011,7 @@ fn check_and_reactivate_source_leaves_disabled_unchanged_after_failed_live_check
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report = run_reactivate(
-        temp_dir.path(),
-        "example_source",
-        fetcher.client(),
-    )
-    .unwrap();
+    let report = run_reactivate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -984,12 +1039,8 @@ fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
         &simple_source_with_status("active"),
     );
     let fetcher = passing_live_check_fetcher();
-    let activate_report = run_activate(
-        activate_temp_dir.path(),
-        "example_source",
-        fetcher.client(),
-    )
-    .unwrap();
+    let activate_report =
+        run_activate(activate_temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
     assert_eq!(activate_report.result, CheckReportResult::Failed);
     assert_eq!(

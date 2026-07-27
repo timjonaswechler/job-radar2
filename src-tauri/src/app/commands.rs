@@ -521,7 +521,7 @@ pub fn list_source_diagnostics(
 }
 
 #[tauri::command]
-pub fn check_source(
+pub async fn check_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
@@ -537,10 +537,11 @@ pub fn check_source(
         &detail_fetcher,
         &browser,
     )
+    .await
 }
 
 #[tauri::command]
-pub fn check_and_activate_source(
+pub async fn check_and_activate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
@@ -556,10 +557,11 @@ pub fn check_and_activate_source(
         &detail_fetcher,
         &browser,
     )
+    .await
 }
 
 #[tauri::command]
-pub fn check_and_reactivate_source(
+pub async fn check_and_reactivate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
@@ -575,6 +577,7 @@ pub fn check_and_reactivate_source(
         &detail_fetcher,
         &browser,
     )
+    .await
 }
 
 #[tauri::command]

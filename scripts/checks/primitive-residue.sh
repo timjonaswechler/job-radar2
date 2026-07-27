@@ -99,7 +99,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='51190cb8513f8bc6f3196b4c21bb93ee3063751809b5deb3ab513e84cf8306fd'
+FROZEN_MANIFEST_SHA256='b03c4160f05c207380cf51576ed909330320893ccdd29d4a9c673e68fb2a8487'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

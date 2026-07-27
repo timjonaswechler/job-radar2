@@ -581,6 +581,17 @@ mod tests {
     }
 
     #[test]
+    fn source_live_check_use_case_does_not_own_a_tauri_runtime_boundary() {
+        for source in [
+            include_str!("source_live/mod.rs"),
+            include_str!("source_live/activation.rs"),
+        ] {
+            assert!(!source.contains("tauri::"));
+            assert!(!source.contains("block_on"));
+        }
+    }
+
+    #[test]
     fn serialization_failure_is_value_free_and_returns_no_partial_set() {
         struct FailingProjection;
         impl Serialize for FailingProjection {

@@ -5,7 +5,7 @@ use crate::profile_dsl::runtime::{BrowserAcquisition, ProfileHttpClient};
 use crate::source::documents::{SourceDocument, SourceStatus};
 use crate::source_profile::registry::RegistrySource;
 
-use super::build_source_live_check_report;
+use super::{build_source_live_check_report, SourceLiveCheckExecutionContext};
 use crate::checks::persistence::validate_source_live_check_report_key;
 use crate::checks::{persist_latest_check_report, CheckReport, CheckReportResult};
 
@@ -28,7 +28,7 @@ impl SourceActivationFlow {
     }
 }
 
-pub fn check_and_activate_source_with_runtime<D, T, A>(
+pub async fn check_and_activate_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
@@ -48,9 +48,10 @@ where
         detail_fetcher,
         acquisition,
     )
+    .await
 }
 
-pub fn check_and_reactivate_source_with_runtime<D, T, A>(
+pub async fn check_and_reactivate_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
@@ -70,9 +71,10 @@ where
         detail_fetcher,
         acquisition,
     )
+    .await
 }
 
-fn check_and_set_source_active<D, T, A>(
+async fn check_and_set_source_active<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     flow: SourceActivationFlow,
@@ -98,7 +100,9 @@ where
         discovery_fetcher,
         detail_fetcher,
         acquisition,
-    )?;
+        &SourceLiveCheckExecutionContext::default(),
+    )
+    .await?;
 
     let live_check_passed = report.result == CheckReportResult::Passed;
     let transition_allowed = current_status == Some(flow.expected_current_status());

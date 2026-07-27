@@ -52,12 +52,70 @@ pub struct SourceLiveCheckReportStatus {
     pub freshness: Option<CheckReportFreshness>,
 }
 
-pub fn check_source_with_runtime<D, T, A>(
+#[derive(Clone, Default)]
+pub struct SourceLiveCheckExecutionContext<'a> {
+    checked_at: Option<String>,
+    cancellation: Option<&'a dyn crate::profile_dsl::runtime::RuntimeCancellation>,
+}
+
+impl<'a> SourceLiveCheckExecutionContext<'a> {
+    pub fn with_checked_at(mut self, checked_at: impl Into<String>) -> Self {
+        self.checked_at = Some(checked_at.into());
+        self
+    }
+
+    pub fn with_cancellation(
+        mut self,
+        cancellation: &'a dyn crate::profile_dsl::runtime::RuntimeCancellation,
+    ) -> Self {
+        self.cancellation = Some(cancellation);
+        self
+    }
+
+    fn runtime_context(&self) -> RuntimeExecutionContext<'a> {
+        self.cancellation.map_or_else(
+            RuntimeExecutionContext::uncancellable,
+            RuntimeExecutionContext::with_cancellation,
+        )
+    }
+
+    fn checked_at(&self) -> String {
+        self.checked_at
+            .clone()
+            .unwrap_or_else(current_utc_timestamp)
+    }
+}
+
+pub async fn check_source_with_runtime<D, T, A>(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
     discovery_fetcher: &D,
     detail_fetcher: &T,
     acquisition: &A,
+) -> Result<CheckReport, String>
+where
+    D: ProfileHttpClient + Sync + ?Sized,
+    T: ProfileHttpClient + Sync + ?Sized,
+    A: BrowserAcquisition + Sync,
+{
+    check_source_with_runtime_context(
+        app_data_dir,
+        source_key,
+        discovery_fetcher,
+        detail_fetcher,
+        acquisition,
+        SourceLiveCheckExecutionContext::default(),
+    )
+    .await
+}
+
+pub async fn check_source_with_runtime_context<D, T, A>(
+    app_data_dir: impl AsRef<Path>,
+    source_key: impl AsRef<str>,
+    discovery_fetcher: &D,
+    detail_fetcher: &T,
+    acquisition: &A,
+    context: SourceLiveCheckExecutionContext<'_>,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
@@ -74,7 +132,9 @@ where
         discovery_fetcher,
         detail_fetcher,
         acquisition,
-    )?;
+        &context,
+    )
+    .await?;
     persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
     Ok(report)
 }
@@ -118,12 +178,13 @@ pub fn source_live_check_report_status(
     })
 }
 
-pub(crate) fn build_source_live_check_report<D, T, A>(
+pub(crate) async fn build_source_live_check_report<D, T, A>(
     snapshot: &SourceProfileRegistrySnapshot,
     source_key: &str,
     discovery_fetcher: &D,
     detail_fetcher: &T,
     acquisition: &A,
+    context: &SourceLiveCheckExecutionContext<'_>,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync + ?Sized,
@@ -152,7 +213,7 @@ where
 
     if let Some(compiled) = prepared.compiled() {
         let execution_plan = &compiled.execution_plan;
-        let discovery_context = RuntimeExecutionContext::uncancellable().with_limits(PhaseLimits {
+        let discovery_context = context.runtime_context().with_limits(PhaseLimits {
             max_requests: SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
             ..execution_plan.discovery.limits
         });
@@ -166,13 +227,14 @@ where
         } else {
             PhaseBrowser::BrowserFree
         };
-        let discovery_result = tauri::async_runtime::block_on(execute_discovery(
+        let discovery_result = execute_discovery(
             execution_plan,
             &document.source_config,
             discovery_fetcher,
             discovery_browser,
             discovery_context,
-        ));
+        )
+        .await;
         let (discovery_candidates, discovery_report, discovery_diagnostics) = match discovery_result
         {
             Ok(PhaseOutcome::Completed {
@@ -231,13 +293,14 @@ where
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
                 let detail_execution =
                     ProfileDslSourceDetailExecution::new(detail_fetcher, acquisition);
-                let detail_result =
-                    tauri::async_runtime::block_on(detail_execution.execute(SourceDetailRequest {
+                let detail_result = detail_execution
+                    .execute(SourceDetailRequest {
                         compiled_source: compiled,
                         occurrence: candidate,
                         requested_fields: RequestedDetailFields::description_text(),
-                        context: RuntimeExecutionContext::uncancellable(),
-                    }));
+                        context: context.runtime_context(),
+                    })
+                    .await;
                 let detail_report = match &detail_result {
                     Ok(outcome) => outcome.complete_budget_report(),
                     Err(cancelled) => Some(&cancelled.complete_budget_report),
@@ -294,7 +357,7 @@ where
     let mut report = CheckReport::new(
         CheckReportKind::SourceLiveCheck,
         CheckReportSubject::source(source_key),
-        current_utc_timestamp(),
+        context.checked_at(),
         SOURCE_LIVE_CHECK_LOGIC_VERSION,
         result,
     );

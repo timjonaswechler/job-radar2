@@ -13,14 +13,15 @@ mod source_profile;
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use checks::{
     check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
-    check_source_with_runtime, evaluate_check_report_freshness, latest_check_report_path,
-    persist_latest_check_report, prepare_source_behavior_fingerprints, read_latest_check_report,
-    source_live_check_report_path, source_live_check_report_status, CheckFingerprint, CheckReport,
-    CheckReportFreshness, CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError,
-    CheckReportResult, CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject,
-    CheckReportSubjectType, SourceBehaviorFingerprintPreparationError,
-    SourceBehaviorFingerprintPreparationErrorKind, SourceLiveCheckReportState,
-    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    check_source_with_runtime, check_source_with_runtime_context, evaluate_check_report_freshness,
+    latest_check_report_path, persist_latest_check_report, prepare_source_behavior_fingerprints,
+    read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
+    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
+    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportStaleDetail,
+    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
+    SourceBehaviorFingerprintPreparationError, SourceBehaviorFingerprintPreparationErrorKind,
+    SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
+    CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 pub use geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,

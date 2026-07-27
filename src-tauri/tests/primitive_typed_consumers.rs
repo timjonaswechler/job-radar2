@@ -178,14 +178,13 @@ fn application_callers_type_check_at_source_live_check_and_search_run_boundaries
         T: ProfileHttpClient + Sync + ?Sized,
         A: BrowserAcquisition + Sync,
     {
-        let result: Result<job_radar_lib::CheckReport, String> =
-            job_radar_lib::check_source_with_runtime(
-                "/tmp/g02-typecheck",
-                "source",
-                discovery,
-                detail,
-                browser,
-            );
+        let result = job_radar_lib::check_source_with_runtime(
+            "/tmp/g02-typecheck",
+            "source",
+            discovery,
+            detail,
+            browser,
+        );
         drop(result);
     }
     let _ = source_live_check_boundary::<

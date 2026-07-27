@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for the #283 runtime crate migration.
+# Frozen primitive-residue classification. Updated for the #284 asynchronous Source Live Check boundary.
 docs/adr/0009-declarative-source-profile-dsl.md:11:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -564,7 +564,7 @@ src-tauri/src/agent/sessions/wire.rs:724:18:json_text:"text"	unrelated_agent_pro
 src-tauri/src/agent/sessions/wire.rs:725:40:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/sessions/wire.rs:741:50:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/app/commands.rs:5:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/app/commands.rs:643:59:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/app/commands.rs:646:59:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
 src-tauri/src/bin/agent_debug.rs:383:9:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
 src-tauri/src/bin/agent_debug.rs:383:9:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/bin/agent_debug.rs:739:25:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
@@ -587,14 +587,14 @@ src-tauri/src/browser_runtime/owned.rs:2112:25:arbitrary_execution:shell	unrelat
 src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
-src-tauri/src/lib.rs:183:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:235:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:235:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:184:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:236:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:236:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:53:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
-src-tauri/src/lib.rs:86:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:95:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:237:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:237:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:54:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/lib.rs:87:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:96:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/candidate_resolution.rs:1185:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/candidate_resolution.rs:1185:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/candidate_resolution.rs:1186:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
@@ -727,13 +727,13 @@ src-tauri/tests/primitive_serde_inventory.rs:365:55:predicate_composition:negat	
 src-tauri/tests/primitive_serde_inventory.rs:371:58:acceptance_removed:maxErrorRatio	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
 src-tauri/tests/primitive_serde_inventory.rs:376:10:retry:retry	explicit_negative_or_contract_test	Direct Serde rejection fixture for a removed or prohibited DSL shape.
 src-tauri/tests/primitive_serde_inventory.rs:4:29:old_detection:InputUrlPattern	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:202:72:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:208:36:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:209:40:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:210:40:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:211:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:211:35:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/primitive_typed_consumers.rs:214:24:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:201:72:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:207:36:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:208:40:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:209:40:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:210:17:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:210:35:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/tests/primitive_typed_consumers.rs:213:24:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/profile_dsl_profiles/schema.rs:282:86:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/profile_dsl_profiles/schema.rs:283:77:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/profile_dsl_profiles/schema.rs:289:87:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
