@@ -9,10 +9,10 @@ use std::{
 use crate::profile_dsl::{
     execution_plan::capabilities::{ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait},
     runtime::{
-        browser_acquisition::BoxedBrowserAcquisitionFuture, BrowserAcquisition,
-        BrowserAcquisitionCancellation, BrowserAcquisitionCancellationReason,
-        BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequest,
-        BrowserAcquisitionTerminal, BrowserInfrastructureFailure, BrowserRenderedContent,
+        BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionCancellation,
+        BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure,
+        BrowserAcquisitionFailureKind, BrowserAcquisitionRequest, BrowserAcquisitionTerminal,
+        BrowserInfrastructureFailure, BrowserRenderedContent,
     },
 };
 

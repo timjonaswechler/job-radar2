@@ -1,5 +1,6 @@
 mod plan;
 mod reconciliation;
+mod runtime;
 
 pub use plan::{
     compile_detection_plan, detection_descriptor_for_authored_kind,
@@ -24,3 +25,9 @@ pub use reconciliation::{
 };
 
 pub(crate) use plan::completeness_compiled_registrations;
+
+pub use runtime::{
+    execute_detection_operation, DetectionBrowserFailureKind, DetectionOperationResult,
+    DetectionProfileCompletion, DetectionProfileExecutionFailureKind, DetectionProfileOutcome,
+    DetectionProfileRejectionKind,
+};

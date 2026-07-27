@@ -139,7 +139,7 @@ pub use source_profile_dsl::profile_dsl::primitives::value::{
 // Lower-level phase execution remains externally reachable only as a hidden
 // deterministic regression-test hook. Application callers use SourceDetailExecution.
 #[doc(hidden)]
-pub use profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
+pub use source_profile_dsl::profile_dsl::runtime::detail::execute_detail as __test_execute_detail_phase;
 
 #[doc(hidden)]
 pub use profile_dsl::runtime::__TestBrowserAcquisitionInvocation;

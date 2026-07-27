@@ -1,3 +1,5 @@
+#![allow(ambiguous_glob_reexports)]
+
 pub mod profile_dsl;
 pub mod source;
 pub mod source_profile;
@@ -31,5 +33,10 @@ pub use profile_dsl::primitives::transform::*;
 pub use profile_dsl::primitives::value::*;
 pub use profile_dsl::template::*;
 pub use source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
-pub use source_profile::detection::{compile_detection_plan, CompiledDetectionPlan};
+pub use source_profile::detection::*;
 pub use source_profile::documents::SourceProfileDocument;
+
+#[allow(ambiguous_glob_reexports)]
+pub use profile_dsl::runtime::*;
+
+pub use profile_dsl::runtime::detail::execute_detail;

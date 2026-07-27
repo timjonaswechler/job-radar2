@@ -203,7 +203,8 @@ fn positive_catalogue_distinguishes_http_and_browser_byte_dimensions() {
     ));
     let phase_schema =
         include_str!("../crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json");
-    let detection_source = include_str!("../src/source_profile/detection/strategy.rs");
+    let detection_source =
+        include_str!("../crates/source-profile-dsl/src/source_profile/detection/runtime.rs");
     assert!(phase_schema.contains("maxBrowserRenderedBytes"));
     assert!(detection_source.contains("response_bytes"));
     assert!(detection_source.contains("browser_rendered_bytes"));
