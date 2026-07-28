@@ -66,17 +66,14 @@ Das vollständige Projektvokabular steht in [`CONTEXT.md`](CONTEXT.md).
 
 ## Orientierung im Repository
 
-Wenn du neu einsteigst, lies am besten in dieser Reihenfolge:
+Das zentrale [`Dokumentationsportal`](docs/index.md) führt nach Zielgruppe und Zweck zu allen gepflegten Dokumentationsbereichen.
 
-1. diese README — die Produkt- und Einstiegsperspektive.
-2. [`CONTEXT.md`](CONTEXT.md) — die gemeinsame Sprache des Projekts.
-3. [`docs/prd/declarative-source-profile-dsl.md`](docs/prd/declarative-source-profile-dsl.md) — Zielbild der aktuellen Source Profile DSL.
-4. [`docs/adr/0001-source-config-as-json-schema.md`](docs/adr/0001-source-config-as-json-schema.md) und [`docs/adr/0009-declarative-source-profile-dsl.md`](docs/adr/0009-declarative-source-profile-dsl.md) — zentrale Architekturentscheidungen zur Source/Profile DSL.
-5. [`docs/adr/`](docs/adr/) — weitere Architekturentscheidungen und ihre Begründungen.
-6. [`docs/index.md`](docs/index.md) — Einstieg in Produkt-, Architektur- und Entwicklungsdokumentation.
-7. [`docs/development/search-run-smoke.md`](docs/development/search-run-smoke.md) — manueller Live-Smoke für einen realen Suchlauf.
+- **Job Radar verwenden:** im [`User Guide`](docs/user-guide/README.md) beginnen; diese README bleibt Produktüberblick und lokaler Einstieg.
+- **Job Radar entwickeln:** mit [`Development`](docs/development/README.md) und dem [`CONTEXT.md`](CONTEXT.md)-Vokabular beginnen.
+- **Entscheidungen und Anforderungen verstehen:** die Einstiege für [`Architecture`](docs/architecture/README.md) und [`Product`](docs/product/README.md) verwenden.
+- **Fakten nachschlagen oder interne Arbeit einordnen:** zu [`Reference`](docs/reference/README.md) beziehungsweise [`Project-internal work`](docs/project/README.md) wechseln.
 
-Die eingebauten Source-Profile liegen in:
+Bestehende ADR-, PRD- und Entwicklungslinks bleiben während der schrittweisen Migration gültig. Die eingebauten Source-Profile liegen in:
 
 - [`src-tauri/resources/profiles/`](src-tauri/resources/profiles/)
 

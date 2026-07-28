@@ -8,7 +8,7 @@ Use three levels while implementing:
 
 1. **Quick:** run `just quick` after small changes. It typechecks application/configuration and frontend test code, runs the hermetic Vitest suite once, and runs `cargo check --tests`. It does not create a Vite or Tauri bundle and does not link or execute every Rust test program.
 2. **Focused:** run the narrowest relevant frontend or Rust target while iterating. These commands complement `quick`; they do not replace the full gate.
-3. **Full:** run `just verify` once before handing work over. This executes the complete frontend check (including its production bundle), checks Rust formatting, runs the complete Cargo test suite, and checks the Git diff for whitespace errors.
+3. **Full:** run `just verify` once before handing work over. This executes the complete frontend check (including its production bundle), validates internal Markdown links, checks Rust formatting, runs the complete Cargo test suite, and checks the Git diff for whitespace errors.
 
 `just verify` is the required local handoff gate even when all quick and focused checks passed. The CI workflow remains authoritative for credential safeguards and cross-platform desktop packaging.
 
@@ -48,7 +48,8 @@ The underlying recipes are:
 | `rust-check` | `cargo check --manifest-path src-tauri/Cargo.toml --tests` |
 | `rust-test <target> [args]` | `cargo test --manifest-path src-tauri/Cargo.toml --test <target> [args]` |
 | `rust-unit [args]` | `cargo test --manifest-path src-tauri/Cargo.toml --lib [args]` |
-| `verify` | frontend full check, `cargo fmt --check`, full `cargo test`, `git diff --check` |
+| `docs-check` | dependency-free internal Markdown destination and heading-anchor validation |
+| `verify` | frontend full check, Markdown links, `cargo fmt --check`, full `cargo test`, `git diff --check` |
 | `package [args]` | `npm run tauri -- build [args]` |
 
 ## Platform notes

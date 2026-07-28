@@ -25,7 +25,7 @@ The destructive `db-clear` recipe retains its interactive confirmation. `db-clea
 
 ## Repository checks
 
-[`checks/`](checks/) contains non-security repository invariants. `primitive-residue.sh` is exposed through `just primitive-residue` and `just primitive-residue-emit` and is also exercised by Rust integration tests.
+[`checks/`](checks/) contains non-security repository invariants. `markdown-links.mjs` validates tracked internal Markdown destinations and heading anchors through `just docs-check`; its dependency-free self-test runs through `npm run test:markdown-links`. `primitive-residue.sh` is exposed through `just primitive-residue` and `just primitive-residue-emit` and is also exercised by Rust integration tests.
 
 ## Development utilities
 

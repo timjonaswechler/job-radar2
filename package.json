@@ -8,6 +8,8 @@
     "build": "vite build",
     "test:agent-credential-safety": "node scripts/security/agent-credential-safety.test.mjs",
     "check:agent-credentials": "node scripts/security/agent-credential-safety.mjs",
+    "test:markdown-links": "node scripts/checks/markdown-links.test.mjs",
+    "check:markdown-links": "node scripts/checks/markdown-links.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "agent:debug": "cargo run --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug",

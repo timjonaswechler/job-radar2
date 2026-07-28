@@ -3,9 +3,9 @@
 ## Start here
 
 1. Read [`README.md`](README.md) for setup and repository orientation.
-2. Read [`CONTEXT.md`](CONTEXT.md) before changing domain terminology.
-3. Read [`AGENTS.md`](AGENTS.md) for repository-specific engineering rules.
-4. Consult [`docs/index.md`](docs/index.md) for documentation ownership and placement.
+2. Use the central [`documentation portal`](docs/index.md) and its [`Development`](docs/development/README.md) entry point.
+3. Read [`CONTEXT.md`](CONTEXT.md) before changing domain terminology.
+4. Read [`AGENTS.md`](AGENTS.md) for repository-specific engineering rules.
 
 GitHub Issues are the authoritative request and planning surface. Issue workflow and triage configuration are maintained under `docs/agents/` for the installed engineering skills.
 
@@ -29,7 +29,7 @@ See [`docs/development/search-run-smoke.md`](docs/development/search-run-smoke.m
 
 ## Repository hygiene
 
-- Keep tests and their fixtures under `src-tauri/tests/`.
+- Keep Rust integration tests and their fixtures under `src-tauri/tests/`. Dependency-free executable script self-tests may stay beside the script they verify.
 - Keep shipped Source Profile data under `src-tauri/resources/profiles/`.
 - Keep durable decisions in ADRs or PRDs rather than issue-completion reports.
 - Do not commit credentials, provider payloads, local app data, generated reports, or temporary handoff artifacts.

@@ -40,10 +40,11 @@ rust-test target *args:
 rust-unit *args:
     cargo test --manifest-path src-tauri/Cargo.toml --lib "$@"
 
-# Run the complete handoff gate (frontend full check, Rust formatting/tests, and whitespace validation).
+# Run the complete handoff gate (frontend, documentation, Rust, and whitespace validation).
 [group('Development loops')]
 verify:
     npm run check:frontend
+    npm run check:markdown-links
     cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
     cargo test --manifest-path src-tauri/Cargo.toml
     git diff --check
@@ -98,6 +99,11 @@ db-preserve-after-squash: migrations-squash db-rebaseline-migrations
 [group('Local app data and database')]
 db-reset-after-squash: migrations-squash db-clear-force
     @echo "Done. Start the app again to recreate the DB from the squashed migration."
+
+# Validate internal links and heading anchors in tracked Markdown files.
+[group('Repository maintenance')]
+docs-check:
+    npm run check:markdown-links
 
 # Validate the reviewed Primitive residue manifest.
 [group('Repository maintenance')]

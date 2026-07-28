@@ -1,6 +1,6 @@
 # Development documentation
 
-Maintained developer guides live here. General setup and commands are in the repository [`README.md`](../../README.md); repository-specific agent rules are in [`AGENTS.md`](../../AGENTS.md).
+Maintained developer guides live here. General setup and commands are in the repository [`README.md`](../../README.md); repository-specific agent rules are in [`AGENTS.md`](../../AGENTS.md). For other audiences and document types, use the central [documentation portal](../index.md).
 
 ## Guides
 
