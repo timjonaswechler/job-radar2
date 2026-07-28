@@ -1,14 +1,14 @@
-use crate::agent::api::ApiKind;
-use crate::agent::auth::{
+use crate::api::ApiKind;
+use crate::auth::{
     canonical_existing_prefix_is_inside_repository, create_private_directory,
     path_below_ancestor_contains_symlink, path_is_inside_repository, read_existing_private_file,
     trusted_directory_is_real,
 };
-use crate::agent::models::{
+use crate::models::{
     Model, ModelCost, ModelCostTier, ModelId, ModelInput, ProviderId, ReasoningLevel,
 };
-use crate::agent::providers::{self, AuthenticationMethod, ProviderDescriptor};
-use crate::agent::AgentError;
+use crate::providers::{self, AuthenticationMethod, ProviderDescriptor};
+use crate::AgentError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,18 +156,6 @@ pub struct ModelRegistry {
 }
 
 impl ModelRegistry {
-    pub fn for_current_user() -> Result<Self, AgentError> {
-        #[cfg(target_os = "macos")]
-        {
-            let location = crate::app::paths::current_user_app_data_location()
-                .map_err(|_| AgentError::invalid_model_configuration())?;
-            return Self::from_agents_data_root(location.root.join("agents"));
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        Err(AgentError::invalid_model_configuration())
-    }
-
     pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
         Self::with_environment(agents_data_root.as_ref(), EnvironmentAvailability::Process)
     }

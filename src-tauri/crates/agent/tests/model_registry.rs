@@ -1,7 +1,7 @@
-use job_radar_lib::agent::api::ApiKind;
-use job_radar_lib::agent::models::{ModelId, ModelInput, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::registry::{ModelRegistry, ProviderAvailability};
-use job_radar_lib::agent::AgentErrorCategory;
+use agent::api::ApiKind;
+use agent::models::{ModelId, ModelInput, ProviderId, ReasoningLevel};
+use agent::registry::{ModelRegistry, ProviderAvailability};
+use agent::AgentErrorCategory;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

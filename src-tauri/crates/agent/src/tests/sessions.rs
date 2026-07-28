@@ -1,9 +1,9 @@
-use job_radar_lib::agent::models::{ModelId, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::sessions::{
+use crate::models::{ModelId, ProviderId, ReasoningLevel};
+use crate::sessions::{
     AssistantBlock, AssistantUsage, CompactionReason, CompactionRecord, CompletedTurn,
     SessionAccess, SessionCheckpoint, SessionErrorCode, SessionId, StopReason,
 };
-use job_radar_lib::agent::testing::SessionTestHarness;
+use crate::testing::SessionTestHarness;
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, RngSeed};
 use std::io::{BufRead, Read, Write};
@@ -31,7 +31,10 @@ fn install_fixture(temp: &TempDir, fixture: &str) -> std::path::PathBuf {
     let target = root(temp)
         .join("sessions")
         .join(format!("2023-07-01T00-00-00Z_{SESSION}.jsonl"));
-    std::fs::copy(format!("tests/fixtures/agent_sessions/{fixture}"), &target).unwrap();
+    let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/agent_sessions")
+        .join(fixture);
+    std::fs::copy(fixture_path, &target).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -896,7 +899,11 @@ fn spawn_worker(
 ) -> Worker {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
-        .args(["--exact", "sessions::subprocess_worker", "--nocapture"])
+        .args([
+            "--exact",
+            "tests::sessions::subprocess_worker",
+            "--nocapture",
+        ])
         .env("JOB_RADAR_SUBPROCESS_MODE", mode)
         .env("JOB_RADAR_SUBPROCESS_ROOT", agents_root)
         .stdin(Stdio::piped())
@@ -934,8 +941,7 @@ fn subprocess_worker() {
         return;
     };
     let root = std::path::PathBuf::from(std::env::var_os("JOB_RADAR_SUBPROCESS_ROOT").unwrap());
-    let manager =
-        job_radar_lib::agent::sessions::SessionManager::from_agents_data_root(&root).unwrap();
+    let manager = crate::sessions::SessionManager::from_agents_data_root(&root).unwrap();
     match mode.as_str() {
         "publish" => {
             let mut handle = manager.create().unwrap();
@@ -971,16 +977,14 @@ fn subprocess_worker() {
 #[test]
 fn subprocess_crash_and_snapshot_contracts_use_explicit_ipc() {
     let temp = TempDir::new().unwrap();
-    let manager =
-        job_radar_lib::agent::sessions::SessionManager::from_agents_data_root(&root(&temp))
-            .unwrap();
+    let manager = crate::sessions::SessionManager::from_agents_data_root(&root(&temp)).unwrap();
     drop(manager);
     let mut worker = spawn_worker("publish", &root(&temp), None, Some("publish"));
     await_marker(&mut worker, "CHECKPOINT publish");
     worker.child.kill().unwrap();
     worker.child.wait().unwrap();
     assert!(
-        job_radar_lib::agent::sessions::SessionManager::from_agents_data_root(&root(&temp))
+        crate::sessions::SessionManager::from_agents_data_root(&root(&temp))
             .unwrap()
             .list()
             .unwrap()

@@ -1,16 +1,16 @@
-use futures_util::{stream, StreamExt};
-use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::sessions::{CompactionReason, SessionCheckpoint, SessionId};
-use job_radar_lib::agent::testing::{
+use crate::models::{Model, ModelId, ProviderId, ReasoningLevel};
+use crate::sessions::{CompactionReason, SessionCheckpoint, SessionId};
+use crate::testing::{
     synthetic_assistant_message_with_replay, synthetic_model_with_limits,
     synthetic_turn_completion_with_replay, ExpectedConversationRequest, ScriptedProvider,
     ScriptedTurn, SessionTestHarness, SyntheticReplaySignature,
 };
-use job_radar_lib::agent::{
+use crate::{
     AgentChat, AgentChatEvent, AgentChatState, AssistantContent, ContentKind, ConversationProvider,
     ConversationRequest, FinishReason, Message, ProviderEvent, ProviderEventStream,
     ProviderTurnCompletion, TokenUsage, UserMessage,
 };
+use futures_util::{stream, StreamExt};
 use std::path::PathBuf;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -117,7 +117,7 @@ fn completed_with_typed_replay(text: &str) -> Vec<ProviderEvent> {
 }
 
 fn run(chat: &mut AgentChat, text: &str) -> Vec<AgentChatEvent> {
-    tauri::async_runtime::block_on(async {
+    crate::testing::block_on(async {
         let mut stream = chat.send(text.to_owned()).unwrap();
         let mut events = Vec::new();
         while let Some(event) = stream.next().await {
@@ -311,8 +311,8 @@ fn unsuccessful_and_dropped_turns_never_publish_or_enter_resume_context() {
                 expected("Failed"),
                 vec![
                     ProviderEvent::Started,
-                    ProviderEvent::Failed(job_radar_lib::agent::AgentError {
-                        category: job_radar_lib::agent::AgentErrorCategory::Transport,
+                    ProviderEvent::Failed(crate::AgentError {
+                        category: crate::AgentErrorCategory::Transport,
                         message: "synthetic transport failure".into(),
                         retry_after: None,
                     }),
@@ -393,7 +393,7 @@ fn caller_cancellation_wakes_a_pending_turn_and_never_publishes_a_partial_chat()
     )
     .unwrap();
 
-    let terminal = tauri::async_runtime::block_on(async {
+    let terminal = crate::testing::block_on(async {
         let mut events = chat.send("Cancel me".into()).unwrap();
         let cancellation = events.cancellation();
         cancellation.cancel();
@@ -432,7 +432,7 @@ fn caller_cancellation_after_partial_output_wins_without_committing_the_ready_co
     )
     .unwrap();
 
-    tauri::async_runtime::block_on(async {
+    crate::testing::block_on(async {
         let mut events = chat.send("Cancel partial".into()).unwrap();
         assert!(matches!(events.next().await, Some(AgentChatEvent::Started)));
         assert!(matches!(
@@ -555,13 +555,13 @@ fn manual_compaction_is_durable_reconstructs_context_and_retains_full_history() 
     let temp = TempDir::new().unwrap();
     let manager = harness(None).manager(&root(&temp)).unwrap();
     let selected = model("synthetic-model", vec![ReasoningLevel::Off]);
-    let first_reply = job_radar_lib::agent::testing::synthetic_assistant_message(
+    let first_reply = crate::testing::synthetic_assistant_message(
         vec![AssistantContent::Text("One reply".into())],
         selected.clone(),
         TokenUsage::default(),
         FinishReason::Completed,
     );
-    let second_reply = job_radar_lib::agent::testing::synthetic_assistant_message(
+    let second_reply = crate::testing::synthetic_assistant_message(
         vec![AssistantContent::Text("Two reply".into())],
         selected.clone(),
         TokenUsage::default(),
@@ -586,7 +586,7 @@ fn manual_compaction_is_durable_reconstructs_context_and_retains_full_history() 
     .unwrap();
     run(&mut chat, "One");
     run(&mut chat, "Two");
-    let events = tauri::async_runtime::block_on(async {
+    let events = crate::testing::block_on(async {
         chat.compact(Some("focus".into()))
             .unwrap()
             .collect::<Vec<_>>()
@@ -648,7 +648,7 @@ fn threshold_compaction_finishes_durably_before_completed_is_observable() {
     let temp = TempDir::new().unwrap();
     let manager = harness(None).manager(&root(&temp)).unwrap();
     let selected = model("synthetic-model", vec![ReasoningLevel::Off]);
-    let first_reply = job_radar_lib::agent::testing::synthetic_assistant_message(
+    let first_reply = crate::testing::synthetic_assistant_message(
         vec![AssistantContent::Text("A1".into())],
         selected.clone(),
         TokenUsage::default(),
@@ -669,7 +669,7 @@ fn threshold_compaction_finishes_durably_before_completed_is_observable() {
     )
     .unwrap();
     run(&mut chat, "U1");
-    tauri::async_runtime::block_on(async {
+    crate::testing::block_on(async {
         let mut stream = chat.send("U2".into()).unwrap();
         while let Some(event) = stream.next().await {
             if matches!(event, AgentChatEvent::Completed { .. }) {
@@ -724,7 +724,7 @@ fn threshold_compaction_cancellation_preserves_durable_turn_then_completes() {
     .unwrap();
     run(&mut chat, "U1");
 
-    let events = tauri::async_runtime::block_on(async {
+    let events = crate::testing::block_on(async {
         let mut stream = chat.send("U2".into()).unwrap();
         let mut events = Vec::new();
         while let Some(event) = stream.next().await {
@@ -772,7 +772,7 @@ fn overflow_compacts_and_retries_exactly_once_without_persisting_failed_attempt(
     let temp = TempDir::new().unwrap();
     let manager = harness(None).manager(&root(&temp)).unwrap();
     let selected = model("synthetic-model", vec![ReasoningLevel::Off]);
-    let first_reply = job_radar_lib::agent::testing::synthetic_assistant_message(
+    let first_reply = crate::testing::synthetic_assistant_message(
         vec![AssistantContent::Text("A1".into())],
         selected.clone(),
         TokenUsage::default(),
@@ -781,7 +781,7 @@ fn overflow_compacts_and_retries_exactly_once_without_persisting_failed_attempt(
     let provider = ScriptedProvider::new(vec![selected.clone()], vec![
         ScriptedTurn::new(ExpectedConversationRequest::new("System", vec![Message::User(UserMessage::new("U1"))], selected.id().clone(), ReasoningLevel::Off), completed("A1")),
         ScriptedTurn::new(ExpectedConversationRequest::new("System", vec![Message::User(UserMessage::new("U1")), first_reply, Message::User(UserMessage::new("U2"))], selected.id().clone(), ReasoningLevel::Off), completed("A2")),
-        ScriptedTurn::new(ExpectedConversationRequest::any_messages("System", selected.id().clone(), ReasoningLevel::Off), vec![ProviderEvent::Started, ProviderEvent::Failed(job_radar_lib::agent::AgentError { category: job_radar_lib::agent::AgentErrorCategory::ContextOverflow, message: "overflow".into(), retry_after: None })]),
+        ScriptedTurn::new(ExpectedConversationRequest::any_messages("System", selected.id().clone(), ReasoningLevel::Off), vec![ProviderEvent::Started, ProviderEvent::Failed(crate::AgentError { category: crate::AgentErrorCategory::ContextOverflow, message: "overflow".into(), retry_after: None })]),
         ScriptedTurn::new(ExpectedConversationRequest::any_messages("You summarize prior conversation context. Do not answer or continue the conversation.", selected.id().clone(), ReasoningLevel::Off), completed(VALID_SUMMARY)),
         ScriptedTurn::new(ExpectedConversationRequest::any_messages("System", selected.id().clone(), ReasoningLevel::Off), completed("recovered")),
     ]);
@@ -870,9 +870,9 @@ fn iterative_compaction_uses_previous_summary_and_only_the_new_raw_span() {
     .unwrap();
     run(&mut chat, "old user");
     run(&mut chat, "new user");
-    tauri::async_runtime::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
+    crate::testing::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
     run(&mut chat, "latest user");
-    tauri::async_runtime::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
+    crate::testing::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
 
     let requests = handle.recorded_requests();
     let prompt = match &requests[4].messages()[0] {
@@ -939,7 +939,7 @@ fn split_turn_uses_8192_cap_and_merges_valid_prefix_summary() {
     )
     .unwrap();
     run(&mut chat, &large);
-    let events = tauri::async_runtime::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
+    let events = crate::testing::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
     assert!(matches!(
         events.last(),
         Some(AgentChatEvent::CompactionCompleted { .. })
@@ -997,7 +997,7 @@ fn cancelled_malformed_and_truncated_compactions_create_no_entry() {
     .unwrap();
     run(&mut chat, "U1");
     run(&mut chat, "U2");
-    tauri::async_runtime::block_on(async {
+    crate::testing::block_on(async {
         let mut stream = chat.compact(None).unwrap();
         assert!(matches!(
             stream.next().await,
@@ -1012,13 +1012,13 @@ fn cancelled_malformed_and_truncated_compactions_create_no_entry() {
         ));
     });
     assert!(chat.snapshot().compactions().is_empty());
-    let malformed = tauri::async_runtime::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
+    let malformed = crate::testing::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
     assert!(matches!(
         malformed.last(),
         Some(AgentChatEvent::CompactionFailed { .. })
     ));
     assert!(chat.snapshot().compactions().is_empty());
-    let truncated = tauri::async_runtime::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
+    let truncated = crate::testing::block_on(chat.compact(None).unwrap().collect::<Vec<_>>());
     assert!(matches!(
         truncated.last(),
         Some(AgentChatEvent::CompactionFailed { .. })
@@ -1072,8 +1072,8 @@ fn second_overflow_stops_without_loop_or_partial_turn() {
     let overflow = || {
         vec![
             ProviderEvent::Started,
-            ProviderEvent::Failed(job_radar_lib::agent::AgentError {
-                category: job_radar_lib::agent::AgentErrorCategory::ContextOverflow,
+            ProviderEvent::Failed(crate::AgentError {
+                category: crate::AgentErrorCategory::ContextOverflow,
                 message: "overflow".into(),
                 retry_after: None,
             }),

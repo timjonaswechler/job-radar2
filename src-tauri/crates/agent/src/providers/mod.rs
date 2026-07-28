@@ -1,7 +1,7 @@
 pub mod openai_codex;
 
-use crate::agent::api::ApiKind;
-use crate::agent::models::{Model, ProviderId};
+use crate::api::ApiKind;
+use crate::models::{Model, ProviderId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthenticationMethod {
@@ -66,7 +66,7 @@ impl ProviderDescriptor {
         &self.models
     }
 
-    pub(crate) fn has_configured_api_key(&self) -> bool {
+    pub fn has_configured_api_key(&self) -> bool {
         self.configured_api_key
     }
 }

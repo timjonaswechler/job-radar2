@@ -1,5 +1,5 @@
-use crate::agent::models::{Model, ModelId, ReasoningLevel};
-use crate::agent::{AgentError, AgentErrorCategory};
+use crate::models::{Model, ModelId, ReasoningLevel};
+use crate::{AgentError, AgentErrorCategory};
 use futures_util::task::AtomicWaker;
 use futures_util::Stream;
 use std::fmt;
@@ -358,7 +358,7 @@ impl AgentConversation {
     pub(crate) fn from_shared(
         system_prompt: String,
         provider: Arc<dyn ConversationProvider>,
-        provider_id: crate::agent::models::ProviderId,
+        provider_id: crate::models::ProviderId,
         model: ModelId,
         reasoning: ReasoningLevel,
         messages: Vec<Message>,
@@ -381,7 +381,7 @@ impl AgentConversation {
     pub(crate) fn from_shared_with_models(
         system_prompt: String,
         provider: Arc<dyn ConversationProvider>,
-        provider_id: crate::agent::models::ProviderId,
+        provider_id: crate::models::ProviderId,
         model: ModelId,
         reasoning: ReasoningLevel,
         messages: Vec<Message>,
@@ -436,7 +436,7 @@ impl AgentConversation {
 
     pub(crate) fn select_provider_model(
         &mut self,
-        provider: &crate::agent::models::ProviderId,
+        provider: &crate::models::ProviderId,
         model: ModelId,
     ) -> Result<(), AgentError> {
         let models = self.provider.model_snapshot();
@@ -672,8 +672,8 @@ impl Stream for ConversationAttempt {
 /// Model and Reasoning Level changes therefore cannot overlap an active turn.
 ///
 /// ```compile_fail
-/// use job_radar_lib::agent::AgentConversation;
-/// use job_radar_lib::agent::models::ReasoningLevel;
+/// use agent::AgentConversation;
+/// use agent::models::ReasoningLevel;
 ///
 /// fn change_during_turn(conversation: &mut AgentConversation) {
 ///     let stream = conversation.send("hello".to_owned()).unwrap();

@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for the #284 asynchronous Source Live Check boundary.
+# Frozen primitive-residue classification. Updated for the #297 Agent crate extraction.
 docs/adr/0009-declarative-source-profile-dsl.md:11:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -100,6 +100,113 @@ research/rust-agent-capability-gap-inventory.md:37:82:arbitrary_execution:shell	
 research/rust-agent-capability-gap-inventory.md:45:380:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
 research/rust-agent-capability-gap-inventory.md:55:189:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
 research/rust-agent-capability-gap-inventory.md:7:326:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
+src-tauri/crates/agent/src/auth.rs:1877:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/chat.rs:589:5:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/chat.rs:816:77:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/chat.rs:872:51:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:100:32:rate_limit:rate limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:101:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:101:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:109:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:109:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:18:9:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:18:9:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:8:5:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:97:19:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:97:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:97:32:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/error.rs:99:43:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex.rs:844:89:predicate_all_any_none:"none"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1010:57:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1026:37:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:112:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:112:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:112:37:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:112:37:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1203:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1203:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:120:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:120:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1231:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1236:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1455:80:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1472:203:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1509:62:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1546:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1548:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1549:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1560:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1562:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1625:36:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1638:13:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1638:63:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1642:35:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1646:23:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1646:23:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1660:56:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1661:45:rate_limit:rate limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1662:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1662:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1746:58:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1749:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1749:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1793:44:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1793:83:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1844:51:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1866:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1866:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1940:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1944:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1946:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1946:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1949:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1950:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1950:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1951:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1954:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:1954:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:275:52:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:343:9:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:380:45:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:483:46:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:483:46:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:498:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:498:32:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:513:48:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:515:28:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:515:41:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:515:41:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:550:10:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:550:10:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:552:15:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:65:5:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/openai_codex/streaming.rs:65:5:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/registry.rs:1051:33:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/registry.rs:1054:13:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:1153:43:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:1153:50:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:136:14:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:137:23:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:577:30:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:578:61:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:579:48:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:724:18:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:725:40:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/sessions/wire.rs:741:50:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Profile DSL.
+src-tauri/crates/agent/src/tests/chats.rs:1078:17:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:1078:17:retry_after:retry_after	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:317:25:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:317:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:475:58:retry:Retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:504:25:retry:Retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:784:277:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/chats.rs:784:277:retry_after:retry_after	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/conversation.rs:376:25:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/conversation.rs:376:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/sessions.rs:299:22:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/sessions.rs:406:187:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/src/tests/sessions.rs:406:194:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/agent/tests/model_registry.rs:105:29:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:125:14:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:126:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:127:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
@@ -463,114 +570,21 @@ src-tauri/crates/source-profile-dsl/tests/profile_dsl_runtime/strategy_allowance
 src-tauri/crates/source-profile-dsl/tests/profile_dsl_runtime/strategy_allowances.rs:92:18:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Contract test evidence is intentionally retained.
 src-tauri/crates/source-profile-dsl/tests/source_detail_execution.rs:30:95:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Contract test evidence is intentionally retained.
 src-tauri/crates/source-profile-dsl/tests/source_detail_execution.rs:334:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Contract test evidence is intentionally retained.
-src-tauri/src/agent/auth.rs:1899:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/chat.rs:589:5:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/chat.rs:816:77:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/chat.rs:872:51:retry:Retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
 src-tauri/src/agent/chat_application.rs:806:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:807:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:808:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/configuration.rs:868:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/configuration.rs:868:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/configuration.rs:876:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/configuration.rs:876:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:102:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/error.rs:102:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:18:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/error.rs:18:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:8:5:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:90:19:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:90:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/error.rs:90:32:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:92:43:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:93:32:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/error.rs:94:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/error.rs:94:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex.rs:848:89:predicate_all_any_none:"none"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1016:57:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1032:37:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:112:17:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:112:17:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:112:37:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:112:37:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1209:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1209:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:120:17:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:120:17:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1237:58:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1242:58:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1455:80:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1472:203:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1509:62:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1546:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1548:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1549:53:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1560:41:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1562:41:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1625:36:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1638:13:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1638:63:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1642:35:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1646:23:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1646:23:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1660:56:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1661:45:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1662:26:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1662:26:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1746:58:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1749:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1749:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1793:44:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1793:83:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1844:51:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1866:13:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1866:13:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1940:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1944:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1946:19:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1946:19:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1949:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1950:26:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1950:26:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:1951:25:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1954:19:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:1954:19:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:281:52:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:349:9:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:386:45:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:489:46:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:489:46:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:504:32:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:504:32:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:519:48:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:521:28:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:521:41:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:521:41:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:556:10:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:556:10:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/openai_codex/streaming.rs:558:15:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:65:5:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
-src-tauri/src/agent/openai_codex/streaming.rs:65:5:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/registry.rs:1063:33:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/registry.rs:1066:13:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:1153:43:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:1153:50:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:136:14:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:137:23:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:577:30:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:578:61:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:579:48:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:724:18:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:725:40:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/src/agent/sessions/wire.rs:741:50:json_text:"text"	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/configuration.rs:864:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/configuration.rs:864:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/src/agent/configuration.rs:872:9:retry:retry	unrelated_agent_provider_retry	Agent provider retry lifecycle, outside Profile DSL Retry.
+src-tauri/src/agent/configuration.rs:872:9:retry_after:retry_after	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/app/commands.rs:5:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/app/commands.rs:646:59:old_detection:aggregate_detection	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
-src-tauri/src/bin/agent_debug.rs:383:9:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
-src-tauri/src/bin/agent_debug.rs:383:9:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:386:9:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/bin/agent_debug.rs:386:9:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/bin/agent_debug.rs:739:25:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
 src-tauri/src/bin/agent_debug.rs:739:25:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/bin/agent_debug.rs:87:29:rate_limit:RateLimit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/bin/agent_debug.rs:87:45:rate_limit:rate limit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:95:29:rate_limit:RateLimit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:95:45:rate_limit:rate limit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/browser_runtime/owned.rs:1514:34:retry:retry	unrelated_browser_install_or_admin_retry	Browser installation or administration retry, outside Profile DSL execution.
 src-tauri/src/browser_runtime/owned.rs:1545:47:retry:retry	unrelated_browser_install_or_admin_retry	Browser installation or administration retry, outside Profile DSL execution.
 src-tauri/src/browser_runtime/owned.rs:1751:31:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
@@ -588,10 +602,10 @@ src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelat
 src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/lib.rs:185:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:237:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:237:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:238:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:238:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:248:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:248:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:249:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:249:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:55:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
 src-tauri/src/lib.rs:88:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:97:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
@@ -623,20 +637,6 @@ src-tauri/src/search/run/tests/support.rs:289:44:predicate_all_any_none:"all"	fi
 src-tauri/src/search/smoke/request.rs:82:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/tests/agent/chat_application.rs:395:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/agent/chat_application.rs:395:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/chats.rs:1078:17:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/chats.rs:1078:17:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/chats.rs:317:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/chats.rs:317:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/chats.rs:475:58:retry:Retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/chats.rs:504:25:retry:Retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/chats.rs:784:307:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/chats.rs:784:307:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/conversation.rs:376:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/conversation.rs:376:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/model_registry.rs:105:29:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/sessions.rs:296:22:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/agent/sessions.rs:403:187:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/agent/sessions.rs:403:194:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/browser_acquisition_contract.rs:107:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/browser_acquisition_contract.rs:108:29:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/browser_acquisition_contract.rs:115:27:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.

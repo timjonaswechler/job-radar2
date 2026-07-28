@@ -7,7 +7,7 @@ authors = ["Tim Jonas Wechler"]
 edition = "2021"
 
 [workspace]
-members = [".", "crates/geo", "crates/source-profile-dsl"]
+members = [".", "crates/agent", "crates/geo", "crates/source-profile-dsl"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -31,6 +31,7 @@ agent-debug = []
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+agent = { path = "crates/agent" }
 geo = { path = "crates/geo" }
 source-profile-dsl = { path = "crates/source-profile-dsl" }
 tauri = { version = "2", features = [] }
@@ -73,6 +74,7 @@ windows-sys = { version = "0.59", features = [
 ] }
 
 [dev-dependencies]
+agent = { path = "crates/agent", features = ["test-support"] }
 tempfile = "3"
 jsonschema = { version = "0.46.8", default-features = false }
 proptest = "1.6"

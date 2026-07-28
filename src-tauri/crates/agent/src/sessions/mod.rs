@@ -2,7 +2,7 @@ mod reconstruct;
 mod storage;
 mod wire;
 
-use crate::agent::models::{ModelId, ProviderId, ReasoningLevel};
+use crate::models::{ModelId, ProviderId, ReasoningLevel};
 use std::{fmt, path::Path, str::FromStr, sync::Arc};
 use uuid::Uuid;
 

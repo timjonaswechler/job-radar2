@@ -5,7 +5,7 @@ use super::{
     SessionCheckpoint, SessionError, SessionErrorCode, SessionHandle, SessionId, SessionSnapshot,
     SessionSummary, SystemRuntime,
 };
-use crate::agent::models::{ModelId, ProviderId, ReasoningLevel};
+use crate::models::{ModelId, ProviderId, ReasoningLevel};
 use fs2::FileExt;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -182,8 +182,8 @@ impl SessionManager {
 fn validate_root(root: &Path) -> Result<(), SessionError> {
     if !root.is_absolute()
         || root.file_name().and_then(|x| x.to_str()) != Some("agents")
-        || crate::agent::auth::path_is_inside_repository(root)
-        || crate::agent::auth::canonical_existing_prefix_is_inside_repository(root)
+        || crate::auth::path_is_inside_repository(root)
+        || crate::auth::canonical_existing_prefix_is_inside_repository(root)
     {
         return Err(SessionError::new(SessionErrorCode::InvalidRoot));
     }

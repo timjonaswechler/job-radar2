@@ -1,12 +1,12 @@
-use futures_util::StreamExt;
-use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::testing::{
+use crate::models::{Model, ModelId, ProviderId, ReasoningLevel};
+use crate::testing::{
     synthetic_assistant_message, ExpectedConversationRequest, ScriptedProvider, ScriptedTurn,
 };
-use job_radar_lib::agent::{
+use crate::{
     AgentConversation, AgentErrorCategory, AssistantContent, ContentKind, ConversationEvent,
     FinishReason, Message, ProviderEvent, ProviderTurnCompletion, TokenUsage, UserMessage,
 };
+use futures_util::StreamExt;
 
 fn synthetic_model(id: &str, levels: Vec<ReasoningLevel>) -> Model {
     Model::new(
@@ -19,7 +19,7 @@ fn synthetic_model(id: &str, levels: Vec<ReasoningLevel>) -> Model {
 }
 
 fn run_turn(conversation: &mut AgentConversation, text: &str) -> Vec<ConversationEvent> {
-    tauri::async_runtime::block_on(async {
+    crate::testing::block_on(async {
         let mut stream = conversation.send(text.to_owned()).unwrap();
         let mut events = Vec::new();
         while let Some(event) = stream.next().await {
@@ -99,7 +99,7 @@ fn completed_turn_streams_lifecycle_and_commits_one_complete_pair() {
     )
     .unwrap();
 
-    let events = tauri::async_runtime::block_on(async {
+    let events = crate::testing::block_on(async {
         let mut stream = conversation.send("Hello".to_owned()).unwrap();
         let mut events = Vec::new();
         while let Some(event) = stream.next().await {
@@ -370,7 +370,7 @@ fn failed_and_aborted_turns_roll_back_user_and_partial_assistant_messages() {
                         index: 0,
                         delta: "partial".to_owned(),
                     },
-                    ProviderEvent::Failed(job_radar_lib::agent::AgentError {
+                    ProviderEvent::Failed(crate::AgentError {
                         category: AgentErrorCategory::Transport,
                         message: "provider transport failed".to_owned(),
                         retry_after: None,

@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
-use job_radar_lib::agent::openai_codex::{AgentAuthentication, AuthStatus};
-use job_radar_lib::agent::AgentErrorCategory;
+use agent::openai_codex::{AgentAuthentication, AuthStatus};
+use agent::AgentErrorCategory;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};

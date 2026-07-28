@@ -1,8 +1,8 @@
 pub mod models;
 
 use super::{AuthenticationMethod, ProviderDescriptor};
-use crate::agent::api::ApiKind;
-use crate::agent::models::ProviderId;
+use crate::api::ApiKind;
+use crate::models::ProviderId;
 
 pub fn descriptor() -> ProviderDescriptor {
     ProviderDescriptor::new(

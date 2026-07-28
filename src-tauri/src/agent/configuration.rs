@@ -1,8 +1,7 @@
-use crate::agent::auth::StoredAuthenticationKind;
 use crate::agent::models::ReasoningLevel;
 use crate::agent::openai_codex::{
     AgentAuthentication, AuthFuture, AuthInteraction, BrowserAuthorization, DeviceAuthorization,
-    LoginMethod, SecretAuthorizationInput,
+    LoginMethod, SecretAuthorizationInput, StoredAuthenticationKind,
 };
 use crate::agent::providers::AuthenticationMethod;
 use crate::agent::{
@@ -209,10 +208,7 @@ impl ConversationProvider for ConfiguredAgentChatProvider {
             Ok(provider) => provider.stream(request),
             Err(_) => Box::pin(futures_util::stream::iter(vec![
                 ProviderEvent::Started,
-                ProviderEvent::Failed(AgentError::fixed(
-                    crate::agent::AgentErrorCategory::Authentication,
-                    "authentication is unavailable",
-                )),
+                ProviderEvent::Failed(AgentError::authentication_unavailable()),
             ])),
         }
     }

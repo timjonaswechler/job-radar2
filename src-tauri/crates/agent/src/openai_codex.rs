@@ -1,9 +1,9 @@
 mod streaming;
 
 pub use self::streaming::OpenAiCodexProvider;
-pub use crate::agent::auth::AuthStatus;
-use crate::agent::auth::{AuthStorage, AuthStorageError, OAuthCredential};
-use crate::agent::{AgentError, AgentErrorCategory};
+pub use crate::auth::{AuthStatus, StoredAuthenticationKind};
+use crate::auth::{AuthStorage, AuthStorageError, OAuthCredential};
+use crate::{AgentError, AgentErrorCategory};
 use base64::Engine;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -32,7 +32,7 @@ pub type AuthFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, AgentError>> 
 
 impl From<AuthStorageError> for AgentError {
     fn from(error: AuthStorageError) -> Self {
-        use crate::agent::auth::AuthStorageErrorCategory;
+        use crate::auth::AuthStorageErrorCategory;
         match error.category {
             AuthStorageErrorCategory::InvalidConfiguration => {
                 AgentError::invalid_authentication_configuration()
@@ -236,10 +236,6 @@ pub struct AgentAuthentication {
 }
 
 impl AgentAuthentication {
-    pub fn for_current_user() -> Result<Self, AgentError> {
-        Self::with_storage(AuthStorage::for_current_user()?)
-    }
-
     pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
         Self::with_storage(AuthStorage::in_agents_data_root(agents_data_root.as_ref())?)
     }
@@ -269,26 +265,26 @@ impl AgentAuthentication {
         self.storage.status(PROVIDER_ID).map_err(Into::into)
     }
 
-    pub(crate) fn authentication_kind(
+    pub fn authentication_kind(
         &self,
         provider: &str,
-    ) -> Result<Option<crate::agent::auth::StoredAuthenticationKind>, AgentError> {
+    ) -> Result<Option<crate::auth::StoredAuthenticationKind>, AgentError> {
         self.storage
             .authentication_kind(provider)
             .map_err(Into::into)
     }
 
-    pub(crate) fn set_api_key(&self, provider: &str, key: String) -> Result<(), AgentError> {
+    pub fn set_api_key(&self, provider: &str, key: String) -> Result<(), AgentError> {
         self.storage
             .set_api_key(provider, key, BTreeMap::new())
             .map_err(Into::into)
     }
 
-    pub(crate) fn remove(&self, provider: &str) -> Result<(), AgentError> {
+    pub fn remove(&self, provider: &str) -> Result<(), AgentError> {
         self.storage.logout(provider).map_err(Into::into)
     }
 
-    pub(crate) fn reload(&self) -> Result<(), AgentError> {
+    pub fn reload(&self) -> Result<(), AgentError> {
         self.storage.reload().map_err(Into::into)
     }
 
@@ -334,7 +330,7 @@ impl AgentAuthentication {
                         Err(error) => {
                             *captured_error.lock().expect("refresh error lock poisoned") =
                                 Some(error);
-                            Err(crate::agent::auth::AuthStorageError::refresh_failed())
+                            Err(crate::auth::AuthStorageError::refresh_failed())
                         }
                     }
                 },
@@ -354,7 +350,7 @@ impl AgentAuthentication {
             }
         }
         .ok_or_else(AgentError::authentication)?;
-        let crate::agent::auth::ResolvedCredential::OAuth { access, metadata } = credential else {
+        let crate::auth::ResolvedCredential::OAuth { access, metadata } = credential else {
             return Err(AgentError::authentication());
         };
         let account_id = metadata
@@ -891,7 +887,7 @@ mod tests {
         let mut interaction = SyntheticInteraction::browser();
 
         assert_eq!(auth.status().unwrap(), AuthStatus::NotConfigured);
-        tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
+        crate::testing::block_on(auth.login(&mut interaction)).unwrap();
         assert_eq!(auth.status().unwrap(), AuthStatus::Configured);
 
         let authorization_url =
@@ -952,7 +948,7 @@ mod tests {
             )
             .unwrap();
 
-        let error = match tauri::async_runtime::block_on(auth.resolve_for_request(None)) {
+        let error = match crate::testing::block_on(auth.resolve_for_request(None)) {
             Ok(_) => panic!("API-key credential unexpectedly accepted"),
             Err(error) => error,
         };
@@ -973,10 +969,10 @@ mod tests {
             5_000,
         );
         let mut interaction = SyntheticInteraction::browser();
-        tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
+        crate::testing::block_on(auth.login(&mut interaction)).unwrap();
         runtime.now_ms.store(6_000, Ordering::SeqCst);
 
-        let resolved = tauri::async_runtime::block_on(auth.resolve_for_request(None)).unwrap();
+        let resolved = crate::testing::block_on(auth.resolve_for_request(None)).unwrap();
         assert!(resolved.access == rotated_access);
         assert!(resolved.account_id == "synthetic-account-rotated");
         let stored: serde_json::Value = serde_json::from_slice(
@@ -1016,7 +1012,7 @@ mod tests {
         );
         let mut interaction = SyntheticInteraction::device();
 
-        tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
+        crate::testing::block_on(auth.login(&mut interaction)).unwrap();
 
         assert!(interaction.device_code_seen);
         assert_eq!(
@@ -1058,7 +1054,7 @@ mod tests {
         );
         let mut interaction = SyntheticInteraction::device();
 
-        tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
+        crate::testing::block_on(auth.login(&mut interaction)).unwrap();
 
         assert_eq!(
             runtime.sleeps.lock().unwrap().as_slice(),
@@ -1079,7 +1075,7 @@ mod tests {
         );
         let mut interaction = SyntheticInteraction::device();
 
-        let error = tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap_err();
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
 
         assert_eq!(error.category, AgentErrorCategory::Authentication);
         assert_eq!(
@@ -1104,7 +1100,7 @@ mod tests {
         );
         let mut interaction = SyntheticInteraction::device();
 
-        let error = tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap_err();
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
 
         assert_eq!(error.category, AgentErrorCategory::Authentication);
         assert_eq!(
@@ -1125,7 +1121,7 @@ mod tests {
         let mut interaction = SyntheticInteraction::device();
         interaction.display_delay = Some((runtime, DEVICE_TIMEOUT));
 
-        let error = tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap_err();
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
 
         assert_eq!(error.category, AgentErrorCategory::Authentication);
         assert_eq!(http.requests.lock().unwrap().len(), 1);
@@ -1136,7 +1132,7 @@ mod tests {
         let (auth, _http, _runtime, _app_data) = authentication(Vec::new(), 1_000);
         let mut interaction = SyntheticInteraction::browser();
 
-        let error = tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap_err();
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
 
         assert_eq!(error.category, AgentErrorCategory::Transport);
         assert_eq!(error.message, "authentication transport is unavailable");
@@ -1154,10 +1150,10 @@ mod tests {
             5_000,
         );
         let mut interaction = SyntheticInteraction::browser();
-        tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap();
+        crate::testing::block_on(auth.login(&mut interaction)).unwrap();
         runtime.now_ms.store(6_000, Ordering::SeqCst);
 
-        let error = match tauri::async_runtime::block_on(auth.resolve_for_request(None)) {
+        let error = match crate::testing::block_on(auth.resolve_for_request(None)) {
             Ok(_) => panic!("expired credential unexpectedly resolved"),
             Err(error) => error,
         };
@@ -1176,7 +1172,7 @@ mod tests {
             1_000,
         );
         let mut interaction = SyntheticInteraction::browser();
-        let error = tauri::async_runtime::block_on(auth.login(&mut interaction)).unwrap_err();
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
 
         assert_eq!(error.category, AgentErrorCategory::Authentication);
         assert_eq!(error.message, "authentication failed");

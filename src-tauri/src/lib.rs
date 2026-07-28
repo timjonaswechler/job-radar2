@@ -213,6 +213,17 @@ pub use source_profile_dsl::source_profile::documents::SourceProfileDocument;
 
 use tauri::{Emitter, Manager};
 
+pub fn current_user_agents_data_root() -> std::io::Result<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        return app::paths::current_user_app_data_location()
+            .map(|location| location.root.join("agents"));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+}
+
 struct TauriBackgroundTaskNotifier {
     app: tauri::AppHandle,
 }

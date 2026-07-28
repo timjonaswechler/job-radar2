@@ -1,12 +1,12 @@
+use agent::testing::{
+    ExpectedConversationRequest, ScriptedProvider, ScriptedTurn, SessionTestHarness,
+};
 use futures_util::stream;
 use job_radar_lib::agent::chat_application::{
     AgentChatApplication, AgentChatApplicationEvent, AgentChatApplicationEventKind,
     AgentChatCreateInput, AgentChatEventListener, AgentChatStatus, ApplicationReasoningLevel,
 };
 use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::testing::{
-    ExpectedConversationRequest, ScriptedProvider, ScriptedTurn, SessionTestHarness,
-};
 use job_radar_lib::agent::{
     AgentError, AgentErrorCategory, ContentKind, ConversationProvider, ConversationRequest,
     FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,

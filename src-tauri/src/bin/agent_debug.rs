@@ -1,6 +1,14 @@
 #[cfg(not(debug_assertions))]
 compile_error!("the agent debug harness is unavailable in release builds");
 
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("agent debug runtime must initialize")
+        .block_on(future)
+}
+
 #[derive(Debug, Eq, PartialEq)]
 enum Input {
     Login,
@@ -29,16 +37,16 @@ fn parse_line(line: &str) -> Input {
 
 #[derive(Default)]
 struct EventRenderer {
-    active: std::collections::BTreeMap<usize, job_radar_lib::agent::ContentKind>,
+    active: std::collections::BTreeMap<usize, agent::ContentKind>,
 }
 
 impl EventRenderer {
     fn render(
         &mut self,
-        event: &job_radar_lib::agent::ConversationEvent,
+        event: &agent::ConversationEvent,
         writer: &mut impl std::io::Write,
     ) -> std::io::Result<()> {
-        use job_radar_lib::agent::{ContentKind, ConversationEvent};
+        use agent::{ContentKind, ConversationEvent};
         match event {
             ConversationEvent::Started | ConversationEvent::Completed { .. } => {}
             ConversationEvent::ContentStarted { index, kind } => {
@@ -78,13 +86,14 @@ impl EventRenderer {
     }
 }
 
-fn safe_error_message(category: job_radar_lib::agent::AgentErrorCategory) -> &'static str {
-    use job_radar_lib::agent::AgentErrorCategory;
+fn safe_error_message(category: agent::AgentErrorCategory) -> &'static str {
+    use agent::AgentErrorCategory;
     match category {
         AgentErrorCategory::Authentication => "authentication failed",
         AgentErrorCategory::ModelUnavailable => "model unavailable",
         AgentErrorCategory::Transport => "transport unavailable",
         AgentErrorCategory::RateLimited => "rate limited",
+        AgentErrorCategory::ContextOverflow => "context window exceeded",
         AgentErrorCategory::Provider => "provider failed",
         AgentErrorCategory::InvalidConfiguration => "invalid configuration",
     }
@@ -93,7 +102,7 @@ fn safe_error_message(category: job_radar_lib::agent::AgentErrorCategory) -> &'s
 #[derive(Debug)]
 enum HarnessFailure {
     Io,
-    Agent(job_radar_lib::agent::AgentErrorCategory),
+    Agent(agent::AgentErrorCategory),
 }
 
 impl From<std::io::Error> for HarnessFailure {
@@ -102,8 +111,8 @@ impl From<std::io::Error> for HarnessFailure {
     }
 }
 
-impl From<job_radar_lib::agent::AgentError> for HarnessFailure {
-    fn from(error: job_radar_lib::agent::AgentError) -> Self {
+impl From<agent::AgentError> for HarnessFailure {
+    fn from(error: agent::AgentError) -> Self {
         Self::Agent(error.category)
     }
 }
@@ -121,7 +130,7 @@ fn capture_loopback_callback(
     overall_timeout: std::time::Duration,
     read_timeout: std::time::Duration,
     launch_browser: impl FnOnce(std::net::SocketAddr) -> bool,
-) -> Option<job_radar_lib::agent::openai_codex::SecretAuthorizationInput> {
+) -> Option<agent::openai_codex::SecretAuthorizationInput> {
     use std::io::Write;
 
     if !address.ip().is_loopback() {
@@ -159,9 +168,7 @@ fn capture_loopback_callback(
                 if stream.write_all(neutral_browser_response(true)).is_err() {
                     return None;
                 }
-                return Some(
-                    job_radar_lib::agent::openai_codex::SecretAuthorizationInput::new(callback),
-                );
+                return Some(agent::openai_codex::SecretAuthorizationInput::new(callback));
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(std::time::Duration::from_millis(10));
@@ -268,8 +275,8 @@ fn authorize_browser_with_capture(
     writer: &mut impl std::io::Write,
     instructions: &str,
     authorization_url: &str,
-    capture: impl FnOnce(&str) -> Option<job_radar_lib::agent::openai_codex::SecretAuthorizationInput>,
-) -> std::io::Result<job_radar_lib::agent::openai_codex::SecretAuthorizationInput> {
+    capture: impl FnOnce(&str) -> Option<agent::openai_codex::SecretAuthorizationInput>,
+) -> std::io::Result<agent::openai_codex::SecretAuthorizationInput> {
     writeln!(writer, "{instructions}")?;
     writeln!(writer, "Waiting for the browser callback...")?;
     writer.flush()?;
@@ -287,12 +294,14 @@ fn authorize_browser_with_capture(
 fn read_secret_authorization_input(
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
-) -> std::io::Result<job_radar_lib::agent::openai_codex::SecretAuthorizationInput> {
+) -> std::io::Result<agent::openai_codex::SecretAuthorizationInput> {
     write!(writer, "Paste the authorization result: ")?;
     writer.flush()?;
     let mut input = String::new();
     reader.read_line(&mut input)?;
-    Ok(job_radar_lib::agent::openai_codex::SecretAuthorizationInput::new(input.trim().to_owned()))
+    Ok(agent::openai_codex::SecretAuthorizationInput::new(
+        input.trim().to_owned(),
+    ))
 }
 
 struct DebugAuthInteraction<'a, R, W> {
@@ -300,18 +309,15 @@ struct DebugAuthInteraction<'a, R, W> {
     writer: &'a mut W,
 }
 
-impl<R, W> job_radar_lib::agent::openai_codex::AuthInteraction for DebugAuthInteraction<'_, R, W>
+impl<R, W> agent::openai_codex::AuthInteraction for DebugAuthInteraction<'_, R, W>
 where
     R: std::io::BufRead + Send,
     W: std::io::Write + Send,
 {
     fn select_login_method(
         &mut self,
-    ) -> job_radar_lib::agent::openai_codex::AuthFuture<
-        '_,
-        job_radar_lib::agent::openai_codex::LoginMethod,
-    > {
-        use job_radar_lib::agent::openai_codex::LoginMethod;
+    ) -> agent::openai_codex::AuthFuture<'_, agent::openai_codex::LoginMethod> {
+        use agent::openai_codex::LoginMethod;
         let result = numbered_selection(
             self.reader,
             self.writer,
@@ -333,11 +339,8 @@ where
 
     fn authorize_browser(
         &mut self,
-        authorization: job_radar_lib::agent::openai_codex::BrowserAuthorization,
-    ) -> job_radar_lib::agent::openai_codex::AuthFuture<
-        '_,
-        job_radar_lib::agent::openai_codex::SecretAuthorizationInput,
-    > {
+        authorization: agent::openai_codex::BrowserAuthorization,
+    ) -> agent::openai_codex::AuthFuture<'_, agent::openai_codex::SecretAuthorizationInput> {
         let result = authorize_browser_with_capture(
             self.reader,
             self.writer,
@@ -359,8 +362,8 @@ where
 
     fn display_device_code(
         &mut self,
-        authorization: job_radar_lib::agent::openai_codex::DeviceAuthorization,
-    ) -> job_radar_lib::agent::openai_codex::AuthFuture<'_, ()> {
+        authorization: agent::openai_codex::DeviceAuthorization,
+    ) -> agent::openai_codex::AuthFuture<'_, ()> {
         let result = (|| {
             writeln!(self.writer, "Open: {}", authorization.verification_uri())?;
             writeln!(self.writer, "Device code: {}", authorization.user_code())?;
@@ -376,21 +379,21 @@ where
     }
 }
 
-fn harness_auth_error() -> job_radar_lib::agent::AgentError {
-    job_radar_lib::agent::AgentError {
-        category: job_radar_lib::agent::AgentErrorCategory::InvalidConfiguration,
+fn harness_auth_error() -> agent::AgentError {
+    agent::AgentError {
+        category: agent::AgentErrorCategory::InvalidConfiguration,
         message: "debug authentication interaction failed".to_owned(),
         retry_after: None,
     }
 }
 
 fn stream_prompt(
-    conversation: &mut job_radar_lib::agent::AgentConversation,
+    conversation: &mut agent::AgentConversation,
     text: String,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
     use futures_util::StreamExt;
-    tauri::async_runtime::block_on(async {
+    block_on(async {
         let mut stream = conversation.send(text)?;
         let mut renderer = EventRenderer::default();
         while let Some(event) = stream.next().await {
@@ -401,7 +404,7 @@ fn stream_prompt(
 }
 
 fn choose_model(
-    conversation: &mut job_radar_lib::agent::AgentConversation,
+    conversation: &mut agent::AgentConversation,
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
@@ -429,7 +432,7 @@ fn choose_model(
 }
 
 fn choose_reasoning(
-    conversation: &mut job_radar_lib::agent::AgentConversation,
+    conversation: &mut agent::AgentConversation,
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
@@ -474,15 +477,16 @@ where
     R: std::io::BufRead + Send,
     W: std::io::Write + Send,
 {
-    use job_radar_lib::agent::models::{ModelId, ReasoningLevel};
-    use job_radar_lib::agent::openai_codex::{
-        AgentAuthentication, AuthStatus, OpenAiCodexProvider,
-    };
-    use job_radar_lib::agent::{AgentConversation, ModelRegistry};
+    use agent::models::{ModelId, ReasoningLevel};
+    use agent::openai_codex::{AgentAuthentication, AuthStatus, OpenAiCodexProvider};
+    use agent::{AgentConversation, ModelRegistry};
     use std::sync::Arc;
 
-    let authentication = Arc::new(AgentAuthentication::for_current_user()?);
-    let registry = Arc::new(ModelRegistry::for_current_user()?);
+    let agents_data_root = job_radar_lib::current_user_agents_data_root()?;
+    let authentication = Arc::new(AgentAuthentication::from_agents_data_root(
+        &agents_data_root,
+    )?);
+    let registry = Arc::new(ModelRegistry::from_agents_data_root(&agents_data_root)?);
     let provider = OpenAiCodexProvider::new(Arc::clone(&authentication), registry)?;
     let mut conversation = AgentConversation::new(
         "You are a concise, helpful assistant.".to_owned(),
@@ -531,7 +535,7 @@ where
             Input::Login => {
                 let result = {
                     let mut interaction = DebugAuthInteraction { reader, writer };
-                    tauri::async_runtime::block_on(authentication.login(&mut interaction))
+                    block_on(authentication.login(&mut interaction))
                 };
                 match result {
                     Ok(()) => writeln!(writer, "authentication: configured")?,
@@ -574,10 +578,10 @@ mod tests {
 
     static LOOPBACK_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    fn conversation_with_two_models() -> job_radar_lib::agent::AgentConversation {
-        use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-        use job_radar_lib::agent::testing::ScriptedProvider;
-        use job_radar_lib::agent::AgentConversation;
+    fn conversation_with_two_models() -> agent::AgentConversation {
+        use agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
+        use agent::testing::ScriptedProvider;
+        use agent::AgentConversation;
 
         let provider_id = ProviderId::new("synthetic-provider").unwrap();
         let first = Model::new(
@@ -605,11 +609,9 @@ mod tests {
 
     #[test]
     fn ordinary_prompt_streams_through_the_public_conversation_contract() {
-        use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-        use job_radar_lib::agent::testing::{
-            ExpectedConversationRequest, ScriptedProvider, ScriptedTurn,
-        };
-        use job_radar_lib::agent::{
+        use agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
+        use agent::testing::{ExpectedConversationRequest, ScriptedProvider, ScriptedTurn};
+        use agent::{
             AgentConversation, ContentKind, FinishReason, Message, ProviderEvent,
             ProviderTurnCompletion, TokenUsage, UserMessage,
         };
@@ -679,7 +681,7 @@ mod tests {
 
     #[test]
     fn model_and_settings_menus_change_only_public_conversation_selection() {
-        use job_radar_lib::agent::models::ReasoningLevel;
+        use agent::models::ReasoningLevel;
 
         let mut conversation = conversation_with_two_models();
         let mut model_input = std::io::Cursor::new(b"2\n");
@@ -700,9 +702,7 @@ mod tests {
 
     #[test]
     fn event_renderer_distinguishes_reasoning_and_never_prints_error_payloads() {
-        use job_radar_lib::agent::{
-            AgentError, AgentErrorCategory, ContentKind, ConversationEvent,
-        };
+        use agent::{AgentError, AgentErrorCategory, ContentKind, ConversationEvent};
 
         let mut renderer = EventRenderer::default();
         let mut output = Vec::new();
@@ -782,7 +782,7 @@ mod tests {
 
     #[test]
     fn browser_authorization_uses_automatic_capture_and_redacted_manual_fallback() {
-        use job_radar_lib::agent::openai_codex::SecretAuthorizationInput;
+        use agent::openai_codex::SecretAuthorizationInput;
 
         let mut automatic_input = std::io::Cursor::new(Vec::<u8>::new());
         let mut automatic_output = Vec::new();

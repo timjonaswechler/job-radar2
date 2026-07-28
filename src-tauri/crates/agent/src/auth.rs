@@ -28,7 +28,7 @@ pub enum AuthStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum StoredAuthenticationKind {
+pub enum StoredAuthenticationKind {
     ApiKey,
     OAuth,
 }
@@ -225,21 +225,6 @@ pub(crate) struct AuthStorage {
 }
 
 impl AuthStorage {
-    pub(crate) fn for_current_user() -> Result<Self, AuthStorageError> {
-        #[cfg(target_os = "macos")]
-        {
-            let location = crate::app::paths::current_user_app_data_location()
-                .map_err(|_| AuthStorageError::invalid_configuration())?;
-            Self::in_agents_data_root_from(
-                &location.trusted_ancestor,
-                &location.root.join(STORAGE_DIRECTORY),
-            )
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        Err(AuthStorageError::invalid_configuration())
-    }
-
     #[cfg(test)]
     pub(super) fn for_test_app_data(app_data_dir: &Path) -> Result<Self, AuthStorageError> {
         Self::in_app_data_dir(app_data_dir)
@@ -784,7 +769,7 @@ fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
 
 #[cfg(windows)]
 fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
-    crate::agent::sessions::unsafe_path_metadata(metadata)
+    crate::sessions::unsafe_path_metadata(metadata)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -819,8 +804,7 @@ pub(crate) fn create_private_directory(path: &Path) -> Result<(), AuthStorageErr
     if private_path_metadata_is_unsafe(&metadata) || !metadata.is_dir() {
         return Err(AuthStorageError::invalid_configuration());
     }
-    crate::agent::sessions::harden_windows_path(path, true)
-        .map_err(|_| AuthStorageError::unavailable())
+    crate::sessions::harden_windows_path(path, true).map_err(|_| AuthStorageError::unavailable())
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -940,7 +924,7 @@ pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthSto
     if private_path_metadata_is_unsafe(&path_metadata) || !path_metadata.is_file() {
         return Err(AuthStorageError::invalid_configuration());
     }
-    crate::agent::sessions::harden_windows_path(path, false)
+    crate::sessions::harden_windows_path(path, false)
         .map_err(|_| AuthStorageError::unavailable())?;
     let mut file = OpenOptions::new()
         .read(true)
@@ -952,7 +936,7 @@ pub(crate) fn read_existing_private_file(path: &Path) -> Result<Vec<u8>, AuthSto
         .map_err(|_| AuthStorageError::unavailable())?;
     if private_path_metadata_is_unsafe(&metadata)
         || !metadata.is_file()
-        || !crate::agent::sessions::path_matches_file(path, &file).unwrap_or(false)
+        || !crate::sessions::path_matches_file(path, &file).unwrap_or(false)
     {
         return Err(AuthStorageError::invalid_configuration());
     }
@@ -1068,7 +1052,7 @@ mod tests {
             )
             .unwrap();
         let refreshes = AtomicUsize::new(0);
-        let resolved = tauri::async_runtime::block_on(storage.resolve(
+        let resolved = crate::testing::block_on(storage.resolve(
             PROVIDER,
             None,
             &|_| Some("synthetic-ambient-value".to_owned()),
@@ -1082,7 +1066,7 @@ mod tests {
         assert_eq!(api_key_value(resolved), "synthetic-scoped-value");
         assert_eq!(refreshes.load(Ordering::SeqCst), 0);
 
-        let overridden = tauri::async_runtime::block_on(storage.resolve(
+        let overridden = crate::testing::block_on(storage.resolve(
             PROVIDER,
             Some("synthetic-runtime-value"),
             &|_| None,
@@ -1120,7 +1104,7 @@ mod tests {
         storage.set_oauth(PROVIDER, oauth).unwrap();
 
         let resolved =
-            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+            crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
                 panic!("unexpired OAuth credential must not refresh")
             }))
             .unwrap();
@@ -1140,7 +1124,7 @@ mod tests {
         )
         .unwrap();
         let before_reload =
-            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+            crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
                 panic!("unexpired OAuth credential must not refresh")
             }))
             .unwrap();
@@ -1153,7 +1137,7 @@ mod tests {
 
         storage.reload().unwrap();
         let after_reload =
-            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+            crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
                 panic!("unexpired OAuth credential must not refresh")
             }))
             .unwrap();
@@ -1195,7 +1179,7 @@ mod tests {
             storage.logout(PROVIDER).unwrap_err().category,
             AuthStorageErrorCategory::Unavailable
         );
-        let valid_edit = match tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let valid_edit = match crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1206,7 +1190,7 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(valid_edit.category, AuthStorageErrorCategory::Unavailable);
-        let still_published = tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let still_published = crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1221,7 +1205,7 @@ mod tests {
             storage.logout(PROVIDER).unwrap_err().category,
             AuthStorageErrorCategory::InvalidConfiguration
         );
-        let malformed_edit = match tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let malformed_edit = match crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1235,7 +1219,7 @@ mod tests {
             malformed_edit.category,
             AuthStorageErrorCategory::InvalidConfiguration
         );
-        let still_published = tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let still_published = crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1254,15 +1238,13 @@ mod tests {
             .set_api_key(PROVIDER, "$SYNTHETIC_MISSING".to_owned(), BTreeMap::new())
             .unwrap();
 
-        let missing = match tauri::async_runtime::block_on(storage.resolve(
-            PROVIDER,
-            None,
-            &|_| None,
-            |_| async { Err(AuthStorageError::refresh_failed()) },
-        )) {
-            Ok(_) => panic!("missing environment reference unexpectedly resolved"),
-            Err(error) => error,
-        };
+        let missing =
+            match crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+                Err(AuthStorageError::refresh_failed())
+            })) {
+                Ok(_) => panic!("missing environment reference unexpectedly resolved"),
+                Err(error) => error,
+            };
         assert_eq!(missing.category, AuthStorageErrorCategory::Unavailable);
 
         let command = storage
@@ -1337,7 +1319,7 @@ mod tests {
         assert_eq!(stored_json[PROVIDER]["expires"], u64::MAX);
         assert!(stored_json[PROVIDER].get("expiresAtMs").is_none());
         let resolved =
-            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+            crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
                 panic!("unexpired OAuth credential must not refresh")
             }))
             .unwrap();
@@ -1365,7 +1347,7 @@ mod tests {
         storage.logout(PROVIDER).unwrap();
         assert_eq!(storage.status(PROVIDER).unwrap(), AuthStatus::NotConfigured);
         let resolved =
-            tauri::async_runtime::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
+            crate::testing::block_on(storage.resolve(PROVIDER, None, &|_| None, |_| async {
                 panic!("missing OAuth credential must not refresh")
             }))
             .unwrap();
@@ -1546,13 +1528,11 @@ mod tests {
 
         let storage = AuthStorage::for_test_app_data(app_data.path()).unwrap();
         for provider in ["synthetic-provider-a", "synthetic-provider-b"] {
-            let resolved = tauri::async_runtime::block_on(storage.resolve(
-                provider,
-                None,
-                &|_| None,
-                |_| async { panic!("unexpired OAuth credential must not refresh") },
-            ))
-            .unwrap();
+            let resolved =
+                crate::testing::block_on(storage.resolve(provider, None, &|_| None, |_| async {
+                    panic!("unexpired OAuth credential must not refresh")
+                }))
+                .unwrap();
             assert!(matches!(resolved, Some(ResolvedCredential::OAuth { .. })));
         }
     }
@@ -1585,13 +1565,11 @@ mod tests {
             ("synthetic-provider-a", "synthetic-key-a"),
             ("synthetic-provider-b", "synthetic-key-b"),
         ] {
-            let resolved = tauri::async_runtime::block_on(storage.resolve(
-                provider,
-                None,
-                &|_| None,
-                |_| async { panic!("API keys must not refresh") },
-            ))
-            .unwrap();
+            let resolved =
+                crate::testing::block_on(storage.resolve(provider, None, &|_| None, |_| async {
+                    panic!("API keys must not refresh")
+                }))
+                .unwrap();
             assert_eq!(api_key_value(resolved), expected);
         }
     }
@@ -1617,7 +1595,7 @@ mod tests {
                 scope.spawn(move || {
                     let storage = AuthStorage::for_test_app_data(&app_data_path).unwrap();
                     barrier.wait();
-                    let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
+                    let resolved = crate::testing::block_on(storage.resolve_using_clock(
                         PROVIDER,
                         None,
                         &|_| None,
@@ -1635,7 +1613,7 @@ mod tests {
         });
 
         assert_eq!(refresh_count.load(Ordering::SeqCst), 1);
-        let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let resolved = crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1667,7 +1645,7 @@ mod tests {
             let current_time = Arc::clone(&clock);
             let waiter_refresh_count = Arc::clone(&refresh_count);
             let handle = scope.spawn(move || {
-                tauri::async_runtime::block_on(waiter.resolve_using_clock(
+                crate::testing::block_on(waiter.resolve_using_clock(
                     PROVIDER,
                     None,
                     &|_| None,
@@ -1708,7 +1686,7 @@ mod tests {
             .set_oauth(PROVIDER, credential("expired", 100))
             .unwrap();
 
-        tauri::async_runtime::block_on(async {
+        crate::testing::block_on(async {
             let first_resolution = storage.resolve_using_clock(
                 PROVIDER,
                 None,
@@ -1751,7 +1729,7 @@ mod tests {
         let expired = credential("expired", 100);
         storage.set_oauth(PROVIDER, expired.clone()).unwrap();
 
-        let error = match tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let error = match crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,
@@ -1765,7 +1743,7 @@ mod tests {
         assert_eq!(error.category, AuthStorageErrorCategory::RefreshFailed);
         assert_eq!(error.message, "authentication refresh failed");
         assert!(!format!("{error:?}").contains("synthetic-"));
-        let resolved = tauri::async_runtime::block_on(storage.resolve_using_clock(
+        let resolved = crate::testing::block_on(storage.resolve_using_clock(
             PROVIDER,
             None,
             &|_| None,

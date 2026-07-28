@@ -19,6 +19,13 @@ pub struct AgentError {
 }
 
 impl AgentError {
+    pub fn authentication_unavailable() -> Self {
+        Self::fixed(
+            AgentErrorCategory::Authentication,
+            "authentication is unavailable",
+        )
+    }
+
     pub(crate) fn authentication() -> Self {
         Self::fixed(AgentErrorCategory::Authentication, "authentication failed")
     }

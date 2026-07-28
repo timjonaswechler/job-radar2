@@ -1,4 +1,4 @@
-use crate::agent::AgentError;
+use crate::AgentError;
 
 /// Identifies a request protocol compiled into Job Radar. Provider identity is
 /// deliberately separate so multiple providers can share one protocol.

@@ -1,8 +1,8 @@
 use super::{AgentAuthentication, ProviderCredential};
-use crate::agent::conversation::BlockSignature;
-use crate::agent::models::{Model, ProviderId, ReasoningLevel};
-use crate::agent::registry::{ModelRegistry, ResolvedModelRequest};
-use crate::agent::{
+use crate::conversation::BlockSignature;
+use crate::models::{Model, ProviderId, ReasoningLevel};
+use crate::registry::{ModelRegistry, ResolvedModelRequest};
+use crate::{
     AgentError, AssistantContent, ContentKind, ConversationProvider, ConversationRequest,
     FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,
 };
@@ -151,12 +151,6 @@ impl OpenAiCodexProvider {
         })
     }
 
-    pub fn for_current_user() -> Result<Self, AgentError> {
-        let authentication = Arc::new(AgentAuthentication::for_current_user()?);
-        let registry = Arc::new(ModelRegistry::for_current_user()?);
-        Self::new(authentication, registry)
-    }
-
     #[cfg(test)]
     fn with_adapters(
         authentication: Arc<dyn CredentialResolver>,
@@ -202,7 +196,7 @@ impl ConversationProvider for OpenAiCodexProvider {
             .registry
             .resolve_request(request.model().provider(), request.model().id());
         let (sender, receiver) = tokio::sync::mpsc::channel(16);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             if sender.send(ProviderEvent::Started).await.is_err() {
                 return;
             }
@@ -1073,8 +1067,8 @@ fn parse_usage(value: Option<&Value>) -> TokenUsage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::models::{ModelId, ReasoningLevel};
-    use crate::agent::{AgentConversation, AgentErrorCategory, ConversationEvent};
+    use crate::models::{ModelId, ReasoningLevel};
+    use crate::{AgentConversation, AgentErrorCategory, ConversationEvent};
     use futures_util::StreamExt;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1247,7 +1241,7 @@ mod tests {
     }
 
     fn collect_turn(conversation: &mut AgentConversation, text: &str) -> Vec<ConversationEvent> {
-        tauri::async_runtime::block_on(async {
+        crate::testing::block_on(async {
             conversation
                 .send(text.to_owned())
                 .unwrap()
@@ -1314,7 +1308,7 @@ mod tests {
         assert!(matches!(
             events.last(),
             Some(ConversationEvent::Failed { error })
-                if error.category == crate::agent::AgentErrorCategory::InvalidConfiguration
+                if error.category == crate::AgentErrorCategory::InvalidConfiguration
         ));
         assert_eq!(resolution_count.load(Ordering::SeqCst), 0);
         assert!(http.inspections.lock().unwrap().is_empty());
@@ -1357,7 +1351,7 @@ mod tests {
         assert!(matches!(
             events.last(),
             Some(ConversationEvent::Failed { error })
-                if error.category == crate::agent::AgentErrorCategory::InvalidConfiguration
+                if error.category == crate::AgentErrorCategory::InvalidConfiguration
         ));
         assert_eq!(resolution_count.load(Ordering::SeqCst), 0);
         assert!(http.inspections.lock().unwrap().is_empty());
@@ -1388,11 +1382,17 @@ mod tests {
         )
         .unwrap();
 
-        let first_stream = conversation.send("First".to_owned()).unwrap();
-        write_models(&root, "second", "second-effort");
-        registry.reload().unwrap();
-        tauri::async_runtime::block_on(first_stream.collect::<Vec<_>>());
-        collect_turn(&mut conversation, "Second");
+        crate::testing::block_on(async {
+            let first_stream = conversation.send("First".to_owned()).unwrap();
+            write_models(&root, "second", "second-effort");
+            registry.reload().unwrap();
+            first_stream.collect::<Vec<_>>().await;
+            conversation
+                .send("Second".to_owned())
+                .unwrap()
+                .collect::<Vec<_>>()
+                .await;
+        });
 
         let inspections = http.inspections.lock().unwrap();
         assert_eq!(
@@ -1426,7 +1426,7 @@ mod tests {
         )
         .unwrap();
 
-        tauri::async_runtime::block_on(async {
+        crate::testing::block_on(async {
             let mut events = conversation.send("Cancel".to_owned()).unwrap();
             assert!(matches!(
                 events.next().await,

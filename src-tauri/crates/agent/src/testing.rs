@@ -1,6 +1,6 @@
-use crate::agent::conversation::{BlockSignature, ReplayMetadata};
-use crate::agent::models::{Model, ModelId, ReasoningLevel};
-use crate::agent::{
+use crate::conversation::{BlockSignature, ReplayMetadata};
+use crate::models::{Model, ModelId, ReasoningLevel};
+use crate::{
     AgentError, AgentErrorCategory, AssistantContent, AssistantMessage, ConversationProvider,
     ConversationRequest, FinishReason, Message, ProviderEvent, ProviderEventStream,
     ProviderTurnCompletion, TokenUsage,
@@ -11,9 +11,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use crate::agent::sessions::{
-    self, SessionCheckpoint, SessionError, SessionHandle, SessionManager,
-};
+use crate::sessions::{self, SessionCheckpoint, SessionError, SessionHandle, SessionManager};
+
+pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("agent test runtime must initialize")
+        .block_on(future)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExpectedConversationRequest {

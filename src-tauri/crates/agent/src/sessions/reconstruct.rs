@@ -4,7 +4,7 @@ use super::{
     RecoveryNotice, SessionAccess, SessionError, SessionErrorCode, SessionId, SessionSnapshot,
     VisibleBlock, VisibleHistoryEntry, VisibleTurn,
 };
-use crate::agent::models::{ModelId, ProviderId, ReasoningLevel};
+use crate::models::{ModelId, ProviderId, ReasoningLevel};
 use std::collections::HashMap;
 
 pub(super) fn reconstruct(

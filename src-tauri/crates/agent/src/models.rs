@@ -1,5 +1,5 @@
-use crate::agent::api::ApiKind;
-use crate::agent::AgentError;
+use crate::api::ApiKind;
+use crate::AgentError;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
