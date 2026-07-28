@@ -10,6 +10,12 @@ mod search;
 mod source;
 mod source_profile;
 
+pub use crate::geo::GeoDbResolver;
+pub use ::geo::{
+    distance_km, matches_location_filter, prepare_location_filter, GeoPoint, GeoResolveFuture,
+    GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason, LocationMatchOutcome,
+    LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
+};
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use checks::{
     check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
@@ -22,11 +28,6 @@ pub use checks::{
     SourceBehaviorFingerprintPreparationError, SourceBehaviorFingerprintPreparationErrorKind,
     SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
     CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
-};
-pub use geo::{
-    distance_km, matches_location_filter, prepare_location_filter, GeoDbResolver, GeoPoint,
-    GeoResolveFuture, GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason,
-    LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use profile_dsl::primitives::completeness::{
     classify_tagged_variant_keys, escape_json_pointer_token, missing_witness,

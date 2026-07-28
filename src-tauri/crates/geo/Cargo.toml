@@ -1,0 +1,10 @@
+[package]
+name = "geo"
+version = "0.1.0"
+description = "Tauri-free geolocation policy and resolver interface"
+authors = ["Tim Jonas Wechler"]
+edition = "2021"
+publish = false
+
+[dependencies]
+unicode-normalization = "0.1"

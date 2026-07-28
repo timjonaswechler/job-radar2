@@ -1,0 +1,26 @@
+mod distance;
+mod matching;
+mod normalization;
+mod resolver;
+
+pub use distance::distance_km;
+pub use matching::{
+    matches_location_filter, prepare_location_filter, LocationFilterMatchReport,
+    LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
+    PreparedLocationFilter,
+};
+pub use normalization::{location_lookup_keys, postal_lookup_keys};
+pub use resolver::{GeoResolveFuture, GeoResolver};
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeoPoint {
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResolvedLocation {
+    pub input: String,
+    pub label: String,
+    pub point: GeoPoint,
+}

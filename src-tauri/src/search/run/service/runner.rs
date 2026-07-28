@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
+use geo::GeoResolver;
 use sqlx::SqlitePool;
 
 use crate::{
-    geo::GeoResolver,
     profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity},
     search::{
         candidate_resolution::CompiledSearchRequirements,

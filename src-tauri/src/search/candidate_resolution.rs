@@ -5,15 +5,16 @@ use std::{
     sync::Mutex,
 };
 
+use geo::{
+    prepare_location_filter, GeoResolver, LocationFilterMatchReport,
+    LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
+    PreparedLocationFilter,
+};
 use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use url::Url;
 
 use crate::{
-    geo::{
-        GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason,
-        LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter,
-    },
     profile_dsl::{
         compiler::CompiledSource,
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
@@ -151,7 +152,7 @@ impl<'a> CompiledSearchRequirements<'a> {
         resolver: &'a dyn GeoResolver,
     ) -> Result<Self, String> {
         let (geo, geo_runtime_failure) =
-            match crate::geo::prepare_location_filter(resolver, locations, radius_km).await {
+            match prepare_location_filter(resolver, locations, radius_km).await {
                 Ok(filter) => (Some(GeoRequirements { filter, resolver }), false),
                 Err(error)
                     if error.starts_with("Search Request location could not be resolved:") =>

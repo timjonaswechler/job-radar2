@@ -1,11 +1,10 @@
 use std::path::Path;
 
-use sqlx::{sqlite::SqliteConnectOptions, Row, SqlitePool};
-
-use super::{
-    normalization::{location_lookup_keys, postal_lookup_keys},
-    GeoPoint, GeoResolveFuture, GeoResolver, ResolvedLocation,
+use geo::{
+    location_lookup_keys, postal_lookup_keys, GeoPoint, GeoResolveFuture, GeoResolver,
+    ResolvedLocation,
 };
+use sqlx::{sqlite::SqliteConnectOptions, Row, SqlitePool};
 
 #[derive(Clone)]
 pub struct GeoDbResolver {

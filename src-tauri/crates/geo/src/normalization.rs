@@ -1,6 +1,6 @@
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
-pub(super) fn location_lookup_keys(input: &str) -> Vec<String> {
+pub fn location_lookup_keys(input: &str) -> Vec<String> {
     let normalized = normalize_punctuation_and_whitespace(&input.trim().to_lowercase());
     if normalized.is_empty() {
         return Vec::new();
@@ -13,7 +13,7 @@ pub(super) fn location_lookup_keys(input: &str) -> Vec<String> {
     keys
 }
 
-pub(super) fn postal_lookup_keys(input: &str) -> Vec<String> {
+pub fn postal_lookup_keys(input: &str) -> Vec<String> {
     let numeric_key = input.trim().to_lowercase();
     if !numeric_key.is_empty()
         && numeric_key

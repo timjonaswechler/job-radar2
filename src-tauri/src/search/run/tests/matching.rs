@@ -1,3 +1,5 @@
+use geo::{GeoPoint, GeoResolveFuture, GeoResolver, ResolvedLocation};
+
 use super::support::*;
 
 #[test]
@@ -453,10 +455,8 @@ fn radius_without_request_locations_does_not_require_candidate_locations_or_deta
                 &[],
             )]),
         )]);
-        let geo_resolver = FixtureGeoResolver::new(std::iter::empty::<(
-            &'static str,
-            Vec<crate::geo::ResolvedLocation>,
-        )>());
+        let geo_resolver =
+            FixtureGeoResolver::new(std::iter::empty::<(&'static str, Vec<ResolvedLocation>)>());
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
@@ -635,8 +635,8 @@ fn candidate_geo_resolver_failure_is_a_truthful_source_runtime_failure_without_r
 }
 
 struct FailingCandidateGeoResolver;
-impl crate::geo::GeoResolver for FailingCandidateGeoResolver {
-    fn resolve<'a>(&'a self, input: &'a str) -> crate::geo::GeoResolveFuture<'a> {
+impl GeoResolver for FailingCandidateGeoResolver {
+    fn resolve<'a>(&'a self, input: &'a str) -> GeoResolveFuture<'a> {
         Box::pin(async move {
             if input == "Mainz" {
                 Ok(vec![resolved_location("Mainz", "Mainz", 49.99, 8.24)])
@@ -700,13 +700,11 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
 }
 
 struct FixtureGeoResolver {
-    locations: BTreeMap<String, Vec<crate::geo::ResolvedLocation>>,
+    locations: BTreeMap<String, Vec<ResolvedLocation>>,
 }
 
 impl FixtureGeoResolver {
-    fn new(
-        locations: impl IntoIterator<Item = (&'static str, Vec<crate::geo::ResolvedLocation>)>,
-    ) -> Self {
+    fn new(locations: impl IntoIterator<Item = (&'static str, Vec<ResolvedLocation>)>) -> Self {
         Self {
             locations: locations
                 .into_iter()
@@ -716,22 +714,17 @@ impl FixtureGeoResolver {
     }
 }
 
-impl crate::geo::GeoResolver for FixtureGeoResolver {
-    fn resolve<'a>(&'a self, input: &'a str) -> crate::geo::GeoResolveFuture<'a> {
+impl GeoResolver for FixtureGeoResolver {
+    fn resolve<'a>(&'a self, input: &'a str) -> GeoResolveFuture<'a> {
         Box::pin(async move { Ok(self.locations.get(input).cloned().unwrap_or_default()) })
     }
 }
 
-fn resolved_location(
-    input: &str,
-    label: &str,
-    latitude: f64,
-    longitude: f64,
-) -> crate::geo::ResolvedLocation {
-    crate::geo::ResolvedLocation {
+fn resolved_location(input: &str, label: &str, latitude: f64, longitude: f64) -> ResolvedLocation {
+    ResolvedLocation {
         input: input.to_string(),
         label: label.to_string(),
-        point: crate::geo::GeoPoint {
+        point: GeoPoint {
             latitude,
             longitude,
         },

@@ -587,32 +587,32 @@ src-tauri/src/browser_runtime/owned.rs:2112:25:arbitrary_execution:shell	unrelat
 src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
-src-tauri/src/lib.rs:184:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:236:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:236:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:185:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:237:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:237:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:54:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
-src-tauri/src/lib.rs:87:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:96:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1185:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1185:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1186:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1186:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1420:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1420:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1440:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1440:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1491:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1492:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1493:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1496:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1497:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1498:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1533:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1533:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1534:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1534:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:238:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:238:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:55:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/lib.rs:88:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:97:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1186:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1186:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1187:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1187:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1421:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1421:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1441:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1441:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1492:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1493:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1494:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1497:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1498:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1499:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1534:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1534:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1535:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/candidate_resolution.rs:1535:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/posting/tests.rs:79:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/request/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/request/tests.rs:209:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
