@@ -112,4 +112,4 @@ primitive-residue-emit:
 # Regenerate the bundled geolocation seed database from local GeoNames inputs.
 [group('Repository maintenance')]
 geo-seed:
-    @python3 scripts/geo/generate-seed.py
+    @python3 scripts/generators/generate-seed.py
