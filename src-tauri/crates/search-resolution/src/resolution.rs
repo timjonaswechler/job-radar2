@@ -14,26 +14,20 @@ use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use url::Url;
 
+use source_profile_dsl::profile_dsl::occurrence::{
+    DetailField, DetailPatch, PostingOccurrence, PostingOccurrenceIdentity, RequestedDetailFields,
+};
+use source_profile_dsl::{
+    execute_discovery, BrowserAcquisition, CompiledSource, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, Diagnostics, DiscoveryBrowserAdapter, PhaseBrowser, PhaseCompletion,
+    PhaseExecutionReport, PhaseLimits, PhaseOutcome, PhaseRunError, PhaseUsage, PolicyOutcome,
+    ProfileHttpClient, RuntimeCancellation, RuntimeExecutionContext, SourceDetailExecution,
+    SourceDetailOutcome, SourceDetailRequest,
+};
+
 use crate::{
-    profile_dsl::{
-        compiler::CompiledSource,
-        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        documents::PhaseLimits,
-        occurrence::{
-            DetailField, DetailPatch, PostingOccurrence, PostingOccurrenceIdentity,
-            RequestedDetailFields,
-        },
-        runtime::{
-            execute_discovery, BrowserAcquisition, DiscoveryBrowserAdapter, PhaseBrowser,
-            PhaseCompletion, PhaseExecutionReport, PhaseOutcome, PhaseRunError, PhaseUsage,
-            PolicyOutcome, ProfileHttpClient, RuntimeCancellation, RuntimeExecutionContext,
-            SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
-        },
-    },
-    search::{
-        normalization::{collapse_whitespace, normalize_locations},
-        request::{SearchRule, SearchRuleKind, SearchRuleTarget},
-    },
+    normalization::{collapse_whitespace, normalize_locations},
+    rules::{SearchRule, SearchRuleKind, SearchRuleTarget},
 };
 
 pub const CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT: usize = 10;
@@ -670,7 +664,7 @@ async fn execute_profile_dsl_batch(
     let browser = if plan.discovery.strategies.iter().any(|strategy| {
         matches!(
             strategy.fetch,
-            crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. }
+            source_profile_dsl::ExecutionPlanFetch::Browser { .. }
         )
     }) {
         PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
@@ -1074,8 +1068,14 @@ impl ResolutionState {
                     {
                         return Err(failed(ResolutionFailure::ProtocolInvariant, Vec::new()));
                     }
-                    if dispositions.iter().any(|d| matches!(d, crate::profile_dsl::runtime::RequestedFieldDisposition::Unavailable { .. } | crate::profile_dsl::runtime::RequestedFieldDisposition::Conflicted { .. } | crate::profile_dsl::runtime::RequestedFieldDisposition::Unsupported { .. }))
-                        || !values.apply(fields, &needed)
+                    if dispositions.iter().any(|d| {
+                        matches!(
+                            d,
+                            source_profile_dsl::RequestedFieldDisposition::Unavailable { .. }
+                                | source_profile_dsl::RequestedFieldDisposition::Conflicted { .. }
+                                | source_profile_dsl::RequestedFieldDisposition::Unsupported { .. }
+                        )
+                    }) || !values.apply(fields, &needed)
                         || !values.is_complete(request.requirements)
                     {
                         self.counts.unresolved = checked_add(self.counts.unresolved, 1)?;
@@ -1084,9 +1084,11 @@ impl ResolutionState {
                             .final_matches(request.requirements)
                             .await
                             .map_err(geo_resolution_failed)?;
-                        self.location_diagnostics.observe_match_report(matches.1.as_ref());
+                        self.location_diagnostics
+                            .observe_match_report(matches.1.as_ref());
                         if matches.0 {
-                            self.finalized.push(values.finalize(&self.source_key, occurrence)?);
+                            self.finalized
+                                .push(values.finalize(&self.source_key, occurrence)?);
                             self.counts.finalized = checked_add(self.counts.finalized, 1)?;
                         } else {
                             self.counts.rejected = checked_add(self.counts.rejected, 1)?;
@@ -1220,12 +1222,12 @@ fn valid_detail_report(outcome: &SourceDetailOutcome) -> bool {
             PhaseCompletion::PolicyUnsatisfied
         ),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: crate::profile_dsl::runtime::SourceDetailFailure::PhaseExecution { .. },
+            typed_failure: source_profile_dsl::SourceDetailFailure::PhaseExecution { .. },
             complete_budget_report: Some(report),
             ..
         } => matches!(report.completion, PhaseCompletion::ExecutionFailed),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: crate::profile_dsl::runtime::SourceDetailFailure::PhasePreStart { .. },
+            typed_failure: source_profile_dsl::SourceDetailFailure::PhasePreStart { .. },
             complete_budget_report: None,
             ..
         } => true,
@@ -1242,7 +1244,7 @@ fn patch_is_requested(requested: &RequestedDetailFields, patch: &DetailPatch) ->
 
 fn valid_dispositions(
     requested: &RequestedDetailFields,
-    dispositions: &[crate::profile_dsl::runtime::RequestedFieldDisposition],
+    dispositions: &[source_profile_dsl::RequestedFieldDisposition],
 ) -> bool {
     let fields = dispositions.iter().map(|d| d.field()).collect::<Vec<_>>();
     fields.len() == requested.iter().count()
@@ -1381,7 +1383,7 @@ fn absolute_url(value: &str) -> Option<String> {
 fn hint_rejects(o: &PostingOccurrence, requirements: &CompiledSearchRequirements<'_>) -> bool {
     o.hints
         .get("title")
-        .filter(|h| h.hint_use == Some(crate::profile_dsl::runtime::HintUse::SearchPrefilter))
+        .filter(|h| h.hint_use == Some(source_profile_dsl::HintUse::SearchPrefilter))
         .is_some_and(|h| !requirements.matches_title(&collapse_whitespace(&h.value)))
 }
 
@@ -1766,7 +1768,7 @@ fn dimension_from_completion(c: &PhaseCompletion) -> Option<ResolutionLimitDimen
     let PhaseCompletion::BudgetExhausted { exhaustion } = c else {
         return None;
     };
-    use crate::profile_dsl::runtime::AllowanceDimension::*;
+    use source_profile_dsl::AllowanceDimension::*;
     Some(match exhaustion.dimension {
         StrategyAttempts => ResolutionLimitDimension::StrategyAttempts,
         Requests => ResolutionLimitDimension::Requests,

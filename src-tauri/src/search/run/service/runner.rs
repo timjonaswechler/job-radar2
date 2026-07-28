@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use geo::GeoResolver;
+use search_resolution::CompiledSearchRequirements;
 use sqlx::SqlitePool;
 
 use crate::{
     profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity},
     search::{
-        candidate_resolution::CompiledSearchRequirements,
         request::{RunningSearchRuns, SearchRequestService},
         run::{persist_atomic_search_run, AtomicSearchRunInput},
     },

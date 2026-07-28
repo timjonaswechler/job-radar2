@@ -1,19 +1,23 @@
-mod support;
-
-use job_radar_lib::{
-    resolve_source_candidates, AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource,
-    CompileSourceOutcome, CompiledSearchRequirements, DetailField, DetailPatch,
-    PhaseCancellationReason, PhaseCancelled, PhaseCompletion, PhaseExecutionFailure,
-    PhaseExecutionReport, PhaseLimits, PhaseUsage, PostingOccurrence, PostingOccurrenceIdentity,
-    PostingReference, ProviderValues, RequestedFieldDisposition, ResolutionCeilings,
-    ResolutionCompletion, ResolutionFailure, RuntimeCancellation, ScriptedBrowserAcquisition,
-    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, ScriptedSourceDiscoveryExecution,
-    SearchRule, SearchRuleKind, SearchRuleTarget, SourceDetailFailure, SourceDetailOutcome,
-    SourceDetailRequestSnapshot, SourceDiscovery, SourceDocument, SourceProfileDocument,
-    SourceResolutionError, SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
+use search_resolution::{
+    resolve_source_candidates, CompiledSearchRequirements, RequirementsCompilationFailure,
+    ResolutionCeilings, ResolutionCompletion, ResolutionFailure, ResolutionLimitDimension,
+    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution, SearchRule,
+    SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
+    SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
 use serde_json::json;
+use source_profile_dsl::{
+    compile_source, AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource,
+    CandidateDetailFailure, CompileSourceOutcome, CompiledSource, DetailField, DetailPatch,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, PhaseCancellationReason, PhaseCancelled,
+    PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseLimits, PhaseUsage,
+    PostingOccurrence, PostingOccurrenceIdentity, PostingReference, ProfileCompilerInput,
+    ProviderValues, RequestedDetailFields, RequestedFieldDisposition, RuntimeCancellation,
+    ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceDetailFailure,
+    SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequestSnapshot, SourceDocument,
+    SourceProfileDocument,
+};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct NeverCancelled;
@@ -39,7 +43,7 @@ impl RuntimeCancellation for CancelOnCheck {
     }
 }
 
-fn compiled_source() -> job_radar_lib::CompiledSource {
+fn compiled_source() -> CompiledSource {
     let profile: SourceProfileDocument = serde_json::from_value(json!({
         "schemaVersion": 3, "key": "fixture_profile", "name": "Fixture", "kind": "generic",
         "support": { "level": "experimental", "summary": "Candidate Resolution fixture" },
@@ -67,7 +71,7 @@ fn compiled_source() -> job_radar_lib::CompiledSource {
         "sourceConfig": { "feedUrl": "https://example.test/feed" },
         "selectedAccessPath": { "type": "profile_access_path", "profileKey": "fixture_profile", "pathKey": "default" }
     })).unwrap();
-    match support::compile_test_source(&source, Some(profile)) {
+    match compile_source(&source, &ProfileCompilerInput::new(&[profile])) {
         CompileSourceOutcome::Compiled { source, .. } => source,
         other => panic!("fixture did not compile: {other:?}"),
     }
@@ -369,16 +373,16 @@ async fn detail_failures_continue_and_sampling_is_fixed_at_ten() {
             SourceDetailRequestSnapshot::new(
                 "fixture_source",
                 o.identity.clone(),
-                job_radar_lib::RequestedDetailFields::new([DetailField::Company]).unwrap(),
+                RequestedDetailFields::new([DetailField::Company]).unwrap(),
             ),
             Ok(SourceDetailOutcome::CandidateExecutionFailed {
-                typed_failure: job_radar_lib::CandidateDetailFailure::IncludesExecutionFailure,
+                typed_failure: CandidateDetailFailure::IncludesExecutionFailure,
                 complete_budget_report: candidate_failure_report(),
-                diagnostics: vec![job_radar_lib::Diagnostic {
-                    category: job_radar_lib::DiagnosticCategory::Runtime,
+                diagnostics: vec![Diagnostic {
+                    category: DiagnosticCategory::Runtime,
                     code: "provider-secret-code".into(),
                     message: "secret payload".into(),
-                    severity: job_radar_lib::DiagnosticSeverity::Error,
+                    severity: DiagnosticSeverity::Error,
                     path: "/secret".into(),
                     strategy_key: None,
                     details: Some(json!({"secret":"payload"})),
@@ -424,9 +428,7 @@ async fn detail_failures_continue_and_sampling_is_fixed_at_ten() {
 async fn minimal_multi_field_detail_patch_finalizes_and_accounting_is_exact() {
     let source = compiled_source();
     let candidate = occurrence("1", None, None);
-    let requested =
-        job_radar_lib::RequestedDetailFields::new([DetailField::Title, DetailField::Company])
-            .unwrap();
+    let requested = RequestedDetailFields::new([DetailField::Title, DetailField::Company]).unwrap();
     let detail = ScriptedSourceDetailExecution::new([(
         SourceDetailRequestSnapshot::new("fixture_source", candidate.identity.clone(), requested),
         Ok(SourceDetailOutcome::Completed {
@@ -443,7 +445,7 @@ async fn minimal_multi_field_detail_patch_finalizes_and_accounting_is_exact() {
                     field: DetailField::Company,
                 },
             ],
-            phase_evidence: Some(job_radar_lib::SourceDetailPhaseEvidence {
+            phase_evidence: Some(SourceDetailPhaseEvidence {
                 complete_budget_report: report(2),
                 diagnostics: vec![],
             }),
@@ -490,7 +492,7 @@ async fn cancellation_releases_no_resolution_and_radius_is_rejected() {
     );
     assert_eq!(
         CompiledSearchRequirements::compile(&[], &[], &["Berlin".into()], Some(10)).unwrap_err(),
-        job_radar_lib::RequirementsCompilationFailure::RadiusRequiresGeoResolver
+        RequirementsCompilationFailure::RadiusRequiresGeoResolver
     );
 }
 
@@ -600,9 +602,7 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
         occurrence("2", None, None),
         occurrence("3", None, None),
     ];
-    let requested =
-        job_radar_lib::RequestedDetailFields::new([DetailField::Title, DetailField::Company])
-            .unwrap();
+    let requested = RequestedDetailFields::new([DetailField::Title, DetailField::Company]).unwrap();
     let detail = ScriptedSourceDetailExecution::new([(
         SourceDetailRequestSnapshot::new(
             "fixture_source",
@@ -623,7 +623,7 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
                     field: DetailField::Company,
                 },
             ],
-            phase_evidence: Some(job_radar_lib::SourceDetailPhaseEvidence {
+            phase_evidence: Some(SourceDetailPhaseEvidence {
                 complete_budget_report: report(1),
                 diagnostics: vec![],
             }),
@@ -648,7 +648,7 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
     assert_eq!(
         result.completion,
         ResolutionCompletion::Partial {
-            limit_reached: job_radar_lib::ResolutionLimitDimension::DetailCandidates
+            limit_reached: ResolutionLimitDimension::DetailCandidates
         }
     );
     assert_eq!(
@@ -668,7 +668,7 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
 async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_cancellation() {
     let source = compiled_source();
     let candidate = occurrence("mapping", Some("Engineer"), None);
-    let requested = job_radar_lib::RequestedDetailFields::new([DetailField::Company]).unwrap();
+    let requested = RequestedDetailFields::new([DetailField::Company]).unwrap();
     let snapshot =
         SourceDetailRequestSnapshot::new("fixture_source", candidate.identity.clone(), requested);
 
@@ -679,7 +679,7 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
             dispositions: vec![RequestedFieldDisposition::Conflicted {
                 field: DetailField::Company,
             }],
-            phase_evidence: Some(job_radar_lib::SourceDetailPhaseEvidence {
+            phase_evidence: Some(SourceDetailPhaseEvidence {
                 complete_budget_report: terminal_report(PhaseCompletion::PolicyUnsatisfied),
                 diagnostics: vec![],
             }),
@@ -751,16 +751,16 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
     assert_eq!(
         partial.completion,
         ResolutionCompletion::Partial {
-            limit_reached: job_radar_lib::ResolutionLimitDimension::Requests
+            limit_reached: ResolutionLimitDimension::Requests
         }
     );
     assert_eq!(partial.counts.unresolved, 1);
 
-    let source_abort_diagnostic = job_radar_lib::Diagnostic {
-        category: job_radar_lib::DiagnosticCategory::Runtime,
+    let source_abort_diagnostic = Diagnostic {
+        category: DiagnosticCategory::Runtime,
         code: "source_detail_abort".into(),
         message: "Source Detail aborted".into(),
-        severity: job_radar_lib::DiagnosticSeverity::Error,
+        severity: DiagnosticSeverity::Error,
         path: "/detail".into(),
         strategy_key: None,
         details: None,
@@ -828,11 +828,11 @@ async fn detail_diagnostics_are_appended_in_execution_order() {
         occurrence("diagnostic-completed", Some("Engineer"), None),
         occurrence("diagnostic-budget", Some("Engineer"), None),
     ];
-    let diagnostic = |code: &str| job_radar_lib::Diagnostic {
-        category: job_radar_lib::DiagnosticCategory::Runtime,
+    let diagnostic = |code: &str| Diagnostic {
+        category: DiagnosticCategory::Runtime,
         code: code.into(),
         message: code.into(),
-        severity: job_radar_lib::DiagnosticSeverity::Warning,
+        severity: DiagnosticSeverity::Warning,
         path: "/candidate-resolution".into(),
         strategy_key: None,
         details: None,
@@ -840,7 +840,7 @@ async fn detail_diagnostics_are_appended_in_execution_order() {
     let discovery_diagnostic = diagnostic("discovery");
     let completed_diagnostic = diagnostic("detail_completed");
     let budget_diagnostic = diagnostic("detail_budget");
-    let requested = job_radar_lib::RequestedDetailFields::new([DetailField::Company]).unwrap();
+    let requested = RequestedDetailFields::new([DetailField::Company]).unwrap();
     let detail = ScriptedSourceDetailExecution::new([
         (
             SourceDetailRequestSnapshot::new(
@@ -853,7 +853,7 @@ async fn detail_diagnostics_are_appended_in_execution_order() {
                 dispositions: vec![RequestedFieldDisposition::Unavailable {
                     field: DetailField::Company,
                 }],
-                phase_evidence: Some(job_radar_lib::SourceDetailPhaseEvidence {
+                phase_evidence: Some(SourceDetailPhaseEvidence {
                     complete_budget_report: terminal_report(PhaseCompletion::PolicyUnsatisfied),
                     diagnostics: vec![completed_diagnostic.clone()],
                 }),
@@ -901,10 +901,7 @@ async fn detail_diagnostics_are_appended_in_execution_order() {
     ));
 }
 
-async fn failed_candidate_resolution(
-    source: &job_radar_lib::CompiledSource,
-    count: usize,
-) -> job_radar_lib::SourceResolution {
+async fn failed_candidate_resolution(source: &CompiledSource, count: usize) -> SourceResolution {
     let occurrences = (0..count)
         .map(|index| occurrence(&format!("sample-{count}-{index}"), Some("Engineer"), None))
         .collect::<Vec<_>>();
@@ -913,10 +910,10 @@ async fn failed_candidate_resolution(
             SourceDetailRequestSnapshot::new(
                 "fixture_source",
                 occurrence.identity.clone(),
-                job_radar_lib::RequestedDetailFields::new([DetailField::Company]).unwrap(),
+                RequestedDetailFields::new([DetailField::Company]).unwrap(),
             ),
             Ok(SourceDetailOutcome::CandidateExecutionFailed {
-                typed_failure: job_radar_lib::CandidateDetailFailure::IncludesExecutionFailure,
+                typed_failure: CandidateDetailFailure::IncludesExecutionFailure,
                 complete_budget_report: candidate_failure_report(),
                 diagnostics: vec![],
             }),
@@ -1003,7 +1000,7 @@ async fn cumulative_child_duration_above_parent_ceiling_is_an_invariant_failure(
 async fn source_detail_failure_report_presence_must_match_the_typed_failure() {
     let source = compiled_source();
     let candidate = occurrence("bad-evidence", Some("Engineer"), None);
-    let requested = job_radar_lib::RequestedDetailFields::new([DetailField::Company]).unwrap();
+    let requested = RequestedDetailFields::new([DetailField::Company]).unwrap();
     let detail = ScriptedSourceDetailExecution::new([(
         SourceDetailRequestSnapshot::new("fixture_source", candidate.identity.clone(), requested),
         Ok(SourceDetailOutcome::SourceExecutionFailed {
@@ -1150,11 +1147,11 @@ async fn child_reports_are_checked_against_exact_tightened_batch_limits() {
 #[tokio::test]
 async fn discovery_budget_exhaustion_is_partial_and_preserves_prior_batch_and_report() {
     let source = compiled_source();
-    let terminal_diagnostic = job_radar_lib::Diagnostic {
-        category: job_radar_lib::DiagnosticCategory::Runtime,
+    let terminal_diagnostic = Diagnostic {
+        category: DiagnosticCategory::Runtime,
         code: "discovery_budget_exhausted".into(),
         message: "Discovery budget exhausted".into(),
-        severity: job_radar_lib::DiagnosticSeverity::Warning,
+        severity: DiagnosticSeverity::Warning,
         path: "/discovery".into(),
         strategy_key: None,
         details: None,
@@ -1208,7 +1205,7 @@ async fn discovery_budget_exhaustion_is_partial_and_preserves_prior_batch_and_re
     assert_eq!(
         result.completion,
         ResolutionCompletion::Partial {
-            limit_reached: job_radar_lib::ResolutionLimitDimension::Requests
+            limit_reached: ResolutionLimitDimension::Requests
         }
     );
     discovery.assert_finished();
@@ -1257,7 +1254,7 @@ async fn fully_processed_batches_are_retained_at_the_next_batch_boundary() {
     assert_eq!(
         result.completion,
         ResolutionCompletion::Partial {
-            limit_reached: job_radar_lib::ResolutionLimitDimension::DiscoveryBatches
+            limit_reached: ResolutionLimitDimension::DiscoveryBatches
         }
     );
     discovery.assert_finished();

@@ -7,7 +7,7 @@ authors = ["Tim Jonas Wechler"]
 edition = "2021"
 
 [workspace]
-members = [".", "crates/agent", "crates/geo", "crates/source-profile-dsl"]
+members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -33,6 +33,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 agent = { path = "crates/agent" }
 geo = { path = "crates/geo" }
+search-resolution = { path = "crates/search-resolution" }
 source-profile-dsl = { path = "crates/source-profile-dsl" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
@@ -52,8 +53,6 @@ libc = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 regex = "1"
 roxmltree = "0.20"
-unicode-normalization = "0.1"
-unicode-segmentation = "1"
 url = "2"
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util", "rt", "sync", "test-util", "time"] }

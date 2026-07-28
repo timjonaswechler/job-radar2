@@ -1,8 +1,5 @@
-use std::collections::HashSet;
-
-use crate::search::{
-    candidate_resolution::FinalizedCandidate, normalization::normalized_text_key,
-    posting::matching::same_job_posting,
+use search_resolution::{
+    merge_unique_locations, same_job_posting, FinalizedCandidate, PostingComparison,
 };
 
 use super::super::{NormalizedPosting, PostingSource};
@@ -57,26 +54,22 @@ pub(super) fn merge_postings(inputs: Vec<FinalizedMergeInput>) -> Vec<Normalized
 
 fn can_merge(posting: &NormalizedPosting, input: &FinalizedMergeInput) -> bool {
     same_job_posting(
-        &posting.title,
-        &posting.company,
-        &posting.locations,
-        &input.title,
-        &input.company,
-        &input.locations,
+        PostingComparison {
+            title: &posting.title,
+            company: &posting.company,
+            locations: &posting.locations,
+        },
+        PostingComparison {
+            title: &input.title,
+            company: &input.company,
+            locations: &input.locations,
+        },
     )
 }
 
 fn merge_into_posting(posting: &mut NormalizedPosting, input: FinalizedMergeInput) {
-    let mut existing_location_keys = posting
-        .locations
-        .iter()
-        .map(|location| normalized_text_key(location))
-        .collect::<HashSet<_>>();
-    for location in input.locations {
-        if existing_location_keys.insert(normalized_text_key(&location)) {
-            posting.locations.push(location);
-        }
-    }
+    posting.locations =
+        merge_unique_locations(std::mem::take(&mut posting.locations), &input.locations);
     if !posting.sources.iter().any(|existing| {
         existing.source_key == input.source.source_key && existing.url == input.source.url
     }) {

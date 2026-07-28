@@ -1,5 +1,10 @@
 use std::path::PathBuf;
 
+use search_resolution::{
+    resolve_source_candidates, CompiledSearchRequirements, ResolutionCeilings, SourceDiscovery,
+    SourceResolution, SourceResolutionError, SourceResolutionRequest,
+};
+
 use crate::{
     background_tasks::CancellationToken,
     browser_runtime::ManagedBrowserAcquisition,
@@ -10,10 +15,6 @@ use crate::{
             ProfileDslSourceDetailExecution, ReqwestProfileHttpClient, RuntimeCancellation,
             SourceDetailExecution,
         },
-    },
-    search::candidate_resolution::{
-        resolve_source_candidates, CompiledSearchRequirements, ResolutionCeilings, SourceDiscovery,
-        SourceResolution, SourceResolutionError, SourceResolutionRequest,
     },
 };
 
@@ -33,7 +34,7 @@ enum ResolutionRuntimeMode {
 
 #[cfg(test)]
 pub(crate) struct ScriptedResolutionSource {
-    pub(crate) discovery: crate::search::candidate_resolution::ScriptedSourceDiscoveryExecution,
+    pub(crate) discovery: search_resolution::ScriptedSourceDiscoveryExecution,
     pub(crate) detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution,
 }
 
@@ -82,7 +83,7 @@ impl SearchRunResolutionRuntime {
                 let key = &compiled_source.execution_plan.source.key;
                 let Some(source) = sources.get(key) else {
                     return Err(SourceResolutionError::Failed {
-                        failure: crate::search::candidate_resolution::ResolutionFailure::DiscoveryExecution,
+                        failure: search_resolution::ResolutionFailure::DiscoveryExecution,
                         diagnostics: Vec::new(),
                     });
                 };

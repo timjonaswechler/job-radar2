@@ -1,10 +1,13 @@
 use super::*;
+use search_resolution::{
+    self as resolution, ScriptedDiscoveryBatch, ScriptedSourceDiscoveryExecution,
+};
+
 use crate::{
     profile_dsl::runtime::{
         PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
     },
     search::{
-        candidate_resolution::{ScriptedDiscoveryBatch, ScriptedSourceDiscoveryExecution},
         request::{
             RunningSearchRuns, SearchRequestService, SearchRule, SearchRuleKind, SearchRuleTarget,
         },
@@ -40,7 +43,7 @@ fn fixture_resolution_runtime(
     let limits = crate::search::run::production_resolution_ceilings();
     SearchRunResolutionRuntime::scripted(responses.into_iter().map(|(key, response)| {
         let outcome = match response {
-            Ok(candidates) => crate::search::candidate_resolution::ScriptedDiscoveryOutcome::Batch(
+            Ok(candidates) => resolution::ScriptedDiscoveryOutcome::Batch(
                 ScriptedDiscoveryBatch {
                     expected_continuation: None,
                     expected_maximum: limits.max_batch_size,
@@ -61,7 +64,7 @@ fn fixture_resolution_runtime(
                 },
             ),
             Err(_) => {
-                crate::search::candidate_resolution::ScriptedDiscoveryOutcome::ExecutionFailed {
+                resolution::ScriptedDiscoveryOutcome::ExecutionFailed {
                     expected_continuation: None,
                     expected_maximum: limits.max_batch_size,
                     expected_limits: limits.phase,

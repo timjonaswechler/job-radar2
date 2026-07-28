@@ -1,31 +1,48 @@
-use crate::search::comparison::{
-    comparison_key, comparison_tokens, token_containment, token_jaccard,
+use std::collections::HashSet;
+
+use crate::{
+    comparison::{comparison_key, comparison_tokens, token_containment, token_jaccard},
+    normalization::normalized_text_key,
 };
 
 const TITLE_CONTAINMENT_THRESHOLD: f64 = 0.90;
 const TITLE_JACCARD_THRESHOLD: f64 = 0.55;
 
-pub(crate) fn same_job_posting(
-    existing_title: &str,
-    existing_company: &str,
-    existing_locations: &[String],
-    candidate_title: &str,
-    candidate_company: &str,
-    candidate_locations: &[String],
-) -> bool {
-    if comparison_key(existing_company) != comparison_key(candidate_company) {
+#[derive(Clone, Copy, Debug)]
+pub struct PostingComparison<'a> {
+    pub title: &'a str,
+    pub company: &'a str,
+    pub locations: &'a [String],
+}
+
+pub fn same_job_posting(existing: PostingComparison<'_>, candidate: PostingComparison<'_>) -> bool {
+    if comparison_key(existing.company) != comparison_key(candidate.company) {
         return false;
     }
 
-    if !titles_compatible(existing_title, candidate_title) {
+    if !titles_compatible(existing.title, candidate.title) {
         return false;
     }
 
-    if existing_locations.is_empty() || candidate_locations.is_empty() {
+    if existing.locations.is_empty() || candidate.locations.is_empty() {
         return true;
     }
 
-    locations_compatible(existing_locations, candidate_locations)
+    locations_compatible(existing.locations, candidate.locations)
+}
+
+/// Extends finalized locations without adding canonical duplicates.
+pub fn merge_unique_locations(mut existing: Vec<String>, incoming: &[String]) -> Vec<String> {
+    let mut keys = existing
+        .iter()
+        .map(|location| normalized_text_key(location))
+        .collect::<HashSet<_>>();
+    for location in incoming {
+        if keys.insert(normalized_text_key(location)) {
+            existing.push(location.clone());
+        }
+    }
+    existing
 }
 
 fn titles_compatible(existing_title: &str, candidate_title: &str) -> bool {

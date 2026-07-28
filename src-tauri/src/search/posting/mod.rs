@@ -1,4 +1,3 @@
-pub(crate) mod matching;
 mod service;
 
 #[cfg(test)]
@@ -12,15 +11,11 @@ pub use types::{
     UpdateJobPostingStateInput,
 };
 
-use std::collections::HashSet;
-
 use sqlx::{Row, Sqlite, Transaction};
 
-use crate::search::{
-    normalization::normalized_text_key,
-    posting::matching::same_job_posting,
-    run::{NormalizedPosting, PostingSource},
-};
+use search_resolution::{merge_unique_locations, same_job_posting, PostingComparison};
+
+use crate::search::run::{NormalizedPosting, PostingSource};
 
 pub(crate) fn validate_merged_postings(postings: &[NormalizedPosting]) -> Result<(), String> {
     for posting in postings {
@@ -121,12 +116,16 @@ async fn find_posting_by_dedupe(
         let locations = locations_from_json(&locations_json)?;
 
         if same_job_posting(
-            &title,
-            &company,
-            &locations,
-            &posting.title,
-            &posting.company,
-            &posting.locations,
+            PostingComparison {
+                title: &title,
+                company: &company,
+                locations: &locations,
+            },
+            PostingComparison {
+                title: &posting.title,
+                company: &posting.company,
+                locations: &posting.locations,
+            },
         ) {
             return Ok(Some(id));
         }
@@ -271,19 +270,8 @@ async fn upsert_posting_source(
     Ok(inserted_source.last_insert_rowid())
 }
 
-fn merge_locations(mut existing_locations: Vec<String>, new_locations: &[String]) -> Vec<String> {
-    let mut existing_location_keys = existing_locations
-        .iter()
-        .map(|location| normalized_text_key(location))
-        .collect::<HashSet<_>>();
-
-    for location in new_locations {
-        if existing_location_keys.insert(normalized_text_key(location)) {
-            existing_locations.push(location.clone());
-        }
-    }
-
-    existing_locations
+fn merge_locations(existing_locations: Vec<String>, new_locations: &[String]) -> Vec<String> {
+    merge_unique_locations(existing_locations, new_locations)
 }
 
 fn locations_from_json(json: &str) -> Result<Vec<String>, String> {

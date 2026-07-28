@@ -10,16 +10,15 @@ pub(super) use serde_json::{json, Value};
 pub(super) use sqlx::{Row, SqlitePool};
 pub(super) use std::collections::BTreeMap;
 
+use search_resolution::{
+    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
+};
+
 use crate::{
     profile_dsl::runtime::{
         PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
     },
-    search::{
-        candidate_resolution::{
-            ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
-        },
-        run::ScriptedResolutionSource,
-    },
+    search::run::ScriptedResolutionSource,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::path::Path;

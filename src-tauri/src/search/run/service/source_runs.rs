@@ -1,7 +1,6 @@
-use crate::{
-    profile_dsl::{compiler::CompiledSource, diagnostics::Diagnostics},
-    search::candidate_resolution::{SourceResolution, SourceResolutionError},
-};
+use search_resolution::{SourceResolution, SourceResolutionError};
+
+use crate::profile_dsl::{compiler::CompiledSource, diagnostics::Diagnostics};
 
 use super::super::{SearchRunStatus, SourceResolutionSummary, SourceRunResult, SourceRunStatus};
 use super::SourceExecutionError;

@@ -48,12 +48,13 @@ tracked = subprocess.run(
     check=True,
 ).stdout.decode().splitlines()
 paths = [path for path in tracked if Path(path).suffix in extensions and Path(path).is_file()]
-# The new package may be unstaged while this check runs locally; its source and tests are always scanned.
-for directory, _, files in os.walk("src-tauri/crates/source-profile-dsl"):
-    for name in files:
-        path = os.path.join(directory, name)
-        if Path(name).suffix in extensions:
-            paths.append(path)
+# Workspace packages may be unstaged while this check runs locally; their source and tests are always scanned.
+for package in ("source-profile-dsl", "search-resolution"):
+    for directory, _, files in os.walk(f"src-tauri/crates/{package}"):
+        for name in files:
+            path = os.path.join(directory, name)
+            if Path(name).suffix in extensions:
+                paths.append(path)
 
 def field(value):
     if "text" in value:
@@ -99,7 +100,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='9723809eb0003f650c5ecd30bd45921aa372a5faa75702dc67d9c4854a81198a'
+FROZEN_MANIFEST_SHA256='48a0c65a03f31826631156dca8b41d165abd72964be05241817d49913214cf64'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

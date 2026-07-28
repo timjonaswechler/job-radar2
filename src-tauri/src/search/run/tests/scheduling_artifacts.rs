@@ -1,4 +1,5 @@
 use super::support::*;
+use search_resolution as resolution;
 
 #[test]
 fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
@@ -156,10 +157,10 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                       detail| {
             crate::search::run::ScriptedResolutionSource {
                 discovery:
-                    crate::search::candidate_resolution::ScriptedSourceDiscoveryExecution::new(
+                    resolution::ScriptedSourceDiscoveryExecution::new(
                         key,
                         [
-                            crate::search::candidate_resolution::ScriptedDiscoveryBatch {
+                            resolution::ScriptedDiscoveryBatch {
                                 expected_continuation: None,
                                 expected_maximum: limits.max_batch_size,
                                 expected_limits: limits.phase,
@@ -283,10 +284,10 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
             source_keys[0].clone(),
             crate::search::run::ScriptedResolutionSource {
                 discovery:
-                    crate::search::candidate_resolution::ScriptedSourceDiscoveryExecution::new(
+                    resolution::ScriptedSourceDiscoveryExecution::new(
                         &source_keys[0],
                         [
-                            crate::search::candidate_resolution::ScriptedDiscoveryBatch {
+                            resolution::ScriptedDiscoveryBatch {
                                 expected_continuation: None,
                                 expected_maximum: limits.max_batch_size,
                                 expected_limits: limits.phase,
@@ -355,8 +356,8 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
                 .as_ref()
                 .unwrap()
                 .completion,
-            crate::search::candidate_resolution::ResolutionCompletion::Partial {
-                limit_reached: crate::search::candidate_resolution::ResolutionLimitDimension::Pages
+            resolution::ResolutionCompletion::Partial {
+                limit_reached: resolution::ResolutionLimitDimension::Pages
             }
         ));
         let summary = result.source_runs[0].resolution.as_ref().unwrap();
@@ -511,8 +512,8 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
         )
         .await;
         let limits = crate::search::run::production_resolution_ceilings();
-        let completed = crate::search::candidate_resolution::ScriptedDiscoveryOutcome::Batch(
-            crate::search::candidate_resolution::ScriptedDiscoveryBatch {
+        let completed = resolution::ScriptedDiscoveryOutcome::Batch(
+            resolution::ScriptedDiscoveryBatch {
                 expected_continuation: None,
                 expected_maximum: limits.max_batch_size,
                 expected_limits: limits.phase,
@@ -536,7 +537,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                 diagnostics: Vec::new(),
             },
         );
-        let cancelled = crate::search::candidate_resolution::ScriptedDiscoveryOutcome::Cancelled {
+        let cancelled = resolution::ScriptedDiscoveryOutcome::Cancelled {
             expected_continuation: None,
             expected_maximum: limits.max_batch_size,
             expected_limits: limits.phase,
@@ -553,7 +554,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                 .into_iter()
                 .map(|(key, outcome)| {
                     let source = crate::search::run::ScriptedResolutionSource {
-                        discovery: crate::search::candidate_resolution::ScriptedSourceDiscoveryExecution::new_outcomes(&key, [outcome]),
+                        discovery: resolution::ScriptedSourceDiscoveryExecution::new_outcomes(&key, [outcome]),
                         detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
                     };
                     (key, source)

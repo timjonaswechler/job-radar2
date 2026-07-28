@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for the #297 Agent crate extraction.
+# Frozen primitive-residue classification. Updated for the #298 search-resolution crate extraction.
 docs/adr/0009-declarative-source-profile-dsl.md:11:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -207,6 +207,32 @@ src-tauri/crates/agent/src/tests/sessions.rs:299:22:retry:retry	explicit_negativ
 src-tauri/crates/agent/src/tests/sessions.rs:406:187:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
 src-tauri/crates/agent/src/tests/sessions.rs:406:194:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
 src-tauri/crates/agent/tests/model_registry.rs:105:29:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
+src-tauri/crates/search-resolution/src/resolution.rs:1188:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1188:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1189:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1189:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1423:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1423:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1443:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1443:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1494:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1495:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1496:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1499:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1500:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1501:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1536:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1536:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1537:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/resolution.rs:1537:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/src/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:105:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:115:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:1162:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:1203:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:165:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:165:54:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:470:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:125:14:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:126:24:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/boundedness.rs:127:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
@@ -601,39 +627,20 @@ src-tauri/src/browser_runtime/owned.rs:2112:25:arbitrary_execution:shell	unrelat
 src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
-src-tauri/src/lib.rs:185:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:184:5:old_detection:aggregate_detection_attempts, compile_detection_plan, detection	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:247:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:247:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:248:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:248:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:249:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:249:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:55:68:old_detection:InputUrlPattern	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
 src-tauri/src/lib.rs:88:12:registration_residue:PrimitiveDescriptor	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:97:5:registration_residue:compile_pagination	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1186:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1186:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1187:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1187:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1421:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1421:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1441:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1441:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1492:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1493:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1494:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1497:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1498:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1499:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1534:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1534:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1535:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/candidate_resolution.rs:1535:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/posting/tests.rs:79:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/request/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/request/tests.rs:209:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/request/tests.rs:301:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/run/execution.rs:20:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/run/tests/support.rs:171:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/run/tests/support.rs:289:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/execution.rs:21:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/tests/support.rs:170:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/tests/support.rs:288:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/smoke/request.rs:82:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/tests/agent/chat_application.rs:395:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/agent/chat_application.rs:395:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
@@ -675,13 +682,6 @@ src-tauri/tests/browser_primitives.rs:38:10:retry:retry	explicit_negative_or_con
 src-tauri/tests/browser_primitives.rs:50:84:browser_byte_dimension:maxBrowserRenderedBytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/browser_primitives.rs:51:101:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/browser_primitives.rs:5:32:registration_residue:PrimitiveDescriptor	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
-src-tauri/tests/candidate_resolution.rs:101:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:111:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:1165:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:1206:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:161:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:161:54:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/tests/candidate_resolution.rs:468:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/detection_reconciliation.rs:2:5:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/detection_reconciliation.rs:305:18:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/detection_reconciliation.rs:333:21:old_detection:aggregate_detection	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.

@@ -1,11 +1,9 @@
+use search_resolution::{
+    CandidateDiagnosticSummary, ResolutionCompletion, ResolutionCounts, SourceResolution,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    profile_dsl::{diagnostics::Diagnostics, runtime::PhaseUsage},
-    search::candidate_resolution::{
-        CandidateDiagnosticSummary, ResolutionCompletion, ResolutionCounts, SourceResolution,
-    },
-};
+use crate::profile_dsl::{diagnostics::Diagnostics, runtime::PhaseUsage};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

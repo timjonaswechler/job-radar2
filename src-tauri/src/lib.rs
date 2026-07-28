@@ -170,16 +170,15 @@ pub use profile_dsl::runtime::{
     SourceDetailRequest, SourceDetailRequestSnapshot, SourceDetailResult,
 };
 
-pub use search::candidate_resolution::{
+pub use search::smoke::run_dev_search_run_smoke_cli;
+pub use search_resolution::{
     resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
     FinalizedCandidate, RequirementsCompilationFailure, ResolutionCeilings, ResolutionCompletion,
     ResolutionCounts, ResolutionFailure, ResolutionLimitDimension, ResolutionReport,
-    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
-    SourceDiscovery, SourceResolution, SourceResolutionError, SourceResolutionRequest,
-    CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
+    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution, SearchRule,
+    SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
+    SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
-pub use search::request::{SearchRule, SearchRuleKind, SearchRuleTarget};
-pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_profile::detection::{
     aggregate_detection_attempts, compile_detection_plan, detection_descriptor_for_authored_kind,
