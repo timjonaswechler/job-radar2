@@ -36,12 +36,16 @@ Das Repository verwendet ein Single-Context-Layout mit `CONTEXT.md` und `docs/ad
 
 ## Befehle
 
+Im Entwicklungsloop gilt `quick → focused → full`; das Full Gate ist grundsätzlich erst vor der Übergabe erforderlich. Quick- und Focused-Befehle ersetzen es nicht. Details und Filterbeispiele stehen in [`docs/development/validation.md`](docs/development/validation.md).
+
 ```bash
-npm run tauri -- dev                         # App starten
-npm run check:frontend                       # Frontend type-checken, testen und bauen
-npm run build                                # Vite-Produktionsbundle bauen
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run smoke:search-run                     # manueller, netzwerkabhängiger Smoke
+just quick                                    # schnelle Typechecks, Frontendtests, cargo check --tests
+just frontend-test settings                   # fokussierter Vitest-Lauf
+just rust-test profile_dsl_profiles workday:: # fokussiertes sichtbares Cargo-Testtarget
+just verify                                   # vollständiges lokales Übergabe-Gate
+just package                                  # Tauri-Paket für die aktuelle Plattform
+npm run tauri -- dev                          # App starten
+npm run smoke:search-run                      # manueller, netzwerkabhängiger Smoke
 ```
 
 ## Arbeitsregeln

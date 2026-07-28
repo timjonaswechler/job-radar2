@@ -92,17 +92,16 @@ npm run tauri -- dev
 Nützliche weitere Befehle:
 
 ```bash
-npm run typecheck               # Produktionscode und Vite-Konfiguration prüfen
-npm run typecheck:test          # Frontend-Testcode und importierten App-Code prüfen
-npm run test:frontend           # alle Frontendtests einmalig ausführen
-npm run test:frontend:watch     # Frontendtests im Watch-Modus; Vitest-Filter sind möglich
-npm run build                   # Vite-Produktionsbundle bauen (ohne separaten Typecheck)
-npm run check:frontend          # Typechecks, Frontendtests und Produktionsbuild
-npm run smoke:search-run        # manueller, netzwerkabhängiger Suchlauf-Smoke
-npm run tauri -- build          # Desktop-App für das aktuelle System bauen
+just quick                     # schnelle Typechecks, Frontendtests und cargo check --tests
+just frontend-test settings    # Frontendtest über Vitest filtern
+just rust-test profile_dsl_profiles workday:: # ein sichtbares Rust-Testtarget fokussieren
+just verify                    # vollständiges lokales Übergabe-Gate
+just package                   # Desktop-App für das aktuelle System bauen
+npm run test:frontend:watch -- settings       # Vitest im gefilterten Watch-Modus
+npm run smoke:search-run       # manueller, netzwerkabhängiger Suchlauf-Smoke
 ```
 
-Zum Beispiel filtert `npm run test:frontend -- settings` einen nicht-interaktiven Lauf; `npm run test:frontend:watch -- settings` startet denselben Filter im Watch-Modus. Der schnelle Entwicklungsloop aus Typechecks und Tests baut kein Produktionsbundle. Credential-Scanner und Scanner-Self-Test bleiben eigenständige Security-Kommandos.
+Die drei Ebenen sind bewusst getrennt: `quick` bündelt den schnellen hermetischen Loop ohne Produktionsbundle und ohne vollständigen Cargo-Testlauf; fokussierte Rezepte führen ein gewähltes Testtarget aus; `verify` ist vor jeder Übergabe erforderlich und wird weder durch Quick- noch durch Focused-Läufe ersetzt. Die vollständige Befehlsreferenz einschließlich Plattformhinweisen steht in [`docs/development/validation.md`](docs/development/validation.md). Credential-Scanner und Scanner-Self-Test bleiben eigenständige Security-Kommandos.
 
 Der Smoke-Test ist bewusst nicht Teil der normalen CI-Logik, weil er echte externe Jobquellen nutzt.
 

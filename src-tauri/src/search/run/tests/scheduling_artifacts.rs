@@ -156,29 +156,24 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                       occurrences: Vec<crate::profile_dsl::occurrence::PostingOccurrence>,
                       detail| {
             crate::search::run::ScriptedResolutionSource {
-                discovery:
-                    resolution::ScriptedSourceDiscoveryExecution::new(
-                        key,
-                        [
-                            resolution::ScriptedDiscoveryBatch {
-                                expected_continuation: None,
-                                expected_maximum: limits.max_batch_size,
-                                expected_limits: limits.phase,
-                                occurrences,
-                                exhausted: true,
-                                remaining: Some(0),
-                                continuation: None,
-                                continuation_source_key: None,
-                                complete_budget_report:
-                                    crate::profile_dsl::runtime::PhaseExecutionReport {
-                                        usage: Default::default(),
-                                        completion:
-                                            crate::profile_dsl::runtime::PhaseCompletion::Accepted,
-                                    },
-                                diagnostics: Vec::new(),
-                            },
-                        ],
-                    ),
+                discovery: resolution::ScriptedSourceDiscoveryExecution::new(
+                    key,
+                    [resolution::ScriptedDiscoveryBatch {
+                        expected_continuation: None,
+                        expected_maximum: limits.max_batch_size,
+                        expected_limits: limits.phase,
+                        occurrences,
+                        exhausted: true,
+                        remaining: Some(0),
+                        continuation: None,
+                        continuation_source_key: None,
+                        complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
+                            usage: Default::default(),
+                            completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
+                        },
+                        diagnostics: Vec::new(),
+                    }],
+                ),
                 detail,
             }
         };
@@ -283,57 +278,52 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
         let runtime = SearchRunResolutionRuntime::scripted([(
             source_keys[0].clone(),
             crate::search::run::ScriptedResolutionSource {
-                discovery:
-                    resolution::ScriptedSourceDiscoveryExecution::new(
-                        &source_keys[0],
-                        [
-                            resolution::ScriptedDiscoveryBatch {
-                                expected_continuation: None,
-                                expected_maximum: limits.max_batch_size,
-                                expected_limits: limits.phase,
-                                occurrences: vec![
-                                    occurrence(
-                                        &source_keys[0],
-                                        candidate(
-                                            "Laser Engineer",
-                                            "ACME",
-                                            "https://example.test/finalized-before-budget",
-                                            &["Mainz"],
-                                        ),
-                                    ),
-                                    occurrence(
-                                        &source_keys[0],
-                                        candidate(
-                                            "Current Engineer",
-                                            "",
-                                            "https://example.test/unresolved-at-budget",
-                                            &["Mainz"],
-                                        ),
-                                    ),
-                                    occurrence(
-                                        &source_keys[0],
-                                        candidate(
-                                            "Later Engineer",
-                                            "ACME",
-                                            "https://example.test/skipped-after-budget",
-                                            &["Mainz"],
-                                        ),
-                                    ),
-                                ],
-                                exhausted: false,
-                                remaining: Some(1),
-                                continuation: Some("next".to_string()),
-                                continuation_source_key: None,
-                                complete_budget_report:
-                                    crate::profile_dsl::runtime::PhaseExecutionReport {
-                                        usage,
-                                        completion:
-                                            crate::profile_dsl::runtime::PhaseCompletion::Accepted,
-                                    },
-                                diagnostics: Vec::new(),
-                            },
+                discovery: resolution::ScriptedSourceDiscoveryExecution::new(
+                    &source_keys[0],
+                    [resolution::ScriptedDiscoveryBatch {
+                        expected_continuation: None,
+                        expected_maximum: limits.max_batch_size,
+                        expected_limits: limits.phase,
+                        occurrences: vec![
+                            occurrence(
+                                &source_keys[0],
+                                candidate(
+                                    "Laser Engineer",
+                                    "ACME",
+                                    "https://example.test/finalized-before-budget",
+                                    &["Mainz"],
+                                ),
+                            ),
+                            occurrence(
+                                &source_keys[0],
+                                candidate(
+                                    "Current Engineer",
+                                    "",
+                                    "https://example.test/unresolved-at-budget",
+                                    &["Mainz"],
+                                ),
+                            ),
+                            occurrence(
+                                &source_keys[0],
+                                candidate(
+                                    "Later Engineer",
+                                    "ACME",
+                                    "https://example.test/skipped-after-budget",
+                                    &["Mainz"],
+                                ),
+                            ),
                         ],
-                    ),
+                        exhausted: false,
+                        remaining: Some(1),
+                        continuation: Some("next".to_string()),
+                        continuation_source_key: None,
+                        complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
+                            usage,
+                            completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
+                        },
+                        diagnostics: Vec::new(),
+                    }],
+                ),
                 detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
             },
         )]);
@@ -512,8 +502,8 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
         )
         .await;
         let limits = crate::search::run::production_resolution_ceilings();
-        let completed = resolution::ScriptedDiscoveryOutcome::Batch(
-            resolution::ScriptedDiscoveryBatch {
+        let completed =
+            resolution::ScriptedDiscoveryOutcome::Batch(resolution::ScriptedDiscoveryBatch {
                 expected_continuation: None,
                 expected_maximum: limits.max_batch_size,
                 expected_limits: limits.phase,
@@ -535,8 +525,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                     completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
                 },
                 diagnostics: Vec::new(),
-            },
-        );
+            });
         let cancelled = resolution::ScriptedDiscoveryOutcome::Cancelled {
             expected_continuation: None,
             expected_maximum: limits.max_batch_size,
@@ -550,15 +539,21 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
             diagnostics: Vec::new(),
         };
         let runtime = SearchRunResolutionRuntime::scripted(
-            [(source_keys[0].clone(), completed), (source_keys[1].clone(), cancelled)]
-                .into_iter()
-                .map(|(key, outcome)| {
-                    let source = crate::search::run::ScriptedResolutionSource {
-                        discovery: resolution::ScriptedSourceDiscoveryExecution::new_outcomes(&key, [outcome]),
-                        detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
-                    };
-                    (key, source)
-                }),
+            [
+                (source_keys[0].clone(), completed),
+                (source_keys[1].clone(), cancelled),
+            ]
+            .into_iter()
+            .map(|(key, outcome)| {
+                let source = crate::search::run::ScriptedResolutionSource {
+                    discovery: resolution::ScriptedSourceDiscoveryExecution::new_outcomes(
+                        &key,
+                        [outcome],
+                    ),
+                    detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
+                };
+                (key, source)
+            }),
         );
 
         let result = SearchRunService::new_with_result_artifact(

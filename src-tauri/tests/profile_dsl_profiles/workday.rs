@@ -6,10 +6,9 @@ use crate::support::{
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
 use job_radar_lib::{
-    execute_discovery, AllowanceDimension, HttpMethod, PhaseCompletion,
+    execute_discovery, AllowanceDimension, HttpMethod, PhaseBrowser, PhaseCompletion,
     PostingOccurrence, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
- SupportLevel, PhaseBrowser,
+    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument, SupportLevel,
 };
 use serde_json::{json, Value};
 
@@ -214,8 +213,6 @@ fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total
         .iter()
         .all(|diagnostic| diagnostic.code != "pagination_max_requests_reached"));
 }
-
-
 
 fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     for forbidden in [

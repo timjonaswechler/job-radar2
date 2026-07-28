@@ -43,38 +43,34 @@ fn fixture_resolution_runtime(
     let limits = crate::search::run::production_resolution_ceilings();
     SearchRunResolutionRuntime::scripted(responses.into_iter().map(|(key, response)| {
         let outcome = match response {
-            Ok(candidates) => resolution::ScriptedDiscoveryOutcome::Batch(
-                ScriptedDiscoveryBatch {
-                    expected_continuation: None,
-                    expected_maximum: limits.max_batch_size,
-                    expected_limits: limits.phase,
-                    occurrences: candidates
-                        .into_iter()
-                        .map(|candidate| occurrence(key, candidate))
-                        .collect(),
-                    exhausted: true,
-                    remaining: Some(0),
-                    continuation: None,
-                    continuation_source_key: None,
-                    complete_budget_report: PhaseExecutionReport {
-                        usage: PhaseUsage::default(),
-                        completion: PhaseCompletion::Accepted,
-                    },
-                    diagnostics: Vec::new(),
+            Ok(candidates) => resolution::ScriptedDiscoveryOutcome::Batch(ScriptedDiscoveryBatch {
+                expected_continuation: None,
+                expected_maximum: limits.max_batch_size,
+                expected_limits: limits.phase,
+                occurrences: candidates
+                    .into_iter()
+                    .map(|candidate| occurrence(key, candidate))
+                    .collect(),
+                exhausted: true,
+                remaining: Some(0),
+                continuation: None,
+                continuation_source_key: None,
+                complete_budget_report: PhaseExecutionReport {
+                    usage: PhaseUsage::default(),
+                    completion: PhaseCompletion::Accepted,
                 },
-            ),
-            Err(_) => {
-                resolution::ScriptedDiscoveryOutcome::ExecutionFailed {
-                    expected_continuation: None,
-                    expected_maximum: limits.max_batch_size,
-                    expected_limits: limits.phase,
-                    complete_budget_report: PhaseExecutionReport {
-                        usage: PhaseUsage::default(),
-                        completion: PhaseCompletion::ExecutionFailed,
-                    },
-                    diagnostics: Vec::new(),
-                }
-            }
+                diagnostics: Vec::new(),
+            }),
+            Err(_) => resolution::ScriptedDiscoveryOutcome::ExecutionFailed {
+                expected_continuation: None,
+                expected_maximum: limits.max_batch_size,
+                expected_limits: limits.phase,
+                complete_budget_report: PhaseExecutionReport {
+                    usage: PhaseUsage::default(),
+                    completion: PhaseCompletion::ExecutionFailed,
+                },
+                diagnostics: Vec::new(),
+            },
         };
         (
             key.to_string(),

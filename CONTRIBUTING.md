@@ -11,14 +11,15 @@ GitHub Issues are the authoritative request and planning surface. Issue workflow
 
 ## Validation
 
-Use the narrowest relevant tests while developing, then run the complete affected suite:
+Use the repository's [`quick → focused → full`](docs/development/validation.md) loop. Run quick checks and the narrowest relevant target while developing, then run the complete handoff gate once before handing work over:
 
 ```bash
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
+just quick
+just rust-test profile_dsl_profiles workday:: # example focused target
+just verify                                   # required before handoff
 ```
 
-The Search Run smoke is manual and network-dependent:
+Quick and focused checks are not substitutes for `just verify` or CI. The Search Run smoke is manual and network-dependent:
 
 ```bash
 npm run smoke:search-run -- --app-data-dir "/path/to/app-data"

@@ -1,6 +1,5 @@
 use job_radar_lib::{
-    PhaseBrowser,
-    __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
+    PhaseBrowser, __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
     CompileSourceOutcome, Diagnostics, PhaseCancelled, PhaseExecutionFailure, PhaseExecutionReport,
     PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome,
     PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpClient, RegistrySourceProfile,
