@@ -6,6 +6,7 @@ Scripts are grouped by the workflow they own. Stable user-facing commands remain
 - [`database/`](database/) — local SQLite and SQLx migration maintenance.
 - [`development/`](development/) — optional source-maintenance utilities.
 - [`geo/`](geo/) — generation of bundled geolocation resources.
-- [`testing/`](testing/) — shared adapters for running frontend contract tests.
+
+Frontend tests run directly through the canonical Vitest commands in `package.json`; no script adapter is required.
 
 Add a new script to the narrowest owning directory. If developers or CI need to call it regularly, expose it through `package.json` or the `Justfile` and document that command instead of the implementation path.

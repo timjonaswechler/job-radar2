@@ -92,10 +92,17 @@ npm run tauri -- dev
 Nützliche weitere Befehle:
 
 ```bash
-npm run build                  # Frontend type-checken und bauen
+npm run typecheck               # Produktionscode und Vite-Konfiguration prüfen
+npm run typecheck:test          # Frontend-Testcode und importierten App-Code prüfen
+npm run test:frontend           # alle Frontendtests einmalig ausführen
+npm run test:frontend:watch     # Frontendtests im Watch-Modus; Vitest-Filter sind möglich
+npm run build                   # Vite-Produktionsbundle bauen (ohne separaten Typecheck)
+npm run check:frontend          # Typechecks, Frontendtests und Produktionsbuild
 npm run smoke:search-run        # manueller, netzwerkabhängiger Suchlauf-Smoke
 npm run tauri -- build          # Desktop-App für das aktuelle System bauen
 ```
+
+Zum Beispiel filtert `npm run test:frontend -- settings` einen nicht-interaktiven Lauf; `npm run test:frontend:watch -- settings` startet denselben Filter im Watch-Modus. Der schnelle Entwicklungsloop aus Typechecks und Tests baut kein Produktionsbundle. Credential-Scanner und Scanner-Self-Test bleiben eigenständige Security-Kommandos.
 
 Der Smoke-Test ist bewusst nicht Teil der normalen CI-Logik, weil er echte externe Jobquellen nutzt.
 

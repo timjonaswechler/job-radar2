@@ -58,15 +58,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Frontend build
-        run: npm run build
-
-      - name: Frontend contract tests
-        run: |
-          npm run test:source-ui
-          npm run test:postings-ui
-          npm run test:window-platform
-          npm run test:agent-settings-ui
+      - name: Frontend check
+        run: npm run check:frontend
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

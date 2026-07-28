@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for the #298 search-resolution crate extraction.
+# Frozen primitive-residue classification. Updated for the #285 frontend test-runner migration.
 docs/adr/0009-declarative-source-profile-dsl.md:11:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/adr/0009-declarative-source-profile-dsl.md:11:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -908,17 +908,17 @@ src/features/postings/queues/posting-queues.ts:106:19:predicate_all_any_none:"al
 src/features/postings/queues/posting-queues.ts:191:25:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
 src/features/postings/queues/posting-queues.ts:73:9:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
 src/features/postings/queues/postings-sidebar.tsx:27:34:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.
-src/features/postings/tests/postings-ui-contract-tests.ts:116:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:117:49:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:118:55:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:119:67:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:120:62:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:121:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:122:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:123:58:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:124:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:127:15:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui-contract-tests.ts:274:5:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:118:53:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:119:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:120:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:121:69:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:122:64:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:123:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:124:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:125:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:126:59:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:129:17:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:276:7:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
 src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Profile DSL primitives.
 src/features/search-requests/model/search-request-form-model.ts:47:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Profile DSL execution.

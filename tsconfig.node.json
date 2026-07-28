@@ -1,11 +1,10 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "skipLibCheck": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
+    "lib": ["ES2023"],
+    "tsBuildInfoFile": "./node_modules/.cache/typescript/node.tsbuildinfo",
     "types": ["node"]
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts"]
 }

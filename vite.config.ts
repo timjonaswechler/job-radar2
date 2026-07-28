@@ -24,7 +24,7 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           const packageName = getNodeModulePackageName(id);
           if (!packageName) return undefined;
 

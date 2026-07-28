@@ -316,29 +316,8 @@ function ProviderRow({
   onRequestRemove: () => void;
 }) {
   const { t } = useTranslation();
-  const apiKeyInput = useRef<HTMLInputElement>(null);
-  const [apiKeyInvalid, setApiKeyInvalid] = useState(false);
   const providerBusy = busy?.providerId === provider.id;
   const loginBusy = providerBusy && busy?.action === "login";
-
-  useEffect(() => () => {
-    if (apiKeyInput.current) apiKeyInput.current.value = "";
-  }, []);
-
-  const handleApiKeySubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const input = apiKeyInput.current;
-    if (!input) return;
-    const apiKey = input.value;
-    input.value = "";
-    if (!apiKey.trim()) {
-      setApiKeyInvalid(true);
-      input.focus();
-      return;
-    }
-    setApiKeyInvalid(false);
-    void onSubmitApiKey(apiKey);
-  };
 
   return (
     <AccordionItem value={provider.id}>
@@ -409,48 +388,12 @@ function ProviderRow({
         ) : null}
 
         {provider.authenticationMethods.includes("api_key") ? (
-          <form className="flex flex-col gap-2" onSubmit={handleApiKeySubmit}>
-            <FieldGroup>
-              <Field data-invalid={apiKeyInvalid || undefined}>
-                <FieldLabel htmlFor={`${provider.id}-api-key`}>
-                  {t("settings.agents.apiKey.title")}
-                </FieldLabel>
-                <FieldDescription id={`${provider.id}-api-key-description`}>
-                  {provider.activeAuthentication === "api_key"
-                    ? t("settings.agents.apiKey.replaceDescription")
-                    : t("settings.agents.apiKey.description")}
-                </FieldDescription>
-                <Input
-                  ref={apiKeyInput}
-                  id={`${provider.id}-api-key`}
-                  name="apiKey"
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-invalid={apiKeyInvalid}
-                  aria-describedby={
-                    apiKeyInvalid
-                      ? `${provider.id}-api-key-description ${provider.id}-api-key-error`
-                      : `${provider.id}-api-key-description`
-                  }
-                  disabled={busy !== null}
-                />
-                {apiKeyInvalid ? (
-                  <FieldError id={`${provider.id}-api-key-error`}>
-                    {t("settings.agents.apiKey.required")}
-                  </FieldError>
-                ) : null}
-              </Field>
-            </FieldGroup>
-            <div>
-              <Button type="submit" size="sm" variant="outline" disabled={busy !== null}>
-                <KeyRoundIcon data-icon="inline-start" />
-                {provider.activeAuthentication === "api_key"
-                  ? t("settings.agents.actions.replaceApiKey")
-                  : t("settings.agents.actions.saveApiKey")}
-              </Button>
-            </div>
-          </form>
+          <ProviderApiKeyForm
+            providerId={provider.id}
+            activeAuthentication={provider.activeAuthentication}
+            busy={busy !== null}
+            onSubmitApiKey={(_providerId, apiKey) => onSubmitApiKey(apiKey)}
+          />
         ) : null}
 
         {provider.activeAuthentication ? (
@@ -465,6 +408,86 @@ function ProviderRow({
         ) : null}
       </AccordionContent>
     </AccordionItem>
+  );
+}
+
+export function ProviderApiKeyForm({
+  providerId,
+  activeAuthentication,
+  busy,
+  onSubmitApiKey,
+}: {
+  providerId: string;
+  activeAuthentication: ProviderConfigurationStatus["activeAuthentication"];
+  busy: boolean;
+  onSubmitApiKey: (providerId: string, apiKey: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const apiKeyInput = useRef<HTMLInputElement>(null);
+  const [apiKeyInvalid, setApiKeyInvalid] = useState(false);
+
+  useEffect(() => () => {
+    if (apiKeyInput.current) apiKeyInput.current.value = "";
+  }, []);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const input = apiKeyInput.current;
+    if (!input) return;
+    const apiKey = input.value;
+    input.value = "";
+    if (!apiKey.trim()) {
+      setApiKeyInvalid(true);
+      input.focus();
+      return;
+    }
+    setApiKeyInvalid(false);
+    void onSubmitApiKey(providerId, apiKey);
+  };
+
+  return (
+    <form className="flex flex-col gap-2" onSubmit={handleSubmit}>
+      <FieldGroup>
+        <Field data-invalid={apiKeyInvalid || undefined}>
+          <FieldLabel htmlFor={`${providerId}-api-key`}>
+            {t("settings.agents.apiKey.title")}
+          </FieldLabel>
+          <FieldDescription id={`${providerId}-api-key-description`}>
+            {activeAuthentication === "api_key"
+              ? t("settings.agents.apiKey.replaceDescription")
+              : t("settings.agents.apiKey.description")}
+          </FieldDescription>
+          <Input
+            ref={apiKeyInput}
+            id={`${providerId}-api-key`}
+            name="apiKey"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={apiKeyInvalid}
+            aria-describedby={
+              apiKeyInvalid
+                ? `${providerId}-api-key-description ${providerId}-api-key-error`
+                : `${providerId}-api-key-description`
+            }
+            disabled={busy}
+          />
+          {apiKeyInvalid ? (
+            <FieldError id={`${providerId}-api-key-error`}>
+              {t("settings.agents.apiKey.required")}
+            </FieldError>
+          ) : null}
+        </Field>
+      </FieldGroup>
+      <div>
+        <Button type="submit" size="sm" variant="outline" disabled={busy}>
+          <KeyRoundIcon data-icon="inline-start" />
+          {activeAuthentication === "api_key"
+            ? t("settings.agents.actions.replaceApiKey")
+            : t("settings.agents.actions.saveApiKey")}
+        </Button>
+      </div>
+    </form>
   );
 }
 

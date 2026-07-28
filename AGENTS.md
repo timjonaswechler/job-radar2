@@ -38,7 +38,8 @@ Das Repository verwendet ein Single-Context-Layout mit `CONTEXT.md` und `docs/ad
 
 ```bash
 npm run tauri -- dev                         # App starten
-npm run build                                # Frontend type-checken und bauen
+npm run check:frontend                       # Frontend type-checken, testen und bauen
+npm run build                                # Vite-Produktionsbundle bauen
 cargo test --manifest-path src-tauri/Cargo.toml
 npm run smoke:search-run                     # manueller, netzwerkabhängiger Smoke
 ```

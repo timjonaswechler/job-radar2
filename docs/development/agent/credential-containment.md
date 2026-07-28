@@ -33,7 +33,7 @@ Synthetic fixtures are allowed only when values are conspicuously marked as synt
 | Direct keys and exact environment references remain value-free at registry boundaries | `availability_resolves_direct_and_environment_references_without_exposing_values` in `src-tauri/tests/agent/model_registry.rs`; auth resolution is covered by `api_keys_resolve_direct_values_and_exact_environment_references_deterministically` |
 | Invalid files have the specified asymmetric behavior | `explicit_reload_publishes_valid_edits_and_fails_closed_as_one_snapshot` makes authentication unavailable; `explicit_reload_is_transactional_and_preserves_old_immutable_snapshots` retains the last-known-good model registry |
 | Configuration and Tauri-facing results are redacted | `src-tauri/tests/agent/configuration_api.rs` serializes status, mutations, invalid-file diagnostics, and login progress and proves synthetic secret/account values are absent; `SecretApiKeyInput` is deserialize-only and non-debuggable |
-| Settings UI does not retain or render credential/error payloads | `npm run test:agent-settings-ui` checks password input, clearing before submission, code-based errors/diagnostics, and absence of raw backend message rendering |
+| Settings UI does not retain or render credential/error payloads | `npm run test:frontend -- settings` renders the API-key interaction in jsdom and checks one submission plus immediate input clearing; Node-environment contracts check code-based errors/diagnostics and absence of raw backend message rendering |
 | In-flight Codex turns pin configuration while later turns observe reloads | `request_generation_is_pinned_in_flight_and_reloaded_for_the_next_turn`; the remaining OpenAI Codex and Agent Conversation suites preserve login, refresh, streaming, and conversation behavior |
 
 Focused verification:
@@ -46,7 +46,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --test agent configuration_api::
 cargo test --manifest-path src-tauri/Cargo.toml --test agent data_root::
 cargo test --manifest-path src-tauri/Cargo.toml --test agent model_registry::
 cargo test --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug
-npm run test:agent-settings-ui
+npm run test:frontend -- settings
 ```
 
 ## Limits

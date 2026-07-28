@@ -5,19 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "test:source-ui": "node scripts/testing/run-typescript-contract.mjs src/features/sources/tests/source-ui-contract-tests.ts 'source UI contract tests'",
-    "test:search-requests-ui": "node scripts/testing/run-typescript-contract.mjs src/features/search-requests/tests/search-requests-ui-contract-tests.ts 'search requests UI contract tests'",
-    "test:postings-ui": "node scripts/testing/run-typescript-contract.mjs src/features/postings/tests/postings-ui-contract-tests.ts 'postings UI contract tests'",
-    "test:navigation": "node scripts/testing/run-typescript-contract.mjs src/app/navigation/navigation-contract-tests.tsx 'navigation contract tests'",
-    "test:window-platform": "node --experimental-strip-types --test src/lib/window-control-platform.test.ts",
+    "build": "vite build",
     "test:agent-credential-safety": "node scripts/checks/agent-credential-safety.test.mjs",
-    "test:agent-settings-ui": "node scripts/testing/run-typescript-contract.mjs src/features/settings/tests/agent-settings-ui-contract-tests.ts 'agent settings UI contract tests'",
     "check:agent-credentials": "node scripts/checks/agent-credential-safety.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "agent:debug": "cargo run --manifest-path src-tauri/Cargo.toml --features agent-debug --bin agent-debug",
-    "smoke:search-run": "cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke"
+    "smoke:search-run": "cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke",
+    "typecheck": "tsc -b tsconfig.app.json tsconfig.node.json",
+    "typecheck:test": "tsc -b tsconfig.test.json",
+    "test:frontend": "vitest run",
+    "test:frontend:watch": "vitest --watch",
+    "check:frontend": "npm run typecheck && npm run typecheck:test && npm run test:frontend && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -71,12 +70,17 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.9.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.10"
   }
 }

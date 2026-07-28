@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.cache/typescript/test.tsbuildinfo",
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src"]
+}
