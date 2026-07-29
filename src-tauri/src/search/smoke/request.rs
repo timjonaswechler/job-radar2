@@ -5,9 +5,7 @@ use crate::search::request::{
     SearchRequestStatus, SearchRule, SearchRuleInput, SearchRuleKind, SearchRuleTarget,
 };
 
-use super::constants::{
-    EXCLUDE_RULE_VALUES, INCLUDE_RULE_VALUES, SCHOTT_SOURCE_KEY, SMOKE_LOCATION, SMOKE_RADIUS_KM,
-};
+use super::constants::SMOKE_INCLUDE_PATTERN;
 
 pub(super) async fn get_or_create_smoke_search_request(
     pool: &SqlitePool,
@@ -29,10 +27,10 @@ pub(super) async fn get_or_create_smoke_search_request(
 
 fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String]) -> bool {
     search_request.status == SearchRequestStatus::Active
-        && search_request.include_rules == expected_rules(INCLUDE_RULE_VALUES)
-        && search_request.exclude_rules == expected_regex_rules(EXCLUDE_RULE_VALUES)
-        && search_request.locations == vec![SMOKE_LOCATION.to_string()]
-        && search_request.radius_km == Some(SMOKE_RADIUS_KM)
+        && search_request.include_rules == expected_smoke_rules()
+        && search_request.exclude_rules.is_empty()
+        && search_request.locations.is_empty()
+        && search_request.radius_km.is_none()
         && search_request.source_keys == source_keys
         && search_request.validation_error.is_none()
 }
@@ -40,58 +38,22 @@ fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String
 fn smoke_search_request_input(source_keys: Vec<String>) -> CreateSearchRequestInput {
     CreateSearchRequestInput {
         status: SearchRequestStatus::Active,
-        include_rules: INCLUDE_RULE_VALUES
-            .iter()
-            .map(|value| text_rule_input(value))
-            .collect(),
-        exclude_rules: EXCLUDE_RULE_VALUES
-            .iter()
-            .map(|value| regex_rule_input(value))
-            .collect(),
-        locations: vec![SMOKE_LOCATION.to_string()],
-        radius_km: Some(SMOKE_RADIUS_KM),
+        include_rules: vec![SearchRuleInput {
+            target: "title".to_string(),
+            kind: "regex".to_string(),
+            value: SMOKE_INCLUDE_PATTERN.to_string(),
+        }],
+        exclude_rules: Vec::new(),
+        locations: Vec::new(),
+        radius_km: None,
         source_keys,
     }
 }
 
-pub(super) fn expected_rules(values: &[&str]) -> Vec<SearchRule> {
-    values
-        .iter()
-        .map(|value| SearchRule {
-            target: SearchRuleTarget::Title,
-            kind: SearchRuleKind::Text,
-            value: (*value).to_string(),
-        })
-        .collect()
-}
-
-fn expected_regex_rules(values: &[&str]) -> Vec<SearchRule> {
-    values
-        .iter()
-        .map(|value| SearchRule {
-            target: SearchRuleTarget::Title,
-            kind: SearchRuleKind::Regex,
-            value: (*value).to_string(),
-        })
-        .collect()
-}
-
-fn text_rule_input(value: &str) -> SearchRuleInput {
-    SearchRuleInput {
-        target: "title".to_string(),
-        kind: "text".to_string(),
-        value: value.to_string(),
-    }
-}
-
-fn regex_rule_input(value: &str) -> SearchRuleInput {
-    SearchRuleInput {
-        target: "title".to_string(),
-        kind: "regex".to_string(),
-        value: value.to_string(),
-    }
-}
-
-pub(super) fn smoke_source_keys() -> Vec<String> {
-    vec![SCHOTT_SOURCE_KEY.to_string()]
+pub(super) fn expected_smoke_rules() -> Vec<SearchRule> {
+    vec![SearchRule {
+        target: SearchRuleTarget::Title,
+        kind: SearchRuleKind::Regex,
+        value: SMOKE_INCLUDE_PATTERN.to_string(),
+    }]
 }

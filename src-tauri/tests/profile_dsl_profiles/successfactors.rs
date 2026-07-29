@@ -63,11 +63,11 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         ),
         (
             "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
-            read_text("tests/fixtures/successfactors/posting-detail-1405371733-schott.html"),
+            read_text("tests/fixtures/successfactors/posting-detail-1405371733-browser-repair.html"),
         ),
         (
             "https://jobs.example-successfactors.test/job/St_-Gallen-Product-Engineer-%28mwd%29-SG/1405371733/",
-            read_text("tests/fixtures/successfactors/posting-detail-1405371733-schott.html"),
+            read_text("tests/fixtures/successfactors/posting-detail-1405371733-browser-repair.html"),
         ),
     ]);
 
@@ -143,30 +143,30 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
         Some("primary_html_description")
     );
 
-    let schott_style_candidate = &discovery.payload.candidates[3];
-    let schott_style_detail = block_on(execute_detail_test_with_config(
+    let browser_repair_candidate = &discovery.payload.candidates[3];
+    let browser_repair_detail = block_on(execute_detail_test_with_config(
         &plan,
         &source.source_config,
-        schott_style_candidate,
+        browser_repair_candidate,
         &fetcher,
     ));
-    let expected_schott_style_detail: Value =
+    let expected_browser_repair_detail: Value =
         read_json("tests/fixtures/successfactors/posting-detail-1405371733-expected.json");
     assert_eq!(
-        schott_style_detail
+        browser_repair_detail
             .payload
             .patch
             .description_text
             .as_deref(),
-        expected_schott_style_detail["descriptionText"].as_str()
+        expected_browser_repair_detail["descriptionText"].as_str()
     );
-    assert_eq!(schott_style_detail.diagnostics.len(), 1);
+    assert_eq!(browser_repair_detail.diagnostics.len(), 1);
     assert_eq!(
-        schott_style_detail.diagnostics[0].code,
+        browser_repair_detail.diagnostics[0].code,
         "description_too_short"
     );
     assert_eq!(
-        schott_style_detail.diagnostics[0].strategy_key.as_deref(),
+        browser_repair_detail.diagnostics[0].strategy_key.as_deref(),
         Some("primary_html_description")
     );
 

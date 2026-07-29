@@ -135,11 +135,6 @@ fn malformed_inputs_return_one_typed_failure_and_no_partial_document() {
     for (parse_type, input, expected_kind) in [
         ("json", "{\"jobs\":[", ParseFailureKind::MalformedJson),
         ("xml", "<jobs><job></jobs>", ParseFailureKind::MalformedXml),
-        (
-            "html",
-            "<!doctype html><html><body><main><article></main></body></html>",
-            ParseFailureKind::MalformedHtml,
-        ),
     ] {
         let plan = compile_parse(
             &serde_json::from_value(serde_json::json!({ "type": parse_type })).unwrap(),
@@ -157,7 +152,7 @@ fn malformed_inputs_return_one_typed_failure_and_no_partial_document() {
 }
 
 #[test]
-fn malformed_and_truncated_html_never_exposes_the_repaired_tree() {
+fn browser_repairable_html_exposes_the_recovered_document() {
     let plan = compile_parse(
         &serde_json::from_value(serde_json::json!({ "type": "html" })).unwrap(),
         ParseInputKind::DecodedHttp,
@@ -169,12 +164,12 @@ fn malformed_and_truncated_html_never_exposes_the_repaired_tree() {
         "<main><article>",
         "<main></span></main>",
         "<p><div>misnested</div></p>",
+        "<p><p>nested paragraph</p>&nbsp;</p>",
     ] {
-        let failure = plan
+        let document = plan
             .parse(ParseInput::DecodedHttp(DecodedHttpText::new(input)))
-            .expect_err("html5ever repairs must not become a partial ParsedDocument");
-        assert_eq!(failure.kind, ParseFailureKind::MalformedHtml);
-        assert!(!failure.message.contains(input));
+            .expect("browser-style HTML recovery should expose a selectable document");
+        assert!(document.as_html().is_some());
     }
 }
 

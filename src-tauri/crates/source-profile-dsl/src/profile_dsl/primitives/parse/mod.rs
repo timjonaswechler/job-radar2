@@ -256,7 +256,6 @@ pub enum ParseFailureKind {
     InputKindMismatch,
     MalformedJson,
     MalformedXml,
-    MalformedHtml,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -369,7 +368,6 @@ impl CompiledParse {
                 let (code, label) = match failure.kind {
                     ParseFailureKind::MalformedJson => ("json_parse_failed", "JSON"),
                     ParseFailureKind::MalformedXml => ("xml_parse_failed", "XML"),
-                    ParseFailureKind::MalformedHtml => ("html_parse_failed", "HTML"),
                     ParseFailureKind::InputKindMismatch => {
                         ("parse_input_kind_mismatch", "the configured format")
                     }

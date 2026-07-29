@@ -71,7 +71,7 @@ mod tests {
 
             let posting_state_defaults = sqlx::query(
                 "INSERT INTO job_postings (title, company)
-                 VALUES ('Laser Engineer', 'SCHOTT AG')
+                 VALUES ('Fixture Engineer', 'Fixture Company')
                  RETURNING read_state, interest_state, preparation_state, application_state",
             )
             .fetch_one(&pool)
@@ -108,7 +108,7 @@ mod tests {
                 .unwrap();
             sqlx::query(
                 "INSERT INTO job_posting_sources (posting_id, source_key, source_name_snapshot, url)
-                 VALUES (?1, 'schott_ag', 'SCHOTT AG', 'https://example.test/jobs/laser')",
+                 VALUES (?1, 'fixture_source', 'Fixture Company', 'https://example.test/jobs/fixture')",
             )
             .bind(posting_id)
             .execute(&pool)

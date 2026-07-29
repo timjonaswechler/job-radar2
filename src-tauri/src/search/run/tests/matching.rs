@@ -21,29 +21,34 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
             Ok(vec![
                 candidate(
                     "LASER Physicist",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/1",
                     &["Mainz"],
                 ),
                 candidate(
                     "Senior Optics Engineer",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/2",
                     &["Mainz"],
                 ),
                 candidate(
                     "Laser Praktikum",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/3",
                     &["Mainz"],
                 ),
                 candidate(
                     "Werkstudent Optics Engineer",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/4",
                     &["Mainz"],
                 ),
-                candidate("Chemist", "SCHOTT", "https://example.test/5", &["Mainz"]),
+                candidate(
+                    "Chemist",
+                    "Fixture Company",
+                    "https://example.test/5",
+                    &["Mainz"],
+                ),
             ]),
         )]);
         let running_search_runs = RunningSearchRuns::default();
@@ -112,19 +117,19 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
             Ok(vec![
                 candidate(
                     "Laser Engineer",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/1",
                     &["Mainz"],
                 ),
                 candidate(
                     "Laser PraktikantIn",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/2",
                     &["Mainz"],
                 ),
                 candidate(
                     "laser Engineer",
-                    "SCHOTT",
+                    "Fixture Company",
                     "https://example.test/3",
                     &["Mainz"],
                 ),

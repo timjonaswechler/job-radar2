@@ -214,8 +214,8 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
                 source_keys[0].clone(),
                 Ok(vec![candidate(
                     "Head Of Laser & Post Processing Development (mwd) RP/1205240901",
-                    "SCHOTT AG",
-                    "https://source-one.test/schott-laser",
+                    "Fixture Company",
+                    "https://source-one.test/fixture-laser",
                     &["Mainz"],
                 )]),
             ),
@@ -223,8 +223,8 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
                 source_keys[1].clone(),
                 Ok(vec![candidate(
                     "Head of Laser & Post Processing Development (m/w/d)*",
-                    "SCHOTT AG",
-                    "https://source-two.test/schott-laser",
+                    "Fixture Company",
+                    "https://source-two.test/fixture-laser",
                     &["Mainz"],
                 )]),
             ),
@@ -249,8 +249,8 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
             posting.title,
             "Head Of Laser & Post Processing Development (mwd) RP/1205240901"
         );
-        assert_eq!(posting.company, "SCHOTT AG");
-        assert_eq!(posting.url, "https://source-one.test/schott-laser");
+        assert_eq!(posting.company, "Fixture Company");
+        assert_eq!(posting.url, "https://source-one.test/fixture-laser");
         assert_eq!(posting.locations, vec!["Mainz"]);
         assert_eq!(posting.sources.len(), 2);
         assert_eq!(

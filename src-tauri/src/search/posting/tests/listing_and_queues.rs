@@ -22,18 +22,18 @@ fn lists_persisted_postings_with_locations_primary_source_and_sources() {
         let primary_source_id = insert_existing_source(
             &pool,
             posting_id,
-            "schott_ag",
-            "SCHOTT AG",
-            "https://example.test/jobs/laser",
+            "fixture_source_one",
+            "Fixture Source One",
+            "https://source-one.example.test/jobs/fixture",
             "2026-06-01T00:00:00.000Z",
         )
         .await;
         let second_source_id = insert_existing_source(
             &pool,
             posting_id,
-            "stepstone_de",
-            "StepStone Deutschland",
-            "https://stepstone.example.test/jobs/laser",
+            "fixture_source_two",
+            "Fixture Source Two",
+            "https://source-two.example.test/jobs/fixture",
             "2026-06-02T00:00:00.000Z",
         )
         .await;
@@ -62,11 +62,17 @@ fn lists_persisted_postings_with_locations_primary_source_and_sources() {
         );
         assert_eq!(posting.sources.len(), 2);
         assert_eq!(posting.sources[0].id, primary_source_id);
-        assert_eq!(posting.sources[0].source_key, "schott_ag");
-        assert_eq!(posting.sources[0].source_name_snapshot, "SCHOTT AG");
-        assert_eq!(posting.sources[0].url, "https://example.test/jobs/laser");
+        assert_eq!(posting.sources[0].source_key, "fixture_source_one");
+        assert_eq!(
+            posting.sources[0].source_name_snapshot,
+            "Fixture Source One"
+        );
+        assert_eq!(
+            posting.sources[0].url,
+            "https://source-one.example.test/jobs/fixture"
+        );
         assert_eq!(posting.sources[1].id, second_source_id);
-        assert_eq!(posting.sources[1].source_key, "stepstone_de");
+        assert_eq!(posting.sources[1].source_key, "fixture_source_two");
     });
 }
 

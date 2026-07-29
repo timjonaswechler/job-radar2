@@ -113,18 +113,18 @@ fn state_update_does_not_change_sources_or_seen_fields() {
         let primary_source_id = insert_existing_source(
             &pool,
             posting_id,
-            "schott_ag",
-            "SCHOTT AG",
-            "https://example.test/jobs/laser",
+            "fixture_source_one",
+            "Fixture Source One",
+            "https://source-one.example.test/jobs/fixture",
             "2026-06-01T00:00:00.000Z",
         )
         .await;
         insert_existing_source(
             &pool,
             posting_id,
-            "stepstone_de",
-            "StepStone Deutschland",
-            "https://stepstone.example.test/jobs/laser",
+            "fixture_source_two",
+            "Fixture Source Two",
+            "https://source-two.example.test/jobs/fixture",
             "2026-06-02T00:00:00.000Z",
         )
         .await;

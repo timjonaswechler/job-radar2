@@ -8,14 +8,11 @@ use crate::{
 
 use super::{
     constants::{SMOKE_APP_DATA_DIR_ENV, SMOKE_COMMAND},
-    run_search_run_smoke_with_options,
-    schott_source::ensure_schott_smoke_source,
-    SearchRunSmokeSummary,
+    run_search_run_smoke_with_options, SearchRunSmokeSummary,
 };
 
-struct SmokeCliOptions {
+pub(super) struct SmokeCliOptions {
     app_data_dir: Option<PathBuf>,
-    ensure_schott_source: bool,
     source_keys: Vec<String>,
     allow_draft: bool,
     help: bool,
@@ -46,18 +43,10 @@ where
             .await
             .map_err(|error| error.to_string())?;
 
-        if options.ensure_schott_source {
-            ensure_schott_smoke_source(&state.paths.app_data_dir)?;
-        }
-
         let result_path = default_search_run_result_path();
         let source_resolver =
             SearchRunResolutionRuntime::production(state.paths.browser_runtime_dir.clone());
-        let source_keys = if options.source_keys.is_empty() {
-            super::request::smoke_source_keys()
-        } else {
-            options.source_keys
-        };
+        let source_keys = options.source_keys;
         let summary = run_search_run_smoke_with_options(
             &state.db,
             &state.running_search_runs,
@@ -74,12 +63,11 @@ where
     })
 }
 
-fn parse_smoke_cli_args<I>(args: I) -> Result<SmokeCliOptions, String>
+pub(super) fn parse_smoke_cli_args<I>(args: I) -> Result<SmokeCliOptions, String>
 where
     I: IntoIterator<Item = OsString>,
 {
     let mut app_data_dir = None;
-    let mut ensure_schott_source = false;
     let mut source_keys = Vec::new();
     let mut allow_draft = false;
     let mut help = false;
@@ -88,10 +76,6 @@ where
     while let Some(arg) = args.next() {
         if arg == "--help" || arg == "-h" {
             help = true;
-            continue;
-        }
-        if arg == "--ensure-schott-source" {
-            ensure_schott_source = true;
             continue;
         }
         if arg == "--allow-draft" {
@@ -132,9 +116,12 @@ where
         ));
     }
 
+    if !help && source_keys.is_empty() {
+        return Err("at least one --source-key is required".to_string());
+    }
+
     Ok(SmokeCliOptions {
         app_data_dir,
-        ensure_schott_source,
         source_keys,
         allow_draft,
         help,
@@ -143,15 +130,15 @@ where
 
 fn push_source_key(source_keys: &mut Vec<String>, value: &str) -> Result<(), String> {
     let source_key = value.trim();
-    if source_key.is_empty() {
-        return Err("--source-key requires a non-empty source key".to_string());
+    if source_key.is_empty() || source_key.starts_with('-') {
+        return Err("--source-key requires a non-empty source key value".to_string());
     }
     source_keys.push(source_key.to_string());
     Ok(())
 }
 
 fn smoke_cli_help() -> &'static str {
-    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> [--ensure-schott-source] [--source-key <key> ...] [--allow-draft]\n\nRuns the network-dependent development smoke Search Run and overwrites the bounded search-run-result.json summary in the repository root. By default it targets the SCHOTT smoke Source. Use --source-key repeatedly to target existing local Sources. Use --allow-draft to execute selected draft Sources for this smoke run without changing their persisted Source Status. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
+    "Usage: cargo run --manifest-path src-tauri/Cargo.toml -- dev-search-run-smoke --app-data-dir <path> --source-key <key> [--source-key <key> ...] [--allow-draft]\n\nRuns the network-dependent development smoke Search Run for explicitly selected local Sources and overwrites the bounded search-run-result.json summary in the repository root. Use --allow-draft to execute selected draft Sources without changing their persisted Source Status. Use JOB_RADAR_SMOKE_APP_DATA_DIR instead of --app-data-dir if preferred."
 }
 
 fn print_smoke_summary(summary: &SearchRunSmokeSummary) {

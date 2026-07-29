@@ -9,7 +9,7 @@ These synthetic fixtures exercise the built-in `successfactors` Source Profile f
 - classic numeric RMK job URL forms;
 - title, location, URL, `postingMeta.jobId`, and `postingMeta.externalPath` extraction;
 - primary HTML description extraction;
-- ordered generic and SCHOTT-style fallback selectors;
+- ordered generic and browser-repair fallback selectors;
 - deterministic Diagnostics when the primary selector is empty;
 - bounded HTTP evidence used by Detection.
 

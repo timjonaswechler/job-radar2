@@ -10,7 +10,7 @@ fn search_request_crud_round_trips_without_name() {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
         let service = SearchRequestService::new(&pool, &running_search_runs);
-        let source_key = "indeed_de".to_string();
+        let source_key = "fixture_source".to_string();
 
         let created = service
             .create(CreateSearchRequestInput {
@@ -38,7 +38,10 @@ fn search_request_crud_round_trips_without_name() {
         assert!(!created.updated_at.is_empty());
         let created_json = serde_json::to_value(&created).unwrap();
         assert!(created_json.get("name").is_none());
-        assert_eq!(created_json["sourceKeys"], serde_json::json!(["indeed_de"]));
+        assert_eq!(
+            created_json["sourceKeys"],
+            serde_json::json!(["fixture_source"])
+        );
         assert!(created_json.get("sourceIds").is_none());
 
         let persisted_source_keys_json: String =
@@ -47,7 +50,7 @@ fn search_request_crud_round_trips_without_name() {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(persisted_source_keys_json, "[\"indeed_de\"]");
+        assert_eq!(persisted_source_keys_json, "[\"fixture_source\"]");
 
         let listed = service.list().await.unwrap();
         assert_eq!(listed, vec![created.clone()]);
@@ -85,7 +88,7 @@ fn invalid_regex_is_persisted_as_validation_error_only_when_not_active() {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
         let service = SearchRequestService::new(&pool, &running_search_runs);
-        let source_key = "indeed_de".to_string();
+        let source_key = "fixture_source".to_string();
 
         let draft = service
             .create(CreateSearchRequestInput {
@@ -164,7 +167,7 @@ fn active_search_requests_require_include_rule_and_source_key() {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
         let service = SearchRequestService::new(&pool, &running_search_runs);
-        let source_key = "indeed_de".to_string();
+        let source_key = "fixture_source".to_string();
 
         let missing_rule = service
             .create(CreateSearchRequestInput {

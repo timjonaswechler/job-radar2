@@ -2,8 +2,7 @@ use dom_query::Document as HtmlDocument;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ParseDescriptor, ParseFailure, ParseFailureKind, ParseInput, ParseInputKind, ParsePlanContext,
-    ParsedDocument,
+    ParseDescriptor, ParseFailure, ParseInput, ParseInputKind, ParsePlanContext, ParsedDocument,
 };
 
 pub const DESCRIPTOR: ParseDescriptor = ParseDescriptor { key: "html" };
@@ -32,10 +31,10 @@ pub(super) fn parse<'a>(
     input: ParseInput<'a>,
 ) -> Result<ParsedDocument<'a>, ParseFailure> {
     let text = input.text();
-    // html5ever treats a missing doctype as a generic parse error even for a
-    // productive HTML fragment. Add only that parser context; then every
-    // reported tokenizer/tree-builder error represents repaired input and the
-    // resulting partial tree must not cross the Parse boundary.
+    // Parse external HTML with browser-style HTML5 error recovery. Source markup
+    // is passed through unchanged apart from supplying fragment parser context;
+    // html5ever's repaired DOM remains usable by downstream selection and
+    // acceptance instead of turning ordinary authoring errors into hard failures.
     let has_doctype = text
         .trim_start()
         .get(..9)
@@ -45,14 +44,7 @@ pub(super) fn parse<'a>(
     } else {
         std::borrow::Cow::Owned(format!("<!doctype html>{text}"))
     };
-    let document = HtmlDocument::from(parse_text.as_ref());
-    let parse_error = document.errors.borrow().first().map(ToString::to_string);
-    if let Some(error) = parse_error {
-        return Err(ParseFailure::malformed(
-            ParseFailureKind::MalformedHtml,
-            input.kind(),
-            error,
-        ));
-    }
-    Ok(ParsedDocument::Html(document))
+    Ok(ParsedDocument::Html(HtmlDocument::from(
+        parse_text.as_ref(),
+    )))
 }
