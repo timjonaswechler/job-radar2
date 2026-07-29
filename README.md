@@ -68,12 +68,12 @@ Das vollständige Projektvokabular steht in [`CONTEXT.md`](CONTEXT.md).
 
 Das zentrale [`Dokumentationsportal`](docs/index.md) führt nach Zielgruppe und Zweck zu allen gepflegten Dokumentationsbereichen.
 
-- **Job Radar verwenden:** Der [`User Guide für den ersten vollständigen Search Run`](docs/user-guide/README.md) führt vom lokalen Start über Source und Search Request bis zu Ergebnissen und Troubleshooting; diese README bleibt Produktüberblick und kurzer lokaler Einstieg.
+- **Job Radar verwenden:** Der [`User Guide für den ersten vollständigen Search Run`](docs/user/README.md) führt vom lokalen Start über Source und Search Request bis zu Ergebnissen und Troubleshooting; diese README bleibt Produktüberblick und kurzer lokaler Einstieg.
 - **Job Radar entwickeln:** mit [`Development`](docs/development/README.md) und dem [`CONTEXT.md`](CONTEXT.md)-Vokabular beginnen.
-- **Entscheidungen und Anforderungen verstehen:** die Einstiege für [`Architecture`](docs/architecture/README.md) und [`Product`](docs/product/README.md) verwenden.
-- **Fakten nachschlagen oder interne Arbeit einordnen:** zu [`Reference`](docs/reference/README.md) beziehungsweise [`Project-internal work`](docs/project/README.md) wechseln.
+- **Entscheidungen und Anforderungen verstehen:** die Einstiege für [`Architecture`](docs/development/architecture/README.md) und [`Product`](docs/development/product/README.md) verwenden.
+- **Fakten nachschlagen oder interne Arbeit einordnen:** zu [`Reference`](docs/development/reference/README.md) beziehungsweise [`Project-internal work`](docs/development/project/README.md) wechseln.
 
-Bestehende ADR-, PRD- und Entwicklungslinks bleiben während der schrittweisen Migration gültig. Die eingebauten Source-Profile liegen in:
+Alle entwicklungsbezogenen Dokumente liegen gebündelt unter [`docs/development/`](docs/development/). Die eingebauten Source-Profile liegen in:
 
 - [`src-tauri/resources/profiles/`](src-tauri/resources/profiles/)
 

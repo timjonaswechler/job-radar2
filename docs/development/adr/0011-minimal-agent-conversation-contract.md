@@ -70,7 +70,7 @@ Unknown usage values become `0` or `None`. Tool use, monetary cost, errors, and 
 
 A caller-facing Agent Model contains only its ID, display name, Provider ID, and supported Reasoning Levels. Base URLs, API kinds, headers, pricing, request compatibility, and provider transport metadata stay behind the provider seam.
 
-The initial OpenAI Codex adapter uses the model catalog pinned in `research/pi-rust-agent-baseline.md`; it performs no live discovery and infers no capabilities from model-name strings. Unknown model IDs produce `ModelUnavailable`.
+The initial OpenAI Codex adapter uses the model catalog pinned in `docs/development/research/pi-rust-agent-baseline.md`; it performs no live discovery and infers no capabilities from model-name strings. Unknown model IDs produce `ModelUnavailable`.
 
 Reasoning Levels match Pi:
 

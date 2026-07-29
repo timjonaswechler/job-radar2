@@ -7,7 +7,7 @@
 3. Read [`CONTEXT.md`](CONTEXT.md) before changing domain terminology.
 4. Read [`AGENTS.md`](AGENTS.md) for repository-specific engineering rules.
 
-GitHub Issues are the authoritative request and planning surface. Issue workflow and triage configuration are maintained under `docs/agents/` for the installed engineering skills.
+GitHub Issues are the authoritative request and planning surface. Issue workflow and triage configuration are maintained under `docs/development/agents/` for the installed engineering skills.
 
 ## Validation
 

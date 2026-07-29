@@ -13,9 +13,9 @@ Job Radar ist eine lokale Tauri-2-Desktop-App für wiederholbare Jobsuchen: Quel
 
 - `README.md` — Produktüberblick, lokale Befehle, Repo-Orientierung.
 - `CONTEXT.md` — kanonische Domain-Sprache; vor Begriffsumbenennungen lesen.
-- `docs/prd/declarative-source-profile-dsl.md` — Zielbild der deklarativen Profile-DSL und Source-/Source-Profile-Dokumentmodell.
-- `docs/adr/0001-source-config-as-json-schema.md` und `docs/adr/0009-declarative-source-profile-dsl.md` — zentrale Source/Profile-Architekturentscheidungen.
-- `docs/adr/` — weitere Architekturentscheidungen.
+- `docs/development/prd/declarative-source-profile-dsl.md` — Zielbild der deklarativen Profile-DSL und Source-/Source-Profile-Dokumentmodell.
+- `docs/development/adr/0001-source-config-as-json-schema.md` und `docs/development/adr/0009-declarative-source-profile-dsl.md` — zentrale Source/Profile-Architekturentscheidungen.
+- `docs/development/adr/` — weitere Architekturentscheidungen.
 - `docs/index.md` — Dokumentationsübersicht und Ablageregeln.
 - `docs/development/search-run-smoke.md` — manueller Live-Smoke für Suchläufe.
 - `handoff/` — ausschließlich temporäre, aktive Übergaben.
@@ -24,15 +24,15 @@ Job Radar ist eine lokale Tauri-2-Desktop-App für wiederholbare Jobsuchen: Quel
 
 ### Issue tracker
 
-Issues werden als GitHub Issues in diesem Repository verwaltet; externe Pull Requests sind keine Triage-Request-Surface. Siehe `docs/agents/issue-tracker.md`.
+Issues werden als GitHub Issues in diesem Repository verwaltet; externe Pull Requests sind keine Triage-Request-Surface. Siehe `docs/development/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Die fünf kanonischen Triage-Rollen verwenden `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` und `wontfix`. Siehe `docs/agents/triage-labels.md`.
+Die fünf kanonischen Triage-Rollen verwenden `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` und `wontfix`. Siehe `docs/development/agents/triage-labels.md`.
 
 ### Domain docs
 
-Das Repository verwendet ein Single-Context-Layout mit `CONTEXT.md` und `docs/adr/` im Repository-Root. Siehe `docs/agents/domain.md`.
+Das Repository verwendet ein Single-Context-Layout mit `CONTEXT.md` und `docs/development/adr/` im Repository-Root. Siehe `docs/development/agents/domain.md`.
 
 ## Befehle
 

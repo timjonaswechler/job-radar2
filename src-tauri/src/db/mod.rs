@@ -1,4 +1,3 @@
-pub mod migrations;
 pub mod seed;
 use crate::db::seed::seed_database;
 

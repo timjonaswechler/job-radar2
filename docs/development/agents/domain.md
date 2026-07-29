@@ -1,11 +1,11 @@
 # Domain Docs
 
-Job Radar verwendet ein Single-Context-Layout. `CONTEXT.md` und `docs/adr/` im Repository-Root gelten für Frontend und Backend.
+Job Radar verwendet ein Single-Context-Layout. `CONTEXT.md` und `docs/development/adr/` im Repository-Root gelten für Frontend und Backend.
 
 ## Vor der Arbeit lesen
 
 - `CONTEXT.md` für die kanonische Domain-Sprache.
-- Die ADRs unter `docs/adr/`, die den zu bearbeitenden Bereich betreffen.
+- Die ADRs unter `docs/development/adr/`, die den zu bearbeitenden Bereich betreffen.
 - Für Source/Profile-DSL-Arbeit zusätzlich die in `AGENTS.md` genannten PRDs und ADRs.
 
 Falls eine dieser Dateien nicht existiert, wird stillschweigend weitergearbeitet. Domain-Dokumentation wird durch `/domain-modeling` bedarfsgerecht ergänzt, nicht vorsorglich erzeugt.

@@ -40,7 +40,7 @@ for spec in "${PATTERNS[@]}"; do
 import base64, json, os, subprocess
 from pathlib import Path
 
-roots = ["src-tauri/src", "src-tauri/tests", "src-tauri/crates/agent", "src-tauri/resources", "src", "docs", "research"]
+roots = ["src-tauri/src", "src-tauri/tests", "src-tauri/crates/agent", "src-tauri/resources", "src", "docs"]
 extensions = {".rs", ".json", ".ts", ".tsx", ".md"}
 tracked = subprocess.run(
     ["git", "ls-files", "--", *roots],
@@ -100,7 +100,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='0c4b06a3ac26e8c504a84b9d5299d4d11c09647d36eb1ad6f51e2c35a02c3f54'
+FROZEN_MANIFEST_SHA256='7b5852368be5eca7a67ce74f6d048e358d82f8811cc07c31111b3cad2c7aa415'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then
@@ -122,7 +122,7 @@ while IFS=$'\t' read -r evidence class rationale rest; do
     exit 1
   fi
   path=${evidence%%:*}
-  if [[ "$path" == docs/adr/* && "$class" == historical_documentation ]]; then
+  if [[ "$path" == docs/development/adr/* && "$class" == historical_documentation ]]; then
     echo "Accepted ADR residue is active, not historical: $evidence" >&2
     exit 1
   fi

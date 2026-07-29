@@ -1,6 +1,6 @@
 # Agent Conversation core
 
-This document describes the provider-neutral, ephemeral conversation contract accepted in [`ADR 0011`](../../adr/0011-minimal-agent-conversation-contract.md). The lifecycle behavior follows the Pi baseline pinned in [`research/pi-rust-agent-baseline.md`](../../../research/pi-rust-agent-baseline.md) without introducing provider transport, tools, or persistence.
+This document describes the provider-neutral, ephemeral conversation contract accepted in [`ADR 0011`](../adr/0011-minimal-agent-conversation-contract.md). The lifecycle behavior follows the Pi baseline pinned in [`docs/development/research/pi-rust-agent-baseline.md`](../research/pi-rust-agent-baseline.md) without introducing provider transport, tools, or persistence.
 
 ## Behavior
 

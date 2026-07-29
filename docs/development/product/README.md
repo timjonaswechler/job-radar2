@@ -2,12 +2,12 @@
 
 Product documentation defines what Job Radar should do, for whom, and within which scope. It records accepted behavior and requirements without turning implementation details into user instructions.
 
-Accepted Product Requirement Documents remain in the existing [`docs/prd/`](../prd/) directory so current links stay valid:
+Accepted Product Requirement Documents live in [`../prd/`](../prd/):
 
 - [Declarative Source Profile DSL](../prd/declarative-source-profile-dsl.md)
 - [Declarative Profile Strategy Algebra](../prd/declarative-profile-strategy-algebra.md)
 - [Search Request geolocation](../prd/search-request-geolocation.md)
 
-Use a PRD for accepted product behavior, constraints, acceptance criteria, and explicit non-goals. User task instructions belong in the [User Guide](../user-guide/README.md); architectural rationale belongs in [Architecture](../architecture/README.md).
+Use a PRD for accepted product behavior, constraints, acceptance criteria, and explicit non-goals. User task instructions belong in the [User Guide](../../user/README.md); architectural rationale belongs in [Architecture](../architecture/README.md).
 
-[Back to the documentation portal](../index.md)
+[Back to the documentation portal](../../index.md)

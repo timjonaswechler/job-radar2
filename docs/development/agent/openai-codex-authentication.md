@@ -1,6 +1,6 @@
 # OpenAI Codex authentication and model selection
 
-This document describes the OpenAI ChatGPT/Codex subscription authentication and pinned model-selection adapter behind the provider-neutral Rust Agent module. The behavior is derived from the MIT-licensed Pi baseline pinned in [`research/pi-rust-agent-baseline.md`](../../../research/pi-rust-agent-baseline.md) at commit `dcfe36c79702ec240b146c45f167ab75ecddd205`.
+This document describes the OpenAI ChatGPT/Codex subscription authentication and pinned model-selection adapter behind the provider-neutral Rust Agent module. The behavior is derived from the MIT-licensed Pi baseline pinned in [`docs/development/research/pi-rust-agent-baseline.md`](../research/pi-rust-agent-baseline.md) at commit `dcfe36c79702ec240b146c45f167ab75ecddd205`.
 
 ## Contract
 

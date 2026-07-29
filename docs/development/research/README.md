@@ -10,4 +10,4 @@ A research document should identify:
 - local conclusions and deliberate deviations;
 - unresolved decisions and revalidation triggers.
 
-When a decision is accepted, record it in `docs/adr/` or `docs/prd/`. Remove obsolete research once it no longer provides evidence that is referenced by an active decision or implementation.
+When a decision is accepted, record it in `docs/development/adr/` or `docs/development/prd/`. Remove obsolete research once it no longer provides evidence that is referenced by an active decision or implementation.

@@ -1,6 +1,6 @@
 # OpenAI Codex conversation streaming
 
-This document describes the explicit-SSE OpenAI Codex `ConversationProvider` behind the provider-neutral Agent Conversation interface. Request and event behavior is derived from the MIT-licensed Pi baseline pinned in [`research/pi-rust-agent-baseline.md`](../../../research/pi-rust-agent-baseline.md) at commit `dcfe36c79702ec240b146c45f167ab75ecddd205`.
+This document describes the explicit-SSE OpenAI Codex `ConversationProvider` behind the provider-neutral Agent Conversation interface. Request and event behavior is derived from the MIT-licensed Pi baseline pinned in [`docs/development/research/pi-rust-agent-baseline.md`](../research/pi-rust-agent-baseline.md) at commit `dcfe36c79702ec240b146c45f167ab75ecddd205`.
 
 ## Contract
 

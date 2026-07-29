@@ -1,6 +1,6 @@
 # Provider-neutral agent authentication storage
 
-The internal Rust agent authentication module ports the credential contract pinned in [`research/pi-auth-model-registry-behavior.md`](../../../research/pi-auth-model-registry-behavior.md). It stores provider-keyed `api_key` and `oauth` entries under the portable `agents/` application-data root while deliberately strengthening Pi's persistence and reload guarantees.
+The internal Rust agent authentication module ports the credential contract pinned in [`docs/development/research/pi-auth-model-registry-behavior.md`](../research/pi-auth-model-registry-behavior.md). It stores provider-keyed `api_key` and `oauth` entries under the portable `agents/` application-data root while deliberately strengthening Pi's persistence and reload guarantees.
 
 ## Credential contract
 

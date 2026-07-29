@@ -5,8 +5,8 @@
 ## Canonical sources
 
 1. `CONTEXT.md` — domain vocabulary.
-2. `docs/prd/` and `docs/adr/` — accepted product and architecture decisions.
-3. `AGENTS.md` and `docs/agents/` — repository and tracker workflow.
+2. `docs/development/prd/` and `docs/development/adr/` — accepted product and architecture decisions.
+3. `AGENTS.md` and `docs/development/agents/` — repository and tracker workflow.
 4. GitHub Issues — current scope, dependencies, readiness, and completion state.
 
 ## Lifecycle

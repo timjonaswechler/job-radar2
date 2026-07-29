@@ -33,7 +33,7 @@ prompts/source-profile-fixture-workup.md
 search-run-candidates.json
 
 # Generated/local data kept out of repository history
-/Cargo.lock
+*Cargo.lock
 /src-tauri/Cargo.lock
 /src-tauri/geo/*.txt
 .pi-subagents/
