@@ -149,6 +149,12 @@ impl AgentChat {
             .unwrap_or_else(|| self.session.snapshot().reasoning_level())
     }
 
+    pub fn context_window(&self) -> Option<u64> {
+        self.conversation
+            .as_ref()
+            .map(|conversation| conversation.model().context_window())
+    }
+
     pub fn state(&self) -> AgentChatState {
         if self.not_saved {
             AgentChatState::NotSaved
@@ -646,6 +652,10 @@ impl AgentChatEventStream<'_> {
 
     pub fn reasoning_level(&self) -> ReasoningLevel {
         self.conversation.reasoning_level()
+    }
+
+    pub fn context_window(&self) -> u64 {
+        self.conversation.model().context_window()
     }
 
     pub fn is_finished(&self) -> bool {

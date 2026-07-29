@@ -70,6 +70,102 @@ export const en = {
       },
     },
   },
+  agentChat: {
+    loading: "Loading Agent Chat…",
+    status: {
+      saved: "Saved",
+      running: "Active",
+      modelUnavailable: "Model missing",
+      readOnly: "Read-only",
+      damaged: "Damaged",
+      notSaved: "Not saved",
+      waiting: "The Agent is responding…",
+    },
+    messages: {
+      reasoning: "Reasoning",
+      reasoningRedacted: "Reasoning is unavailable",
+    },
+    composer: {
+      label: "Message the Agent",
+      placeholder: "Message the Agent…",
+    },
+    actions: {
+      send: "Send message",
+      stop: "Stop response",
+      resize: "Resize Chat and Canvas",
+      selectModel: "Select Agent Model",
+      selectReasoning: "Select Reasoning Level",
+      compact: "Compact Agent Chat",
+    },
+    context: {
+      label: "Context usage",
+      estimated:
+        "Usage is an estimate of the provider context for the next request.",
+      unavailable: "Context usage is unavailable",
+      unavailableShort: "Context unavailable",
+    },
+    reasoning: {
+      off: "Off",
+      minimal: "Minimal",
+      low: "Low",
+      medium: "Medium",
+      high: "High",
+      x_high: "Very high",
+      max: "Maximum",
+    },
+    compaction: {
+      running: "Compacting the Agent Chat…",
+      marker: "Context compacted",
+      tokensBefore: "{{count}} tokens before",
+    },
+    notices: {
+      aborted: "The response was stopped and not saved.",
+      compacted: "The Agent Chat was compacted.",
+      compactionCancelled: "Compaction was cancelled.",
+    },
+    recovery: {
+      title: "Agent Chat was recovered",
+      incompleteFinalTurnDiscarded:
+        "An incomplete final response was discarded. The previously saved history remains available.",
+    },
+    states: {
+      title: "Agent Chat is restricted",
+      running:
+        "The Agent Chat already has an active operation. It can be stopped.",
+      modelUnavailable:
+        "The previously used Agent Model is unavailable. Explicitly select an available model.",
+      readOnlyLocked:
+        "The Agent Chat is open in another process and can only be read here.",
+      readOnlyUnsupported:
+        "The Agent Chat contains a recognized but unsupported format and can only be read.",
+      damaged:
+        "The saved Agent Chat data is damaged. The Chat cannot be continued.",
+    },
+    errors: {
+      loadTitle: "Agent Chat could not be opened",
+      actionTitle: "Action failed",
+      authenticationUnavailable:
+        "The provider sign-in could not be used for this request. Reload Agent settings or sign in again.",
+      invalidConfiguration:
+        "The Agent configuration is invalid or unavailable.",
+      rateLimited:
+        "The provider rate limit has been reached. Try again later.",
+      transportUnavailable:
+        "The provider is currently unreachable over the network.",
+      modelUnavailable:
+        "The selected Agent Model is unavailable. Select another model.",
+      contextFull:
+        "The context is full. Compact the Chat or select a model with a larger context.",
+      providerFailed:
+        "The provider could not process the request.",
+      chatBusy: "The Agent Chat already has an active operation.",
+      readOnly: "The Agent Chat is read-only.",
+      unsupported: "This Agent Chat format can only be read.",
+      damaged: "The saved Agent Chat data is damaged.",
+      notSaved: "The response was generated but could not be saved.",
+      unavailable: "The Agent Chat is currently unavailable.",
+    },
+  },
   settings: {
     agents: {
       title: "Agent providers",

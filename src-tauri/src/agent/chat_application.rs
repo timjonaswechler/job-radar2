@@ -132,6 +132,8 @@ pub struct AgentChatProjection {
     pub selected_provider_id: Option<String>,
     pub selected_model_id: Option<String>,
     pub reasoning_level: ApplicationReasoningLevel,
+    pub context_tokens: u64,
+    pub context_window: Option<u64>,
     pub recovery_notices: Vec<AgentChatRecoveryNotice>,
 }
 
@@ -535,7 +537,12 @@ impl AgentChatApplication {
         }
 
         while let Some(event) = stream.next().await {
-            let mut projected = project_snapshot(stream.snapshot(), stream.state(), false);
+            let mut projected = project_snapshot(
+                stream.snapshot(),
+                stream.state(),
+                false,
+                Some(stream.context_window()),
+            );
             projected.selected_provider_id = Some(stream.selected_provider().as_str().to_owned());
             projected.selected_model_id = Some(stream.selected_model().as_str().to_owned());
             projected.reasoning_level = stream.reasoning_level().into();
@@ -628,7 +635,12 @@ fn parse_id(id: &AgentChatId) -> Result<SessionId, AgentChatApplicationError> {
 }
 
 fn project_chat(chat: &AgentChat, running: bool) -> AgentChatProjection {
-    let mut projection = project_snapshot(chat.snapshot(), chat.state(), running);
+    let mut projection = project_snapshot(
+        chat.snapshot(),
+        chat.state(),
+        running,
+        chat.context_window(),
+    );
     projection.selected_provider_id = chat
         .selected_provider()
         .map(|provider| provider.as_str().to_owned());
@@ -641,6 +653,7 @@ fn project_snapshot(
     snapshot: &SessionSnapshot,
     state: AgentChatState,
     running: bool,
+    context_window: Option<u64>,
 ) -> AgentChatProjection {
     AgentChatProjection {
         id: AgentChatId(snapshot.id().to_string()),
@@ -692,6 +705,8 @@ fn project_snapshot(
             .selected_model()
             .map(|model| model.as_str().to_owned()),
         reasoning_level: snapshot.reasoning_level().into(),
+        context_tokens: snapshot.context_tokens(),
+        context_window,
         recovery_notices: snapshot
             .recovery_notices()
             .iter()

@@ -70,6 +70,102 @@ export const de = {
       },
     },
   },
+  agentChat: {
+    loading: "Agent Chat wird geladen…",
+    status: {
+      saved: "Gespeichert",
+      running: "Aktiv",
+      modelUnavailable: "Modell fehlt",
+      readOnly: "Schreibgeschützt",
+      damaged: "Beschädigt",
+      notSaved: "Nicht gespeichert",
+      waiting: "Der Agent antwortet…",
+    },
+    messages: {
+      reasoning: "Reasoning",
+      reasoningRedacted: "Reasoning ist nicht verfügbar",
+    },
+    composer: {
+      label: "Nachricht an den Agenten",
+      placeholder: "Nachricht an den Agenten…",
+    },
+    actions: {
+      send: "Nachricht senden",
+      stop: "Antwort stoppen",
+      resize: "Chat und Canvas in der Größe ändern",
+      selectModel: "Agent Model auswählen",
+      selectReasoning: "Reasoning Level auswählen",
+      compact: "Agent Chat komprimieren",
+    },
+    context: {
+      label: "Kontextnutzung",
+      estimated:
+        "Die Nutzung ist eine Schätzung des Provider-Kontexts für die nächste Anfrage.",
+      unavailable: "Kontextnutzung ist nicht verfügbar",
+      unavailableShort: "Kontext nicht verfügbar",
+    },
+    reasoning: {
+      off: "Aus",
+      minimal: "Minimal",
+      low: "Niedrig",
+      medium: "Mittel",
+      high: "Hoch",
+      x_high: "Sehr hoch",
+      max: "Maximal",
+    },
+    compaction: {
+      running: "Der Agent Chat wird komprimiert…",
+      marker: "Kontext komprimiert",
+      tokensBefore: "{{count}} Tokens zuvor",
+    },
+    notices: {
+      aborted: "Die Antwort wurde gestoppt und nicht gespeichert.",
+      compacted: "Der Agent Chat wurde komprimiert.",
+      compactionCancelled: "Die Komprimierung wurde abgebrochen.",
+    },
+    recovery: {
+      title: "Agent Chat wurde wiederhergestellt",
+      incompleteFinalTurnDiscarded:
+        "Eine unvollständige letzte Antwort wurde verworfen. Der vorherige gespeicherte Verlauf ist weiterhin verfügbar.",
+    },
+    states: {
+      title: "Agent Chat ist eingeschränkt",
+      running:
+        "Im Agent Chat läuft bereits eine Aktion. Sie kann gestoppt werden.",
+      modelUnavailable:
+        "Das zuletzt verwendete Agent Model ist nicht verfügbar. Wähle ausdrücklich ein verfügbares Modell aus.",
+      readOnlyLocked:
+        "Der Agent Chat ist in einem anderen Prozess geöffnet und kann hier nur gelesen werden.",
+      readOnlyUnsupported:
+        "Der Agent Chat enthält ein erkanntes, aber nicht unterstütztes Format und kann nur gelesen werden.",
+      damaged:
+        "Die gespeicherten Agent-Chat-Daten sind beschädigt. Der Chat kann nicht fortgesetzt werden.",
+    },
+    errors: {
+      loadTitle: "Agent Chat konnte nicht geöffnet werden",
+      actionTitle: "Aktion fehlgeschlagen",
+      authenticationUnavailable:
+        "Die Provider-Anmeldung konnte für diese Anfrage nicht verwendet werden. Lade die Agent-Einstellungen neu oder melde dich erneut an.",
+      invalidConfiguration:
+        "Die Agent-Konfiguration ist ungültig oder nicht verfügbar.",
+      rateLimited:
+        "Der Provider hat das Anfrage-Limit erreicht. Versuche es später erneut.",
+      transportUnavailable:
+        "Der Provider ist über das Netzwerk derzeit nicht erreichbar.",
+      modelUnavailable:
+        "Das ausgewählte Agent Model ist nicht verfügbar. Wähle ein anderes Modell.",
+      contextFull:
+        "Der Kontext ist voll. Komprimiere den Chat oder wähle ein Modell mit größerem Kontext.",
+      providerFailed:
+        "Der Provider konnte die Anfrage nicht verarbeiten.",
+      chatBusy: "Im Agent Chat läuft bereits eine Aktion.",
+      readOnly: "Der Agent Chat ist schreibgeschützt.",
+      unsupported: "Dieses Agent-Chat-Format kann nur gelesen werden.",
+      damaged: "Die gespeicherten Agent-Chat-Daten sind beschädigt.",
+      notSaved: "Die Antwort wurde erzeugt, konnte aber nicht gespeichert werden.",
+      unavailable: "Der Agent Chat ist derzeit nicht verfügbar.",
+    },
+  },
   settings: {
     agents: {
       title: "Agent-Provider",

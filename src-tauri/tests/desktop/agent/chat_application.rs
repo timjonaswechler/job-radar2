@@ -110,6 +110,8 @@ fn application_service_streams_visible_content_then_projects_only_durable_chat_s
         assert_eq!(draft.status, AgentChatStatus::Ready);
         assert_eq!(draft.selected_model_id.as_deref(), Some("synthetic-model"));
         assert_eq!(draft.reasoning_level, ApplicationReasoningLevel::Medium);
+        assert_eq!(draft.context_tokens, 0);
+        assert_eq!(draft.context_window, Some(128_000));
 
         let (sender, mut receiver) = mpsc::unbounded_channel();
         application
@@ -148,6 +150,8 @@ fn application_service_streams_visible_content_then_projects_only_durable_chat_s
         };
         assert_eq!(completed.history.len(), 1);
         assert_eq!(completed.status, AgentChatStatus::Ready);
+        assert!(completed.context_tokens > 0);
+        assert_eq!(completed.context_window, Some(128_000));
         application
             .set_reasoning_level(&draft.id, ApplicationReasoningLevel::Off)
             .await
