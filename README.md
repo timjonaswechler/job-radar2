@@ -68,7 +68,7 @@ Das vollständige Projektvokabular steht in [`CONTEXT.md`](CONTEXT.md).
 
 Das zentrale [`Dokumentationsportal`](docs/index.md) führt nach Zielgruppe und Zweck zu allen gepflegten Dokumentationsbereichen.
 
-- **Job Radar verwenden:** im [`User Guide`](docs/user-guide/README.md) beginnen; diese README bleibt Produktüberblick und lokaler Einstieg.
+- **Job Radar verwenden:** Der [`User Guide für den ersten vollständigen Search Run`](docs/user-guide/README.md) führt vom lokalen Start über Source und Search Request bis zu Ergebnissen und Troubleshooting; diese README bleibt Produktüberblick und kurzer lokaler Einstieg.
 - **Job Radar entwickeln:** mit [`Development`](docs/development/README.md) und dem [`CONTEXT.md`](CONTEXT.md)-Vokabular beginnen.
 - **Entscheidungen und Anforderungen verstehen:** die Einstiege für [`Architecture`](docs/architecture/README.md) und [`Product`](docs/product/README.md) verwenden.
 - **Fakten nachschlagen oder interne Arbeit einordnen:** zu [`Reference`](docs/reference/README.md) beziehungsweise [`Project-internal work`](docs/project/README.md) wechseln.
@@ -79,7 +79,7 @@ Bestehende ADR-, PRD- und Entwicklungslinks bleiben während der schrittweisen M
 
 ## Lokal starten
 
-Für die normale Entwicklung:
+Vorausgesetzt werden Node.js mit `npm`, eine Rust-Toolchain und die [Tauri-2-Systemvoraussetzungen](https://v2.tauri.app/start/prerequisites/) für das eigene Betriebssystem. Für die normale Entwicklung im lokalen Repository-Checkout:
 
 ```bash
 npm install

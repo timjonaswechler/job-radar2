@@ -2,7 +2,7 @@
 
 This is the central entry point for maintained Job Radar documentation. Choose the route that matches why you are here:
 
-- **Using Job Radar:** start with the [User Guide](user-guide/README.md) for product concepts, workflows, and troubleshooting.
+- **Using Job Radar:** follow the [User Guide](user-guide/README.md) from local startup through Source setup, Search Request creation, the first complete Search Run, and troubleshooting.
 - **Building or changing Job Radar:** start with [Development](development/README.md), then consult [Architecture](architecture/README.md), [Product](product/README.md), and [Reference](reference/README.md) as needed.
 
 The repository [README](../README.md) remains the product overview and local setup entry point.
@@ -11,7 +11,7 @@ The repository [README](../README.md) remains the product overview and local set
 
 | Area | Purpose | Put here |
 |---|---|---|
-| [User Guide](user-guide/README.md) | Help people use the application successfully. | User-facing concepts, task-oriented guides, and troubleshooting. |
+| [User Guide](user-guide/README.md) | Help people use the application successfully, starting with the first complete Search Run. | User-facing concepts, task-oriented guides, and troubleshooting. |
 | [Development](development/README.md) | Help contributors build, test, debug, and operate the development environment. | Maintained engineering workflows and implemented technical contracts. |
 | [Architecture](architecture/README.md) | Explain why the system is shaped as it is. | Architecture navigation and accepted Architecture Decision Records. |
 | [Product](product/README.md) | Define intended product behavior and scope. | Product navigation and accepted Product Requirement Documents. |
