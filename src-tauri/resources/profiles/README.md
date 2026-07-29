@@ -17,5 +17,5 @@ The fixture README files distinguish synthetic regression data, vendor documenta
 Run the built-in profile tests with:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles
+cargo test --manifest-path src-tauri/Cargo.toml --test bundled_source_profiles
 ```

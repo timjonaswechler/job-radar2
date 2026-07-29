@@ -41,7 +41,7 @@ Im Entwicklungsloop gilt `quick → focused → full`; das Full Gate ist grunds�
 ```bash
 just quick                                    # schnelle Typechecks, Frontendtests, cargo check --tests
 just frontend-test settings                   # fokussierter Vitest-Lauf
-just rust-test profile_dsl_profiles workday:: # fokussiertes sichtbares Cargo-Testtarget
+just rust-test bundled_source_profiles workday:: # fokussiertes sichtbares Cargo-Testtarget
 just verify                                   # vollständiges lokales Übergabe-Gate
 just package                                  # Tauri-Paket für die aktuelle Plattform
 npm run tauri -- dev                          # App starten

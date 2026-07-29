@@ -284,10 +284,10 @@ pub fn frozen_owner_classification(
 ) -> OwnerClassification {
     let catalogue = match layer {
         InventoryLayer::Schema => {
-            include_str!("../../../../../../tests/fixtures/primitive_completeness/primitive-schema-owner-catalogue.txt")
+            include_str!("../../../../tests/fixtures/primitive_completeness/primitive-schema-owner-catalogue.txt")
         }
         InventoryLayer::Serde => {
-            include_str!("../../../../../../tests/fixtures/primitive_completeness/primitive-serde-owner-catalogue.txt")
+            include_str!("../../../../tests/fixtures/primitive_completeness/primitive-serde-owner-catalogue.txt")
         }
         InventoryLayer::Compiled => panic!("compiled registrations carry owner metadata directly"),
     };

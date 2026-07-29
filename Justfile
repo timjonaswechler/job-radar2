@@ -23,16 +23,22 @@ frontend-check:
 frontend-test *args:
     npm run test:frontend -- "$@"
 
-# Check all Rust test targets without linking or running their test programs.
+# Check all workspace Rust test targets without linking or running their test programs.
 [group('Development loops')]
 rust-check:
-    cargo check --manifest-path src-tauri/Cargo.toml --tests
+    cargo check --manifest-path src-tauri/Cargo.toml --workspace --tests
 
-# Run one named Rust integration-test target; optional Cargo test filters and arguments are forwarded unchanged.
+# Run one desktop-package integration-test target; optional Cargo test filters and arguments are forwarded unchanged.
 [group('Development loops')]
 [positional-arguments]
 rust-test target *args:
-    target="$1"; shift; cargo test --manifest-path src-tauri/Cargo.toml --test "$target" "$@"
+    target="$1"; shift; cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test "$target" "$@"
+
+# Run one integration-test target owned by a specific workspace package.
+[group('Development loops')]
+[positional-arguments]
+rust-crate-test package target *args:
+    package="$1"; target="$2"; shift 2; cargo test --manifest-path src-tauri/Cargo.toml --package "$package" --test "$target" "$@"
 
 # Run Rust library unit tests; optional Cargo test filters and arguments are forwarded unchanged.
 [group('Development loops')]
@@ -46,7 +52,7 @@ verify:
     npm run check:frontend
     npm run check:markdown-links
     cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-    cargo test --manifest-path src-tauri/Cargo.toml
+    cargo test --manifest-path src-tauri/Cargo.toml --workspace
     git diff --check
 
 # Build the Tauri desktop package for the current platform; optional Tauri arguments are forwarded unchanged.

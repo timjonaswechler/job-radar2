@@ -15,7 +15,7 @@ Use the repository's [`quick → focused → full`](docs/development/validation.
 
 ```bash
 just quick
-just rust-test profile_dsl_profiles workday:: # example focused target
+just rust-test bundled_source_profiles workday:: # example focused target
 just verify                                   # required before handoff
 ```
 

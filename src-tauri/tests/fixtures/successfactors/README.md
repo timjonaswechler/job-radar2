@@ -22,7 +22,7 @@ All posting data in this directory is repository-owned test data.
 - `posting-detail-*.html` — synthetic primary and fallback Detail inputs.
 - `posting-detail-*-expected.json` — expected lazy Detail results.
 
-The corresponding integration tests are in [`profile_dsl_profiles/successfactors.rs`](../../profile_dsl_profiles/successfactors.rs).
+The corresponding integration tests are in [`bundled_source_profiles/successfactors.rs`](../../bundled_source_profiles/successfactors.rs).
 
 ## Provenance and limits
 
@@ -40,5 +40,5 @@ Operational confidence for a concrete Source comes from its Source Live Check. N
 ## Focused validation
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles successfactors::
+cargo test --manifest-path src-tauri/Cargo.toml --test bundled_source_profiles successfactors::
 ```

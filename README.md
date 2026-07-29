@@ -91,7 +91,7 @@ Nützliche weitere Befehle:
 ```bash
 just quick                     # schnelle Typechecks, Frontendtests und cargo check --tests
 just frontend-test settings    # Frontendtest über Vitest filtern
-just rust-test profile_dsl_profiles workday:: # ein sichtbares Rust-Testtarget fokussieren
+just rust-test bundled_source_profiles workday:: # ein sichtbares Rust-Testtarget fokussieren
 just verify                    # vollständiges lokales Übergabe-Gate
 just package                   # Desktop-App für das aktuelle System bauen
 npm run test:frontend:watch -- settings       # Vitest im gefilterten Watch-Modus

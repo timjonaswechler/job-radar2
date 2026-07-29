@@ -22,7 +22,7 @@ The `Acme Robotics` tenant, host, site, requisitions, and posting data are repos
 - [`posting-detail-jr-1001-response.json`](posting-detail-jr-1001-response.json) — synthetic detail response.
 - [`posting-detail-jr-1001-expected.json`](posting-detail-jr-1001-expected.json) — expected lazy Detail result.
 
-The corresponding integration tests are in [`profile_dsl_profiles/workday.rs`](../../profile_dsl_profiles/workday.rs).
+The corresponding integration tests are in [`bundled_source_profiles/workday.rs`](../../bundled_source_profiles/workday.rs).
 
 ## Provenance and limits
 
@@ -33,5 +33,5 @@ Operational confidence for a concrete Source comes from its Source Live Check.
 ## Focused validation
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles workday::
+cargo test --manifest-path src-tauri/Cargo.toml --test bundled_source_profiles workday::
 ```

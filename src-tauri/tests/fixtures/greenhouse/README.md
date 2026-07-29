@@ -19,7 +19,7 @@ These synthetic fixtures exercise the built-in `greenhouse` Source Profile witho
 - [`posting-detail-9001-response.json`](posting-detail-9001-response.json) — synthetic detail response.
 - [`posting-detail-9001-expected.json`](posting-detail-9001-expected.json) — expected lazy Detail result.
 
-The corresponding integration tests are in [`profile_dsl_profiles/greenhouse.rs`](../../profile_dsl_profiles/greenhouse.rs).
+The corresponding integration tests are in [`bundled_source_profiles/greenhouse.rs`](../../bundled_source_profiles/greenhouse.rs).
 
 ## Provenance and limits
 
@@ -30,5 +30,5 @@ The fixture proves parser and runtime behavior only. It does not prove that a co
 ## Focused validation
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test profile_dsl_profiles greenhouse::
+cargo test --manifest-path src-tauri/Cargo.toml --test bundled_source_profiles greenhouse::
 ```

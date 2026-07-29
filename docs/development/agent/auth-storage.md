@@ -36,7 +36,7 @@ These persistence and POSIX permission contracts currently run on macOS and Linu
 Run on a supported Unix host:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml agent::auth::tests
-cargo test --manifest-path src-tauri/Cargo.toml --test agent data_root::
+cargo test --manifest-path src-tauri/crates/agent/Cargo.toml auth::tests
+cargo test --manifest-path src-tauri/crates/agent/Cargo.toml --test contracts authentication_storage::
 npm run test:agent-credential-safety
 ```

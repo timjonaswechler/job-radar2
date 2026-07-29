@@ -17,9 +17,9 @@ This document describes the provider-neutral, ephemeral conversation contract ac
 
 ## Verification
 
-External integration tests cover lifecycle order, completed commits, failed/aborted rollback, multi-turn replay, stable conversation identity, model and Reasoning Level changes, malformed provider streams, and scripted-provider mismatch handling. A compile-fail doctest verifies that the stream's mutable borrow prevents concurrent mutation.
+Crate-owned contract tests cover lifecycle order, completed commits, failed/aborted rollback, multi-turn replay, stable conversation identity, model and Reasoning Level changes, malformed provider streams, and scripted-provider mismatch handling. A compile-fail doctest verifies that the stream's mutable borrow prevents concurrent mutation.
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --test agent conversation::
-cargo test --manifest-path src-tauri/Cargo.toml --doc
+cargo test --manifest-path src-tauri/crates/agent/Cargo.toml --lib contract_tests::conversation::
+cargo test --manifest-path src-tauri/crates/agent/Cargo.toml --doc
 ```
