@@ -10,7 +10,6 @@ edition = "2021"
 members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl"]
 resolver = "2"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -18,14 +17,6 @@ resolver = "2"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "job_radar_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
-
-[[bin]]
-name = "agent-debug"
-path = "src/bin/agent_debug.rs"
-required-features = ["agent-debug"]
-
-[features]
-agent-debug = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
