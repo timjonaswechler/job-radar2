@@ -33,6 +33,12 @@ just rust-crate-test agent contracts model_registry::
 # Focus desktop-package library tests.
 just rust-unit search::run::tests
 
+# Focus the portable persistent Agent Chat proof.
+just agent-chat-proof
+
+# Opt-in production-adapter macOS storage/locking/Trash smoke.
+just agent-chat-macos-smoke
+
 # Required before handoff.
 just verify
 
@@ -52,6 +58,8 @@ The underlying recipes are:
 | `rust-test <target> [args]` | `cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test <target> [args]` |
 | `rust-crate-test <package> <target> [args]` | `cargo test --manifest-path src-tauri/Cargo.toml --package <package> --test <target> [args]` |
 | `rust-unit [args]` | `cargo test --manifest-path src-tauri/Cargo.toml --lib [args]` |
+| `agent-chat-proof` | portable Agent crate, Tauri application seam, and React Chat/Canvas tests |
+| `agent-chat-macos-smoke` | ignored opt-in production-adapter storage/locking/Trash smoke with one synthetic session |
 | `docs-check` | dependency-free internal Markdown destination and heading-anchor validation |
 | `verify` | frontend full check, Markdown links, `cargo fmt --check`, `cargo test --workspace`, `git diff --check` |
 | `package [args]` | `npm run tauri -- build [args]` |

@@ -1043,6 +1043,66 @@ fn subprocess_crash_and_snapshot_contracts_use_explicit_ipc() {
     writer.child.wait().unwrap();
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+#[ignore = "opt-in native smoke: moves one synthetic session through macOS Trash"]
+fn native_macos_storage_locking_and_trash_smoke() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().unwrap();
+    let agents_root = root(&temp);
+    let manager = crate::sessions::SessionManager::from_agents_data_root(&agents_root).unwrap();
+    let mut writer = manager.create().unwrap();
+    writer
+        .append_completed_turn(turn("synthetic native smoke response"))
+        .unwrap();
+    let session_id = writer.snapshot().id();
+
+    assert_eq!(
+        std::fs::metadata(&agents_root)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o700
+    );
+    let session_path = std::fs::read_dir(agents_root.join("sessions"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .path()
+                .extension()
+                .is_some_and(|value| value == "jsonl")
+        })
+        .unwrap()
+        .path();
+    assert_eq!(
+        std::fs::metadata(&session_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+
+    let snapshot = manager.open(&session_id).unwrap();
+    assert_eq!(snapshot.snapshot().access(), SessionAccess::ReadOnlyLocked);
+    drop(snapshot);
+    drop(writer);
+
+    let writer_after_release = manager.open(&session_id).unwrap();
+    assert_eq!(
+        writer_after_release.snapshot().access(),
+        SessionAccess::Writable
+    );
+    drop(writer_after_release);
+
+    manager.move_to_trash(&session_id).unwrap();
+    assert!(!session_path.exists());
+    assert!(manager.open(&session_id).is_err());
+}
+
 #[cfg(unix)]
 #[test]
 fn storage_permissions_are_private() {

@@ -46,6 +46,18 @@ rust-crate-test package target *args:
 rust-unit *args:
     cargo test --manifest-path src-tauri/Cargo.toml --lib "$@"
 
+# Run the portable persistent Agent Chat proof through Rust, Tauri, and React public seams.
+[group('Development loops')]
+agent-chat-proof:
+    cargo test --manifest-path src-tauri/Cargo.toml --package agent
+    cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test desktop agent::chat_application::
+    npm run test:frontend -- src/features/agent-chat/tests
+
+# Move one synthetic session through production macOS storage, locking, and Trash adapters.
+[group('Development loops')]
+agent-chat-macos-smoke:
+    cargo test --manifest-path src-tauri/Cargo.toml --package agent native_macos_storage_locking_and_trash_smoke -- --ignored --nocapture
+
 # Run the complete handoff gate (frontend, documentation, Rust, and whitespace validation).
 [group('Development loops')]
 verify:

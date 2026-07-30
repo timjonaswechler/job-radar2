@@ -60,7 +60,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
 
   desktop-build:
-    name: Desktop build (${{ matrix.os }})
+    name: Agent Chat gates + desktop build (${{ matrix.os }})
     needs: quality
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -106,6 +106,18 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      # Persistent Agent Chats are supported by one portable contract. Run the
+      # public Rust, Tauri application, and React shell gates on every desktop
+      # target rather than treating a successful native bundle as test evidence.
+      - name: Portable Agent Chat Rust gates
+        run: cargo test --manifest-path src-tauri/Cargo.toml --package agent
+
+      - name: Portable Agent Chat Tauri application gates
+        run: cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test desktop agent::chat_application::
+
+      - name: Portable Agent Chat frontend gates
+        run: npm run test:frontend -- src/features/agent-chat/tests
 
       - name: Tauri desktop bundle
         env:

@@ -8,5 +8,6 @@ The internal Rust Agent implementation is intentionally separated into stable co
 - [`openai-codex-authentication.md`](openai-codex-authentication.md) — provider-specific authentication and model selection.
 - [`openai-codex-streaming.md`](openai-codex-streaming.md) — provider-specific request, SSE, replay, and redaction contract.
 - [`debug-harness.md`](debug-harness.md) — feature-gated development harness.
+- [`persistent-agent-chat-verification.md`](persistent-agent-chat-verification.md) — aggregate deterministic, CI, native, UI, and opt-in provider evidence for persistent Agent Chats.
 
 Upstream behavior studies and proposed future capabilities are kept under [`research/`](../research/) because they are non-normative until adopted by an ADR or PRD.
