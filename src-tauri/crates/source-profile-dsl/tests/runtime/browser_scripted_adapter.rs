@@ -1,9 +1,9 @@
 use source_profile_dsl::{
-    BrowserAcquisition, BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal,
-    BrowserLifecycleEvent, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    PhaseCompletion, PhaseLimits, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation, BrowserAcquisition,
+    BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal, BrowserLifecycleEvent,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PhaseCompletion, PhaseLimits,
+    ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
     ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization,
-    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation,
 };
 
 fn request_snapshot(
