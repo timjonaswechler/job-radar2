@@ -94,12 +94,17 @@ docs/development/profile-dsl/catalog.md:259:11:predicate_composition:negat	activ
 docs/development/profile-dsl/catalog.md:516:8:http_byte_dimension:response_bytes	active_contract_documentation	Maintained Profile DSL limit inventory; reviewed as documentation rather than implementation.
 docs/development/profile-dsl/catalog.md:524:4:rate_limit:rate_limit	active_contract_documentation	Maintained Profile DSL limit inventory; reviewed as documentation rather than implementation.
 docs/development/profile-dsl/catalog.md:559:21:arbitrary_execution:JavaScript	active_contract_documentation	Maintained Profile DSL inventory explicitly excludes arbitrary Rust, JavaScript, and shell code.
-docs/development/research/issue-44-browser-assisted-element-picker.md:11:599:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
-docs/development/research/issue-44-browser-assisted-element-picker.md:19:699:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
-docs/development/research/issue-44-browser-assisted-element-picker.md:29:485:retry:retry	historical_documentation	Historical nonproductive evidence.
-docs/development/research/issue-44-browser-assisted-element-picker.md:69:164:old_detection:mutable capture	historical_documentation	Historical nonproductive evidence.
-docs/development/research/issue-44-browser-assisted-element-picker.md:73:148:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
-docs/development/research/issue-44-browser-assisted-element-picker.md:7:186:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:102:200:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:152:414:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:155:55:arbitrary_execution:plugin	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:163:13:arbitrary_execution:javascript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:173:191:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:183:87:retry:Retry	historical_documentation	Historical nonproductive evidence.
+docs/development/research/issue-44-browser-assisted-element-picker.md:219:110:bot:Bot	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:246:70:retry:retry	historical_documentation	Historical nonproductive evidence.
+docs/development/research/issue-44-browser-assisted-element-picker.md:36:147:retry:retry	historical_documentation	Historical nonproductive evidence.
+docs/development/research/issue-44-browser-assisted-element-picker.md:78:50:arbitrary_execution:JavaScript	historical_documentation	Non-active historical or handoff documentation reviewed.
+docs/development/research/issue-44-browser-assisted-element-picker.md:84:130:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
 docs/development/research/pi-auth-model-registry-behavior.md:17:245:retry:retry	historical_documentation	Historical nonproductive evidence.
 docs/development/research/pi-auth-model-registry-behavior.md:23:71:arbitrary_execution:shell	historical_documentation	Non-active historical or handoff documentation reviewed.
 docs/development/research/pi-auth-model-registry-behavior.md:33:211:retry:retry	historical_documentation	Historical nonproductive evidence.
