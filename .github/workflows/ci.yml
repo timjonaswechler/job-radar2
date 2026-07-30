@@ -114,7 +114,9 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --package agent
 
       - name: Portable Agent Chat Tauri application gates
-        run: cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test desktop agent::chat_application::
+        run: >-
+          cargo test --manifest-path src-tauri/Cargo.toml --package job-radar
+          --test desktop agent::chat_application::
 
       - name: Portable Agent Chat frontend gates
         run: npm run test:frontend -- src/features/agent-chat/tests
