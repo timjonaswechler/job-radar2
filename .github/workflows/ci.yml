@@ -37,6 +37,22 @@ jobs:
       - name: Check internal Markdown links
         run: npm run check:markdown-links
 
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
