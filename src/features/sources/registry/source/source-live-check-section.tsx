@@ -24,6 +24,7 @@ import {
   checkAndReactivateSource,
   checkSource,
   getSourceLiveCheckReportStatus,
+  setSourceInactive,
   type CheckReport,
   type RegistrySource,
   type SourceLiveCheckReportStatus,
@@ -44,6 +45,7 @@ export function SourceLiveCheckSection({
   const [liveCheckLoading, setLiveCheckLoading] = useState(true);
   const [runningAction, setRunningAction] =
     useState<SourceLiveCheckActionKind | null>(null);
+  const [changingLifecycle, setChangingLifecycle] = useState(false);
   const [liveCheckError, setLiveCheckError] = useState<string | null>(null);
   const model = sourceLiveCheckDisplayModel(liveCheckStatus);
   const actions = useMemo(
@@ -76,6 +78,23 @@ export function SourceLiveCheckSection({
   useEffect(() => {
     void refreshLiveCheckStatus();
   }, [refreshLiveCheckStatus]);
+
+  const setInactive = useCallback(async () => {
+    const status = source.document.status === "disabled" ? "draft" : "disabled";
+    setChangingLifecycle(true);
+    setLiveCheckError(null);
+    try {
+      await setSourceInactive(sourceKey, status);
+      await onUpdated?.();
+      toast.success(status === "disabled" ? "Source deaktiviert" : "Source als Entwurf gesetzt");
+    } catch (unknownError) {
+      const message = errorMessage(unknownError);
+      setLiveCheckError(message);
+      toast.error("Source Status konnte nicht geändert werden", { description: message });
+    } finally {
+      setChangingLifecycle(false);
+    }
+  }, [onUpdated, source.document.status, sourceKey]);
 
   const runLiveCheckAction = useCallback(
     async (kind: SourceLiveCheckActionKind) => {
@@ -150,7 +169,7 @@ export function SourceLiveCheckSection({
             type="button"
             variant="outline"
             size="sm"
-            disabled={liveCheckLoading || runningAction !== null}
+            disabled={liveCheckLoading || runningAction !== null || changingLifecycle}
             onClick={refreshLiveCheckStatus}
           >
             <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
@@ -163,7 +182,7 @@ export function SourceLiveCheckSection({
               size="sm"
               variant={action.kind === "check" ? "outline" : "default"}
               title={action.description}
-              disabled={liveCheckLoading || runningAction !== null}
+              disabled={liveCheckLoading || runningAction !== null || changingLifecycle}
               onClick={() => void runLiveCheckAction(action.kind)}
             >
               {runningAction === action.kind ? (
@@ -178,6 +197,24 @@ export function SourceLiveCheckSection({
               {action.label}
             </Button>
           ))}
+          {source.origin === "custom" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={liveCheckLoading || runningAction !== null || changingLifecycle}
+              onClick={() => void setInactive()}
+            >
+              {changingLifecycle ? (
+                <Loader2Icon
+                  data-icon="inline-start"
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {source.document.status === "disabled" ? "Als Entwurf setzen" : "Deaktivieren"}
+            </Button>
+          ) : null}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 pub mod agent;
 mod app;
+mod atomic_file;
 mod background_tasks;
 mod browser_runtime;
 mod checks;
@@ -8,6 +9,7 @@ mod geo;
 mod profile_dsl;
 mod search;
 mod source;
+mod source_onboarding;
 mod source_profile;
 
 pub use crate::geo::GeoDbResolver;
@@ -18,16 +20,12 @@ pub use ::geo::{
 };
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use checks::{
-    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
-    check_source_with_runtime, check_source_with_runtime_context, evaluate_check_report_freshness,
-    latest_check_report_path, persist_latest_check_report, prepare_source_behavior_fingerprints,
-    read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
-    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
-    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportStaleDetail,
-    CheckReportStaleReason, CheckReportSubject, CheckReportSubjectType,
-    SourceBehaviorFingerprintPreparationError, SourceBehaviorFingerprintPreparationErrorKind,
-    SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
-    CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    evaluate_check_report_freshness, prepare_source_behavior_fingerprints, CheckFingerprint,
+    CheckReport, CheckReportFreshness, CheckReportFreshnessState, CheckReportKind,
+    CheckReportResult, CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject,
+    CheckReportSubjectType, SourceBehaviorFingerprintPreparationError,
+    SourceBehaviorFingerprintPreparationErrorKind, SourceLiveCheckReportState,
+    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 pub use profile_dsl::primitives::completeness::{
     classify_tagged_variant_keys, escape_json_pointer_token, missing_witness,
@@ -180,6 +178,11 @@ pub use search_resolution::{
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
 pub use source::validation::{SourceValidationState, ValidationStateKind};
+pub use source_onboarding::{
+    CreateSourceDraft, DetectSource, DetectionOutcome, InactiveSourceStatus, OperationContext,
+    ReviseSourceDefinition, SavedSource, SourceChange, SourceChangeOutcome, SourceLiveCheckOutcome,
+    SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError, SourceOnboardingErrorKind,
+};
 pub use source_profile::detection::{
     aggregate_detection_attempts, compile_detection_plan, detection_descriptor_for_authored_kind,
     detection_descriptor_for_url_input_kind, detection_shape_descriptors,
@@ -305,6 +308,7 @@ pub fn run() {
             app::commands::detect_source_proposal_from_url,
             app::commands::create_source,
             app::commands::update_source,
+            app::commands::set_source_inactive,
             app::commands::create_search_request,
             app::commands::list_search_requests,
             app::commands::get_search_request,

@@ -359,6 +359,18 @@ export type SourceDocument = {
   diagnostics?: Diagnostics
 }
 
+export type CreateSourceDraft = {
+  key: SourceKey
+  name: string
+  sourceConfig: JsonObject
+  selectedAccessPath: SelectedAccessPath
+  accessPaths?: AccessPathFragment[]
+  sourceSupport?: SupportMetadata
+}
+
+export type ReviseSourceDefinition = CreateSourceDraft
+export type InactiveSourceStatus = "draft" | "disabled"
+
 export type ValidationStateKind = "unknown" | "valid" | "invalid"
 
 export type SourceValidationState = {
@@ -381,6 +393,12 @@ export type RegistrySource = {
   document: SourceDocument
   validationState: SourceValidationState
   effectiveProfile?: SourceProfileDocument
+}
+
+export type SavedSource = {
+  origin: SourceRegistryDocumentOrigin
+  document: SourceDocument
+  validationState: SourceValidationState
 }
 
 export type CheckReportKind = "source_live_check"
@@ -546,10 +564,7 @@ export type DetectionProfileOutcome = {
   diagnostics: Diagnostics
 }
 
-export type DetectionOperationResult = {
-  attempts: DetectionAttempt[]
-  profileOutcomes: DetectionProfileOutcome[]
-  runResult: SourceProposalDetectionResult
+export type DetectionOperationResult = SourceProposalDetectionResult & {
   diagnostics: Diagnostics
   report: PhaseExecutionReport
 }
@@ -595,10 +610,14 @@ export function detectSourceProposalFromUrl(url: string) {
   return invoke<DetectionOperationResult>("detect_source_proposal_from_url", { url })
 }
 
-export function createSource(document: SourceDocument) {
-  return invoke<RegistrySource>("create_source", { document })
+export function createSource(draft: CreateSourceDraft) {
+  return invoke<SavedSource>("create_source", { draft })
 }
 
-export function updateSource(document: SourceDocument) {
-  return invoke<RegistrySource>("update_source", { document })
+export function updateSource(revision: ReviseSourceDefinition) {
+  return invoke<SavedSource>("update_source", { revision })
+}
+
+export function setSourceInactive(sourceKey: string, status: InactiveSourceStatus) {
+  return invoke<SavedSource>("set_source_inactive", { sourceKey, status })
 }

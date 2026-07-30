@@ -14,7 +14,6 @@ import {
   updateSource,
   type RegistrySource,
   type RegistrySourceProfile,
-  type SourceStatus,
 } from "@/lib/api/sources";
 
 import {
@@ -61,9 +60,6 @@ export function useSourceEdit({
   );
 
   const [name, setName] = useState(initialDraft?.name ?? "");
-  const [status, setStatus] = useState<SourceStatus>(
-    initialDraft?.status ?? "draft",
-  );
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>(
     initialDraft?.configEntries ?? [],
   );
@@ -91,7 +87,6 @@ export function useSourceEdit({
     sessionSourceKeyRef.current = source.document.key;
     baselineDraftRef.current = initialDraft;
     setName(initialDraft.name);
-    setStatus(initialDraft.status);
     setConfigEntries(initialDraft.configEntries);
     setDirectSourceSpecializationText(initialDraft.directSourceSpecializationText);
     setJsonPreviewOpen(false);
@@ -105,13 +100,12 @@ export function useSourceEdit({
         ? buildUpdatedSourceDocument({
             source,
             name,
-            status,
             configEntries,
             directSourceSpecializationText,
             schemaMetadata,
           })
         : { document: null, errors: [], configErrors: [], specializationErrors: [] },
-    [configEntries, name, schemaMetadata, source, directSourceSpecializationText, status],
+    [configEntries, name, schemaMetadata, source, directSourceSpecializationText],
   );
   const previewJson = useMemo(
     () =>
@@ -128,8 +122,8 @@ export function useSourceEdit({
   const supportsProfileOverrides =
     source?.document.selectedAccessPath.type === "profile_access_path";
   const currentDraft = useMemo<SourceEditDraftState>(
-    () => ({ name, status, configEntries, directSourceSpecializationText }),
-    [configEntries, name, directSourceSpecializationText, status],
+    () => ({ name, configEntries, directSourceSpecializationText }),
+    [configEntries, name, directSourceSpecializationText],
   );
   const isDirty = baselineDraftRef.current
     ? isSourceEditDraftDirty(currentDraft, baselineDraftRef.current)
@@ -139,7 +133,6 @@ export function useSourceEdit({
     const baselineDraft = baselineDraftRef.current;
     if (baselineDraft) {
       setName(baselineDraft.name);
-      setStatus(baselineDraft.status);
       setConfigEntries(baselineDraft.configEntries);
       setDirectSourceSpecializationText(baselineDraft.directSourceSpecializationText);
     }
@@ -200,7 +193,6 @@ export function useSourceEdit({
   return {
     state: {
       name,
-      status,
       configEntries,
       directSourceSpecializationText,
       jsonPreviewOpen,
@@ -219,7 +211,6 @@ export function useSourceEdit({
     },
     actions: {
       setName,
-      setStatus,
       setConfigEntries,
       setDirectSourceSpecializationText,
       requestClose: unsavedChanges.requestClose,

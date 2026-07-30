@@ -6,17 +6,16 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import { directSourceSpecializationFromText } from "@/features/sources/source-form/direct-source-specialization";
-import type { RegistrySource, SourceDocument, SourceStatus } from "@/lib/api/sources";
+import type { RegistrySource, ReviseSourceDefinition } from "@/lib/api/sources";
 
 export type SourceEditDraftState = {
   name: string;
-  status: SourceStatus;
   configEntries: SourceConfigEntry[];
   directSourceSpecializationText: string;
 };
 
 export type SourceEditBuildResult = {
-  document: SourceDocument | null;
+  document: ReviseSourceDefinition | null;
   errors: string[];
   configErrors: string[];
   specializationErrors: string[];
@@ -24,20 +23,17 @@ export type SourceEditBuildResult = {
 
 export type SourceEditDraftSnapshot = {
   name: string;
-  status: SourceStatus;
   configEntries: Array<{ key: string; value: string }>;
   directSourceSpecializationText: string;
 };
 
 export function sourceEditDraftSnapshot({
   name,
-  status,
   configEntries,
   directSourceSpecializationText,
 }: SourceEditDraftState): SourceEditDraftSnapshot {
   return {
     name,
-    status,
     configEntries: configEntries.map(({ key, value }) => ({ key, value })),
     directSourceSpecializationText,
   };
@@ -64,7 +60,6 @@ export function sourceEditDraftFromSource({
 }): SourceEditDraftState {
   return {
     name: source.document.name,
-    status: source.document.status,
     configEntries: entriesWithSchemaHints(
       configEntriesFromJsonObject(
         source.document.sourceConfig,
@@ -86,14 +81,12 @@ export function sourceEditDraftFromSource({
 export function buildUpdatedSourceDocument({
   source,
   name,
-  status,
   configEntries,
   directSourceSpecializationText,
   schemaMetadata,
 }: {
   source: RegistrySource;
   name: string;
-  status: SourceStatus;
   configEntries: SourceConfigEntry[];
   directSourceSpecializationText: string;
   schemaMetadata: SchemaMetadata;
@@ -115,11 +108,12 @@ export function buildUpdatedSourceDocument({
     };
   }
 
-  const document: SourceDocument = {
-    ...source.document,
+  const document: ReviseSourceDefinition = {
+    key: source.document.key,
     name: name.trim(),
-    status,
     sourceConfig: configResult.value,
+    selectedAccessPath: source.document.selectedAccessPath,
+    sourceSupport: source.document.sourceSupport,
   };
 
   if (specializationResult.value === null) {

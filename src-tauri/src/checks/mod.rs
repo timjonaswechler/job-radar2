@@ -10,9 +10,9 @@ pub use freshness::{
     evaluate_check_report_freshness, CheckReportFreshness, CheckReportFreshnessState,
     CheckReportStaleDetail, CheckReportStaleReason,
 };
-pub use persistence::{
-    latest_check_report_path, persist_latest_check_report, read_latest_check_report,
-    source_live_check_report_path, CheckReportPersistenceError,
+pub(crate) use persistence::{
+    persist_latest_check_report, read_latest_check_report, source_live_check_report_path,
+    CheckReportPersistenceError,
 };
 pub use report::{
     CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject, CheckReportSubjectType,
@@ -22,9 +22,10 @@ pub use source_behavior_fingerprints::{
     prepare_source_behavior_fingerprints, SourceBehaviorFingerprintPreparationError,
     SourceBehaviorFingerprintPreparationErrorKind,
 };
+pub(crate) use source_live::{
+    build_source_live_check_report, source_live_check_report_status,
+    SourceLiveCheckExecutionContext,
+};
 pub use source_live::{
-    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
-    check_source_with_runtime, check_source_with_runtime_context, source_live_check_report_status,
-    SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceLiveCheckReportStatus,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    SourceLiveCheckReportState, SourceLiveCheckReportStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };

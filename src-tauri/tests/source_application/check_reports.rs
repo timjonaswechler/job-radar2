@@ -1,8 +1,7 @@
 use job_radar_lib::{
-    evaluate_check_report_freshness, latest_check_report_path, persist_latest_check_report,
-    read_latest_check_report, source_live_check_report_path, CheckFingerprint, CheckReport,
-    CheckReportFreshnessState, CheckReportKind, CheckReportResult, CheckReportStaleReason,
-    CheckReportSubject, CHECK_REPORT_SCHEMA_VERSION,
+    evaluate_check_report_freshness, CheckFingerprint, CheckReport, CheckReportFreshnessState,
+    CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubject,
+    CHECK_REPORT_SCHEMA_VERSION,
 };
 use serde_json::json;
 
@@ -250,75 +249,4 @@ fn freshness_derives_stale_without_changing_persisted_result() {
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(serialized["result"], "failed");
     assert!(serialized.get("stale").is_none());
-}
-
-#[test]
-fn latest_report_paths_use_overwriteable_source_live_check_location() {
-    let app_data_dir = std::path::PathBuf::from("/tmp/job-radar-check-report-test");
-
-    assert_eq!(
-        source_live_check_report_path(&app_data_dir, "acme_jobs"),
-        app_data_dir.join("source-live-checks/acme_jobs.json")
-    );
-
-    let source_report = CheckReport::new(
-        CheckReportKind::SourceLiveCheck,
-        CheckReportSubject::source("acme_jobs"),
-        "2026-07-07T12:00:00Z",
-        "source-live-check/v1",
-        CheckReportResult::Failed,
-    );
-    assert_eq!(
-        latest_check_report_path(&app_data_dir, &source_report).unwrap(),
-        app_data_dir.join("source-live-checks/acme_jobs.json")
-    );
-}
-
-#[test]
-fn latest_report_path_rejects_invalid_source_key() {
-    let app_data_dir = std::path::PathBuf::from("/tmp/job-radar-check-report-test");
-    let report = CheckReport::new(
-        CheckReportKind::SourceLiveCheck,
-        CheckReportSubject::source("../outside"),
-        "2026-07-07T12:00:00Z",
-        "source-live-check/v1",
-        CheckReportResult::Failed,
-    );
-
-    let error = latest_check_report_path(&app_data_dir, &report).unwrap_err();
-
-    assert!(error
-        .to_string()
-        .contains("invalid Source key `../outside`"));
-}
-
-#[test]
-fn persistence_overwrites_latest_source_live_check_report() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let app_data_dir = temp_dir.path();
-
-    let first = CheckReport::new(
-        CheckReportKind::SourceLiveCheck,
-        CheckReportSubject::source("acme_jobs"),
-        "2026-07-07T12:00:00Z",
-        "source-live-check/v1",
-        CheckReportResult::Failed,
-    );
-    let path = persist_latest_check_report(app_data_dir, &first).unwrap();
-    assert_eq!(
-        read_latest_check_report(&path).unwrap().result,
-        CheckReportResult::Failed
-    );
-
-    let second = CheckReport::new(
-        CheckReportKind::SourceLiveCheck,
-        CheckReportSubject::source("acme_jobs"),
-        "2026-07-07T12:05:00Z",
-        "source-live-check/v1",
-        CheckReportResult::Passed,
-    );
-    let overwritten_path = persist_latest_check_report(app_data_dir, &second).unwrap();
-
-    assert_eq!(overwritten_path, path);
-    assert_eq!(read_latest_check_report(&path).unwrap(), second);
 }

@@ -169,7 +169,6 @@ test("source create contract", async () => {
   assert.deepEqual(matchedDraft.form, {
     name: "ACME Jobs",
     key: "acme_jobs",
-    status: "draft",
     profileKey: "lever",
     pathKey: "xml_feed",
   });
@@ -299,7 +298,6 @@ test("source create contract", async () => {
     form: {
       name: detected?.name ?? "",
       key: detected?.key ?? "",
-      status: "draft",
       profileKey: detected?.profileKey ?? "",
       pathKey: detected?.pathKey ?? "",
     },
@@ -314,7 +312,7 @@ test("source create contract", async () => {
     ),
   });
   assert.deepEqual(buildResult.errors, []);
-  assert.equal(buildResult.document?.schemaVersion, 3);
+  assert.equal(Object.prototype.hasOwnProperty.call(buildResult.document ?? {}, "status"), false);
   assert.equal(buildResult.document?.selectedAccessPath.type, "profile_access_path");
   assert.deepEqual(buildResult.document?.sourceConfig, { boardSlug: "acme" });
   assert.deepEqual(buildResult.document?.accessPaths, [
@@ -358,10 +356,6 @@ test("source create contract", async () => {
       { ...cleanCreateDraft, form: { ...emptySourceCreateForm, name: "ACME" } },
     ],
     ["key", { ...cleanCreateDraft, form: { ...emptySourceCreateForm, key: "acme" } }],
-    [
-      "status",
-      { ...cleanCreateDraft, form: { ...emptySourceCreateForm, status: "active" as const } },
-    ],
     [
       "Source Profile",
       {
@@ -498,7 +492,7 @@ test("source create contract", async () => {
   assert.equal(unsupportedDetectionCopy.description.includes("startUrl übernommen"), true);
 
   function assertNoV1SourceProfileFields(
-    value: JsonValue | SourceDocument | null | undefined,
+    value: JsonValue | SourceDocument | Record<string, unknown> | null | undefined,
   ) {
     if (value === null || value === undefined) return;
     if (Array.isArray(value)) {

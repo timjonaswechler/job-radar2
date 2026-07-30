@@ -107,10 +107,8 @@ export function SourceCreateDrawer({
               form={state.form}
               saveAttempted={state.saveAttempted}
               saving={state.saving}
-              selectPortalContainer={drawerContentElement}
               onNameChange={actions.updateName}
               onKeyChange={actions.updateKey}
-              onStatusChange={actions.updateStatus}
             />
 
             <SourceAccessPathFields

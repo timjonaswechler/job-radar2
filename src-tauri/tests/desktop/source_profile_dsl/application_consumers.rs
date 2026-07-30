@@ -171,29 +171,17 @@ fn discovery_detail_http_post_browser_and_sitemap_compile_to_typed_owners() {
 }
 
 #[test]
-fn application_callers_type_check_at_source_live_check_and_search_run_boundaries() {
-    use job_radar_lib::{BrowserAcquisition, ProfileHttpClient};
-
-    fn source_live_check_boundary<D, T, A>(discovery: &D, detail: &T, browser: &A)
-    where
-        D: ProfileHttpClient + Sync + ?Sized,
-        T: ProfileHttpClient + Sync + ?Sized,
-        A: BrowserAcquisition + Sync,
-    {
-        let result = job_radar_lib::check_source_with_runtime(
-            "/tmp/g02-typecheck",
-            "source",
-            discovery,
-            detail,
-            browser,
+fn application_callers_type_check_at_source_onboarding_boundary() {
+    fn source_live_check_boundary(onboarding: &job_radar_lib::SourceOnboarding) {
+        let result = onboarding.live_check(
+            job_radar_lib::SourceLiveCheckRequest::Run {
+                source_key: "source".to_string(),
+            },
+            job_radar_lib::OperationContext::default(),
         );
         drop(result);
     }
-    let _ = source_live_check_boundary::<
-        job_radar_lib::ScriptedProfileHttpClient,
-        job_radar_lib::ScriptedProfileHttpClient,
-        job_radar_lib::ScriptedBrowserAcquisition,
-    >;
+    let _ = source_live_check_boundary;
 }
 
 #[test]
