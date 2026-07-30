@@ -2,6 +2,8 @@
 
 Architecture documentation explains durable system structure, boundaries, and why important technical choices were made.
 
+Repository-wide module and naming conventions are defined in [Module design and naming](module-design.md). Apply them when introducing or materially restructuring a module.
+
 Accepted decisions live in [`../adr/`](../adr/). Start with:
 
 - [Source Config as JSON Schema](../adr/0001-source-config-as-json-schema.md)

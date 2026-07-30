@@ -1,13 +1,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use job_radar_lib::{
-    BrowserAcquisition, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
-    BrowserAcquisitionRequestSnapshot, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
-    BrowserLifecycleEvent, ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait,
-    PhaseCompletion, PhaseLimits, RuntimeCancellation, ScriptedBrowserAcquisition,
-    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
-    ScriptedBrowserFinalization,
-    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation,
+    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation, BrowserAcquisition,
+    BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequestSnapshot,
+    BrowserAcquisitionTerminal, BrowserInfrastructureFailure, BrowserLifecycleEvent,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PhaseCompletion, PhaseLimits,
+    RuntimeCancellation, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization,
 };
 
 fn snapshot(target: &str, remaining: u64) -> BrowserAcquisitionRequestSnapshot {

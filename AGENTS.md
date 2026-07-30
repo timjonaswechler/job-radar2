@@ -51,6 +51,7 @@ npm run smoke:search-run                      # manueller, netzwerkabhängiger S
 ## Arbeitsregeln
 
 - Domain-Begriffe aus `CONTEXT.md` verwenden: z. B. Source, Source Profile, Access Path, Search Request, Search Run.
+- Bei neuen oder wesentlich umgebauten Modulen die Konventionen aus [`docs/development/architecture/module-design.md`](docs/development/architecture/module-design.md) anwenden: Der Modulpfad trägt den Kontext, öffentliche Namen wiederholen ihn nicht, und das Interface bleibt klein.
 - Suchkriterien gehören zur Search Request, nicht in Source Config oder Source Profile.
 - Die Profile DSL bleibt deklarative Konfiguration; keine profile-spezifischen Rust-Sonderfälle einbauen.
 - Source Profiles beschreiben wiederverwendbare Verhaltensfamilien, nicht bloß Host- oder Linkstrukturen. URL-Muster sind Detection-Hinweise; belastbare Detection kombiniert sie bei Bedarf mit begrenzter HTTP-, API-, HTML- oder Browser-Evidenz.

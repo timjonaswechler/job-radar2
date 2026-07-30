@@ -1,10 +1,10 @@
 use job_radar_lib::{
-    PhaseBrowser, __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
-    CompileSourceOutcome, Diagnostics, PhaseCancelled, PhaseExecutionFailure, PhaseExecutionReport,
-    PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome,
-    PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpClient, RegistrySourceProfile,
-    RequestedDetailFields, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
-    SourceProfileDocument, SourceProfileRegistrySnapshot,
+    __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
+    CompileSourceOutcome, Diagnostics, PhaseBrowser, PhaseCancelled, PhaseExecutionFailure,
+    PhaseExecutionReport, PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult,
+    PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpClient,
+    RegistrySourceProfile, RequestedDetailFields, RuntimeExecutionContext, SourceDocument,
+    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
 };
 
 pub struct AcceptedPhase<P> {

@@ -1,8 +1,7 @@
 use job_radar_lib::{
-    BrowserAcquisition, BrowserAcquisitionFailureKind, BrowserAcquisitionTerminal,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ManagedBrowserAcquisition,
-    PhaseCompletion, PhaseLimits,
-    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation,
+    __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation, BrowserAcquisition,
+    BrowserAcquisitionFailureKind, BrowserAcquisitionTerminal, ExecutionPlanBrowserInteraction,
+    ExecutionPlanBrowserWait, ManagedBrowserAcquisition, PhaseCompletion, PhaseLimits,
 };
 
 static REAL_PROBE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
