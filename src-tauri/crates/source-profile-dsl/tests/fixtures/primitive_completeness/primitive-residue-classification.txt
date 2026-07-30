@@ -21,7 +21,7 @@ docs/development/agent/persistent-agent-chat-verification.md:34:24:arbitrary_exe
 docs/development/agent/persistent-agent-chat-verification.md:37:37:arbitrary_execution:shell	active_contract_documentation	Maintained native Agent shell verification documentation; unrelated to Profile DSL arbitrary execution.
 docs/development/agent/persistent-agent-chat-verification.md:37:55:arbitrary_execution:shell	active_contract_documentation	Maintained native Agent shell verification documentation; unrelated to Profile DSL arbitrary execution.
 docs/development/agent/persistent-agent-chat-verification.md:49:17:arbitrary_execution:shell	active_contract_documentation	Maintained Agent shell delivery evidence; unrelated to Profile DSL arbitrary execution.
-docs/development/agent/persistent-agent-chat-verification.md:70:185:arbitrary_execution:shell	active_contract_documentation	Maintained native Agent shell verification documentation; unrelated to Profile DSL arbitrary execution.
+docs/development/agent/persistent-agent-chat-verification.md:72:185:arbitrary_execution:shell	active_contract_documentation	Maintained native Agent shell verification documentation; unrelated to Profile DSL arbitrary execution.
 docs/development/prd/declarative-profile-strategy-algebra.md:117:125:predicate_composition:negat	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/prd/declarative-profile-strategy-algebra.md:124:76:retry:retry	active_contract_documentation	Active contract or G02 verification documentation.
 docs/development/prd/declarative-profile-strategy-algebra.md:162:50:predicate_composition:negat	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
