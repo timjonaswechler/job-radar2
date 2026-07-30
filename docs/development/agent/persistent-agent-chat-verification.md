@@ -36,7 +36,7 @@ It records no session content or path. The ordinary test suite skips this test s
 | Private storage, two-process locking/release, and safe Trash with no permanent-delete fallback | Portable fault/subprocess tests; `native_macos_storage_locking_and_trash_smoke` uses production storage/lock/Trash adapters | Native macOS smoke | macOS | Pass on 2026-07-29 |
 | Native Tauri startup and reusable shell | #230 live shell checkpoints; release bundle built and launched with output discarded | Human/native acceptance | macOS | Pass on 2026-07-29; no private output retained |
 | Portable tests and desktop packaging | `desktop-build` matrix in `.github/workflows/ci.yml` runs Agent, Tauri application, frontend, and bundle gates | CI | macOS, Windows, Linux | Required for this revision; do not mark the ticket resolved until the run passes |
-| Configured-provider first durable turn, restart continuation, cancellation, explicit model change, manual compaction, and continuation | Sanitized opt-in assembled smoke described below | Live provider | macOS | Required before resolution; existing #230 evidence proves live persistent streaming and Stop only |
+| Configured-provider first durable turn, restart continuation, cancellation, explicit model change, manual compaction, and continuation | Sanitized opt-in assembled smoke described below | Live provider | macOS | Pass by user-operated acceptance on 2026-07-30; no private output retained |
 
 ## Slice aggregation
 
@@ -56,12 +56,14 @@ Run this only with a disposable synthetic conversation and an explicitly configu
 
 | Check | Outcome |
 | --- | --- |
-| First complete turn becomes durable | Not run for #231 |
-| Relaunch opens the same Chat and continues it | Not run for #231 |
-| Stop/cancellation creates no partial durable turn | Live Stop approved on #230; assembled restart check not run |
-| Explicit Agent Model change is retained | Not run for #231 |
-| Manual compaction succeeds and remains visible after relaunch | Not run for #231 |
-| Conversation continues after compaction | Not run for #231 |
+| First complete turn becomes durable | Pass |
+| Relaunch opens the same Chat and continues it | Pass |
+| Stop/cancellation creates no partial durable turn | Pass |
+| Explicit Agent Model change is retained | Pass |
+| Manual compaction succeeds and remains visible after relaunch | Pass |
+| Conversation continues after compaction | Pass |
+
+The user confirmed the assembled macOS behavior on 2026-07-30. Only the value-free outcomes above are retained; no prompt, response, replay, account, credential, identifier, or path was recorded.
 
 Do not copy terminal output into this document. A provider or environmental failure never triggers an automatic resend.
 
