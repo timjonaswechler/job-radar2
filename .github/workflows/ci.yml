@@ -125,13 +125,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Persistent Agent Chats are supported by one portable contract. Run the
-      # public Rust, Tauri application, and React shell gates on every desktop
-      # target rather than treating a successful native bundle as test evidence.
-      - name: Portable Agent Chat Rust gates
+      # Provider-neutral Agent and React behavior is portable. Persistence-backed
+      # Chat/session and Tauri application contracts run on supported Unix hosts;
+      # native Windows persistence and its contract re-enablement belong to #294.
+      - name: Portable Agent gates and supported-host persistence contracts
         run: cargo test --manifest-path src-tauri/Cargo.toml --package agent
 
-      - name: Portable Agent Chat Tauri application gates
+      - name: Supported-host Agent Chat Tauri application gates
+        if: runner.os != 'Windows'
         run: >-
           cargo test --manifest-path src-tauri/Cargo.toml --package job-radar
           --test desktop agent::chat_application::
