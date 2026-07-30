@@ -15,6 +15,7 @@ pub struct AppState {
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
+    pub source_onboarding: Arc<crate::source_onboarding::SourceOnboarding>,
 }
 
 impl AppState {
@@ -59,6 +60,15 @@ impl AppState {
             agent_session_manager,
             agent_chat_provider,
         ));
+        let source_http = Arc::new(crate::profile_dsl::runtime::ReqwestProfileHttpClient::new());
+        let source_browser = Arc::new(crate::browser_runtime::ManagedBrowserAcquisition::new(
+            paths.browser_runtime_dir.clone(),
+        ));
+        let source_onboarding = Arc::new(crate::source_onboarding::SourceOnboarding::new(
+            paths.app_data_dir.clone(),
+            source_http,
+            source_browser,
+        ));
 
         Ok(Self {
             db,
@@ -72,6 +82,7 @@ impl AppState {
             ),
             agent_configuration,
             agent_chats,
+            source_onboarding,
         })
     }
 }

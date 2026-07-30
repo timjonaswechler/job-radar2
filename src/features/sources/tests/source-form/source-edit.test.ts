@@ -52,7 +52,6 @@ test("source edit contract", async () => {
     createConfigEntryId: stableEntryIds("edit"),
   });
   assert.equal(draft.name, "ACME");
-  assert.equal(draft.status, "active");
   assert.deepEqual(
     draft.configEntries.map((entry) => [entry.key, entry.value]),
     [["boardSlug", "acme"]],
@@ -61,10 +60,6 @@ test("source edit contract", async () => {
   assert.equal(isSourceEditDraftDirty(draft, draft), false);
   assert.equal(
     isSourceEditDraftDirty({ ...draft, name: "ACME Updated" }, draft),
-    true,
-  );
-  assert.equal(
-    isSourceEditDraftDirty({ ...draft, status: "disabled" }, draft),
     true,
   );
   assert.equal(
@@ -134,7 +129,6 @@ test("source edit contract", async () => {
   const updated = buildUpdatedSourceDocument({
     source,
     name: "ACME Updated",
-    status: "disabled",
     configEntries: [
       { id: "board", key: "boardSlug", value: "acme-updated", locked: true },
     ],
@@ -144,7 +138,7 @@ test("source edit contract", async () => {
   assert.deepEqual(updated.errors, []);
   assert.equal(updated.document?.key, "acme");
   assert.equal(updated.document?.name, "ACME Updated");
-  assert.equal(updated.document?.status, "disabled");
+  assert.equal(Object.prototype.hasOwnProperty.call(updated.document ?? {}, "status"), false);
   assert.deepEqual(updated.document?.sourceConfig, { boardSlug: "acme-updated" });
   assert.equal(updated.document?.accessPaths, undefined);
   assert.deepEqual(updated.document?.selectedAccessPath, source.document.selectedAccessPath);
@@ -152,7 +146,6 @@ test("source edit contract", async () => {
   const invalid = buildUpdatedSourceDocument({
     source,
     name: " ",
-    status: "active",
     configEntries: [],
     directSourceSpecializationText: "{}",
     schemaMetadata,

@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::{fs, path::Path};
+use std::path::Path;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -525,19 +525,18 @@ pub async fn check_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
-        state.paths.browser_runtime_dir.clone(),
-    );
-    crate::checks::check_source_with_runtime(
-        &state.paths.app_data_dir,
-        source_key,
-        &discovery_fetcher,
-        &detail_fetcher,
-        &browser,
-    )
-    .await
+    match state
+        .source_onboarding
+        .live_check(
+            crate::source_onboarding::SourceLiveCheckRequest::Run { source_key },
+            crate::source_onboarding::OperationContext::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. } => Ok(report),
+        _ => Err("unexpected Source Onboarding outcome".to_string()),
+    }
 }
 
 #[tauri::command]
@@ -545,19 +544,19 @@ pub async fn check_and_activate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
-        state.paths.browser_runtime_dir.clone(),
-    );
-    crate::checks::check_and_activate_source_with_runtime(
-        &state.paths.app_data_dir,
-        source_key,
-        &discovery_fetcher,
-        &detail_fetcher,
-        &browser,
-    )
-    .await
+    match state
+        .source_onboarding
+        .live_check(
+            crate::source_onboarding::SourceLiveCheckRequest::CheckAndActivate { source_key },
+            crate::source_onboarding::OperationContext::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. }
+        | crate::source_onboarding::SourceLiveCheckOutcome::Activated { report, .. } => Ok(report),
+        _ => Err("unexpected Source Onboarding outcome".to_string()),
+    }
 }
 
 #[tauri::command]
@@ -565,213 +564,95 @@ pub async fn check_and_reactivate_source(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::CheckReport, String> {
-    let discovery_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let detail_fetcher = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let browser = crate::browser_runtime::ManagedBrowserAcquisition::new(
-        state.paths.browser_runtime_dir.clone(),
-    );
-    crate::checks::check_and_reactivate_source_with_runtime(
-        &state.paths.app_data_dir,
-        source_key,
-        &discovery_fetcher,
-        &detail_fetcher,
-        &browser,
-    )
-    .await
+    match state
+        .source_onboarding
+        .live_check(
+            crate::source_onboarding::SourceLiveCheckRequest::CheckAndActivate { source_key },
+            crate::source_onboarding::OperationContext::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. }
+        | crate::source_onboarding::SourceLiveCheckOutcome::Activated { report, .. } => Ok(report),
+        _ => Err("unexpected Source Onboarding outcome".to_string()),
+    }
 }
 
 #[tauri::command]
-pub fn get_source_live_check_report_status(
+pub async fn get_source_live_check_report_status(
     state: State<'_, AppState>,
     source_key: String,
 ) -> Result<crate::checks::SourceLiveCheckReportStatus, String> {
-    crate::checks::source_live_check_report_status(&state.paths.app_data_dir, source_key)
+    match state
+        .source_onboarding
+        .live_check(
+            crate::source_onboarding::SourceLiveCheckRequest::LatestReportStatus { source_key },
+            crate::source_onboarding::OperationContext::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        crate::source_onboarding::SourceLiveCheckOutcome::LatestReportStatus(status) => Ok(status),
+        _ => Err("unexpected Source Onboarding outcome".to_string()),
+    }
 }
 
 #[tauri::command]
 pub async fn detect_source_proposal_from_url(
     state: State<'_, AppState>,
     url: String,
-) -> Result<crate::source_profile::detection::DetectionOperationResult, String> {
-    let http_client = crate::profile_dsl::runtime::ReqwestProfileHttpClient::new();
-    let acquisition = crate::browser_runtime::ManagedBrowserAcquisition::new(
-        state.paths.browser_runtime_dir.clone(),
-    );
-    Ok(detect_source_proposal_from_url_with_runtime(
-        &state.paths.app_data_dir,
-        &url,
-        &http_client,
-        &acquisition,
-    )
-    .await)
-}
-
-async fn detect_source_proposal_from_url_with_runtime<C, A>(
-    app_data_dir: &Path,
-    url: &str,
-    http_client: &C,
-    acquisition: &A,
-) -> crate::source_profile::detection::DetectionOperationResult
-where
-    C: crate::profile_dsl::runtime::ProfileHttpClient + Sync + ?Sized,
-    A: crate::profile_dsl::runtime::BrowserAcquisition + Sync,
-{
-    struct Uncancelled;
-    impl crate::profile_dsl::runtime::RuntimeCancellation for Uncancelled {
-        fn is_cancelled(&self) -> bool {
-            false
-        }
-    }
-
-    let snapshot = load_source_profile_registry_snapshot(app_data_dir);
-    let mut plans = Vec::new();
-    let mut compile_diagnostics = Vec::new();
-    for profile in snapshot
-        .profiles
-        .iter()
-        .filter(|profile| profile.document.detection.is_some())
-    {
-        match crate::source_profile::detection::compile_detection_plan(&profile.document) {
-            Ok(plan) => plans.push(plan),
-            Err(diagnostics) => compile_diagnostics.extend(diagnostics),
-        }
-    }
-
-    if !compile_diagnostics.is_empty() {
-        let attempt =
-            crate::source_profile::detection::DetectionAttempt::Failed(compile_diagnostics.clone());
-        return crate::source_profile::detection::DetectionOperationResult {
-            attempts: vec![attempt.clone()],
-            profile_outcomes: Vec::new(),
-            run_result: crate::source_profile::detection::aggregate_detection_attempts(vec![
-                attempt,
-            ]),
-            diagnostics: compile_diagnostics,
-            report: crate::profile_dsl::runtime::PhaseExecutionReport {
-                usage: crate::profile_dsl::runtime::PhaseUsage::default(),
-                completion: crate::profile_dsl::runtime::PhaseCompletion::ExecutionFailed,
-            },
-        };
-    }
-
-    let acquisition: &dyn crate::profile_dsl::runtime::BrowserAcquisition = acquisition;
-    crate::source_profile::detection::execute_detection_operation(
-        url,
-        &plans,
-        http_client,
-        crate::profile_dsl::runtime::PhaseBrowser::Browser(acquisition),
-        &Uncancelled,
-    )
-    .await
+) -> Result<crate::source_onboarding::DetectionOutcome, String> {
+    state
+        .source_onboarding
+        .detect(
+            crate::source_onboarding::DetectSource { url },
+            crate::source_onboarding::OperationContext::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn create_source(
+pub async fn create_source(
     state: State<'_, AppState>,
-    document: crate::source::documents::SourceDocument,
-) -> Result<crate::source_profile::registry::RegistrySource, String> {
-    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
-
-    if snapshot.source(&document.key).is_some() {
-        return Err(format!(
-            "Eine Source mit dem Key `{}` existiert bereits.",
-            document.key
-        ));
-    }
-
-    fs::create_dir_all(&state.paths.sources_dir)
-        .map_err(|error| format!("Sources-Ordner konnte nicht angelegt werden: {error}"))?;
-    let path = state
-        .paths
-        .sources_dir
-        .join(format!("{}.json", document.key));
-    if path.exists() {
-        return Err(format!("Die Datei `{}` existiert bereits.", path.display()));
-    }
-
-    write_source_document(&path, &document)?;
-
-    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
-    snapshot.source(&document.key).cloned().ok_or_else(|| {
-        format!(
-            "Source `{}` wurde nach dem Schreiben nicht gefunden.",
-            document.key
-        )
-    })
+    draft: crate::source_onboarding::CreateSourceDraft,
+) -> Result<crate::source_onboarding::SavedSource, String> {
+    state
+        .source_onboarding
+        .change(crate::source_onboarding::SourceChange::CreateDraft(draft))
+        .await
+        .map(|outcome| outcome.source)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn update_source(
+pub async fn update_source(
     state: State<'_, AppState>,
-    document: crate::source::documents::SourceDocument,
-) -> Result<crate::source_profile::registry::RegistrySource, String> {
-    update_source_document(
-        &state.paths.app_data_dir,
-        &state.paths.sources_dir,
-        document,
-    )
+    revision: crate::source_onboarding::ReviseSourceDefinition,
+) -> Result<crate::source_onboarding::SavedSource, String> {
+    state
+        .source_onboarding
+        .change(crate::source_onboarding::SourceChange::ReviseDefinition(
+            revision,
+        ))
+        .await
+        .map(|outcome| outcome.source)
+        .map_err(|error| error.to_string())
 }
 
-fn update_source_document(
-    app_data_dir: &Path,
-    sources_dir: &Path,
-    document: crate::source::documents::SourceDocument,
-) -> Result<crate::source_profile::registry::RegistrySource, String> {
-    let snapshot = load_source_profile_registry_snapshot(app_data_dir);
-    let existing = snapshot
-        .source(&document.key)
-        .ok_or_else(|| format!("Source `{}` wurde nicht gefunden.", document.key))?;
-
-    validate_source_update_target(existing)?;
-
-    fs::create_dir_all(sources_dir)
-        .map_err(|error| format!("Sources-Ordner konnte nicht angelegt werden: {error}"))?;
-    let path = source_update_path(sources_dir, &document)?;
-    write_source_document(&path, &document)?;
-
-    let snapshot = load_source_profile_registry_snapshot(app_data_dir);
-    snapshot.source(&document.key).cloned().ok_or_else(|| {
-        format!(
-            "Source `{}` wurde nach dem Schreiben nicht gefunden.",
-            document.key
-        )
-    })
-}
-
-fn validate_source_update_target(
-    existing: &crate::source_profile::registry::RegistrySource,
-) -> Result<(), String> {
-    if existing.origin != "custom" {
-        return Err(format!(
-            "Source `{}` ist eingebaut und kann nicht überschrieben werden.",
-            existing.document.key
-        ));
-    }
-    Ok(())
-}
-
-fn source_update_path(
-    sources_dir: &Path,
-    document: &crate::source::documents::SourceDocument,
-) -> Result<std::path::PathBuf, String> {
-    let path = sources_dir.join(format!("{}.json", document.key));
-    if !path.exists() {
-        return Err(format!(
-            "Die Datei `{}` wurde nicht gefunden.",
-            path.display()
-        ));
-    }
-    Ok(path)
-}
-
-fn write_source_document(
-    path: &Path,
-    document: &crate::source::documents::SourceDocument,
-) -> Result<(), String> {
-    let contents = serde_json::to_string_pretty(document)
-        .map_err(|error| format!("Source konnte nicht serialisiert werden: {error}"))?;
-    fs::write(path, format!("{contents}\n"))
-        .map_err(|error| format!("Source konnte nicht geschrieben werden: {error}"))
+#[tauri::command]
+pub async fn set_source_inactive(
+    state: State<'_, AppState>,
+    source_key: String,
+    status: crate::source_onboarding::InactiveSourceStatus,
+) -> Result<crate::source_onboarding::SavedSource, String> {
+    state
+        .source_onboarding
+        .change(crate::source_onboarding::SourceChange::SetInactive { source_key, status })
+        .await
+        .map(|outcome| outcome.source)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1146,112 +1027,6 @@ mod tests {
                 snapshot.diagnostics
             );
         });
-    }
-
-    #[test]
-    fn update_source_document_overwrites_custom_source_registry_file() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let paths =
-            crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf()).unwrap();
-        fs::create_dir_all(&paths.sources_dir).unwrap();
-
-        let initial_source = command_test_source_document(
-            "acme",
-            "ACME",
-            crate::source::documents::SourceStatus::Active,
-            "acme",
-        );
-        let source_path = paths.sources_dir.join("acme.json");
-        write_source_document(&source_path, &initial_source).unwrap();
-
-        let updated_source = command_test_source_document(
-            "acme",
-            "ACME Updated",
-            crate::source::documents::SourceStatus::Disabled,
-            "acme-updated",
-        );
-        let updated_registry_source =
-            update_source_document(&paths.app_data_dir, &paths.sources_dir, updated_source)
-                .unwrap();
-
-        assert_eq!(updated_registry_source.origin, "custom");
-        assert_eq!(updated_registry_source.document.name, "ACME Updated");
-        assert_eq!(
-            updated_registry_source.document.status,
-            crate::source::documents::SourceStatus::Disabled
-        );
-        assert_eq!(
-            updated_registry_source.document.source_config["boardSlug"],
-            serde_json::json!("acme-updated")
-        );
-
-        let persisted: crate::source::documents::SourceDocument =
-            serde_json::from_str(&fs::read_to_string(source_path).unwrap()).unwrap();
-        assert_eq!(persisted.name, "ACME Updated");
-        assert_eq!(persisted.source_config["boardSlug"], "acme-updated");
-    }
-
-    #[test]
-    fn update_source_document_rejects_builtin_source_target() {
-        let source = command_test_source_document(
-            "builtin_acme",
-            "Built-in ACME",
-            crate::source::documents::SourceStatus::Active,
-            "builtin-acme",
-        );
-        let registry_source = crate::source_profile::registry::RegistrySource {
-            origin: "built_in".to_string(),
-            path: "resources/sources/builtin_acme.json".to_string(),
-            document: source,
-            validation_state: crate::source::validation::SourceValidationState {
-                source_key: "builtin_acme".to_string(),
-                state: crate::source::validation::ValidationStateKind::Valid,
-                can_compile: true,
-                can_execute: true,
-                diagnostics: Vec::new(),
-            },
-            effective_profile: None,
-            compile_outcome: None,
-        };
-
-        let error = validate_source_update_target(&registry_source).unwrap_err();
-        assert!(error.contains("ist eingebaut und kann nicht überschrieben werden"));
-    }
-
-    fn command_test_source_document(
-        key: &str,
-        name: &str,
-        status: crate::source::documents::SourceStatus,
-        board_slug: &str,
-    ) -> crate::source::documents::SourceDocument {
-        let mut source_config = serde_json::Map::new();
-        source_config.insert("boardSlug".to_string(), serde_json::json!(board_slug));
-
-        crate::source::documents::SourceDocument {
-            schema_version: 3,
-            key: key.to_string(),
-            name: name.to_string(),
-            status,
-            source_config,
-            selected_access_path: crate::source::documents::SelectedAccessPath::ProfileAccessPath {
-                profile_key: "greenhouse".to_string(),
-                path_key: "boards_api".to_string(),
-            },
-            access_paths: Some(
-                serde_json::from_value(serde_json::json!([{
-                    "key": "boards_api",
-                    "discovery": {
-                        "strategies": [{
-                            "key": "jobs_api",
-                            "acceptWhen": { "minResults": 0 }
-                        }]
-                    }
-                }]))
-                .expect("command test direct specialization must deserialize"),
-            ),
-            source_support: None,
-            diagnostics: None,
-        }
     }
 
     #[test]

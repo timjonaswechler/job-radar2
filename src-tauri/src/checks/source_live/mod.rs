@@ -1,5 +1,3 @@
-mod activation;
-
 use std::io::ErrorKind;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,14 +21,9 @@ use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnaps
 
 use super::persistence::validate_source_live_check_report_key;
 use super::{
-    evaluate_check_report_freshness, persist_latest_check_report, read_latest_check_report,
-    source_live_check_report_path, CheckFingerprint, CheckReport, CheckReportFreshness,
-    CheckReportFreshnessState, CheckReportKind, CheckReportPersistenceError, CheckReportResult,
-    CheckReportSubject,
-};
-
-pub use activation::{
-    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
+    evaluate_check_report_freshness, read_latest_check_report, source_live_check_report_path,
+    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
+    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportSubject,
 };
 
 pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
@@ -53,18 +46,18 @@ pub struct SourceLiveCheckReportStatus {
 }
 
 #[derive(Clone, Default)]
-pub struct SourceLiveCheckExecutionContext<'a> {
+pub(crate) struct SourceLiveCheckExecutionContext<'a> {
     checked_at: Option<String>,
     cancellation: Option<&'a dyn crate::profile_dsl::runtime::RuntimeCancellation>,
 }
 
 impl<'a> SourceLiveCheckExecutionContext<'a> {
-    pub fn with_checked_at(mut self, checked_at: impl Into<String>) -> Self {
+    pub(crate) fn with_checked_at(mut self, checked_at: impl Into<String>) -> Self {
         self.checked_at = Some(checked_at.into());
         self
     }
 
-    pub fn with_cancellation(
+    pub(crate) fn with_cancellation(
         mut self,
         cancellation: &'a dyn crate::profile_dsl::runtime::RuntimeCancellation,
     ) -> Self {
@@ -86,60 +79,7 @@ impl<'a> SourceLiveCheckExecutionContext<'a> {
     }
 }
 
-pub async fn check_source_with_runtime<D, T, A>(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-    discovery_fetcher: &D,
-    detail_fetcher: &T,
-    acquisition: &A,
-) -> Result<CheckReport, String>
-where
-    D: ProfileHttpClient + Sync + ?Sized,
-    T: ProfileHttpClient + Sync + ?Sized,
-    A: BrowserAcquisition + Sync,
-{
-    check_source_with_runtime_context(
-        app_data_dir,
-        source_key,
-        discovery_fetcher,
-        detail_fetcher,
-        acquisition,
-        SourceLiveCheckExecutionContext::default(),
-    )
-    .await
-}
-
-pub async fn check_source_with_runtime_context<D, T, A>(
-    app_data_dir: impl AsRef<Path>,
-    source_key: impl AsRef<str>,
-    discovery_fetcher: &D,
-    detail_fetcher: &T,
-    acquisition: &A,
-    context: SourceLiveCheckExecutionContext<'_>,
-) -> Result<CheckReport, String>
-where
-    D: ProfileHttpClient + Sync + ?Sized,
-    T: ProfileHttpClient + Sync + ?Sized,
-    A: BrowserAcquisition + Sync,
-{
-    let app_data_dir = app_data_dir.as_ref();
-    let source_key = source_key.as_ref();
-    validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
-    let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-    let report = build_source_live_check_report(
-        &snapshot,
-        source_key,
-        discovery_fetcher,
-        detail_fetcher,
-        acquisition,
-        &context,
-    )
-    .await?;
-    persist_latest_check_report(app_data_dir, &report).map_err(|error| error.to_string())?;
-    Ok(report)
-}
-
-pub fn source_live_check_report_status(
+pub(crate) fn source_live_check_report_status(
     app_data_dir: impl AsRef<Path>,
     source_key: impl AsRef<str>,
 ) -> Result<SourceLiveCheckReportStatus, String> {

@@ -73,9 +73,8 @@ Für einen Search Run wird mindestens eine valide, aktive und damit ausführbare
 3. Prüfe die Felder:
    - **Name** ist die sichtbare Bezeichnung.
    - **Key** ist die stabile Kennung und darf Kleinbuchstaben, Zahlen und Unterstriche enthalten.
-   - **Status** bleibt zunächst **„Entwurf“**.
    - **Quellenprofil**, **Zugriffspfad** und **Source Config** beschreiben den Zugriff auf die Source. Suchbegriffe gehören ausdrücklich nicht hierher.
-4. Wähle **„Quelle speichern“**. **„JSON ansehen“** zeigt bei Bedarf das daraus erzeugte Source-Dokument.
+4. Wähle **„Quelle speichern“**. Neue Sources werden immer als **„Entwurf“** angelegt; **„JSON ansehen“** zeigt bei Bedarf die authored Definition ohne frei wählbaren Lifecycle-Status.
 5. Klicke die neue Zeile in der Quellenliste an, um die Details zu öffnen.
 6. Wähle im Abschnitt **„Source Live Check“** die Aktion **„Prüfen & Aktivieren“**.
 

@@ -28,14 +28,10 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { profileKindLabels } from "@/features/sources/labels";
-import {
-  SourceNameField,
-  SourceStatusField,
-} from "@/features/sources/source-form/source-form-fields";
+import { SourceNameField } from "@/features/sources/source-form/source-form-fields";
 import type {
   ProfileAccessPathDefinition,
   RegistrySourceProfile,
-  SourceStatus,
 } from "@/lib/api/sources";
 
 import {
@@ -110,20 +106,16 @@ type SourceCreateIdentityFieldsProps = {
   form: SourceCreateFormState;
   saveAttempted: boolean;
   saving: boolean;
-  selectPortalContainer?: HTMLElement | null;
   onNameChange: (name: string) => void;
   onKeyChange: (key: string) => void;
-  onStatusChange: (status: SourceStatus) => void;
 };
 
 export function SourceCreateIdentityFields({
   form,
   saveAttempted,
   saving,
-  selectPortalContainer,
   onNameChange,
   onKeyChange,
-  onStatusChange,
 }: SourceCreateIdentityFieldsProps) {
   const keyInvalid = saveAttempted && (!form.key || !sourceKeyPattern.test(form.key));
 
@@ -157,13 +149,6 @@ export function SourceCreateIdentityFields({
           </FieldDescription>
         </Field>
 
-        <SourceStatusField
-          status={form.status}
-          description="Neue Quellen starten normalerweise als Entwurf, bis du sie geprüft hast."
-          disabled={saving}
-          selectPortalContainer={selectPortalContainer}
-          onChange={onStatusChange}
-        />
       </FieldGroup>
     </FieldSet>
   );

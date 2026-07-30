@@ -16,7 +16,6 @@ import {
   type RegistrySourceProfile,
   type SourceProposal,
   type SourceProposalDetectionResult,
-  type SourceStatus,
 } from "@/lib/api/sources";
 
 import {
@@ -168,10 +167,6 @@ export function useSourceCreate({
     setForm((current) => sourceCreateFormAfterKeyChange(current, key));
   };
 
-  const updateStatus = (status: SourceStatus) => {
-    setForm((current) => ({ ...current, status }));
-  };
-
   const updateProfile = (profileKey: string) => {
     const nextDraft = sourceCreateDraftAfterProfileChange({
       profiles,
@@ -229,8 +224,7 @@ export function useSourceCreate({
     try {
       setDetecting(true);
       setDetectionError(null);
-      const operation = await detectSourceProposalFromUrl(trimmedUrl);
-      const result = operation.runResult;
+      const result = await detectSourceProposalFromUrl(trimmedUrl);
       setDetectionResult(result);
 
       if (result.status === "matched") {
@@ -352,7 +346,6 @@ export function useSourceCreate({
       cancelDiscard: unsavedChanges.cancelDiscard,
       updateName,
       updateKey,
-      updateStatus,
       updateProfile,
       updateAccessPath,
       applyProposal,

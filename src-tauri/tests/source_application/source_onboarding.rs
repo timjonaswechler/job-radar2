@@ -1,15 +1,14 @@
-use std::{fs, future::Future, path::Path};
+use std::{fs, future::Future, path::Path, sync::Arc};
 
 use job_radar_lib::{
-    check_and_activate_source_with_runtime, check_and_reactivate_source_with_runtime,
-    check_source_with_runtime, check_source_with_runtime_context, persist_latest_check_report,
-    read_latest_check_report, source_live_check_report_path, source_live_check_report_status,
     CheckReport, CheckReportFreshnessState, CheckReportKind, CheckReportResult,
-    CheckReportStaleReason, CheckReportSubjectType, DiagnosticCategory, DiagnosticSeverity,
-    ProfileHttpClient, ProfileHttpRequest, RuntimeCancellation, ScriptedBrowserAcquisition,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceLiveCheckExecutionContext, SourceLiveCheckReportState, SourceStatus,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    CheckReportStaleReason, CheckReportSubjectType, CreateSourceDraft, DetectSource,
+    DetectionRunStatus, DiagnosticCategory, DiagnosticSeverity, OperationContext,
+    ProfileHttpRequest, ReviseSourceDefinition, RuntimeCancellation, SavedSource,
+    ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceChange, SourceDocument, SourceLiveCheckOutcome,
+    SourceLiveCheckReportState, SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError,
+    SourceOnboardingErrorKind, SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -29,6 +28,31 @@ fn write_profile(app_data_dir: &Path, profile: &serde_json::Value) {
     .unwrap();
 }
 
+fn detection_profile(
+    key: &str,
+    support_level: &str,
+    strategies: serde_json::Value,
+) -> serde_json::Value {
+    let mut profile: serde_json::Value =
+        serde_json::from_str(include_str!("../../resources/profiles/greenhouse.json")).unwrap();
+    profile["key"] = json!(key);
+    profile["name"] = json!(key);
+    profile["support"]["level"] = json!(support_level);
+    profile["sourceConfigSchema"] = json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startUrl"],
+        "properties": { "startUrl": { "type": "string", "format": "uri" } }
+    });
+    profile["accessPaths"].as_array_mut().unwrap().truncate(1);
+    profile["detection"] = json!({
+        "recommendedAccessPathKey": "boards_api",
+        "policy": { "type": "all_required" },
+        "strategies": strategies
+    });
+    profile
+}
+
 fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
     let source_dir = app_data_dir.join("sources");
     fs::create_dir_all(&source_dir).unwrap();
@@ -40,10 +64,6 @@ fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
     .unwrap();
 }
 
-fn browser_acquisition() -> ScriptedBrowserAcquisition {
-    ScriptedBrowserAcquisition::new([])
-}
-
 fn block_on<T>(future: impl Future<Output = T>) -> T {
     tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -52,51 +72,80 @@ fn block_on<T>(future: impl Future<Output = T>) -> T {
         .block_on(future)
 }
 
-fn run_check<F: ProfileHttpClient + Sync + ?Sized>(
-    app: impl AsRef<std::path::Path>,
+fn onboarding(
+    app_data_dir: impl AsRef<Path>,
+    client: Arc<ScriptedProfileHttpClient>,
+) -> SourceOnboarding {
+    SourceOnboarding::new(
+        app_data_dir.as_ref(),
+        client,
+        Arc::new(ScriptedBrowserAcquisition::new([])),
+    )
+}
+
+fn run_checked(
+    app_data_dir: impl AsRef<Path>,
     key: &str,
-    fetcher: &F,
-) -> Result<CheckReport, String> {
-    block_on(check_source_with_runtime(
-        app,
-        key,
-        fetcher,
-        fetcher,
-        &browser_acquisition(),
+    client: Arc<ScriptedProfileHttpClient>,
+) -> Result<(CheckReport, SavedSource), SourceOnboardingError> {
+    match block_on(onboarding(app_data_dir, client).live_check(
+        SourceLiveCheckRequest::Run {
+            source_key: key.to_string(),
+        },
+        OperationContext::default(),
+    ))? {
+        SourceLiveCheckOutcome::Checked { report, source } => Ok((report, source)),
+        outcome => panic!("unexpected status-neutral outcome: {outcome:?}"),
+    }
+}
+
+fn run_check(
+    app_data_dir: impl AsRef<Path>,
+    key: &str,
+    client: Arc<ScriptedProfileHttpClient>,
+) -> Result<CheckReport, SourceOnboardingError> {
+    run_checked(app_data_dir, key, client).map(|(report, _)| report)
+}
+
+fn run_activation(
+    app_data_dir: impl AsRef<Path>,
+    key: &str,
+    client: Arc<ScriptedProfileHttpClient>,
+) -> Result<SourceLiveCheckOutcome, SourceOnboardingError> {
+    block_on(onboarding(app_data_dir, client).live_check(
+        SourceLiveCheckRequest::CheckAndActivate {
+            source_key: key.to_string(),
+        },
+        OperationContext::default(),
     ))
 }
-fn run_activate<F: ProfileHttpClient + Sync + ?Sized>(
-    app: impl AsRef<std::path::Path>,
+
+fn latest_status(
+    app_data_dir: impl AsRef<Path>,
     key: &str,
-    fetcher: &F,
-) -> Result<CheckReport, String> {
-    block_on(check_and_activate_source_with_runtime(
-        app,
-        key,
-        fetcher,
-        fetcher,
-        &browser_acquisition(),
-    ))
+) -> Result<job_radar_lib::SourceLiveCheckReportStatus, SourceOnboardingError> {
+    match block_on(
+        onboarding(app_data_dir, Arc::new(ScriptedProfileHttpClient::new([]))).live_check(
+            SourceLiveCheckRequest::LatestReportStatus {
+                source_key: key.to_string(),
+            },
+            OperationContext::default(),
+        ),
+    )? {
+        SourceLiveCheckOutcome::LatestReportStatus(status) => Ok(status),
+        outcome => panic!("unexpected latest-status outcome: {outcome:?}"),
+    }
 }
-fn run_reactivate<F: ProfileHttpClient + Sync + ?Sized>(
-    app: impl AsRef<std::path::Path>,
-    key: &str,
-    fetcher: &F,
-) -> Result<CheckReport, String> {
-    block_on(check_and_reactivate_source_with_runtime(
-        app,
-        key,
-        fetcher,
-        fetcher,
-        &browser_acquisition(),
-    ))
-}
+
 fn run_check_without_io(
-    app: impl AsRef<std::path::Path>,
+    app_data_dir: impl AsRef<Path>,
     key: &str,
-) -> Result<CheckReport, String> {
-    let fetcher = ScriptedProfileHttpClient::new([]);
-    run_check(app, key, &fetcher)
+) -> Result<CheckReport, SourceOnboardingError> {
+    run_check(
+        app_data_dir,
+        key,
+        Arc::new(ScriptedProfileHttpClient::new([])),
+    )
 }
 
 struct Cancelled;
@@ -108,25 +157,30 @@ impl RuntimeCancellation for Cancelled {
 }
 
 #[test]
-fn source_live_check_accepts_controlled_time_and_cancellation_without_tauri_runtime() {
+fn cancelled_check_and_activate_preserves_draft_with_controlled_time() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
     write_source(temp_dir.path(), &simple_source_with_status("draft"));
-    let client = ScriptedProfileHttpClient::new([]);
-    let browser = browser_acquisition();
+    let client = Arc::new(ScriptedProfileHttpClient::new([]));
     let cancellation = Cancelled;
 
-    let report = block_on(check_source_with_runtime_context(
-        temp_dir.path(),
-        "example_source",
-        &client,
-        &client,
-        &browser,
-        SourceLiveCheckExecutionContext::default()
-            .with_checked_at("2025-01-02T03:04:05Z")
-            .with_cancellation(&cancellation),
+    let outcome = block_on(onboarding(temp_dir.path(), Arc::clone(&client)).live_check(
+        SourceLiveCheckRequest::CheckAndActivate {
+            source_key: "example_source".to_string(),
+        },
+        OperationContext {
+            checked_at: Some("2025-01-02T03:04:05Z"),
+            cancellation: Some(&cancellation),
+        },
     ))
     .unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Checked { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Draft);
+            report
+        }
+        other => panic!("expected checked outcome, got {other:?}"),
+    };
 
     assert_eq!(report.checked_at, "2025-01-02T03:04:05Z");
     assert_eq!(report.result, CheckReportResult::Failed);
@@ -149,9 +203,9 @@ fn invalid_predicate_regex_stops_source_live_check_before_http() {
     }]);
     write_profile(temp_dir.path(), &profile);
     write_source(temp_dir.path(), &source);
-    let client = ScriptedProfileHttpClient::new([]);
+    let client = Arc::new(ScriptedProfileHttpClient::new([]));
 
-    let report = run_check(temp_dir.path(), "example_source", &client).unwrap();
+    let report = run_check(temp_dir.path(), "example_source", Arc::clone(&client)).unwrap();
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert!(report
@@ -159,15 +213,6 @@ fn invalid_predicate_regex_stops_source_live_check_before_http() {
         .iter()
         .any(|diagnostic| diagnostic.code == "predicate_regex_invalid"));
     assert!(client.requests().is_empty());
-}
-
-fn read_source_status(app_data_dir: &Path, source_key: &str) -> SourceStatus {
-    let path = app_data_dir
-        .join("sources")
-        .join(format!("{source_key}.json"));
-    let document: SourceDocument =
-        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
-    document.status
 }
 
 fn simple_profile() -> serde_json::Value {
@@ -239,7 +284,7 @@ fn assert_stale_detail(
 }
 
 #[test]
-fn source_live_check_reports_cumulative_request_exhaustion_without_partial_payload() {
+fn budget_exhausted_check_and_activate_preserves_draft_without_partial_payload() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile());
     write_source(temp_dir.path(), &simple_source_with_status("draft"));
@@ -267,7 +312,14 @@ fn source_live_check_reports_cumulative_request_exhaustion_without_partial_paylo
         ),
     ]);
 
-    let report = run_check(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let outcome = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Checked { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Draft);
+            report
+        }
+        other => panic!("budget exhaustion must not activate: {other:?}"),
+    };
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
@@ -444,15 +496,32 @@ fn check_source_creates_and_persists_passed_report_for_valid_draft_source() {
     );
     assert_eq!(fetcher.detail_requested_urls(), vec!["job-1"]);
 
-    let persisted_path = source_live_check_report_path(temp_dir.path(), "example_source");
-    let persisted = read_latest_check_report(&persisted_path).unwrap();
-    assert_eq!(persisted, report);
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
+    assert_eq!(status.report.as_ref(), Some(&report));
+}
 
-    let stored_source: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(temp_dir.path().join("sources/example_source.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(stored_source["status"], json!("draft"));
+#[test]
+fn source_onboarding_status_neutral_check_preserves_every_source_status() {
+    for status in ["draft", "active", "disabled"] {
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_profile(temp_dir.path(), &simple_profile_without_pagination());
+        write_source(temp_dir.path(), &simple_source_with_status(status));
+        let fetcher = passing_live_check_fetcher();
+
+        let (report, source) =
+            run_checked(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+
+        assert_eq!(report.result, CheckReportResult::Passed);
+        assert_eq!(
+            source.document.status,
+            match status {
+                "draft" => SourceStatus::Draft,
+                "active" => SourceStatus::Active,
+                "disabled" => SourceStatus::Disabled,
+                _ => unreachable!(),
+            }
+        );
+    }
 }
 
 #[test]
@@ -462,7 +531,7 @@ fn check_source_rejects_invalid_source_key_without_writing_outside_report_dir() 
     let fetcher = passing_live_check_fetcher();
     let error = run_check(temp_dir.path(), "../outside", fetcher.client()).unwrap_err();
 
-    assert!(error.contains("invalid Source key `../outside`"));
+    assert_eq!(error.kind, SourceOnboardingErrorKind::InvalidKey);
     assert!(!temp_dir.path().join("outside.json").exists());
 }
 
@@ -471,16 +540,18 @@ fn source_live_check_report_status_rejects_invalid_source_key_before_reading_pat
     let temp_dir = tempfile::tempdir().unwrap();
     fs::write(temp_dir.path().join("outside.json"), "{}").unwrap();
 
-    let error = source_live_check_report_status(temp_dir.path(), "../outside").unwrap_err();
+    let error = latest_status(temp_dir.path(), "../outside").unwrap_err();
 
-    assert!(error.contains("invalid Source key `../outside`"));
+    assert_eq!(error.kind, SourceOnboardingErrorKind::InvalidKey);
 }
 
 #[test]
 fn source_live_check_report_status_is_unknown_without_persisted_report() {
     let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Unknown);
     assert!(status.report.is_none());
@@ -492,7 +563,7 @@ fn source_live_check_report_status_marks_persisted_report_fresh() {
     let temp_dir = tempfile::tempdir().unwrap();
     let report = create_passed_source_live_check(temp_dir.path());
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
     assert_eq!(status.report.as_ref(), Some(&report));
@@ -507,9 +578,25 @@ fn source_live_check_report_status_excludes_source_name_metadata() {
     create_passed_source_live_check(temp_dir.path());
     let mut source = simple_source_with_status("draft");
     source["name"] = json!("Renamed Example Source");
-    write_source(temp_dir.path(), &source);
+    let document: SourceDocument = serde_json::from_value(source).unwrap();
+    let revised = block_on(
+        onboarding(
+            temp_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .change(SourceChange::ReviseDefinition(ReviseSourceDefinition {
+            key: document.key,
+            name: document.name,
+            source_config: document.source_config,
+            selected_access_path: document.selected_access_path,
+            access_paths: document.access_paths,
+            source_support: document.source_support,
+        })),
+    )
+    .unwrap();
+    assert_eq!(revised.source.document.status, SourceStatus::Draft);
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
     assert_eq!(
@@ -532,7 +619,7 @@ fn source_live_check_report_status_marks_changed_profile_document_stale_without_
         json!("https://changed.example.test/jobs");
     write_profile(temp_dir.path(), &profile);
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Stale);
     assert_eq!(
@@ -544,11 +631,6 @@ fn source_live_check_report_status_marks_changed_profile_document_stale_without_
         "base_source_profile",
         CheckReportStaleReason::ChangedFingerprintSha256,
     );
-    let stored_source: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(temp_dir.path().join("sources/example_source.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(stored_source["status"], json!("draft"));
 }
 
 #[test]
@@ -558,9 +640,25 @@ fn source_live_check_report_status_marks_changed_source_config_and_direct_specia
     let mut source = simple_source_with_status("draft");
     source["sourceConfig"]["language"] = json!("de");
     source["accessPaths"][0]["discovery"]["strategies"][0]["acceptWhen"]["minResults"] = json!(2);
-    write_source(temp_dir.path(), &source);
+    let document: SourceDocument = serde_json::from_value(source).unwrap();
+    let revised = block_on(
+        onboarding(
+            temp_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .change(SourceChange::ReviseDefinition(ReviseSourceDefinition {
+            key: document.key,
+            name: document.name,
+            source_config: document.source_config,
+            selected_access_path: document.selected_access_path,
+            access_paths: document.access_paths,
+            source_support: document.source_support,
+        })),
+    )
+    .unwrap();
+    assert_eq!(revised.source.document.status, SourceStatus::Draft);
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Stale);
     assert_stale_detail(
@@ -582,11 +680,15 @@ fn source_live_check_report_status_marks_changed_source_config_and_direct_specia
 #[test]
 fn source_live_check_report_status_marks_changed_logic_version_stale() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let mut report = create_passed_source_live_check(temp_dir.path());
+    create_passed_source_live_check(temp_dir.path());
+    let report_path = temp_dir
+        .path()
+        .join("source-live-checks/example_source.json");
+    let mut report: CheckReport = serde_json::from_slice(&fs::read(&report_path).unwrap()).unwrap();
     report.logic_version = "source-live-check/v0".to_string();
-    persist_latest_check_report(temp_dir.path(), &report).unwrap();
+    fs::write(&report_path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
 
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
     assert_eq!(status.state, SourceLiveCheckReportState::Stale);
     assert_eq!(
@@ -605,11 +707,11 @@ fn check_source_rejects_unknown_source_without_persisting_a_report() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile());
 
-    let error = run_check_without_io(temp_dir.path(), "missing_source").unwrap_err();
+    let run_error = run_check_without_io(temp_dir.path(), "missing_source").unwrap_err();
+    let status_error = latest_status(temp_dir.path(), "missing_source").unwrap_err();
 
-    assert!(error.contains("was not found in the registry snapshot"));
-    let persisted_path = source_live_check_report_path(temp_dir.path(), "missing_source");
-    assert!(!persisted_path.exists());
+    assert_eq!(run_error.kind, SourceOnboardingErrorKind::NotFound);
+    assert_eq!(status_error.kind, SourceOnboardingErrorKind::NotFound);
 }
 
 #[test]
@@ -920,24 +1022,22 @@ fn check_and_activate_source_changes_draft_to_active_after_passed_live_check() {
     write_source(temp_dir.path(), &simple_source_with_status("draft"));
     let fetcher = passing_live_check_fetcher();
 
-    let report = run_activate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let outcome = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Activated { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Active);
+            report
+        }
+        other => panic!("expected activation, got {other:?}"),
+    };
 
     assert_eq!(report.result, CheckReportResult::Passed);
-    assert_eq!(
-        read_source_status(temp_dir.path(), "example_source"),
-        SourceStatus::Active
-    );
     assert_eq!(
         fetcher.discovery_requested_urls(),
         vec!["https://example.test/jobs.json"]
     );
-    let persisted = read_latest_check_report(&source_live_check_report_path(
-        temp_dir.path(),
-        "example_source",
-    ))
-    .unwrap();
-    assert_eq!(persisted.result, CheckReportResult::Passed);
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
+    let status = latest_status(temp_dir.path(), "example_source").unwrap();
+    assert_eq!(status.report.as_ref(), Some(&report));
     assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
 }
 
@@ -951,31 +1051,22 @@ fn check_and_activate_source_leaves_draft_unchanged_after_failed_live_check() {
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report = run_activate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let outcome = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Checked { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Draft);
+            report
+        }
+        other => panic!("failed check must not activate: {other:?}"),
+    };
 
     assert_eq!(report.result, CheckReportResult::Failed);
     assert_eq!(
-        read_source_status(temp_dir.path(), "example_source"),
-        SourceStatus::Draft
-    );
-    assert_activation_blocked(
-        &report,
-        "example_source",
-        json!("draft"),
-        json!("active"),
-        json!("failed"),
-    );
-    let persisted = read_latest_check_report(&source_live_check_report_path(
-        temp_dir.path(),
-        "example_source",
-    ))
-    .unwrap();
-    assert_activation_blocked(
-        &persisted,
-        "example_source",
-        json!("draft"),
-        json!("active"),
-        json!("failed"),
+        latest_status(temp_dir.path(), "example_source")
+            .unwrap()
+            .report
+            .as_ref(),
+        Some(&report)
     );
 }
 
@@ -986,19 +1077,26 @@ fn check_and_reactivate_source_changes_disabled_to_active_after_passed_live_chec
     write_source(temp_dir.path(), &simple_source_with_status("disabled"));
     let fetcher = passing_live_check_fetcher();
 
-    let report = run_reactivate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let outcome = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Activated { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Active);
+            report
+        }
+        other => panic!("expected reactivation, got {other:?}"),
+    };
 
     assert_eq!(report.result, CheckReportResult::Passed);
-    assert_eq!(
-        read_source_status(temp_dir.path(), "example_source"),
-        SourceStatus::Active
-    );
     assert_eq!(
         fetcher.discovery_requested_urls(),
         vec!["https://example.test/jobs.json"]
     );
-    let status = source_live_check_report_status(temp_dir.path(), "example_source").unwrap();
-    assert_eq!(status.state, SourceLiveCheckReportState::Fresh);
+    assert_eq!(
+        latest_status(temp_dir.path(), "example_source")
+            .unwrap()
+            .state,
+        SourceLiveCheckReportState::Fresh
+    );
 }
 
 #[test]
@@ -1011,124 +1109,52 @@ fn check_and_reactivate_source_leaves_disabled_unchanged_after_failed_live_check
         json!({ "jobs": [] }).to_string(),
     )]);
 
-    let report = run_reactivate(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let outcome = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap();
+    let report = match outcome {
+        SourceLiveCheckOutcome::Checked { report, source } => {
+            assert_eq!(source.document.status, SourceStatus::Disabled);
+            report
+        }
+        other => panic!("failed check must not reactivate: {other:?}"),
+    };
 
     assert_eq!(report.result, CheckReportResult::Failed);
-    assert_eq!(
-        read_source_status(temp_dir.path(), "example_source"),
-        SourceStatus::Disabled
-    );
-    assert_activation_blocked(
-        &report,
-        "example_source",
-        json!("disabled"),
-        json!("active"),
-        json!("failed"),
-    );
 }
 
 #[test]
-fn check_and_activate_or_reactivate_blocks_invalid_status_transitions() {
-    let activate_temp_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        activate_temp_dir.path(),
-        &simple_profile_without_pagination(),
-    );
-    write_source(
-        activate_temp_dir.path(),
-        &simple_source_with_status("active"),
-    );
+fn check_and_activate_rejects_active_source_before_external_work() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("active"));
     let fetcher = passing_live_check_fetcher();
-    let activate_report =
-        run_activate(activate_temp_dir.path(), "example_source", fetcher.client()).unwrap();
 
-    assert_eq!(activate_report.result, CheckReportResult::Failed);
-    assert_eq!(
-        read_source_status(activate_temp_dir.path(), "example_source"),
-        SourceStatus::Active
-    );
-    assert_activation_blocked(
-        &activate_report,
-        "example_source",
-        json!("active"),
-        json!("active"),
-        json!("passed"),
-    );
+    let error = run_activation(temp_dir.path(), "example_source", fetcher.client()).unwrap_err();
 
-    let reactivate_temp_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        reactivate_temp_dir.path(),
-        &simple_profile_without_pagination(),
-    );
-    write_source(
-        reactivate_temp_dir.path(),
-        &simple_source_with_status("draft"),
-    );
-    let fetcher = passing_live_check_fetcher();
-    let reactivate_report = run_reactivate(
-        reactivate_temp_dir.path(),
-        "example_source",
-        fetcher.client(),
-    )
-    .unwrap();
-
-    assert_eq!(reactivate_report.result, CheckReportResult::Failed);
-    assert_eq!(
-        read_source_status(reactivate_temp_dir.path(), "example_source"),
-        SourceStatus::Draft
-    );
-    assert_activation_blocked(
-        &reactivate_report,
-        "example_source",
-        json!("draft"),
-        json!("active"),
-        json!("passed"),
-    );
-}
-
-fn assert_activation_blocked(
-    report: &job_radar_lib::CheckReport,
-    source_key: &str,
-    current_status: serde_json::Value,
-    requested_status: serde_json::Value,
-    live_check_result: serde_json::Value,
-) {
-    let diagnostic = report
-        .diagnostics
-        .iter()
-        .find(|diagnostic| {
-            diagnostic.category == DiagnosticCategory::Runtime
-                && diagnostic.code == "source_live_check.activation_blocked"
-        })
-        .expect("missing source_live_check.activation_blocked diagnostic");
-    let details = diagnostic.details.as_ref().unwrap();
-    assert_eq!(details["sourceKey"], json!(source_key));
-    assert_eq!(details["currentStatus"], current_status);
-    assert_eq!(details["requestedStatus"], requested_status);
-    assert_eq!(details["liveCheckResult"], live_check_result);
+    assert_eq!(error.kind, SourceOnboardingErrorKind::InvalidLifecycle);
+    assert!(fetcher.client.requests().is_empty());
 }
 
 struct FakeLiveCheckFetcher {
-    client: ScriptedProfileHttpClient,
+    client: Arc<ScriptedProfileHttpClient>,
 }
 
 impl FakeLiveCheckFetcher {
     fn new<'a>(responses: impl IntoIterator<Item = (&'a str, String)>) -> Self {
         Self {
-            client: ScriptedProfileHttpClient::new(responses.into_iter().map(|(url, body)| {
-                ScriptedHttpEvent::Response {
+            client: Arc::new(ScriptedProfileHttpClient::new(responses.into_iter().map(
+                |(url, body)| ScriptedHttpEvent::Response {
                     status: 200,
                     final_url: url.to_string(),
                     headers: Vec::new(),
                     body: vec![ScriptedHttpBodyEvent::Chunk(body.into_bytes())],
                     content_length: None,
-                }
-            })),
+                },
+            ))),
         }
     }
 
-    fn client(&self) -> &ScriptedProfileHttpClient {
-        &self.client
+    fn client(&self) -> Arc<ScriptedProfileHttpClient> {
+        Arc::clone(&self.client)
     }
 
     fn discovery_requests(&self) -> Vec<ProfileHttpRequest> {
@@ -1154,4 +1180,387 @@ impl FakeLiveCheckFetcher {
             .map(|request| request.url)
             .collect()
     }
+}
+
+fn authored_draft() -> CreateSourceDraft {
+    let document: SourceDocument = serde_json::from_str(SIMPLE_SOURCE).unwrap();
+    CreateSourceDraft {
+        key: document.key,
+        name: document.name,
+        source_config: document.source_config,
+        selected_access_path: document.selected_access_path,
+        access_paths: document.access_paths,
+        source_support: document.source_support,
+    }
+}
+
+#[test]
+fn source_onboarding_creation_is_draft_only_and_revision_preserves_status() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    let onboarding = onboarding(
+        temp_dir.path(),
+        Arc::new(ScriptedProfileHttpClient::new([])),
+    );
+
+    let created = block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
+    assert_eq!(created.source.document.status, SourceStatus::Draft);
+    let saved_view = serde_json::to_value(&created.source).unwrap();
+    assert!(saved_view.get("path").is_none());
+    assert!(saved_view.get("compileOutcome").is_none());
+    assert!(saved_view.get("effectiveProfile").is_none());
+
+    let disabled = block_on(onboarding.change(SourceChange::SetInactive {
+        source_key: "example_source".to_string(),
+        status: job_radar_lib::InactiveSourceStatus::Disabled,
+    }))
+    .unwrap();
+    assert_eq!(disabled.source.document.status, SourceStatus::Disabled);
+
+    let document = disabled.source.document;
+    let revised = block_on(onboarding.change(SourceChange::ReviseDefinition(
+        ReviseSourceDefinition {
+            key: document.key,
+            name: "Revised name".to_string(),
+            source_config: document.source_config,
+            selected_access_path: document.selected_access_path,
+            access_paths: document.access_paths,
+            source_support: document.source_support,
+        },
+    )))
+    .unwrap();
+    assert_eq!(revised.source.document.status, SourceStatus::Disabled);
+    assert_eq!(revised.source.document.name, "Revised name");
+}
+
+#[test]
+fn source_onboarding_rejects_duplicate_and_invalid_keys_with_typed_errors() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    let onboarding = onboarding(
+        temp_dir.path(),
+        Arc::new(ScriptedProfileHttpClient::new([])),
+    );
+    block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
+
+    let duplicate =
+        block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap_err();
+    assert_eq!(duplicate.kind, SourceOnboardingErrorKind::Duplicate);
+
+    let mut invalid = authored_draft();
+    invalid.key = "../outside".to_string();
+    let invalid = block_on(onboarding.change(SourceChange::CreateDraft(invalid))).unwrap_err();
+    assert_eq!(invalid.kind, SourceOnboardingErrorKind::InvalidKey);
+}
+
+#[test]
+fn source_onboarding_detection_has_no_persistent_source_side_effect() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    let onboarding = onboarding(
+        temp_dir.path(),
+        Arc::new(ScriptedProfileHttpClient::new([])),
+    );
+
+    let _ = block_on(onboarding.detect(
+        DetectSource {
+            url: "https://example.test/jobs".to_string(),
+        },
+        OperationContext::default(),
+    ))
+    .unwrap();
+
+    assert!(!temp_dir.path().join("sources").exists());
+}
+
+#[test]
+fn source_onboarding_detection_preserves_authoritative_terminal_aggregation() {
+    let absolute = json!([
+        { "type": "url", "key": "url", "input": { "type": "absolute_url" } }
+    ]);
+
+    let matched_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        matched_dir.path(),
+        &detection_profile("matched_fixture", "stable", absolute.clone()),
+    );
+    let matched = block_on(
+        onboarding(
+            matched_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .detect(
+            DetectSource {
+                url: "https://example.test/jobs".to_string(),
+            },
+            OperationContext::default(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(matched.status, DetectionRunStatus::Matched);
+
+    let ambiguous_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        ambiguous_dir.path(),
+        &detection_profile("first_fixture", "stable", absolute.clone()),
+    );
+    write_profile(
+        ambiguous_dir.path(),
+        &detection_profile("second_fixture", "stable", absolute.clone()),
+    );
+    let ambiguous = block_on(
+        onboarding(
+            ambiguous_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .detect(
+            DetectSource {
+                url: "https://example.test/jobs".to_string(),
+            },
+            OperationContext::default(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(ambiguous.status, DetectionRunStatus::Ambiguous);
+    assert_eq!(ambiguous.proposals.len(), 2);
+
+    let unsupported_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        unsupported_dir.path(),
+        &detection_profile("unsupported_fixture", "unsupported", absolute),
+    );
+    let mixed_unsupported_and_failed = block_on(
+        onboarding(
+            unsupported_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .detect(
+            DetectSource {
+                url: "https://example.test/jobs".to_string(),
+            },
+            OperationContext::default(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        mixed_unsupported_and_failed.status,
+        DetectionRunStatus::Failed
+    );
+    assert_eq!(
+        mixed_unsupported_and_failed.unsupported_profiles.len(),
+        1,
+        "the unsupported evidence remains reported without rewriting aggregate status"
+    );
+
+    let failed_dir = tempfile::tempdir().unwrap();
+    let failed = block_on(
+        onboarding(
+            failed_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .detect(
+            DetectSource {
+                url: "relative".to_string(),
+            },
+            OperationContext::default(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(failed.status, DetectionRunStatus::Failed);
+
+    let cancelled_dir = tempfile::tempdir().unwrap();
+    let cancellation = Cancelled;
+    let cancelled = block_on(
+        onboarding(
+            cancelled_dir.path(),
+            Arc::new(ScriptedProfileHttpClient::new([])),
+        )
+        .detect(
+            DetectSource {
+                url: "https://example.test/jobs".to_string(),
+            },
+            OperationContext {
+                checked_at: None,
+                cancellation: Some(&cancellation),
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(cancelled.status, DetectionRunStatus::Cancelled);
+
+    let exhausted_dir = tempfile::tempdir().unwrap();
+    write_profile(
+        exhausted_dir.path(),
+        &detection_profile(
+            "budget_fixture",
+            "stable",
+            json!([
+                { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
+                { "type": "http", "key": "probe", "fetch": {
+                    "mode": "http", "url": "{{inputUrl}}", "timeoutMs": 1000
+                }}
+            ]),
+        ),
+    );
+    let budget_client = Arc::new(ScriptedProfileHttpClient::new([
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs".to_string(),
+            headers: Vec::new(),
+            body: Vec::new(),
+            content_length: Some(67_108_865),
+        },
+    ]));
+    let exhausted = block_on(onboarding(exhausted_dir.path(), budget_client).detect(
+        DetectSource {
+            url: "https://example.test/jobs".to_string(),
+        },
+        OperationContext::default(),
+    ))
+    .unwrap();
+    assert_eq!(exhausted.status, DetectionRunStatus::BudgetExhausted);
+}
+
+#[test]
+fn source_onboarding_check_and_activate_returns_the_persisted_report_fingerprints() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let fetcher = passing_live_check_fetcher();
+    // Scripted clients are stateful, so this interface test supplies its own shared script.
+    let client = Arc::new(ScriptedProfileHttpClient::new([
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs.json".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(json!({"jobs":[{"id":"job-1","title":"Rust Engineer","url":"https://example.test/jobs/job-1"}]}).to_string().into_bytes())],
+            content_length: None,
+        },
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "job-1".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(json!({"descriptionHtml":"<p>This description is sufficiently long for activation.</p>"}).to_string().into_bytes())],
+            content_length: None,
+        },
+    ]));
+    drop(fetcher);
+    let onboarding = onboarding(temp_dir.path(), client);
+
+    let outcome = block_on(onboarding.live_check(
+        SourceLiveCheckRequest::CheckAndActivate {
+            source_key: "example_source".to_string(),
+        },
+        OperationContext {
+            checked_at: Some("2025-01-02T03:04:05Z"),
+            cancellation: None,
+        },
+    ))
+    .unwrap();
+    let (report, source) = match outcome {
+        SourceLiveCheckOutcome::Activated { report, source } => (report, source),
+        other => panic!("expected activation, got {other:?}"),
+    };
+    assert_eq!(source.document.status, SourceStatus::Active);
+    let persisted = latest_status(temp_dir.path(), "example_source")
+        .unwrap()
+        .report
+        .expect("activation report should be persisted");
+    assert_eq!(persisted.fingerprints, report.fingerprints);
+    assert_eq!(persisted.checked_at, "2025-01-02T03:04:05Z");
+}
+
+#[test]
+fn source_onboarding_authors_profile_selected_source_owned_and_compile_invalid_drafts() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    let onboarding = onboarding(
+        temp_dir.path(),
+        Arc::new(ScriptedProfileHttpClient::new([])),
+    );
+
+    let profile_selected =
+        block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
+    assert_eq!(profile_selected.source.document.status, SourceStatus::Draft);
+
+    let source_owned_document: SourceDocument = serde_json::from_str(include_str!(
+        "../fixtures/source-profile-dsl/valid/source-owned-access-path.json"
+    ))
+    .unwrap();
+    let source_owned = CreateSourceDraft {
+        key: source_owned_document.key,
+        name: source_owned_document.name,
+        source_config: source_owned_document.source_config,
+        selected_access_path: source_owned_document.selected_access_path,
+        access_paths: source_owned_document.access_paths,
+        source_support: source_owned_document.source_support,
+    };
+    let source_owned =
+        block_on(onboarding.change(SourceChange::CreateDraft(source_owned))).unwrap();
+    assert_eq!(source_owned.source.document.status, SourceStatus::Draft);
+
+    let mut invalid = authored_draft();
+    invalid.key = "compile_invalid".to_string();
+    invalid.selected_access_path = job_radar_lib::SelectedAccessPath::ProfileAccessPath {
+        profile_key: "missing_profile".to_string(),
+        path_key: "missing_path".to_string(),
+    };
+    let invalid = block_on(onboarding.change(SourceChange::CreateDraft(invalid))).unwrap();
+    assert_eq!(
+        invalid.source.validation_state.state,
+        job_radar_lib::ValidationStateKind::Invalid
+    );
+    assert!(!invalid.source.validation_state.diagnostics.is_empty());
+}
+
+#[test]
+fn source_onboarding_report_storage_failure_cannot_leave_source_active() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    fs::write(
+        temp_dir.path().join("source-live-checks"),
+        "not a directory",
+    )
+    .unwrap();
+    let client = Arc::new(ScriptedProfileHttpClient::new([
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs.json".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(json!({"jobs":[{"id":"job-1","title":"Rust Engineer","url":"https://example.test/jobs/job-1"}]}).to_string().into_bytes())],
+            content_length: None,
+        },
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "job-1".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(json!({"descriptionHtml":"<p>This description is sufficiently long for activation.</p>"}).to_string().into_bytes())],
+            content_length: None,
+        },
+    ]));
+    let onboarding = onboarding(temp_dir.path(), client);
+
+    let error = block_on(onboarding.live_check(
+        SourceLiveCheckRequest::CheckAndActivate {
+            source_key: "example_source".to_string(),
+        },
+        OperationContext::default(),
+    ))
+    .unwrap_err();
+
+    assert_eq!(error.kind, SourceOnboardingErrorKind::Storage);
+    let document: SourceDocument = serde_json::from_str(SIMPLE_SOURCE).unwrap();
+    let revised = block_on(onboarding.change(SourceChange::ReviseDefinition(
+        ReviseSourceDefinition {
+            key: document.key,
+            name: document.name,
+            source_config: document.source_config,
+            selected_access_path: document.selected_access_path,
+            access_paths: document.access_paths,
+            source_support: document.source_support,
+        },
+    )))
+    .unwrap();
+    assert_eq!(revised.source.document.status, SourceStatus::Draft);
 }

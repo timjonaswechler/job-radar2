@@ -13,10 +13,9 @@ import type {
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySourceProfile,
-  SourceDocument,
+  CreateSourceDraft,
   SourceProposal,
   SourceProposalDetectionResult,
-  SourceStatus,
 } from "@/lib/api/sources";
 
 export const sourceKeyPattern = /^[a-z0-9_]+$/;
@@ -24,7 +23,6 @@ export const sourceKeyPattern = /^[a-z0-9_]+$/;
 export const emptySourceCreateForm: SourceCreateFormState = {
   name: "",
   key: "",
-  status: "draft",
   profileKey: "",
   pathKey: "",
 };
@@ -32,13 +30,12 @@ export const emptySourceCreateForm: SourceCreateFormState = {
 export type SourceCreateFormState = {
   name: string;
   key: string;
-  status: SourceStatus;
   profileKey: string;
   pathKey: string;
 };
 
 export type SourceCreateBuildResult = {
-  document: SourceDocument | null;
+  document: CreateSourceDraft | null;
   errors: string[];
   configErrors: string[];
   specializationErrors: string[];
@@ -99,7 +96,6 @@ export type SourceCreateDraftSnapshot = {
   url: string;
   name: string;
   key: string;
-  status: SourceStatus;
   profileKey: string;
   pathKey: string;
   configEntries: Array<{ key: string; value: string }>;
@@ -110,7 +106,6 @@ const emptySourceCreateDraftSnapshot: SourceCreateDraftSnapshot = {
   url: "",
   name: "",
   key: "",
-  status: "draft",
   profileKey: "",
   pathKey: "",
   configEntries: [],
@@ -127,7 +122,6 @@ export function sourceCreateDraftSnapshot({
     url,
     name: form.name,
     key: form.key,
-    status: form.status,
     profileKey: form.profileKey,
     pathKey: form.pathKey,
     configEntries: configEntries.map(({ key, value }) => ({ key, value })),
@@ -255,8 +249,7 @@ export function sourceCreateDraftAfterDetectedSource({
     form: {
       name: detected.name,
       key: detected.key,
-      status: "draft",
-      profileKey: detected.profileKey,
+          profileKey: detected.profileKey,
       pathKey: detected.pathKey,
     },
     keyTouched: false,
@@ -361,11 +354,9 @@ export function buildCreatedSourceDocument({
     };
   }
 
-  const document: SourceDocument = {
-    schemaVersion: 3,
+  const document: CreateSourceDraft = {
     key: form.key,
     name: form.name.trim(),
-    status: form.status,
     sourceConfig: configResult.value,
     selectedAccessPath: {
       type: "profile_access_path",

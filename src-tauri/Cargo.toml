@@ -23,6 +23,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 agent = { path = "crates/agent" }
+atomic-write-file = "0.3.0"
 geo = { path = "crates/geo" }
 search-resolution = { path = "crates/search-resolution" }
 source-profile-dsl = { path = "crates/source-profile-dsl" }

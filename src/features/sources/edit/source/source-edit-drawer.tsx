@@ -23,18 +23,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  SourceNameField,
-  SourceStatusField,
-} from "@/features/sources/source-form/source-form-fields";
+import { SourceNameField } from "@/features/sources/source-form/source-form-fields";
 import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
 import { DiscardSourceChangesDialog } from "@/features/sources/source-form/discard-source-changes-dialog";
 import { DirectSourceSpecializationEditor } from "@/features/sources/source-form/direct-source-specialization-editor";
-import type {
-  RegistrySource,
-  RegistrySourceProfile,
-  SourceStatus,
-} from "@/lib/api/sources";
+import type { RegistrySource, RegistrySourceProfile } from "@/lib/api/sources";
 
 import { useSourceEdit } from "./use-source-edit";
 
@@ -113,12 +106,9 @@ export function SourceEditDrawer({
               <SourceEditIdentityFields
                 sourceKey={source.document.key}
                 name={state.name}
-                status={state.status}
                 saveAttempted={state.saveAttempted}
                 disabled={state.saving || !data.editable}
-                selectPortalContainer={drawerContentElement}
                 onNameChange={actions.setName}
-                onStatusChange={actions.setStatus}
               />
 
               <SourceConfigEditor
@@ -215,23 +205,17 @@ export function SourceEditDrawer({
 type SourceEditIdentityFieldsProps = {
   sourceKey: string;
   name: string;
-  status: SourceStatus;
   saveAttempted: boolean;
   disabled: boolean;
-  selectPortalContainer?: HTMLElement | null;
   onNameChange: (name: string) => void;
-  onStatusChange: (status: SourceStatus) => void;
 };
 
 function SourceEditIdentityFields({
   sourceKey,
   name,
-  status,
   saveAttempted,
   disabled,
-  selectPortalContainer,
   onNameChange,
-  onStatusChange,
 }: SourceEditIdentityFieldsProps) {
   return (
     <FieldSet>
@@ -254,13 +238,6 @@ function SourceEditIdentityFields({
           </FieldDescription>
         </Field>
 
-        <SourceStatusField
-          status={status}
-          description="Nur aktive und valide Sources werden in Search Runs ausgeführt."
-          disabled={disabled}
-          selectPortalContainer={selectPortalContainer}
-          onChange={onStatusChange}
-        />
       </FieldGroup>
     </FieldSet>
   );

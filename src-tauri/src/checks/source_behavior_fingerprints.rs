@@ -575,8 +575,14 @@ mod tests {
 
     #[test]
     fn productive_source_live_check_uses_canonical_preparation_without_activation_reprepare() {
-        assert!(include_str!("source_live/mod.rs").contains("prepare_source_behavior_fingerprints"));
-        assert!(!include_str!("source_live/activation.rs")
+        assert_eq!(
+            include_str!("source_live/mod.rs")
+                .matches("prepare_source_behavior_fingerprints")
+                .count(),
+            2,
+            "one import and one authoritative preparation are expected"
+        );
+        assert!(!include_str!("../source_onboarding.rs")
             .contains("prepare_source_behavior_fingerprints"));
     }
 
@@ -584,10 +590,11 @@ mod tests {
     fn source_live_check_use_case_does_not_own_a_tauri_runtime_boundary() {
         for source in [
             include_str!("source_live/mod.rs"),
-            include_str!("source_live/activation.rs"),
+            include_str!("../source_onboarding.rs"),
         ] {
-            assert!(!source.contains("tauri::"));
-            assert!(!source.contains("block_on"));
+            let productive_source = source.split("#[cfg(test)]").next().unwrap_or(source);
+            assert!(!productive_source.contains("tauri::"));
+            assert!(!productive_source.contains("block_on"));
         }
     }
 
