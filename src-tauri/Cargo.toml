@@ -5,6 +5,19 @@ version = "0.1.0"
 description = "Job Radar desktop app"
 authors = ["Tim Jonas Wechler"]
 edition = "2021"
+autobins = false
+
+[[bin]]
+name = "job-radar"
+path = "src/main.rs"
+
+[[bin]]
+name = "agent-debug"
+path = "src/bin/agent_debug.rs"
+required-features = ["agent-debug"]
+
+[features]
+agent-debug = []
 
 [workspace]
 members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl"]
