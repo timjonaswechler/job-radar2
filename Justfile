@@ -73,10 +73,16 @@ verify:
 package *args:
     npm run tauri -- build "$@"
 
-# Print the line count of every tracked Rust source file and the total.
+# Report tracked Rust and TypeScript source size by production and test scope.
 [group('Repository maintenance')]
-loc extension:
-    @git ls-files '*.{{ extension }}' | while IFS= read -r file; do wc -l "$file"; done | awk '{ total += $1; print } END { if (NR == 0) print "No Rust files found."; else printf "%7d total\n", total }'
+size:
+    @python3 scripts/development/source-size.py
+
+# Find exact and structurally similar Rust functions and blocks; optional analyzer arguments are forwarded.
+[group('Repository maintenance')]
+[positional-arguments]
+duplication-test *args:
+    cargo run --release --manifest-path rust-duplicate-block-finder/Cargo.toml -- src-tauri --output rust-duplicate-block-finder/duplicate-report "$@"
 
 # Print the Tauri app data directory used by the installed/dev app.
 [group('Local app data and database')]

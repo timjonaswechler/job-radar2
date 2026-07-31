@@ -29,7 +29,7 @@ The destructive `db-clear` recipe retains its interactive confirmation. `db-clea
 
 ## Development utilities
 
-[`development/`](development/) contains optional source-maintenance tools that are not routine validation commands. `rust-module-split.py` is owned by maintainers performing reviewed Rust module decomposition for the #166 implementation family and later oversized flat Rust modules. Its repeatable use case is to list top-level Rust items, produce and manually edit a JSON split plan, dry-run exact item placement, and only then write reviewed module files. It remains at its current path so active or follow-up module-split work does not lose its entry point.
+[`development/`](development/) contains source-maintenance tools. `just size` runs `source-size.py` to report non-empty lines in tracked Rust and TypeScript sources, split by production code, inline Rust tests, external Rust tests, and frontend test files. `rust-module-split.py` is owned by maintainers performing reviewed Rust module decomposition for the #166 implementation family and later oversized flat Rust modules. Its repeatable use case is to list top-level Rust items, produce and manually edit a JSON split plan, dry-run exact item placement, and only then write reviewed module files. It remains at its current path so active or follow-up module-split work does not lose its entry point.
 
 Frontend tests run directly through the canonical Vitest commands in `package.json`; no frontend test wrapper, aggregator launcher, or compatibility alias remains under `scripts/`.
 

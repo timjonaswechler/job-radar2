@@ -49,7 +49,7 @@ npm run smoke:search-run                      # manueller, netzwerkabhängiger S
 ```
 
 ## Arbeitsregeln
-
+- replace, don't layer.
 - Domain-Begriffe aus `CONTEXT.md` verwenden: z. B. Source, Source Profile, Access Path, Search Request, Search Run.
 - Bei neuen oder wesentlich umgebauten Modulen die Konventionen aus [`docs/development/architecture/module-design.md`](docs/development/architecture/module-design.md) anwenden: Der Modulpfad trägt den Kontext, öffentliche Namen wiederholen ihn nicht, und das Interface bleibt klein.
 - Bei neuen oder wesentlich veränderten Rust-Modulen, öffentlichen Rust-Interfaces, Fehlertypen oder Nebenwirkungs-Seams vor dem Entwurf [`docs/development/architecture/rust.md`](docs/development/architecture/rust.md) lesen und dessen Completion Criteria auf jeden berührten öffentlichen Seam anwenden.

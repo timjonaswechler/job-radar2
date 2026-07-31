@@ -7,6 +7,18 @@ behavioral equivalence.
 
 ## Run
 
+From the repository root, use the stable development command:
+
+```bash
+just duplication-test
+```
+
+Additional analyzer options are forwarded, for example
+`just duplication-test --no-similarity`. Reports are written to
+`rust-duplicate-block-finder/duplicate-report/`.
+
+To invoke the analyzer directly from this directory instead, run:
+
 ```bash
 cargo run --release -- ../src-tauri \
   --min-lines 5 \
