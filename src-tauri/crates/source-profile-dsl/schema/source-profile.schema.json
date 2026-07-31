@@ -1,0 +1,397 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source-profile.schema.json",
+  "title": "Job Radar Source Profile schema-v3 document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "key",
+    "name",
+    "kind",
+    "support",
+    "accessPaths"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 3
+    },
+    "key": {
+      "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+    },
+    "name": {
+      "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "recruiting_system",
+        "job_portal",
+        "website_family",
+        "career_site",
+        "generic"
+      ]
+    },
+    "description": {
+      "$ref": "source-behavior/common.schema.json#/$defs/description"
+    },
+    "support": {
+      "$ref": "source-behavior/common.schema.json#/$defs/supportMetadata"
+    },
+    "detection": {
+      "$ref": "#/$defs/detection"
+    },
+    "sourceConfigSchema": {
+      "$ref": "source-behavior/common.schema.json#/$defs/jsonSchemaObject"
+    },
+    "accessPaths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/profileAccessPath"
+      }
+    },
+    "diagnostics": {
+      "$ref": "source-behavior/diagnostics.schema.json#/$defs/diagnostics"
+    }
+  },
+  "$defs": {
+    "profileAccessPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "discovery"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+        },
+        "name": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "description": {
+          "$ref": "source-behavior/common.schema.json#/$defs/description"
+        },
+        "sourceConfigSchema": {
+          "$ref": "source-behavior/common.schema.json#/$defs/jsonSchemaObject"
+        },
+        "knownIssues": {
+          "type": "array",
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/supportNote"
+          }
+        },
+        "discovery": {
+          "$ref": "source-behavior/policy.schema.json#/$defs/discoveryStrategySet"
+        },
+        "detail": {
+          "$ref": "source-behavior/policy.schema.json#/$defs/detailStrategySet"
+        },
+        "diagnostics": {
+          "$ref": "source-behavior/diagnostics.schema.json#/$defs/diagnostics"
+        }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "all_required"
+            }
+          }
+        },
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/detectionUrlStrategy"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/detectionHttpStrategy"
+              },
+              {
+                "$ref": "#/$defs/detectionBrowserStrategy"
+              }
+            ]
+          }
+        },
+        "recommendedAccessPathKey": {
+          "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+        },
+        "sourceConfig": {
+          "$ref": "source-behavior/common.schema.json#/$defs/jsonObject"
+        },
+        "keyCandidates": {
+          "type": "array",
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/templateString"
+          }
+        },
+        "nameCandidates": {
+          "type": "array",
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/templateString"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/detectionEvidence"
+          }
+        }
+      },
+      "required": [
+        "policy",
+        "strategies"
+      ]
+    },
+    "httpFetch": {
+      "$ref": "source-behavior/fetch.schema.json#/$defs/httpFetch"
+    },
+    "browserFetch": {
+      "$ref": "source-behavior/fetch.schema.json#/$defs/browserFetch"
+    },
+    "detectionStrategy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/detectionUrlStrategy"
+        },
+        {
+          "$ref": "#/$defs/detectionHttpStrategy"
+        },
+        {
+          "$ref": "#/$defs/detectionBrowserStrategy"
+        }
+      ]
+    },
+    "detectionUrlStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "key",
+        "input"
+      ],
+      "properties": {
+        "type": {
+          "const": "url"
+        },
+        "key": {
+          "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+        },
+        "input": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "alternatives"
+              ],
+              "properties": {
+                "type": {
+                  "const": "pattern_alternatives"
+                },
+                "alternatives": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/inputUrlPattern"
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "absolute_url"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "detectionHttpStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "key",
+        "fetch"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "captures"
+            ]
+          },
+          "then": {
+            "required": [
+              "regex"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "type": {
+          "const": "http"
+        },
+        "key": {
+          "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+        },
+        "fetch": {
+          "$ref": "#/$defs/httpFetch"
+        },
+        "expectStatus": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "contains": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "regex": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "captures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/captureKey"
+          }
+        },
+        "evidence": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "detectionBrowserStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "key",
+        "fetch"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "captures"
+            ]
+          },
+          "then": {
+            "required": [
+              "regex"
+            ]
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "contains"
+              ]
+            },
+            {
+              "required": [
+                "regex"
+              ]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "type": {
+          "const": "browser"
+        },
+        "key": {
+          "$ref": "source-behavior/common.schema.json#/$defs/technicalKey"
+        },
+        "fetch": {
+          "$ref": "#/$defs/browserFetch"
+        },
+        "contains": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "regex": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "captures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/captureKey"
+          }
+        },
+        "evidence": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "inputUrlPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pattern"
+      ],
+      "properties": {
+        "pattern": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "captures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "source-behavior/common.schema.json#/$defs/captureKey"
+          }
+        }
+      }
+    },
+    "detectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "url",
+            "http",
+            "html",
+            "browser"
+          ]
+        },
+        "message": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}

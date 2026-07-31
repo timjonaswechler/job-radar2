@@ -23,7 +23,7 @@ import {
   type SchemaCatalog,
   type SchemaResolutionOptions,
 } from "@/features/sources/shared/schema-introspection";
-import { profileDslSchemaCatalog } from "@/features/sources/shared/profile-dsl-schema-catalog";
+import { sourceSchemaCatalog } from "@/features/sources/shared/source-schema-catalog";
 import {
   createSchemaValueRows,
   type SchemaValueTreeRowModel,
@@ -94,7 +94,7 @@ export function SchemaValueTable({
   value,
   schema,
   schemaRef,
-  schemaCatalog = profileDslSchemaCatalog,
+  schemaCatalog = sourceSchemaCatalog,
   schemaOptions,
   maxDepth = 6,
   className,

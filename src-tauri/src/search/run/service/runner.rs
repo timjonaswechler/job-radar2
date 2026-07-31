@@ -2,14 +2,12 @@ use std::path::PathBuf;
 
 use geo::GeoResolver;
 use search_resolution::CompiledSearchRequirements;
+use source_profile_dsl::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 use sqlx::SqlitePool;
 
-use crate::{
-    profile_dsl::diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity},
-    search::{
-        request::{RunningSearchRuns, SearchRequestService},
-        run::{persist_atomic_search_run, AtomicSearchRunInput},
-    },
+use crate::search::{
+    request::{RunningSearchRuns, SearchRequestService},
+    run::{persist_atomic_search_run, AtomicSearchRunInput},
 };
 
 use super::super::{
@@ -190,9 +188,11 @@ impl<'a> SearchRunService<'a> {
                 .await
             {
                 Ok(resolution) => {
-                    finalized.extend(resolution.finalized.iter().map(|candidate| {
-                        finalized_merge_input(candidate, &source.execution_plan.source.name)
-                    }));
+                    finalized.extend(
+                        resolution.finalized.iter().map(|candidate| {
+                            finalized_merge_input(candidate, source.source_name())
+                        }),
+                    );
                     source_runs.push(source_run_completed(source, &resolution));
                 }
                 Err(error) => source_runs.push(source_run_resolution_failed(source, error)),
@@ -274,10 +274,9 @@ fn cancelled_source_run_for_selected(
     selected: &SelectedSearchRunSource,
 ) -> super::super::SourceRunResult {
     match selected {
-        SelectedSearchRunSource::Resolved(source) => source_run_cancelled_for_source(
-            &source.execution_plan.source.key,
-            &source.execution_plan.source.name,
-        ),
+        SelectedSearchRunSource::Resolved(source) => {
+            source_run_cancelled_for_source(source.source_key(), source.source_name())
+        }
         SelectedSearchRunSource::Missing { source_key, .. } => {
             source_run_cancelled_for_key(source_key)
         }

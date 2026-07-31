@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { minimalDetailStrategy, minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+import { minimalDetailStrategy, minimalDiscoveryStrategy } from "@/features/sources/tests/support/source-behavior";
 
 import {
   buildCreatedSourceDocument,

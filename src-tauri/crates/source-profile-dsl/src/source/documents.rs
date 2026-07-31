@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{
+use crate::definition::diagnostics::Diagnostics;
+use crate::definition::documents::{
     AccessPathFragment, DetailStep, DiscoveryStep, JsonObject, JsonSchemaObject, SupportMetadata,
 };
 
@@ -55,7 +55,7 @@ pub enum SelectedAccessPath {
         #[serde(rename = "pathKey")]
         path_key: String,
     },
-    /// Inline Access Path owned by this Source. It reuses shared Profile DSL
+    /// Inline Access Path owned by this Source. It reuses shared Source Behavior Language
     /// steps but is not a reusable Source Profile Access Path.
     SourceOwnedAccessPath {
         key: String,

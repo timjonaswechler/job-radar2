@@ -21,7 +21,7 @@ use super::{
     begin_active_browser_session, current_runtime_spec, status_for_runtime_dir,
     ActiveBrowserSession, BrowserRuntimeState,
 };
-use source_profile_dsl::profile_dsl::runtime::allowance::{
+use source_profile_dsl::execution::{
     BROWSER_FORCE_TERMINATE_REAP_MS, BROWSER_GRACEFUL_CLOSE_MS, BROWSER_HANDLER_COMPLETION_MS,
     BROWSER_SESSION_FINALIZATION_MS,
 };

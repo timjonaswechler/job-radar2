@@ -6,7 +6,7 @@ use search_resolution::{
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
 use serde_json::json;
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     compile_source, AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource,
     CandidateDetailFailure, CompileSourceOutcome, CompiledSource, DetailField, DetailPatch,
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, PhaseCancellationReason, PhaseCancelled,

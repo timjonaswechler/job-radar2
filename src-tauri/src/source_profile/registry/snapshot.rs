@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::compiler::{CompileSourceOutcome, SourceProfileLookup};
-use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::source::documents::SourceDocument;
 use crate::source::validation::SourceValidationState;
-use crate::source_profile::documents::SourceProfileDocument;
+use source_profile_dsl::definition::Diagnostics;
+use source_profile_dsl::definition::SourceDocument;
+use source_profile_dsl::definition::SourceProfileDocument;
+use source_profile_dsl::definition::{CompileSourceOutcome, SourceProfileLookup};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

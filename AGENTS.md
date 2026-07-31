@@ -13,8 +13,8 @@ Job Radar ist eine lokale Tauri-2-Desktop-App für wiederholbare Jobsuchen: Quel
 
 - `README.md` — Produktüberblick, lokale Befehle, Repo-Orientierung.
 - `CONTEXT.md` — kanonische Domain-Sprache; vor Begriffsumbenennungen lesen.
-- `docs/development/prd/declarative-source-profile-dsl.md` — Zielbild der deklarativen Profile-DSL und Source-/Source-Profile-Dokumentmodell.
-- `docs/development/adr/0001-source-config-as-json-schema.md` und `docs/development/adr/0009-declarative-source-profile-dsl.md` — zentrale Source/Profile-Architekturentscheidungen.
+- `docs/development/prd/source-behavior-language.md` — Zielbild der deklarativen Source Behavior Language und Source-/Source-Profile-Dokumentmodell.
+- `docs/development/adr/0001-source-config-as-json-schema.md` und `docs/development/adr/0009-source-behavior-language.md` — zentrale Source/Profile-Architekturentscheidungen.
 - `docs/development/adr/` — weitere Architekturentscheidungen.
 - `docs/index.md` — Dokumentationsübersicht und Ablageregeln.
 - `docs/development/search-run-smoke.md` — manueller Live-Smoke für Suchläufe.
@@ -55,10 +55,10 @@ npm run smoke:search-run                      # manueller, netzwerkabhängiger S
 - Bei neuen oder wesentlich veränderten Rust-Modulen, öffentlichen Rust-Interfaces, Fehlertypen oder Nebenwirkungs-Seams vor dem Entwurf [`docs/development/architecture/rust.md`](docs/development/architecture/rust.md) lesen und dessen Completion Criteria auf jeden berührten öffentlichen Seam anwenden.
 - Bei neuen oder wesentlich veränderten TypeScript-/React-Feature-Seams, Tauri-Transportverträgen, Zustandsmodellen oder Async-Lebenszyklen vor dem Entwurf [`docs/development/architecture/typescript-react.md`](docs/development/architecture/typescript-react.md) lesen und dessen Completion Criteria auf jeden berührten Feature-Seam anwenden.
 - Suchkriterien gehören zur Search Request, nicht in Source Config oder Source Profile.
-- Die Profile DSL bleibt deklarative Konfiguration; keine profile-spezifischen Rust-Sonderfälle einbauen.
+- Die Source Behavior Language bleibt deklarative Konfiguration; keine profile-spezifischen Rust-Sonderfälle einbauen.
 - Source Profiles beschreiben wiederverwendbare Verhaltensfamilien, nicht bloß Host- oder Linkstrukturen. URL-Muster sind Detection-Hinweise; belastbare Detection kombiniert sie bei Bedarf mit begrenzter HTTP-, API-, HTML- oder Browser-Evidenz.
 - Ziel der Source-Einrichtung ist: Der User gibt einen Einstiegspunkt an, Profile Detection wählt Profile und Access Path, füllt die Source Config möglichst vollständig aus und prüft die konkrete Source per Source Live Check. Quellenspezifische Konfiguration darf variieren, soll aber nicht zum erforderlichen Integrationswissen des Users werden.
-- Bei der Weiterentwicklung von Search Runs günstige Discovery-Hinweise von kanonischen Posting-Daten unterscheiden: nur plausible Kandidaten detailliert laden, Titel und Locations vor dem finalen Matching normalisieren und nur final geprüfte Matches persistieren. Das als generische DSL-/Pipeline-Fähigkeit lösen, nicht als ATS-Sonderfall.
+- Bei der Weiterentwicklung von Search Runs günstige Discovery-Hinweise von kanonischen Posting-Daten unterscheiden: nur plausible Kandidaten detailliert laden, Titel und Locations vor dem finalen Matching normalisieren und nur final geprüfte Matches persistieren. Das als generische Source Behavior Language-/Pipeline-Fähigkeit lösen, nicht als ATS-Sonderfall.
 - Strategien sollen begrenzt sein und strukturierte Diagnostics liefern.
 - Diese Datei kurz halten: Details verlinken statt duplizieren.
 

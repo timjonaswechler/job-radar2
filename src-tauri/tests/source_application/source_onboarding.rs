@@ -1,6 +1,6 @@
 use std::{fs, future::Future, path::Path, sync::Arc};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     CheckReport, CheckReportFreshnessState, CheckReportKind, CheckReportResult,
     CheckReportStaleReason, CheckReportSubjectType, CreateSourceDraft, DetectSource,
     DetectionRunStatus, DiagnosticCategory, DiagnosticSeverity, OperationContext,
@@ -13,9 +13,9 @@ use job_radar_lib::{
 use serde_json::json;
 
 const SIMPLE_PROFILE: &str =
-    include_str!("../fixtures/source-profile-dsl/valid/simple-source-profile.json");
+    include_str!("../fixtures/source-behavior/valid/simple-source-profile.json");
 const SIMPLE_SOURCE: &str =
-    include_str!("../fixtures/source-profile-dsl/valid/source-selecting-access-path.json");
+    include_str!("../fixtures/source-behavior/valid/source-selecting-access-path.json");
 
 fn write_profile(app_data_dir: &Path, profile: &serde_json::Value) {
     let profile_dir = app_data_dir.join("source-profiles");
@@ -123,7 +123,7 @@ fn run_activation(
 fn latest_status(
     app_data_dir: impl AsRef<Path>,
     key: &str,
-) -> Result<job_radar_lib::SourceLiveCheckReportStatus, SourceOnboardingError> {
+) -> Result<crate::job_radar_lib::SourceLiveCheckReportStatus, SourceOnboardingError> {
     match block_on(
         onboarding(app_data_dir, Arc::new(ScriptedProfileHttpClient::new([]))).live_check(
             SourceLiveCheckRequest::LatestReportStatus {
@@ -260,7 +260,7 @@ fn passing_live_check_fetcher() -> FakeLiveCheckFetcher {
     ])
 }
 
-fn create_passed_source_live_check(app_data_dir: &Path) -> job_radar_lib::CheckReport {
+fn create_passed_source_live_check(app_data_dir: &Path) -> crate::job_radar_lib::CheckReport {
     write_profile(app_data_dir, &simple_profile_without_pagination());
     write_source(app_data_dir, &simple_source_with_status("draft"));
     let fetcher = passing_live_check_fetcher();
@@ -268,7 +268,7 @@ fn create_passed_source_live_check(app_data_dir: &Path) -> job_radar_lib::CheckR
 }
 
 fn assert_stale_detail(
-    status: &job_radar_lib::SourceLiveCheckReportStatus,
+    status: &crate::job_radar_lib::SourceLiveCheckReportStatus,
     kind: &str,
     reason: CheckReportStaleReason,
 ) {
@@ -1212,7 +1212,7 @@ fn source_onboarding_creation_is_draft_only_and_revision_preserves_status() {
 
     let disabled = block_on(onboarding.change(SourceChange::SetInactive {
         source_key: "example_source".to_string(),
-        status: job_radar_lib::InactiveSourceStatus::Disabled,
+        status: crate::job_radar_lib::InactiveSourceStatus::Disabled,
     }))
     .unwrap();
     assert_eq!(disabled.source.document.status, SourceStatus::Disabled);
@@ -1484,7 +1484,7 @@ fn source_onboarding_authors_profile_selected_source_owned_and_compile_invalid_d
     assert_eq!(profile_selected.source.document.status, SourceStatus::Draft);
 
     let source_owned_document: SourceDocument = serde_json::from_str(include_str!(
-        "../fixtures/source-profile-dsl/valid/source-owned-access-path.json"
+        "../fixtures/source-behavior/valid/source-owned-access-path.json"
     ))
     .unwrap();
     let source_owned = CreateSourceDraft {
@@ -1501,14 +1501,14 @@ fn source_onboarding_authors_profile_selected_source_owned_and_compile_invalid_d
 
     let mut invalid = authored_draft();
     invalid.key = "compile_invalid".to_string();
-    invalid.selected_access_path = job_radar_lib::SelectedAccessPath::ProfileAccessPath {
+    invalid.selected_access_path = crate::job_radar_lib::SelectedAccessPath::ProfileAccessPath {
         profile_key: "missing_profile".to_string(),
         path_key: "missing_path".to_string(),
     };
     let invalid = block_on(onboarding.change(SourceChange::CreateDraft(invalid))).unwrap();
     assert_eq!(
         invalid.source.validation_state.state,
-        job_radar_lib::ValidationStateKind::Invalid
+        crate::job_radar_lib::ValidationStateKind::Invalid
     );
     assert!(!invalid.source.validation_state.diagnostics.is_empty());
 }

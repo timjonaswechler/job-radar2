@@ -1,4 +1,4 @@
-use job_radar_lib::agent::configuration::{
+use crate::job_radar_lib::agent::configuration::{
     AgentConfiguration, AgentDataFolderOpener, AuthenticationKind, ConfigurationState,
     ExternalUrlOpener, OpenError, SecretApiKeyInput, SubscriptionLoginProgress,
     SubscriptionLoginProgressReporter, SubscriptionLoginStage,

@@ -6,15 +6,15 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::profile_dsl::compiler::{
-    compile_source, validate_source_profile_document, CompileSourceOutcome, CompiledSourceAccess,
+use crate::source::validation::derive_source_validation_state;
+use source_profile_dsl::definition::SourceDocument;
+use source_profile_dsl::definition::SourceProfileDocument;
+use source_profile_dsl::definition::{
+    compile_source, validate_source_profile_document, CompileSourceOutcome,
 };
-use crate::profile_dsl::diagnostics::{
+use source_profile_dsl::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::source::documents::SourceDocument;
-use crate::source::validation::derive_source_validation_state;
-use crate::source_profile::documents::SourceProfileDocument;
 
 use super::builtins::{
     EmbeddedRegistryDocument, BUILTIN_SOURCE_JSON_FILES, BUILTIN_SOURCE_PROFILE_JSON_FILES,
@@ -89,12 +89,7 @@ pub fn load_snapshot_with_builtins(
         let compile_outcome = compile_source(&source.document, &profile_only_registry);
         let validation_state = derive_source_validation_state(&source.document, &compile_outcome);
         let effective_profile = match &compile_outcome {
-            CompileSourceOutcome::Compiled { source, .. } => match &source.access {
-                CompiledSourceAccess::Profile { effective_profile } => {
-                    Some(effective_profile.document.clone())
-                }
-                CompiledSourceAccess::SourceOwned { .. } => None,
-            },
+            CompileSourceOutcome::Compiled { source, .. } => source.effective_profile().cloned(),
             CompileSourceOutcome::Rejected { .. } => None,
         };
         diagnostics.extend(validation_state.diagnostics.clone());

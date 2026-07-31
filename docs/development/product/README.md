@@ -4,7 +4,7 @@ Product documentation defines what Job Radar should do, for whom, and within whi
 
 Accepted Product Requirement Documents live in [`../prd/`](../prd/):
 
-- [Declarative Source Profile DSL](../prd/declarative-source-profile-dsl.md)
+- [Declarative Source Behavior Language](../prd/source-behavior-language.md)
 - [Declarative Profile Strategy Algebra](../prd/declarative-profile-strategy-algebra.md)
 - [Search Request geolocation](../prd/search-request-geolocation.md)
 

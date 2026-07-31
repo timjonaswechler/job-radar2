@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::compiler::CompileSourceOutcome;
-use crate::profile_dsl::diagnostics::{
+use source_profile_dsl::definition::CompileSourceOutcome;
+use source_profile_dsl::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::source::documents::{SourceDocument, SourceStatus};
+use source_profile_dsl::definition::{SourceDocument, SourceStatus};
 
 /// Derived Source validation state. It is computed from the exact authoritative
 /// compiler outcome and is never persisted as a Source lifecycle status.

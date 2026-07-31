@@ -1,18 +1,18 @@
 use super::*;
 use crate::{
-    profile_dsl::runtime::{
-        BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
-        RequestedFieldDisposition, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
-        ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
-        ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
-        SourceDetailOutcome, SourceDetailRequestSnapshot,
-    },
     search::run::{
         NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
     },
     source_profile::registry::SourceProfileRegistrySnapshot,
 };
 use serde_json::{from_str, json, Value};
+use source_profile_dsl::test_support::{
+    BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
+    RequestedFieldDisposition, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
+    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, ScriptedSourceDetailExecution,
+    SourceDetailOutcome, SourceDetailRequestSnapshot,
+};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
@@ -38,7 +38,7 @@ impl FixtureDetailHttpClient {
                 body: vec![match result {
                     Ok(body) => ScriptedHttpBodyEvent::Chunk(body.into_bytes()),
                     Err(_) => ScriptedHttpBodyEvent::Failure(
-                        crate::profile_dsl::runtime::ProfileHttpFailureKind::BodyStream,
+                        source_profile_dsl::execution::ProfileHttpFailureKind::BodyStream,
                     ),
                 }],
                 content_length: None,

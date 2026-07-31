@@ -1,5 +1,11 @@
 //! Executable contracts for the Source Profile documents shipped as product
-//! resources. Generic DSL behavior belongs to `crates/source-profile-dsl/tests`.
+//! resources. Generic Source Behavior Language behavior belongs to `crates/source-profile-dsl/tests`.
+
+#[allow(unused_imports)]
+mod job_radar_lib {
+    pub use ::job_radar_lib::*;
+    pub use source_profile_dsl::test_support::*;
+}
 
 #[path = "bundled_source_profiles/greenhouse.rs"]
 mod greenhouse;

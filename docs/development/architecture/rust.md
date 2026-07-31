@@ -93,7 +93,7 @@ seams.
   error or diagnostic interface.
 
 For Source Profiles and Search Runs, implement these capabilities through
-the generic DSL or pipeline rather than source-specific Rust branches.
+the generic Source Behavior Language or pipeline rather than source-specific Rust branches.
 
 ## Clarity and performance
 

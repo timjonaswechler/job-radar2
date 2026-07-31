@@ -167,7 +167,7 @@ fn get_job_posting_falls_back_after_typed_source_mismatch_and_writes_only_final_
         );
         let expected = |source_key: &str, url: &str| {
             let (_, identity) =
-                crate::profile_dsl::runtime::validate_posting_reference(source_key, url, None)
+                source_profile_dsl::execution::validate_posting_reference(source_key, url, None)
                     .unwrap();
             SourceDetailRequestSnapshot::new(
                 source_key,

@@ -1,10 +1,9 @@
 use crate::{
-    profile_dsl::{
-        compiler::{compile_source, CompileSourceOutcome},
-        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-    },
-    source::documents::SourceStatus,
-    source_profile::registry::SourceProfileRegistrySnapshot,
+    source::documents::SourceStatus, source_profile::registry::SourceProfileRegistrySnapshot,
+};
+use source_profile_dsl::definition::{
+    compile_source, CompileSourceOutcome, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    Diagnostics,
 };
 
 use super::SourceExecutionError;
@@ -16,7 +15,7 @@ pub(super) struct SourceSelectionOptions {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum SelectedSearchRunSource {
-    Resolved(Box<crate::profile_dsl::compiler::CompiledSource>),
+    Resolved(Box<source_profile_dsl::definition::CompiledSource>),
     Missing {
         source_key: String,
         error: SourceExecutionError,

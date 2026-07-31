@@ -5,7 +5,7 @@ use crate::support::{
 
 use std::{collections::BTreeMap, fs, future::Future, path::Path};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     execute_discovery, AllowanceDimension, HttpMethod, PhaseBrowser, PhaseCompletion,
     PostingOccurrence, RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent,
     ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument, SupportLevel,
@@ -20,7 +20,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
     let profile_value: Value = serde_json::from_str(&profile_text).unwrap();
     assert_detects_named_workday_source_config_captures(&profile_value);
     let profile: SourceProfileDocument = serde_json::from_value(profile_value)
-        .expect("Workday built-in profile should be a Source Profile DSL document");
+        .expect("Workday built-in profile should be a Source Behavior Language document");
     assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.support.level, SupportLevel::Stable);
 
@@ -223,7 +223,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     ] {
         assert!(
             !profile_text.contains(forbidden),
-            "Workday DSL profile must not contain v1 vocabulary `{forbidden}`"
+            "Workday Source Behavior Language profile must not contain v1 vocabulary `{forbidden}`"
         );
     }
 }

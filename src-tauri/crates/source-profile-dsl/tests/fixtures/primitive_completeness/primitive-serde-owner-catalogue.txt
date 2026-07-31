@@ -1,169 +1,169 @@
 # Independently frozen authored Serde owner/file/compiled-identity classification supplied to owner descriptors.
-Template	template	[DiscoveryValue, DetailValue, DiscoveryHttpUrl, DiscoveryHttpHeader, DiscoveryHttpBody, DetailHttpUrl, DetailHttpHeader, DetailHttpBody, DiscoveryBrowserUrl, DetailBrowserUrl, DetectionHttpUrl, DetectionBrowserUrl, DetectionProposal]	P01	src-tauri/crates/source-profile-dsl/src/profile_dsl/template.rs	Keyed	CompiledTemplate
-Parse	charset	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/mod.rs	ParentOption	CompiledParse::{Json|Xml|Html}.context.charset
-Parse	html	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/html.rs	Tagged	CompiledParse::Html
-Parse	json	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/json.rs	Tagged	CompiledParse::Json
-Parse	xml	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/xml.rs	Tagged	CompiledParse::Xml
-Select	css	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/css.rs	Tagged	CompiledSelect::Css
-Select	css.selector	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/css.rs	ParentOption	CompiledSelect::Css.selector
-Select	document	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/document.rs	Tagged	CompiledSelect::Document
-Select	json_path	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/json_path.rs	Tagged	CompiledSelect::JsonPath
-Select	json_path.jsonPath	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/json_path.rs	ParentOption	CompiledSelect::JsonPath.segments
-Select	sitemap_urls	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/sitemap_urls.rs	Tagged	CompiledSelect::SitemapUrls
-Select	sitemap_urls.urlPattern	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/sitemap_urls.rs	ParentOption	CompiledSelect::SitemapUrls.url_pattern
-Select	xml_element	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/xml_element.rs	Tagged	CompiledSelect::XmlElement
-Select	xml_element.element	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/xml_element.rs	ParentOption	CompiledSelect::XmlElement.element
-Select	xml_text	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/xml_text.rs	Tagged	CompiledSelect::XmlText
-Select	xml_text.textPath	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/select/xml_text.rs	ParentOption	CompiledSelect::XmlText.{current,segments}
-Cardinality	all	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/cardinality/all.rs	Tagged	CompiledCardinality::All
-Cardinality	first	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/cardinality/first.rs	Tagged	CompiledCardinality::First
-Cardinality	one	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/cardinality/one.rs	Tagged	CompiledCardinality::One
-Cardinality	optional	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/cardinality/optional.rs	Tagged	CompiledCardinality::Optional
-Transform	dedupe	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/dedupe.rs	Tagged	CompiledTransform::Dedupe
-Transform	html_to_text	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/html_to_text.rs	Tagged	CompiledTransform::HtmlToText
-Transform	join	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/join.rs	Tagged	CompiledTransform::Join
-Transform	join.separator	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/join.rs	ParentOption	CompiledTransform::Join.separator
-Transform	normalize_whitespace	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/normalize_whitespace.rs	Tagged	CompiledTransform::NormalizeWhitespace
-Transform	regex_replace	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/regex_replace.rs	Tagged	CompiledTransform::RegexReplace
-Transform	regex_replace.pattern	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/regex_replace.rs	ParentOption	CompiledTransform::RegexReplace.pattern
-Transform	regex_replace.replacement	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/regex_replace.rs	ParentOption	CompiledTransform::RegexReplace.replacement
-Transform	slug_to_title	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/slug_to_title.rs	Tagged	CompiledTransform::SlugToTitle
-Transform	split	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/split.rs	Tagged	CompiledTransform::Split
-Transform	split.dropEmpty	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.drop_empty
-Transform	split.separator	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.separator
-Transform	split.trimParts	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.trim_parts
-Transform	to_string	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/to_string.rs	Tagged	CompiledTransform::ToString
-Transform	trim	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/trim.rs	Tagged	CompiledTransform::Trim
-Transform	url_decode	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/transform/url_decode.rs	Tagged	CompiledTransform::UrlDecode
-ValuePlacement	detail_capture_source	[DetailCaptureSource]	P06a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DetailCaptureSource
-ValuePlacement	detail_match_filter_output	[DetailMatchFilterOutput]	P06a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DetailMatchFilterOutput
-ValuePlacement	discovery_capture_source	[DiscoveryCaptureSource]	P06a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DiscoveryCaptureSource
-ValuePlacement	discovery_filter_output	[DiscoveryFilterOutput]	P06a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DiscoveryFilterOutput
-Value	capture	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/capture.rs	Tagged	CompiledValue::Capture
-Value	combine	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/combine.rs	Tagged	CompiledValue::Combine
-Value	combine.join	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	CompiledValue::Combine.join
-Value	combine.part.optional	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	CompiledCombinePart.optional
-Value	combine.part.value	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	CompiledCombinePart.value
-Value	const	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/const_value.rs	Tagged	CompiledValue::Const
-Value	css_attribute	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/css_attribute.rs	Tagged	CompiledValue::CssAttribute
-Value	css_text	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/css_text.rs	Tagged	CompiledValue::CssText
-Value	first_non_empty	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/first_non_empty.rs	Tagged	CompiledValue::FirstNonEmpty
-Value	first_non_empty.candidates	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	ParentOption	CompiledValue::FirstNonEmpty.candidates
-Value	item_field	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/item_field.rs	Tagged	CompiledValue::ItemField
-Value	json_path	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/json_path.rs	Tagged	CompiledValue::JsonPath
-Value	list.multiple	[DiscoveryFilterOutput, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	Untagged	CompiledListValue::Multiple
-Value	list.single	[DiscoveryFilterOutput, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs	Untagged	CompiledListValue::Single
-Value	posting_meta	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/posting_meta.rs	Tagged	CompiledValue::PostingMeta
-Value	source_config	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/source_config.rs	Tagged	CompiledValue::SourceConfig
-Value	template	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/template.rs	Tagged	CompiledValue::Template
-Value	xml_element	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/xml_element.rs	Tagged	CompiledValue::XmlElement
-Value	xml_text	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/xml_text.rs	Tagged	CompiledValue::XmlText
-Predicate	detail.match	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal
-Predicate	detail.match.left	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal.left
-Predicate	detail.match.right	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal.right
-Predicate	equal	[DetailMatch, DetectionHttpStatus]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/equal.rs	Tagged	CompiledPredicate::Equal
-Predicate	non_empty	[DiscoveryWhere, DetailWhere, DetectionHttpContains, DetectionBrowserContains]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/non_empty.rs	Tagged	CompiledPredicate::NonEmpty
-Predicate	non_empty.field	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/non_empty.rs	ParentOption	CompiledPredicate::NonEmpty.field
-Predicate	regex	[DiscoveryWhere, DetailWhere, DetectionHttpRegex, DetectionBrowserRegex]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/regex.rs	Tagged	CompiledPredicate::Regex
-Predicate	regex.field	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/regex.rs	ParentOption	CompiledPredicate::Regex.field
-Predicate	regex.pattern	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/predicate/regex.rs	ParentOption	CompiledPredicate::Regex.pattern
-Capture	entry.from	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/capture/named.rs	ParentOption	CompiledCaptureRule.from
-Capture	entry.pattern	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/capture/named.rs	ParentOption	CompiledCaptureRule.pattern
-Capture	named	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/capture/named.rs	Keyed	CompiledCaptureRule.key
-Fetch	http	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	Tagged	CompiledHttpFetch
-Fetch	http.body.form	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Form
-Fetch	http.body.form.fields	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Form.fields
-Fetch	http.body.json	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Json
-Fetch	http.body.json.value	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Json.value
-Fetch	http.body.text	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Text
-Fetch	http.body.text.value	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Text.value
-Fetch	http.headers	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.headers
-Fetch	http.method.GET	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.method::Get
-Fetch	http.method.POST	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.method::Post
-Fetch	http.timeoutMs	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.timeout_ms
-Fetch	http.url	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.url
-Pagination	cursor	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	CompiledPagination::Cursor
-Pagination	cursor.cursorParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.cursor_param
-Pagination	cursor.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits
-Pagination	cursor.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_depth
-Pagination	cursor.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_items
-Pagination	cursor.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_requests
-Pagination	cursor.nextCursorPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.next_cursor_path
-Pagination	cursor.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.parameter_location
-Pagination	offset_limit	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	CompiledPagination::OffsetLimit
-Pagination	offset_limit.limit	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limit
-Pagination	offset_limit.limitParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limit_param
-Pagination	offset_limit.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits
-Pagination	offset_limit.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_depth
-Pagination	offset_limit.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_items
-Pagination	offset_limit.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_requests
-Pagination	offset_limit.offsetParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.offset_param
-Pagination	offset_limit.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.parameter_location
-Pagination	offset_limit.startOffset	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.start_offset
-Pagination	offset_limit.totalPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.total_path
-Pagination	page	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	CompiledPagination::Page
-Pagination	page.firstPage	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.first_page
-Pagination	page.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits
-Pagination	page.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_depth
-Pagination	page.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_items
-Pagination	page.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_requests
-Pagination	page.pageParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_param
-Pagination	page.pageSize	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_size
-Pagination	page.pageSizeParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_size_param
-Pagination	page.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.parameter_location
-Pagination	page.totalPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.total_path
-Pagination	sitemap	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	CompiledPagination::Sitemap
-Pagination	sitemap.childSitemapSelector	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.child_sitemap_selector
-Pagination	sitemap.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits
-Pagination	sitemap.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_depth
-Pagination	sitemap.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_items
-Pagination	sitemap.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_requests
-Pagination	sitemap.postingUrlSelector	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.posting_url_selector
-PaginationLocation	json_body	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	PaginationParameterLocation::JsonBody
-PaginationLocation	query	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/pagination/mod.rs	Tagged	PaginationParameterLocation::Query
-Acceptance	minDescriptionLength	[Discovery, Detail]	P11	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.min_description_length
-Acceptance	minResults	[Discovery]	P11	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.min_results
-Acceptance	requiredFields	[Discovery, Detail]	P11	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.required_fields
-Browser	browser	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	Tagged	ExecutionPlanFetch::Browser
-Browser	browser.interactions	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.interactions
-Browser	browser.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.timeout_ms
-Browser	browser.url	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.url
-Browser	browser.waits	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.waits
-Browser	click_if_visible	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserInteraction::ClickIfVisible
-Browser	click_if_visible.maxCount	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.max_count
-Browser	click_if_visible.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.selector
-Browser	click_if_visible.waitAfterMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.wait_after_ms
-Browser	click_until_gone	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserInteraction::ClickUntilGone
-Browser	click_until_gone.maxCount	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.max_count
-Browser	click_until_gone.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.selector
-Browser	click_until_gone.waitAfterMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.wait_after_ms
-Browser	network_idle	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserWait::NetworkIdle
-Browser	network_idle.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::NetworkIdle.timeout_ms
-Browser	selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserWait::Selector
-Browser	selector.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::Selector.selector
-Browser	selector.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::Selector.timeout_ms
-Detection	absolute_url	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Tagged	CompiledUrlInput::AbsoluteUrl
-Detection	browser	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Tagged	CompiledDetectionStrategy::Browser
-Detection	browser.captures	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.captures
-Detection	browser.contains	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.contains
-Detection	browser.evidence	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.evidence
-Detection	browser.fetch	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.{url,timeout_ms,waits,interactions}
-Detection	browser.key	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.key
-Detection	browser.regex	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.acceptance_regex
-Detection	http	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Tagged	CompiledDetectionStrategy::Http
-Detection	http.captures	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.captures
-Detection	http.contains	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.contains
-Detection	http.evidence	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.evidence
-Detection	http.expectStatus	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.expect_status
-Detection	http.fetch	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.fetch
-Detection	http.key	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.key
-Detection	http.regex	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.acceptance_regex
-Detection	input_url_pattern	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Keyed	CompiledUrlAlternative.pattern
-Detection	input_url_pattern.captures	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledUrlAlternative.pattern.capture_keys
-Detection	input_url_pattern.pattern	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledUrlAlternative.pattern.authored_pattern
-Detection	pattern_alternatives	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Tagged	CompiledUrlInput::PatternAlternatives
-Detection	pattern_alternatives.alternatives	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledUrlInput::PatternAlternatives.0
-Detection	url	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	Tagged	CompiledDetectionStrategy::Url
-Detection	url.input	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Url.input
-Detection	url.key	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/source_profile/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Url.key
-PhaseLimit	maxBrowserRenderedBytes	[DiscoveryPhaseLimit, DetailPhaseLimit]	B01	src-tauri/crates/source-profile-dsl/src/profile_dsl/documents/limits.rs	ParentOption	PhaseLimits.max_browser_rendered_bytes
+Template	template	[DiscoveryValue, DetailValue, DiscoveryHttpUrl, DiscoveryHttpHeader, DiscoveryHttpBody, DetailHttpUrl, DetailHttpHeader, DetailHttpBody, DiscoveryBrowserUrl, DetailBrowserUrl, DetectionHttpUrl, DetectionBrowserUrl, DetectionProposal]	P01	src-tauri/crates/source-profile-dsl/src/definition/template.rs	Keyed	CompiledTemplate
+Parse	charset	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/mod.rs	ParentOption	CompiledParse::{Json|Xml|Html}.context.charset
+Parse	html	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/html.rs	Tagged	CompiledParse::Html
+Parse	json	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/json.rs	Tagged	CompiledParse::Json
+Parse	xml	[Discovery, Detail]	P02	src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/xml.rs	Tagged	CompiledParse::Xml
+Select	css	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/css.rs	Tagged	CompiledSelect::Css
+Select	css.selector	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/css.rs	ParentOption	CompiledSelect::Css.selector
+Select	document	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/document.rs	Tagged	CompiledSelect::Document
+Select	json_path	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/json_path.rs	Tagged	CompiledSelect::JsonPath
+Select	json_path.jsonPath	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/json_path.rs	ParentOption	CompiledSelect::JsonPath.segments
+Select	sitemap_urls	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/sitemap_urls.rs	Tagged	CompiledSelect::SitemapUrls
+Select	sitemap_urls.urlPattern	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/sitemap_urls.rs	ParentOption	CompiledSelect::SitemapUrls.url_pattern
+Select	xml_element	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/xml_element.rs	Tagged	CompiledSelect::XmlElement
+Select	xml_element.element	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/xml_element.rs	ParentOption	CompiledSelect::XmlElement.element
+Select	xml_text	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/xml_text.rs	Tagged	CompiledSelect::XmlText
+Select	xml_text.textPath	[Discovery, Detail]	P03	src-tauri/crates/source-profile-dsl/src/definition/primitives/select/xml_text.rs	ParentOption	CompiledSelect::XmlText.{current,segments}
+Cardinality	all	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/definition/primitives/cardinality/all.rs	Tagged	CompiledCardinality::All
+Cardinality	first	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/definition/primitives/cardinality/first.rs	Tagged	CompiledCardinality::First
+Cardinality	one	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/definition/primitives/cardinality/one.rs	Tagged	CompiledCardinality::One
+Cardinality	optional	[Discovery, Detail]	P04	src-tauri/crates/source-profile-dsl/src/definition/primitives/cardinality/optional.rs	Tagged	CompiledCardinality::Optional
+Transform	dedupe	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/dedupe.rs	Tagged	CompiledTransform::Dedupe
+Transform	html_to_text	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/html_to_text.rs	Tagged	CompiledTransform::HtmlToText
+Transform	join	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/join.rs	Tagged	CompiledTransform::Join
+Transform	join.separator	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/join.rs	ParentOption	CompiledTransform::Join.separator
+Transform	normalize_whitespace	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/normalize_whitespace.rs	Tagged	CompiledTransform::NormalizeWhitespace
+Transform	regex_replace	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/regex_replace.rs	Tagged	CompiledTransform::RegexReplace
+Transform	regex_replace.pattern	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/regex_replace.rs	ParentOption	CompiledTransform::RegexReplace.pattern
+Transform	regex_replace.replacement	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/regex_replace.rs	ParentOption	CompiledTransform::RegexReplace.replacement
+Transform	slug_to_title	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/slug_to_title.rs	Tagged	CompiledTransform::SlugToTitle
+Transform	split	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/split.rs	Tagged	CompiledTransform::Split
+Transform	split.dropEmpty	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.drop_empty
+Transform	split.separator	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.separator
+Transform	split.trimParts	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/split.rs	ParentOption	CompiledTransform::Split.trim_parts
+Transform	to_string	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/to_string.rs	Tagged	CompiledTransform::ToString
+Transform	trim	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/trim.rs	Tagged	CompiledTransform::Trim
+Transform	url_decode	[Discovery, Detail]	P05	src-tauri/crates/source-profile-dsl/src/definition/primitives/transform/url_decode.rs	Tagged	CompiledTransform::UrlDecode
+ValuePlacement	detail_capture_source	[DetailCaptureSource]	P06a	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DetailCaptureSource
+ValuePlacement	detail_match_filter_output	[DetailMatchFilterOutput]	P06a	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DetailMatchFilterOutput
+ValuePlacement	discovery_capture_source	[DiscoveryCaptureSource]	P06a	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DiscoveryCaptureSource
+ValuePlacement	discovery_filter_output	[DiscoveryFilterOutput]	P06a	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	ValueCompileContext.placement::DiscoveryFilterOutput
+Value	capture	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/capture.rs	Tagged	CompiledValue::Capture
+Value	combine	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/combine.rs	Tagged	CompiledValue::Combine
+Value	combine.join	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	CompiledValue::Combine.join
+Value	combine.part.optional	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	CompiledCombinePart.optional
+Value	combine.part.value	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	CompiledCombinePart.value
+Value	const	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/const_value.rs	Tagged	CompiledValue::Const
+Value	css_attribute	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/css_attribute.rs	Tagged	CompiledValue::CssAttribute
+Value	css_text	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/css_text.rs	Tagged	CompiledValue::CssText
+Value	first_non_empty	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/first_non_empty.rs	Tagged	CompiledValue::FirstNonEmpty
+Value	first_non_empty.candidates	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	ParentOption	CompiledValue::FirstNonEmpty.candidates
+Value	item_field	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/item_field.rs	Tagged	CompiledValue::ItemField
+Value	json_path	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/json_path.rs	Tagged	CompiledValue::JsonPath
+Value	list.multiple	[DiscoveryFilterOutput, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	Untagged	CompiledListValue::Multiple
+Value	list.single	[DiscoveryFilterOutput, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs	Untagged	CompiledListValue::Single
+Value	posting_meta	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/posting_meta.rs	Tagged	CompiledValue::PostingMeta
+Value	source_config	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/source_config.rs	Tagged	CompiledValue::SourceConfig
+Value	template	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/template.rs	Tagged	CompiledValue::Template
+Value	xml_element	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/xml_element.rs	Tagged	CompiledValue::XmlElement
+Value	xml_text	[DiscoveryCaptureSource, DiscoveryFilterOutput, DetailCaptureSource, DetailMatchFilterOutput]	P06bc	src-tauri/crates/source-profile-dsl/src/definition/primitives/value/xml_text.rs	Tagged	CompiledValue::XmlText
+Predicate	detail.match	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal
+Predicate	detail.match.left	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal.left
+Predicate	detail.match.right	[DetailMatch]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/mod.rs	ParentOption	ExecutionPlanDetailStrategy.field_match::Equal.right
+Predicate	equal	[DetailMatch, DetectionHttpStatus]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/equal.rs	Tagged	CompiledPredicate::Equal
+Predicate	non_empty	[DiscoveryWhere, DetailWhere, DetectionHttpContains, DetectionBrowserContains]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/non_empty.rs	Tagged	CompiledPredicate::NonEmpty
+Predicate	non_empty.field	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/non_empty.rs	ParentOption	CompiledPredicate::NonEmpty.field
+Predicate	regex	[DiscoveryWhere, DetailWhere, DetectionHttpRegex, DetectionBrowserRegex]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/regex.rs	Tagged	CompiledPredicate::Regex
+Predicate	regex.field	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/regex.rs	ParentOption	CompiledPredicate::Regex.field
+Predicate	regex.pattern	[DiscoveryWhere, DetailWhere]	P07	src-tauri/crates/source-profile-dsl/src/definition/primitives/predicate/regex.rs	ParentOption	CompiledPredicate::Regex.pattern
+Capture	entry.from	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/definition/primitives/capture/named.rs	ParentOption	CompiledCaptureRule.from
+Capture	entry.pattern	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/definition/primitives/capture/named.rs	ParentOption	CompiledCaptureRule.pattern
+Capture	named	[Discovery, Detail]	P08	src-tauri/crates/source-profile-dsl/src/definition/primitives/capture/named.rs	Keyed	CompiledCaptureRule.key
+Fetch	http	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	Tagged	CompiledHttpFetch
+Fetch	http.body.form	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Form
+Fetch	http.body.form.fields	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Form.fields
+Fetch	http.body.json	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Json
+Fetch	http.body.json.value	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Json.value
+Fetch	http.body.text	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Text
+Fetch	http.body.text.value	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpRequestBody::Text.value
+Fetch	http.headers	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.headers
+Fetch	http.method.GET	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.method::Get
+Fetch	http.method.POST	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.method::Post
+Fetch	http.timeoutMs	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.timeout_ms
+Fetch	http.url	[Discovery, Detail, DetectionHttp]	P09	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/http.rs	ParentOption	CompiledHttpFetch.url
+Pagination	cursor	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	CompiledPagination::Cursor
+Pagination	cursor.cursorParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.cursor_param
+Pagination	cursor.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits
+Pagination	cursor.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_depth
+Pagination	cursor.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_items
+Pagination	cursor.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.limits.max_requests
+Pagination	cursor.nextCursorPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.next_cursor_path
+Pagination	cursor.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Cursor.parameter_location
+Pagination	offset_limit	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	CompiledPagination::OffsetLimit
+Pagination	offset_limit.limit	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limit
+Pagination	offset_limit.limitParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limit_param
+Pagination	offset_limit.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits
+Pagination	offset_limit.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_depth
+Pagination	offset_limit.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_items
+Pagination	offset_limit.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.limits.max_requests
+Pagination	offset_limit.offsetParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.offset_param
+Pagination	offset_limit.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.parameter_location
+Pagination	offset_limit.startOffset	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.start_offset
+Pagination	offset_limit.totalPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::OffsetLimit.total_path
+Pagination	page	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	CompiledPagination::Page
+Pagination	page.firstPage	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.first_page
+Pagination	page.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits
+Pagination	page.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_depth
+Pagination	page.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_items
+Pagination	page.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.limits.max_requests
+Pagination	page.pageParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_param
+Pagination	page.pageSize	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_size
+Pagination	page.pageSizeParam	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.page_size_param
+Pagination	page.parameterLocation	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.parameter_location
+Pagination	page.totalPath	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Page.total_path
+Pagination	sitemap	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	CompiledPagination::Sitemap
+Pagination	sitemap.childSitemapSelector	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.child_sitemap_selector
+Pagination	sitemap.limits	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits
+Pagination	sitemap.limits.maxDepth	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_depth
+Pagination	sitemap.limits.maxItems	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_items
+Pagination	sitemap.limits.maxRequests	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.limits.max_requests
+Pagination	sitemap.postingUrlSelector	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	ParentOption	CompiledPagination::Sitemap.posting_url_selector
+PaginationLocation	json_body	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	PaginationParameterLocation::JsonBody
+PaginationLocation	query	[Discovery]	P10	src-tauri/crates/source-profile-dsl/src/definition/primitives/pagination/mod.rs	Tagged	PaginationParameterLocation::Query
+Acceptance	minDescriptionLength	[Discovery, Detail]	P11	src-tauri/crates/source-profile-dsl/src/definition/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.min_description_length
+Acceptance	minResults	[Discovery]	P11	src-tauri/crates/source-profile-dsl/src/definition/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.min_results
+Acceptance	requiredFields	[Discovery, Detail]	P11	src-tauri/crates/source-profile-dsl/src/definition/primitives/acceptance/mod.rs	ParentOption	CompiledAcceptance.required_fields
+Browser	browser	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	Tagged	ExecutionPlanFetch::Browser
+Browser	browser.interactions	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.interactions
+Browser	browser.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.timeout_ms
+Browser	browser.url	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.url
+Browser	browser.waits	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanFetch::Browser.waits
+Browser	click_if_visible	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserInteraction::ClickIfVisible
+Browser	click_if_visible.maxCount	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.max_count
+Browser	click_if_visible.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.selector
+Browser	click_if_visible.waitAfterMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickIfVisible.wait_after_ms
+Browser	click_until_gone	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserInteraction::ClickUntilGone
+Browser	click_until_gone.maxCount	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.max_count
+Browser	click_until_gone.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.selector
+Browser	click_until_gone.waitAfterMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserInteraction::ClickUntilGone.wait_after_ms
+Browser	network_idle	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserWait::NetworkIdle
+Browser	network_idle.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::NetworkIdle.timeout_ms
+Browser	selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	Tagged	ExecutionPlanBrowserWait::Selector
+Browser	selector.selector	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::Selector.selector
+Browser	selector.timeoutMs	[Discovery, Detail, DetectionBrowser]	B03a	src-tauri/crates/source-profile-dsl/src/definition/primitives/fetch/browser.rs	ParentOption	ExecutionPlanBrowserWait::Selector.timeout_ms
+Detection	absolute_url	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Tagged	CompiledUrlInput::AbsoluteUrl
+Detection	browser	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Tagged	CompiledDetectionStrategy::Browser
+Detection	browser.captures	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.captures
+Detection	browser.contains	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.contains
+Detection	browser.evidence	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.evidence
+Detection	browser.fetch	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.{url,timeout_ms,waits,interactions}
+Detection	browser.key	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.key
+Detection	browser.regex	[Detection]	D03	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Browser.acceptance_regex
+Detection	http	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Tagged	CompiledDetectionStrategy::Http
+Detection	http.captures	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.captures
+Detection	http.contains	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.contains
+Detection	http.evidence	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.evidence
+Detection	http.expectStatus	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.expect_status
+Detection	http.fetch	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.fetch
+Detection	http.key	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.key
+Detection	http.regex	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Http.acceptance_regex
+Detection	input_url_pattern	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Keyed	CompiledUrlAlternative.pattern
+Detection	input_url_pattern.captures	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledUrlAlternative.pattern.capture_keys
+Detection	input_url_pattern.pattern	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledUrlAlternative.pattern.authored_pattern
+Detection	pattern_alternatives	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Tagged	CompiledUrlInput::PatternAlternatives
+Detection	pattern_alternatives.alternatives	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledUrlInput::PatternAlternatives.0
+Detection	url	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	Tagged	CompiledDetectionStrategy::Url
+Detection	url.input	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Url.input
+Detection	url.key	[Detection]	D02	src-tauri/crates/source-profile-dsl/src/detection/plan.rs	ParentOption	CompiledDetectionStrategy::Url.key
+PhaseLimit	maxBrowserRenderedBytes	[DiscoveryPhaseLimit, DetailPhaseLimit]	B01	src-tauri/crates/source-profile-dsl/src/definition/documents/limits.rs	ParentOption	PhaseLimits.max_browser_rendered_bytes

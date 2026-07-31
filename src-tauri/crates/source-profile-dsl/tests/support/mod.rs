@@ -1,4 +1,4 @@
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     compile_source, execute_detail, execute_discovery, CompileSourceOutcome, Diagnostics,
     PhaseBrowser, PhaseCancelled, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
     PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome, PolicyUnsatisfiedCause,
@@ -19,7 +19,7 @@ pub struct RegistrySourceProfile {
     pub document: SourceProfileDocument,
 }
 
-impl source_profile_dsl::SourceProfileLookup for SourceProfileRegistrySnapshot {
+impl source_profile_dsl::test_support::SourceProfileLookup for SourceProfileRegistrySnapshot {
     fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
         self.profiles
             .iter()
@@ -38,7 +38,7 @@ pub fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
 
 pub struct AcceptedPhase<P> {
     pub payload: P,
-    pub diagnostics: source_profile_dsl::Diagnostics,
+    pub diagnostics: source_profile_dsl::test_support::Diagnostics,
     pub report: PhaseExecutionReport,
 }
 
@@ -142,7 +142,7 @@ pub fn not_started<P: std::fmt::Debug>(
 pub async fn execute_discovery_test<F>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
-) -> AcceptedPhase<source_profile_dsl::DiscoveryPhasePayload>
+) -> AcceptedPhase<source_profile_dsl::test_support::DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -154,7 +154,7 @@ pub async fn execute_discovery_test_with_config<F>(
     plan: &SourceExecutionPlan,
     source_config: &serde_json::Map<String, serde_json::Value>,
     fetcher: &F,
-) -> AcceptedPhase<source_profile_dsl::DiscoveryPhasePayload>
+) -> AcceptedPhase<source_profile_dsl::test_support::DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -217,7 +217,7 @@ pub async fn execute_detail_test<F>(
     plan: &SourceExecutionPlan,
     posting: &PostingOccurrence,
     fetcher: &F,
-) -> AcceptedPhase<source_profile_dsl::DetailPhasePayload>
+) -> AcceptedPhase<source_profile_dsl::test_support::DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -230,7 +230,7 @@ pub async fn execute_detail_test_with_config<F>(
     source_config: &serde_json::Map<String, serde_json::Value>,
     posting: &PostingOccurrence,
     fetcher: &F,
-) -> AcceptedPhase<source_profile_dsl::DetailPhasePayload>
+) -> AcceptedPhase<source_profile_dsl::test_support::DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -310,10 +310,10 @@ pub fn unwrap_plan(outcome: CompileSourceOutcome) -> SourceExecutionPlan {
             source,
             diagnostics,
         } if diagnostics.iter().all(|diagnostic| {
-            diagnostic.severity != source_profile_dsl::DiagnosticSeverity::Error
+            diagnostic.severity != source_profile_dsl::test_support::DiagnosticSeverity::Error
         }) =>
         {
-            source.execution_plan
+            source_profile_dsl::test_support::test_execution_plan(&source)
         }
         other => panic!("expected compiled Source, got {other:?}"),
     }

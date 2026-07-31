@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/collapsible";
 import { DetailRow } from "@/features/sources/registry/detail-row";
 import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
-import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
+import { sourceBehaviorSchemaRefs } from "@/features/sources/shared/source-schema-catalog";
 import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
 import type { ProfileAccessPathDefinition } from "@/lib/api/sources";
 
@@ -101,13 +101,13 @@ export function ProfileAccessPathDetails({
             title="discovery"
             description="Deklarative source-weite Posting Discovery."
             value={accessPath.discovery}
-            schemaRef={profileDslSchemaRefs.discoveryStep}
+            schemaRef={sourceBehaviorSchemaRefs.discoveryStep}
           />
           <OptionalSchemaValuePreview
             title="detail"
             description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
             value={accessPath.detail}
-            schemaRef={profileDslSchemaRefs.detailStep}
+            schemaRef={sourceBehaviorSchemaRefs.detailStep}
           />
         </div>
       </CollapsibleContent>

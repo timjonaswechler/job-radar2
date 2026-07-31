@@ -1,9 +1,9 @@
 use std::{future::Future, pin::Pin, time::Duration};
 
 use futures_util::StreamExt;
-use source_profile_dsl::profile_dsl::runtime::{
-    http::collect_profile_http_response, ProfileHttpClient, ProfileHttpError,
-    ProfileHttpFailureKind, ProfileHttpRequest, ProfileHttpResponse, RuntimeExecutionContext,
+use source_profile_dsl::execution::{
+    collect_profile_http_response, ProfileHttpClient, ProfileHttpError, ProfileHttpFailureKind,
+    ProfileHttpRequest, ProfileHttpResponse, RuntimeExecutionContext,
 };
 
 #[derive(Clone)]
@@ -39,10 +39,8 @@ impl ProfileHttpClient for ReqwestProfileHttpClient {
     {
         Box::pin(async move {
             let method = match request.method {
-                source_profile_dsl::profile_dsl::documents::HttpMethod::Get => reqwest::Method::GET,
-                source_profile_dsl::profile_dsl::documents::HttpMethod::Post => {
-                    reqwest::Method::POST
-                }
+                source_profile_dsl::definition::HttpMethod::Get => reqwest::Method::GET,
+                source_profile_dsl::definition::HttpMethod::Post => reqwest::Method::POST,
             };
             let mut builder = self
                 .client
@@ -109,5 +107,73 @@ fn failure(kind: ProfileHttpFailureKind, admitted_bytes: u64) -> ProfileHttpErro
     ProfileHttpError {
         kind,
         admitted_bytes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use source_profile_dsl::definition::HttpMethod;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    fn request(url: String) -> ProfileHttpRequest {
+        ProfileHttpRequest {
+            method: HttpMethod::Get,
+            url,
+            headers: Vec::new(),
+            body: None,
+            timeout_ms: 5_000,
+            authored_charset: None,
+        }
+    }
+
+    #[test]
+    fn preserves_redirect_non_success_repeated_raw_headers_and_exact_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            for index in 0..2 {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 2048];
+                let read = socket.read(&mut request).unwrap();
+                let line = String::from_utf8_lossy(&request[..read]);
+                if index == 0 {
+                    assert!(line.starts_with("GET /start "));
+                    write!(socket, "HTTP/1.1 302 Found\r\nLocation: http://{address}/final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+                } else {
+                    assert!(line.starts_with("GET /final "));
+                    let mut response = b"HTTP/1.1 418 Teapot\r\nContent-Type: text/plain; charset=windows-1252\r\nX-Repeat: first\r\nX-Repeat: ".to_vec();
+                    response.push(0xff);
+                    response.extend_from_slice(b"\r\nContent-Encoding: gzip\r\nContent-Length: 1\r\nConnection: close\r\n\r\n\x80");
+                    socket.write_all(&response).unwrap();
+                }
+            }
+        });
+        let client = ReqwestProfileHttpClient::new();
+        let response = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(client.fetch(
+                request(format!("http://{address}/start")),
+                RuntimeExecutionContext::uncancellable(),
+            ))
+            .unwrap_or_else(|_| panic!("adapter request failed"));
+        server.join().unwrap();
+        assert_eq!(response.status(), 418);
+        assert_eq!(response.final_url(), format!("http://{address}/final"));
+        assert_eq!(response.raw_body(), &[0x80]);
+        assert_eq!(response.body, "€");
+        let repeated = response
+            .headers()
+            .iter()
+            .filter(|h| h.name() == "x-repeat")
+            .map(|h| h.value())
+            .collect::<Vec<_>>();
+        assert_eq!(repeated, vec![b"first".as_slice(), &[0xff]]);
     }
 }

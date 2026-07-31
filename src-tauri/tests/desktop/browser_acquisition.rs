@@ -1,10 +1,10 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation, BrowserAcquisition,
     BrowserAcquisitionFailure, BrowserAcquisitionFailureKind, BrowserAcquisitionRequestSnapshot,
-    BrowserAcquisitionTerminal, BrowserInfrastructureFailure, BrowserLifecycleEvent,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, PhaseCompletion, PhaseLimits,
+    BrowserAcquisitionTerminal, BrowserInfrastructureFailure, BrowserInteractionInstruction,
+    BrowserLifecycleEvent, BrowserWaitInstruction, PhaseCompletion, PhaseLimits,
     RuntimeCancellation, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
     ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization,
 };
@@ -139,7 +139,7 @@ async fn every_ordinary_stage_failure_is_typed_charged_and_finalized_before_retu
             }
             BrowserAcquisitionFailureKind::Navigation => (Vec::new(), Vec::new(), Vec::new(), 1, 0),
             BrowserAcquisitionFailureKind::Wait { .. } => (
-                vec![ExecutionPlanBrowserWait::Selector {
+                vec![BrowserWaitInstruction::Selector {
                     selector: "main".to_string(),
                     timeout_ms: 500,
                 }],
@@ -150,7 +150,7 @@ async fn every_ordinary_stage_failure_is_typed_charged_and_finalized_before_retu
             ),
             BrowserAcquisitionFailureKind::Interaction { .. } => (
                 Vec::new(),
-                vec![ExecutionPlanBrowserInteraction::ClickIfVisible {
+                vec![BrowserInteractionInstruction::ClickIfVisible {
                     selector: ".more".to_string(),
                     max_count: 1,
                     wait_after_ms: None,
@@ -255,7 +255,7 @@ async fn hard_deadline_comes_only_from_shared_control_and_finalizes_before_budge
     };
     assert_eq!(
         exhaustion.dimension,
-        job_radar_lib::AllowanceDimension::Duration
+        crate::job_radar_lib::AllowanceDimension::Duration
     );
     assert!(adapter.lifecycle().ends_with(&[
         BrowserLifecycleEvent::HandlerCompleted,
@@ -285,7 +285,7 @@ fn caller_tightening_rejects_browser_primitive_raises_before_acquisition() {
         "https://example.test",
         5_000,
         Vec::new(),
-        vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
+        vec![BrowserInteractionInstruction::ClickUntilGone {
             selector: ".more".to_string(),
             max_count: 2,
             wait_after_ms: None,

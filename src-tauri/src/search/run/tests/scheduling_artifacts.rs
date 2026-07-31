@@ -35,11 +35,11 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                 source_keys[1].clone(),
                 Err(SourceExecutionError::FailedWithDiagnostics {
                     message: "fixture runtime failure".to_string(),
-                    diagnostics: vec![crate::profile_dsl::diagnostics::Diagnostic {
-                        category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
+                    diagnostics: vec![source_profile_dsl::definition::Diagnostic {
+                        category: source_profile_dsl::definition::DiagnosticCategory::Runtime,
                         code: "fixture_runtime_failure".to_string(),
                         message: "Fixture runtime failure".to_string(),
-                        severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
+                        severity: source_profile_dsl::definition::DiagnosticSeverity::Error,
                         path: "/discovery/strategies/0".to_string(),
                         strategy_key: Some("json_api".to_string()),
                         details: Some(json!({ "fixture": true })),
@@ -144,16 +144,16 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 &["Mainz"],
             ),
         );
-        let detail_snapshot = crate::profile_dsl::runtime::SourceDetailRequestSnapshot::new(
+        let detail_snapshot = source_profile_dsl::execution::SourceDetailRequestSnapshot::new(
             &source_keys[1],
             aborted_occurrence.identity.clone(),
-            crate::profile_dsl::runtime::RequestedDetailFields::new([
-                crate::profile_dsl::runtime::DetailField::Company,
+            source_profile_dsl::execution::RequestedDetailFields::new([
+                source_profile_dsl::execution::DetailField::Company,
             ])
             .unwrap(),
         );
         let source = |key: &str,
-                      occurrences: Vec<crate::profile_dsl::occurrence::PostingOccurrence>,
+                      occurrences: Vec<source_profile_dsl::execution::PostingOccurrence>,
                       detail| {
             crate::search::run::ScriptedResolutionSource {
                 discovery: resolution::ScriptedSourceDiscoveryExecution::new(
@@ -167,10 +167,12 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                         remaining: Some(0),
                         continuation: None,
                         continuation_source_key: None,
-                        complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
-                            usage: Default::default(),
-                            completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
-                        },
+                        complete_budget_report:
+                            source_profile_dsl::execution::PhaseExecutionReport {
+                                usage: Default::default(),
+                                completion:
+                                    source_profile_dsl::execution::PhaseCompletion::Accepted,
+                            },
                         diagnostics: Vec::new(),
                     }],
                 ),
@@ -183,7 +185,7 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 source(
                     &source_keys[0],
                     vec![successful_occurrence],
-                    crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
+                    source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
                 ),
             ),
             (
@@ -191,15 +193,15 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 source(
                     &source_keys[1],
                     vec![aborted_occurrence],
-                    crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([(
+                    source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([(
                         detail_snapshot,
-                        Ok(crate::profile_dsl::runtime::SourceDetailOutcome::SourceExecutionFailed {
-                            typed_failure: crate::profile_dsl::runtime::SourceDetailFailure::PhaseExecution {
-                                failure: crate::profile_dsl::runtime::PhaseExecutionFailure::Internal,
+                        Ok(source_profile_dsl::execution::SourceDetailOutcome::SourceExecutionFailed {
+                            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhaseExecution {
+                                failure: source_profile_dsl::execution::PhaseExecutionFailure::Internal,
                             },
-                            complete_budget_report: Some(crate::profile_dsl::runtime::PhaseExecutionReport {
+                            complete_budget_report: Some(source_profile_dsl::execution::PhaseExecutionReport {
                                 usage: Default::default(),
-                                completion: crate::profile_dsl::runtime::PhaseCompletion::ExecutionFailed,
+                                completion: source_profile_dsl::execution::PhaseCompletion::ExecutionFailed,
                             }),
                             diagnostics: Vec::new(),
                         }),
@@ -273,7 +275,7 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
         )
         .await;
         let limits = crate::search::run::production_resolution_ceilings();
-        let mut usage = crate::profile_dsl::runtime::PhaseUsage::default();
+        let mut usage = source_profile_dsl::execution::PhaseUsage::default();
         usage.pages = limits.phase.max_pages;
         let runtime = SearchRunResolutionRuntime::scripted([(
             source_keys[0].clone(),
@@ -317,14 +319,16 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
                         remaining: Some(1),
                         continuation: Some("next".to_string()),
                         continuation_source_key: None,
-                        complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
-                            usage,
-                            completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
-                        },
+                        complete_budget_report:
+                            source_profile_dsl::execution::PhaseExecutionReport {
+                                usage,
+                                completion:
+                                    source_profile_dsl::execution::PhaseCompletion::Accepted,
+                            },
                         diagnostics: Vec::new(),
                     }],
                 ),
-                detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
+                detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
             },
         )]);
 
@@ -520,9 +524,9 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                 remaining: Some(0),
                 continuation: None,
                 continuation_source_key: None,
-                complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
+                complete_budget_report: source_profile_dsl::execution::PhaseExecutionReport {
                     usage: Default::default(),
-                    completion: crate::profile_dsl::runtime::PhaseCompletion::Accepted,
+                    completion: source_profile_dsl::execution::PhaseCompletion::Accepted,
                 },
                 diagnostics: Vec::new(),
             });
@@ -530,10 +534,10 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
             expected_continuation: None,
             expected_maximum: limits.max_batch_size,
             expected_limits: limits.phase,
-            complete_budget_report: crate::profile_dsl::runtime::PhaseExecutionReport {
+            complete_budget_report: source_profile_dsl::execution::PhaseExecutionReport {
                 usage: Default::default(),
-                completion: crate::profile_dsl::runtime::PhaseCompletion::Cancelled {
-                    reason: crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                completion: source_profile_dsl::execution::PhaseCompletion::Cancelled {
+                    reason: source_profile_dsl::execution::PhaseCancellationReason::UserCancelled,
                 },
             },
             diagnostics: Vec::new(),
@@ -550,7 +554,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                         &key,
                         [outcome],
                     ),
-                    detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution::new([]),
+                    detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
                 };
                 (key, source)
             }),

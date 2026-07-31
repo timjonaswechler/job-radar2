@@ -8,20 +8,20 @@ use crate::checks::{
     build_source_live_check_report, persist_latest_check_report, source_live_check_report_status,
     CheckReport, CheckReportResult, SourceLiveCheckExecutionContext, SourceLiveCheckReportStatus,
 };
-use crate::profile_dsl::diagnostics::Diagnostics;
-use crate::profile_dsl::documents::{AccessPathFragment, JsonObject, SupportMetadata};
-use crate::profile_dsl::runtime::{
+use crate::source::validation::SourceValidationState;
+use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
+use source_profile_dsl::definition::Diagnostics;
+use source_profile_dsl::definition::{AccessPathFragment, JsonObject, SupportMetadata};
+use source_profile_dsl::definition::{SelectedAccessPath, SourceDocument, SourceStatus};
+use source_profile_dsl::detection::{
+    compile_detection_plan, execute_detection_operation, DetectionRunStatus,
+    ReconciledSourceProposal, UnsupportedReconciledDetection,
+};
+use source_profile_dsl::execution::{
     BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest, PhaseBrowser,
     PhaseCompletion, PhaseExecutionReport, PhaseUsage, ProfileHttpClient, ProfileHttpError,
     ProfileHttpRequest, ProfileHttpResponse, RuntimeCancellation, RuntimeExecutionContext,
 };
-use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
-use crate::source::validation::SourceValidationState;
-use crate::source_profile::detection::{
-    compile_detection_plan, execute_detection_operation, DetectionRunStatus,
-    ReconciledSourceProposal, UnsupportedReconciledDetection,
-};
-use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
 
 #[derive(Clone)]
 pub struct SourceOnboarding {
@@ -345,7 +345,7 @@ pub struct OperationContext<'a> {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectionOutcome {
-    pub status: crate::source_profile::detection::DetectionRunStatus,
+    pub status: source_profile_dsl::detection::DetectionRunStatus,
     pub proposals: Vec<ReconciledSourceProposal>,
     pub unsupported_profiles: Vec<UnsupportedReconciledDetection>,
     pub diagnostics: Diagnostics,
@@ -594,13 +594,13 @@ impl RuntimeCancellation for NeverCancelled {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile_dsl::runtime::{ScriptedBrowserAcquisition, ScriptedProfileHttpClient};
     use crate::source::validation::ValidationStateKind;
+    use source_profile_dsl::test_support::{ScriptedBrowserAcquisition, ScriptedProfileHttpClient};
 
     #[test]
     fn built_in_source_mutation_is_rejected() {
         let document: SourceDocument = serde_json::from_str(include_str!(
-            "../tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json"
+            "../tests/fixtures/source-behavior/valid/source-selecting-access-path.json"
         ))
         .unwrap();
         let source = RegistrySource {

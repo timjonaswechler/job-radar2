@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{json, Value};
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     compile_pagination_plan, pagination_descriptors, pagination_parameter_locations,
     validate_pagination_inventories, CompiledPagination, Pagination, PaginationFragment,
     PaginationInventory, PaginationParameterLocation, PaginationRegistryError, ParseType,
@@ -9,7 +9,7 @@ use source_profile_dsl::{
 
 fn schema_inventory() -> PaginationInventory {
     let schema: Value = serde_json::from_str(include_str!(
-        "../../src/schema/profile-dsl/pagination.schema.json"
+        "../../schema/source-behavior/pagination.schema.json"
     ))
     .unwrap();
     let mut variants = Vec::new();
@@ -93,7 +93,7 @@ fn serde_inventory() -> PaginationInventory {
 
 fn fragment_schema_options() -> Vec<String> {
     let schema: Value = serde_json::from_str(include_str!(
-        "../../src/schema/profile-dsl/fragments.schema.json"
+        "../../schema/source-behavior/fragments.schema.json"
     ))
     .unwrap();
     schema["$defs"]["paginationFragment"]["properties"]

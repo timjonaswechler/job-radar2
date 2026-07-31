@@ -1,17 +1,17 @@
-use agent::testing::{
-    ExpectedConversationRequest, ScriptedProvider, ScriptedTurn, SessionTestHarness,
-};
-use futures_util::stream;
-use job_radar_lib::agent::chat_application::{
+use crate::job_radar_lib::agent::chat_application::{
     AgentChatApplication, AgentChatApplicationEvent, AgentChatApplicationEventKind,
     AgentChatCreateInput, AgentChatEventListener, AgentChatStatus, ApplicationReasoningLevel,
 };
-use job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
-use job_radar_lib::agent::{
+use crate::job_radar_lib::agent::models::{Model, ModelId, ProviderId, ReasoningLevel};
+use crate::job_radar_lib::agent::{
     AgentError, AgentErrorCategory, ContentKind, ConversationProvider, ConversationRequest,
     FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,
     UserMessage,
 };
+use agent::testing::{
+    ExpectedConversationRequest, ScriptedProvider, ScriptedTurn, SessionTestHarness,
+};
+use futures_util::stream;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -214,10 +214,12 @@ fn identified_resume_preserves_unavailable_model_without_fallback() {
             ScriptedProvider::new(vec![replacement.clone()], vec![]),
         );
         let opened = resumed
-            .open(job_radar_lib::agent::chat_application::AgentChatOpenInput {
-                id: draft.id.clone(),
-                system_prompt: "NEW-SYSTEM-PROMPT-CANARY".into(),
-            })
+            .open(
+                crate::job_radar_lib::agent::chat_application::AgentChatOpenInput {
+                    id: draft.id.clone(),
+                    system_prompt: "NEW-SYSTEM-PROMPT-CANARY".into(),
+                },
+            )
             .await
             .unwrap();
         assert_eq!(opened.status, AgentChatStatus::ModelUnavailable);

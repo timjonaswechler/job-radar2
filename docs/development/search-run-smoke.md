@@ -1,6 +1,6 @@
 # Generic search-run smoke
 
-This is a manual backend-only development smoke for the current Source/Profile DSL execution path. It is network-dependent and is not part of the deterministic test suite.
+This is a manual backend-only development smoke for the current Source Behavior Language execution path. It is network-dependent and is not part of the deterministic test suite.
 
 The smoke requires one or more existing local Sources. It creates or reuses an active Search Request with a generic title regex (`.+`), no exclusions, and no location filter, then runs the selected Sources through the production Search Run path.
 

@@ -6,14 +6,11 @@ use std::{
     time::Duration,
 };
 
-use crate::profile_dsl::{
-    execution_plan::capabilities::{ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait},
-    runtime::{
-        BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionCancellation,
-        BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure,
-        BrowserAcquisitionFailureKind, BrowserAcquisitionRequest, BrowserAcquisitionTerminal,
-        BrowserInfrastructureFailure, BrowserRenderedContent,
-    },
+use source_profile_dsl::execution::{
+    BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionCancellation,
+    BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
+    BrowserAcquisitionRequest, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
+    BrowserInteractionInstruction, BrowserRenderedContent, BrowserWaitInstruction,
 };
 
 const NETWORK_TRACKER_SCRIPT: &str = r#"
@@ -143,7 +140,7 @@ async fn acquire_page(
     if request
         .waits
         .iter()
-        .any(|wait| matches!(wait, ExecutionPlanBrowserWait::NetworkIdle { .. }))
+        .any(|wait| matches!(wait, BrowserWaitInstruction::NetworkIdle { .. }))
     {
         controlled(
             request,
@@ -192,16 +189,16 @@ async fn acquire_page(
 
 async fn apply_wait(
     page: &Page,
-    wait: &ExecutionPlanBrowserWait,
+    wait: &BrowserWaitInstruction,
     wait_index: usize,
     request: &BrowserAcquisitionRequest<'_>,
 ) -> Result<(), BrowserAcquisitionTerminal> {
     match wait {
-        ExecutionPlanBrowserWait::Selector {
+        BrowserWaitInstruction::Selector {
             selector,
             timeout_ms,
         } => wait_for_selector(page, selector, *timeout_ms, wait_index, request).await,
-        ExecutionPlanBrowserWait::NetworkIdle { timeout_ms } => {
+        BrowserWaitInstruction::NetworkIdle { timeout_ms } => {
             wait_for_network_idle(page, *timeout_ms, wait_index, request).await
         }
     }
@@ -344,17 +341,17 @@ async fn wait_for_selector(
 
 async fn apply_interaction(
     page: &Page,
-    interaction: &ExecutionPlanBrowserInteraction,
+    interaction: &BrowserInteractionInstruction,
     interaction_index: usize,
     request: &BrowserAcquisitionRequest<'_>,
 ) -> Result<(), BrowserAcquisitionTerminal> {
     let (selector, max_count, wait_after_ms, must_disappear) = match interaction {
-        ExecutionPlanBrowserInteraction::ClickIfVisible {
+        BrowserInteractionInstruction::ClickIfVisible {
             selector,
             max_count,
             wait_after_ms,
         } => (selector, *max_count, *wait_after_ms, false),
-        ExecutionPlanBrowserInteraction::ClickUntilGone {
+        BrowserInteractionInstruction::ClickUntilGone {
             selector,
             max_count,
             wait_after_ms,
@@ -525,11 +522,9 @@ fn cancelled_terminal() -> BrowserAcquisitionTerminal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        browser_runtime::current_runtime_spec,
-        profile_dsl::{
-            documents::PhaseLimits, runtime::browser_acquisition::BrowserAcquisitionTestInvocation,
-        },
+    use crate::browser_runtime::current_runtime_spec;
+    use source_profile_dsl::{
+        definition::PhaseLimits, test_support::BrowserAcquisitionTestInvocation,
     };
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
@@ -537,7 +532,7 @@ mod tests {
 
     struct CancellationFlag(AtomicBool);
 
-    impl crate::profile_dsl::runtime::RuntimeCancellation for CancellationFlag {
+    impl source_profile_dsl::execution::RuntimeCancellation for CancellationFlag {
         fn is_cancelled(&self) -> bool {
             self.0.load(Ordering::SeqCst)
         }

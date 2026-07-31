@@ -4,7 +4,7 @@ Job Radar helps users observe job sources, discover job postings across recruiti
 
 ## Language
 
-Primary architecture and code vocabulary is English. German UI copy may use translated terms later, but Source/Profile DSL work uses the canonical English terms below.
+Primary architecture and code vocabulary is English. German UI copy may use translated terms later, but Source Behavior Language work uses the canonical English terms below.
 
 **Source**:
 A saved, repeatable source configuration that tells Job Radar which concrete endpoint or entry point job postings may be discovered from. A Source either selects one Access Path from a reusable Source Profile or owns one inline Source-owned Access Path. A Source does not contain search criteria such as keywords, roles, preferred locations, countries, radius, include rules, or exclude rules; those belong to a Search Request.
@@ -31,11 +31,11 @@ A Source Profile versioned with the application and embedded into the app bundle
 _Avoid_: loose external built-in file, database-owned built-in profile
 
 **Custom Source Profile**:
-A user- or agent-authored Source Profile stored in the app data directory. It uses the same DSL, schema, compiler, and validation rules as built-in profiles. It may not use a key that collides with a built-in Source Profile.
+A user- or agent-authored Source Profile stored in the app data directory. It uses the same Source Behavior Language, schema, compiler, and validation rules as built-in profiles. It may not use a key that collides with a built-in Source Profile.
 _Avoid_: built-in override, weaker custom model, runtime plugin
 
 **Access Path**:
-A selectable profile-owned execution variant that describes how a Source can discover postings and load posting details through the declarative Profile DSL. An Access Path defines Source Config requirements and DSL Strategy Sets for `discovery` and optional `detail`; it does not select a runtime adapter.
+A selectable profile-owned execution variant that describes how a Source can discover postings and load posting details through the declarative Source Behavior Language. An Access Path defines Source Config requirements and Source Behavior Language Strategy Sets for `discovery` and optional `detail`; it does not select a runtime adapter.
 _Avoid_: Zugriffspfad, adapter key, browser switch, runtime hook
 
 **Selected Access Path**:
@@ -43,11 +43,11 @@ The one Access Path selected by a concrete Source. A Source either selects a reu
 _Avoid_: adapter selection, runtime selection, profile mix
 
 **Source-owned Access Path**:
-An inline Access Path stored on exactly one Source when no reusable Source Profile fits. It uses the same declarative DSL capabilities as a profile Access Path, is not reusable, and is not considered during profile detection. It may later be promoted into a reusable Source Profile.
+An inline Access Path stored on exactly one Source when no reusable Source Profile fits. It uses the same declarative Source Behavior Language capabilities as a profile Access Path, is not reusable, and is not considered during profile detection. It may later be promoted into a reusable Source Profile.
 _Avoid_: source-specific extraction, Quellenprofil, one-off profile, adapter
 
-**Profile DSL**:
-The declarative schema-v3 JSON language used to describe Source Profiles, Access Paths, `detection`, `discovery`, lazy `detail`, ordered fallback Strategies, extraction, transforms, bounded browser interactions, diagnostics, and support metadata. Every complete Discovery/Detail Strategy Set carries one mandatory typed Policy: `{ "type": "first_accepted" }` for ordered fallback, `{ "type": "all_required" }` for strict sequential universal acceptance, `{ "type": "at_least", "count": N }` for an early positive threshold, or `{ "type": "collect_all", "minAccepted": N }` to execute every Strategy before checking a positive minimum. Both cardinalities may not exceed the final merged Strategy cardinality. Profile-DSL Retry is not supported. The DSL is configuration, not arbitrary code.
+**Source Behavior Language**:
+The declarative schema-v3 JSON language used to describe Source Profiles, Access Paths, `detection`, `discovery`, lazy `detail`, ordered fallback Strategies, extraction, transforms, bounded browser interactions, diagnostics, and support metadata. Every complete Discovery/Detail Strategy Set carries one mandatory typed Policy: `{ "type": "first_accepted" }` for ordered fallback, `{ "type": "all_required" }` for strict sequential universal acceptance, `{ "type": "at_least", "count": N }` for an early positive threshold, or `{ "type": "collect_all", "minAccepted": N }` to execute every Strategy before checking a positive minimum. Both cardinalities may not exceed the final merged Strategy cardinality. Source Behavior Language Retry is not supported. The Source Behavior Language is configuration, not arbitrary code.
 _Avoid_: script, plugin API, scraper code, profile-specific Rust
 
 **Profile Compiler**:
@@ -63,7 +63,7 @@ A machine-readable issue emitted by schema validation, registry loading, the Pro
 _Avoid_: free-form error string only, UI-only copy, Rust compiler diagnostic
 
 **Capability**:
-A generic DSL behavior that can be reused across Source Profiles, such as fetch, parse, select, extract, transform, pagination, fallback, browser interaction, validation, or diagnostics. New capabilities may require runtime code, but they must be generic and not tied to one ATS.
+A generic Source Behavior Language behavior that can be reused across Source Profiles, such as fetch, parse, select, extract, transform, pagination, fallback, browser interaction, validation, or diagnostics. New capabilities may require runtime code, but they must be generic and not tied to one ATS.
 _Avoid_: ATS adapter, profile-specific feature, special case
 
 **Strategy**:
@@ -83,11 +83,11 @@ The Tauri-free application module through which callers perform Profile Detectio
 _Avoid_: Tauri command orchestration, raw file writer, generic Source status setter, profile-specific adapter
 
 **discovery**:
-The DSL step that discovers Posting Occurrences from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies. Every occurrence has a valid provider URL; provider posting ID, Provider Values, Discovery Hints, and postingMeta are optional. Discovery must not fetch every detail page just to populate descriptions.
+The Source Behavior Language step that discovers Posting Occurrences from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies. Every occurrence has a valid provider URL; provider posting ID, Provider Values, Discovery Hints, and postingMeta are optional. Discovery must not fetch every detail page just to populate descriptions.
 _Avoid_: inventory, crawling, Detail, Search Request criteria, normalized posting candidate
 
 **detail**:
-The lazy DSL step that loads detail fields for one concrete posting source occurrence. It can use the posting URL, Source Config, and postingMeta and may try multiple fallback strategies. In this DSL version it must support descriptionText extraction; additional canonical detail fields may be added later.
+The lazy Source Behavior Language step that loads detail fields for one concrete posting source occurrence. It can use the posting URL, Source Config, and postingMeta and may try multiple fallback strategies. In this Source Behavior Language version it must support descriptionText extraction; additional canonical detail fields may be added later.
 _Avoid_: Discovery, bulk detail fanout, inventory fields
 
 **Posting Occurrence**:

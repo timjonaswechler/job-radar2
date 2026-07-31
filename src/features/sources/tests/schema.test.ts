@@ -14,23 +14,23 @@ import {
 } from "@/features/sources/shared/schema-introspection";
 import { createSchemaValueRows } from "@/features/sources/shared/schema-value-rows";
 import {
-  profileDslSchemaCatalog,
-  profileDslSchemaRefs,
-} from "@/features/sources/shared/profile-dsl-schema-catalog";
+  sourceSchemaCatalog,
+  sourceBehaviorSchemaRefs,
+} from "@/features/sources/shared/source-schema-catalog";
 import type { JsonValue } from "@/lib/api/sources";
 import { test } from "vitest";
 
 test("schema contract", async () => {
   const schemaCatalog = createSchemaCatalog([
     {
-      $id: "https://job-radar.local/schemas/profile-dsl/common.schema.json",
+      $id: "https://job-radar.local/schemas/source-behavior/common.schema.json",
       $defs: {
         technicalKey: { type: "string", pattern: "^[a-z0-9_]+$" },
         nonEmptyString: { type: "string", minLength: 1 },
       },
     },
     {
-      $id: "https://job-radar.local/schemas/profile-dsl/fetch.schema.json",
+      $id: "https://job-radar.local/schemas/source-behavior/fetch.schema.json",
       $defs: {
         fetch: {
           oneOf: [
@@ -105,7 +105,7 @@ test("schema contract", async () => {
     { value: "live", label: "live" },
   ]);
 
-  const fetchRef = "profile-dsl/fetch.schema.json#/$defs/fetch";
+  const fetchRef = "source-behavior/fetch.schema.json#/$defs/fetch";
   const httpFetchValue: JsonValue = {
     mode: "http",
     method: "POST",
@@ -132,7 +132,7 @@ test("schema contract", async () => {
 
   const arrayItemSchema = schemaForArrayItem({
     type: "array",
-    items: { $ref: "profile-dsl/fetch.schema.json#/$defs/fetch" },
+    items: { $ref: "source-behavior/fetch.schema.json#/$defs/fetch" },
   }, { catalog: schemaCatalog });
   assert.equal(
     activeSchemaVariant(
@@ -143,12 +143,12 @@ test("schema contract", async () => {
     "Browser fetch",
   );
 
-  const discoverySchema = profileDslSchemaCatalog.resolveRef(
-    profileDslSchemaRefs.discoveryStep,
+  const discoverySchema = sourceSchemaCatalog.resolveRef(
+    sourceBehaviorSchemaRefs.discoveryStep,
   );
   assert.ok(discoverySchema);
   const discoverySchemaOptions = {
-    catalog: profileDslSchemaCatalog,
+    catalog: sourceSchemaCatalog,
     rootSchema: discoverySchema.rootSchema,
     baseUri: discoverySchema.baseUri,
   };

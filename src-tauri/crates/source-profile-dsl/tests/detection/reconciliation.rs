@@ -1,5 +1,5 @@
 use serde_json::{json, Map, Value};
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     aggregate_detection_attempts, DetectionAttempt, DetectionConfigContribution,
     DetectionContribution, DetectionEvidenceContribution, DetectionOrigin, DetectionProfileContext,
     DetectionReconciliationError, DetectionRunStatus, DetectionStateConflictKind,
@@ -171,13 +171,13 @@ fn canonical_atomic_pointers_preserve_present_empty_values_and_conflict_on_overl
 fn evidence_identity_uses_kind_and_descriptor_path_and_keeps_origin_order() {
     let context = DetectionProfileContext::compile(&profile()).unwrap();
     let first = DetectionEvidenceContribution::new(
-        source_profile_dsl::DetectionEvidenceKind::Http,
+        source_profile_dsl::test_support::DetectionEvidenceKind::Http,
         "/detection/strategies/0/evidence",
         "same message",
     )
     .unwrap();
     let second = DetectionEvidenceContribution::new(
-        source_profile_dsl::DetectionEvidenceKind::Http,
+        source_profile_dsl::test_support::DetectionEvidenceKind::Http,
         "/detection/strategies/1/evidence",
         "same message",
     )
@@ -312,7 +312,7 @@ fn independent_profile_conflict_does_not_hide_matches_but_control_terminals_do()
     assert_eq!(failed.proposals, vec![proposal.clone()]);
 
     let mut unsupported_profile = profile();
-    unsupported_profile.support.level = source_profile_dsl::SupportLevel::Unsupported;
+    unsupported_profile.support.level = source_profile_dsl::test_support::SupportLevel::Unsupported;
     let unsupported_context = DetectionProfileContext::compile(&unsupported_profile).unwrap();
     let unsupported = match unsupported_context
         .prepare_proposal(
@@ -328,7 +328,9 @@ fn independent_profile_conflict_does_not_hide_matches_but_control_terminals_do()
         )
         .unwrap()
     {
-        source_profile_dsl::PreparedDetectionOutput::Unsupported(unsupported) => unsupported,
+        source_profile_dsl::test_support::PreparedDetectionOutput::Unsupported(unsupported) => {
+            unsupported
+        }
         other => panic!("expected unsupported output, got {other:?}"),
     };
 
@@ -438,8 +440,8 @@ fn authored_recommendation_conflicts_with_a_strategy_recommendation() {
 fn profile_evidence_is_seeded_once_and_strategy_recommendations_select_a_path() {
     let mut profile = profile();
     profile.detection.as_mut().unwrap().evidence =
-        Some(vec![source_profile_dsl::DetectionEvidence {
-            kind: source_profile_dsl::DetectionEvidenceKind::Url,
+        Some(vec![source_profile_dsl::test_support::DetectionEvidence {
+            kind: source_profile_dsl::test_support::DetectionEvidenceKind::Url,
             message: "profile metadata".into(),
             path: None,
         }]);

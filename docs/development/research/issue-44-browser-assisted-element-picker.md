@@ -10,7 +10,7 @@ This report answers [Determine the browser host architecture for Interactive Sou
 
 - t3code commit [`9dd425b2234c062b4767583e42d4b2c1aabab15d`](https://github.com/pingdotgg/t3code/tree/9dd425b2234c062b4767583e42d4b2c1aabab15d), retrieved 2026-07-30.
 - Local Tauri checkout commit [`3f5d3984bc8916b5dd31289b19284637ede37e3d`](https://github.com/tauri-apps/tauri/tree/3f5d3984bc8916b5dd31289b19284637ede37e3d), which identifies itself as Tauri `2.11.5`, reviewed at `/Users/tim-jonaswechler/GitHub-Projekte/test/tauri`.
-- Job Radar baseline commit `6dd0effea70e30b71c6acd659bdc22cc331384a9`, including the current Browser Runtime and Profile DSL contracts.
+- Job Radar baseline commit `6dd0effea70e30b71c6acd659bdc22cc331384a9`, including the current Browser Runtime and Source Behavior Language contracts.
 
 These revisions are pinned because all three implementations are active codebases and Tauri's multiwebview API is explicitly unstable.
 
@@ -99,7 +99,7 @@ ADR 0003 and the current implementation define a deliberately different lifecycl
 
 That contract is intentionally request-shaped and headless. Turning its private `Page` or `OwnedChromiumSession` into a long-lived UI object would violate its current ownership, deadline, byte-admission, and terminal-cleanup guarantees. Removing `--headless=new` only makes a separate Chromium window visible; it does not embed Chromium in a Tauri panel.
 
-The managed runtime remains authoritative where reproducibility matters. Browser fetch is one declarative Profile DSL fetch mode, not a profile type or interactive session. The DSL forbids arbitrary JavaScript, credentials, cookies, login flows, CAPTCHA bypass, and unbounded browser interactions. The Interactive Source Session must not become an indirect way to add any of those behaviors to an Execution Plan. [Profile DSL PRD](../prd/declarative-source-profile-dsl.md)
+The managed runtime remains authoritative where reproducibility matters. Browser fetch is one declarative Source Behavior Language fetch mode, not a profile type or interactive session. The Source Behavior Language forbids arbitrary JavaScript, credentials, cookies, login flows, CAPTCHA bypass, and unbounded browser interactions. The Interactive Source Session must not become an indirect way to add any of those behaviors to an Execution Plan. [Source Behavior Language PRD](../prd/source-behavior-language.md)
 
 ## Recommended architecture seam
 
@@ -187,7 +187,7 @@ Engine drift is expected: a site may serve different markup or execute different
 
 ## Future authenticated sessions
 
-Tauri exposes Webview cookie and browsing-data methods, but that does not make authentication portable to managed Chrome. Platform stores, cookie partitioning, WebAuthn/passkeys, client certificates, SameSite behavior, challenge state, and protected storage differ across system Webviews and Chrome. Exporting cookies would also create a new sensitive-data boundary that the current Profile DSL explicitly excludes.
+Tauri exposes Webview cookie and browsing-data methods, but that does not make authentication portable to managed Chrome. Platform stores, cookie partitioning, WebAuthn/passkeys, client certificates, SameSite behavior, challenge state, and protected storage differ across system Webviews and Chrome. Exporting cookies would also create a new sensitive-data boundary that the current Source Behavior Language explicitly excludes.
 
 For this destination, use an ephemeral unauthenticated system Webview and do not inspect or transfer cookies. A later effort may choose either:
 
@@ -235,7 +235,7 @@ The adapter's successful result is rendered text after bounded work and mandator
 | History controls inconsistent | Incorrect back/forward availability | Cross-platform spike around redirects and History API; conservative disabled-state UX. |
 | Iframe/shadow content | Selector cannot be replayed | Top-level DOM only in MVP; explicit unsupported Diagnostic. |
 | Webview crash/leak | Invisible input interception or stale native child | Backend owner closes child and emits terminal infrastructure Diagnostic; packaged crash/reopen test. |
-| Future auth assumptions leak into MVP | Cookies/credentials cross trust boundaries | Ephemeral unauthenticated context; no cookie APIs, export, persistence, or Profile DSL fields. |
+| Future auth assumptions leak into MVP | Cookies/credentials cross trust boundaries | Ephemeral unauthenticated context; no cookie APIs, export, persistence, or Source Behavior Language fields. |
 
 ## Recommended next architecture decision
 
@@ -267,6 +267,6 @@ If proof 1 or 3 fails on a supported platform, use option B as an explicit degra
 - [Tauri runtime authority](https://v2.tauri.app/security/runtime-authority/)
 - [WRY child Webviews and platform considerations](https://github.com/tauri-apps/wry#child-webviews)
 - [Job Radar managed Browser Runtime decision](../adr/0003-managed-browser-runtime.md)
-- [Job Radar declarative Profile DSL](../prd/declarative-source-profile-dsl.md)
+- [Job Radar declarative Source Behavior Language](../prd/source-behavior-language.md)
 - [Job Radar managed Browser Acquisition](../../../src-tauri/src/browser_runtime/managed.rs)
 - [Job Radar owned Chromium lifecycle](../../../src-tauri/src/browser_runtime/owned.rs)

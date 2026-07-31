@@ -1,9 +1,13 @@
 [package]
 name = "source-profile-dsl"
 version = "0.1.0"
-description = "Tauri-free declarative Source Profile DSL and compiler"
+description = "Tauri-free Source Behavior Language engine and compiler"
 authors = ["Tim Jonas Wechler"]
 edition = "2021"
+
+[features]
+default = []
+test-support = []
 
 [dependencies]
 bigdecimal = "0.4"
@@ -22,3 +26,23 @@ tokio = { version = "1", features = ["macros", "rt", "sync", "test-util", "time"
 [dev-dependencies]
 jsonschema = { version = "0.46.8", default-features = false }
 proptest = "1.6"
+
+[[test]]
+name = "definition"
+path = "tests/definition.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "detection"
+path = "tests/detection.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "execution"
+path = "tests/execution.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "schemas"
+path = "tests/schemas.rs"
+required-features = ["test-support"]

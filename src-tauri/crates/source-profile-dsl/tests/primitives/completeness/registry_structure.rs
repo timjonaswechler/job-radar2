@@ -1,7 +1,7 @@
 use std::process::Command;
 #[test]
 fn top_level_registry_only_declares_family_modules() {
-    let source = include_str!("../../../src/profile_dsl/primitives/mod.rs");
+    let source = include_str!("../../../src/definition/primitives/mod.rs");
     let declarations = source
         .lines()
         .map(str::trim)
@@ -39,7 +39,7 @@ fn top_level_registry_only_declares_family_modules() {
 }
 #[test]
 fn completeness_assembly_has_no_productive_dependency_or_dispatch() {
-    let source = include_str!("../../../src/profile_dsl/primitives/completeness.rs");
+    let source = include_str!("../../../src/definition/primitives/completeness.rs");
     for forbidden in [
         "profile_dsl::compiler",
         "profile_dsl::runtime",
@@ -56,13 +56,13 @@ fn completeness_assembly_has_no_productive_dependency_or_dispatch() {
             "productive dependency {forbidden}"
         );
     }
-    let model = include_str!("../../../src/profile_dsl/primitives/completeness/model.rs");
+    let model = include_str!("../../../src/definition/primitives/completeness/model.rs");
     for forbidden_policy in [
         "match owner",
         "(Family::Parse, \"text\")",
         "normalizeWhitespace",
         "maxErrorRatio",
-        "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/",
+        "src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/",
     ] {
         assert!(
             !model.contains(forbidden_policy),

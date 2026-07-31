@@ -1,7 +1,7 @@
-use job_radar_lib::{
+use crate::job_radar_lib::{
     __TestBrowserAcquisitionInvocation as BrowserAcquisitionTestInvocation, BrowserAcquisition,
-    BrowserAcquisitionFailureKind, BrowserAcquisitionTerminal, ExecutionPlanBrowserInteraction,
-    ExecutionPlanBrowserWait, ManagedBrowserAcquisition, PhaseCompletion, PhaseLimits,
+    BrowserAcquisitionFailureKind, BrowserAcquisitionTerminal, BrowserInteractionInstruction,
+    BrowserWaitInstruction, ManagedBrowserAcquisition, PhaseCompletion, PhaseLimits,
 };
 
 static REAL_PROBE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -50,21 +50,21 @@ async fn real_managed_adapter_probe_is_environment_gated_and_uses_the_final_inte
         .acquire(invocation.request(
             "data:text/html,%3Cmain%20id%3D%22probe%22%3Emanaged-adapter%3Cbutton%20id%3D%22remove%22%20onclick%3D%22this.remove()%22%3Eremove%3C%2Fbutton%3E%3Cdiv%20style%3D%22opacity%3A0%22%3E%3Cbutton%20id%3D%22hidden%22%3Ehidden%3C%2Fbutton%3E%3C%2Fdiv%3E%3C%2Fmain%3E",
             vec![
-                ExecutionPlanBrowserWait::Selector {
+                BrowserWaitInstruction::Selector {
                     selector: "#remove".to_string(),
                     timeout_ms: 500,
                 },
-                ExecutionPlanBrowserWait::NetworkIdle {
+                BrowserWaitInstruction::NetworkIdle {
                     timeout_ms: 1_000,
                 },
             ],
             vec![
-                ExecutionPlanBrowserInteraction::ClickIfVisible {
+                BrowserInteractionInstruction::ClickIfVisible {
                     selector: "#hidden".to_string(),
                     max_count: 1,
                     wait_after_ms: None,
                 },
-                ExecutionPlanBrowserInteraction::ClickUntilGone {
+                BrowserInteractionInstruction::ClickUntilGone {
                     selector: "#remove".to_string(),
                     max_count: 1,
                     wait_after_ms: None,

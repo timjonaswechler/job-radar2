@@ -1,15 +1,12 @@
 use search_resolution::{SourceResolution, SourceResolutionError};
 
-use crate::profile_dsl::{compiler::CompiledSource, diagnostics::Diagnostics};
+use source_profile_dsl::definition::{CompiledSource, Diagnostics};
 
 use super::super::{SearchRunStatus, SourceResolutionSummary, SourceRunResult, SourceRunStatus};
 use super::SourceExecutionError;
 
 fn source_identity(source: &CompiledSource) -> (&str, &str) {
-    (
-        &source.execution_plan.source.key,
-        &source.execution_plan.source.name,
-    )
+    (source.source_key(), source.source_name())
 }
 
 pub(super) fn source_run_completed(

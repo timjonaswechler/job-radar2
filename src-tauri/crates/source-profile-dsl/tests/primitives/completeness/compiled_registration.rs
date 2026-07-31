@@ -1,4 +1,4 @@
-use source_profile_dsl::profile_dsl::primitives::completeness::{
+use source_profile_dsl::test_support::{
     production_compiled_inventory, production_primitive_inventories,
     validate_primitive_completeness, Family, Owner,
 };

@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source-behavior/strategy.schema.json",
+  "title": "Job Radar Source Behavior Language strategy definitions",
+  "$defs": {
+    "discoveryStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "fetch",
+        "parse",
+        "select",
+        "extract"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "common.schema.json#/$defs/technicalKey"
+        },
+        "description": {
+          "$ref": "common.schema.json#/$defs/description"
+        },
+        "fetch": {
+          "$ref": "fetch.schema.json#/$defs/fetch"
+        },
+        "pagination": {
+          "$ref": "pagination.schema.json#/$defs/pagination"
+        },
+        "parse": {
+          "$ref": "parse.schema.json#/$defs/parse"
+        },
+        "select": {
+          "$ref": "select.schema.json#/$defs/select"
+        },
+        "where": {
+          "$ref": "select.schema.json#/$defs/where"
+        },
+        "captures": {
+          "$ref": "select.schema.json#/$defs/captures"
+        },
+        "extract": {
+          "$ref": "#/$defs/discoveryExtraction"
+        },
+        "acceptWhen": {
+          "$ref": "#/$defs/acceptance"
+        },
+        "diagnostics": {
+          "$ref": "diagnostics.schema.json#/$defs/diagnostics"
+        }
+      }
+    },
+    "detailStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "fetch",
+        "parse",
+        "select",
+        "extract"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "common.schema.json#/$defs/technicalKey"
+        },
+        "description": {
+          "$ref": "common.schema.json#/$defs/description"
+        },
+        "fetch": {
+          "$ref": "fetch.schema.json#/$defs/fetch"
+        },
+        "parse": {
+          "$ref": "parse.schema.json#/$defs/parse"
+        },
+        "select": {
+          "$ref": "select.schema.json#/$defs/select"
+        },
+        "where": {
+          "$ref": "select.schema.json#/$defs/where"
+        },
+        "captures": {
+          "$ref": "select.schema.json#/$defs/captures"
+        },
+        "match": {
+          "$ref": "predicate.schema.json#/$defs/equal"
+        },
+        "extract": {
+          "$ref": "#/$defs/detailExtraction"
+        },
+        "acceptWhen": {
+          "$ref": "#/$defs/acceptance"
+        },
+        "diagnostics": {
+          "$ref": "diagnostics.schema.json#/$defs/diagnostics"
+        }
+      }
+    },
+    "discoveryExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference"
+      ],
+      "properties": {
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "providerPostingId": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            }
+          }
+        },
+        "providerValues": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "company": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "locations": {
+              "$ref": "extract.schema.json#/$defs/listFieldExpression"
+            },
+            "descriptionText": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            }
+          }
+        },
+        "hints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "extract.schema.json#/$defs/fieldExpression"
+              },
+              "hintUse": {
+                "type": "string",
+                "enum": [
+                  "search_prefilter"
+                ]
+              }
+            }
+          }
+        },
+        "postingMeta": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "extract.schema.json#/$defs/fieldExpression"
+          }
+        }
+      }
+    },
+    "detailExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fields"
+      ],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "title": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "company": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            },
+            "locations": {
+              "$ref": "extract.schema.json#/$defs/listFieldExpression"
+            },
+            "descriptionText": {
+              "$ref": "extract.schema.json#/$defs/fieldExpression"
+            }
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredFields": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/nonEmptyString"
+          }
+        },
+        "minDescriptionLength": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minResults": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

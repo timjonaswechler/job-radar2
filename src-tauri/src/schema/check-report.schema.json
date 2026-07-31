@@ -20,14 +20,14 @@
     "kind": { "$ref": "#/$defs/checkKind" },
     "subject": { "$ref": "#/$defs/subject" },
     "checkedAt": { "type": "string", "format": "date-time" },
-    "logicVersion": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+    "logicVersion": { "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString" },
     "result": { "$ref": "#/$defs/result" },
     "fingerprints": {
       "type": "array",
       "items": { "$ref": "#/$defs/fingerprint" }
     },
-    "diagnostics": { "$ref": "profile-dsl/diagnostics.schema.json#/$defs/diagnostics" },
-    "details": { "$ref": "profile-dsl/common.schema.json#/$defs/jsonObject" }
+    "diagnostics": { "$ref": "source-behavior/diagnostics.schema.json#/$defs/diagnostics" },
+    "details": { "$ref": "source-behavior/common.schema.json#/$defs/jsonObject" }
   },
   "allOf": [
     {
@@ -60,7 +60,7 @@
       "required": ["type", "key"],
       "properties": {
         "type": { "$ref": "#/$defs/subjectType" },
-        "key": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" }
+        "key": { "$ref": "source-behavior/common.schema.json#/$defs/technicalKey" }
       }
     },
     "result": {
@@ -72,8 +72,8 @@
       "additionalProperties": false,
       "required": ["kind"],
       "properties": {
-        "kind": { "$ref": "profile-dsl/common.schema.json#/$defs/technicalKey" },
-        "reference": { "$ref": "profile-dsl/common.schema.json#/$defs/nonEmptyString" },
+        "kind": { "$ref": "source-behavior/common.schema.json#/$defs/technicalKey" },
+        "reference": { "$ref": "source-behavior/common.schema.json#/$defs/nonEmptyString" },
         "sha256": {
           "type": "string",
           "pattern": "^[A-Fa-f0-9]{64}$"

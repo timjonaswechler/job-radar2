@@ -2,18 +2,20 @@ use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use std::path::Path;
 
 use crate::{
-    browser_runtime::ManagedBrowserAcquisition,
-    profile_dsl::{
-        compiler::{compile_source, CompileSourceOutcome},
-        diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
-        runtime::{
-            BrowserAcquisition, DetailField, PostingOccurrence, ProfileDslSourceDetailExecution,
-            ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition,
-            ReqwestProfileHttpClient, RuntimeExecutionContext, SourceDetailExecution,
-            SourceDetailOutcome, SourceDetailRequest,
-        },
-    },
+    browser_runtime::ManagedBrowserAcquisition, profile_dsl::ReqwestProfileHttpClient,
     source_profile::registry::SourceProfileRegistrySnapshot,
+};
+use source_profile_dsl::{
+    definition::{
+        compile_source, CompileSourceOutcome, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+        Diagnostics,
+    },
+    execution::{
+        BrowserAcquisition, DetailField, PostingOccurrence, ProfileHttpClient,
+        RequestedDetailFields, RequestedFieldDisposition, RuntimeExecutionContext,
+        SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailOutcome,
+        SourceDetailRequest,
+    },
 };
 
 use super::{
@@ -151,7 +153,7 @@ impl<'a> JobPostingService<'a> {
         F: ProfileHttpClient + Sync + ?Sized,
         A: BrowserAcquisition + Sync,
     {
-        let execution = ProfileDslSourceDetailExecution::new(fetcher, acquisition);
+        let execution = SourceBehaviorDetailExecution::new(fetcher, acquisition);
         self.get_job_posting_with_detail_execution(id, snapshot, &execution)
             .await
     }
@@ -532,7 +534,7 @@ fn posting_occurrence(
     posting: &JobPosting,
     posting_source: &JobPostingSource,
 ) -> Result<PostingOccurrence, String> {
-    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
+    let (reference, identity) = source_profile_dsl::execution::validate_posting_reference(
         &posting_source.source_key,
         &posting_source.url,
         None,
@@ -541,7 +543,7 @@ fn posting_occurrence(
     Ok(PostingOccurrence {
         identity,
         reference,
-        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+        provider_values: source_profile_dsl::execution::ProviderValues {
             title: Some(posting.title.clone()),
             company: Some(posting.company.clone()),
             locations: posting.locations.clone(),

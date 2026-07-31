@@ -1,3 +1,9 @@
+#[allow(unused_imports)]
+mod job_radar_lib {
+    pub use ::job_radar_lib::*;
+    pub use source_profile_dsl::test_support::*;
+}
+
 #[path = "source_application/check_reports.rs"]
 mod check_reports;
 #[path = "source_application/live_check_fingerprints.rs"]

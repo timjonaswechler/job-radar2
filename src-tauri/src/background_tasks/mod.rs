@@ -97,7 +97,7 @@ pub struct BackgroundTaskSnapshot {
     pub progress: Option<BackgroundTaskProgress>,
     pub result: Option<Value>,
     pub error: Option<String>,
-    pub diagnostics: crate::profile_dsl::diagnostics::Diagnostics,
+    pub diagnostics: source_profile_dsl::definition::Diagnostics,
 }
 
 #[derive(Clone, Debug)]
@@ -105,7 +105,7 @@ pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
 }
 
-impl crate::profile_dsl::runtime::RuntimeCancellation for CancellationToken {
+impl source_profile_dsl::execution::RuntimeCancellation for CancellationToken {
     fn is_cancelled(&self) -> bool {
         CancellationToken::is_cancelled(self)
     }
@@ -169,12 +169,12 @@ pub enum BackgroundTaskCompletion {
     },
     Failed {
         error: String,
-        diagnostics: crate::profile_dsl::diagnostics::Diagnostics,
+        diagnostics: source_profile_dsl::definition::Diagnostics,
     },
     Cancelled {
         error: Option<String>,
         result: Option<Value>,
-        diagnostics: crate::profile_dsl::diagnostics::Diagnostics,
+        diagnostics: source_profile_dsl::definition::Diagnostics,
     },
 }
 

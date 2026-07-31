@@ -91,7 +91,7 @@ for offset in range(0, len(paths), 200):
 PY
 done
 # The registry file itself is classified even when it contains no searchable behavior token.
-printf '%s\n' 'src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
+printf '%s\n' 'src-tauri/crates/source-profile-dsl/src/definition/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
 LC_ALL=C sort "$TMP" -o "$TMP"
 
 if [[ ${1:-} == --emit ]]; then
@@ -100,7 +100,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-profile-dsl/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='6cb59dbf7cc62def79de0b5d22650f9de7f81784a75f0866b346ba18c51e351f'
+FROZEN_MANIFEST_SHA256='210a9ae531728a668016005ac37b85f3dbea921f463318e1b261865fb3e45f35'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

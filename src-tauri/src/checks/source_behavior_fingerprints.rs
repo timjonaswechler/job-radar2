@@ -12,17 +12,16 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use crate::profile_dsl::compiler::{
-    forbidden_request_key_behavior, CompileSourceOutcome, CompiledSource, CompiledSourceAccess,
-    CompiledSourceProvenance, ProvenanceEntry, ProvenancePathSegment, SourceOwnedAccessPath,
-    SourceRuntimeBinding, MAX_FALLBACK_STRATEGIES,
+use source_profile_dsl::definition::SourceProfileDocument;
+use source_profile_dsl::definition::{
+    forbidden_request_key_behavior, CompileSourceOutcome, CompiledSource, CompiledSourceProvenance,
+    ProvenanceEntry, ProvenancePathSegment, SourceOwnedAccessPath, SourceRuntimeBinding,
+    MAX_FALLBACK_STRATEGIES,
 };
-use crate::profile_dsl::documents::{
+use source_profile_dsl::definition::{
     AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject,
 };
-use crate::profile_dsl::execution_plan::ExecutionPlanAccessPath;
-use crate::source::documents::{SelectedAccessPath, SourceDocument};
-use crate::source_profile::documents::SourceProfileDocument;
+use source_profile_dsl::definition::{SelectedAccessPath, SourceDocument};
 
 use super::source_live::SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS;
 use super::CheckFingerprint;
@@ -88,9 +87,9 @@ struct DirectAccessPathBehaviorProjection<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     source_config_schema: Option<Value>,
     #[serde(rename = "discovery", skip_serializing_if = "Option::is_none")]
-    discovery: Option<&'a crate::profile_dsl::documents::DiscoveryStepFragment>,
+    discovery: Option<&'a source_profile_dsl::definition::DiscoveryStepFragment>,
     #[serde(rename = "detail", skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a crate::profile_dsl::documents::DetailStepFragment>,
+    detail: Option<&'a source_profile_dsl::definition::DetailStepFragment>,
 }
 
 #[derive(Serialize)]
@@ -150,7 +149,7 @@ pub fn prepare_source_behavior_fingerprints(
             let Some(base_profile) = resolved_base_profile else {
                 return Err(inconsistent("base_source_profile"));
             };
-            let CompiledSourceAccess::Profile { effective_profile } = &compiled.access else {
+            let Some(effective_profile) = compiled.effective_profile() else {
                 return Err(inconsistent("effective_source_profile"));
             };
             push_component(
@@ -164,7 +163,7 @@ pub fn prepare_source_behavior_fingerprints(
                 &mut fingerprints,
                 SOURCE_BEHAVIOR,
                 "effective_source_profile",
-                &profile_projection(&effective_profile.document),
+                &profile_projection(effective_profile),
             )?;
             push_compiled_components(&mut fingerprints, source, compiled)?;
         }
@@ -174,7 +173,7 @@ pub fn prepare_source_behavior_fingerprints(
                 source: compiled, ..
             },
         ) => {
-            let CompiledSourceAccess::SourceOwned { access_path } = &compiled.access else {
+            let Some(access_path) = compiled.source_owned_access_path() else {
                 return Err(inconsistent("source_owned_access_path"));
             };
             push_component(
@@ -243,20 +242,17 @@ fn validate_structural_coherence(
                 source: compiled, ..
             } = outcome
             {
-                let CompiledSourceAccess::Profile { effective_profile } = &compiled.access else {
+                let Some(effective_profile) = compiled.effective_profile() else {
                     return Err(inconsistent("effective_source_profile"));
                 };
-                let ExecutionPlanAccessPath::ProfileAccessPath {
-                    profile_key: compiled_profile_key,
-                    path_key: compiled_path_key,
-                    ..
-                } = &compiled.execution_plan.selected_access_path
+                let Some((compiled_profile_key, compiled_path_key)) =
+                    compiled.selected_profile_access_path()
                 else {
                     return Err(inconsistent("selected_access_path"));
                 };
-                if compiled.execution_plan.source.key != source.key
-                    || compiled.execution_plan.source.name != source.name
-                    || effective_profile.document.key != *profile_key
+                if compiled.source_key() != source.key
+                    || compiled.source_name() != source.name
+                    || effective_profile.key != *profile_key
                     || compiled_profile_key != profile_key
                     || compiled_path_key != path_key
                 {
@@ -272,17 +268,14 @@ fn validate_structural_coherence(
                 source: compiled, ..
             } = outcome
             {
-                let CompiledSourceAccess::SourceOwned { access_path } = &compiled.access else {
+                let Some(access_path) = compiled.source_owned_access_path() else {
                     return Err(inconsistent("source_owned_access_path"));
                 };
-                let ExecutionPlanAccessPath::SourceOwnedAccessPath {
-                    key: compiled_key, ..
-                } = &compiled.execution_plan.selected_access_path
-                else {
+                let Some(compiled_key) = compiled.selected_source_owned_access_path() else {
                     return Err(inconsistent("selected_access_path"));
                 };
-                if compiled.execution_plan.source.key != source.key
-                    || compiled.execution_plan.source.name != source.name
+                if compiled.source_key() != source.key
+                    || compiled.source_name() != source.name
                     || access_path.key != *key
                     || compiled_key != key
                 {
@@ -299,7 +292,7 @@ fn push_compiled_components(
     source: &SourceDocument,
     compiled: &CompiledSource,
 ) -> Result<(), SourceBehaviorFingerprintPreparationError> {
-    let filtered_provenance = filtered_provenance(&compiled.provenance);
+    let filtered_provenance = filtered_provenance(compiled.provenance());
     push_component(
         fingerprints,
         SOURCE_BEHAVIOR,
@@ -308,7 +301,7 @@ fn push_compiled_components(
     )?;
     push_source_and_selector_components(fingerprints, source)?;
     if compiled
-        .runtime_binding_dependencies
+        .runtime_binding_dependencies()
         .bindings
         .contains(&SourceRuntimeBinding::Name)
     {

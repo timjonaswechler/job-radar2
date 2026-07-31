@@ -15,4 +15,5 @@ unicode-segmentation = "1"
 url = "2"
 
 [dev-dependencies]
+source-profile-dsl = { path = "../source-profile-dsl", features = ["test-support"] }
 tokio = { version = "1", features = ["macros", "rt", "sync", "test-util", "time"] }

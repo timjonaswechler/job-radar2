@@ -1,5 +1,5 @@
 use serde_json::json;
-use source_profile_dsl::profile_dsl::primitives::completeness::{
+use source_profile_dsl::test_support::{
     classify_tagged_variant_keys, escape_json_pointer_token, production_primitive_inventories,
     production_schema_inventory, schema_inventory_from_documents, traverse_schema_root,
     validate_primitive_completeness, Family, PrimitiveContext, SchemaTraversalError,
@@ -185,7 +185,7 @@ fn checked_in_schema_extraction_discovers_keys_and_options_independently() {
 #[test]
 fn removing_a_reachable_primitive_reference_removes_its_occurrence_context() {
     let mut docs = checked_in_schemas();
-    docs.get_mut("profile-dsl/strategy.schema.json")
+    docs.get_mut("source-behavior/strategy.schema.json")
         .unwrap()
         .pointer_mut("/$defs/discoveryStrategy/properties/fetch/$ref")
         .unwrap()
@@ -200,7 +200,7 @@ fn removing_a_reachable_primitive_reference_removes_its_occurrence_context() {
 #[test]
 fn removing_one_of_two_same_context_occurrences_is_detected() {
     let mut docs = checked_in_schemas();
-    docs.get_mut("profile-dsl/strategy.schema.json")
+    docs.get_mut("source-behavior/strategy.schema.json")
         .unwrap()
         .pointer_mut("/$defs/discoveryStrategy/properties/where/$ref")
         .unwrap()
@@ -224,7 +224,7 @@ fn removing_one_of_two_same_context_occurrences_is_detected() {
 #[test]
 fn removing_one_value_placement_reference_removes_only_that_typed_context() {
     let mut docs = checked_in_schemas();
-    docs.get_mut("profile-dsl/strategy.schema.json")
+    docs.get_mut("source-behavior/strategy.schema.json")
         .unwrap()
         .pointer_mut("/$defs/discoveryStrategy/properties/captures/$ref")
         .unwrap()
@@ -251,7 +251,7 @@ fn removing_one_value_placement_reference_removes_only_that_typed_context() {
 #[test]
 fn removing_browser_url_template_placement_preserves_other_template_contexts() {
     let mut docs = checked_in_schemas();
-    docs.get_mut("profile-dsl/fetch.schema.json")
+    docs.get_mut("source-behavior/fetch.schema.json")
         .unwrap()
         .pointer_mut("/$defs/browserFetch/properties/url/$ref")
         .unwrap()
@@ -278,7 +278,7 @@ fn removing_browser_url_template_placement_preserves_other_template_contexts() {
 fn unclassified_reachable_executable_options_and_discriminators_fail_closed() {
     let mut option_docs = checked_in_schemas();
     option_docs
-        .get_mut("profile-dsl/fetch.schema.json")
+        .get_mut("source-behavior/fetch.schema.json")
         .unwrap()
         .pointer_mut("/$defs/httpFetch/properties")
         .unwrap()
@@ -307,8 +307,8 @@ fn source_profile_traversal_reaches_every_strategy_occurrence_and_detection_root
     let evidence =
         traverse_schema_root(&docs, "source-profile.schema.json", "", "profile").unwrap();
     for target in [
-        "profile-dsl/strategy.schema.json#/$defs/discoveryStrategy",
-        "profile-dsl/strategy.schema.json#/$defs/detailStrategy",
+        "source-behavior/strategy.schema.json#/$defs/discoveryStrategy",
+        "source-behavior/strategy.schema.json#/$defs/detailStrategy",
         "source-profile.schema.json#/$defs/detectionUrlStrategy",
         "source-profile.schema.json#/$defs/detectionHttpStrategy",
         "source-profile.schema.json#/$defs/detectionBrowserStrategy",
@@ -325,51 +325,51 @@ fn checked_in_schemas() -> BTreeMap<String, serde_json::Value> {
     [
         (
             "source-profile.schema.json",
-            include_str!("../../../src/schema/source-profile.schema.json"),
+            include_str!("../../../schema/source-profile.schema.json"),
         ),
         (
-            "profile-dsl/common.schema.json",
-            include_str!("../../../src/schema/profile-dsl/common.schema.json"),
+            "source-behavior/common.schema.json",
+            include_str!("../../../schema/source-behavior/common.schema.json"),
         ),
         (
-            "profile-dsl/diagnostics.schema.json",
-            include_str!("../../../src/schema/profile-dsl/diagnostics.schema.json"),
+            "source-behavior/diagnostics.schema.json",
+            include_str!("../../../schema/source-behavior/diagnostics.schema.json"),
         ),
         (
-            "profile-dsl/extract.schema.json",
-            include_str!("../../../src/schema/profile-dsl/extract.schema.json"),
+            "source-behavior/extract.schema.json",
+            include_str!("../../../schema/source-behavior/extract.schema.json"),
         ),
         (
-            "profile-dsl/fetch.schema.json",
-            include_str!("../../../src/schema/profile-dsl/fetch.schema.json"),
+            "source-behavior/fetch.schema.json",
+            include_str!("../../../schema/source-behavior/fetch.schema.json"),
         ),
         (
-            "profile-dsl/pagination.schema.json",
-            include_str!("../../../src/schema/profile-dsl/pagination.schema.json"),
+            "source-behavior/pagination.schema.json",
+            include_str!("../../../schema/source-behavior/pagination.schema.json"),
         ),
         (
-            "profile-dsl/parse.schema.json",
-            include_str!("../../../src/schema/profile-dsl/parse.schema.json"),
+            "source-behavior/parse.schema.json",
+            include_str!("../../../schema/source-behavior/parse.schema.json"),
         ),
         (
-            "profile-dsl/policy.schema.json",
-            include_str!("../../../src/schema/profile-dsl/policy.schema.json"),
+            "source-behavior/policy.schema.json",
+            include_str!("../../../schema/source-behavior/policy.schema.json"),
         ),
         (
-            "profile-dsl/predicate.schema.json",
-            include_str!("../../../src/schema/profile-dsl/predicate.schema.json"),
+            "source-behavior/predicate.schema.json",
+            include_str!("../../../schema/source-behavior/predicate.schema.json"),
         ),
         (
-            "profile-dsl/select.schema.json",
-            include_str!("../../../src/schema/profile-dsl/select.schema.json"),
+            "source-behavior/select.schema.json",
+            include_str!("../../../schema/source-behavior/select.schema.json"),
         ),
         (
-            "profile-dsl/strategy.schema.json",
-            include_str!("../../../src/schema/profile-dsl/strategy.schema.json"),
+            "source-behavior/strategy.schema.json",
+            include_str!("../../../schema/source-behavior/strategy.schema.json"),
         ),
         (
-            "profile-dsl/transform.schema.json",
-            include_str!("../../../src/schema/profile-dsl/transform.schema.json"),
+            "source-behavior/transform.schema.json",
+            include_str!("../../../schema/source-behavior/transform.schema.json"),
         ),
     ]
     .into_iter()

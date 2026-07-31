@@ -6,7 +6,7 @@ import { DetailRow } from "@/features/sources/registry/detail-row";
 import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
 import { SourceLiveCheckSection } from "@/features/sources/registry/source/source-live-check-section";
 import { OptionalJsonPreview } from "@/features/sources/shared/json-preview";
-import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
+import { sourceBehaviorSchemaRefs } from "@/features/sources/shared/source-schema-catalog";
 import {
   OptionalSchemaValuePreview,
   SchemaValuePreview,
@@ -114,13 +114,13 @@ export function SourceDetails({
         title="Authored accessPaths"
         description="Direkt im schema-v3 Source-Dokument authorisierte Spezialisierungsfragmente."
         value={source.document.accessPaths}
-        schemaRef={profileDslSchemaRefs.accessPathFragments}
+        schemaRef={sourceBehaviorSchemaRefs.accessPathFragments}
       />
       <OptionalSchemaValuePreview
         title="sourceSupport"
         description="Support-Metadaten für Source-owned Access Paths."
         value={source.document.sourceSupport}
-        schemaRef={profileDslSchemaRefs.supportMetadata}
+        schemaRef={sourceBehaviorSchemaRefs.supportMetadata}
       />
       <OptionalJsonPreview
         title="Source-Diagnosen im Dokument"
@@ -265,13 +265,13 @@ function AccessPathJsonBlocks({ accessPath }: AccessPathJsonBlocksProps) {
         title="discovery"
         description="Deklarative source-weite Posting Discovery."
         value={accessPath.discovery}
-        schemaRef={profileDslSchemaRefs.discoveryStep}
+        schemaRef={sourceBehaviorSchemaRefs.discoveryStep}
       />
       <OptionalSchemaValuePreview
         title="detail"
         description="Optionale lazy Posting Detail Extraktion für eine konkrete Posting-Quelle."
         value={accessPath.detail}
-        schemaRef={profileDslSchemaRefs.detailStep}
+        schemaRef={sourceBehaviorSchemaRefs.detailStep}
       />
     </div>
   );

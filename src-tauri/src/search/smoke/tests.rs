@@ -3,19 +3,17 @@ use search_resolution::{
     self as resolution, ScriptedDiscoveryBatch, ScriptedSourceDiscoveryExecution,
 };
 
-use crate::{
-    profile_dsl::runtime::{
-        PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
-    },
-    search::{
-        request::{RunningSearchRuns, SearchRequestService},
-        run::{
-            ScriptedResolutionSource, SearchRunResolutionRuntime, SourceExecutionError,
-            SourceRunStatus,
-        },
+use crate::search::{
+    request::{RunningSearchRuns, SearchRequestService},
+    run::{
+        ScriptedResolutionSource, SearchRunResolutionRuntime, SourceExecutionError, SourceRunStatus,
     },
 };
 use serde_json::Value;
+use source_profile_dsl::{
+    execution::{PhaseCompletion, PhaseExecutionReport, PhaseUsage},
+    test_support::ScriptedSourceDetailExecution,
+};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
@@ -413,17 +411,14 @@ fn write_fixture_source_file_with_status(
 fn occurrence(
     source_key: &str,
     candidate: FixtureCandidate,
-) -> crate::profile_dsl::occurrence::PostingOccurrence {
-    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
-        source_key,
-        &candidate.url,
-        None,
-    )
-    .unwrap();
-    crate::profile_dsl::occurrence::PostingOccurrence {
+) -> source_profile_dsl::execution::PostingOccurrence {
+    let (reference, identity) =
+        source_profile_dsl::execution::validate_posting_reference(source_key, &candidate.url, None)
+            .unwrap();
+    source_profile_dsl::execution::PostingOccurrence {
         identity,
         reference,
-        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+        provider_values: source_profile_dsl::execution::ProviderValues {
             title: Some(candidate.title),
             company: Some(candidate.company),
             locations: candidate.locations,

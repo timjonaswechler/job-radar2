@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     compile_source, prepare_source_behavior_fingerprints, CompileSourceOutcome,
     RegistrySourceProfile, ReusableAccessPathDocument, SelectedAccessPath, SourceDocument,
     SourceProfileDocument, SourceProfileRegistrySnapshot, SourceRuntimeBinding,
@@ -9,7 +9,7 @@ use job_radar_lib::{
 #[test]
 fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
     let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let job_radar_lib::Fetch::Http { url, .. } =
+    let crate::job_radar_lib::Fetch::Http { url, .. } =
         &mut profile.access_paths[0].discovery.strategies[0].fetch
     else {
         panic!("fixture uses HTTP fetch")
@@ -27,7 +27,7 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
         panic!("fixture must compile")
     };
     assert_eq!(
-        compiled.runtime_binding_dependencies.bindings,
+        compiled.runtime_binding_dependencies().bindings,
         vec![SourceRuntimeBinding::Name]
     );
 
@@ -393,18 +393,18 @@ fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
 fn prepare_profile(
     source: &SourceDocument,
     profile: &SourceProfileDocument,
-) -> Vec<job_radar_lib::CheckFingerprint> {
+) -> Vec<crate::job_radar_lib::CheckFingerprint> {
     let outcome = compile_source(source, &registry_with_profile(profile.clone()));
     prepare_source_behavior_fingerprints(source, Some(profile), &outcome).unwrap()
 }
 
-fn prepare_owned(source: &SourceDocument) -> Vec<job_radar_lib::CheckFingerprint> {
+fn prepare_owned(source: &SourceDocument) -> Vec<crate::job_radar_lib::CheckFingerprint> {
     let outcome = compile_source(source, &SourceProfileRegistrySnapshot::default());
     prepare_source_behavior_fingerprints(source, None, &outcome).unwrap()
 }
 
 fn assert_behavior_order(
-    fingerprints: &[job_radar_lib::CheckFingerprint],
+    fingerprints: &[crate::job_radar_lib::CheckFingerprint],
     branch_references: &[&str],
 ) {
     let mut expected = branch_references.to_vec();
@@ -419,7 +419,7 @@ fn assert_behavior_order(
     assert_eq!(references(fingerprints), expected);
 }
 
-fn references(fingerprints: &[job_radar_lib::CheckFingerprint]) -> Vec<&str> {
+fn references(fingerprints: &[crate::job_radar_lib::CheckFingerprint]) -> Vec<&str> {
     fingerprints
         .iter()
         .map(|fingerprint| fingerprint.reference.as_deref().unwrap())
@@ -427,7 +427,7 @@ fn references(fingerprints: &[job_radar_lib::CheckFingerprint]) -> Vec<&str> {
 }
 
 fn digest_map(
-    fingerprints: &[job_radar_lib::CheckFingerprint],
+    fingerprints: &[crate::job_radar_lib::CheckFingerprint],
 ) -> BTreeMap<(String, String), String> {
     fingerprints
         .iter()
@@ -443,7 +443,7 @@ fn digest_map(
         .collect()
 }
 
-fn fragments(value: serde_json::Value) -> Vec<job_radar_lib::AccessPathFragment> {
+fn fragments(value: serde_json::Value) -> Vec<crate::job_radar_lib::AccessPathFragment> {
     serde_json::from_value(value).unwrap()
 }
 
@@ -452,7 +452,8 @@ fn set_selected_fetch_url(profile: &mut SourceProfileDocument, url: &str) {
 }
 
 fn set_path_fetch_url(path: &mut ReusableAccessPathDocument, value: &str) {
-    let job_radar_lib::Fetch::Http { url, .. } = &mut path.discovery.strategies[0].fetch else {
+    let crate::job_radar_lib::Fetch::Http { url, .. } = &mut path.discovery.strategies[0].fetch
+    else {
         panic!("fixture uses HTTP fetch")
     };
     *url = value.into();
@@ -465,7 +466,8 @@ fn set_owned_fetch_url(source: &mut SourceDocument, value: &str) {
         panic!("fixture uses Source-owned access")
     };
     match &mut discovery.strategies[0].fetch {
-        job_radar_lib::Fetch::Http { url, .. } | job_radar_lib::Fetch::Browser { url, .. } => {
+        crate::job_radar_lib::Fetch::Http { url, .. }
+        | crate::job_radar_lib::Fetch::Browser { url, .. } => {
             *url = value.into();
         }
     }
@@ -485,7 +487,7 @@ fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistr
 
 fn read_fixture<T: serde::de::DeserializeOwned>(relative: &str) -> T {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/source-profile-dsl")
+        .join("tests/fixtures/source-behavior")
         .join(relative);
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }

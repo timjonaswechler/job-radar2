@@ -1,8 +1,8 @@
 use serde_json::json;
-use source_profile_dsl::profile_dsl::primitives::completeness::{
+use source_profile_dsl::test_support::{
     production_schema_inventory, production_serde_inventory, AuthoredShapeKind, Family,
 };
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     Acceptance, BrowserInteraction, BrowserWait, CaptureRule, DetectionStrategy, DetectionUrlInput,
     Fetch, FieldExpression, InputUrlPattern, ListFieldExpression, Pagination, Parse, Predicate,
     RequestBody, Select, Transform,
@@ -80,9 +80,7 @@ fn serde_inventory_is_independent_and_exact() {
         .map(|v| (v.family, v.key.clone(), v.contexts.clone(), v.shape))
         .collect::<BTreeSet<_>>();
     assert_eq!(schema_ids, serde_ids);
-    assert!(serde
-        .iter()
-        .all(|v| v.authored_file.contains("profile_dsl")));
+    assert!(serde.iter().all(|v| v.authored_file.contains("definition")));
     assert_eq!(
         serde.iter().map(|v| v.shape).collect::<BTreeSet<_>>(),
         BTreeSet::from([

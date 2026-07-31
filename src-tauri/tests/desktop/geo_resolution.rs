@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, path::Path};
 
+use crate::job_radar_lib::GeoDbResolver;
 use geo::{
     matches_location_filter, prepare_location_filter, GeoPoint, GeoResolveFuture, GeoResolver,
     LocationMatchOutcome, ResolvedLocation,
 };
-use job_radar_lib::GeoDbResolver;
 
 #[test]
 fn resolves_mainz_from_bundled_geo_database() {

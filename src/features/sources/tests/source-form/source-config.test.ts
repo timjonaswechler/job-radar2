@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 
-import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/source-behavior";
 
 import {
-  profileDslSchemaCatalog,
-  profileDslSchemaRefs,
-} from "@/features/sources/shared/profile-dsl-schema-catalog";
+  sourceSchemaCatalog,
+  sourceBehaviorSchemaRefs,
+} from "@/features/sources/shared/source-schema-catalog";
 import {
   effectiveSourceConfigSchema,
   entriesWithSchemaHints,
@@ -174,8 +174,8 @@ test("source config contract", async () => {
   assert.deepEqual(directSourceSpecializationFromText("{not-json}").errors, [
     "Direkte Source-Spezialisierung braucht gültiges JSON.",
   ]);
-  const directSourceSpecializationSchema = profileDslSchemaCatalog.resolveRef(
-    profileDslSchemaRefs.accessPathFragments,
+  const directSourceSpecializationSchema = sourceSchemaCatalog.resolveRef(
+    sourceBehaviorSchemaRefs.accessPathFragments,
   );
   assert.equal(directSourceSpecializationSchema?.schema.type, "array");
   assert.ok(directSourceSpecializationSchema?.schema.items);

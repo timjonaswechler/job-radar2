@@ -14,15 +14,18 @@ use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use url::Url;
 
-use source_profile_dsl::profile_dsl::occurrence::{
-    DetailField, DetailPatch, PostingOccurrence, PostingOccurrenceIdentity, RequestedDetailFields,
-};
 use source_profile_dsl::{
-    execute_discovery, BrowserAcquisition, CompiledSource, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, Diagnostics, DiscoveryBrowserAdapter, PhaseBrowser, PhaseCompletion,
-    PhaseExecutionReport, PhaseLimits, PhaseOutcome, PhaseRunError, PhaseUsage, PolicyOutcome,
-    ProfileHttpClient, RuntimeCancellation, RuntimeExecutionContext, SourceDetailExecution,
-    SourceDetailOutcome, SourceDetailRequest,
+    definition::{
+        CompiledSource, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
+        PhaseLimits,
+    },
+    execution::{
+        discover, BrowserAcquisition, DetailField, DetailPatch, PhaseCompletion,
+        PhaseExecutionReport, PhaseOutcome, PhaseRunError, PhaseUsage, PolicyOutcome,
+        PostingOccurrence, PostingOccurrenceIdentity, ProfileHttpClient, RequestedDetailFields,
+        RuntimeCancellation, RuntimeExecutionContext, SourceDetailExecution, SourceDetailOutcome,
+        SourceDetailRequest,
+    },
 };
 
 use crate::{
@@ -534,7 +537,7 @@ impl ScriptedSourceDiscoveryExecution {
     async fn execute_batch(&self, request: DiscoveryBatchRequest<'_>) -> DiscoveryBatchResult {
         let actual_continuation = request.continuation.map(|value| value.value.clone());
         self.calls.lock().unwrap().push(actual_continuation.clone());
-        if request.compiled_source.execution_plan.source.key != self.source_key {
+        if request.compiled_source.source_key() != self.source_key {
             return Err(DiscoveryBatchFailure::NotStarted);
         }
         let scripted = self
@@ -637,7 +640,7 @@ impl ScriptedSourceDiscoveryExecution {
     }
 }
 
-/// Truthful one-shot adapter over the current Profile-DSL Discovery phase. The phase is tightened
+/// Truthful one-shot adapter over the current Source Behavior Language Discovery phase. The phase is tightened
 /// by the supplied maximum. It accepts only a complete materialized vector already within that
 /// bound and never slices it or invents continuation.
 async fn execute_profile_dsl_batch(
@@ -648,34 +651,15 @@ async fn execute_profile_dsl_batch(
     if request.continuation.is_some() {
         return Err(DiscoveryBatchFailure::UnboundedMaterializedOutput);
     }
-    let plan = &request.compiled_source.execution_plan;
-    // The landed phase envelope has no natural-pagination exhaustion fact. A
-    // paginated accepted vector therefore cannot be truthfully projected as an
-    // exhausted batch, even when it happens to fit. Refuse it rather than slice,
-    // continue, or invent exhaustion.
-    if plan
-        .discovery
-        .strategies
-        .iter()
-        .any(|strategy| strategy.pagination.is_some())
-    {
+    // A paginated accepted vector cannot be truthfully projected as an exhausted
+    // one-shot batch. Ask the execution interface instead of inspecting plan nodes.
+    if !request.compiled_source.discovery_is_materializable() {
         return Err(DiscoveryBatchFailure::UnboundedMaterializedOutput);
     }
-    let browser = if plan.discovery.strategies.iter().any(|strategy| {
-        matches!(
-            strategy.fetch,
-            source_profile_dsl::ExecutionPlanFetch::Browser { .. }
-        )
-    }) {
-        PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
-    } else {
-        PhaseBrowser::BrowserFree
-    };
-    let result = execute_discovery(
-        plan,
-        &request.compiled_source.source_config,
+    let result = discover(
+        request.compiled_source,
         fetcher,
-        browser,
+        acquisition,
         request.context,
     )
     .await;
@@ -741,7 +725,7 @@ pub async fn resolve_source_candidates(
     if request.requirements.geo_runtime_failure {
         return Err(geo_resolution_failed(String::new()));
     }
-    let source_key = request.compiled_source.execution_plan.source.key.clone();
+    let source_key = request.compiled_source.source_key().to_string();
     let mut state = ResolutionState::new(source_key.clone(), ceilings.phase, request.requirements);
     let mut continuation: Option<DiscoveryContinuation> = None;
     let mut used_tokens = HashSet::new();
@@ -1071,9 +1055,9 @@ impl ResolutionState {
                     if dispositions.iter().any(|d| {
                         matches!(
                             d,
-                            source_profile_dsl::RequestedFieldDisposition::Unavailable { .. }
-                                | source_profile_dsl::RequestedFieldDisposition::Conflicted { .. }
-                                | source_profile_dsl::RequestedFieldDisposition::Unsupported { .. }
+                            source_profile_dsl::execution::RequestedFieldDisposition::Unavailable { .. }
+                                | source_profile_dsl::execution::RequestedFieldDisposition::Conflicted { .. }
+                                | source_profile_dsl::execution::RequestedFieldDisposition::Unsupported { .. }
                         )
                     }) || !values.apply(fields, &needed)
                         || !values.is_complete(request.requirements)
@@ -1222,12 +1206,12 @@ fn valid_detail_report(outcome: &SourceDetailOutcome) -> bool {
             PhaseCompletion::PolicyUnsatisfied
         ),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: source_profile_dsl::SourceDetailFailure::PhaseExecution { .. },
+            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhaseExecution { .. },
             complete_budget_report: Some(report),
             ..
         } => matches!(report.completion, PhaseCompletion::ExecutionFailed),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: source_profile_dsl::SourceDetailFailure::PhasePreStart { .. },
+            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhasePreStart { .. },
             complete_budget_report: None,
             ..
         } => true,
@@ -1244,7 +1228,7 @@ fn patch_is_requested(requested: &RequestedDetailFields, patch: &DetailPatch) ->
 
 fn valid_dispositions(
     requested: &RequestedDetailFields,
-    dispositions: &[source_profile_dsl::RequestedFieldDisposition],
+    dispositions: &[source_profile_dsl::execution::RequestedFieldDisposition],
 ) -> bool {
     let fields = dispositions.iter().map(|d| d.field()).collect::<Vec<_>>();
     fields.len() == requested.iter().count()
@@ -1383,7 +1367,7 @@ fn absolute_url(value: &str) -> Option<String> {
 fn hint_rejects(o: &PostingOccurrence, requirements: &CompiledSearchRequirements<'_>) -> bool {
     o.hints
         .get("title")
-        .filter(|h| h.hint_use == Some(source_profile_dsl::HintUse::SearchPrefilter))
+        .filter(|h| h.hint_use == Some(source_profile_dsl::execution::HintUse::SearchPrefilter))
         .is_some_and(|h| !requirements.matches_title(&collapse_whitespace(&h.value)))
 }
 
@@ -1768,7 +1752,7 @@ fn dimension_from_completion(c: &PhaseCompletion) -> Option<ResolutionLimitDimen
     let PhaseCompletion::BudgetExhausted { exhaustion } = c else {
         return None;
     };
-    use source_profile_dsl::AllowanceDimension::*;
+    use source_profile_dsl::execution::AllowanceDimension::*;
     Some(match exhaustion.dimension {
         StrategyAttempts => ResolutionLimitDimension::StrategyAttempts,
         Requests => ResolutionLimitDimension::Requests,

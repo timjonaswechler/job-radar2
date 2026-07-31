@@ -1,4 +1,4 @@
-use crate::profile_dsl::diagnostics::{
+use source_profile_dsl::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
 

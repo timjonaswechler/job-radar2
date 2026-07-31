@@ -516,7 +516,7 @@ pub fn list_sources(
 #[tauri::command]
 pub fn list_source_diagnostics(
     state: State<'_, AppState>,
-) -> Result<crate::profile_dsl::diagnostics::Diagnostics, String> {
+) -> Result<source_profile_dsl::definition::Diagnostics, String> {
     Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).diagnostics)
 }
 
@@ -789,13 +789,13 @@ pub fn cancel_background_task(
 fn background_task_error_diagnostic(
     code: impl Into<String>,
     message: impl Into<String>,
-) -> crate::profile_dsl::diagnostics::Diagnostic {
+) -> source_profile_dsl::definition::Diagnostic {
     let message = message.into();
-    crate::profile_dsl::diagnostics::Diagnostic {
-        category: crate::profile_dsl::diagnostics::DiagnosticCategory::Runtime,
+    source_profile_dsl::definition::Diagnostic {
+        category: source_profile_dsl::definition::DiagnosticCategory::Runtime,
         code: code.into(),
         message: message.clone(),
-        severity: crate::profile_dsl::diagnostics::DiagnosticSeverity::Error,
+        severity: source_profile_dsl::definition::DiagnosticSeverity::Error,
         path: "".to_string(),
         strategy_key: None,
         details: Some(serde_json::json!({ "message": message })),

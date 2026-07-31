@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde_json::{json, Value};
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     compile_detection_plan, detection_descriptor_for_authored_kind,
     detection_descriptor_for_url_input_kind, detection_shape_descriptors,
     execute_detection_operation, validate_detection_shape_descriptors, DetectionAttempt,
@@ -72,9 +72,7 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
         DETECTION_HTTP_DESCRIPTOR,
     ] {
         assert_eq!(descriptor.owner, "D02");
-        assert!(descriptor
-            .canonical_file
-            .ends_with("source_profile/detection/plan.rs"));
+        assert!(descriptor.canonical_file.ends_with("detection/plan.rs"));
     }
 
     assert!(DETECTION_INPUT_URL_PATTERN_DESCRIPTOR.options[0].non_empty);
@@ -112,7 +110,7 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
     );
     let absolute = DetectionUrlInput::AbsoluteUrl;
     let alternatives = DetectionUrlInput::PatternAlternatives {
-        alternatives: vec![source_profile_dsl::InputUrlPattern {
+        alternatives: vec![source_profile_dsl::test_support::InputUrlPattern {
             pattern: "(?<tenant>.+)".into(),
             captures: Some(vec!["tenant".into()]),
         }],
@@ -126,21 +124,22 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
         &DETECTION_URL_PATTERN_ALTERNATIVES_DESCRIPTOR
     );
 
-    let option_inventory = |descriptor: &source_profile_dsl::DetectionShapeDescriptor| {
-        descriptor
-            .options
-            .iter()
-            .map(|option| {
-                (
-                    option.key,
-                    option.required,
-                    option.minimum,
-                    option.maximum,
-                    option.compiled_identity,
-                )
-            })
-            .collect::<Vec<_>>()
-    };
+    let option_inventory =
+        |descriptor: &source_profile_dsl::test_support::DetectionShapeDescriptor| {
+            descriptor
+                .options
+                .iter()
+                .map(|option| {
+                    (
+                        option.key,
+                        option.required,
+                        option.minimum,
+                        option.maximum,
+                        option.compiled_identity,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
     assert_eq!(
         option_inventory(&DETECTION_URL_DESCRIPTOR),
         vec![
@@ -253,13 +252,14 @@ fn d02_descriptor_catalogue_ties_authored_and_compiled_url_http_shapes() {
             .cloned()
             .collect::<std::collections::BTreeSet<_>>()
     };
-    let descriptor_keys = |descriptor: &source_profile_dsl::DetectionShapeDescriptor| {
-        descriptor
-            .options
-            .iter()
-            .map(|option| option.key.to_string())
-            .collect::<std::collections::BTreeSet<_>>()
-    };
+    let descriptor_keys =
+        |descriptor: &source_profile_dsl::test_support::DetectionShapeDescriptor| {
+            descriptor
+                .options
+                .iter()
+                .map(|option| option.key.to_string())
+                .collect::<std::collections::BTreeSet<_>>()
+        };
     let serialized_url = serde_json::to_value(&authored_url).unwrap();
     let serialized_http = serde_json::to_value(&authored_http).unwrap();
     assert_eq!(
@@ -372,7 +372,7 @@ fn compiler_requires_exact_all_required_url_first_and_compiles_patterns_before_i
         &["startUrl"],
     );
     wrong_policy.detection.as_mut().unwrap().policy =
-        Some(source_profile_dsl::StrategyPolicy::FirstAccepted);
+        Some(source_profile_dsl::test_support::StrategyPolicy::FirstAccepted);
     assert_eq!(
         compile_detection_plan(&wrong_policy).unwrap_err()[0].code,
         "invalid_detection_policy"
@@ -429,7 +429,10 @@ fn direct_serde_rejects_partial_or_mixed_final_detection_shapes() {
         }),
     ] {
         assert!(
-            serde_json::from_value::<source_profile_dsl::DetectionDocument>(detection).is_err()
+            serde_json::from_value::<source_profile_dsl::test_support::DetectionDocument>(
+                detection
+            )
+            .is_err()
         );
     }
 
@@ -484,7 +487,7 @@ fn direct_serde_enforces_d02_schema_bounds_and_string_shapes() {
         }))
         .is_err());
         assert!(
-            serde_json::from_value::<source_profile_dsl::DetectionDocument>(json!({
+            serde_json::from_value::<source_profile_dsl::test_support::DetectionDocument>(json!({
                 "recommendedAccessPathKey": key
             }))
             .is_err()
@@ -495,7 +498,10 @@ fn direct_serde_enforces_d02_schema_bounds_and_string_shapes() {
         json!({ "kind": "url", "message": "" }),
         json!({ "kind": "url", "message": "known", "path": "" }),
     ] {
-        assert!(serde_json::from_value::<source_profile_dsl::DetectionEvidence>(evidence).is_err());
+        assert!(
+            serde_json::from_value::<source_profile_dsl::test_support::DetectionEvidence>(evidence)
+                .is_err()
+        );
     }
 
     assert!(serde_json::from_value::<DetectionUrlInput>(json!({
@@ -524,7 +530,7 @@ fn direct_serde_enforces_d02_schema_bounds_and_string_shapes() {
     }
 
     assert!(
-        serde_json::from_value::<source_profile_dsl::InputUrlPattern>(json!({
+        serde_json::from_value::<source_profile_dsl::test_support::InputUrlPattern>(json!({
             "pattern": ""
         }))
         .is_err()
@@ -553,7 +559,7 @@ fn direct_serde_enforces_d02_schema_bounds_and_string_shapes() {
         }))
         .is_err());
         assert!(
-            serde_json::from_value::<source_profile_dsl::InputUrlPattern>(json!({
+            serde_json::from_value::<source_profile_dsl::test_support::InputUrlPattern>(json!({
                 "pattern": "(?<tenant>.+)",
                 "captures": captures
             }))
@@ -663,7 +669,7 @@ async fn alternatives_feed_latest_reconciled_capture_to_http_template_and_preser
     assert!(proposal
         .evidence
         .iter()
-        .any(|item| item.kind == source_profile_dsl::DetectionEvidenceKind::Http));
+        .any(|item| item.kind == source_profile_dsl::test_support::DetectionEvidenceKind::Http));
 
     let serialized = serde_json::to_value(&result).unwrap();
     assert_eq!(
@@ -675,7 +681,10 @@ async fn alternatives_feed_latest_reconciled_capture_to_http_template_and_preser
         serde_json::to_value(&result.run_result).unwrap()
     );
     assert_eq!(
-        serde_json::from_value::<source_profile_dsl::DetectionOperationResult>(serialized).unwrap(),
+        serde_json::from_value::<source_profile_dsl::test_support::DetectionOperationResult>(
+            serialized
+        )
+        .unwrap(),
         result
     );
 }

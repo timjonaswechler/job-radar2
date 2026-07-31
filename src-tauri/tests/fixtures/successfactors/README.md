@@ -35,7 +35,7 @@ Relevant SAP documentation includes:
 
 SuccessFactors sites vary. Public installations may expose RSS rather than a `urlset`, use prefixed job paths, or encode multi-token locations ambiguously in URLs. The fixtures prove only the explicitly represented profile shapes. They do not establish support for every RMK installation or current operability of a concrete Source.
 
-Operational confidence for a concrete Source comes from its Source Live Check. New provider variants should first become minimal sanitized regression fixtures and generic DSL/runtime behavior rather than Source-specific Rust branches.
+Operational confidence for a concrete Source comes from its Source Live Check. New provider variants should first become minimal sanitized regression fixtures and generic Source Behavior Language runtime behavior rather than Source-specific Rust branches.
 
 ## Focused validation
 

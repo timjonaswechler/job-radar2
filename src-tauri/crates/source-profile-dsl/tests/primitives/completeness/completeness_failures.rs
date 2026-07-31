@@ -1,4 +1,4 @@
-use source_profile_dsl::profile_dsl::primitives::completeness::{
+use source_profile_dsl::test_support::{
     validate_primitive_completeness, AuthoredShapeKind::*, CompiledRegistration,
     CompletenessPolicy, Family, InventoryLayer, Owner, PrimitiveCompletenessError,
     PrimitiveCompletenessInventories, PrimitiveContext, SchemaPointerContext, SchemaShape,
@@ -18,7 +18,7 @@ fn schema(key: &str) -> SchemaShape {
         contexts: CONTEXTS.iter().copied().collect(),
         owner: Owner::P06bc,
         canonical_file:
-            "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs".into(),
+            "src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs".into(),
         compiled_identity: identity(key),
         shape: Tagged,
         pointers: BTreeSet::from([format!("schema#/{key}")]),
@@ -37,10 +37,10 @@ fn serde(key: &str) -> SerdeShape {
         contexts: CONTEXTS.iter().copied().collect(),
         owner: Owner::P06bc,
         canonical_file:
-            "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs".into(),
+            "src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs".into(),
         compiled_identity: identity(key),
         shape: Tagged,
-        authored_file: "src-tauri/crates/source-profile-dsl/src/profile_dsl/documents/extract.rs",
+        authored_file: "src-tauri/crates/source-profile-dsl/src/definition/documents/extract.rs",
     }
 }
 fn compiled(key: &'static str) -> CompiledRegistration {
@@ -51,7 +51,7 @@ fn compiled(key: &'static str) -> CompiledRegistration {
         contexts: CONTEXTS,
         owner: Owner::P06bc,
         canonical_file:
-            "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs",
+            "src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs",
         shape: Tagged,
         compiled_identity: identity,
         witness: synthetic_compiled_witness,
@@ -77,14 +77,14 @@ fn policy(forbidden: &[(Family, &str)]) -> CompletenessPolicy {
             (
                 Owner::P06bc,
                 BTreeSet::from([
-                    "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/value/mod.rs"
+                    "src-tauri/crates/source-profile-dsl/src/definition/primitives/value/mod.rs"
                         .to_owned(),
                 ]),
             ),
             (
                 Owner::P02,
                 BTreeSet::from([
-                    "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/mod.rs"
+                    "src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/mod.rs"
                         .to_owned(),
                 ]),
             ),
@@ -155,7 +155,7 @@ fn duplicate_conflicting_owner_context_shape_file_and_behavior_fail() {
     )));
     let mut v = complete("template");
     v.compiled[0].canonical_file =
-        "src-tauri/crates/source-profile-dsl/src/profile_dsl/compiler/mod.rs";
+        "src-tauri/crates/source-profile-dsl/src/definition/compiler/mod.rs";
     assert!(errors(&v)
         .iter()
         .any(|e| matches!(e, PrimitiveCompletenessError::NoncanonicalFile { .. })));
@@ -208,8 +208,7 @@ fn compiled_identities_are_non_empty_and_globally_unique() {
     )));
 
     let mut missing_witness = complete("template");
-    missing_witness.compiled[0].witness =
-        source_profile_dsl::profile_dsl::primitives::completeness::missing_witness;
+    missing_witness.compiled[0].witness = source_profile_dsl::test_support::missing_witness;
     assert!(errors(&missing_witness).iter().any(|error| matches!(
         error,
         PrimitiveCompletenessError::MissingCompiledWitness { .. }
@@ -270,7 +269,7 @@ fn every_nested_shape_class_and_removed_key_is_visible() {
             contexts: ctx.clone(),
             owner: Owner::P02,
             canonical_file:
-                "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/mod.rs".into(),
+                "src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/mod.rs".into(),
             compiled_identity: "removed".into(),
             shape: Tagged,
             pointers: BTreeSet::from(["schema".into()]),
@@ -287,7 +286,7 @@ fn every_nested_shape_class_and_removed_key_is_visible() {
             contexts: ctx,
             owner: Owner::P02,
             canonical_file:
-                "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/mod.rs".into(),
+                "src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/mod.rs".into(),
             compiled_identity: "removed".into(),
             shape: Tagged,
             authored_file: "serde",
@@ -298,7 +297,7 @@ fn every_nested_shape_class_and_removed_key_is_visible() {
             contexts: &[PrimitiveContext::Discovery],
             owner: Owner::P02,
             canonical_file:
-                "src-tauri/crates/source-profile-dsl/src/profile_dsl/primitives/parse/mod.rs",
+                "src-tauri/crates/source-profile-dsl/src/definition/primitives/parse/mod.rs",
             shape: Tagged,
             compiled_identity: "removed",
             witness: synthetic_compiled_witness,

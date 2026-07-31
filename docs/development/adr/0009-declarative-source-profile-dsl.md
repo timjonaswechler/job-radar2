@@ -1,4 +1,6 @@
 # Replace v1 source profiles with a declarative Source Profile DSL
+> **Terminology note:** The maintained canonical term is **Source Behavior Language**. This ADR keeps its historical filename and title for traceability; references to “Source Profile DSL” or “DSL” below describe the same language.
+
 
 Job Radar replaces the v1 Source Profile model with a declarative JSON Source Profile DSL that is compiled into a typed Execution Plan before runtime execution. ATS and career-site behavior is described through reusable generic capabilities such as fetch, parse, select, extract, transform, pagination, finite Strategy fallback, browser mode, and diagnostics; individual ATS profiles must not require profile-specific Rust adapters.
 

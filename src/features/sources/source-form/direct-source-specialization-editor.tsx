@@ -11,17 +11,17 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import {
-  profileDslSchemaCatalog,
-  profileDslSchemaRefs,
-} from "@/features/sources/shared/profile-dsl-schema-catalog";
+  sourceSchemaCatalog,
+  sourceBehaviorSchemaRefs,
+} from "@/features/sources/shared/source-schema-catalog";
 import { SchemaGuidedValueEditor } from "@/features/sources/schema-editor/schema-editor";
 import type { SchemaResolutionOptions } from "@/features/sources/shared/schema-introspection";
 
-const directSourceSpecializationSchemaContext = profileDslSchemaCatalog.resolveRef(
-  profileDslSchemaRefs.accessPathFragments,
+const directSourceSpecializationSchemaContext = sourceSchemaCatalog.resolveRef(
+  sourceBehaviorSchemaRefs.accessPathFragments,
 );
 const directSourceSpecializationSchemaOptions: SchemaResolutionOptions = {
-  catalog: profileDslSchemaCatalog,
+  catalog: sourceSchemaCatalog,
   rootSchema: directSourceSpecializationSchemaContext?.rootSchema,
   baseUri: directSourceSpecializationSchemaContext?.baseUri,
 };

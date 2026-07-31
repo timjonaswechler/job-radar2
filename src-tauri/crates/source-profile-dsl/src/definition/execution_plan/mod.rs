@@ -1,0 +1,47 @@
+use serde::{Deserialize, Serialize};
+
+pub mod capabilities;
+pub mod detail;
+pub mod discovery;
+pub mod values;
+
+use detail::ExecutionPlanDetailStep;
+use discovery::ExecutionPlanDiscoveryStep;
+
+use crate::definition::primitives::acceptance::AcceptanceCompileError;
+use capabilities::ExecutionPlanBuildError;
+
+fn acceptance_error(path: &str, error: AcceptanceCompileError) -> ExecutionPlanBuildError {
+    ExecutionPlanBuildError::new(format!("{path}/acceptWhen/{}", error.key), error.message)
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceExecutionPlan {
+    pub source: ExecutionPlanSource,
+    pub selected_access_path: ExecutionPlanAccessPath,
+    pub discovery: ExecutionPlanDiscoveryStep,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<ExecutionPlanDetailStep>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionPlanSource {
+    pub key: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExecutionPlanAccessPath {
+    #[serde(rename_all = "camelCase")]
+    ProfileAccessPath {
+        profile_key: String,
+        profile_name: String,
+        path_key: String,
+        path_name: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SourceOwnedAccessPath { key: String, name: String },
+}

@@ -14,11 +14,10 @@ use search_resolution::{
     ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution,
 };
 
-use crate::{
-    profile_dsl::runtime::{
-        PhaseCompletion, PhaseExecutionReport, PhaseUsage, ScriptedSourceDetailExecution,
-    },
-    search::run::ScriptedResolutionSource,
+use crate::search::run::ScriptedResolutionSource;
+use source_profile_dsl::{
+    execution::{PhaseCompletion, PhaseExecutionReport, PhaseUsage},
+    test_support::ScriptedSourceDetailExecution,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::path::Path;
@@ -67,7 +66,8 @@ pub(super) fn fixture_resolution_runtime<K: ToString>(
                 complete_budget_report: PhaseExecutionReport {
                     usage: PhaseUsage::default(),
                     completion: PhaseCompletion::Cancelled {
-                        reason: crate::profile_dsl::runtime::PhaseCancellationReason::UserCancelled,
+                        reason:
+                            source_profile_dsl::execution::PhaseCancellationReason::UserCancelled,
                     },
                 },
                 diagnostics: Vec::new(),
@@ -358,17 +358,14 @@ pub(super) fn candidate_with_meta(
 pub(super) fn occurrence(
     source_key: &str,
     candidate: FixtureCandidate,
-) -> crate::profile_dsl::occurrence::PostingOccurrence {
-    let (reference, identity) = crate::profile_dsl::occurrence::validate_posting_reference(
-        source_key,
-        &candidate.url,
-        None,
-    )
-    .unwrap();
-    crate::profile_dsl::occurrence::PostingOccurrence {
+) -> source_profile_dsl::execution::PostingOccurrence {
+    let (reference, identity) =
+        source_profile_dsl::execution::validate_posting_reference(source_key, &candidate.url, None)
+            .unwrap();
+    source_profile_dsl::execution::PostingOccurrence {
         identity,
         reference,
-        provider_values: crate::profile_dsl::occurrence::ProviderValues {
+        provider_values: source_profile_dsl::execution::ProviderValues {
             title: Some(candidate.title),
             company: Some(candidate.company),
             locations: candidate.locations,

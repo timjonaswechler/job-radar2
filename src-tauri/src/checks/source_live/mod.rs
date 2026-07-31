@@ -5,19 +5,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use crate::checks::prepare_source_behavior_fingerprints;
-use crate::profile_dsl::compiler::{CompileSourceOutcome, CompiledSource};
-use crate::profile_dsl::diagnostics::{
+use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
+use source_profile_dsl::definition::SelectedAccessPath;
+use source_profile_dsl::definition::{CompileSourceOutcome, CompiledSource};
+use source_profile_dsl::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
-use crate::profile_dsl::documents::{JsonObject, PhaseLimits};
-use crate::profile_dsl::runtime::{
-    execute_discovery, BrowserAcquisition, DetailField, DiscoveryBrowserAdapter, PhaseBrowser,
-    PhaseOutcome, PolicyOutcome, PostingOccurrence, ProfileDslSourceDetailExecution,
+use source_profile_dsl::definition::{JsonObject, PhaseLimits};
+use source_profile_dsl::execution::{
+    discover, BrowserAcquisition, DetailField, PhaseOutcome, PolicyOutcome, PostingOccurrence,
     ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition, RuntimeExecutionContext,
-    SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest, SourceDetailResult,
+    SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
+    SourceDetailResult,
 };
-use crate::source::documents::SelectedAccessPath;
-use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
 
 use super::persistence::validate_source_live_check_report_key;
 use super::{
@@ -48,7 +48,7 @@ pub struct SourceLiveCheckReportStatus {
 #[derive(Clone, Default)]
 pub(crate) struct SourceLiveCheckExecutionContext<'a> {
     checked_at: Option<String>,
-    cancellation: Option<&'a dyn crate::profile_dsl::runtime::RuntimeCancellation>,
+    cancellation: Option<&'a dyn source_profile_dsl::execution::RuntimeCancellation>,
 }
 
 impl<'a> SourceLiveCheckExecutionContext<'a> {
@@ -59,7 +59,7 @@ impl<'a> SourceLiveCheckExecutionContext<'a> {
 
     pub(crate) fn with_cancellation(
         mut self,
-        cancellation: &'a dyn crate::profile_dsl::runtime::RuntimeCancellation,
+        cancellation: &'a dyn source_profile_dsl::execution::RuntimeCancellation,
     ) -> Self {
         self.cancellation = Some(cancellation);
         self
@@ -127,7 +127,7 @@ pub(crate) async fn build_source_live_check_report<D, T, A>(
     context: &SourceLiveCheckExecutionContext<'_>,
 ) -> Result<CheckReport, String>
 where
-    D: ProfileHttpClient + Sync + ?Sized,
+    D: ProfileHttpClient + Sync,
     T: ProfileHttpClient + Sync + ?Sized,
     A: BrowserAcquisition + Sync,
 {
@@ -152,29 +152,12 @@ where
     );
 
     if let Some(compiled) = prepared.compiled() {
-        let execution_plan = &compiled.execution_plan;
         let discovery_context = context.runtime_context().with_limits(PhaseLimits {
             max_requests: SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
-            ..execution_plan.discovery.limits
+            ..compiled.discovery_limits()
         });
-        let discovery_browser = if execution_plan.discovery.strategies.iter().any(|strategy| {
-            matches!(
-                strategy.fetch,
-                crate::profile_dsl::execution_plan::capabilities::ExecutionPlanFetch::Browser { .. }
-            )
-        }) {
-            PhaseBrowser::Browser(DiscoveryBrowserAdapter::new(acquisition))
-        } else {
-            PhaseBrowser::BrowserFree
-        };
-        let discovery_result = execute_discovery(
-            execution_plan,
-            &document.source_config,
-            discovery_fetcher,
-            discovery_browser,
-            discovery_context,
-        )
-        .await;
+        let discovery_result =
+            discover(compiled, discovery_fetcher, acquisition, discovery_context).await;
         let (discovery_candidates, discovery_report, discovery_diagnostics) = match discovery_result
         {
             Ok(PhaseOutcome::Completed {
@@ -191,14 +174,14 @@ where
                 Some(outcome.complete_budget_report().clone()),
                 outcome.diagnostics().clone(),
             ),
-            Err(crate::profile_dsl::runtime::PhaseRunError::Cancelled(cancelled)) => (
+            Err(source_profile_dsl::execution::PhaseRunError::Cancelled(cancelled)) => (
                 Vec::new(),
                 Some(cancelled.complete_budget_report),
                 cancelled.diagnostics,
             ),
-            Err(crate::profile_dsl::runtime::PhaseRunError::NotStarted { diagnostics, .. }) => {
-                (Vec::new(), None, diagnostics)
-            }
+            Err(source_profile_dsl::execution::PhaseRunError::NotStarted {
+                diagnostics, ..
+            }) => (Vec::new(), None, diagnostics),
         };
         let candidate_count = discovery_candidates.len();
         let first_acceptable_candidate = discovery_candidates
@@ -228,11 +211,11 @@ where
                 candidate_count,
                 acceptable_candidate_count,
             ));
-        } else if execution_plan.detail.is_some() {
+        } else if compiled.supports_detail() {
             if let Some(candidate) = first_acceptable_candidate {
                 details.insert("detailChecked".to_string(), serde_json::Value::Bool(true));
                 let detail_execution =
-                    ProfileDslSourceDetailExecution::new(detail_fetcher, acquisition);
+                    SourceBehaviorDetailExecution::new(detail_fetcher, acquisition);
                 let detail_result = detail_execution
                     .execute(SourceDetailRequest {
                         compiled_source: compiled,
@@ -487,7 +470,7 @@ fn detail_failure_cause(result: &SourceDetailResult) -> String {
 #[cfg(test)]
 mod source_detail_typed_control_tests {
     use super::*;
-    use crate::profile_dsl::runtime::{
+    use source_profile_dsl::execution::{
         DetailPatch, PhaseCompletion, PhaseExecutionReport, PhaseUsage, SourceDetailPhaseEvidence,
     };
 

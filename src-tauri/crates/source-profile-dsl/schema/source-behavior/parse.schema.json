@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://job-radar.local/schemas/source-behavior/parse.schema.json",
+  "title": "Job Radar Source Behavior Language parse definitions",
+  "$defs": {
+    "parse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["json", "xml", "html"] },
+        "charset": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

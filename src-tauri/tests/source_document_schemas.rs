@@ -1,3 +1,9 @@
+#[allow(unused_imports)]
+mod job_radar_lib {
+    pub use ::job_radar_lib::*;
+    pub use source_profile_dsl::test_support::*;
+}
+
 use std::{fs, path::Path};
 
 use jsonschema::{Draft, Registry};
@@ -5,20 +11,20 @@ use serde_json::{json, Value};
 
 const SCHEMA_FILES: &[&str] = &[
     "src/schema/check-report.schema.json",
-    "crates/source-profile-dsl/src/schema/source-profile.schema.json",
-    "crates/source-profile-dsl/src/schema/source.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/common.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/fetch.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/parse.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/predicate.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/extract.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/transform.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/pagination.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/strategy.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/fragments.schema.json",
-    "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
+    "crates/source-profile-dsl/schema/source-profile.schema.json",
+    "crates/source-profile-dsl/schema/source.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/common.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/fetch.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/parse.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/predicate.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/select.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/extract.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/transform.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/pagination.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/strategy.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/policy.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/fragments.schema.json",
+    "crates/source-profile-dsl/schema/source-behavior/diagnostics.schema.json",
 ];
 
 #[derive(Clone, Copy)]
@@ -35,13 +41,11 @@ impl SchemaEntrypoint {
         match self {
             Self::CheckReport => "src/schema/check-report.schema.json",
             Self::PolicyStrategySet => {
-                "crates/source-profile-dsl/src/schema/profile-dsl/policy.schema.json"
+                "crates/source-profile-dsl/schema/source-behavior/policy.schema.json"
             }
-            Self::Select => "crates/source-profile-dsl/src/schema/profile-dsl/select.schema.json",
-            Self::SourceProfile => {
-                "crates/source-profile-dsl/src/schema/source-profile.schema.json"
-            }
-            Self::Source => "crates/source-profile-dsl/src/schema/source.schema.json",
+            Self::Select => "crates/source-profile-dsl/schema/source-behavior/select.schema.json",
+            Self::SourceProfile => "crates/source-profile-dsl/schema/source-profile.schema.json",
+            Self::Source => "crates/source-profile-dsl/schema/source.schema.json",
         }
     }
 }
@@ -52,15 +56,15 @@ fn valid_profile_dsl_examples_match_schema_entrypoints() {
 
     harness.assert_valid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     harness.assert_valid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     harness.assert_valid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-owned-access-path.json",
     );
     harness.assert_valid(
         SchemaEntrypoint::SourceProfile,
@@ -73,7 +77,7 @@ fn capture_keys_are_valid_named_group_identifiers_in_complete_and_fragment_docum
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     profile["accessPaths"][0]["discovery"]["strategies"][0]["captures"] = json!({
         "tenant_2": {
@@ -97,7 +101,7 @@ fn capture_keys_are_valid_named_group_identifiers_in_complete_and_fragment_docum
 
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     source["accessPaths"] = json!([{
         "key": "json_feed",
@@ -118,7 +122,7 @@ fn first_non_empty_candidate_loading_limit_is_enforced_by_schema() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     let candidates = (0..16)
         .map(|index| json!({ "type": "const", "value": index }))
@@ -153,7 +157,7 @@ fn explicit_http_fetch_fragment_uses_the_canonical_timeout_ceiling() {
     let harness = SchemaHarness::new();
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     source["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "http",
@@ -174,7 +178,7 @@ fn direct_pagination_fragment_uses_canonical_json_body_parameter_location() {
     let harness = SchemaHarness::new();
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     source["accessPaths"][0]["discovery"]["strategies"][0]["pagination"] = json!({
         "type": "page",
@@ -197,11 +201,11 @@ fn custom_source_examples_match_schema_entrypoints() {
 
     harness.assert_valid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/valid/custom-source-profile.json",
+        "tests/fixtures/source-behavior/valid/custom-source-profile.json",
     );
     harness.assert_valid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/valid/custom-source.json",
+        "tests/fixtures/source-behavior/valid/custom-source.json",
     );
 }
 
@@ -211,62 +215,62 @@ fn invalid_profile_dsl_examples_are_rejected_for_expected_reason() {
 
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/unbounded-pagination.json",
+        "tests/fixtures/source-behavior/invalid/unbounded-pagination.json",
         &["pagination", "oneOf"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/forbidden-secrets.json",
+        "tests/fixtures/source-behavior/invalid/forbidden-secrets.json",
         &["authorization", "cookie"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/missing-support.json",
+        "tests/fixtures/source-behavior/invalid/missing-support.json",
         &["support", "required"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/detail-pagination.json",
+        "tests/fixtures/source-behavior/invalid/detail-pagination.json",
         &["pagination"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/invalid/invalid-source-status.json",
+        "tests/fixtures/source-behavior/invalid/invalid-source-status.json",
         &["invalid"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/invalid/v2-source-overrides.json",
+        "tests/fixtures/source-behavior/invalid/v2-source-overrides.json",
         &["sourceOverrides"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/v1-adapter-key.json",
+        "tests/fixtures/source-behavior/invalid/v1-adapter-key.json",
         &["adapterKey"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/v1-inventory.json",
+        "tests/fixtures/source-behavior/invalid/v1-inventory.json",
         &["inventory"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/detection-missing-timeouts.json",
+        "tests/fixtures/source-behavior/invalid/detection-missing-timeouts.json",
         &["/detection/strategies", "oneOf"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::SourceProfile,
-        "tests/fixtures/source-profile-dsl/invalid/template-pipe.json",
+        "tests/fixtures/source-behavior/invalid/template-pipe.json",
         &["not"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/invalid/v1-source-specific.json",
+        "tests/fixtures/source-behavior/invalid/v1-source-specific.json",
         &["source_specific"],
     );
     harness.assert_invalid(
         SchemaEntrypoint::Source,
-        "tests/fixtures/source-profile-dsl/invalid/v1-source-specific-pascal.json",
+        "tests/fixtures/source-behavior/invalid/v1-source-specific-pascal.json",
         &["SourceSpecific"],
     );
 }
@@ -277,14 +281,14 @@ fn schema_rejects_removed_text_parse_in_profiles_and_direct_fragments() {
 
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     profile["accessPaths"][0]["discovery"]["strategies"][0]["parse"]["type"] = json!("text");
     harness.assert_json_invalid(SchemaEntrypoint::SourceProfile, profile, &["text"]);
 
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     source["accessPaths"][0]["discovery"]["strategies"][0]["parse"] = json!({ "type": "text" });
     harness.assert_json_invalid(SchemaEntrypoint::Source, source, &["text"]);
@@ -295,7 +299,7 @@ fn discovery_occurrence_sections_are_disjoint_and_hint_use_is_closed() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     let extract = &mut profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"];
     extract["reference"]["providerPostingId"] =
@@ -515,7 +519,7 @@ fn source_schema_accepts_direct_profile_fragments() {
     let harness = SchemaHarness::new();
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-selecting-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
     source["accessPaths"] = json!([{
         "key": "json_feed",
@@ -536,7 +540,7 @@ fn source_schema_rejects_titles_on_source_owned_config_properties() {
     let harness = SchemaHarness::new();
     let mut source = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/source-owned-access-path.json",
+        "tests/fixtures/source-behavior/valid/source-owned-access-path.json",
     );
     source["selectedAccessPath"]["sourceConfigSchema"]["properties"]["startUrl"]["title"] =
         json!("Start URL");
@@ -549,7 +553,7 @@ fn schema_has_no_prohibited_browser_interaction_variants() {
     let harness = SchemaHarness::new();
     let mut profile = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"] = json!({
         "mode": "browser",
@@ -572,7 +576,7 @@ fn browser_wait_schema_is_variant_exact_and_has_no_authored_byte_field() {
     let harness = SchemaHarness::new();
     let base = read_json(
         env!("CARGO_MANIFEST_DIR"),
-        "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+        "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
     let browser_fetch = |wait: Value| {
         let mut profile = base.clone();
@@ -803,8 +807,8 @@ impl SchemaHarness {
 
     fn assert_diagnostics_valid(&self, diagnostics: Value) {
         let errors = self.validate_instance(
-            "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
-            json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
+            "crates/source-profile-dsl/schema/source-behavior/diagnostics.schema.json",
+            json!({ "$ref": "https://job-radar.local/schemas/source-behavior/diagnostics.schema.json#/$defs/diagnostics" }),
             diagnostics,
         );
         assert!(
@@ -816,8 +820,8 @@ impl SchemaHarness {
 
     fn assert_diagnostics_invalid(&self, diagnostics: Value, expected_fragments: &[&str]) {
         let errors = self.validate_instance(
-            "crates/source-profile-dsl/src/schema/profile-dsl/diagnostics.schema.json",
-            json!({ "$ref": "https://job-radar.local/schemas/profile-dsl/diagnostics.schema.json#/$defs/diagnostics" }),
+            "crates/source-profile-dsl/schema/source-behavior/diagnostics.schema.json",
+            json!({ "$ref": "https://job-radar.local/schemas/source-behavior/diagnostics.schema.json#/$defs/diagnostics" }),
             diagnostics,
         );
         assert!(

@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     compile_source, load_source_profile_registry_snapshot, CompileSourceOutcome,
     DiagnosticCategory, DiagnosticSeverity, SourceDocument, SourceProfileDocument,
 };
@@ -29,7 +29,7 @@ fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_docum
         assert_no_v1_resource_vocabulary(&path, &text);
         let document: SourceProfileDocument = serde_json::from_str(&text).unwrap_or_else(|error| {
             panic!(
-                "{} should be a Source Profile DSL document: {error}",
+                "{} should be a Source Behavior Language document: {error}",
                 path.display()
             )
         });
@@ -52,7 +52,7 @@ fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_docum
         assert_no_v1_resource_vocabulary(&path, &text);
         let document: SourceDocument = serde_json::from_str(&text).unwrap_or_else(|error| {
             panic!(
-                "{} should be a Source DSL document: {error}",
+                "{} should be a Source Behavior Language document: {error}",
                 path.display()
             )
         });
@@ -106,7 +106,7 @@ fn registry_loading_enforces_value_depth_before_any_source_uses_the_profile() {
     fs::create_dir_all(&custom_profile_dir).unwrap();
     let mut profile: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(fixture_path(
-            "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+            "tests/fixtures/source-behavior/valid/simple-source-profile.json",
         ))
         .unwrap(),
     )
@@ -166,9 +166,9 @@ fn backend_v1_adapter_registry_and_runtime_entrypoints_are_removed() {
     )
     .unwrap();
     let CompileSourceOutcome::Compiled { source, .. } = compile_source(&source, &snapshot) else {
-        panic!("new DSL Source should compile into an Execution Plan");
+        panic!("new Source Behavior Language Source should compile into an Execution Plan");
     };
-    let plan = source.execution_plan;
+    let plan = source_profile_dsl::test_support::test_execution_plan(&source);
     let serialized_plan = serde_json::to_string(&plan).unwrap();
     assert!(!serialized_plan.contains("adapterKey"));
     assert!(!serialized_plan.contains("list_adapters"));
@@ -182,7 +182,7 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
     fs::create_dir_all(&custom_profile_dir).unwrap();
     fs::create_dir_all(&custom_source_dir).unwrap();
     fs::copy(
-        fixture_path("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json"),
+        fixture_path("tests/fixtures/source-behavior/valid/simple-source-profile.json"),
         custom_profile_dir.join("example_jobs.json"),
     )
     .unwrap();
@@ -212,7 +212,7 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
     let source = snapshot.source("invalid_source").unwrap();
     assert_eq!(
         source.validation_state.state,
-        job_radar_lib::ValidationStateKind::Invalid
+        crate::job_radar_lib::ValidationStateKind::Invalid
     );
     assert!(!source.validation_state.can_compile);
     assert!(!source.validation_state.can_execute);
@@ -237,7 +237,7 @@ fn registry_direct_serde_rejects_unbounded_unreferenced_custom_profiles() {
 
     let mut profile: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(fixture_path(
-            "tests/fixtures/source-profile-dsl/valid/simple-source-profile.json",
+            "tests/fixtures/source-behavior/valid/simple-source-profile.json",
         ))
         .unwrap(),
     )
@@ -271,7 +271,7 @@ fn registry_exposes_schema_and_profile_compiler_failures_as_structured_diagnosti
     fs::create_dir_all(&custom_profile_dir).unwrap();
     fs::create_dir_all(&custom_source_dir).unwrap();
     fs::copy(
-        fixture_path("tests/fixtures/source-profile-dsl/valid/simple-source-profile.json"),
+        fixture_path("tests/fixtures/source-behavior/valid/simple-source-profile.json"),
         custom_profile_dir.join("example_jobs.json"),
     )
     .unwrap();
@@ -415,7 +415,7 @@ fn assert_no_v1_resource_vocabulary(path: &Path, text: &str) {
 }
 
 fn assert_diagnostic(
-    diagnostics: &[job_radar_lib::Diagnostic],
+    diagnostics: &[crate::job_radar_lib::Diagnostic],
     category: DiagnosticCategory,
     code: &str,
 ) {

@@ -6,16 +6,12 @@ use search_resolution::{
 };
 
 use crate::{
-    background_tasks::CancellationToken,
-    browser_runtime::ManagedBrowserAcquisition,
-    profile_dsl::{
-        compiler::CompiledSource,
-        documents::PhaseLimits,
-        runtime::{
-            ProfileDslSourceDetailExecution, ReqwestProfileHttpClient, RuntimeCancellation,
-            SourceDetailExecution,
-        },
-    },
+    background_tasks::CancellationToken, browser_runtime::ManagedBrowserAcquisition,
+    profile_dsl::ReqwestProfileHttpClient,
+};
+use source_profile_dsl::{
+    definition::{CompiledSource, PhaseLimits},
+    execution::{RuntimeCancellation, SourceBehaviorDetailExecution, SourceDetailExecution},
 };
 
 /// Sealed Search Run runtime. Both productive and deterministic modes enter Q01 through the
@@ -35,7 +31,7 @@ enum ResolutionRuntimeMode {
 #[cfg(test)]
 pub(crate) struct ScriptedResolutionSource {
     pub(crate) discovery: search_resolution::ScriptedSourceDiscoveryExecution,
-    pub(crate) detail: crate::profile_dsl::runtime::ScriptedSourceDetailExecution,
+    pub(crate) detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution,
 }
 
 impl SearchRunResolutionRuntime {
@@ -68,7 +64,7 @@ impl SearchRunResolutionRuntime {
             } => {
                 let fetcher = ReqwestProfileHttpClient::new();
                 let acquisition = ManagedBrowserAcquisition::new(browser_runtime_dir.clone());
-                let detail = ProfileDslSourceDetailExecution::new(&fetcher, &acquisition);
+                let detail = SourceBehaviorDetailExecution::new(&fetcher, &acquisition);
                 resolve_with_dependencies(
                     compiled_source,
                     requirements,
@@ -80,7 +76,7 @@ impl SearchRunResolutionRuntime {
             }
             #[cfg(test)]
             ResolutionRuntimeMode::Scripted(sources) => {
-                let key = &compiled_source.execution_plan.source.key;
+                let key = compiled_source.source_key();
                 let Some(source) = sources.get(key) else {
                     return Err(SourceResolutionError::Failed {
                         failure: search_resolution::ResolutionFailure::DiscoveryExecution,

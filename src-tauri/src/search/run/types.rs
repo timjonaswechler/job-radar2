@@ -3,7 +3,7 @@ use search_resolution::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::profile_dsl::{diagnostics::Diagnostics, runtime::PhaseUsage};
+use source_profile_dsl::{definition::Diagnostics, execution::PhaseUsage};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

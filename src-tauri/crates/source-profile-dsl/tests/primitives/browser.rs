@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::{json, Value};
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     browser_primitive_descriptors, compile_template, validate_browser_primitive_descriptors,
     BrowserInteraction, BrowserPrimitiveDescriptor, BrowserWait, ExecutionPlanBrowserInteraction,
     ExecutionPlanBrowserWait, ExecutionPlanFetch, Fetch, TemplateDescriptor,
@@ -137,7 +137,7 @@ fn browser_descriptor_catalogue_is_exact_exhaustive_and_rejects_synthetic_faults
         .all(|descriptor| descriptor.owner == "B03a"
             && descriptor
                 .canonical_file
-                .ends_with("profile_dsl/primitives/fetch/browser.rs")));
+                .ends_with("definition/primitives/fetch/browser.rs")));
 
     let authored_waits = [
         BrowserWait::Selector {

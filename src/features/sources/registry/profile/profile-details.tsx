@@ -6,7 +6,7 @@ import {
   ProfileSupportEvidenceSection,
 } from "@/features/sources/registry/profile/profile-evidence-section";
 import { InlineDiagnostics } from "@/features/sources/registry/diagnostics/inline-diagnostics";
-import { profileDslSchemaRefs } from "@/features/sources/shared/profile-dsl-schema-catalog";
+import { sourceBehaviorSchemaRefs } from "@/features/sources/shared/source-schema-catalog";
 import { OptionalSchemaValuePreview } from "@/features/sources/shared/schema-value-table";
 import {
   originLabels,
@@ -84,7 +84,7 @@ export function ProfileDetails({
         title="support"
         description="Support Level, bekannte Einschränkungen und Evidenz des Source Profile."
         value={profile.document.support}
-        schemaRef={profileDslSchemaRefs.supportMetadata}
+        schemaRef={sourceBehaviorSchemaRefs.supportMetadata}
       />
       <OptionalSchemaValuePreview
         title="Profil sourceConfigSchema"
@@ -95,7 +95,7 @@ export function ProfileDetails({
         title="Detection-Regeln"
         description="Regeln, wie dieses Profil bei eingereichten URLs eine Source Proposal erzeugt."
         value={profile.document.detection}
-        schemaRef={profileDslSchemaRefs.detection}
+        schemaRef={sourceBehaviorSchemaRefs.detection}
       />
 
       <div className="grid gap-2">

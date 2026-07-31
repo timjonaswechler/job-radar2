@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/profile-dsl";
+import { minimalDiscoveryStrategy } from "@/features/sources/tests/support/source-behavior";
 
 import { profileGridColumns } from "@/features/sources/registry/profile/profile-grid-columns";
 import { ProfileRegistryTab } from "@/features/sources/registry/profile/profile-registry-tab";

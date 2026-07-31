@@ -5,7 +5,7 @@ use crate::support::{
 
 use std::{fs, future::Future, path::Path};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     PostingOccurrence, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
     SourceDocument, SourceProfileDocument,
 };
@@ -17,9 +17,12 @@ fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
     assert_no_v1_profile_vocabulary(&profile_text);
 
     let profile: SourceProfileDocument = serde_json::from_str(&profile_text)
-        .expect("Greenhouse built-in profile should be a Source Profile DSL document");
+        .expect("Greenhouse built-in profile should be a Source Behavior Language document");
     assert_eq!(profile.schema_version, 3);
-    assert_eq!(profile.support.level, job_radar_lib::SupportLevel::Stable);
+    assert_eq!(
+        profile.support.level,
+        crate::job_radar_lib::SupportLevel::Stable
+    );
 
     let source: SourceDocument = serde_json::from_value(json!({
         "schemaVersion": 3,
@@ -98,7 +101,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     ] {
         assert!(
             !profile_text.contains(forbidden),
-            "Greenhouse DSL profile must not contain v1 vocabulary `{forbidden}`"
+            "Greenhouse Source Behavior Language profile must not contain v1 vocabulary `{forbidden}`"
         );
     }
 }

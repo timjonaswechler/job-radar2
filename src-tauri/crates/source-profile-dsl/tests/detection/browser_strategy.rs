@@ -2,15 +2,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde_json::{json, Value};
-use source_profile_dsl::{
+use source_profile_dsl::test_support::{
     compile_detection_plan, detection_descriptor_for_authored_kind, execute_detection_operation,
     AllowanceDimension, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
-    BrowserAcquisitionRequestSnapshot, BrowserLifecycleEvent, DetectionProfileCompletion,
-    DetectionProfileExecutionFailureKind, DetectionProfileRejectionKind, DetectionRunStatus,
-    DetectionStrategy, ExecutionPlanBrowserInteraction, PhaseBrowser, PhaseCompletion,
-    RuntimeCancellation, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
-    ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedProfileHttpClient,
-    SourceProfileDocument, DETECTION_BROWSER_DESCRIPTOR,
+    BrowserAcquisitionRequestSnapshot, BrowserInteractionInstruction, BrowserLifecycleEvent,
+    DetectionProfileCompletion, DetectionProfileExecutionFailureKind,
+    DetectionProfileRejectionKind, DetectionRunStatus, DetectionStrategy, PhaseBrowser,
+    PhaseCompletion, RuntimeCancellation, ScriptedBrowserAcquisition,
+    ScriptedBrowserAcquisitionEvent, ScriptedBrowserAcquisitionExpectation,
+    ScriptedBrowserFinalization, ScriptedProfileHttpClient, SourceProfileDocument,
+    DETECTION_BROWSER_DESCRIPTOR,
 };
 
 #[derive(Default)]
@@ -31,7 +32,7 @@ fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
     assert_eq!(DETECTION_BROWSER_DESCRIPTOR.owner, "D03");
     assert!(DETECTION_BROWSER_DESCRIPTOR
         .canonical_file
-        .ends_with("source_profile/detection/plan.rs"));
+        .ends_with("detection/plan.rs"));
     assert_eq!(
         DETECTION_BROWSER_DESCRIPTOR
             .options
@@ -135,7 +136,7 @@ fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
     assert_eq!(
         plan.strategy_descriptors().copied().collect::<Vec<_>>(),
         vec![
-            source_profile_dsl::DETECTION_URL_DESCRIPTOR,
+            source_profile_dsl::test_support::DETECTION_URL_DESCRIPTOR,
             DETECTION_BROWSER_DESCRIPTOR
         ]
     );
@@ -387,15 +388,17 @@ async fn http_and_browser_use_independent_shared_report_dimensions() {
         ],
         finalization: ScriptedBrowserFinalization::default(),
     }]);
-    let http = ScriptedProfileHttpClient::new([source_profile_dsl::ScriptedHttpEvent::Response {
-        status: 200,
-        final_url: "https://example.test/probe".into(),
-        headers: vec![],
-        body: vec![source_profile_dsl::ScriptedHttpBodyEvent::Chunk(
-            b"http".to_vec(),
-        )],
-        content_length: Some(4),
-    }]);
+    let http = ScriptedProfileHttpClient::new([
+        source_profile_dsl::test_support::ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/probe".into(),
+            headers: vec![],
+            body: vec![
+                source_profile_dsl::test_support::ScriptedHttpBodyEvent::Chunk(b"http".to_vec()),
+            ],
+            content_length: Some(4),
+        },
+    ]);
     let result = execute_detection_operation(
         "https://example.test",
         &[compile_detection_plan(&document).unwrap()],
@@ -437,13 +440,13 @@ async fn http_time_does_not_consume_browser_duration() {
             .unwrap(),
         );
     let http = Arc::new(ScriptedProfileHttpClient::new([
-        source_profile_dsl::ScriptedHttpEvent::Response {
+        source_profile_dsl::test_support::ScriptedHttpEvent::Response {
             status: 200,
             final_url: "https://example.test/probe".into(),
             headers: vec![],
             body: vec![
-                source_profile_dsl::ScriptedHttpBodyEvent::Gate("http".into()),
-                source_profile_dsl::ScriptedHttpBodyEvent::Chunk(b"http".to_vec()),
+                source_profile_dsl::test_support::ScriptedHttpBodyEvent::Gate("http".into()),
+                source_profile_dsl::test_support::ScriptedHttpBodyEvent::Chunk(b"http".to_vec()),
             ],
             content_length: None,
         },
@@ -498,7 +501,7 @@ async fn profile_action_scope_accepts_exact_ten_executed_clicks() {
             "type": "click_until_gone", "selector": ".more", "maxCount": 5
         }]);
     }
-    let interaction = ExecutionPlanBrowserInteraction::ClickUntilGone {
+    let interaction = BrowserInteractionInstruction::ClickUntilGone {
         selector: ".more".into(),
         max_count: 5,
         wait_after_ms: None,
@@ -590,7 +593,7 @@ async fn operation_action_scope_accepts_exact_32_and_denies_33rd_before_click() 
         let attempted_clicks = if index == 6 { 2 } else { 5 };
         exact_expectations.push(ScriptedBrowserAcquisitionExpectation {
             request: BrowserAcquisitionRequestSnapshot {
-                interactions: vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
+                interactions: vec![BrowserInteractionInstruction::ClickUntilGone {
                     selector: ".more".into(),
                     max_count: 5,
                     wait_after_ms: None,
@@ -699,7 +702,11 @@ async fn logical_wait_scopes_accept_32_and_deny_a_strategy_fifth_wait() {
         { "type": "network_idle", "timeoutMs": 1 }
     ]);
     let compiled_waits = (0..4)
-        .map(|_| source_profile_dsl::ExecutionPlanBrowserWait::NetworkIdle { timeout_ms: 1 })
+        .map(
+            |_| source_profile_dsl::test_support::BrowserWaitInstruction::NetworkIdle {
+                timeout_ms: 1,
+            },
+        )
         .collect::<Vec<_>>();
     let mut plans = Vec::new();
     let mut expectations = Vec::new();
@@ -743,7 +750,7 @@ async fn logical_wait_scopes_accept_32_and_deny_a_strategy_fifth_wait() {
     }]);
     let over_browser = ScriptedBrowserAcquisition::new([ScriptedBrowserAcquisitionExpectation {
         request: BrowserAcquisitionRequestSnapshot {
-            interactions: vec![ExecutionPlanBrowserInteraction::ClickUntilGone {
+            interactions: vec![BrowserInteractionInstruction::ClickUntilGone {
                 selector: ".more".into(),
                 max_count: 5,
                 wait_after_ms: Some(1),
@@ -1010,7 +1017,7 @@ async fn absent_optional_click_charges_neither_action_nor_wait() {
         "maxCount": 5,
         "waitAfterMs": 1000
     }]);
-    let interaction = ExecutionPlanBrowserInteraction::ClickIfVisible {
+    let interaction = BrowserInteractionInstruction::ClickIfVisible {
         selector: ".optional".into(),
         max_count: 5,
         wait_after_ms: Some(1000),

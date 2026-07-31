@@ -5,7 +5,7 @@ use crate::support::{
 
 use std::{fs, future::Future, path::Path};
 
-use job_radar_lib::{
+use crate::job_radar_lib::{
     DiagnosticCategory, DiagnosticSeverity, PhaseCompletion, PostingOccurrence,
     ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
     SourceProfileDocument, SupportLevel,
@@ -19,8 +19,9 @@ fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fi
 
     let profile_value: Value = serde_json::from_str(&profile_text).unwrap();
     assert_detects_named_successfactors_source_config_captures(&profile_value);
-    let profile: SourceProfileDocument = serde_json::from_value(profile_value)
-        .expect("SAP SuccessFactors built-in profile should be a Source Profile DSL document");
+    let profile: SourceProfileDocument = serde_json::from_value(profile_value).expect(
+        "SAP SuccessFactors built-in profile should be a Source Behavior Language document",
+    );
     assert_eq!(profile.schema_version, 3);
     assert_eq!(profile.support.level, SupportLevel::Stable);
 
@@ -197,7 +198,7 @@ fn assert_no_v1_profile_vocabulary(profile_text: &str) {
     ] {
         assert!(
             !profile_text.contains(forbidden),
-            "SAP SuccessFactors DSL profile must not contain v1 vocabulary `{forbidden}`"
+            "SAP SuccessFactors Source Behavior Language profile must not contain v1 vocabulary `{forbidden}`"
         );
     }
 }

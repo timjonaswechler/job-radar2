@@ -1,4 +1,4 @@
-use job_radar_lib::{
+use crate::job_radar_lib::{
     __test_execute_detail_phase as execute_detail, compile_source, execute_discovery,
     CompileSourceOutcome, Diagnostics, PhaseBrowser, PhaseCancelled, PhaseExecutionFailure,
     PhaseExecutionReport, PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult,
@@ -9,7 +9,7 @@ use job_radar_lib::{
 
 pub struct AcceptedPhase<P> {
     pub payload: P,
-    pub diagnostics: job_radar_lib::Diagnostics,
+    pub diagnostics: crate::job_radar_lib::Diagnostics,
     pub report: PhaseExecutionReport,
 }
 
@@ -113,7 +113,7 @@ pub fn not_started<P: std::fmt::Debug>(
 pub async fn execute_discovery_test<F>(
     plan: &SourceExecutionPlan,
     fetcher: &F,
-) -> AcceptedPhase<job_radar_lib::DiscoveryPhasePayload>
+) -> AcceptedPhase<crate::job_radar_lib::DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -125,7 +125,7 @@ pub async fn execute_discovery_test_with_config<F>(
     plan: &SourceExecutionPlan,
     source_config: &serde_json::Map<String, serde_json::Value>,
     fetcher: &F,
-) -> AcceptedPhase<job_radar_lib::DiscoveryPhasePayload>
+) -> AcceptedPhase<crate::job_radar_lib::DiscoveryPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -188,7 +188,7 @@ pub async fn execute_detail_test<F>(
     plan: &SourceExecutionPlan,
     posting: &PostingOccurrence,
     fetcher: &F,
-) -> AcceptedPhase<job_radar_lib::DetailPhasePayload>
+) -> AcceptedPhase<crate::job_radar_lib::DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -201,7 +201,7 @@ pub async fn execute_detail_test_with_config<F>(
     source_config: &serde_json::Map<String, serde_json::Value>,
     posting: &PostingOccurrence,
     fetcher: &F,
-) -> AcceptedPhase<job_radar_lib::DetailPhasePayload>
+) -> AcceptedPhase<crate::job_radar_lib::DetailPhasePayload>
 where
     F: ProfileHttpClient + Sync + ?Sized,
 {
@@ -291,11 +291,11 @@ pub fn unwrap_plan(outcome: CompileSourceOutcome) -> SourceExecutionPlan {
         CompileSourceOutcome::Compiled {
             source,
             diagnostics,
-        } if diagnostics
-            .iter()
-            .all(|diagnostic| diagnostic.severity != job_radar_lib::DiagnosticSeverity::Error) =>
+        } if diagnostics.iter().all(|diagnostic| {
+            diagnostic.severity != crate::job_radar_lib::DiagnosticSeverity::Error
+        }) =>
         {
-            source.execution_plan
+            source_profile_dsl::test_support::test_execution_plan(&source)
         }
         other => panic!("expected compiled Source, got {other:?}"),
     }
