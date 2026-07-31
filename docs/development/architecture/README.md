@@ -4,6 +4,10 @@ Architecture documentation explains durable system structure, boundaries, and wh
 
 Repository-wide module and naming conventions are defined in [Module design and naming](module-design.md). Apply them when introducing or materially restructuring a module.
 
+Rust-specific engineering rules for types, ownership, errors, effects, performance, and testing are defined in [Rust engineering](rust.md). Apply them to new and materially changed Rust code.
+
+TypeScript- and React-specific engineering rules for runtime contracts, module roles, state, adapters, performance, and testing are defined in [TypeScript and React engineering](typescript-react.md). Apply them to new and materially changed frontend code.
+
 Accepted decisions live in [`../adr/`](../adr/). Start with:
 
 - [Source Config as JSON Schema](../adr/0001-source-config-as-json-schema.md)

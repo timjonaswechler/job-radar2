@@ -52,6 +52,8 @@ npm run smoke:search-run                      # manueller, netzwerkabhängiger S
 
 - Domain-Begriffe aus `CONTEXT.md` verwenden: z. B. Source, Source Profile, Access Path, Search Request, Search Run.
 - Bei neuen oder wesentlich umgebauten Modulen die Konventionen aus [`docs/development/architecture/module-design.md`](docs/development/architecture/module-design.md) anwenden: Der Modulpfad trägt den Kontext, öffentliche Namen wiederholen ihn nicht, und das Interface bleibt klein.
+- Bei neuen oder wesentlich veränderten Rust-Modulen, öffentlichen Rust-Interfaces, Fehlertypen oder Nebenwirkungs-Seams vor dem Entwurf [`docs/development/architecture/rust.md`](docs/development/architecture/rust.md) lesen und dessen Completion Criteria auf jeden berührten öffentlichen Seam anwenden.
+- Bei neuen oder wesentlich veränderten TypeScript-/React-Feature-Seams, Tauri-Transportverträgen, Zustandsmodellen oder Async-Lebenszyklen vor dem Entwurf [`docs/development/architecture/typescript-react.md`](docs/development/architecture/typescript-react.md) lesen und dessen Completion Criteria auf jeden berührten Feature-Seam anwenden.
 - Suchkriterien gehören zur Search Request, nicht in Source Config oder Source Profile.
 - Die Profile DSL bleibt deklarative Konfiguration; keine profile-spezifischen Rust-Sonderfälle einbauen.
 - Source Profiles beschreiben wiederverwendbare Verhaltensfamilien, nicht bloß Host- oder Linkstrukturen. URL-Muster sind Detection-Hinweise; belastbare Detection kombiniert sie bei Bedarf mit begrenzter HTTP-, API-, HTML- oder Browser-Evidenz.
