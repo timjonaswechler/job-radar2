@@ -18,7 +18,7 @@ fn profile_with_strategy_member(
     value: serde_json::Value,
 ) -> serde_json::Value {
     let mut profile: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../resources/profiles/greenhouse.json"
+        "../../../../sources/resources/profiles/greenhouse.json"
     ))
     .unwrap();
     profile["accessPaths"][0][phase]["strategies"][0][member] = value;

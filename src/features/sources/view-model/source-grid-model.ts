@@ -12,7 +12,7 @@ import {
 import type {
   JsonValue,
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SelectedAccessPath,
   SourceRegistryDocumentOrigin,
   SourceStatus,
@@ -63,7 +63,7 @@ export type SourceGridFilters = {
 
 export function createSourceGridRows(
   sources: RegistrySource[],
-  profilesByKey: Map<string, RegistrySourceProfile>,
+  profilesByKey: Map<string, InstalledProfileWithDefinition>,
   diagnosticsBySourceKey: Map<string, StructuredDiagnostic[]>,
 ): SourceGridRow[] {
   return sources.map((source) => {
@@ -99,7 +99,7 @@ export function createSourceGridRows(
       source.origin,
       accessPathLabel,
       profileLabel,
-      resolution.profile?.document.name ?? "",
+      resolution.profile?.definition.name ?? "",
       supportLabel,
       capabilitiesSummary,
       configSummary,

@@ -36,12 +36,16 @@ export function SourcesWorkspaceView() {
   const initialDiagnosticToastShown = useRef(false);
 
   const profiles = data?.profiles ?? [];
+  const admittedProfiles = data?.admittedProfiles ?? [];
   const sources = data?.sources ?? [];
   const diagnostics = data?.diagnostics ?? [];
 
   const profilesByKey = useMemo(
-    () => new Map(profiles.map((profile) => [profile.document.key, profile])),
-    [profiles],
+    () =>
+      new Map(
+        admittedProfiles.map((profile) => [profile.definition.key, profile]),
+      ),
+    [admittedProfiles],
   );
   const diagnosticIndex = useMemo(
     () => buildDiagnosticIndex(sources, profiles, diagnostics),
@@ -159,7 +163,7 @@ export function SourcesWorkspaceView() {
       <CreateRegistryDocumentDrawer
         kind={createDrawerKind}
         open={createDrawerKind !== null}
-        profiles={profiles}
+        profiles={admittedProfiles}
         sources={sources}
         onCreated={refresh}
         onOpenChange={(open) => {

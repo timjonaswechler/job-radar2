@@ -39,6 +39,7 @@ pub use provenance::{
 use crate::definition::documents::{DetailStep, DiscoveryStep, JsonSchemaObject};
 use crate::definition::execution_plan::SourceExecutionPlan;
 use crate::definition::profile::SourceProfileDocument;
+use crate::detection::{compile_detection_plan, CompiledDetectionPlan};
 use crate::execution::occurrence::{DetailField, DetailFieldCapabilities};
 use crate::source::documents::{SelectedAccessPath, SourceConfig, SourceDocument};
 
@@ -229,8 +230,25 @@ pub fn compile_source(
     source: &SourceDocument,
     profiles: &impl SourceProfileLookup,
 ) -> CompileSourceOutcome {
+    compile_source_with_profile_validation(source, profiles, true)
+}
+
+/// Compiles against a Profile set whose owner has already validated and
+/// prepared Profile Detection material.
+pub fn compile_source_with_admitted_profiles(
+    source: &SourceDocument,
+    profiles: &impl SourceProfileLookup,
+) -> CompileSourceOutcome {
+    compile_source_with_profile_validation(source, profiles, false)
+}
+
+fn compile_source_with_profile_validation(
+    source: &SourceDocument,
+    profiles: &impl SourceProfileLookup,
+    validate_detection: bool,
+) -> CompileSourceOutcome {
     let mut diagnostics = Vec::new();
-    let compiled = build_compiled_source(source, profiles, &mut diagnostics);
+    let compiled = build_compiled_source(source, profiles, validate_detection, &mut diagnostics);
 
     if has_error_diagnostics(&diagnostics) {
         return CompileSourceOutcome::Rejected { diagnostics };
@@ -256,6 +274,7 @@ pub fn compile_source(
 fn build_compiled_source(
     source: &SourceDocument,
     profiles: &impl SourceProfileLookup,
+    validate_detection: bool,
     diagnostics: &mut Diagnostics,
 ) -> Option<CompiledSource> {
     match &source.selected_access_path {
@@ -286,6 +305,7 @@ fn build_compiled_source(
                 &effective_profile,
                 profile_key,
                 path_key,
+                validate_detection,
                 diagnostics,
             )?;
             let execution_plan = resolved.execution_plan;
@@ -359,6 +379,31 @@ pub fn validate_source_profile_document(profile: &SourceProfileDocument) -> Diag
     let mut diagnostics = Vec::new();
     resolution::validate_source_profile_document(profile, &mut diagnostics);
     diagnostics
+}
+
+/// Validates one authored Source Profile and prepares its optional Detection
+/// material in the same pass.
+pub fn prepare_source_profile_document(
+    profile: &SourceProfileDocument,
+) -> Result<Option<CompiledDetectionPlan>, Diagnostics> {
+    let mut diagnostics = Vec::new();
+    resolution::validate_source_profile_document_without_detection(profile, &mut diagnostics);
+    let detection = if profile.detection.is_some() {
+        match compile_detection_plan(profile) {
+            Ok(plan) => Some(plan),
+            Err(detection_diagnostics) => {
+                diagnostics.extend(detection_diagnostics);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if has_error_diagnostics(&diagnostics) {
+        Err(diagnostics)
+    } else {
+        Ok(detection)
+    }
 }
 
 pub(super) fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {

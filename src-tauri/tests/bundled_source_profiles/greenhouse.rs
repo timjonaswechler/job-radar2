@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn greenhouse_builtin_profile_compiles_and_executes_offline_fixtures() {
-    let profile_text = read_text("resources/profiles/greenhouse.json");
+    let profile_text = read_text("crates/sources/resources/profiles/greenhouse.json");
     assert_no_v1_profile_vocabulary(&profile_text);
 
     let profile: SourceProfileDocument = serde_json::from_str(&profile_text)

@@ -19,14 +19,14 @@ import {
 } from "@/features/sources/view-model/source-grid-model";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceRegistryDocumentOrigin,
   SourceStatus,
 } from "@/lib/api/sources";
 
 type UseSourceRegistryTabOptions = {
   sources: RegistrySource[];
-  profilesByKey: Map<string, RegistrySourceProfile>;
+  profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnosticIndex: DiagnosticIndex;
 };
 

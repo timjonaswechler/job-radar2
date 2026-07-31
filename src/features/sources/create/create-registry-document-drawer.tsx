@@ -3,14 +3,14 @@ import { SourceProfileTemplateDrawer } from "@/features/sources/create/source-pr
 import { SourceCreateDrawer } from "@/features/sources/create/source/source-create-drawer";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceRegistryDocumentKind,
 } from "@/lib/api/sources";
 
 type CreateRegistryDocumentDrawerProps = {
   kind: SourceRegistryDocumentKind | null;
   open: boolean;
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   sources: RegistrySource[];
   onCreated?: () => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;

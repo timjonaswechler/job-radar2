@@ -20,7 +20,7 @@ required-features = ["agent-debug"]
 agent-debug = []
 
 [workspace]
-members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl"]
+members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl", "crates/sources"]
 resolver = "2"
 
 
@@ -40,6 +40,7 @@ atomic-write-file = "0.3.0"
 geo = { path = "crates/geo" }
 search-resolution = { path = "crates/search-resolution" }
 source-profile-dsl = { path = "crates/source-profile-dsl" }
+sources = { path = "crates/sources" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"

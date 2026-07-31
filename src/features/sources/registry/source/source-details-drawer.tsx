@@ -12,13 +12,13 @@ import { SourceDetails } from "@/features/sources/registry/source/source-details
 import type { SourceGridRow } from "@/features/sources/view-model/source-grid-model";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
 type SourceDetailsDrawerProps = {
   row: SourceGridRow | null;
-  profilesByKey: Map<string, RegistrySourceProfile>;
+  profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnostics: StructuredDiagnostic[];
   open: boolean;
   onEdit?: (source: RegistrySource) => void;

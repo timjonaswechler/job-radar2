@@ -35,7 +35,7 @@ impl RuntimeCancellation for Cancellation {
 
 fn profile(strategies: Value, required: &[&str]) -> SourceProfileDocument {
     let mut value: Value = serde_json::from_str(include_str!(
-        "../../../../resources/profiles/greenhouse.json"
+        "../../../sources/resources/profiles/greenhouse.json"
     ))
     .unwrap();
     value["key"] = json!("fixture");
@@ -437,7 +437,7 @@ fn direct_serde_rejects_partial_or_mixed_final_detection_shapes() {
     }
 
     let mut value: Value = serde_json::from_str(include_str!(
-        "../../../../resources/profiles/greenhouse.json"
+        "../../../sources/resources/profiles/greenhouse.json"
     ))
     .unwrap();
     value["detection"] = json!({
@@ -1111,15 +1111,15 @@ fn built_in_profiles_compile_only_the_final_detection_strategy_shape() {
     for (key, document) in [
         (
             "greenhouse",
-            include_str!("../../../../resources/profiles/greenhouse.json"),
+            include_str!("../../../sources/resources/profiles/greenhouse.json"),
         ),
         (
             "workday",
-            include_str!("../../../../resources/profiles/workday.json"),
+            include_str!("../../../sources/resources/profiles/workday.json"),
         ),
         (
             "successfactors",
-            include_str!("../../../../resources/profiles/successfactors.json"),
+            include_str!("../../../sources/resources/profiles/successfactors.json"),
         ),
     ] {
         let profile: SourceProfileDocument =

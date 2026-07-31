@@ -13,7 +13,7 @@ import {
   createSource,
   detectSourceProposalFromUrl,
   type RegistrySource,
-  type RegistrySourceProfile,
+  type InstalledProfileWithDefinition,
   type SourceProposal,
   type SourceProposalDetectionResult,
 } from "@/lib/api/sources";
@@ -34,7 +34,7 @@ import {
 } from "./source-create-model";
 
 type UseSourceCreateProps = {
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   sources: RegistrySource[];
   open: boolean;
   onCreated?: () => Promise<unknown> | unknown;
@@ -67,11 +67,11 @@ export function useSourceCreate({
   );
   const selectedProfile = useMemo(
     () =>
-      profiles.find((profile) => profile.document.key === form.profileKey) ??
+      profiles.find((profile) => profile.definition.key === form.profileKey) ??
       null,
     [form.profileKey, profiles],
   );
-  const availableAccessPaths = selectedProfile?.document.accessPaths ?? [];
+  const availableAccessPaths = selectedProfile?.definition.accessPaths ?? [];
   const selectedAccessPath =
     availableAccessPaths.find(
       (accessPath) => accessPath.key === form.pathKey,
@@ -79,7 +79,7 @@ export function useSourceCreate({
   const sourceConfigSchema = useMemo(
     () =>
       effectiveSourceConfigSchema(
-        selectedProfile?.document.sourceConfigSchema,
+        selectedProfile?.definition.sourceConfigSchema,
         selectedAccessPath?.sourceConfigSchema,
       ),
     [selectedAccessPath?.sourceConfigSchema, selectedProfile],

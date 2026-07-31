@@ -490,34 +490,22 @@ fn load_source_profile_registry_snapshot(
     crate::source_profile::registry::load_snapshot(app_data_dir)
 }
 
-#[tauri::command]
-pub fn get_source_profile_registry_snapshot(
-    state: State<'_, AppState>,
-) -> Result<crate::source_profile::registry::SourceProfileRegistrySnapshot, String> {
-    Ok(load_source_profile_registry_snapshot(
-        &state.paths.app_data_dir,
-    ))
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceInventoryView {
+    profiles: sources::installed::ProfilesView,
+    sources: Vec<crate::source_profile::registry::RegistrySource>,
+    diagnostics: source_profile_dsl::definition::Diagnostics,
 }
 
 #[tauri::command]
-pub fn list_source_profiles(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::source_profile::registry::RegistrySourceProfile>, String> {
-    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).profiles)
-}
-
-#[tauri::command]
-pub fn list_sources(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::source_profile::registry::RegistrySource>, String> {
-    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).sources)
-}
-
-#[tauri::command]
-pub fn list_source_diagnostics(
-    state: State<'_, AppState>,
-) -> Result<source_profile_dsl::definition::Diagnostics, String> {
-    Ok(load_source_profile_registry_snapshot(&state.paths.app_data_dir).diagnostics)
+pub fn get_source_inventory(state: State<'_, AppState>) -> Result<SourceInventoryView, String> {
+    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+    Ok(SourceInventoryView {
+        profiles: snapshot.installed_profiles().view().clone(),
+        sources: snapshot.sources,
+        diagnostics: snapshot.diagnostics,
+    })
 }
 
 #[tauri::command]
@@ -1014,13 +1002,25 @@ mod tests {
             let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
 
             assert!(snapshot
+                .installed_profiles()
+                .view()
                 .profiles
                 .iter()
-                .any(|profile| profile.document.key == "greenhouse"));
+                .any(|profile| profile
+                    .definition
+                    .as_ref()
+                    .map(|definition| definition.key.as_str())
+                    == Some("greenhouse")));
             assert!(snapshot
+                .installed_profiles()
+                .view()
                 .profiles
                 .iter()
-                .any(|profile| profile.document.key == "workday"));
+                .any(|profile| profile
+                    .definition
+                    .as_ref()
+                    .map(|definition| definition.key.as_str())
+                    == Some("workday")));
             assert!(
                 snapshot.diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",

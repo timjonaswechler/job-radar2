@@ -42,12 +42,20 @@ pub(super) fn validate_source_profile_document(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
 ) {
-    let _ = validate_source_profile_document_with_contracts(profile, diagnostics);
+    let _ = validate_source_profile_document_with_contracts(profile, diagnostics, true);
+}
+
+pub(super) fn validate_source_profile_document_without_detection(
+    profile: &SourceProfileDocument,
+    diagnostics: &mut Diagnostics,
+) {
+    let _ = validate_source_profile_document_with_contracts(profile, diagnostics, false);
 }
 
 fn validate_source_profile_document_with_contracts(
     profile: &SourceProfileDocument,
     diagnostics: &mut Diagnostics,
+    validate_detection: bool,
 ) -> Vec<ValidatedAccessPath> {
     validate_support_metadata(
         &profile.support,
@@ -56,7 +64,7 @@ fn validate_source_profile_document_with_contracts(
         diagnostics,
     );
     validate_reusable_access_path_keys(profile, diagnostics);
-    if profile.detection.is_some() {
+    if validate_detection && profile.detection.is_some() {
         if let Err(detection_diagnostics) = compile_detection_plan(profile) {
             diagnostics.extend(detection_diagnostics);
         }
@@ -139,9 +147,14 @@ pub(super) fn compile_materialized_profile_access_path(
     effective_profile: &SourceProfileDocument,
     profile_key: &str,
     path_key: &str,
+    validate_detection: bool,
     diagnostics: &mut Diagnostics,
 ) -> Option<ResolvedSourceExecutionPlan> {
-    let contracts = validate_source_profile_document_with_contracts(effective_profile, diagnostics);
+    let contracts = validate_source_profile_document_with_contracts(
+        effective_profile,
+        diagnostics,
+        validate_detection,
+    );
     if has_error_diagnostics(diagnostics) {
         return None;
     }

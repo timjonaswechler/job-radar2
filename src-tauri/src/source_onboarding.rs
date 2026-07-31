@@ -14,13 +14,12 @@ use source_profile_dsl::definition::Diagnostics;
 use source_profile_dsl::definition::{AccessPathFragment, JsonObject, SupportMetadata};
 use source_profile_dsl::definition::{SelectedAccessPath, SourceDocument, SourceStatus};
 use source_profile_dsl::detection::{
-    compile_detection_plan, execute_detection_operation, DetectionRunStatus,
-    ReconciledSourceProposal, UnsupportedReconciledDetection,
+    execute_detection_operation, ReconciledSourceProposal, UnsupportedReconciledDetection,
 };
 use source_profile_dsl::execution::{
     BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest, PhaseBrowser,
-    PhaseCompletion, PhaseExecutionReport, PhaseUsage, ProfileHttpClient, ProfileHttpError,
-    ProfileHttpRequest, ProfileHttpResponse, RuntimeCancellation, RuntimeExecutionContext,
+    PhaseExecutionReport, ProfileHttpClient, ProfileHttpError, ProfileHttpRequest,
+    ProfileHttpResponse, RuntimeCancellation, RuntimeExecutionContext,
 };
 
 #[derive(Clone)]
@@ -28,8 +27,6 @@ pub struct SourceOnboarding {
     app_data_dir: PathBuf,
     http: SharedHttp,
     browser: SharedBrowser,
-    #[cfg(test)]
-    snapshot_override: Option<SourceProfileRegistrySnapshot>,
 }
 
 impl SourceOnboarding {
@@ -42,8 +39,6 @@ impl SourceOnboarding {
             app_data_dir: app_data_dir.into(),
             http: SharedHttp(http),
             browser: SharedBrowser(browser),
-            #[cfg(test)]
-            snapshot_override: None,
         }
     }
 
@@ -53,30 +48,7 @@ impl SourceOnboarding {
         context: OperationContext<'_>,
     ) -> Result<DetectionOutcome, SourceOnboardingError> {
         let snapshot = self.snapshot();
-        let mut plans = Vec::new();
-        let mut diagnostics = Vec::new();
-        for profile in snapshot
-            .profiles
-            .iter()
-            .filter(|profile| profile.document.detection.is_some())
-        {
-            match compile_detection_plan(&profile.document) {
-                Ok(plan) => plans.push(plan),
-                Err(profile_diagnostics) => diagnostics.extend(profile_diagnostics),
-            }
-        }
-        if !diagnostics.is_empty() {
-            return Ok(DetectionOutcome {
-                status: DetectionRunStatus::Failed,
-                proposals: Vec::new(),
-                unsupported_profiles: Vec::new(),
-                diagnostics,
-                report: PhaseExecutionReport {
-                    usage: PhaseUsage::default(),
-                    completion: PhaseCompletion::ExecutionFailed,
-                },
-            });
-        }
+        let plans = snapshot.installed_profiles().prepared_detection();
 
         let uncancelled = NeverCancelled;
         let cancellation = context.cancellation.unwrap_or(&uncancelled);
@@ -272,17 +244,7 @@ impl SourceOnboarding {
     }
 
     fn snapshot(&self) -> SourceProfileRegistrySnapshot {
-        #[cfg(test)]
-        if let Some(snapshot) = &self.snapshot_override {
-            return snapshot.clone();
-        }
         crate::source_profile::registry::load_snapshot(&self.app_data_dir)
-    }
-
-    #[cfg(test)]
-    fn with_snapshot_for_test(mut self, snapshot: SourceProfileRegistrySnapshot) -> Self {
-        self.snapshot_override = Some(snapshot);
-        self
     }
 
     fn source(&self, key: &str) -> Result<RegistrySource, SourceOnboardingError> {
@@ -626,44 +588,5 @@ mod tests {
         let error = onboarding.ensure_custom(&source).unwrap_err();
 
         assert_eq!(error.kind, SourceOnboardingErrorKind::BuiltIn);
-    }
-
-    #[test]
-    fn detect_exposes_authoritative_unsupported_status_for_isolated_test_registry() {
-        let directory = tempfile::tempdir().unwrap();
-        let mut profile: serde_json::Value =
-            serde_json::from_str(include_str!("../resources/profiles/greenhouse.json")).unwrap();
-        profile["support"]["level"] = serde_json::json!("unsupported");
-        let profile_json = serde_json::to_string(&profile).unwrap();
-        let snapshot = crate::source_profile::registry::load_snapshot_with_builtins(
-            directory.path(),
-            &[("source-profiles/builtin/greenhouse.json", &profile_json)],
-            &[],
-        );
-        assert_eq!(
-            snapshot.profiles.len(),
-            1,
-            "synthetic profile diagnostics: {:?}",
-            snapshot.diagnostics
-        );
-        let onboarding = SourceOnboarding::new(
-            directory.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-            Arc::new(ScriptedBrowserAcquisition::new([])),
-        )
-        .with_snapshot_for_test(snapshot);
-        let result = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(onboarding.detect(
-                DetectSource {
-                    url: "https://boards.greenhouse.io/acme".to_string(),
-                },
-                OperationContext::default(),
-            ))
-            .unwrap();
-
-        assert_eq!(result.status, DetectionRunStatus::Unsupported);
-        assert_eq!(result.unsupported_profiles.len(), 1);
     }
 }

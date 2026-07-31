@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::job_radar_lib::{
     compile_source, prepare_source_behavior_fingerprints, CompileSourceOutcome,
-    RegistrySourceProfile, ReusableAccessPathDocument, SelectedAccessPath, SourceDocument,
-    SourceProfileDocument, SourceProfileRegistrySnapshot, SourceRuntimeBinding,
+    ReusableAccessPathDocument, SelectedAccessPath, SourceDocument, SourceProfileDocument,
+    SourceProfileLookup, SourceRuntimeBinding,
 };
 
 #[test]
@@ -186,12 +186,12 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
         ],
     );
 
-    let unresolved = compile_source(&source, &SourceProfileRegistrySnapshot::default());
+    let unresolved = compile_source(&source, &TestProfiles::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&source, None, &unresolved).unwrap(),
         &["source_config", "selected_access_path"],
     );
-    let unresolved_direct = compile_source(&direct, &SourceProfileRegistrySnapshot::default());
+    let unresolved_direct = compile_source(&direct, &TestProfiles::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&direct, None, &unresolved_direct).unwrap(),
         &[
@@ -373,7 +373,7 @@ fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
         panic!("fixture uses Source-owned access")
     };
     discovery.strategies.clear();
-    let outcome = compile_source(&source, &SourceProfileRegistrySnapshot::default());
+    let outcome = compile_source(&source, &TestProfiles::default());
     assert!(matches!(outcome, CompileSourceOutcome::Rejected { .. }));
 
     let fingerprints = prepare_source_behavior_fingerprints(&source, None, &outcome).unwrap();
@@ -399,7 +399,7 @@ fn prepare_profile(
 }
 
 fn prepare_owned(source: &SourceDocument) -> Vec<crate::job_radar_lib::CheckFingerprint> {
-    let outcome = compile_source(source, &SourceProfileRegistrySnapshot::default());
+    let outcome = compile_source(source, &TestProfiles::default());
     prepare_source_behavior_fingerprints(source, None, &outcome).unwrap()
 }
 
@@ -473,16 +473,17 @@ fn set_owned_fetch_url(source: &mut SourceDocument, value: &str) {
     }
 }
 
-fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistrySnapshot {
-    SourceProfileRegistrySnapshot {
-        profiles: vec![RegistrySourceProfile {
-            origin: "test".into(),
-            path: String::new(),
-            document: profile,
-        }],
-        sources: Vec::new(),
-        diagnostics: Vec::new(),
+#[derive(Default)]
+struct TestProfiles(Vec<SourceProfileDocument>);
+
+impl SourceProfileLookup for TestProfiles {
+    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.0.iter().find(|profile| profile.key == key)
     }
+}
+
+fn registry_with_profile(profile: SourceProfileDocument) -> TestProfiles {
+    TestProfiles(vec![profile])
 }
 
 fn read_fixture<T: serde::de::DeserializeOwned>(relative: &str) -> T {

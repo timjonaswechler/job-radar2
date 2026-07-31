@@ -1,7 +1,7 @@
 import type {
   JsonValue,
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
   StructuredDiagnostic,
@@ -19,18 +19,18 @@ export type DiagnosticIndex = {
 
 export function buildDiagnosticIndex(
   sources: RegistrySource[],
-  profiles: RegistrySourceProfile[],
+  profiles: InstalledProfileWithDefinition[],
   diagnostics: StructuredDiagnostic[],
 ): DiagnosticIndex {
   const bySourceKey = new Map<string, StructuredDiagnostic[]>();
   const byProfileKey = new Map<string, StructuredDiagnostic[]>();
   const sourceKeys = new Set(sources.map((source) => source.document.key));
-  const profileKeys = new Set(profiles.map((profile) => profile.document.key));
+  const profileKeys = new Set(profiles.map((profile) => profile.definition.key));
   const sourceKeyByPath = new Map(
     sources.map((source) => [source.path, source.document.key]),
   );
-  const profileKeyByPath = new Map(
-    profiles.map((profile) => [profile.path, profile.document.key]),
+  const profileKeyByFileName = new Map(
+    profiles.map((profile) => [profile.fileName, profile.definition.key]),
   );
   const unassigned: StructuredDiagnostic[] = [];
 
@@ -39,6 +39,7 @@ export function buildDiagnosticIndex(
     const details = diagnosticDetails(diagnostic);
     const documentKind = diagnosticDocumentKind(diagnostic);
     const diagnosticPath = diagnosticDocumentPath(diagnostic);
+    const diagnosticFileName = stringValue(details.fileName);
     const detailSourceKey = stringValue(details.sourceKey);
     const detailProfileKey = stringValue(details.sourceProfileKey);
     const detailKey = stringValue(details.key);
@@ -62,9 +63,12 @@ export function buildDiagnosticIndex(
         pushDiagnostic(bySourceKey, sourcePathKey, diagnostic);
         attached = true;
       }
-      const profilePathKey = profileKeyByPath.get(diagnosticPath);
-      if (profilePathKey) {
-        pushDiagnostic(byProfileKey, profilePathKey, diagnostic);
+    }
+
+    if (!attached && diagnosticFileName) {
+      const profileKey = profileKeyByFileName.get(diagnosticFileName);
+      if (profileKey) {
+        pushDiagnostic(byProfileKey, profileKey, diagnostic);
         attached = true;
       }
     }

@@ -33,22 +33,19 @@ fn detection_profile(
     support_level: &str,
     strategies: serde_json::Value,
 ) -> serde_json::Value {
-    let mut profile: serde_json::Value =
-        serde_json::from_str(include_str!("../../resources/profiles/greenhouse.json")).unwrap();
+    let mut profile: serde_json::Value = serde_json::from_str(include_str!(
+        "../../crates/sources/resources/profiles/greenhouse.json"
+    ))
+    .unwrap();
     profile["key"] = json!(key);
     profile["name"] = json!(key);
     profile["support"]["level"] = json!(support_level);
-    profile["sourceConfigSchema"] = json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["startUrl"],
-        "properties": { "startUrl": { "type": "string", "format": "uri" } }
-    });
     profile["accessPaths"].as_array_mut().unwrap().truncate(1);
     profile["detection"] = json!({
         "recommendedAccessPathKey": "boards_api",
         "policy": { "type": "all_required" },
-        "strategies": strategies
+        "strategies": strategies,
+        "sourceConfig": { "boardSlug": "fixture" }
     });
     profile
 }
@@ -192,7 +189,7 @@ fn cancelled_check_and_activate_preserves_draft_with_controlled_time() {
 }
 
 #[test]
-fn invalid_predicate_regex_stops_source_live_check_before_http() {
+fn invalid_custom_profile_is_quarantined_before_source_live_check_http() {
     let temp_dir = tempfile::tempdir().unwrap();
     let mut profile: serde_json::Value = serde_json::from_str(SIMPLE_PROFILE).unwrap();
     let source: serde_json::Value = serde_json::from_str(SIMPLE_SOURCE).unwrap();
@@ -205,13 +202,11 @@ fn invalid_predicate_regex_stops_source_live_check_before_http() {
     write_source(temp_dir.path(), &source);
     let client = Arc::new(ScriptedProfileHttpClient::new([]));
 
-    let report = run_check(temp_dir.path(), "example_source", Arc::clone(&client)).unwrap();
+    let error = run_check(temp_dir.path(), "example_source", Arc::clone(&client)).unwrap_err();
 
-    assert_eq!(report.result, CheckReportResult::Failed);
-    assert!(report
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "predicate_regex_invalid"));
+    assert!(error
+        .to_string()
+        .contains("references unresolved Source Profile `example_jobs`"));
     assert!(client.requests().is_empty());
 }
 

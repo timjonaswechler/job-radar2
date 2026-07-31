@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
-    let profile_text = read_text("resources/profiles/workday.json");
+    let profile_text = read_text("crates/sources/resources/profiles/workday.json");
     assert_no_v1_profile_vocabulary(&profile_text);
 
     let profile_value: Value = serde_json::from_str(&profile_text).unwrap();
@@ -133,7 +133,7 @@ fn workday_builtin_profile_compiles_and_executes_cxs_offline_fixtures() {
 #[test]
 fn workday_offset_limit_pagination_retains_the_initial_total_when_followup_total_is_zero() {
     let mut profile_value: Value =
-        serde_json::from_str(&read_text("resources/profiles/workday.json")).unwrap();
+        serde_json::from_str(&read_text("crates/sources/resources/profiles/workday.json")).unwrap();
     profile_value["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]["limits"]
         ["maxRequests"] = json!(2);
     let profile: SourceProfileDocument = serde_json::from_value(profile_value).unwrap();

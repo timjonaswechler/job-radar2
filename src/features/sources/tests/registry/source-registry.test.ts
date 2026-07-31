@@ -12,18 +12,18 @@ import {
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 import { test } from "vitest";
 
 test("source registry contract", async () => {
   assert.equal(typeof SourceRegistryTab, "function");
 
-  const profile: RegistrySourceProfile = {
+  const profile: InstalledProfileWithDefinition = {
     origin: "built_in",
-    path: "resources/profiles/greenhouse.json",
-    document: {
-      schemaVersion: 3,
+    admission: "admitted",
+    fileName: "greenhouse.json",
+    definition: {
       key: "greenhouse",
       name: "Greenhouse",
       kind: "recruiting_system",
@@ -43,7 +43,7 @@ test("source registry contract", async () => {
       ],
     },
   };
-  const profilesByKey = new Map([[profile.document.key, profile]]);
+  const profilesByKey = new Map([[profile.definition.key, profile]]);
 
   const source: RegistrySource = {
     origin: "custom",
@@ -227,7 +227,7 @@ test("source registry contract", async () => {
     missingAccessPathSource,
     profilesByKey,
   );
-  assert.equal(missingAccessPathResolution.profile?.document.key, "greenhouse");
+  assert.equal(missingAccessPathResolution.profile?.definition.key, "greenhouse");
   assert.equal(missingAccessPathResolution.profileAccessPath, null);
   assert.deepEqual(missingAccessPathResolution.capabilities, []);
 

@@ -31,7 +31,7 @@ import { profileKindLabels } from "@/features/sources/labels";
 import { SourceNameField } from "@/features/sources/source-form/source-form-fields";
 import type {
   ProfileAccessPathDefinition,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 
 import {
@@ -156,7 +156,7 @@ export function SourceCreateIdentityFields({
 
 type SourceAccessPathFieldsProps = {
   form: SourceCreateFormState;
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   availableAccessPaths: ProfileAccessPathDefinition[];
   saveAttempted: boolean;
   saving: boolean;
@@ -178,8 +178,8 @@ export function SourceAccessPathFields({
   const profileItems = useMemo(
     () =>
       profiles.map((profile) => ({
-        value: profile.document.key,
-        label: `${profile.document.name} · ${profileKindLabels[profile.document.kind]}`,
+        value: profile.definition.key,
+        label: `${profile.definition.name} · ${profileKindLabels[profile.definition.kind]}`,
       })),
     [profiles],
   );

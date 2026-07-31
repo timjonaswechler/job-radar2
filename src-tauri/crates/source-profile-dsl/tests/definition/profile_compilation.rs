@@ -70,7 +70,7 @@ fn compilation_owned_primitive_inventory_is_complete() {
 #[test]
 fn direct_core_compilation_validates_detection_definitions() {
     let mut profile_value: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../resources/profiles/successfactors.json"
+        "../../../sources/resources/profiles/successfactors.json"
     ))
     .expect("valid built-in profile fixture");
     profile_value["detection"]["strategies"][1]["key"] =

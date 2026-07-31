@@ -14,13 +14,20 @@ fn resource_directory_matches_embedded_new_dsl_builtins_and_contains_no_v1_docum
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let snapshot = load_source_profile_registry_snapshot(tempfile::tempdir().unwrap().path());
 
-    let profile_paths = json_files(&crate_dir.join("resources/profiles"));
+    let profile_paths = json_files(&crate_dir.join("crates/sources/resources/profiles"));
     let resource_profile_keys = file_stems(&profile_paths);
     let embedded_profile_keys = snapshot
+        .installed_profiles()
+        .view()
         .profiles
         .iter()
-        .filter(|profile| profile.origin == "built_in")
-        .map(|profile| profile.document.key.clone())
+        .filter(|profile| profile.origin == sources::installed::Origin::BuiltIn)
+        .filter_map(|profile| {
+            profile
+                .definition
+                .as_ref()
+                .map(|definition| definition.key.clone())
+        })
         .collect::<BTreeSet<_>>();
     assert_eq!(resource_profile_keys, embedded_profile_keys);
 
@@ -66,7 +73,7 @@ fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collis
     let custom_profile_dir = temp_dir.path().join("source-profiles");
     fs::create_dir_all(&custom_profile_dir).unwrap();
     fs::copy(
-        fixture_path("resources/profiles/greenhouse.json"),
+        fixture_path("crates/sources/resources/profiles/greenhouse.json"),
         custom_profile_dir.join("greenhouse.json"),
     )
     .unwrap();
@@ -74,18 +81,39 @@ fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collis
     let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
 
     let greenhouse_profiles = snapshot
+        .installed_profiles()
+        .view()
         .profiles
         .iter()
-        .filter(|profile| profile.document.key == "greenhouse")
+        .filter(|profile| {
+            profile
+                .definition
+                .as_ref()
+                .map(|definition| definition.key.as_str())
+                == Some("greenhouse")
+        })
         .collect::<Vec<_>>();
-    assert_eq!(greenhouse_profiles.len(), 1);
-    assert_eq!(greenhouse_profiles[0].origin, "built_in");
+    assert_eq!(greenhouse_profiles.len(), 2);
+    assert_eq!(
+        greenhouse_profiles[0].origin,
+        sources::installed::Origin::BuiltIn
+    );
+    assert_eq!(
+        greenhouse_profiles[0].admission,
+        sources::installed::Admission::Admitted
+    );
+    assert_eq!(
+        greenhouse_profiles[1].admission,
+        sources::installed::Admission::Rejected
+    );
 
-    let serialized = serde_json::to_string(&greenhouse_profiles[0].document).unwrap();
+    let serialized = serde_json::to_string(&greenhouse_profiles[0]).unwrap();
     assert!(!serialized.contains("adapterKey"));
     assert!(!serialized.contains("inventory"));
 
     let diagnostic = snapshot
+        .installed_profiles()
+        .view()
         .diagnostics
         .iter()
         .find(|diagnostic| diagnostic.code == "duplicate_source_profile_key")
@@ -97,46 +125,6 @@ fn registry_loads_new_dsl_builtin_profiles_and_ignores_custom_builtin_key_collis
         diagnostic.details.as_ref().unwrap()["sourceProfileKey"],
         "greenhouse"
     );
-}
-
-#[test]
-fn registry_loading_enforces_value_depth_before_any_source_uses_the_profile() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let custom_profile_dir = temp_dir.path().join("source-profiles");
-    fs::create_dir_all(&custom_profile_dir).unwrap();
-    let mut profile: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(fixture_path(
-            "tests/fixtures/source-behavior/valid/simple-source-profile.json",
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    let mut value = serde_json::json!({ "type": "const", "value": "leaf" });
-    for _ in 1..17 {
-        value = serde_json::json!({
-            "type": "combine",
-            "parts": [{ "value": value }]
-        });
-    }
-    profile["key"] = serde_json::json!("over_depth_profile");
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["extract"]["providerValues"]["title"] =
-        value;
-    fs::write(
-        custom_profile_dir.join("over_depth_profile.json"),
-        serde_json::to_vec_pretty(&profile).unwrap(),
-    )
-    .unwrap();
-
-    let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
-
-    let diagnostic = snapshot
-        .diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.code == "value_depth_limit_exceeded")
-        .expect("registry loading Value depth diagnostic");
-    assert_eq!(diagnostic.category, DiagnosticCategory::Compiler);
-    assert_eq!(diagnostic.details.as_ref().unwrap()["actual"], 17);
-    assert_eq!(diagnostic.details.as_ref().unwrap()["maximum"], 16);
 }
 
 #[test]
@@ -227,40 +215,6 @@ fn registry_loads_custom_sources_with_derived_validation_state_and_compiler_diag
     assert!(snapshot.diagnostics.iter().any(|diagnostic| diagnostic.code
         == "forbidden_search_criteria_in_source_config"
         && diagnostic.path == "/sourceConfig/keyword"));
-}
-
-#[test]
-fn registry_direct_serde_rejects_unbounded_unreferenced_custom_profiles() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let custom_profile_dir = temp_dir.path().join("source-profiles");
-    fs::create_dir_all(&custom_profile_dir).unwrap();
-
-    let mut profile: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(fixture_path(
-            "tests/fixtures/source-behavior/valid/simple-source-profile.json",
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    profile["accessPaths"][0]["discovery"]["strategies"][0]["fetch"]
-        .as_object_mut()
-        .unwrap()
-        .remove("timeoutMs");
-    fs::write(
-        custom_profile_dir.join("example_jobs.json"),
-        serde_json::to_string_pretty(&profile).unwrap(),
-    )
-    .unwrap();
-
-    let snapshot = load_source_profile_registry_snapshot(temp_dir.path());
-
-    assert!(snapshot.profile("example_jobs").is_none());
-    assert!(snapshot.source("example_jobs").is_none());
-    assert!(snapshot.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == DiagnosticCategory::Schema
-            && diagnostic.severity == DiagnosticSeverity::Error
-            && diagnostic.code == "invalid_document_shape"
-    }));
 }
 
 #[test]

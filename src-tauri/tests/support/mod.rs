@@ -3,8 +3,8 @@ use crate::job_radar_lib::{
     CompileSourceOutcome, Diagnostics, PhaseBrowser, PhaseCancelled, PhaseExecutionFailure,
     PhaseExecutionReport, PhaseOutcome, PhasePreStartFailure, PhaseRunError, PhaseRunResult,
     PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence, ProfileHttpClient,
-    RegistrySourceProfile, RequestedDetailFields, RuntimeExecutionContext, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceProfileRegistrySnapshot,
+    RequestedDetailFields, RuntimeExecutionContext, SourceDocument, SourceExecutionPlan,
+    SourceProfileDocument, SourceProfileLookup,
 };
 
 pub struct AcceptedPhase<P> {
@@ -271,19 +271,14 @@ pub fn compile_test_source(
     source: &SourceDocument,
     profile: Option<SourceProfileDocument>,
 ) -> CompileSourceOutcome {
-    let registry = SourceProfileRegistrySnapshot {
-        profiles: profile
-            .into_iter()
-            .map(|document| RegistrySourceProfile {
-                origin: "test".into(),
-                path: String::new(),
-                document,
-            })
-            .collect(),
-        sources: Vec::new(),
-        diagnostics: Vec::new(),
-    };
-    compile_source(source, &registry)
+    struct TestProfiles(Vec<SourceProfileDocument>);
+    impl SourceProfileLookup for TestProfiles {
+        fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+            self.0.iter().find(|profile| profile.key == key)
+        }
+    }
+
+    compile_source(source, &TestProfiles(profile.into_iter().collect()))
 }
 
 pub fn unwrap_plan(outcome: CompileSourceOutcome) -> SourceExecutionPlan {

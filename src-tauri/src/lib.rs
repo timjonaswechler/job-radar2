@@ -43,7 +43,7 @@ pub use source_onboarding::{
     SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError, SourceOnboardingErrorKind,
 };
 pub use source_profile::registry::{
-    load_snapshot as load_source_profile_registry_snapshot, RegistrySource, RegistrySourceProfile,
+    load_snapshot as load_source_profile_registry_snapshot, RegistrySource,
     SourceProfileRegistrySnapshot,
 };
 
@@ -124,10 +124,7 @@ pub fn run() {
             app::commands::install_browser_runtime,
             app::commands::uninstall_browser_runtime,
             app::commands::check_browser_runtime,
-            app::commands::get_source_profile_registry_snapshot,
-            app::commands::list_source_profiles,
-            app::commands::list_sources,
-            app::commands::list_source_diagnostics,
+            app::commands::get_source_inventory,
             app::commands::check_source,
             app::commands::check_and_activate_source,
             app::commands::check_and_reactivate_source,

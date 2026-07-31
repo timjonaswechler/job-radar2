@@ -10,7 +10,7 @@ import {
   createProfileGridRows,
   filterProfileGridRows,
 } from "@/features/sources/view-model/profile-grid-model";
-import type { RegistrySourceProfile } from "@/lib/api/sources";
+import type { InstalledProfileWithDefinition } from "@/lib/api/sources";
 import { test } from "vitest";
 
 test("profile registry contract", async () => {
@@ -24,11 +24,11 @@ test("profile registry contract", async () => {
     true,
   );
 
-  const stableProfile: RegistrySourceProfile = {
+  const stableProfile: InstalledProfileWithDefinition = {
     origin: "built_in",
-    path: "resources/profiles/greenhouse.json",
-    document: {
-      schemaVersion: 3,
+    admission: "admitted",
+    fileName: "greenhouse.json",
+    definition: {
       key: "greenhouse",
       name: "Greenhouse",
       kind: "recruiting_system",
@@ -42,11 +42,12 @@ test("profile registry contract", async () => {
       ],
     },
   };
-  const warningProfile: RegistrySourceProfile = {
+  const warningProfile: InstalledProfileWithDefinition = {
     origin: "built_in",
-    path: "resources/profiles/warning.json",
-    document: {
-      ...stableProfile.document,
+    admission: "admitted",
+    fileName: "warning.json",
+    definition: {
+      ...stableProfile.definition,
       key: "warning_profile",
       name: "Warning Profile",
       kind: "generic",
@@ -54,25 +55,16 @@ test("profile registry contract", async () => {
       accessPaths: [],
     },
   };
-  const errorProfile: RegistrySourceProfile = {
+  const errorProfile: InstalledProfileWithDefinition = {
     origin: "custom",
-    path: "profiles/error.json",
-    document: {
-      ...stableProfile.document,
+    admission: "admitted",
+    fileName: "error.json",
+    definition: {
+      ...stableProfile.definition,
       key: "error_profile",
       name: "Error Profile",
       kind: "generic",
       support: { level: "experimental" },
-      diagnostics: [
-        {
-          category: "schema",
-          code: "profile_schema_error",
-          message: "Profile schema is invalid",
-          severity: "error",
-          path: "/accessPaths/0",
-          details: { sourceProfileKey: "error_profile" },
-        },
-      ],
       accessPaths: [],
     },
   };
@@ -90,6 +82,19 @@ test("profile registry contract", async () => {
             severity: "warning",
             path: "/support/knownIssues/0",
             details: { sourceProfileKey: "warning_profile" },
+          },
+        ],
+      ],
+      [
+        "error_profile",
+        [
+          {
+            category: "schema",
+            code: "profile_schema_error",
+            message: "Profile schema is invalid",
+            severity: "error",
+            path: "/accessPaths/0",
+            details: { sourceProfileKey: "error_profile" },
           },
         ],
       ],
@@ -121,11 +126,12 @@ test("profile registry contract", async () => {
     ["warning_profile"],
   );
 
-  const evidenceProfile: RegistrySourceProfile = {
+  const evidenceProfile: InstalledProfileWithDefinition = {
     origin: "custom",
-    path: "profiles/evidence.json",
-    document: {
-      ...stableProfile.document,
+    admission: "admitted",
+    fileName: "evidence.json",
+    definition: {
+      ...stableProfile.definition,
       key: "evidence_profile",
       name: "Evidence Profile",
       support: {

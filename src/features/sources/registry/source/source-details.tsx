@@ -22,7 +22,7 @@ import type { SourceResolution } from "@/features/sources/view-model/registry-re
 import type {
   ProfileAccessPathDefinition,
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SelectedAccessPath,
   SourceOwnedSelectedAccessPath,
   StructuredDiagnostic,
@@ -30,7 +30,7 @@ import type {
 
 type SourceDetailsProps = {
   source: RegistrySource;
-  profilesByKey: Map<string, RegistrySourceProfile>;
+  profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnostics: StructuredDiagnostic[];
   onUpdated?: () => Promise<unknown> | unknown;
 };
@@ -169,7 +169,7 @@ function AccessPathDetails({
           {resolution.profile ? (
             <DetailRow
               label="Profil-Name"
-              value={resolution.profile.document.name}
+              value={resolution.profile.definition.name}
             />
           ) : null}
           {resolution.supportLevel ? (

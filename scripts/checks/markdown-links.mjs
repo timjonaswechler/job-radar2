@@ -269,12 +269,21 @@ export function formatMarkdownLinkFindings(findings) {
 }
 
 export function trackedMarkdownFiles(root = process.cwd()) {
-  const result = spawnSync("git", ["ls-files", "-z", "--", "*.md"], {
+  const tracked = spawnSync("git", ["ls-files", "-z", "--", "*.md"], {
     cwd: root,
     encoding: "utf8",
   });
-  if (result.status !== 0) throw new Error("could not enumerate tracked Markdown files");
-  return result.stdout.split("\0").filter(Boolean);
+  const untracked = spawnSync(
+    "git",
+    ["ls-files", "-z", "--others", "--exclude-standard", "--", "*.md"],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (tracked.status !== 0 || untracked.status !== 0) {
+    throw new Error("could not enumerate repository Markdown files");
+  }
+  return [...tracked.stdout.split("\0"), ...untracked.stdout.split("\0")]
+    .filter(Boolean)
+    .filter((path) => existsSync(resolve(root, path)));
 }
 
 function main() {

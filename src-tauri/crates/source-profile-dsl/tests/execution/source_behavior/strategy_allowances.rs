@@ -750,7 +750,7 @@ fn assert_exhaustion(completion: &PhaseCompletion, dimension: AllowanceDimension
 }
 
 fn sitemap_fan_out_plan() -> source_profile_dsl::test_support::SourceExecutionPlan {
-    let mut profile_value = read_json("resources/profiles/successfactors.json");
+    let mut profile_value = read_json("crates/sources/resources/profiles/successfactors.json");
     profile_value["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]
         ["childSitemapSelector"] = json!({ "type": "sitemap_urls" });
     profile_value["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]["limits"] =

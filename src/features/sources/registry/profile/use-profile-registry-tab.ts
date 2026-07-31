@@ -18,13 +18,13 @@ import {
   type ProfileGridRow,
 } from "@/features/sources/view-model/profile-grid-model";
 import type {
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
 } from "@/lib/api/sources";
 
 type UseProfileRegistryTabOptions = {
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   diagnosticIndex: DiagnosticIndex;
 };
 

@@ -12,7 +12,7 @@ import { directSourceSpecializationFromText } from "@/features/sources/source-fo
 import type {
   JsonValue,
   ProfileAccessPathDefinition,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   CreateSourceDraft,
   SourceProposal,
   SourceProposalDetectionResult,
@@ -162,17 +162,17 @@ export function sourceCreateDraftAfterProfileChange({
   profileKey,
   createConfigEntryId = createSourceConfigEntryId,
 }: {
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
   profileKey: string;
   createConfigEntryId?: () => string;
 }): Pick<SourceCreateDraftState, "form" | "configEntries"> {
   const nextProfile =
-    profiles.find((profile) => profile.document.key === profileKey) ?? null;
-  const nextPath = nextProfile?.document.accessPaths[0];
+    profiles.find((profile) => profile.definition.key === profileKey) ?? null;
+  const nextPath = nextProfile?.definition.accessPaths[0];
   const nextSchema = effectiveSourceConfigSchema(
-    nextProfile?.document.sourceConfigSchema,
+    nextProfile?.definition.sourceConfigSchema,
     nextPath?.sourceConfigSchema,
   );
   const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
@@ -198,17 +198,17 @@ export function sourceCreateDraftAfterAccessPathChange({
   pathKey,
   createConfigEntryId = createSourceConfigEntryId,
 }: {
-  selectedProfile: RegistrySourceProfile | null;
+  selectedProfile: InstalledProfileWithDefinition | null;
   form: SourceCreateFormState;
   configEntries: SourceConfigEntry[];
   pathKey: string;
   createConfigEntryId?: () => string;
 }): Pick<SourceCreateDraftState, "form" | "configEntries"> {
-  const nextPath = selectedProfile?.document.accessPaths.find(
+  const nextPath = selectedProfile?.definition.accessPaths.find(
     (accessPath) => accessPath.key === pathKey,
   );
   const nextSchema = effectiveSourceConfigSchema(
-    selectedProfile?.document.sourceConfigSchema,
+    selectedProfile?.definition.sourceConfigSchema,
     nextPath?.sourceConfigSchema,
   );
   const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
@@ -228,19 +228,19 @@ export function sourceCreateDraftAfterDetectedSource({
   detected,
   createConfigEntryId = createSourceConfigEntryId,
 }: {
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   detected: DetectedSourceLike;
   createConfigEntryId?: () => string;
 }): SourceCreateDraftState {
   const nextProfile =
-    profiles.find((profile) => profile.document.key === detected.profileKey) ??
+    profiles.find((profile) => profile.definition.key === detected.profileKey) ??
     null;
   const nextPath =
-    nextProfile?.document.accessPaths.find(
+    nextProfile?.definition.accessPaths.find(
       (accessPath) => accessPath.key === detected.pathKey,
     ) ?? null;
   const nextSchema = effectiveSourceConfigSchema(
-    nextProfile?.document.sourceConfigSchema,
+    nextProfile?.definition.sourceConfigSchema,
     nextPath?.sourceConfigSchema,
   );
   const nextMetadata = sourceConfigSchemaMetadata(nextSchema);
@@ -272,7 +272,7 @@ export function sourceCreateDraftAfterDetectionResult({
   createConfigEntryId = createSourceConfigEntryId,
 }: {
   draft: SourceCreateDraftState;
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   result: SourceProposalDetectionResult;
   trimmedUrl: string;
   createConfigEntryId?: () => string;
@@ -324,7 +324,7 @@ export function buildCreatedSourceDocument({
   configEntries: SourceConfigEntry[];
   directSourceSpecializationText?: string;
   existingSourceKeys: Set<string>;
-  selectedProfile: RegistrySourceProfile | null;
+  selectedProfile: InstalledProfileWithDefinition | null;
   selectedAccessPath: ProfileAccessPathDefinition | null;
   schemaMetadata: SchemaMetadata;
 }): SourceCreateBuildResult {
@@ -360,7 +360,7 @@ export function buildCreatedSourceDocument({
     sourceConfig: configResult.value,
     selectedAccessPath: {
       type: "profile_access_path",
-      profileKey: selectedProfile.document.key,
+      profileKey: selectedProfile.definition.key,
       pathKey: selectedAccessPath.key,
     },
   };

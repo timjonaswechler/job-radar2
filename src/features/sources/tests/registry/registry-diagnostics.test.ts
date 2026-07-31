@@ -11,7 +11,7 @@ import {
 import { useSourceRegistryInventory } from "@/features/sources/workspace/use-source-registry-inventory";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 import { test } from "vitest";
@@ -83,12 +83,12 @@ test("registry diagnostics contract", async () => {
     };
   }
 
-  function registryProfile(key: string): RegistrySourceProfile {
+  function registryProfile(key: string): InstalledProfileWithDefinition {
     return {
       origin: "built_in",
-      path: `profiles/${key}.json`,
-      document: {
-        schemaVersion: 3,
+      admission: "admitted",
+      fileName: `${key}.json`,
+      definition: {
         key,
         name: key,
         kind: "recruiting_system",

@@ -24,18 +24,18 @@ import {
 } from "@/features/sources/shared/source-config-schema";
 import type {
   JsonValue,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceDocument,
   SourceProposal,
 } from "@/lib/api/sources";
 import { test } from "vitest";
 
 test("source create contract", async () => {
-  const greenhouseProfile: RegistrySourceProfile = {
+  const greenhouseProfile: InstalledProfileWithDefinition = {
     origin: "built_in",
-    path: "resources/profiles/greenhouse.json",
-    document: {
-      schemaVersion: 3,
+    admission: "admitted",
+    fileName: "greenhouse.json",
+    definition: {
       key: "greenhouse",
       name: "Greenhouse",
       kind: "recruiting_system",
@@ -56,11 +56,11 @@ test("source create contract", async () => {
     },
   };
 
-  const leverProfile: RegistrySourceProfile = {
+  const leverProfile: InstalledProfileWithDefinition = {
     origin: "built_in",
-    path: "resources/profiles/lever.json",
-    document: {
-      schemaVersion: 3,
+    admission: "admitted",
+    fileName: "lever.json",
+    definition: {
       key: "lever",
       name: "Lever",
       kind: "recruiting_system",
@@ -258,11 +258,11 @@ test("source create contract", async () => {
     configEntries: matchedDraft.configEntries,
     existingSourceKeys: new Set(),
     selectedProfile: leverProfile,
-    selectedAccessPath: leverProfile.document.accessPaths[1] ?? null,
+    selectedAccessPath: leverProfile.definition.accessPaths[1] ?? null,
     schemaMetadata: sourceConfigSchemaMetadata(
       effectiveSourceConfigSchema(
-        leverProfile.document.sourceConfigSchema,
-        leverProfile.document.accessPaths[1]?.sourceConfigSchema,
+        leverProfile.definition.sourceConfigSchema,
+        leverProfile.definition.accessPaths[1]?.sourceConfigSchema,
       ),
     ),
   });
@@ -306,9 +306,9 @@ test("source create contract", async () => {
       '[{"key":"boards_api","discovery":{"strategies":[{"key":"jobs_api"}]}}]',
     existingSourceKeys: new Set(),
     selectedProfile: greenhouseProfile,
-    selectedAccessPath: greenhouseProfile.document.accessPaths[0] ?? null,
+    selectedAccessPath: greenhouseProfile.definition.accessPaths[0] ?? null,
     schemaMetadata: sourceConfigSchemaMetadata(
-      greenhouseProfile.document.sourceConfigSchema ?? {},
+      greenhouseProfile.definition.sourceConfigSchema ?? {},
     ),
   });
   assert.deepEqual(buildResult.errors, []);

@@ -9,7 +9,7 @@ import { uniqueDiagnostics } from "@/features/sources/view-model/diagnostics";
 import type {
   DetectionEvidenceKind,
   ProfileAccessPathDefinition,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceProfileKind,
   SourceRegistryDocumentOrigin,
   StructuredDiagnostic,
@@ -44,9 +44,9 @@ export type ProfileGridRow = {
   diagnosticsCount: number;
   ownDiagnosticsCount: number;
   dependencyDiagnosticsCount: number;
-  path: string;
+  fileName: string;
   searchText: string;
-  profile: RegistrySourceProfile;
+  profile: InstalledProfileWithDefinition;
 };
 
 export type ProfileGridFilters = {
@@ -57,20 +57,19 @@ export type ProfileGridFilters = {
 };
 
 export function createProfileGridRows(
-  profiles: RegistrySourceProfile[],
+  profiles: InstalledProfileWithDefinition[],
   diagnosticsByProfileKey: Map<string, StructuredDiagnostic[]>,
 ): ProfileGridRow[] {
   return profiles.map((profile) => {
     const diagnostics = uniqueDiagnostics([
-      ...(diagnosticsByProfileKey.get(profile.document.key) ?? []),
-      ...(profile.document.diagnostics ?? []),
-      ...profile.document.accessPaths.flatMap(
+      ...(diagnosticsByProfileKey.get(profile.definition.key) ?? []),
+      ...profile.definition.accessPaths.flatMap(
         (accessPath) => accessPath.diagnostics ?? [],
       ),
     ]);
     const diagnosticSummary = classifyProfileRegistryRowHealth(diagnostics);
-    const kindLabel = profileKindLabels[profile.document.kind];
-    const supportLabel = supportLevelLabels[profile.document.support.level];
+    const kindLabel = profileKindLabels[profile.definition.kind];
+    const supportLabel = supportLevelLabels[profile.definition.support.level];
     const supportEvidenceKinds = profileSupportEvidenceKinds(profile);
     const supportEvidenceLabels = supportEvidenceKinds.map(
       (kind) => supportEvidenceKindLabels[kind],
@@ -94,12 +93,12 @@ export function createProfileGridRows(
       "keine Fähigkeiten",
     );
     const searchText = [
-      profile.document.key,
-      profile.document.name,
+      profile.definition.key,
+      profile.definition.name,
       kindLabel,
-      profile.document.kind,
+      profile.definition.kind,
       supportLabel,
-      profile.document.support.level,
+      profile.definition.support.level,
       supportEvidenceSummary,
       supportEvidenceKinds.join(" "),
       detectionEvidenceSummary,
@@ -108,18 +107,18 @@ export function createProfileGridRows(
       profile.origin,
       capabilitiesSummary,
       schemaSummary,
-      profile.path,
-      profile.document.accessPaths.map((accessPath) => accessPath.key).join(" "),
+      profile.fileName,
+      profile.definition.accessPaths.map((accessPath) => accessPath.key).join(" "),
     ]
       .join(" ")
       .toLocaleLowerCase("de");
 
     return {
-      key: profile.document.key,
-      name: profile.document.name,
-      kind: profile.document.kind,
+      key: profile.definition.key,
+      name: profile.definition.name,
+      kind: profile.definition.kind,
       kindLabel,
-      supportLevel: profile.document.support.level,
+      supportLevel: profile.definition.support.level,
       supportLabel,
       supportEvidenceKinds,
       supportEvidenceLabels,
@@ -129,14 +128,14 @@ export function createProfileGridRows(
       detectionEvidenceSummary,
       origin: profile.origin,
       originLabel,
-      accessPathCount: profile.document.accessPaths.length,
+      accessPathCount: profile.definition.accessPaths.length,
       capabilitiesSummary,
       schemaSummary,
       health: diagnosticSummary.health,
       diagnosticsCount: diagnosticSummary.diagnosticsCount,
       ownDiagnosticsCount: diagnosticSummary.ownDiagnosticsCount,
       dependencyDiagnosticsCount: diagnosticSummary.dependencyDiagnosticsCount,
-      path: profile.path,
+      fileName: profile.fileName,
       searchText,
       profile,
     };
@@ -210,13 +209,13 @@ export function profileOriginEntries() {
   >;
 }
 
-function profileSchemaSummary(profile: RegistrySourceProfile) {
+function profileSchemaSummary(profile: InstalledProfileWithDefinition) {
   const parts = [
-    profile.document.sourceConfigSchema ? "Profil-Schema" : null,
-    profile.document.detection ? "Detection" : null,
+    profile.definition.sourceConfigSchema ? "Profil-Schema" : null,
+    profile.definition.detection ? "Detection" : null,
   ].filter(Boolean);
 
-  const pathSchemaCount = profile.document.accessPaths.filter(
+  const pathSchemaCount = profile.definition.accessPaths.filter(
     (accessPath) => accessPath.sourceConfigSchema,
   ).length;
 
@@ -229,19 +228,19 @@ function profileSchemaSummary(profile: RegistrySourceProfile) {
   return parts.join(" · ") || "keine Zusatzblöcke";
 }
 
-function profileCapabilities(profile: RegistrySourceProfile) {
-  return unique(profile.document.accessPaths.flatMap(accessPathCapabilities));
+function profileCapabilities(profile: InstalledProfileWithDefinition) {
+  return unique(profile.definition.accessPaths.flatMap(accessPathCapabilities));
 }
 
-function profileSupportEvidenceKinds(profile: RegistrySourceProfile) {
+function profileSupportEvidenceKinds(profile: InstalledProfileWithDefinition) {
   return unique(
-    profile.document.support.evidence?.map((evidence) => evidence.kind) ?? [],
+    profile.definition.support.evidence?.map((evidence) => evidence.kind) ?? [],
   );
 }
 
-function profileDetectionEvidenceKinds(profile: RegistrySourceProfile) {
+function profileDetectionEvidenceKinds(profile: InstalledProfileWithDefinition) {
   return unique(
-    profile.document.detection?.evidence?.map((evidence) => evidence.kind) ?? [],
+    profile.definition.detection?.evidence?.map((evidence) => evidence.kind) ?? [],
   );
 }
 

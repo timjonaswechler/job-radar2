@@ -1,0 +1,5 @@
+pub const MAX_CUSTOM_PROFILE_DOCUMENTS: usize = 256;
+pub const MAX_PROFILE_BYTES: usize = 1024 * 1024;
+pub const MAX_AGGREGATE_PROFILE_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_DIAGNOSTICS_PER_DOCUMENT: usize = 100;
+pub const MAX_DIAGNOSTICS_PER_SNAPSHOT: usize = 4096;

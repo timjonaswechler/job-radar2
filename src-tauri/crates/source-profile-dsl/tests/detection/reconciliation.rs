@@ -8,7 +8,7 @@ use source_profile_dsl::test_support::{
 
 fn profile() -> SourceProfileDocument {
     let mut profile: SourceProfileDocument = serde_json::from_str(include_str!(
-        "../../../../resources/profiles/greenhouse.json"
+        "../../../sources/resources/profiles/greenhouse.json"
     ))
     .unwrap();
     profile.key = "example".into();

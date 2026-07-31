@@ -677,6 +677,7 @@ src-tauri/crates/source-profile-dsl/tests/primitives/source_behavior/value.rs:23
 src-tauri/crates/source-profile-dsl/tests/primitives/source_behavior/value.rs:403:13:registration_residue:duplicate = registr	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/crates/source-profile-dsl/tests/primitives/source_behavior/value.rs:425:25:json_text:"text"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/crates/source-profile-dsl/tests/primitives/source_behavior/value.rs:567:109:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src-tauri/crates/sources/tests/installed_profiles.rs:250:34:registration_residue:raw_paths_documents_and_detection_plan	explicit_negative_or_contract_test	Installed Profile host-view contract verifies raw paths, authored documents, and Detection plans remain private.
 src-tauri/src/agent/chat_application.rs:821:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:822:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:823:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
@@ -717,7 +718,6 @@ src-tauri/src/search/request/tests.rs:304:15:json_text:"text"	final_implementati
 src-tauri/src/search/run/execution.rs:17:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/tests/support.rs:170:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/tests/support.rs:288:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/source_onboarding.rs:632:37:registration_residue:unsupported_status_for_isolated_test_registr	explicit_negative_or_contract_test	Private Source Onboarding contract test name; verifies unsupported Detection behavior without adding a registry seam.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/desktop/browser_acquisition.rs:106:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
@@ -953,7 +953,7 @@ src/features/sources/shared/schema-value-table.tsx:439:30:pacing:pacing	unrelate
 src/features/sources/source-form/source-config/config-value-control.tsx:154:10:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/source-form/source-config/source-config-table.tsx:46:47:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/workspace/sources-workspace-tabs.ts:28:31:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/features/sources/workspace/sources-workspace-view.tsx:88:43:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/sources/workspace/sources-workspace-view.tsx:92:43:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/lib/api/agent-chat.ts:23:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/agent-chat.ts:75:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
@@ -963,9 +963,9 @@ src/lib/api/search-requests.ts:239:24:browser_byte_dimension:browser_rendered_by
 src/lib/api/search-requests.ts:239:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:92:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:93:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/sources.ts:120:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/sources.ts:127:55:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/sources.ts:143:58:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/sources.ts:215:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/sources.ts:226:64:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/sources/profiles.ts:118:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/sources/profiles.ts:125:55:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/sources/profiles.ts:141:58:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/sources/profiles.ts:213:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/sources/profiles.ts:224:64:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/i18n/en.ts:152:23:rate_limit:rate limit	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.

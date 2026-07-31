@@ -5,88 +5,43 @@ use std::{
 };
 
 use serde::de::DeserializeOwned;
+use source_profile_dsl::definition::{
+    compile_source_with_admitted_profiles, CompileSourceOutcome, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, Diagnostics, SourceDocument,
+};
+use sources::installed::Profiles;
 
 use crate::source::validation::derive_source_validation_state;
-use source_profile_dsl::definition::SourceDocument;
-use source_profile_dsl::definition::SourceProfileDocument;
-use source_profile_dsl::definition::{
-    compile_source, validate_source_profile_document, CompileSourceOutcome,
-};
-use source_profile_dsl::definition::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
-};
 
-use super::builtins::{
-    EmbeddedRegistryDocument, BUILTIN_SOURCE_JSON_FILES, BUILTIN_SOURCE_PROFILE_JSON_FILES,
-    BUILT_IN_ORIGIN, CUSTOM_ORIGIN,
-};
-use super::snapshot::{RegistrySource, RegistrySourceProfile, SourceProfileRegistrySnapshot};
+use super::snapshot::{RegistrySource, SourceProfileRegistrySnapshot};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RegistryDocumentKind {
-    SourceProfile,
-    Source,
-}
-
-impl RegistryDocumentKind {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::SourceProfile => "source_profile",
-            Self::Source => "source",
-        }
-    }
-}
+const BUILT_IN_ORIGIN: &str = "built_in";
+const CUSTOM_ORIGIN: &str = "custom";
+const BUILTIN_SOURCE_JSON_FILES: &[(&str, &str)] = &[];
 
 #[derive(Clone, Debug)]
-struct RawRegistryDocument {
-    kind: RegistryDocumentKind,
+struct RawSourceDocument {
     origin: &'static str,
     path: String,
     contents: String,
 }
 
 pub fn load_snapshot(app_data_dir: impl AsRef<Path>) -> SourceProfileRegistrySnapshot {
-    load_snapshot_with_builtins(
-        app_data_dir,
-        BUILTIN_SOURCE_PROFILE_JSON_FILES,
-        BUILTIN_SOURCE_JSON_FILES,
-    )
-}
-
-pub fn load_snapshot_with_builtins(
-    app_data_dir: impl AsRef<Path>,
-    builtin_source_profiles: &[EmbeddedRegistryDocument<'_>],
-    builtin_sources: &[EmbeddedRegistryDocument<'_>],
-) -> SourceProfileRegistrySnapshot {
     let app_data_dir = app_data_dir.as_ref();
+    let profiles = Profiles::load(app_data_dir)
+        .expect("embedded Built-in Source Profiles must pass installed admission");
     let mut diagnostics = Vec::new();
 
-    let mut profile_documents =
-        embedded_documents(RegistryDocumentKind::SourceProfile, builtin_source_profiles);
-    profile_documents.extend(custom_documents(
-        RegistryDocumentKind::SourceProfile,
-        app_data_dir.join("source-profiles"),
-        &mut diagnostics,
-    ));
-
-    let mut source_documents = embedded_documents(RegistryDocumentKind::Source, builtin_sources);
-    source_documents.extend(custom_documents(
-        RegistryDocumentKind::Source,
+    let mut source_documents = embedded_source_documents(BUILTIN_SOURCE_JSON_FILES);
+    source_documents.extend(custom_source_documents(
         app_data_dir.join("sources"),
         &mut diagnostics,
     ));
 
-    let profiles = load_profile_documents(profile_documents, &mut diagnostics);
     let source_documents = load_source_documents(source_documents, &mut diagnostics);
-    let profile_only_registry = SourceProfileRegistrySnapshot {
-        profiles: profiles.clone(),
-        sources: Vec::new(),
-        diagnostics: Vec::new(),
-    };
-
     let mut sources = Vec::new();
     for source in source_documents {
-        let compile_outcome = compile_source(&source.document, &profile_only_registry);
+        let compile_outcome = compile_source_with_admitted_profiles(&source.document, &profiles);
         let validation_state = derive_source_validation_state(&source.document, &compile_outcome);
         let effective_profile = match &compile_outcome {
             CompileSourceOutcome::Compiled { source, .. } => source.effective_profile().cloned(),
@@ -103,21 +58,13 @@ pub fn load_snapshot_with_builtins(
         });
     }
 
-    SourceProfileRegistrySnapshot {
-        profiles,
-        sources,
-        diagnostics,
-    }
+    SourceProfileRegistrySnapshot::new(profiles, sources, diagnostics)
 }
 
-fn embedded_documents(
-    kind: RegistryDocumentKind,
-    documents: &[EmbeddedRegistryDocument<'_>],
-) -> Vec<RawRegistryDocument> {
+fn embedded_source_documents(documents: &[(&str, &str)]) -> Vec<RawSourceDocument> {
     documents
         .iter()
-        .map(|(path, contents)| RawRegistryDocument {
-            kind,
+        .map(|(path, contents)| RawSourceDocument {
             origin: BUILT_IN_ORIGIN,
             path: (*path).to_string(),
             contents: (*contents).to_string(),
@@ -125,11 +72,10 @@ fn embedded_documents(
         .collect()
 }
 
-fn custom_documents(
-    kind: RegistryDocumentKind,
+fn custom_source_documents(
     directory: PathBuf,
     diagnostics: &mut Diagnostics,
-) -> Vec<RawRegistryDocument> {
+) -> Vec<RawSourceDocument> {
     let mut paths = Vec::new();
     let entries = match fs::read_dir(&directory) {
         Ok(entries) => entries,
@@ -137,10 +83,10 @@ fn custom_documents(
         Err(error) => {
             diagnostics.push(registry_diagnostic(
                 "registry_directory_read_error",
-                format!("Could not read registry directory: {error}"),
+                format!("Could not read Source registry directory: {error}"),
                 "",
                 serde_json::json!({
-                    "documentKind": kind.as_str(),
+                    "documentKind": "source",
                     "origin": CUSTOM_ORIGIN,
                     "path": directory.display().to_string(),
                 }),
@@ -159,10 +105,10 @@ fn custom_documents(
             }
             Err(error) => diagnostics.push(registry_diagnostic(
                 "registry_directory_entry_read_error",
-                format!("Could not read registry directory entry: {error}"),
+                format!("Could not read Source registry directory entry: {error}"),
                 "",
                 serde_json::json!({
-                    "documentKind": kind.as_str(),
+                    "documentKind": "source",
                     "origin": CUSTOM_ORIGIN,
                     "path": directory.display().to_string(),
                 }),
@@ -176,8 +122,7 @@ fn custom_documents(
         .filter_map(|path| {
             let path_label = path.display().to_string();
             match fs::read_to_string(&path) {
-                Ok(contents) => Some(RawRegistryDocument {
-                    kind,
+                Ok(contents) => Some(RawSourceDocument {
                     origin: CUSTOM_ORIGIN,
                     path: path_label,
                     contents,
@@ -185,10 +130,10 @@ fn custom_documents(
                 Err(error) => {
                     diagnostics.push(registry_diagnostic(
                         "registry_document_read_error",
-                        format!("Could not read registry document: {error}"),
+                        format!("Could not read Source document: {error}"),
                         "",
                         serde_json::json!({
-                            "documentKind": kind.as_str(),
+                            "documentKind": "source",
                             "origin": CUSTOM_ORIGIN,
                             "path": path_label,
                         }),
@@ -207,45 +152,6 @@ fn is_json_file(path: &Path) -> bool {
     )
 }
 
-fn load_profile_documents(
-    documents: Vec<RawRegistryDocument>,
-    diagnostics: &mut Diagnostics,
-) -> Vec<RegistrySourceProfile> {
-    let mut profiles = Vec::new();
-    let mut seen_keys = HashMap::<String, (&'static str, String)>::new();
-
-    for document in documents {
-        let Some(parsed) = parse_registry_document::<SourceProfileDocument>(&document, diagnostics)
-        else {
-            continue;
-        };
-        if !validate_document_basics(&document, parsed.schema_version, &parsed.key, diagnostics) {
-            continue;
-        }
-        if let Some((first_origin, first_path)) = seen_keys.get(&parsed.key) {
-            diagnostics.push(duplicate_key_diagnostic(
-                &document,
-                &parsed.key,
-                *first_origin,
-                first_path,
-            ));
-            continue;
-        }
-
-        let profile_diagnostics = validate_source_profile_document(&parsed);
-        diagnostics.extend(profile_diagnostics);
-
-        seen_keys.insert(parsed.key.clone(), (document.origin, document.path.clone()));
-        profiles.push(RegistrySourceProfile {
-            origin: document.origin.to_string(),
-            path: document.path,
-            document: parsed,
-        });
-    }
-
-    profiles
-}
-
 #[derive(Clone, Debug)]
 struct SourceDocumentEntry {
     origin: String,
@@ -254,25 +160,32 @@ struct SourceDocumentEntry {
 }
 
 fn load_source_documents(
-    documents: Vec<RawRegistryDocument>,
+    documents: Vec<RawSourceDocument>,
     diagnostics: &mut Diagnostics,
 ) -> Vec<SourceDocumentEntry> {
     let mut sources = Vec::new();
     let mut seen_keys = HashMap::<String, (&'static str, String)>::new();
 
     for document in documents {
-        let Some(parsed) = parse_registry_document::<SourceDocument>(&document, diagnostics) else {
+        let Some(parsed) = parse_source_document::<SourceDocument>(&document, diagnostics) else {
             continue;
         };
         if !validate_document_basics(&document, parsed.schema_version, &parsed.key, diagnostics) {
             continue;
         }
         if let Some((first_origin, first_path)) = seen_keys.get(&parsed.key) {
-            diagnostics.push(duplicate_key_diagnostic(
-                &document,
-                &parsed.key,
-                *first_origin,
-                first_path,
+            diagnostics.push(registry_diagnostic(
+                "duplicate_source_key",
+                format!("Source key `{}` is already defined", parsed.key),
+                "/key",
+                serde_json::json!({
+                    "documentKind": "source",
+                    "key": parsed.key,
+                    "origin": document.origin,
+                    "path": document.path,
+                    "existingOrigin": first_origin,
+                    "existingPath": first_path,
+                }),
             ));
             continue;
         }
@@ -288,8 +201,8 @@ fn load_source_documents(
     sources
 }
 
-fn parse_registry_document<T>(
-    document: &RawRegistryDocument,
+fn parse_source_document<T>(
+    document: &RawSourceDocument,
     diagnostics: &mut Diagnostics,
 ) -> Option<T>
 where
@@ -301,15 +214,12 @@ where
             diagnostics.push(Diagnostic {
                 category: DiagnosticCategory::Schema,
                 code: "invalid_document_shape".to_string(),
-                message: format!(
-                    "{} document shape is invalid: {error}",
-                    document.kind.as_str()
-                ),
+                message: format!("source document shape is invalid: {error}"),
                 severity: DiagnosticSeverity::Error,
                 path: "".to_string(),
                 strategy_key: None,
                 details: Some(serde_json::json!({
-                    "documentKind": document.kind.as_str(),
+                    "documentKind": "source",
                     "origin": document.origin,
                     "path": document.path,
                 })),
@@ -320,7 +230,7 @@ where
 }
 
 fn validate_document_basics(
-    document: &RawRegistryDocument,
+    document: &RawSourceDocument,
     schema_version: u64,
     key: &str,
     diagnostics: &mut Diagnostics,
@@ -329,18 +239,15 @@ fn validate_document_basics(
     if schema_version != 3 {
         diagnostics.push(registry_diagnostic(
             "unsupported_schema_version",
-            format!(
-                "{} document `{key}` uses unsupported schemaVersion `{schema_version}`",
-                document.kind.as_str()
-            ),
+            format!("Source `{key}` uses unsupported schemaVersion `{schema_version}`"),
             "/schemaVersion",
             serde_json::json!({
-                "documentKind": document.kind.as_str(),
+                "documentKind": "source",
                 "origin": document.origin,
                 "path": document.path,
                 "key": key,
                 "schemaVersion": schema_version,
-                "expectedSchemaVersion": 2,
+                "expectedSchemaVersion": 3,
             }),
         ));
         valid = false;
@@ -348,10 +255,10 @@ fn validate_document_basics(
     if !is_technical_key(key) {
         diagnostics.push(registry_diagnostic(
             "invalid_document_key",
-            format!("{} document key `{key}` is invalid", document.kind.as_str()),
+            format!("Source key `{key}` is invalid"),
             "/key",
             serde_json::json!({
-                "documentKind": document.kind.as_str(),
+                "documentKind": "source",
                 "origin": document.origin,
                 "path": document.path,
                 "key": key,
@@ -363,13 +270,10 @@ fn validate_document_basics(
     if filename_key(&document.path).as_deref() != Some(key) {
         diagnostics.push(registry_diagnostic(
             "filename_key_mismatch",
-            format!(
-                "{} document file name must match key `{key}`",
-                document.kind.as_str()
-            ),
+            format!("Source file name must match key `{key}`"),
             "/key",
             serde_json::json!({
-                "documentKind": document.kind.as_str(),
+                "documentKind": "source",
                 "origin": document.origin,
                 "path": document.path,
                 "key": key,
@@ -378,42 +282,7 @@ fn validate_document_basics(
         ));
         valid = false;
     }
-
     valid
-}
-
-fn duplicate_key_diagnostic(
-    document: &RawRegistryDocument,
-    key: &str,
-    first_origin: &'static str,
-    first_path: &str,
-) -> Diagnostic {
-    if document.kind == RegistryDocumentKind::SourceProfile
-        && first_origin == BUILT_IN_ORIGIN
-        && document.origin == CUSTOM_ORIGIN
-    {
-        return Diagnostic::duplicate_builtin_custom_source_profile_key(key);
-    }
-
-    registry_diagnostic(
-        match document.kind {
-            RegistryDocumentKind::SourceProfile => "duplicate_source_profile_key",
-            RegistryDocumentKind::Source => "duplicate_source_key",
-        },
-        format!(
-            "{} key `{key}` is already defined by another registry document",
-            document.kind.as_str()
-        ),
-        "/key",
-        serde_json::json!({
-            "documentKind": document.kind.as_str(),
-            "key": key,
-            "origin": document.origin,
-            "path": document.path,
-            "existingOrigin": first_origin,
-            "existingPath": first_path,
-        }),
-    )
 }
 
 fn registry_diagnostic(

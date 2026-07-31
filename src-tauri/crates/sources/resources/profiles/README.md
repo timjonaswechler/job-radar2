@@ -8,9 +8,9 @@ Each profile must remain declarative and reusable across a behavior family. Sear
 
 Deterministic response and expected-output fixtures live with the Rust integration tests:
 
-- [`greenhouse`](../../tests/fixtures/greenhouse/)
-- [`workday`](../../tests/fixtures/workday/)
-- [`successfactors`](../../tests/fixtures/successfactors/)
+- [`greenhouse`](../../../../tests/fixtures/greenhouse/)
+- [`workday`](../../../../tests/fixtures/workday/)
+- [`successfactors`](../../../../tests/fixtures/successfactors/)
 
 The fixture README files distinguish synthetic regression data, vendor documentation, dated public observations, and historical live checks. Dated observations do not guarantee current provider behavior.
 

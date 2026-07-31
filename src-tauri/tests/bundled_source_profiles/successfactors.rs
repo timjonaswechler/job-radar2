@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn successfactors_builtin_profile_compiles_and_executes_sitemap_html_fallback_fixtures() {
-    let profile_text = read_text("resources/profiles/successfactors.json");
+    let profile_text = read_text("crates/sources/resources/profiles/successfactors.json");
     assert_no_v1_profile_vocabulary(&profile_text);
 
     let profile_value: Value = serde_json::from_str(&profile_text).unwrap();

@@ -13,7 +13,7 @@ import { resolveSource } from "@/features/sources/view-model/registry-resolution
 import {
   updateSource,
   type RegistrySource,
-  type RegistrySourceProfile,
+  type InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 
 import {
@@ -25,7 +25,7 @@ import {
 
 type UseSourceEditProps = {
   source: RegistrySource | null;
-  profilesByKey: Map<string, RegistrySourceProfile>;
+  profilesByKey: Map<string, InstalledProfileWithDefinition>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdated?: () => Promise<unknown> | unknown;

@@ -14,12 +14,12 @@ import {
   supportLevelLabels,
 } from "@/features/sources/labels";
 import type {
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
 
 type ProfileDetailsProps = {
-  profile: RegistrySourceProfile;
+  profile: InstalledProfileWithDefinition;
   diagnostics: StructuredDiagnostic[];
 };
 
@@ -27,7 +27,7 @@ export function ProfileDetails({
   profile,
   diagnostics,
 }: ProfileDetailsProps) {
-  const accessPaths = [...profile.document.accessPaths].sort((left, right) =>
+  const accessPaths = [...profile.definition.accessPaths].sort((left, right) =>
     left.key.localeCompare(right.key, "de"),
   );
 
@@ -39,33 +39,26 @@ export function ProfileDetails({
           diagnostics={diagnostics}
         />
       ) : null}
-      {profile.document.diagnostics?.length ? (
-        <InlineDiagnostics
-          title="Im Profil gespeicherte Diagnosen"
-          diagnostics={profile.document.diagnostics}
-        />
-      ) : null}
-
       <dl className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
-        <DetailRow label="Profil-Key" value={profile.document.key} mono />
-        <DetailRow label="Name" value={profile.document.name} />
+        <DetailRow label="Profil-Key" value={profile.definition.key} mono />
+        <DetailRow label="Name" value={profile.definition.name} />
         <DetailRow
           label="Kind"
-          value={profileKindLabels[profile.document.kind]}
+          value={profileKindLabels[profile.definition.kind]}
         />
         <DetailRow
           label="Deklarierter Support"
-          value={supportLevelLabels[profile.document.support.level]}
+          value={supportLevelLabels[profile.definition.support.level]}
         />
         <DetailRow label="Ursprung" value={originLabels[profile.origin]} />
-        <DetailRow label="Registry-Dokument" value={profile.path} mono />
+        <DetailRow label="Registry-Dokument" value={profile.fileName} mono />
       </dl>
 
-      {profile.document.description ? (
-        <p className="text-muted-foreground">{profile.document.description}</p>
+      {profile.definition.description ? (
+        <p className="text-muted-foreground">{profile.definition.description}</p>
       ) : null}
       <div className="flex flex-wrap gap-1">
-        {profile.document.support.knownIssues?.map((issue, index) => (
+        {profile.definition.support.knownIssues?.map((issue, index) => (
           <Badge key={`${issue.message}-${index}`} variant="warning-light">
             {issue.scope ? `${issue.scope}: ` : ""}
             {issue.message}
@@ -74,27 +67,27 @@ export function ProfileDetails({
       </div>
 
       <ProfileSupportEvidenceSection
-        evidence={profile.document.support.evidence ?? []}
+        evidence={profile.definition.support.evidence ?? []}
       />
       <ProfileDetectionEvidenceSection
-        evidence={profile.document.detection?.evidence ?? []}
+        evidence={profile.definition.detection?.evidence ?? []}
       />
 
       <OptionalSchemaValuePreview
         title="support"
         description="Support Level, bekannte Einschränkungen und Evidenz des Source Profile."
-        value={profile.document.support}
+        value={profile.definition.support}
         schemaRef={sourceBehaviorSchemaRefs.supportMetadata}
       />
       <OptionalSchemaValuePreview
         title="Profil sourceConfigSchema"
         description="Schema-Anteil, der für alle Access Paths dieses Profils gilt."
-        value={profile.document.sourceConfigSchema}
+        value={profile.definition.sourceConfigSchema}
       />
       <OptionalSchemaValuePreview
         title="Detection-Regeln"
         description="Regeln, wie dieses Profil bei eingereichten URLs eine Source Proposal erzeugt."
-        value={profile.document.detection}
+        value={profile.definition.detection}
         schemaRef={sourceBehaviorSchemaRefs.detection}
       />
 

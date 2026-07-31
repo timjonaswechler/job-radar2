@@ -5,12 +5,12 @@ import { useSourceRegistryTab } from "@/features/sources/registry/source/use-sou
 import type { DiagnosticIndex } from "@/features/sources/view-model/diagnostics";
 import type {
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 
 type SourceRegistryTabProps = {
   sources: RegistrySource[];
-  profilesByKey: Map<string, RegistrySourceProfile>;
+  profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnosticIndex: DiagnosticIndex;
   loading: boolean;
   onAdd: () => void;

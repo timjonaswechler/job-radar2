@@ -3,13 +3,13 @@ import type {
   JsonValue,
   ProfileAccessPathDefinition,
   RegistrySource,
-  RegistrySourceProfile,
+  InstalledProfileWithDefinition,
   SourceOwnedSelectedAccessPath,
   SupportLevel,
 } from "@/lib/api/sources";
 
 export type SourceResolution = {
-  profile: RegistrySourceProfile | null;
+  profile: InstalledProfileWithDefinition | null;
   profileAccessPath: ProfileAccessPathDefinition | null;
   baseProfileAccessPath: ProfileAccessPathDefinition | null;
   sourceOwnedAccessPath: SourceOwnedSelectedAccessPath | null;
@@ -20,7 +20,7 @@ export type SourceResolution = {
 
 export function resolveSource(
   source: RegistrySource,
-  profilesByKey: Map<string, RegistrySourceProfile>,
+  profilesByKey: Map<string, InstalledProfileWithDefinition>,
 ): SourceResolution {
   const selectedAccessPath = source.document.selectedAccessPath;
 
@@ -41,10 +41,10 @@ export function resolveSource(
 
   const profile = profilesByKey.get(selectedAccessPath.profileKey) ?? null;
   const baseProfileAccessPath =
-    profile?.document.accessPaths.find(
+    profile?.definition.accessPaths.find(
       (accessPath) => accessPath.key === selectedAccessPath.pathKey,
     ) ?? null;
-  const effectiveProfile = source.effectiveProfile ?? profile?.document;
+  const effectiveProfile = source.effectiveProfile ?? profile?.definition;
   const profileAccessPath =
     effectiveProfile?.accessPaths.find(
       (accessPath) => accessPath.key === selectedAccessPath.pathKey,
@@ -56,10 +56,10 @@ export function resolveSource(
     baseProfileAccessPath,
     sourceOwnedAccessPath: null,
     effectiveSourceConfigSchema: effectiveSourceConfigSchema(
-      profile?.document.sourceConfigSchema,
+      profile?.definition.sourceConfigSchema,
       profileAccessPath?.sourceConfigSchema,
     ),
-    supportLevel: profile?.document.support.level ?? null,
+    supportLevel: profile?.definition.support.level ?? null,
     capabilities: profileAccessPath ? accessPathCapabilities(profileAccessPath) : [],
   };
 }

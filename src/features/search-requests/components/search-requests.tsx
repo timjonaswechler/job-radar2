@@ -29,7 +29,7 @@ import {
 } from "@/lib/api/search-requests";
 import { getAppPreferences, type AppPreferences } from "@/lib/api/app-preferences";
 import {
-  getSourceProfileRegistrySnapshot,
+  getSourceInventory,
   type RegistrySource,
 } from "@/lib/api/sources";
 
@@ -63,7 +63,7 @@ export function SearchRequests() {
       setError(null);
       const [requests, registrySnapshot, preferences] = await Promise.all([
         listSearchRequests(),
-        getSourceProfileRegistrySnapshot(),
+        getSourceInventory(),
         getAppPreferences(),
       ]);
       setData({ requests, sources: registrySnapshot.sources, preferences });

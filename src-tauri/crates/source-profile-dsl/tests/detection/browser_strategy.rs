@@ -144,7 +144,7 @@ fn d03_descriptor_ties_authored_and_compiled_browser_shape() {
 
 fn profile(key: &str, browser_strategies: Vec<Value>) -> SourceProfileDocument {
     let mut value: Value = serde_json::from_str(include_str!(
-        "../../../../resources/profiles/greenhouse.json"
+        "../../../sources/resources/profiles/greenhouse.json"
     ))
     .unwrap();
     value["key"] = json!(key);

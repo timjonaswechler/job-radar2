@@ -2,10 +2,10 @@ import { ProfileDetailsDrawer } from "@/features/sources/registry/profile/profil
 import { ProfileRegistryGrid } from "@/features/sources/registry/profile/profile-registry-grid";
 import { useProfileRegistryTab } from "@/features/sources/registry/profile/use-profile-registry-tab";
 import type { DiagnosticIndex } from "@/features/sources/view-model/diagnostics";
-import type { RegistrySourceProfile } from "@/lib/api/sources";
+import type { InstalledProfileWithDefinition } from "@/lib/api/sources";
 
 type ProfileRegistryTabProps = {
-  profiles: RegistrySourceProfile[];
+  profiles: InstalledProfileWithDefinition[];
   diagnosticIndex: DiagnosticIndex;
   loading: boolean;
   onAdd: () => void;

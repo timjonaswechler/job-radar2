@@ -75,7 +75,7 @@ Das zentrale [`Dokumentationsportal`](docs/index.md) führt nach Zielgruppe und 
 
 Alle entwicklungsbezogenen Dokumente liegen gebündelt unter [`docs/development/`](docs/development/). Die eingebauten Source-Profile liegen in:
 
-- [`src-tauri/resources/profiles/`](src-tauri/resources/profiles/)
+- [`src-tauri/crates/sources/resources/profiles/`](src-tauri/crates/sources/resources/profiles/)
 
 ## Lokal starten
 

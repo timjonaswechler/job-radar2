@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core"
-
 export type JsonValue =
   | null
   | boolean
@@ -381,243 +379,27 @@ export type SourceValidationState = {
   diagnostics?: Diagnostics
 }
 
-export type RegistrySourceProfile = {
-  origin: SourceRegistryDocumentOrigin
-  path: string
-  document: SourceProfileDocument
-}
-
-export type RegistrySource = {
-  origin: SourceRegistryDocumentOrigin
-  path: string
-  document: SourceDocument
-  validationState: SourceValidationState
-  effectiveProfile?: SourceProfileDocument
-}
-
 export type SavedSource = {
   origin: SourceRegistryDocumentOrigin
   document: SourceDocument
   validationState: SourceValidationState
 }
 
-export type CheckReportKind = "source_live_check"
+export type ProfileDefinition = Omit<
+  SourceProfileDocument,
+  "schemaVersion" | "diagnostics"
+>
 
-export type CheckReportSubjectType = "source"
-
-export type CheckReportResult = "passed" | "failed"
-
-export type CheckReportSubject = {
-  type: CheckReportSubjectType
-  key: string
+export type InstalledProfile = {
+  origin: SourceRegistryDocumentOrigin
+  admission: "admitted" | "rejected"
+  fileName: string
+  definition?: ProfileDefinition
 }
 
-export type CheckFingerprint = {
-  kind: string
-  sha256: string
-  reference?: string
-}
+export type InstalledProfileWithDefinition = InstalledProfile & { definition: ProfileDefinition }
 
-export type CheckReport = {
-  schemaVersion: 1
-  kind: CheckReportKind
-  subject: CheckReportSubject
-  checkedAt: string
-  logicVersion: string
-  result: CheckReportResult
-  fingerprints: CheckFingerprint[]
+export type InstalledProfilesView = {
+  profiles: InstalledProfile[]
   diagnostics: Diagnostics
-  details: JsonObject
-}
-
-export type CheckReportFreshnessState = "fresh" | "stale"
-
-export type CheckReportStaleReason =
-  | "logic_version_changed"
-  | "missing_report_fingerprint"
-  | "changed_fingerprint_sha256"
-  | "unexpected_report_fingerprint"
-
-export type CheckReportStaleDetail = {
-  kind: string
-  reference?: string
-  reason: CheckReportStaleReason
-  expectedSha256?: string
-  actualSha256?: string
-  expectedValue?: string
-  actualValue?: string
-}
-
-export type CheckReportFreshness = {
-  state: CheckReportFreshnessState
-  staleFingerprints: CheckReportStaleDetail[]
-}
-
-export type SourceLiveCheckReportStatus = {
-  state: "fresh" | "stale" | "unknown"
-  report?: CheckReport | null
-  freshness?: CheckReportFreshness | null
-}
-
-export type SourceProfileRegistrySnapshot = {
-  profiles: RegistrySourceProfile[]
-  sources: RegistrySource[]
-  diagnostics: Diagnostics
-}
-
-export type SourceProposalEvidence = {
-  kind: DetectionEvidenceKind
-  message: string
-  path?: string
-  descriptorPath: string
-}
-
-export type SourceProposal = {
-  profileKey: string
-  profileName: string
-  recommendedAccessPathKey: string
-  recommendedAccessPathName: string
-  sourceConfig: JsonObject
-  keyCandidates: string[]
-  nameCandidates: string[]
-  captures: Record<string, string>
-  evidence: SourceProposalEvidence[]
-  supportLevel: SupportLevel
-  provenance: DetectionProposalProvenance
-}
-
-export type DetectionOrigin = { strategyKey: string; schemaPath: string }
-export type DetectionProposalProvenance = {
-  captures: Record<string, DetectionOrigin[]>
-  sourceConfig: Record<string, DetectionOrigin[]>
-  recommendation: DetectionOrigin[]
-  evidence: DetectionOrigin[][]
-}
-
-export type UnsupportedSourceProfile = {
-  profileKey: string
-  profileName: string
-  supportLevel: SupportLevel
-  captures: Record<string, string>
-  evidence: SourceProposalEvidence[]
-  provenance: DetectionProposalProvenance
-}
-
-export type SourceProposalDetectionStatus =
-  | "matched"
-  | "ambiguous"
-  | "unsupported"
-  | "failed"
-  | "budget_exhausted"
-  | "cancelled"
-
-export type SourceProposalDetectionResult = {
-  status: SourceProposalDetectionStatus
-  proposals: SourceProposal[]
-  unsupportedProfiles: UnsupportedSourceProfile[]
-  diagnostics: Diagnostics
-}
-
-export type PhaseUsage = {
-  strategyAttempts: number
-  requests: number
-  producedItems: number
-  durationMs: number
-  pages: number
-  browserActions: number
-  fanOut: number
-  responseBytes: number
-  browserRenderedBytes: number
-}
-
-export type PhaseExecutionReport = {
-  usage: PhaseUsage
-  completion:
-    | { type: "accepted" }
-    | { type: "policy_unsatisfied" }
-    | { type: "execution_failed" }
-    | { type: "cancelled"; reason: "user_cancelled" }
-    | {
-        type: "budget_exhausted"
-        exhaustion: {
-          dimension: string
-          requested: number
-          remaining: number
-          limitSources: string[]
-        }
-      }
-}
-
-export type DetectionAttempt =
-  | { type: "matched"; value: SourceProposal }
-  | { type: "unsupported"; value: UnsupportedSourceProfile }
-  | { type: "failed" | "conflict" | "budget_exhausted" | "cancelled"; value: Diagnostics }
-
-export type DetectionProfileCompletion =
-  | { type: "matched" | "unsupported" }
-  | { type: "rejected"; strategyKey: string; kind: string }
-  | { type: "execution_failed"; strategyKey?: string; kind: string | { type: string; kind?: string } }
-
-export type DetectionProfileOutcome = {
-  profileKey: string
-  completion: DetectionProfileCompletion
-  diagnostics: Diagnostics
-}
-
-export type DetectionOperationResult = SourceProposalDetectionResult & {
-  diagnostics: Diagnostics
-  report: PhaseExecutionReport
-}
-
-export function getSourceProfileRegistrySnapshot() {
-  return invoke<SourceProfileRegistrySnapshot>(
-    "get_source_profile_registry_snapshot",
-  )
-}
-
-export function listSourceProfiles() {
-  return invoke<RegistrySourceProfile[]>("list_source_profiles")
-}
-
-export function listSources() {
-  return invoke<RegistrySource[]>("list_sources")
-}
-
-export function listSourceDiagnostics() {
-  return invoke<Diagnostics>("list_source_diagnostics")
-}
-
-export function checkSource(sourceKey: string) {
-  return invoke<CheckReport>("check_source", { sourceKey })
-}
-
-export function checkAndActivateSource(sourceKey: string) {
-  return invoke<CheckReport>("check_and_activate_source", { sourceKey })
-}
-
-export function checkAndReactivateSource(sourceKey: string) {
-  return invoke<CheckReport>("check_and_reactivate_source", { sourceKey })
-}
-
-export function getSourceLiveCheckReportStatus(sourceKey: string) {
-  return invoke<SourceLiveCheckReportStatus>(
-    "get_source_live_check_report_status",
-    { sourceKey },
-  )
-}
-
-export function detectSourceProposalFromUrl(url: string) {
-  return invoke<DetectionOperationResult>("detect_source_proposal_from_url", { url })
-}
-
-export function createSource(draft: CreateSourceDraft) {
-  return invoke<SavedSource>("create_source", { draft })
-}
-
-export function updateSource(revision: ReviseSourceDefinition) {
-  return invoke<SavedSource>("update_source", { revision })
-}
-
-export function setSourceInactive(sourceKey: string, status: InactiveSourceStatus) {
-  return invoke<SavedSource>("set_source_inactive", { sourceKey, status })
 }

@@ -1,20 +1,12 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use sources::installed::Profiles;
 
 use crate::source::validation::SourceValidationState;
-use source_profile_dsl::definition::Diagnostics;
-use source_profile_dsl::definition::SourceDocument;
-use source_profile_dsl::definition::SourceProfileDocument;
-use source_profile_dsl::definition::{CompileSourceOutcome, SourceProfileLookup};
+use source_profile_dsl::definition::{
+    CompileSourceOutcome, Diagnostics, SourceDocument, SourceProfileDocument, SourceProfileLookup,
+};
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegistrySourceProfile {
-    pub origin: String,
-    pub path: String,
-    pub document: SourceProfileDocument,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrySource {
     pub origin: String,
@@ -25,38 +17,47 @@ pub struct RegistrySource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effective_profile: Option<SourceProfileDocument>,
     /// Exact outcome prepared while loading this immutable registry snapshot.
-    /// Productive callers reuse it instead of recompiling or reconstructing plans.
     #[serde(skip)]
     pub compile_outcome: Option<CompileSourceOutcome>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+/// Temporary Desktop-owned Source snapshot. Installed Profile admission is
+/// owned by `sources::installed` and is deliberately not serialized here.
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceProfileRegistrySnapshot {
-    pub profiles: Vec<RegistrySourceProfile>,
+    #[serde(skip)]
+    profiles: Profiles,
     pub sources: Vec<RegistrySource>,
     pub diagnostics: Diagnostics,
 }
 
-impl SourceProfileLookup for SourceProfileRegistrySnapshot {
-    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
-        self.profiles
-            .iter()
-            .find(|profile| profile.document.key == key)
-            .map(|profile| &profile.document)
-    }
-}
-
 impl SourceProfileRegistrySnapshot {
-    pub fn profile(&self, key: &str) -> Option<&RegistrySourceProfile> {
-        self.profiles
-            .iter()
-            .find(|profile| profile.document.key == key)
+    pub fn new(profiles: Profiles, sources: Vec<RegistrySource>, diagnostics: Diagnostics) -> Self {
+        Self {
+            profiles,
+            sources,
+            diagnostics,
+        }
+    }
+
+    pub fn installed_profiles(&self) -> &Profiles {
+        &self.profiles
+    }
+
+    pub fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.profiles.profile(key)
     }
 
     pub fn source(&self, key: &str) -> Option<&RegistrySource> {
         self.sources
             .iter()
             .find(|source| source.document.key == key)
+    }
+}
+
+impl SourceProfileLookup for SourceProfileRegistrySnapshot {
+    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.profiles.profile(key)
     }
 }

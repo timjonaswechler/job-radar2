@@ -23,12 +23,13 @@ pub(crate) mod template;
 
 pub use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use compiler::{
-    compile_source, forbidden_request_key_behavior, validate_source_profile_document,
-    CompileSourceOutcome, CompiledSource, CompiledSourceAccess, CompiledSourceProvenance,
-    EffectiveSourceProfile, ProfileCompilerInput, ProvenanceEntry, ProvenanceOrigin,
-    ProvenancePath, ProvenancePathSegment, SourceOwnedAccessPath, SourceProfileLookup,
-    SourceRuntimeBinding, SourceRuntimeBindingDependencies, MAX_FALLBACK_STRATEGIES,
+    compile_source, compile_source_with_admitted_profiles, forbidden_request_key_behavior,
+    prepare_source_profile_document, validate_source_profile_document, CompileSourceOutcome,
+    CompiledSource, CompiledSourceAccess, CompiledSourceProvenance, EffectiveSourceProfile,
+    ProfileCompilerInput, ProvenanceEntry, ProvenanceOrigin, ProvenancePath, ProvenancePathSegment,
+    SourceOwnedAccessPath, SourceProfileLookup, SourceRuntimeBinding,
+    SourceRuntimeBindingDependencies, MAX_FALLBACK_STRATEGIES,
 };
 pub use diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 pub use documents::*;
-pub use profile::SourceProfileDocument;
+pub use profile::{SourceProfileDocument, SourceProfileKind};
