@@ -1,7 +1,7 @@
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 
-use crate::{browser_runtime::ManagedBrowserAcquisition, profile_dsl::ReqwestProfileHttpClient};
-use source_profile_dsl::{
+use crate::{adapters::ReqwestProfileHttpClient, browser_runtime::ManagedBrowserAcquisition};
+use source_engine::{
     definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
     execution::{
         BrowserAcquisition, DetailField, PostingOccurrence, ProfileHttpClient,
@@ -518,7 +518,7 @@ fn posting_occurrence(
     posting: &JobPosting,
     posting_source: &JobPostingSource,
 ) -> Result<PostingOccurrence, String> {
-    let (reference, identity) = source_profile_dsl::execution::validate_posting_reference(
+    let (reference, identity) = source_engine::execution::validate_posting_reference(
         &posting_source.source_key,
         &posting_source.url,
         None,
@@ -527,7 +527,7 @@ fn posting_occurrence(
     Ok(PostingOccurrence {
         identity,
         reference,
-        provider_values: source_profile_dsl::execution::ProviderValues {
+        provider_values: source_engine::execution::ProviderValues {
             title: Some(posting.title.clone()),
             company: Some(posting.company.clone()),
             locations: posting.locations.clone(),

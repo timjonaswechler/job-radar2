@@ -1,7 +1,7 @@
 use std::{fmt, path::Path};
 
 use serde::{Deserialize, Serialize};
-use source_profile_dsl::{
+use source_engine::{
     definition::{
         CompileSourceOutcome, CompiledSource, DetectionDocument, Diagnostic, Diagnostics,
         JsonSchemaObject, ReusableAccessPathDocument, SourceProfileDocument, SourceProfileKind,
@@ -235,7 +235,7 @@ impl PreparedSource {
                 source,
                 diagnostics,
             } if !diagnostics.iter().any(|item| {
-                item.severity == source_profile_dsl::definition::DiagnosticSeverity::Error
+                item.severity == source_engine::definition::DiagnosticSeverity::Error
             }) =>
             {
                 Some(source)

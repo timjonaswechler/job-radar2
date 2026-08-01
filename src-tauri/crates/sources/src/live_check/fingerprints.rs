@@ -11,16 +11,14 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::installed::SourceDocument;
-use source_profile_dsl::definition::SelectedAccessPath;
-use source_profile_dsl::definition::SourceProfileDocument;
-use source_profile_dsl::definition::{
+use source_engine::definition::SelectedAccessPath;
+use source_engine::definition::SourceProfileDocument;
+use source_engine::definition::{
     forbidden_request_key_behavior, CompileSourceOutcome, CompiledSource, CompiledSourceProvenance,
     ProvenanceEntry, ProvenancePathSegment, SourceOwnedAccessPath, SourceRuntimeBinding,
     MAX_FALLBACK_STRATEGIES,
 };
-use source_profile_dsl::definition::{
-    AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject,
-};
+use source_engine::definition::{AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject};
 
 use super::{execution::MAX_DISCOVERY_REQUESTS, fingerprint::CheckFingerprint};
 
@@ -85,9 +83,9 @@ struct DirectAccessPathBehaviorProjection<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     source_config_schema: Option<Value>,
     #[serde(rename = "discovery", skip_serializing_if = "Option::is_none")]
-    discovery: Option<&'a source_profile_dsl::definition::DiscoveryStepFragment>,
+    discovery: Option<&'a source_engine::definition::DiscoveryStepFragment>,
     #[serde(rename = "detail", skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a source_profile_dsl::definition::DetailStepFragment>,
+    detail: Option<&'a source_engine::definition::DetailStepFragment>,
 }
 
 #[derive(Serialize)]

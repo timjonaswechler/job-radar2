@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use geo::GeoResolver;
 use search_resolution::CompiledSearchRequirements;
-use source_profile_dsl::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
+use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 use sqlx::SqlitePool;
 
 use crate::search::{

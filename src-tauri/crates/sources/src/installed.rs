@@ -26,5 +26,5 @@ pub use snapshot::{
     ProfileView, Profiles, ProfilesView, ResolvedBehaviorView, Snapshot, SnapshotView, SourceView,
     ValidationState, ValidationStateKind,
 };
-pub use source_profile_dsl::definition::SelectedAccessPath;
+pub use source_engine::definition::SelectedAccessPath;
 pub use sources::{CreateDraft, InactiveStatus, Revision, SourceDocument, SourceStatus};

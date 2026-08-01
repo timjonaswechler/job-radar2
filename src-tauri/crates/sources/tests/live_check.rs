@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use serde_json::json;
-use source_profile_dsl::{
+use source_engine::{
     execution::RuntimeCancellation,
     test_support::{
         ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,

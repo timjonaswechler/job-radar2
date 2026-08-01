@@ -71,7 +71,7 @@ Test location follows the interface under test:
 - `src-tauri/crates/<crate>/tests/` contains black-box contracts owned by that crate.
 - `src-tauri/crates/<crate>/src/contract_tests/` contains broad crate contracts that require test-only internal seams; narrow private-helper tests stay beside their implementation under `#[cfg(test)]`.
 - `src-tauri/tests/` contains only tests owned by the desktop package. One `desktop` target contains logically separated Agent, Browser, Geo, HTTP, and Source Behavior Language modules; `source_application` exercises Source application behavior, and `bundled_source_profiles` verifies shipped product resources.
-- Generic Source Behavior Language tests belong under `src-tauri/crates/source-profile-dsl/tests/`, grouped into the four Cargo targets `compiler`, `detection`, `primitives`, and `runtime`. Leaf test files live in matching subdirectories.
+- Generic Source Behavior Language tests belong under `src-tauri/crates/source-engine/tests/`, grouped into the four Cargo targets `definition`, `detection`, `execution`, and `schemas`. Leaf test files live in matching subdirectories.
 - External Agent black-box contracts share the `contracts` target and remain separated into authentication-storage and model-registry modules.
 - Shared deterministic payloads remain under the owning package's `tests/fixtures/` directory.
 

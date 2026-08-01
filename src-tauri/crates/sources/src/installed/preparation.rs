@@ -1,7 +1,7 @@
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use source_profile_dsl::definition::{
+use source_engine::definition::{
     compile_source_with_admitted_profiles, CompileSourceOutcome, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Diagnostics,
 };

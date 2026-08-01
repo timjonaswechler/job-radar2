@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use source_profile_dsl::definition::{
+use source_engine::definition::{
     AccessPathFragment, Diagnostics, JsonObject, SelectedAccessPath, SourceBehavior,
     SupportMetadata,
 };

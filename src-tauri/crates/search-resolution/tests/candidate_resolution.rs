@@ -6,7 +6,7 @@ use search_resolution::{
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
 use serde_json::json;
-use source_profile_dsl::test_support::{
+use source_engine::test_support::{
     compile_source, AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource,
     CandidateDetailFailure, CompileSourceOutcome, CompiledSource, DetailField, DetailPatch,
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, PhaseCancellationReason, PhaseCancelled,
@@ -1050,7 +1050,7 @@ async fn production_one_shot_discovery_adapter_uses_true_effects_without_slicing
         content_length: None,
     }]);
     let acquisition = ScriptedBrowserAcquisition::new([]);
-    let discovery = SourceDiscovery::profile_dsl(&fetcher, &acquisition);
+    let discovery = SourceDiscovery::source_engine(&fetcher, &acquisition);
     let detail = ScriptedSourceDetailExecution::new([]);
     let result = resolve_source_candidates(SourceResolutionRequest {
         compiled_source: &source,

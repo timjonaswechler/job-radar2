@@ -1,6 +1,6 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 
-use source_profile_dsl::definition::{Diagnostics, JsonObject};
+use source_engine::definition::{Diagnostics, JsonObject};
 
 use super::fingerprint::CheckFingerprint;
 

@@ -6,7 +6,7 @@ use std::{
 };
 
 use serde_json::Value;
-use source_profile_dsl::definition::{
+use source_engine::definition::{
     prepare_source_profile_document, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     Diagnostics, SourceProfileDocument,
 };
@@ -218,7 +218,7 @@ fn admit_candidate(
     candidate: Candidate,
     seen: &mut HashMap<String, (Origin, String)>,
     admitted: &mut Vec<AdmittedProfile>,
-    prepared_detection: &mut Vec<source_profile_dsl::detection::CompiledDetectionPlan>,
+    prepared_detection: &mut Vec<source_engine::detection::CompiledDetectionPlan>,
     view: &mut ProfilesView,
 ) -> bool {
     let parsed_value = match serde_json::from_str::<Value>(&candidate.contents) {

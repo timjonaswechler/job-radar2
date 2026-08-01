@@ -708,13 +708,13 @@ pub fn cancel_background_task(
 fn background_task_error_diagnostic(
     code: impl Into<String>,
     message: impl Into<String>,
-) -> source_profile_dsl::definition::Diagnostic {
+) -> source_engine::definition::Diagnostic {
     let message = message.into();
-    source_profile_dsl::definition::Diagnostic {
-        category: source_profile_dsl::definition::DiagnosticCategory::Runtime,
+    source_engine::definition::Diagnostic {
+        category: source_engine::definition::DiagnosticCategory::Runtime,
         code: code.into(),
         message: message.clone(),
-        severity: source_profile_dsl::definition::DiagnosticSeverity::Error,
+        severity: source_engine::definition::DiagnosticSeverity::Error,
         path: "".to_string(),
         strategy_key: None,
         details: Some(serde_json::json!({ "message": message })),

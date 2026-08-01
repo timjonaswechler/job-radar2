@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
 use serde_json::{json, Value};
-use source_profile_dsl::{
+use source_engine::{
     definition::DiagnosticCategory,
     detection::DetectionRunStatus,
     execution::RuntimeCancellation,

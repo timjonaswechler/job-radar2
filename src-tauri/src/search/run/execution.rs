@@ -6,10 +6,10 @@ use search_resolution::{
 };
 
 use crate::{
-    background_tasks::CancellationToken, browser_runtime::ManagedBrowserAcquisition,
-    profile_dsl::ReqwestProfileHttpClient,
+    adapters::ReqwestProfileHttpClient, background_tasks::CancellationToken,
+    browser_runtime::ManagedBrowserAcquisition,
 };
-use source_profile_dsl::{
+use source_engine::{
     definition::{CompiledSource, PhaseLimits},
     execution::{RuntimeCancellation, SourceBehaviorDetailExecution, SourceDetailExecution},
 };
@@ -31,7 +31,7 @@ enum ResolutionRuntimeMode {
 #[cfg(test)]
 pub(crate) struct ScriptedResolutionSource {
     pub(crate) discovery: search_resolution::ScriptedSourceDiscoveryExecution,
-    pub(crate) detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution,
+    pub(crate) detail: source_engine::test_support::ScriptedSourceDetailExecution,
 }
 
 impl SearchRunResolutionRuntime {
@@ -69,7 +69,7 @@ impl SearchRunResolutionRuntime {
                     compiled_source,
                     requirements,
                     cancellation,
-                    SourceDiscovery::profile_dsl(&fetcher, &acquisition),
+                    SourceDiscovery::source_engine(&fetcher, &acquisition),
                     &detail,
                 )
                 .await

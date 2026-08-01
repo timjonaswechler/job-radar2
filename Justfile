@@ -38,7 +38,7 @@ rust-test target *args:
 [group('Development loops')]
 [positional-arguments]
 rust-crate-test package target *args:
-    package="$1"; target="$2"; shift 2; if [ "$package" = source-profile-dsl ]; then cargo test --manifest-path src-tauri/Cargo.toml --package "$package" --features test-support --test "$target" "$@"; else cargo test --manifest-path src-tauri/Cargo.toml --package "$package" --test "$target" "$@"; fi
+    package="$1"; target="$2"; shift 2; if [ "$package" = source-engine ]; then cargo test --manifest-path src-tauri/Cargo.toml --package "$package" --features test-support --test "$target" "$@"; else cargo test --manifest-path src-tauri/Cargo.toml --package "$package" --test "$target" "$@"; fi
 
 # Run Rust library unit tests; optional Cargo test filters and arguments are forwarded unchanged.
 [group('Development loops')]

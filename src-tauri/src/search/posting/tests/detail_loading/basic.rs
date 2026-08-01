@@ -125,7 +125,7 @@ fn get_job_posting_persists_one_scripted_source_detail_description_update() {
             )],
         );
         let (_, identity) =
-            source_profile_dsl::execution::validate_posting_reference("detail_source", url, None)
+            source_engine::execution::validate_posting_reference("detail_source", url, None)
                 .unwrap();
         let expected = SourceDetailRequestSnapshot::new(
             "detail_source",

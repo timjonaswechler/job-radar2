@@ -21,6 +21,8 @@ A Source is the concrete configured endpoint the user wants to use. Its current 
 
 ## Source Onboarding amendment
 
+> **Ownership note:** [ADR 0013](0013-source-engine-and-sources.md) supersedes the module placement below. It remains here as migration history; `sources` now owns these responsibilities without a `SourceOnboarding` facade.
+
 Source setup and lifecycle admission are owned by one Tauri-free `SourceOnboarding` module. Its small interface covers Detection, authored Source changes, report freshness, status-neutral Source Live Checks, and check-and-activate.
 
 Authored creation and definition-revision inputs do not contain arbitrary `SourceStatus` or derived diagnostics. Creation always persists `draft`; revision preserves the current status. Explicit inactive changes can select only `draft` or `disabled`. The module selects activation versus reactivation from the persisted status, rejects an already active Source before external work, always runs a new complete Source Live Check for admission, persists the exact checked fingerprints, and changes status only after the report is durable. Tauri Commands are caller-side transport adapters rather than an alternative orchestration route.

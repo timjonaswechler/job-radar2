@@ -167,7 +167,7 @@ fn engine_registry(crate_dir: &Path) -> Registry<'static> {
     let engine_dir = crate_dir
         .parent()
         .unwrap()
-        .join("source-profile-dsl/schema/source-behavior");
+        .join("source-engine/schema/source-behavior");
     let mut registry = Registry::new();
     for name in ENGINE_SCHEMAS {
         let schema = read(engine_dir.join(name));

@@ -62,7 +62,7 @@ impl AppState {
             agent_session_manager,
             agent_chat_provider,
         ));
-        let source_http = Arc::new(crate::profile_dsl::ReqwestProfileHttpClient::new());
+        let source_http = Arc::new(crate::adapters::ReqwestProfileHttpClient::new());
         let source_browser = Arc::new(crate::browser_runtime::ManagedBrowserAcquisition::new(
             paths.browser_runtime_dir.clone(),
         ));

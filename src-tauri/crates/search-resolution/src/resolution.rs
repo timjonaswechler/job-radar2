@@ -14,7 +14,7 @@ use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use url::Url;
 
-use source_profile_dsl::{
+use source_engine::{
     definition::{
         CompiledSource, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
         PhaseLimits,
@@ -372,7 +372,7 @@ enum SourceDiscoveryKind<'a> {
 }
 
 impl<'a> SourceDiscovery<'a> {
-    pub fn profile_dsl(
+    pub fn source_engine(
         fetcher: &'a (dyn ProfileHttpClient + Sync),
         acquisition: &'a dyn BrowserAcquisition,
     ) -> Self {
@@ -396,7 +396,7 @@ impl<'a> SourceDiscovery<'a> {
             SourceDiscoveryKind::ProfileDsl {
                 fetcher,
                 acquisition,
-            } => execute_profile_dsl_batch(fetcher, acquisition, request).await,
+            } => execute_source_engine_batch(fetcher, acquisition, request).await,
             SourceDiscoveryKind::Scripted(execution) => execution.execute_batch(request).await,
         }
     }
@@ -643,7 +643,7 @@ impl ScriptedSourceDiscoveryExecution {
 /// Truthful one-shot adapter over the current Source Behavior Language Discovery phase. The phase is tightened
 /// by the supplied maximum. It accepts only a complete materialized vector already within that
 /// bound and never slices it or invents continuation.
-async fn execute_profile_dsl_batch(
+async fn execute_source_engine_batch(
     fetcher: &(dyn ProfileHttpClient + Sync),
     acquisition: &dyn BrowserAcquisition,
     request: DiscoveryBatchRequest<'_>,
@@ -1055,9 +1055,9 @@ impl ResolutionState {
                     if dispositions.iter().any(|d| {
                         matches!(
                             d,
-                            source_profile_dsl::execution::RequestedFieldDisposition::Unavailable { .. }
-                                | source_profile_dsl::execution::RequestedFieldDisposition::Conflicted { .. }
-                                | source_profile_dsl::execution::RequestedFieldDisposition::Unsupported { .. }
+                            source_engine::execution::RequestedFieldDisposition::Unavailable { .. }
+                                | source_engine::execution::RequestedFieldDisposition::Conflicted { .. }
+                                | source_engine::execution::RequestedFieldDisposition::Unsupported { .. }
                         )
                     }) || !values.apply(fields, &needed)
                         || !values.is_complete(request.requirements)
@@ -1206,12 +1206,12 @@ fn valid_detail_report(outcome: &SourceDetailOutcome) -> bool {
             PhaseCompletion::PolicyUnsatisfied
         ),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhaseExecution { .. },
+            typed_failure: source_engine::execution::SourceDetailFailure::PhaseExecution { .. },
             complete_budget_report: Some(report),
             ..
         } => matches!(report.completion, PhaseCompletion::ExecutionFailed),
         SourceDetailOutcome::SourceExecutionFailed {
-            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhasePreStart { .. },
+            typed_failure: source_engine::execution::SourceDetailFailure::PhasePreStart { .. },
             complete_budget_report: None,
             ..
         } => true,
@@ -1228,7 +1228,7 @@ fn patch_is_requested(requested: &RequestedDetailFields, patch: &DetailPatch) ->
 
 fn valid_dispositions(
     requested: &RequestedDetailFields,
-    dispositions: &[source_profile_dsl::execution::RequestedFieldDisposition],
+    dispositions: &[source_engine::execution::RequestedFieldDisposition],
 ) -> bool {
     let fields = dispositions.iter().map(|d| d.field()).collect::<Vec<_>>();
     fields.len() == requested.iter().count()
@@ -1367,7 +1367,7 @@ fn absolute_url(value: &str) -> Option<String> {
 fn hint_rejects(o: &PostingOccurrence, requirements: &CompiledSearchRequirements<'_>) -> bool {
     o.hints
         .get("title")
-        .filter(|h| h.hint_use == Some(source_profile_dsl::execution::HintUse::SearchPrefilter))
+        .filter(|h| h.hint_use == Some(source_engine::execution::HintUse::SearchPrefilter))
         .is_some_and(|h| !requirements.matches_title(&collapse_whitespace(&h.value)))
 }
 
@@ -1752,7 +1752,7 @@ fn dimension_from_completion(c: &PhaseCompletion) -> Option<ResolutionLimitDimen
     let PhaseCompletion::BudgetExhausted { exhaustion } = c else {
         return None;
     };
-    use source_profile_dsl::execution::AllowanceDimension::*;
+    use source_engine::execution::AllowanceDimension::*;
     Some(match exhaustion.dimension {
         StrategyAttempts => ResolutionLimitDimension::StrategyAttempts,
         Requests => ResolutionLimitDimension::Requests,

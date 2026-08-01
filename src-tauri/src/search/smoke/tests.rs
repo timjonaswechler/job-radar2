@@ -10,7 +10,7 @@ use crate::search::{
     },
 };
 use serde_json::Value;
-use source_profile_dsl::{
+use source_engine::{
     execution::{PhaseCompletion, PhaseExecutionReport, PhaseUsage},
     test_support::ScriptedSourceDetailExecution,
 };
@@ -411,14 +411,14 @@ fn write_fixture_source_file_with_status(
 fn occurrence(
     source_key: &str,
     candidate: FixtureCandidate,
-) -> source_profile_dsl::execution::PostingOccurrence {
+) -> source_engine::execution::PostingOccurrence {
     let (reference, identity) =
-        source_profile_dsl::execution::validate_posting_reference(source_key, &candidate.url, None)
+        source_engine::execution::validate_posting_reference(source_key, &candidate.url, None)
             .unwrap();
-    source_profile_dsl::execution::PostingOccurrence {
+    source_engine::execution::PostingOccurrence {
         identity,
         reference,
-        provider_values: source_profile_dsl::execution::ProviderValues {
+        provider_values: source_engine::execution::ProviderValues {
             title: Some(candidate.title),
             company: Some(candidate.company),
             locations: candidate.locations,

@@ -1,10 +1,10 @@
-use source_profile_dsl::definition::SourceBehavior;
+use source_engine::definition::SourceBehavior;
 
 use std::{collections::BTreeMap, fs, path::Path};
 
 use super::{fingerprint::CheckFingerprint, fingerprints::prepare_source_behavior_fingerprints};
 use crate::installed::SourceDocument;
-use source_profile_dsl::definition::{
+use source_engine::definition::{
     compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, ReusableAccessPathDocument,
     SelectedAccessPath, SourceProfileDocument, SourceProfileLookup, SourceRuntimeBinding,
 };

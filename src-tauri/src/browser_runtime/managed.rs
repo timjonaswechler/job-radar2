@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use source_profile_dsl::execution::{
+use source_engine::execution::{
     BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionCancellation,
     BrowserAcquisitionCancellationReason, BrowserAcquisitionFailure, BrowserAcquisitionFailureKind,
     BrowserAcquisitionRequest, BrowserAcquisitionTerminal, BrowserInfrastructureFailure,
@@ -523,16 +523,14 @@ fn cancelled_terminal() -> BrowserAcquisitionTerminal {
 mod tests {
     use super::*;
     use crate::browser_runtime::current_runtime_spec;
-    use source_profile_dsl::{
-        definition::PhaseLimits, test_support::BrowserAcquisitionTestInvocation,
-    };
+    use source_engine::{definition::PhaseLimits, test_support::BrowserAcquisitionTestInvocation};
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     struct CancellationFlag(AtomicBool);
 
-    impl source_profile_dsl::execution::RuntimeCancellation for CancellationFlag {
+    impl source_engine::execution::RuntimeCancellation for CancellationFlag {
         fn is_cancelled(&self) -> bool {
             self.0.load(Ordering::SeqCst)
         }

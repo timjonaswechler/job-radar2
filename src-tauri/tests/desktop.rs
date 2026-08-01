@@ -3,7 +3,7 @@
 #[allow(unused_imports)]
 mod job_radar_lib {
     pub use ::job_radar_lib::*;
-    pub use source_profile_dsl::test_support::*;
+    pub use source_engine::test_support::*;
 }
 
 #[path = "desktop/agent.rs"]

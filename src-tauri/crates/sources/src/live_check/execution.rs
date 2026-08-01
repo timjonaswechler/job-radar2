@@ -1,12 +1,10 @@
 use super::fingerprints::prepare_source_behavior_fingerprints;
 use crate::installed::{PreparedSource, Snapshot};
-use source_profile_dsl::definition::CompiledSource;
-use source_profile_dsl::definition::SelectedAccessPath;
-use source_profile_dsl::definition::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
-};
-use source_profile_dsl::definition::{JsonObject, PhaseLimits};
-use source_profile_dsl::execution::{
+use source_engine::definition::CompiledSource;
+use source_engine::definition::SelectedAccessPath;
+use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
+use source_engine::definition::{JsonObject, PhaseLimits};
+use source_engine::execution::{
     discover, BrowserAcquisition, DetailField, PhaseOutcome, PolicyOutcome, PostingOccurrence,
     ProfileHttpClient, RequestedDetailFields, RequestedFieldDisposition, RuntimeExecutionContext,
     SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
@@ -23,7 +21,7 @@ pub(super) const MAX_DISCOVERY_REQUESTS: u64 = 1;
 #[derive(Clone)]
 pub(super) struct ExecutionContext<'a> {
     pub checked_at: String,
-    pub cancellation: Option<&'a dyn source_profile_dsl::execution::RuntimeCancellation>,
+    pub cancellation: Option<&'a dyn source_engine::execution::RuntimeCancellation>,
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -91,14 +89,14 @@ where
                 Some(outcome.complete_budget_report().clone()),
                 outcome.diagnostics().clone(),
             ),
-            Err(source_profile_dsl::execution::PhaseRunError::Cancelled(cancelled)) => (
+            Err(source_engine::execution::PhaseRunError::Cancelled(cancelled)) => (
                 Vec::new(),
                 Some(cancelled.complete_budget_report),
                 cancelled.diagnostics,
             ),
-            Err(source_profile_dsl::execution::PhaseRunError::NotStarted {
-                diagnostics, ..
-            }) => (Vec::new(), None, diagnostics),
+            Err(source_engine::execution::PhaseRunError::NotStarted { diagnostics, .. }) => {
+                (Vec::new(), None, diagnostics)
+            }
         };
         let candidate_count = discovery_candidates.len();
         let first_acceptable_candidate = discovery_candidates
@@ -377,7 +375,7 @@ fn detail_failure_cause(result: &SourceDetailResult) -> String {
 #[cfg(test)]
 mod source_detail_typed_control_tests {
     use super::*;
-    use source_profile_dsl::execution::{
+    use source_engine::execution::{
         DetailPatch, PhaseCompletion, PhaseExecutionReport, PhaseUsage, SourceDetailPhaseEvidence,
     };
 

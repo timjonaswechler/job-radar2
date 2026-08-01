@@ -4,27 +4,27 @@ use jsonschema::{Draft, Registry};
 use serde_json::Value;
 
 const SCHEMA_FILES: &[&str] = &[
-    "crates/source-profile-dsl/schema/source-profile.schema.json",
+    "crates/source-engine/schema/source-profile.schema.json",
     "crates/sources/schema/source.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/common.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/fetch.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/parse.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/predicate.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/select.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/extract.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/transform.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/pagination.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/strategy.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/policy.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/fragments.schema.json",
-    "crates/source-profile-dsl/schema/source-behavior/diagnostics.schema.json",
+    "crates/source-engine/schema/source-behavior/common.schema.json",
+    "crates/source-engine/schema/source-behavior/fetch.schema.json",
+    "crates/source-engine/schema/source-behavior/parse.schema.json",
+    "crates/source-engine/schema/source-behavior/predicate.schema.json",
+    "crates/source-engine/schema/source-behavior/select.schema.json",
+    "crates/source-engine/schema/source-behavior/extract.schema.json",
+    "crates/source-engine/schema/source-behavior/transform.schema.json",
+    "crates/source-engine/schema/source-behavior/pagination.schema.json",
+    "crates/source-engine/schema/source-behavior/strategy.schema.json",
+    "crates/source-engine/schema/source-behavior/policy.schema.json",
+    "crates/source-engine/schema/source-behavior/fragments.schema.json",
+    "crates/source-engine/schema/source-behavior/diagnostics.schema.json",
 ];
 
 #[test]
 fn packaged_profile_and_source_schemas_resolve_across_owner_catalogues() {
     let harness = SchemaHarness::new();
     harness.assert_valid(
-        "crates/source-profile-dsl/schema/source-profile.schema.json",
+        "crates/source-engine/schema/source-profile.schema.json",
         "crates/sources/resources/profiles/greenhouse.json",
     );
     harness.assert_valid(

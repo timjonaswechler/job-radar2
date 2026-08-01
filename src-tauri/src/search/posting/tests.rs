@@ -3,7 +3,7 @@ use crate::search::run::{
     NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
 };
 use serde_json::{from_str, json, Value};
-use source_profile_dsl::test_support::{
+use source_engine::test_support::{
     BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
     RequestedFieldDisposition, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
     ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
@@ -35,7 +35,7 @@ impl FixtureDetailHttpClient {
                 body: vec![match result {
                     Ok(body) => ScriptedHttpBodyEvent::Chunk(body.into_bytes()),
                     Err(_) => ScriptedHttpBodyEvent::Failure(
-                        source_profile_dsl::execution::ProfileHttpFailureKind::BodyStream,
+                        source_engine::execution::ProfileHttpFailureKind::BodyStream,
                     ),
                 }],
                 content_length: None,

@@ -51,7 +51,7 @@ paths = [path for path in tracked if Path(path).suffix in extensions and Path(pa
 # Workspace packages and responsibility-split frontend modules may be unstaged
 # while this check runs locally; their source and tests are always scanned.
 for root in (
-    "src-tauri/crates/source-profile-dsl",
+    "src-tauri/crates/source-engine",
     "src-tauri/crates/search-resolution",
     "src-tauri/crates/sources",
     "src/lib/api/sources",
@@ -98,7 +98,7 @@ for offset in range(0, len(paths), 200):
 PY
 done
 # The registry file itself is classified even when it contains no searchable behavior token.
-printf '%s\n' 'src-tauri/crates/source-profile-dsl/src/definition/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
+printf '%s\n' 'src-tauri/crates/source-engine/src/definition/primitives/mod.rs:1:1:registry_file:primitives/mod.rs' >> "$TMP"
 LC_ALL=C sort "$TMP" -o "$TMP"
 
 if [[ ${1:-} == --emit ]]; then
@@ -106,8 +106,8 @@ if [[ ${1:-} == --emit ]]; then
   exit 0
 fi
 
-MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-profile-dsl/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='a3807c3bcfbc72347c66ff9fa79762a650d4e2b4eba2ee2ec70dc411f0e85b35'
+MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-engine/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
+FROZEN_MANIFEST_SHA256='e9a224c9752979cc4a115150d9e8a060fbfb48dbc256a99b1dec156c739523d0'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

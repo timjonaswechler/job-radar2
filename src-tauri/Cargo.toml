@@ -20,7 +20,7 @@ required-features = ["agent-debug"]
 agent-debug = []
 
 [workspace]
-members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-profile-dsl", "crates/sources"]
+members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/source-engine", "crates/sources"]
 resolver = "2"
 
 
@@ -38,7 +38,7 @@ tauri-build = { version = "2", features = [] }
 agent = { path = "crates/agent" }
 geo = { path = "crates/geo" }
 search-resolution = { path = "crates/search-resolution" }
-source-profile-dsl = { path = "crates/source-profile-dsl" }
+source-engine = { path = "crates/source-engine" }
 sources = { path = "crates/sources" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
@@ -78,7 +78,7 @@ windows-sys = { version = "0.59", features = [
 ] }
 
 [dev-dependencies]
-source-profile-dsl = { path = "crates/source-profile-dsl", features = ["test-support"] }
+source-engine = { path = "crates/source-engine", features = ["test-support"] }
 agent = { path = "crates/agent", features = ["test-support"] }
 tempfile = "3"
 jsonschema = { version = "0.46.8", default-features = false }

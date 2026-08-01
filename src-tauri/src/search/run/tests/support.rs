@@ -15,7 +15,7 @@ use search_resolution::{
 };
 
 use crate::search::run::ScriptedResolutionSource;
-use source_profile_dsl::{
+use source_engine::{
     execution::{PhaseCompletion, PhaseExecutionReport, PhaseUsage},
     test_support::ScriptedSourceDetailExecution,
 };
@@ -66,8 +66,7 @@ pub(super) fn fixture_resolution_runtime<K: ToString>(
                 complete_budget_report: PhaseExecutionReport {
                     usage: PhaseUsage::default(),
                     completion: PhaseCompletion::Cancelled {
-                        reason:
-                            source_profile_dsl::execution::PhaseCancellationReason::UserCancelled,
+                        reason: source_engine::execution::PhaseCancellationReason::UserCancelled,
                     },
                 },
                 diagnostics: Vec::new(),
@@ -358,14 +357,14 @@ pub(super) fn candidate_with_meta(
 pub(super) fn occurrence(
     source_key: &str,
     candidate: FixtureCandidate,
-) -> source_profile_dsl::execution::PostingOccurrence {
+) -> source_engine::execution::PostingOccurrence {
     let (reference, identity) =
-        source_profile_dsl::execution::validate_posting_reference(source_key, &candidate.url, None)
+        source_engine::execution::validate_posting_reference(source_key, &candidate.url, None)
             .unwrap();
-    source_profile_dsl::execution::PostingOccurrence {
+    source_engine::execution::PostingOccurrence {
         identity,
         reference,
-        provider_values: source_profile_dsl::execution::ProviderValues {
+        provider_values: source_engine::execution::ProviderValues {
             title: Some(candidate.title),
             company: Some(candidate.company),
             locations: candidate.locations,

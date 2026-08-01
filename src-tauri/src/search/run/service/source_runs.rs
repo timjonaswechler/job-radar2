@@ -1,6 +1,6 @@
 use search_resolution::{SourceResolution, SourceResolutionError};
 
-use source_profile_dsl::definition::{CompiledSource, Diagnostics};
+use source_engine::definition::{CompiledSource, Diagnostics};
 
 use super::super::{SearchRunStatus, SourceResolutionSummary, SourceRunResult, SourceRunStatus};
 use super::SourceExecutionError;

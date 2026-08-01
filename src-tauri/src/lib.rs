@@ -1,10 +1,10 @@
+mod adapters;
 pub mod agent;
 mod app;
 mod background_tasks;
 mod browser_runtime;
 mod db;
 mod geo;
-mod profile_dsl;
 mod search;
 
 pub use crate::geo::GeoDbResolver;

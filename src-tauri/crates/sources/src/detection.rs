@@ -7,7 +7,7 @@
 use std::{fmt, sync::Arc};
 
 use serde::Serialize;
-use source_profile_dsl::{
+use source_engine::{
     definition::Diagnostics,
     detection::{
         execute_detection_operation, DetectionRunStatus, ReconciledSourceProposal,

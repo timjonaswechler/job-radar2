@@ -35,11 +35,11 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                 source_keys[1].clone(),
                 Err(SourceExecutionError::FailedWithDiagnostics {
                     message: "fixture runtime failure".to_string(),
-                    diagnostics: vec![source_profile_dsl::definition::Diagnostic {
-                        category: source_profile_dsl::definition::DiagnosticCategory::Runtime,
+                    diagnostics: vec![source_engine::definition::Diagnostic {
+                        category: source_engine::definition::DiagnosticCategory::Runtime,
                         code: "fixture_runtime_failure".to_string(),
                         message: "Fixture runtime failure".to_string(),
-                        severity: source_profile_dsl::definition::DiagnosticSeverity::Error,
+                        severity: source_engine::definition::DiagnosticSeverity::Error,
                         path: "/discovery/strategies/0".to_string(),
                         strategy_key: Some("json_api".to_string()),
                         details: Some(json!({ "fixture": true })),
@@ -144,16 +144,16 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 &["Mainz"],
             ),
         );
-        let detail_snapshot = source_profile_dsl::execution::SourceDetailRequestSnapshot::new(
+        let detail_snapshot = source_engine::execution::SourceDetailRequestSnapshot::new(
             &source_keys[1],
             aborted_occurrence.identity.clone(),
-            source_profile_dsl::execution::RequestedDetailFields::new([
-                source_profile_dsl::execution::DetailField::Company,
+            source_engine::execution::RequestedDetailFields::new([
+                source_engine::execution::DetailField::Company,
             ])
             .unwrap(),
         );
         let source = |key: &str,
-                      occurrences: Vec<source_profile_dsl::execution::PostingOccurrence>,
+                      occurrences: Vec<source_engine::execution::PostingOccurrence>,
                       detail| {
             crate::search::run::ScriptedResolutionSource {
                 discovery: resolution::ScriptedSourceDiscoveryExecution::new(
@@ -167,12 +167,10 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                         remaining: Some(0),
                         continuation: None,
                         continuation_source_key: None,
-                        complete_budget_report:
-                            source_profile_dsl::execution::PhaseExecutionReport {
-                                usage: Default::default(),
-                                completion:
-                                    source_profile_dsl::execution::PhaseCompletion::Accepted,
-                            },
+                        complete_budget_report: source_engine::execution::PhaseExecutionReport {
+                            usage: Default::default(),
+                            completion: source_engine::execution::PhaseCompletion::Accepted,
+                        },
                         diagnostics: Vec::new(),
                     }],
                 ),
@@ -185,7 +183,7 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 source(
                     &source_keys[0],
                     vec![successful_occurrence],
-                    source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
+                    source_engine::test_support::ScriptedSourceDetailExecution::new([]),
                 ),
             ),
             (
@@ -193,15 +191,15 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
                 source(
                     &source_keys[1],
                     vec![aborted_occurrence],
-                    source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([(
+                    source_engine::test_support::ScriptedSourceDetailExecution::new([(
                         detail_snapshot,
-                        Ok(source_profile_dsl::execution::SourceDetailOutcome::SourceExecutionFailed {
-                            typed_failure: source_profile_dsl::execution::SourceDetailFailure::PhaseExecution {
-                                failure: source_profile_dsl::execution::PhaseExecutionFailure::Internal,
+                        Ok(source_engine::execution::SourceDetailOutcome::SourceExecutionFailed {
+                            typed_failure: source_engine::execution::SourceDetailFailure::PhaseExecution {
+                                failure: source_engine::execution::PhaseExecutionFailure::Internal,
                             },
-                            complete_budget_report: Some(source_profile_dsl::execution::PhaseExecutionReport {
+                            complete_budget_report: Some(source_engine::execution::PhaseExecutionReport {
                                 usage: Default::default(),
-                                completion: source_profile_dsl::execution::PhaseCompletion::ExecutionFailed,
+                                completion: source_engine::execution::PhaseCompletion::ExecutionFailed,
                             }),
                             diagnostics: Vec::new(),
                         }),
@@ -275,7 +273,7 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
         )
         .await;
         let limits = crate::search::run::production_resolution_ceilings();
-        let mut usage = source_profile_dsl::execution::PhaseUsage::default();
+        let mut usage = source_engine::execution::PhaseUsage::default();
         usage.pages = limits.phase.max_pages;
         let runtime = SearchRunResolutionRuntime::scripted([(
             source_keys[0].clone(),
@@ -319,16 +317,14 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
                         remaining: Some(1),
                         continuation: Some("next".to_string()),
                         continuation_source_key: None,
-                        complete_budget_report:
-                            source_profile_dsl::execution::PhaseExecutionReport {
-                                usage,
-                                completion:
-                                    source_profile_dsl::execution::PhaseCompletion::Accepted,
-                            },
+                        complete_budget_report: source_engine::execution::PhaseExecutionReport {
+                            usage,
+                            completion: source_engine::execution::PhaseCompletion::Accepted,
+                        },
                         diagnostics: Vec::new(),
                     }],
                 ),
-                detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
+                detail: source_engine::test_support::ScriptedSourceDetailExecution::new([]),
             },
         )]);
 
@@ -524,9 +520,9 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                 remaining: Some(0),
                 continuation: None,
                 continuation_source_key: None,
-                complete_budget_report: source_profile_dsl::execution::PhaseExecutionReport {
+                complete_budget_report: source_engine::execution::PhaseExecutionReport {
                     usage: Default::default(),
-                    completion: source_profile_dsl::execution::PhaseCompletion::Accepted,
+                    completion: source_engine::execution::PhaseCompletion::Accepted,
                 },
                 diagnostics: Vec::new(),
             });
@@ -534,10 +530,10 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
             expected_continuation: None,
             expected_maximum: limits.max_batch_size,
             expected_limits: limits.phase,
-            complete_budget_report: source_profile_dsl::execution::PhaseExecutionReport {
+            complete_budget_report: source_engine::execution::PhaseExecutionReport {
                 usage: Default::default(),
-                completion: source_profile_dsl::execution::PhaseCompletion::Cancelled {
-                    reason: source_profile_dsl::execution::PhaseCancellationReason::UserCancelled,
+                completion: source_engine::execution::PhaseCompletion::Cancelled {
+                    reason: source_engine::execution::PhaseCancellationReason::UserCancelled,
                 },
             },
             diagnostics: Vec::new(),
@@ -554,7 +550,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
                         &key,
                         [outcome],
                     ),
-                    detail: source_profile_dsl::test_support::ScriptedSourceDetailExecution::new([]),
+                    detail: source_engine::test_support::ScriptedSourceDetailExecution::new([]),
                 };
                 (key, source)
             }),

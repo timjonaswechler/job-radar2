@@ -9,8 +9,8 @@ use std::{
 };
 
 use serde::Serialize;
-use source_profile_dsl::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
-use source_profile_dsl::execution::{
+use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
+use source_engine::execution::{
     BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest,
     ProfileHttpClient, ProfileHttpError, ProfileHttpRequest, ProfileHttpResponse,
     RuntimeCancellation, RuntimeExecutionContext,

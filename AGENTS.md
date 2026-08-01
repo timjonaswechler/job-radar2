@@ -14,7 +14,7 @@ Job Radar ist eine lokale Tauri-2-Desktop-App für wiederholbare Jobsuchen: Quel
 - `README.md` — Produktüberblick, lokale Befehle, Repo-Orientierung.
 - `CONTEXT.md` — kanonische Domain-Sprache; vor Begriffsumbenennungen lesen.
 - `docs/development/prd/source-behavior-language.md` — Zielbild der deklarativen Source Behavior Language und Source-/Source-Profile-Dokumentmodell.
-- `docs/development/adr/0001-source-config-as-json-schema.md` und `docs/development/adr/0009-source-behavior-language.md` — zentrale Source/Profile-Architekturentscheidungen.
+- `docs/development/adr/0001-source-config-as-json-schema.md` und `docs/development/adr/0013-source-engine-and-sources.md` — zentrale Source/Profile-Architekturentscheidungen.
 - `docs/development/adr/` — weitere Architekturentscheidungen.
 - `docs/index.md` — Dokumentationsübersicht und Ablageregeln.
 - `docs/development/search-run-smoke.md` — manueller Live-Smoke für Suchläufe.

@@ -6,7 +6,7 @@ use std::{
 };
 
 use sha2::{Digest, Sha256};
-use source_profile_dsl::definition::{
+use source_engine::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics, SelectedAccessPath,
 };
 

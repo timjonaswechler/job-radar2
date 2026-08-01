@@ -1,6 +1,4 @@
-use source_profile_dsl::definition::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
-};
+use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 
 use super::super::SourceRunStatus;
 

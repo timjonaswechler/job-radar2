@@ -1,6 +1,4 @@
-use source_profile_dsl::definition::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
-};
+use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 use sources::installed::{Snapshot, SourceStatus};
 
 use super::SourceExecutionError;
@@ -12,7 +10,7 @@ pub(super) struct SourceSelectionOptions {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum SelectedSearchRunSource<'a> {
-    Resolved(&'a source_profile_dsl::definition::CompiledSource),
+    Resolved(&'a source_engine::definition::CompiledSource),
     Missing {
         source_key: String,
         error: SourceExecutionError,

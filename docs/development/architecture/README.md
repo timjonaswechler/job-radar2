@@ -14,6 +14,7 @@ Accepted decisions live in [`../adr/`](../adr/). Start with:
 - [Declarative Source Profile DSL (historical ADR title)](../adr/0009-declarative-source-profile-dsl.md)
 - [Source Live Checks as operational confidence](../adr/0010-source-live-checks-as-operational-confidence.md)
 - [Minimal Agent Conversation contract](../adr/0011-minimal-agent-conversation-contract.md)
+- [Separate Source behavior from installed Source ownership](../adr/0013-source-engine-and-sources.md)
 
 Use an ADR for a durable architectural decision, its context, alternatives, and consequences. Intended product behavior belongs in [Product](../product/README.md); repeatable implementation workflows belong in [Development](../README.md).
 

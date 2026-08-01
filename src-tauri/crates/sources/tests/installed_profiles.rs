@@ -1,7 +1,7 @@
 use std::fs;
 
 use serde_json::Value;
-use source_profile_dsl::definition::DiagnosticCategory;
+use source_engine::definition::DiagnosticCategory;
 use sources::installed::{
     Admission, Origin, Profiles, MAX_AGGREGATE_PROFILE_BYTES, MAX_CUSTOM_PROFILE_DOCUMENTS,
     MAX_DIAGNOSTICS_PER_DOCUMENT, MAX_DIAGNOSTICS_PER_SNAPSHOT, MAX_PROFILE_BYTES,

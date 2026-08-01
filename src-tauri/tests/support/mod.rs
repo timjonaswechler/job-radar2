@@ -278,7 +278,7 @@ pub fn compile_test_source(
         }
     }
 
-    let behavior = source_profile_dsl::definition::SourceBehavior {
+    let behavior = source_engine::definition::SourceBehavior {
         key: source.key.clone(),
         name: source.name.clone(),
         source_config: source.source_config.clone(),
@@ -298,7 +298,7 @@ pub fn unwrap_plan(outcome: CompileSourceOutcome) -> SourceExecutionPlan {
             diagnostic.severity != crate::job_radar_lib::DiagnosticSeverity::Error
         }) =>
         {
-            source_profile_dsl::test_support::test_execution_plan(&source)
+            source_engine::test_support::test_execution_plan(&source)
         }
         other => panic!("expected compiled Source, got {other:?}"),
     }
