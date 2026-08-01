@@ -353,13 +353,15 @@ fn prepare_source_live_check<'a>(
         .ok_or_else(|| format!("Source `{source_key}` was not found in the registry snapshot"))?;
     let outcome = source.compiler_outcome();
     let base_profile = match &source.document().selected_access_path {
-        SelectedAccessPath::ProfileAccessPath { profile_key, .. } => {
-            Some(snapshot.profile(profile_key).ok_or_else(|| {
-                format!(
+        SelectedAccessPath::ProfileAccessPath { profile_key, .. } => Some(
+            snapshot
+                .profile_for_live_check(profile_key)
+                .ok_or_else(|| {
+                    format!(
                     "Source `{source_key}` references unresolved Source Profile `{profile_key}`"
                 )
-            })?)
-        }
+                })?,
+        ),
         SelectedAccessPath::SourceOwnedAccessPath { .. } => None,
     };
     let fingerprints =

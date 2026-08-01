@@ -2,13 +2,12 @@ use std::{fs, future::Future, path::Path, sync::Arc};
 
 use crate::job_radar_lib::{
     CheckReport, CheckReportFreshnessState, CheckReportKind, CheckReportResult,
-    CheckReportStaleReason, CheckReportSubjectType, DetectSource, DetectionRunStatus,
-    DiagnosticCategory, DiagnosticSeverity, InstalledSourceStore, OperationContext,
-    ProfileHttpRequest, Revision, RuntimeCancellation, ScriptedBrowserAcquisition,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
-    SourceLiveCheckOutcome, SourceLiveCheckReportState, SourceLiveCheckRequest, SourceOnboarding,
-    SourceOnboardingError, SourceOnboardingErrorKind, SourceStatus, SourceView,
-    SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    CheckReportStaleReason, CheckReportSubjectType, DiagnosticCategory, DiagnosticSeverity,
+    InstalledSourceStore, OperationContext, ProfileHttpRequest, Revision, RuntimeCancellation,
+    ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
+    ScriptedProfileHttpClient, SourceDocument, SourceLiveCheckOutcome, SourceLiveCheckReportState,
+    SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError, SourceOnboardingErrorKind,
+    SourceStatus, SourceView, SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
@@ -27,28 +26,6 @@ fn write_profile(app_data_dir: &Path, profile: &serde_json::Value) {
         serde_json::to_string_pretty(profile).unwrap(),
     )
     .unwrap();
-}
-
-fn detection_profile(
-    key: &str,
-    support_level: &str,
-    strategies: serde_json::Value,
-) -> serde_json::Value {
-    let mut profile: serde_json::Value = serde_json::from_str(include_str!(
-        "../../crates/sources/resources/profiles/greenhouse.json"
-    ))
-    .unwrap();
-    profile["key"] = json!(key);
-    profile["name"] = json!(key);
-    profile["support"]["level"] = json!(support_level);
-    profile["accessPaths"].as_array_mut().unwrap().truncate(1);
-    profile["detection"] = json!({
-        "recommendedAccessPathKey": "boards_api",
-        "policy": { "type": "all_required" },
-        "strategies": strategies,
-        "sourceConfig": { "boardSlug": "fixture" }
-    });
-    profile
 }
 
 fn write_source(app_data_dir: &Path, source: &serde_json::Value) {
@@ -1166,174 +1143,6 @@ impl FakeLiveCheckFetcher {
             .map(|request| request.url)
             .collect()
     }
-}
-
-#[test]
-fn source_onboarding_detection_has_no_persistent_source_side_effect() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    write_profile(temp_dir.path(), &simple_profile_without_pagination());
-    let onboarding = onboarding(
-        temp_dir.path(),
-        Arc::new(ScriptedProfileHttpClient::new([])),
-    );
-
-    let _ = block_on(onboarding.detect(
-        DetectSource {
-            url: "https://example.test/jobs".to_string(),
-        },
-        OperationContext::default(),
-    ))
-    .unwrap();
-
-    assert!(!temp_dir.path().join("sources").exists());
-}
-
-#[test]
-fn source_onboarding_detection_preserves_authoritative_terminal_aggregation() {
-    let absolute = json!([
-        { "type": "url", "key": "url", "input": { "type": "absolute_url" } }
-    ]);
-
-    let matched_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        matched_dir.path(),
-        &detection_profile("matched_fixture", "stable", absolute.clone()),
-    );
-    let matched = block_on(
-        onboarding(
-            matched_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .detect(
-            DetectSource {
-                url: "https://example.test/jobs".to_string(),
-            },
-            OperationContext::default(),
-        ),
-    )
-    .unwrap();
-    assert_eq!(matched.status, DetectionRunStatus::Matched);
-
-    let ambiguous_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        ambiguous_dir.path(),
-        &detection_profile("first_fixture", "stable", absolute.clone()),
-    );
-    write_profile(
-        ambiguous_dir.path(),
-        &detection_profile("second_fixture", "stable", absolute.clone()),
-    );
-    let ambiguous = block_on(
-        onboarding(
-            ambiguous_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .detect(
-            DetectSource {
-                url: "https://example.test/jobs".to_string(),
-            },
-            OperationContext::default(),
-        ),
-    )
-    .unwrap();
-    assert_eq!(ambiguous.status, DetectionRunStatus::Ambiguous);
-    assert_eq!(ambiguous.proposals.len(), 2);
-
-    let unsupported_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        unsupported_dir.path(),
-        &detection_profile("unsupported_fixture", "unsupported", absolute),
-    );
-    let mixed_unsupported_and_failed = block_on(
-        onboarding(
-            unsupported_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .detect(
-            DetectSource {
-                url: "https://example.test/jobs".to_string(),
-            },
-            OperationContext::default(),
-        ),
-    )
-    .unwrap();
-    assert_eq!(
-        mixed_unsupported_and_failed.status,
-        DetectionRunStatus::Failed
-    );
-    assert_eq!(
-        mixed_unsupported_and_failed.unsupported_profiles.len(),
-        1,
-        "the unsupported evidence remains reported without rewriting aggregate status"
-    );
-
-    let failed_dir = tempfile::tempdir().unwrap();
-    let failed = block_on(
-        onboarding(
-            failed_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .detect(
-            DetectSource {
-                url: "relative".to_string(),
-            },
-            OperationContext::default(),
-        ),
-    )
-    .unwrap();
-    assert_eq!(failed.status, DetectionRunStatus::Failed);
-
-    let cancelled_dir = tempfile::tempdir().unwrap();
-    let cancellation = Cancelled;
-    let cancelled = block_on(
-        onboarding(
-            cancelled_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .detect(
-            DetectSource {
-                url: "https://example.test/jobs".to_string(),
-            },
-            OperationContext {
-                checked_at: None,
-                cancellation: Some(&cancellation),
-            },
-        ),
-    )
-    .unwrap();
-    assert_eq!(cancelled.status, DetectionRunStatus::Cancelled);
-
-    let exhausted_dir = tempfile::tempdir().unwrap();
-    write_profile(
-        exhausted_dir.path(),
-        &detection_profile(
-            "budget_fixture",
-            "stable",
-            json!([
-                { "type": "url", "key": "url", "input": { "type": "absolute_url" } },
-                { "type": "http", "key": "probe", "fetch": {
-                    "mode": "http", "url": "{{inputUrl}}", "timeoutMs": 1000
-                }}
-            ]),
-        ),
-    );
-    let budget_client = Arc::new(ScriptedProfileHttpClient::new([
-        ScriptedHttpEvent::Response {
-            status: 200,
-            final_url: "https://example.test/jobs".to_string(),
-            headers: Vec::new(),
-            body: Vec::new(),
-            content_length: Some(67_108_865),
-        },
-    ]));
-    let exhausted = block_on(onboarding(exhausted_dir.path(), budget_client).detect(
-        DetectSource {
-            url: "https://example.test/jobs".to_string(),
-        },
-        OperationContext::default(),
-    ))
-    .unwrap();
-    assert_eq!(exhausted.status, DetectionRunStatus::BudgetExhausted);
 }
 
 #[test]

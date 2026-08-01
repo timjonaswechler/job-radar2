@@ -27,7 +27,8 @@ pub(super) fn prepare(
     // the engine crate. Every operation-local Snapshot retains this exact result.
     #[cfg(test)]
     PREPARATION_CALLS.fetch_add(1, Ordering::Relaxed);
-    let mut outcome = compile_source_with_admitted_profiles(&document.behavior_input(), profiles);
+    let mut outcome =
+        compile_source_with_admitted_profiles(&document.behavior_input(), &profiles.lookup());
     bound_outcome_diagnostics(&mut outcome, &document.key);
     let validation = validation_state(document, &outcome);
     let resolved = resolved_view(&outcome);

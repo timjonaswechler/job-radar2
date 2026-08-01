@@ -578,15 +578,14 @@ pub async fn get_source_live_check_report_status(
 pub async fn detect_source_proposal_from_url(
     state: State<'_, AppState>,
     url: String,
-) -> Result<crate::source_onboarding::DetectionOutcome, String> {
+) -> Result<sources::detection::Outcome, sources::detection::Error> {
     state
-        .source_onboarding
-        .detect(
-            crate::source_onboarding::DetectSource { url },
-            crate::source_onboarding::OperationContext::default(),
+        .source_detection
+        .run(
+            sources::detection::Request { url },
+            sources::detection::Context::default(),
         )
         .await
-        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -959,8 +958,30 @@ mod tests {
             assert!(removed_tables.is_empty());
 
             let registry_snapshot = state.installed_sources.snapshot().unwrap();
-            assert!(registry_snapshot.profile("greenhouse").is_some());
-            assert!(registry_snapshot.profile("workday").is_some());
+            assert!(registry_snapshot
+                .view()
+                .profiles
+                .profiles
+                .iter()
+                .any(|profile| {
+                    profile
+                        .definition
+                        .as_ref()
+                        .map(|definition| definition.key.as_str())
+                        == Some("greenhouse")
+                }));
+            assert!(registry_snapshot
+                .view()
+                .profiles
+                .profiles
+                .iter()
+                .any(|profile| {
+                    profile
+                        .definition
+                        .as_ref()
+                        .map(|definition| definition.key.as_str())
+                        == Some("workday")
+                }));
             assert!(
                 registry_snapshot.view().diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",
@@ -981,8 +1002,8 @@ mod tests {
             let snapshot = state.installed_sources.snapshot().unwrap();
 
             assert!(snapshot
-                .profiles()
                 .view()
+                .profiles
                 .profiles
                 .iter()
                 .any(|profile| profile
@@ -991,8 +1012,8 @@ mod tests {
                     .map(|definition| definition.key.as_str())
                     == Some("greenhouse")));
             assert!(snapshot
-                .profiles()
                 .view()
+                .profiles
                 .profiles
                 .iter()
                 .any(|profile| profile

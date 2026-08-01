@@ -35,8 +35,8 @@ pub use search_resolution::{
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
 pub use source_onboarding::{
-    DetectSource, DetectionOutcome, OperationContext, SourceLiveCheckOutcome,
-    SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError, SourceOnboardingErrorKind,
+    OperationContext, SourceLiveCheckOutcome, SourceLiveCheckRequest, SourceOnboarding,
+    SourceOnboardingError, SourceOnboardingErrorKind,
 };
 pub use sources::installed::{
     CreateDraft, InactiveStatus, Revision, SourceDocument, SourceStatus, SourceView,

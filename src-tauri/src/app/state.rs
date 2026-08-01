@@ -16,6 +16,7 @@ pub struct AppState {
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
     pub installed_sources: sources::installed::Store,
+    pub source_detection: sources::detection::Operation,
     pub source_onboarding: Arc<crate::source_onboarding::SourceOnboarding>,
 }
 
@@ -66,6 +67,11 @@ impl AppState {
             paths.browser_runtime_dir.clone(),
         ));
         let installed_sources = sources::installed::Store::new(paths.app_data_dir.clone());
+        let source_detection = sources::detection::Operation::new(
+            installed_sources.clone(),
+            source_http.clone(),
+            source_browser.clone(),
+        );
         let source_onboarding = Arc::new(crate::source_onboarding::SourceOnboarding::with_store(
             paths.app_data_dir.clone(),
             installed_sources.clone(),
@@ -86,6 +92,7 @@ impl AppState {
             agent_configuration,
             agent_chats,
             installed_sources,
+            source_detection,
             source_onboarding,
         })
     }

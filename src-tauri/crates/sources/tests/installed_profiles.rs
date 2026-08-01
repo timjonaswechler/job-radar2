@@ -1,7 +1,7 @@
 use std::fs;
 
 use serde_json::Value;
-use source_profile_dsl::definition::{DiagnosticCategory, SourceProfileLookup};
+use source_profile_dsl::definition::DiagnosticCategory;
 use sources::installed::{
     Admission, Origin, Profiles, MAX_AGGREGATE_PROFILE_BYTES, MAX_CUSTOM_PROFILE_DOCUMENTS,
     MAX_DIAGNOSTICS_PER_DOCUMENT, MAX_DIAGNOSTICS_PER_SNAPSHOT, MAX_PROFILE_BYTES,
@@ -26,7 +26,6 @@ fn real_bundled_profiles_are_admitted_through_the_installed_interface() {
         ["greenhouse", "successfactors", "workday"]
     );
     assert!(view.diagnostics.is_empty());
-    assert_eq!(profiles.prepared_detection().len(), 3);
 }
 
 #[test]
@@ -63,16 +62,18 @@ fn custom_profiles_are_ordered_and_cannot_replace_a_builtin_key() {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == "duplicate_source_profile_key"));
-    assert_eq!(
-        SourceProfileLookup::profile(&profiles, "greenhouse")
-            .unwrap()
-            .name,
-        "Greenhouse"
-    );
+    assert!(profiles.view().profiles.iter().any(|profile| {
+        profile.origin == Origin::BuiltIn
+            && profile.admission == Admission::Admitted
+            && profile
+                .definition
+                .as_ref()
+                .is_some_and(|definition| definition.key == "greenhouse")
+    }));
 }
 
 #[test]
-fn semantic_invalid_custom_is_quarantined_without_poisoning_prepared_detection() {
+fn semantic_invalid_custom_is_quarantined_from_productive_installed_state() {
     let app_data = tempfile::tempdir().unwrap();
     let directory = app_data.path().join("source-profiles");
     fs::create_dir_all(&directory).unwrap();
@@ -101,12 +102,15 @@ fn semantic_invalid_custom_is_quarantined_without_poisoning_prepared_detection()
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.category == DiagnosticCategory::Compiler));
-    assert!(profiles.profile("broken_detection").is_none());
-    assert!(!profiles
-        .prepared_detection()
+    assert!(profiles
+        .view()
+        .profiles
         .iter()
-        .any(|plan| plan.profile_key() == "broken_detection"));
-    assert_eq!(profiles.prepared_detection().len(), 3);
+        .find(|profile| profile
+            .definition
+            .as_ref()
+            .is_some_and(|definition| definition.key == "broken_detection"))
+        .is_some_and(|profile| profile.admission == Admission::Rejected));
 }
 
 #[test]

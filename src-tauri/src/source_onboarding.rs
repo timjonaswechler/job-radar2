@@ -1,16 +1,10 @@
 use std::{fmt, path::PathBuf, sync::Arc};
 
 use serde::{Deserialize, Serialize};
-use source_profile_dsl::{
-    definition::Diagnostics,
-    detection::{
-        execute_detection_operation, ReconciledSourceProposal, UnsupportedReconciledDetection,
-    },
-    execution::{
-        BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest, PhaseBrowser,
-        PhaseExecutionReport, ProfileHttpClient, ProfileHttpError, ProfileHttpRequest,
-        ProfileHttpResponse, RuntimeCancellation, RuntimeExecutionContext,
-    },
+use source_profile_dsl::execution::{
+    BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest,
+    ProfileHttpClient, ProfileHttpError, ProfileHttpRequest, ProfileHttpResponse,
+    RuntimeCancellation, RuntimeExecutionContext,
 };
 use sources::installed::{Snapshot, SourceStatus, SourceView, Store};
 
@@ -53,31 +47,6 @@ impl SourceOnboarding {
             http: SharedHttp(http),
             browser: SharedBrowser(browser),
         }
-    }
-
-    pub async fn detect(
-        &self,
-        request: DetectSource,
-        context: OperationContext<'_>,
-    ) -> Result<DetectionOutcome, SourceOnboardingError> {
-        let snapshot = self.snapshot().await?;
-        let uncancelled = NeverCancelled;
-        let cancellation = context.cancellation.unwrap_or(&uncancelled);
-        let result = execute_detection_operation(
-            &request.url,
-            snapshot.profiles().prepared_detection(),
-            &self.http,
-            PhaseBrowser::Browser(&self.browser),
-            cancellation,
-        )
-        .await;
-        Ok(DetectionOutcome {
-            status: result.run_result.status,
-            proposals: result.run_result.proposals,
-            unsupported_profiles: result.run_result.unsupported_profiles,
-            diagnostics: result.diagnostics,
-            report: result.report,
-        })
     }
 
     pub async fn live_check(
@@ -222,24 +191,10 @@ fn check_context(context: OperationContext<'_>) -> SourceLiveCheckExecutionConte
     result
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DetectSource {
-    pub url: String,
-}
 #[derive(Clone, Copy, Default)]
 pub struct OperationContext<'a> {
     pub checked_at: Option<&'a str>,
     pub cancellation: Option<&'a dyn RuntimeCancellation>,
-}
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DetectionOutcome {
-    pub status: source_profile_dsl::detection::DetectionRunStatus,
-    pub proposals: Vec<ReconciledSourceProposal>,
-    pub unsupported_profiles: Vec<UnsupportedReconciledDetection>,
-    pub diagnostics: Diagnostics,
-    pub report: PhaseExecutionReport,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -365,11 +320,5 @@ impl BrowserAcquisition for SharedBrowser {
         request: BrowserAcquisitionRequest<'a>,
     ) -> BoxedBrowserAcquisitionFuture<'a> {
         self.0.acquire(request)
-    }
-}
-struct NeverCancelled;
-impl RuntimeCancellation for NeverCancelled {
-    fn is_cancelled(&self) -> bool {
-        false
     }
 }

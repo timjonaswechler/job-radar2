@@ -128,22 +128,23 @@ impl Profiles {
         &self.view
     }
 
-    /// Temporary prepared capability for Desktop Detection; internalized by #318.
-    pub fn prepared_detection(&self) -> &[CompiledDetectionPlan] {
-        &self.prepared_detection
-    }
-
-    pub fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
-        SourceProfileLookup::profile(self, key)
-    }
-}
-
-impl SourceProfileLookup for Profiles {
-    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+    pub(crate) fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
         self.admitted
             .iter()
             .find(|profile| profile.document.key == key)
             .map(|profile| &profile.document)
+    }
+
+    pub(crate) fn lookup(&self) -> ProfileLookup<'_> {
+        ProfileLookup(self)
+    }
+}
+
+pub(crate) struct ProfileLookup<'a>(&'a Profiles);
+
+impl SourceProfileLookup for ProfileLookup<'_> {
+    fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.0.profile(key)
     }
 }
 
@@ -273,15 +274,15 @@ impl Snapshot {
     pub fn view(&self) -> &SnapshotView {
         &self.view
     }
-    pub fn profiles(&self) -> &Profiles {
-        &self.profiles
-    }
     pub fn source(&self, key: &str) -> Option<&PreparedSource> {
         self.sources
             .iter()
             .find(|source| source.document.key == key)
     }
-    pub fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+    /// Temporary exact Profile material for Desktop Live Check; removed when
+    /// check ownership moves into this crate in #319.
+    #[doc(hidden)]
+    pub fn profile_for_live_check(&self, key: &str) -> Option<&SourceProfileDocument> {
         self.profiles.profile(key)
     }
 }

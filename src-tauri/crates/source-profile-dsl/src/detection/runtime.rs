@@ -116,6 +116,19 @@ pub struct DetectionOperationResult {
     pub report: PhaseExecutionReport,
 }
 
+impl DetectionOperationResult {
+    /// Whether any admitted Profile stopped because execution failed rather
+    /// than because its bounded Detection policy simply did not match.
+    pub fn has_profile_execution_failure(&self) -> bool {
+        self.profile_outcomes.iter().any(|outcome| {
+            matches!(
+                outcome.completion,
+                DetectionProfileCompletion::ExecutionFailed { .. }
+            )
+        })
+    }
+}
+
 fn render_detection_json_value(
     value: &CompiledDetectionJsonValue,
     values: &dyn TemplateValueView,
