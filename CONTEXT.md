@@ -78,10 +78,6 @@ _Avoid_: guessing, domain mapping, confidence-only scoring
 The actionable result of Profile Detection. It includes the detected profile key, recommended Access Path key, proposed Source Config, key/name candidates, captures, evidence, support level, and diagnostics.
 _Avoid_: profile match only, unsupported guess
 
-**Source Onboarding**:
-The Tauri-free application module through which callers perform Profile Detection, create or revise authored Sources, inspect Source Live Check freshness, run status-neutral Source Live Checks, and activate or reactivate through lifecycle-safe admission. Its authored inputs cannot select `active`; creation always produces `draft`, definition revision preserves Source Status, and only a fresh successful check-and-activate operation can produce `active`.
-_Avoid_: Tauri command orchestration, raw file writer, generic Source status setter, profile-specific adapter
-
 **discovery**:
 The Source Behavior Language step that discovers Posting Occurrences from a Source during Search Runs. It can use API, feed, sitemap, HTML, or browser strategies. Every occurrence has a valid provider URL; provider posting ID, Provider Values, Discovery Hints, and postingMeta are optional. Discovery must not fetch every detail page just to populate descriptions.
 _Avoid_: inventory, crawling, Detail, Search Request criteria, normalized posting candidate

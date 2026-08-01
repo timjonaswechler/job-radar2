@@ -79,7 +79,7 @@ pub(crate) fn persist_latest_check_report(
         fs::create_dir_all(parent)?;
     }
     let bytes = serde_json::to_vec_pretty(report)?;
-    crate::atomic_file::replace(&path, &bytes)?;
+    crate::installed::persistence::replace(&path, &bytes)?;
     Ok(path)
 }
 
@@ -112,7 +112,7 @@ fn is_technical_key(key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::{CheckReportKind, CheckReportResult, CheckReportSubject};
+    use crate::live_check::report::{CheckReportKind, CheckReportResult, CheckReportSubject};
 
     fn report(key: &str, checked_at: &str, result: CheckReportResult) -> CheckReport {
         CheckReport::new(

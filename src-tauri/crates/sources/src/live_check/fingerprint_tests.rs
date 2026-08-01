@@ -2,18 +2,17 @@ use source_profile_dsl::definition::SourceBehavior;
 
 use std::{collections::BTreeMap, fs, path::Path};
 
-use crate::job_radar_lib::{
-    compile_source, prepare_source_behavior_fingerprints, CompileSourceOutcome,
-    ReusableAccessPathDocument, SelectedAccessPath, SourceDocument, SourceProfileDocument,
-    SourceProfileLookup, SourceRuntimeBinding,
+use super::{fingerprint::CheckFingerprint, fingerprints::prepare_source_behavior_fingerprints};
+use crate::installed::SourceDocument;
+use source_profile_dsl::definition::{
+    compile_source, AccessPathFragment, CompileSourceOutcome, Fetch, ReusableAccessPathDocument,
+    SelectedAccessPath, SourceProfileDocument, SourceProfileLookup, SourceRuntimeBinding,
 };
 
 #[test]
 fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
     let mut profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let crate::job_radar_lib::Fetch::Http { url, .. } =
-        &mut profile.access_paths[0].discovery.strategies[0].fetch
-    else {
+    let Fetch::Http { url, .. } = &mut profile.access_paths[0].discovery.strategies[0].fetch else {
         panic!("fixture uses HTTP fetch")
     };
     *url = "https://example.test/{{source:name}}".to_string();
@@ -404,7 +403,7 @@ fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
 fn prepare_profile(
     source: &SourceDocument,
     profile: &SourceProfileDocument,
-) -> Vec<crate::job_radar_lib::CheckFingerprint> {
+) -> Vec<CheckFingerprint> {
     let outcome = compile_source(
         &source_behavior(&source),
         &registry_with_profile(profile.clone()),
@@ -423,15 +422,12 @@ fn source_behavior(source: &SourceDocument) -> SourceBehavior {
     }
 }
 
-fn prepare_owned(source: &SourceDocument) -> Vec<crate::job_radar_lib::CheckFingerprint> {
+fn prepare_owned(source: &SourceDocument) -> Vec<CheckFingerprint> {
     let outcome = compile_source(&source_behavior(&source), &TestProfiles::default());
     prepare_source_behavior_fingerprints(source, None, &outcome).unwrap()
 }
 
-fn assert_behavior_order(
-    fingerprints: &[crate::job_radar_lib::CheckFingerprint],
-    branch_references: &[&str],
-) {
+fn assert_behavior_order(fingerprints: &[CheckFingerprint], branch_references: &[&str]) {
     let mut expected = branch_references.to_vec();
     expected.extend([
         "profile_compiler",
@@ -444,16 +440,14 @@ fn assert_behavior_order(
     assert_eq!(references(fingerprints), expected);
 }
 
-fn references(fingerprints: &[crate::job_radar_lib::CheckFingerprint]) -> Vec<&str> {
+fn references(fingerprints: &[CheckFingerprint]) -> Vec<&str> {
     fingerprints
         .iter()
         .map(|fingerprint| fingerprint.reference.as_deref().unwrap())
         .collect()
 }
 
-fn digest_map(
-    fingerprints: &[crate::job_radar_lib::CheckFingerprint],
-) -> BTreeMap<(String, String), String> {
+fn digest_map(fingerprints: &[CheckFingerprint]) -> BTreeMap<(String, String), String> {
     fingerprints
         .iter()
         .map(|fingerprint| {
@@ -468,7 +462,7 @@ fn digest_map(
         .collect()
 }
 
-fn fragments(value: serde_json::Value) -> Vec<crate::job_radar_lib::AccessPathFragment> {
+fn fragments(value: serde_json::Value) -> Vec<AccessPathFragment> {
     serde_json::from_value(value).unwrap()
 }
 
@@ -477,8 +471,7 @@ fn set_selected_fetch_url(profile: &mut SourceProfileDocument, url: &str) {
 }
 
 fn set_path_fetch_url(path: &mut ReusableAccessPathDocument, value: &str) {
-    let crate::job_radar_lib::Fetch::Http { url, .. } = &mut path.discovery.strategies[0].fetch
-    else {
+    let Fetch::Http { url, .. } = &mut path.discovery.strategies[0].fetch else {
         panic!("fixture uses HTTP fetch")
     };
     *url = value.into();
@@ -491,8 +484,7 @@ fn set_owned_fetch_url(source: &mut SourceDocument, value: &str) {
         panic!("fixture uses Source-owned access")
     };
     match &mut discovery.strategies[0].fetch {
-        crate::job_radar_lib::Fetch::Http { url, .. }
-        | crate::job_radar_lib::Fetch::Browser { url, .. } => {
+        Fetch::Http { url, .. } | Fetch::Browser { url, .. } => {
             *url = value.into();
         }
     }
@@ -516,10 +508,10 @@ fn read_fixture<T: serde::de::DeserializeOwned>(relative: &str) -> T {
     let path = if relative.ends_with("source-selecting-access-path.json")
         || relative.ends_with("source-owned-access-path.json")
     {
-        root.join("crates/sources/tests/fixtures/sources")
-            .join(relative)
+        root.join("tests/fixtures/sources").join(relative)
     } else {
-        root.join("tests/fixtures/source-behavior").join(relative)
+        root.join("../../tests/fixtures/source-behavior")
+            .join(relative)
     };
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }

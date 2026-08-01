@@ -17,7 +17,7 @@ pub struct AppState {
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
     pub installed_sources: sources::installed::Store,
     pub source_detection: sources::detection::Operation,
-    pub source_onboarding: Arc<crate::source_onboarding::SourceOnboarding>,
+    pub source_live_check: sources::live_check::Operation,
 }
 
 impl AppState {
@@ -72,12 +72,12 @@ impl AppState {
             source_http.clone(),
             source_browser.clone(),
         );
-        let source_onboarding = Arc::new(crate::source_onboarding::SourceOnboarding::with_store(
-            paths.app_data_dir.clone(),
+        let source_live_check = sources::live_check::Operation::new(
             installed_sources.clone(),
             source_http,
             source_browser,
-        ));
+            Arc::new(sources::live_check::SystemClock),
+        );
 
         Ok(Self {
             db,
@@ -93,7 +93,7 @@ impl AppState {
             agent_chats,
             installed_sources,
             source_detection,
-            source_onboarding,
+            source_live_check,
         })
     }
 }

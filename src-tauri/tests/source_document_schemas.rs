@@ -1,10 +1,9 @@
 use std::{fs, path::Path};
 
 use jsonschema::{Draft, Registry};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 const SCHEMA_FILES: &[&str] = &[
-    "src/schema/check-report.schema.json",
     "crates/source-profile-dsl/schema/source-profile.schema.json",
     "crates/sources/schema/source.schema.json",
     "crates/source-profile-dsl/schema/source-behavior/common.schema.json",
@@ -35,53 +34,6 @@ fn packaged_profile_and_source_schemas_resolve_across_owner_catalogues() {
     harness.assert_valid(
         "crates/sources/schema/source.schema.json",
         "crates/sources/tests/fixtures/sources/valid/source-owned-access-path.json",
-    );
-}
-
-#[test]
-fn check_report_schema_accepts_source_live_check_reports() {
-    SchemaHarness::new().assert_json_valid(
-        "src/schema/check-report.schema.json",
-        json!({
-            "schemaVersion": 1,
-            "kind": "source_live_check",
-            "subject": { "type": "source", "key": "acme_jobs" },
-            "checkedAt": "2026-07-07T12:00:00Z",
-            "logicVersion": "source-live-check/v1",
-            "result": "failed",
-            "fingerprints": [],
-            "diagnostics": [{
-                "category": "runtime",
-                "code": "request_failed",
-                "message": "Discovery request failed",
-                "severity": "error",
-                "path": ""
-            }],
-            "details": {
-                "sourceStatusAtCheck": "draft",
-                "liveCheckState": "live_check_failed"
-            }
-        }),
-        true,
-    );
-}
-
-#[test]
-fn check_report_schema_rejects_mismatched_source_subject() {
-    SchemaHarness::new().assert_json_valid(
-        "src/schema/check-report.schema.json",
-        json!({
-            "schemaVersion": 1,
-            "kind": "source_live_check",
-            "subject": { "type": "source_profile", "key": "greenhouse" },
-            "checkedAt": "2026-07-07T12:00:00Z",
-            "logicVersion": "source-live-check/v1",
-            "result": "passed",
-            "fingerprints": [],
-            "diagnostics": [],
-            "details": {}
-        }),
-        false,
     );
 }
 

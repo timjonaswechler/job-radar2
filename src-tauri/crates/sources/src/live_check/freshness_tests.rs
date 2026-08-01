@@ -1,7 +1,12 @@
-use crate::job_radar_lib::{
-    evaluate_check_report_freshness, CheckFingerprint, CheckReport, CheckReportFreshnessState,
-    CheckReportKind, CheckReportResult, CheckReportStaleReason, CheckReportSubject,
-    CHECK_REPORT_SCHEMA_VERSION,
+use super::{
+    fingerprint::CheckFingerprint,
+    freshness::{
+        evaluate_check_report_freshness, CheckReportFreshnessState, CheckReportStaleReason,
+    },
+    report::{
+        CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject,
+        CHECK_REPORT_SCHEMA_VERSION,
+    },
 };
 use serde_json::json;
 

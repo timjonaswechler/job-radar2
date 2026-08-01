@@ -1,7 +1,5 @@
-//! Dormant canonical Source behavior fingerprint preparation.
+//! Canonical Source behavior fingerprint preparation.
 //!
-//! This module deliberately has no productive Source Live Check caller. A01
-//! will activate the single preparation boundary after schema-v3 activation.
 //! Each closed component is serialized and hashed independently; projection
 //! material and version tokens never enter a Check Report.
 
@@ -12,6 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+use crate::installed::SourceDocument;
 use source_profile_dsl::definition::SelectedAccessPath;
 use source_profile_dsl::definition::SourceProfileDocument;
 use source_profile_dsl::definition::{
@@ -22,10 +21,8 @@ use source_profile_dsl::definition::{
 use source_profile_dsl::definition::{
     AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject,
 };
-use sources::installed::SourceDocument;
 
-use super::source_live::SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS;
-use super::CheckFingerprint;
+use super::{execution::MAX_DISCOVERY_REQUESTS, fingerprint::CheckFingerprint};
 
 const SOURCE_BEHAVIOR: &str = "source_behavior";
 
@@ -125,14 +122,14 @@ struct RuntimeBindingsProjection<'a> {
 }
 
 /// Prepares the complete canonical-v3 fingerprint set without persisting or
-/// activating it. Projection internals remain closed to checks ownership.
+/// activating it. Projection internals remain closed to Live Check ownership.
 ///
 /// `outcome` must be the exact result produced for `source` and
 /// `resolved_base_profile` by the caller's single operation-local compilation.
 /// This boundary performs structural coherence checks but deliberately does not
 /// replay compilation or reconstruct the merge to prove that precondition.
 #[doc(hidden)]
-pub fn prepare_source_behavior_fingerprints(
+pub(super) fn prepare_source_behavior_fingerprints(
     source: &SourceDocument,
     resolved_base_profile: Option<&SourceProfileDocument>,
     outcome: &CompileSourceOutcome,
@@ -480,7 +477,7 @@ fn push_tail(
         fingerprints,
         "immutable_global_behavior",
         "source_live_check_cumulative_discovery_request_limit",
-        &SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
+        &MAX_DISCOVERY_REQUESTS,
     )?;
     push_component(
         fingerprints,
@@ -565,31 +562,6 @@ mod tests {
                 "069ca21296462f5f48b5831276c4983855de37a5c06b91b317ff7b11f3a853ed",
             ]
         );
-    }
-
-    #[test]
-    fn productive_source_live_check_uses_canonical_preparation_without_activation_reprepare() {
-        assert_eq!(
-            include_str!("source_live/mod.rs")
-                .matches("prepare_source_behavior_fingerprints")
-                .count(),
-            2,
-            "one import and one authoritative preparation are expected"
-        );
-        assert!(!include_str!("../source_onboarding.rs")
-            .contains("prepare_source_behavior_fingerprints"));
-    }
-
-    #[test]
-    fn source_live_check_use_case_does_not_own_a_tauri_runtime_boundary() {
-        for source in [
-            include_str!("source_live/mod.rs"),
-            include_str!("../source_onboarding.rs"),
-        ] {
-            let productive_source = source.split("#[cfg(test)]").next().unwrap_or(source);
-            assert!(!productive_source.contains("tauri::"));
-            assert!(!productive_source.contains("block_on"));
-        }
     }
 
     #[test]

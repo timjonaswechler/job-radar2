@@ -8,7 +8,7 @@
 mod limits;
 mod loading;
 mod mutations;
-mod persistence;
+pub(crate) mod persistence;
 mod preparation;
 mod profiles;
 mod snapshot;

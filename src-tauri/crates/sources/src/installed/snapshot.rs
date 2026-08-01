@@ -243,10 +243,7 @@ impl PreparedSource {
             _ => None,
         }
     }
-    /// Temporary exact preparation material for Desktop Live Check; removed when
-    /// check ownership moves into this crate in #319.
-    #[doc(hidden)]
-    pub fn compiler_outcome(&self) -> &CompileSourceOutcome {
+    pub(crate) fn compiler_outcome(&self) -> &CompileSourceOutcome {
         &self.outcome
     }
     pub fn preparation_diagnostics(&self) -> &Diagnostics {
@@ -279,10 +276,7 @@ impl Snapshot {
             .iter()
             .find(|source| source.document.key == key)
     }
-    /// Temporary exact Profile material for Desktop Live Check; removed when
-    /// check ownership moves into this crate in #319.
-    #[doc(hidden)]
-    pub fn profile_for_live_check(&self, key: &str) -> Option<&SourceProfileDocument> {
+    pub(crate) fn profile_for_live_check(&self, key: &str) -> Option<&SourceProfileDocument> {
         self.profiles.profile(key)
     }
 }

@@ -2,7 +2,7 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 
 use source_profile_dsl::definition::{Diagnostics, JsonObject};
 
-use super::fingerprints::CheckFingerprint;
+use super::fingerprint::CheckFingerprint;
 
 pub const CHECK_REPORT_SCHEMA_VERSION: u64 = 1;
 

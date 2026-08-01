@@ -1,14 +1,11 @@
 pub mod agent;
 mod app;
-mod atomic_file;
 mod background_tasks;
 mod browser_runtime;
-mod checks;
 mod db;
 mod geo;
 mod profile_dsl;
 mod search;
-mod source_onboarding;
 
 pub use crate::geo::GeoDbResolver;
 pub use ::geo::{
@@ -17,14 +14,6 @@ pub use ::geo::{
     LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use browser_runtime::ManagedBrowserAcquisition;
-pub use checks::{
-    evaluate_check_report_freshness, prepare_source_behavior_fingerprints, CheckFingerprint,
-    CheckReport, CheckReportFreshness, CheckReportFreshnessState, CheckReportKind,
-    CheckReportResult, CheckReportStaleDetail, CheckReportStaleReason, CheckReportSubject,
-    CheckReportSubjectType, SourceBehaviorFingerprintPreparationError,
-    SourceBehaviorFingerprintPreparationErrorKind, SourceLiveCheckReportState,
-    SourceLiveCheckReportStatus, CHECK_REPORT_SCHEMA_VERSION, SOURCE_LIVE_CHECK_LOGIC_VERSION,
-};
 pub use search::smoke::run_dev_search_run_smoke_cli;
 pub use search_resolution::{
     resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
@@ -33,10 +22,6 @@ pub use search_resolution::{
     ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution, SearchRule,
     SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
-};
-pub use source_onboarding::{
-    OperationContext, SourceLiveCheckOutcome, SourceLiveCheckRequest, SourceOnboarding,
-    SourceOnboardingError, SourceOnboardingErrorKind,
 };
 pub use sources::installed::{
     CreateDraft, InactiveStatus, Revision, SourceDocument, SourceStatus, SourceView,
@@ -123,7 +108,6 @@ pub fn run() {
             app::commands::get_source_inventory,
             app::commands::check_source,
             app::commands::check_and_activate_source,
-            app::commands::check_and_reactivate_source,
             app::commands::get_source_live_check_report_status,
             app::commands::detect_source_proposal_from_url,
             app::commands::create_source,

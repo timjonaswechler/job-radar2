@@ -21,10 +21,10 @@ import {
 } from "@/features/sources/view-model/source-live-check-model";
 import {
   checkAndActivateSource,
-  checkAndReactivateSource,
   checkSource,
   getSourceLiveCheckReportStatus,
   setSourceInactive,
+  sourceCommandErrorMessage,
   type CheckReport,
   type InstalledSource,
   type SourceLiveCheckReportStatus,
@@ -103,17 +103,18 @@ export function SourceLiveCheckSection({
       setLiveCheckError(null);
       try {
         let report: CheckReport;
+        let activated = false;
         if (kind === "check") {
-          report = await checkSource(sourceKey);
-        } else if (kind === "check_and_activate") {
-          report = await checkAndActivateSource(sourceKey);
+          report = (await checkSource(sourceKey)).report;
         } else {
-          report = await checkAndReactivateSource(sourceKey);
+          const outcome = await checkAndActivateSource(sourceKey);
+          report = outcome.report;
+          activated = outcome.type === "activated";
         }
         const nextStatus = await getSourceLiveCheckReportStatus(sourceKey);
         setLiveCheckStatus(nextStatus);
-        if (kind !== "check" && report.result === "passed") await onUpdated?.();
-        if (report.result === "passed") {
+        if (activated) await onUpdated?.();
+        if (report.result === "passed" && (kind === "check" || activated)) {
           toast.success(action?.label ?? "Source Live Check ausgeführt", {
             description:
               kind === "check"
@@ -326,6 +327,4 @@ function sourceLiveCheckBadgeVariant(
   return "secondary";
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
+const errorMessage = sourceCommandErrorMessage;

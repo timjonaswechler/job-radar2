@@ -21,6 +21,33 @@ const ENGINE_SCHEMAS: &[&str] = &[
 ];
 
 #[test]
+fn check_report_schema_accepts_live_check_evidence_and_rejects_mismatched_subjects() {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let registry = engine_registry(crate_dir);
+    let schema = read(crate_dir.join("schema/check-report.schema.json"));
+    let validator = jsonschema::options()
+        .with_draft(Draft::Draft202012)
+        .with_registry(&registry)
+        .build(&schema)
+        .unwrap();
+    let report = serde_json::json!({
+        "schemaVersion": 1,
+        "kind": "source_live_check",
+        "subject": { "type": "source", "key": "acme_jobs" },
+        "checkedAt": "2026-07-07T12:00:00Z",
+        "logicVersion": "source-live-check/v2",
+        "result": "failed",
+        "fingerprints": [],
+        "diagnostics": [],
+        "details": {}
+    });
+    assert!(validator.is_valid(&report));
+    let mut invalid = report;
+    invalid["subject"]["type"] = serde_json::json!("source_profile");
+    assert!(!validator.is_valid(&invalid));
+}
+
+#[test]
 fn source_schema_resolves_the_engine_definition_catalogue_without_copying_json() {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let (registry, source_schema) = source_schema(crate_dir);
@@ -130,6 +157,13 @@ fn source_schema_rejects_owner_specific_authored_invariant_violations() {
 }
 
 fn source_schema(crate_dir: &Path) -> (Registry<'static>, Value) {
+    (
+        engine_registry(crate_dir),
+        read(crate_dir.join("schema/source.schema.json")),
+    )
+}
+
+fn engine_registry(crate_dir: &Path) -> Registry<'static> {
     let engine_dir = crate_dir
         .parent()
         .unwrap()
@@ -140,10 +174,7 @@ fn source_schema(crate_dir: &Path) -> (Registry<'static>, Value) {
         let id = schema["$id"].as_str().unwrap().to_string();
         registry = registry.add(&id, schema).unwrap();
     }
-    (
-        registry.prepare().unwrap(),
-        read(crate_dir.join("schema/source.schema.json")),
-    )
+    registry.prepare().unwrap()
 }
 
 fn read(path: PathBuf) -> Value {

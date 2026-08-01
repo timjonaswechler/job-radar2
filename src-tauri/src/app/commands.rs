@@ -500,78 +500,30 @@ pub async fn get_source_inventory(
 pub async fn check_source(
     state: State<'_, AppState>,
     source_key: String,
-) -> Result<crate::checks::CheckReport, String> {
-    match state
-        .source_onboarding
-        .live_check(
-            crate::source_onboarding::SourceLiveCheckRequest::Run { source_key },
-            crate::source_onboarding::OperationContext::default(),
-        )
+) -> Result<sources::live_check::RunOutcome, sources::live_check::Error> {
+    state
+        .source_live_check
+        .run(&source_key, sources::live_check::Context::default())
         .await
-        .map_err(|error| error.to_string())?
-    {
-        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. } => Ok(report),
-        _ => Err("unexpected Source Onboarding outcome".to_string()),
-    }
 }
 
 #[tauri::command]
 pub async fn check_and_activate_source(
     state: State<'_, AppState>,
     source_key: String,
-) -> Result<crate::checks::CheckReport, String> {
-    match state
-        .source_onboarding
-        .live_check(
-            crate::source_onboarding::SourceLiveCheckRequest::CheckAndActivate { source_key },
-            crate::source_onboarding::OperationContext::default(),
-        )
+) -> Result<sources::live_check::AdmissionOutcome, sources::live_check::Error> {
+    state
+        .source_live_check
+        .check_and_activate(&source_key, sources::live_check::Context::default())
         .await
-        .map_err(|error| error.to_string())?
-    {
-        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. }
-        | crate::source_onboarding::SourceLiveCheckOutcome::Activated { report, .. } => Ok(report),
-        _ => Err("unexpected Source Onboarding outcome".to_string()),
-    }
-}
-
-#[tauri::command]
-pub async fn check_and_reactivate_source(
-    state: State<'_, AppState>,
-    source_key: String,
-) -> Result<crate::checks::CheckReport, String> {
-    match state
-        .source_onboarding
-        .live_check(
-            crate::source_onboarding::SourceLiveCheckRequest::CheckAndActivate { source_key },
-            crate::source_onboarding::OperationContext::default(),
-        )
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        crate::source_onboarding::SourceLiveCheckOutcome::Checked { report, .. }
-        | crate::source_onboarding::SourceLiveCheckOutcome::Activated { report, .. } => Ok(report),
-        _ => Err("unexpected Source Onboarding outcome".to_string()),
-    }
 }
 
 #[tauri::command]
 pub async fn get_source_live_check_report_status(
     state: State<'_, AppState>,
     source_key: String,
-) -> Result<crate::checks::SourceLiveCheckReportStatus, String> {
-    match state
-        .source_onboarding
-        .live_check(
-            crate::source_onboarding::SourceLiveCheckRequest::LatestReportStatus { source_key },
-            crate::source_onboarding::OperationContext::default(),
-        )
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        crate::source_onboarding::SourceLiveCheckOutcome::LatestReportStatus(status) => Ok(status),
-        _ => Err("unexpected Source Onboarding outcome".to_string()),
-    }
+) -> Result<sources::live_check::Status, sources::live_check::Error> {
+    state.source_live_check.status(&source_key).await
 }
 
 #[tauri::command]

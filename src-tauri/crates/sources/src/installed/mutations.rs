@@ -31,6 +31,10 @@ impl Store {
     }
 
     /// Loads fresh disk state for one operation. Store does not cache documents.
+    pub(crate) fn app_data_dir(&self) -> &Path {
+        &self.app_data_dir
+    }
+
     pub fn snapshot(&self) -> Result<Snapshot, Error> {
         let _guard = self
             .coordinator
@@ -88,11 +92,14 @@ impl Store {
         self.saved(key)
     }
 
-    /// Temporary checked admission seam for Desktop Live Check. The exact
-    /// Source/Profile generation is compared while holding the same coordinator
-    /// used by every application-mediated Source mutation, immediately before
-    /// atomic replacement.
-    pub fn admit_checked(&self, key: &str, checked: &Generation) -> Result<SourceView, Error> {
+    /// Compares the exact checked Source/Profile generation while holding the
+    /// installed-state mutation coordinator immediately before atomic replacement.
+    pub(crate) fn admit_checked_if(
+        &self,
+        key: &str,
+        checked: &Generation,
+        should_admit: impl FnOnce() -> bool,
+    ) -> Result<Option<SourceView>, Error> {
         validate_key(key)?;
         let _guard = self.lock()?;
         let snapshot = self.load()?;
@@ -106,12 +113,15 @@ impl Store {
                 "an active Source cannot be checked-admitted",
             ));
         }
+        if !should_admit() {
+            return Ok(None);
+        }
         let mut document = existing.document().clone();
         document.status = SourceStatus::Active;
         let bytes = serialized_document(&document)?;
         self.preflight_write(&bytes, Some(&existing.path), false)?;
         write(&document, &bytes, &existing.path, true)?;
-        self.saved(key)
+        self.saved(key).map(Some)
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, Error> {

@@ -1,10 +1,5 @@
-use std::io::ErrorKind;
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use serde::Serialize;
-
-use crate::checks::prepare_source_behavior_fingerprints;
+use super::fingerprints::prepare_source_behavior_fingerprints;
+use crate::installed::{PreparedSource, Snapshot};
 use source_profile_dsl::definition::CompiledSource;
 use source_profile_dsl::definition::SelectedAccessPath;
 use source_profile_dsl::definition::{
@@ -17,134 +12,43 @@ use source_profile_dsl::execution::{
     SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
     SourceDetailResult,
 };
-use sources::installed::{PreparedSource, Snapshot};
 
-use super::persistence::validate_source_live_check_report_key;
 use super::{
-    evaluate_check_report_freshness, read_latest_check_report, source_live_check_report_path,
-    CheckFingerprint, CheckReport, CheckReportFreshness, CheckReportFreshnessState,
-    CheckReportKind, CheckReportPersistenceError, CheckReportResult, CheckReportSubject,
+    fingerprint::CheckFingerprint,
+    report::{CheckReport, CheckReportKind, CheckReportResult, CheckReportSubject},
 };
 
-pub const SOURCE_LIVE_CHECK_LOGIC_VERSION: &str = "source-live-check/v2";
-pub(crate) const SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS: u64 = 1;
+pub(super) const MAX_DISCOVERY_REQUESTS: u64 = 1;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SourceLiveCheckReportState {
-    Fresh,
-    Stale,
-    Unknown,
+#[derive(Clone)]
+pub(super) struct ExecutionContext<'a> {
+    pub checked_at: String,
+    pub cancellation: Option<&'a dyn source_profile_dsl::execution::RuntimeCancellation>,
 }
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SourceLiveCheckReportStatus {
-    pub state: SourceLiveCheckReportState,
-    pub report: Option<CheckReport>,
-    pub freshness: Option<CheckReportFreshness>,
-}
-
-#[derive(Clone, Default)]
-pub(crate) struct SourceLiveCheckExecutionContext<'a> {
-    checked_at: Option<String>,
-    cancellation: Option<&'a dyn source_profile_dsl::execution::RuntimeCancellation>,
-}
-
-impl<'a> SourceLiveCheckExecutionContext<'a> {
-    pub(crate) fn with_checked_at(mut self, checked_at: impl Into<String>) -> Self {
-        self.checked_at = Some(checked_at.into());
-        self
-    }
-
-    pub(crate) fn with_cancellation(
-        mut self,
-        cancellation: &'a dyn source_profile_dsl::execution::RuntimeCancellation,
-    ) -> Self {
-        self.cancellation = Some(cancellation);
-        self
-    }
-
+impl<'a> ExecutionContext<'a> {
     fn runtime_context(&self) -> RuntimeExecutionContext<'a> {
         self.cancellation.map_or_else(
             RuntimeExecutionContext::uncancellable,
             RuntimeExecutionContext::with_cancellation,
         )
     }
-
-    fn checked_at(&self) -> String {
-        self.checked_at
-            .clone()
-            .unwrap_or_else(current_utc_timestamp)
-    }
 }
 
-pub(crate) async fn source_live_check_report_status(
-    app_data_dir: impl AsRef<Path>,
-    snapshot: &Snapshot,
-    source_key: impl AsRef<str>,
-) -> Result<SourceLiveCheckReportStatus, String> {
-    let app_data_dir = app_data_dir.as_ref().to_path_buf();
-    let snapshot = snapshot.clone();
-    let source_key = source_key.as_ref().to_string();
-    tokio::task::spawn_blocking(move || {
-        source_live_check_report_status_blocking(&app_data_dir, &snapshot, &source_key)
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
-fn source_live_check_report_status_blocking(
-    app_data_dir: &Path,
-    snapshot: &Snapshot,
-    source_key: &str,
-) -> Result<SourceLiveCheckReportStatus, String> {
-    validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
-    let report_path = source_live_check_report_path(app_data_dir, source_key);
-    let report = match read_latest_check_report(&report_path) {
-        Ok(report) => report,
-        Err(CheckReportPersistenceError::Io(error)) if error.kind() == ErrorKind::NotFound => {
-            return Ok(SourceLiveCheckReportStatus {
-                state: SourceLiveCheckReportState::Unknown,
-                report: None,
-                freshness: None,
-            });
-        }
-        Err(error) => return Err(error.to_string()),
-    };
-
-    let current_fingerprints = prepare_source_live_check(snapshot, source_key)?.fingerprints;
-    let freshness = evaluate_check_report_freshness(
-        &report,
-        SOURCE_LIVE_CHECK_LOGIC_VERSION,
-        &current_fingerprints,
-    );
-    let state = match freshness.state {
-        CheckReportFreshnessState::Fresh => SourceLiveCheckReportState::Fresh,
-        CheckReportFreshnessState::Stale => SourceLiveCheckReportState::Stale,
-    };
-
-    Ok(SourceLiveCheckReportStatus {
-        state,
-        report: Some(report),
-        freshness: Some(freshness),
-    })
-}
-
-pub(crate) async fn build_source_live_check_report<D, T, A>(
+pub(super) async fn build_report<D, T, A>(
     snapshot: &Snapshot,
     source_key: &str,
     discovery_fetcher: &D,
     detail_fetcher: &T,
     acquisition: &A,
-    context: &SourceLiveCheckExecutionContext<'_>,
+    context: &ExecutionContext<'_>,
 ) -> Result<CheckReport, String>
 where
     D: ProfileHttpClient + Sync,
     T: ProfileHttpClient + Sync + ?Sized,
     A: BrowserAcquisition + Sync,
 {
-    let prepared = prepare_source_live_check(snapshot, source_key)?;
+    let prepared = prepare(snapshot, source_key)?;
     let document = prepared.source.document();
     let mut diagnostics = prepared.source.validation().diagnostics.clone();
     let fingerprints = prepared.fingerprints.clone();
@@ -166,7 +70,7 @@ where
 
     if let Some(compiled) = prepared.compiled() {
         let discovery_context = context.runtime_context().with_limits(PhaseLimits {
-            max_requests: SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS,
+            max_requests: MAX_DISCOVERY_REQUESTS,
             ..compiled.discovery_limits()
         });
         let discovery_result =
@@ -293,8 +197,8 @@ where
     let mut report = CheckReport::new(
         CheckReportKind::SourceLiveCheck,
         CheckReportSubject::source(source_key),
-        context.checked_at(),
-        SOURCE_LIVE_CHECK_LOGIC_VERSION,
+        context.checked_at.clone(),
+        super::LOGIC_VERSION,
         result,
     );
     report.fingerprints = fingerprints;
@@ -333,9 +237,9 @@ impl SourceLiveCheckSubject {
     }
 }
 
-struct PreparedSourceLiveCheck<'a> {
+pub(super) struct PreparedSourceLiveCheck<'a> {
     source: &'a PreparedSource,
-    fingerprints: Vec<CheckFingerprint>,
+    pub fingerprints: Vec<CheckFingerprint>,
 }
 
 impl PreparedSourceLiveCheck<'_> {
@@ -344,7 +248,7 @@ impl PreparedSourceLiveCheck<'_> {
     }
 }
 
-fn prepare_source_live_check<'a>(
+pub(super) fn prepare<'a>(
     snapshot: &'a Snapshot,
     source_key: &str,
 ) -> Result<PreparedSourceLiveCheck<'a>, String> {
@@ -386,7 +290,7 @@ fn source_live_check_details_placeholders() -> JsonObject {
     );
     details.insert(
         "maxDiscoveryRequests".to_string(),
-        serde_json::json!(SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS),
+        serde_json::json!(MAX_DISCOVERY_REQUESTS),
     );
     details.insert("detailChecked".to_string(), serde_json::Value::Bool(false));
     details.insert("detailPassed".to_string(), serde_json::Value::Null);
@@ -607,37 +511,4 @@ fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {
     diagnostics
         .iter()
         .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-}
-
-fn current_utc_timestamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-    format_unix_timestamp(seconds)
-}
-
-fn format_unix_timestamp(seconds: i64) -> String {
-    let days = seconds.div_euclid(86_400);
-    let seconds_of_day = seconds.rem_euclid(86_400);
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
-}
-
-fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
-    let z = days_since_unix_epoch + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let day_of_era = z - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_parameter = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_parameter + 2) / 5 + 1;
-    let month = month_parameter + if month_parameter < 10 { 3 } else { -9 };
-    year += if month <= 2 { 1 } else { 0 };
-    (year, month, day)
 }

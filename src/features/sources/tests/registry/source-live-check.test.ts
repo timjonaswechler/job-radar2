@@ -78,7 +78,7 @@ test("source live check contract", async () => {
   assert.equal(staleModel.displayState, "stale");
   assert.equal(staleModel.staleFingerprints[0]?.kind, "source_document");
   assert.equal(sourceLiveCheckDisplayModel(null).displayState, "unknown");
-  assert.equal(sourceLiveCheckDisplayModel({ state: "unknown" }).displayLabel, "Unbekannt");
+  assert.equal(sourceLiveCheckDisplayModel({ state: "unknown", report: null, freshness: null }).displayLabel, "Unbekannt");
   for (const label of [passedModel.displayLabel, failedModel.displayLabel, staleModel.displayLabel]) {
     assert.equal(label.toLocaleLowerCase("de").includes("verifiziert"), false);
   }
