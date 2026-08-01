@@ -5,7 +5,7 @@ import {
 } from "@/features/search-requests/status";
 import { selectedMissingSourceKeys } from "@/features/search-requests/model/source-options";
 import type { SearchRequest, SearchRequestStatus } from "@/lib/api/search-requests";
-import type { RegistrySource, SourceKey } from "@/lib/api/sources";
+import type { InstalledSource, SourceKey } from "@/lib/api/sources";
 
 export type SearchRequestGroupId = "attention" | "active" | "draft" | "disabled";
 
@@ -56,7 +56,7 @@ const groupRanks: Record<SearchRequestGroupId, number> = {
 
 export function createSearchRequestRows(
   requests: SearchRequest[],
-  sources: RegistrySource[],
+  sources: InstalledSource[],
 ): SearchRequestTableRow[] {
   const sourcesByKey = new Map(
     sources.map((source) => [source.document.key, source.document.name]),

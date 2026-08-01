@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use serde_json::{json, Value};
 use source_profile_dsl::test_support::{
     compile_source, CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity, Pagination,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceBehavior, SourceExecutionPlan, SourceProfileDocument,
 };
 
 #[derive(Debug)]
@@ -75,9 +75,8 @@ fn compiler_rejects_above_ceiling_and_inherited_limit_raises() {
 
     let mut profile = simple_profile_value();
     profile["accessPaths"][0]["discovery"]["limits"] = phase_limits(4);
-    let mut source: Value = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source["accessPaths"] =
         json!([{ "key": "json_feed", "discovery": { "limits": { "maxRequests": 5 } } }]);
     let result = compile_profile_and_source_values(profile, source);
@@ -102,9 +101,8 @@ fn compiler_rejects_above_ceiling_and_inherited_limit_raises() {
 #[test]
 fn partial_direct_limit_fragment_inherits_backend_values_and_tightens_one_dimension() {
     let profile = simple_profile_value();
-    let mut source: Value = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source["accessPaths"] = json!([{
         "key": "json_feed",
         "discovery": {
@@ -268,9 +266,8 @@ fn direct_serde_rejects_forbidden_headers_before_building_a_plan() {
 #[test]
 fn direct_specialization_rejects_forbidden_headers_before_compilation() {
     let profile = simple_profile_value();
-    let mut source: Value = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source["accessPaths"] = json!([{
         "key": "json_feed",
         "discovery": {
@@ -385,9 +382,8 @@ fn direct_serde_has_no_prohibited_browser_interaction_variants() {
 }
 
 fn compile_profile_value(profile: Value) -> TestCompileResult {
-    let mut source: Value = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: Value =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.as_object_mut().unwrap().remove("accessPaths");
     compile_profile_and_source_values(profile, source)
 }
@@ -395,7 +391,7 @@ fn compile_profile_value(profile: Value) -> TestCompileResult {
 fn compile_profile_and_source_values(profile: Value, source: Value) -> TestCompileResult {
     let profile: SourceProfileDocument = serde_json::from_value(profile)
         .unwrap_or_else(|error| panic!("profile should deserialize: {error}"));
-    let source: SourceDocument = serde_json::from_value(source)
+    let source: SourceBehavior = serde_json::from_value(source)
         .unwrap_or_else(|error| panic!("source should deserialize: {error}"));
 
     let registry = SourceProfileRegistrySnapshot {

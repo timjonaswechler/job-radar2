@@ -71,7 +71,7 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -164,7 +164,7 @@ fn keyed_posting_meta_never_crosses_finalization() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -236,7 +236,7 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -307,7 +307,7 @@ fn fuzzy_dedupe_keeps_different_roles_at_same_company_and_location_separate() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -385,7 +385,7 @@ fn location_compatibility_allows_whole_phrase_overlap_but_blocks_contradictions(
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await

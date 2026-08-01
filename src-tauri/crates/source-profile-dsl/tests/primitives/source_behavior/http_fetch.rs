@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use serde_json::{json, Value};
 use source_profile_dsl::test_support::{
     compile_source, http_fetch_descriptors, validate_http_fetch_descriptors, CompileSourceOutcome,
-    ExecutionPlanFetch, Fetch, HttpMethod, SourceDocument, SourceProfileDocument,
+    ExecutionPlanFetch, Fetch, HttpMethod, SourceBehavior, SourceProfileDocument,
     HTTP_FETCH_DESCRIPTOR,
 };
 
@@ -131,9 +131,8 @@ fn compiler_owns_recursive_json_body_security() {
 
 fn compile_profile(value: Value) -> CompileSourceOutcome {
     let profile: SourceProfileDocument = serde_json::from_value(value).unwrap();
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     compile_source(
         &source,
         &SourceProfileRegistrySnapshot {

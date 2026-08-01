@@ -11,8 +11,9 @@ import { directSourceSpecializationStarterForAccessPath } from "@/features/sourc
 import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsaved-source-changes";
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import {
+  sourceCommandErrorMessage,
   updateSource,
-  type RegistrySource,
+  type InstalledSource,
   type InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 
@@ -24,7 +25,7 @@ import {
 } from "./source-edit-model";
 
 type UseSourceEditProps = {
-  source: RegistrySource | null;
+  source: InstalledSource | null;
   profilesByKey: Map<string, InstalledProfileWithDefinition>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,9 +64,8 @@ export function useSourceEdit({
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>(
     initialDraft?.configEntries ?? [],
   );
-  const [directSourceSpecializationText, setDirectSourceSpecializationText] = useState(
-    initialDraft?.directSourceSpecializationText ?? "",
-  );
+  const [directSourceSpecializationText, setDirectSourceSpecializationText] =
+    useState(initialDraft?.directSourceSpecializationText ?? "");
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,7 +88,9 @@ export function useSourceEdit({
     baselineDraftRef.current = initialDraft;
     setName(initialDraft.name);
     setConfigEntries(initialDraft.configEntries);
-    setDirectSourceSpecializationText(initialDraft.directSourceSpecializationText);
+    setDirectSourceSpecializationText(
+      initialDraft.directSourceSpecializationText,
+    );
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
     setSaving(false);
@@ -104,8 +106,19 @@ export function useSourceEdit({
             directSourceSpecializationText,
             schemaMetadata,
           })
-        : { document: null, errors: [], configErrors: [], specializationErrors: [] },
-    [configEntries, name, schemaMetadata, source, directSourceSpecializationText],
+        : {
+            document: null,
+            errors: [],
+            configErrors: [],
+            specializationErrors: [],
+          },
+    [
+      configEntries,
+      name,
+      schemaMetadata,
+      source,
+      directSourceSpecializationText,
+    ],
   );
   const previewJson = useMemo(
     () =>
@@ -115,8 +128,11 @@ export function useSourceEdit({
     [buildResult.document, jsonPreviewOpen],
   );
   const directSourceSpecializationStarter = useMemo(
-    () => directSourceSpecializationStarterForAccessPath(resolution?.profileAccessPath ?? null),
-    [resolution?.profileAccessPath],
+    () =>
+      directSourceSpecializationStarterForAccessPath(
+        resolution?.baseProfileAccessPath ?? null,
+      ),
+    [resolution?.baseProfileAccessPath],
   );
   const editable = source?.origin === "custom";
   const supportsProfileOverrides =
@@ -134,7 +150,9 @@ export function useSourceEdit({
     if (baselineDraft) {
       setName(baselineDraft.name);
       setConfigEntries(baselineDraft.configEntries);
-      setDirectSourceSpecializationText(baselineDraft.directSourceSpecializationText);
+      setDirectSourceSpecializationText(
+        baselineDraft.directSourceSpecializationText,
+      );
     }
     setJsonPreviewOpen(false);
     setSaveAttempted(false);
@@ -176,14 +194,14 @@ export function useSourceEdit({
       } catch (refreshError) {
         toast.warning(
           "Quelle gespeichert, Registry konnte aber nicht neu geladen werden.",
-          { description: errorMessage(refreshError) },
+          { description: sourceCommandErrorMessage(refreshError) },
         );
       }
       toast.success("Quelle wurde aktualisiert.");
       unsavedChanges.forceCloseAfterSave();
     } catch (error) {
       toast.error("Quelle konnte nicht aktualisiert werden.", {
-        description: errorMessage(error),
+        description: sourceCommandErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -220,8 +238,4 @@ export function useSourceEdit({
       handleSave,
     },
   };
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

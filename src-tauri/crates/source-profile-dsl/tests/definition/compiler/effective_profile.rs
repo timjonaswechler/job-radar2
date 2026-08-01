@@ -6,17 +6,16 @@ use std::{fs, path::Path};
 
 use source_profile_dsl::test_support::{
     compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceAccess,
-    DiagnosticCategory, DiagnosticSeverity, Fetch, SelectedAccessPath, SourceDocument,
-    SourceProfileDocument, SourceStatus,
+    DiagnosticCategory, DiagnosticSeverity, Fetch, SelectedAccessPath, SourceBehavior,
+    SourceProfileDocument,
 };
 
 #[test]
 fn profile_source_compiles_to_a_complete_effective_profile_and_plan() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let registry = registry_with_profile(profile);
 
     let CompileSourceOutcome::Compiled {
@@ -77,9 +76,8 @@ fn compiler_validates_the_complete_effective_profile_before_building_a_plan() {
     };
     *timeout_ms = 0;
     profile.access_paths.push(invalid_unselected_path);
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let CompileSourceOutcome::Rejected { diagnostics } =
         compile_source(&source, &registry_with_profile(profile))
@@ -103,9 +101,8 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
     profile.access_paths.push(second_path);
     let original_profile = profile.clone();
 
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "second_path",
@@ -191,9 +188,8 @@ fn compiler_recursively_specializes_existing_entries_without_reordering_or_mutat
 fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.source_config.remove("language");
     let base_strategy =
         serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
@@ -267,9 +263,8 @@ fn compiler_appends_complete_new_strategies_and_paths_in_fragment_order() {
 fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
@@ -329,9 +324,8 @@ fn compiler_rejects_incomplete_additions_with_sorted_missing_fields() {
 fn effective_profile_rechecks_value_nodes_after_direct_specialization_merge() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let locations = (0..1_024)
         .map(|index| serde_json::json!({ "type": "const", "value": index }))
         .collect::<Vec<_>>();
@@ -365,9 +359,8 @@ fn effective_profile_rechecks_value_nodes_after_direct_specialization_merge() {
 fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([
         {
             "key": "json_feed",
@@ -408,9 +401,8 @@ fn compiler_reports_each_duplicate_fragment_key_at_its_real_pointer() {
 fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_validation() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.source_config.remove("feedUrl");
     let mut strategy =
         serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
@@ -448,9 +440,8 @@ fn compiler_rejects_an_invalid_unselected_added_path_before_source_config_valida
 fn compiler_is_deterministic_for_equivalent_fragment_object_orders() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let registry = registry_with_profile(profile);
 
     let outcomes = [
@@ -467,27 +458,11 @@ fn compiler_is_deterministic_for_equivalent_fragment_object_orders() {
 }
 
 #[test]
-fn final_source_shape_rejects_the_legacy_specialization_model() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
-    let mut source: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
-    source["accessPaths"] = serde_json::json!([{ "key": "json_feed" }]);
-    source["sourceOverrides"] = serde_json::json!({});
-
-    let error = serde_json::from_value::<SourceDocument>(source)
-        .expect_err("the final Source shape must not admit legacy sourceOverrides");
-
-    assert!(error.to_string().contains("sourceOverrides"));
-}
-
-#[test]
 fn directly_supplied_source_is_authoritative_over_same_key_registry_source() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let mut conflicting_source = source.clone();
     conflicting_source.name = "Registry impostor".to_string();
     conflicting_source.source_config.insert(
@@ -519,30 +494,6 @@ fn directly_supplied_source_is_authoritative_over_same_key_registry_source() {
 }
 
 #[test]
-fn source_lifecycle_is_not_part_of_compilation() {
-    let profile: SourceProfileDocument =
-        read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
-    let registry = registry_with_profile(profile);
-
-    let outcomes = [
-        SourceStatus::Draft,
-        SourceStatus::Active,
-        SourceStatus::Disabled,
-    ]
-    .map(|status| {
-        let mut source = source.clone();
-        source.status = status;
-        compile_source(&source, &registry)
-    });
-
-    assert_eq!(outcomes[0], outcomes[1]);
-    assert_eq!(outcomes[1], outcomes[2]);
-}
-
-#[test]
 fn rejection_diagnostics_have_deterministic_key_order() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
@@ -559,9 +510,8 @@ fn rejection_diagnostics_have_deterministic_key_order() {
         }))
         .expect("object fixture should deserialize"),
     );
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let CompileSourceOutcome::Rejected { diagnostics } =
         compile_source(&source, &registry_with_profile(profile))
@@ -603,9 +553,8 @@ fn compiler_enforces_all_effective_source_config_value_constraints() {
         .unwrap()
         .clone(),
     );
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.source_config.extend(
         serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(serde_json::json!({
             "region": "eu",
@@ -698,9 +647,8 @@ fn compiler_rejects_malformed_contract_definitions_deterministically() {
         let mut profile: SourceProfileDocument =
             read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
         profile.source_config_schema = Some(schema.as_object().unwrap().clone());
-        let source: SourceDocument = read_fixture(
-            "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-        );
+        let source: SourceBehavior =
+            read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
         let CompileSourceOutcome::Rejected { diagnostics } =
             compile_source(&source, &registry_with_profile(profile))
         else {
@@ -734,9 +682,8 @@ fn direct_source_schema_specialization_replaces_arrays_and_preserves_profile_tit
         .unwrap()
         .clone(),
     );
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source
         .source_config
         .insert("region".to_string(), serde_json::json!("eu"));
@@ -800,8 +747,8 @@ fn direct_and_source_owned_schema_titles_are_rejected() {
         .to_string()
         .contains("title is not authorable"));
 
-    let mut source: SourceDocument =
-        read_fixture("../../tests/fixtures/source-behavior/valid/source-owned-access-path.json");
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
     let SelectedAccessPath::SourceOwnedAccessPath {
         source_config_schema,
         ..
@@ -829,8 +776,8 @@ fn direct_and_source_owned_schema_titles_are_rejected() {
 
 #[test]
 fn source_owned_access_is_a_distinct_complete_branch() {
-    let source: SourceDocument =
-        read_fixture("../../tests/fixtures/source-behavior/valid/source-owned-access-path.json");
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
 
     let CompileSourceOutcome::Compiled {
         source: compiled, ..
@@ -857,9 +804,8 @@ fn source_owned_access_is_a_distinct_complete_branch() {
 
 #[test]
 fn rejection_exposes_diagnostics_and_no_partial_compiled_source() {
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let CompileSourceOutcome::Rejected { diagnostics } =
         compile_source(&source, &SourceProfileRegistrySnapshot::default())
@@ -890,7 +836,7 @@ fn registry_with_profile(profile: SourceProfileDocument) -> SourceProfileRegistr
     }
 }
 
-fn registry_source(document: SourceDocument) -> RegistrySource {
+fn registry_source(document: SourceBehavior) -> RegistrySource {
     let source_key = document.key.clone();
     RegistrySource {
         origin: "test".into(),

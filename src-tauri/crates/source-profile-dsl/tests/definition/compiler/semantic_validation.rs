@@ -3,8 +3,7 @@ use std::{fs, path::Path};
 
 use source_profile_dsl::test_support::{
     compile_source, Acceptance, AccessPathFragment, CompileSourceOutcome, Fetch, FieldExpression,
-    ListFieldExpression, Predicate, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
-    SourceStatus,
+    ListFieldExpression, Predicate, SourceBehavior, SourceExecutionPlan, SourceProfileDocument,
 };
 
 #[derive(Debug)]
@@ -14,7 +13,7 @@ struct TestCompileResult {
 }
 
 fn compile_test_source(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profile: Option<SourceProfileDocument>,
 ) -> TestCompileResult {
     let registry = SourceProfileRegistrySnapshot {
@@ -48,9 +47,8 @@ fn compile_test_source(
 
 #[test]
 fn compiler_rejects_acceptance_fields_and_thresholds_outside_the_phase_catalogue() {
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let mut detail_profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
@@ -90,9 +88,8 @@ fn compiler_rejects_acceptance_fields_and_thresholds_outside_the_phase_catalogue
 fn compiler_validates_structural_capability_compatibility() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     profile.access_paths[0].discovery.strategies[0].select =
         serde_json::from_value(serde_json::json!({ "type": "css", "selector": ".job" })).unwrap();
     profile.access_paths[0].discovery.strategies[0]
@@ -123,9 +120,8 @@ fn compiler_validates_structural_capability_compatibility() {
 fn compiler_rejects_invalid_predicate_regex_during_plan_compilation() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     profile.access_paths[0].discovery.strategies[0].conditions =
         Some(vec![serde_json::from_value::<Predicate>(
             serde_json::json!({
@@ -153,9 +149,8 @@ fn compiler_rejects_invalid_predicate_regex_during_plan_compilation() {
 fn compiler_preserves_base_and_direct_capture_order_in_the_typed_plan() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     profile.access_paths[0].discovery.strategies[0].captures = Some(
         serde_json::from_str(
             r#"{
@@ -211,9 +206,8 @@ fn compiler_preserves_base_and_direct_capture_order_in_the_typed_plan() {
 
 #[test]
 fn compiler_rejects_invalid_capture_regex_and_missing_selected_group_before_execution() {
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     for (pattern, expected_code) in [
         ("(", "capture_pattern_invalid"),
@@ -253,9 +247,8 @@ fn compiler_rejects_invalid_capture_regex_and_missing_selected_group_before_exec
 fn compiler_rejects_invalid_transform_plans_with_stable_context() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let mut unselected_path = profile.access_paths[0].clone();
     unselected_path.key = "invalid_unselected_path".to_string();
     unselected_path.name = "Invalid unselected path".to_string();
@@ -297,9 +290,8 @@ fn compiler_rejects_invalid_transform_plans_with_stable_context() {
 
 #[test]
 fn compiler_enforces_the_four_value_context_placements_recursively() {
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let mut discovery_capture_profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
@@ -378,9 +370,8 @@ fn compiler_enforces_the_four_value_context_placements_recursively() {
 fn compiler_enforces_the_complete_effective_value_node_limit_once() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     profile.access_paths[0].discovery.strategies[0]
         .extract
         .provider_values
@@ -415,7 +406,7 @@ fn compiler_enforces_the_complete_effective_value_node_limit_once() {
 #[test]
 fn source_owned_plan_uses_declared_optional_source_config_keys() {
     let mut source_json: serde_json::Value =
-        read_fixture("../../tests/fixtures/source-behavior/valid/source-owned-access-path.json");
+        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
     source_json["selectedAccessPath"]["sourceConfigSchema"]["properties"]["optionalTenant"] =
         serde_json::json!({ "type": "string" });
     source_json["selectedAccessPath"]["discovery"]["strategies"][0]["extract"]["providerValues"]
@@ -423,7 +414,7 @@ fn source_owned_plan_uses_declared_optional_source_config_keys() {
         "type": "template",
         "template": "{{sourceConfig:optionalTenant}}"
     });
-    let source: SourceDocument = serde_json::from_value(source_json).unwrap();
+    let source: SourceBehavior = serde_json::from_value(source_json).unwrap();
 
     let result = compile_test_source(&source, None);
 
@@ -434,9 +425,8 @@ fn source_owned_plan_uses_declared_optional_source_config_keys() {
 fn compiler_validates_template_variable_namespaces_keys_and_context() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     if let Fetch::Http { url, .. } = &mut profile.access_paths[0].discovery.strategies[0].fetch {
         *url = "{{posting:url}}?q={{sourceConfig:missing}}&x={{unknown:thing}}".to_string();
@@ -466,9 +456,8 @@ fn compiler_validates_template_variable_namespaces_keys_and_context() {
 fn compiler_validates_capabilities_after_direct_specialization() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.access_paths = Some(
         serde_json::from_value::<Vec<AccessPathFragment>>(serde_json::json!([{
             "key": "json_feed",
@@ -500,9 +489,8 @@ fn compiler_validates_capabilities_after_direct_specialization() {
 fn compiler_rejects_invalid_profile_schema_before_validating_source_config() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source.source_config.remove("feedUrl");
     source
         .source_config
@@ -536,9 +524,8 @@ fn compiler_rejects_invalid_profile_schema_before_validating_source_config() {
 fn compiler_rejects_invalid_sitemap_select_in_unselected_access_path() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let mut profile = serde_json::to_value(profile).unwrap();
     let mut access_path = profile["accessPaths"][0].clone();
     access_path["key"] = serde_json::json!("invalid_unselected_sitemap");
@@ -570,7 +557,7 @@ fn compiler_rejects_invalid_sitemap_select_in_unselected_access_path() {
     let mut selected_source = serde_json::to_value(source).unwrap();
     selected_source["selectedAccessPath"]["pathKey"] =
         serde_json::json!("invalid_unselected_sitemap");
-    let selected_source: SourceDocument = serde_json::from_value(selected_source).unwrap();
+    let selected_source: SourceBehavior = serde_json::from_value(selected_source).unwrap();
     let selected = compile_test_source(&selected_source, Some(profile));
     assert_invalid_sitemap_diagnostic(&selected);
 }
@@ -590,9 +577,8 @@ fn assert_invalid_sitemap_diagnostic(result: &TestCompileResult) {
 
 #[test]
 fn compiler_validates_required_support_metadata() {
-    let mut source: SourceDocument =
-        read_fixture("../../tests/fixtures/source-behavior/valid/source-owned-access-path.json");
-    source.status = SourceStatus::Active;
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
     source.source_support = None;
 
     let missing_source_support = compile_test_source(&source, None);
@@ -609,9 +595,8 @@ fn compiler_validates_required_support_metadata() {
 fn compiler_reports_duplicate_strategy_keys_within_each_step() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let duplicate_discovery = profile.access_paths[0].discovery.strategies[0].clone();
     profile.access_paths[0]
         .discovery
@@ -644,9 +629,8 @@ fn compiler_reports_duplicate_strategy_keys_within_each_step() {
 fn compiler_reports_duplicate_reusable_access_path_keys() {
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let duplicate = profile.access_paths[0].clone();
     profile.access_paths.push(duplicate);
 

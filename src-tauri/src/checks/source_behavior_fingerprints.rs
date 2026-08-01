@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+use source_profile_dsl::definition::SelectedAccessPath;
 use source_profile_dsl::definition::SourceProfileDocument;
 use source_profile_dsl::definition::{
     forbidden_request_key_behavior, CompileSourceOutcome, CompiledSource, CompiledSourceProvenance,
@@ -21,7 +22,7 @@ use source_profile_dsl::definition::{
 use source_profile_dsl::definition::{
     AccessPathFragment, DetailStep, DiscoveryStep, JsonSchemaObject,
 };
-use source_profile_dsl::definition::{SelectedAccessPath, SourceDocument};
+use sources::installed::SourceDocument;
 
 use super::source_live::SOURCE_LIVE_CHECK_MAX_DISCOVERY_REQUESTS;
 use super::CheckFingerprint;
@@ -149,7 +150,7 @@ pub fn prepare_source_behavior_fingerprints(
             let Some(base_profile) = resolved_base_profile else {
                 return Err(inconsistent("base_source_profile"));
             };
-            let Some(effective_profile) = compiled.effective_profile() else {
+            let Some(materialized_profile) = compiled.materialized_profile() else {
                 return Err(inconsistent("effective_source_profile"));
             };
             push_component(
@@ -163,7 +164,7 @@ pub fn prepare_source_behavior_fingerprints(
                 &mut fingerprints,
                 SOURCE_BEHAVIOR,
                 "effective_source_profile",
-                &profile_projection(effective_profile),
+                &profile_projection(materialized_profile),
             )?;
             push_compiled_components(&mut fingerprints, source, compiled)?;
         }
@@ -242,7 +243,7 @@ fn validate_structural_coherence(
                 source: compiled, ..
             } = outcome
             {
-                let Some(effective_profile) = compiled.effective_profile() else {
+                let Some(materialized_profile) = compiled.materialized_profile() else {
                     return Err(inconsistent("effective_source_profile"));
                 };
                 let Some((compiled_profile_key, compiled_path_key)) =
@@ -252,7 +253,7 @@ fn validate_structural_coherence(
                 };
                 if compiled.source_key() != source.key
                     || compiled.source_name() != source.name
-                    || effective_profile.key != *profile_key
+                    || materialized_profile.key != *profile_key
                     || compiled_profile_key != profile_key
                     || compiled_path_key != path_key
                 {

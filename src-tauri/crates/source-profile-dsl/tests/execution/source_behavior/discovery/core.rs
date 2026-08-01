@@ -8,8 +8,8 @@ fn resolved_source_config_is_ephemeral_plan_data_and_runtime_input() {
     ))
     .unwrap();
     profile.access_paths[0].discovery.strategies[0].pagination = None;
-    let mut source: SourceDocument = serde_json::from_str(include_str!(
-        "../../../../../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json"
+    let mut source: SourceBehavior = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json"
     ))
     .unwrap();
     source

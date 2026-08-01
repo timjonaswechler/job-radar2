@@ -21,7 +21,6 @@ pub(crate) mod profile;
 pub(crate) mod source_config;
 pub(crate) mod template;
 
-pub use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 pub use compiler::{
     compile_source, compile_source_with_admitted_profiles, forbidden_request_key_behavior,
     prepare_source_profile_document, validate_source_profile_document, CompileSourceOutcome,
@@ -32,4 +31,5 @@ pub use compiler::{
 };
 pub use diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 pub use documents::*;
+pub use documents::{SelectedAccessPath, SourceBehavior, SourceConfig};
 pub use profile::{SourceProfileDocument, SourceProfileKind};

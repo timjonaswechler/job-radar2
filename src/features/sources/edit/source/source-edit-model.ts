@@ -6,7 +6,7 @@ import {
   type SourceConfigEntry,
 } from "@/features/sources/shared/source-config-schema";
 import { directSourceSpecializationFromText } from "@/features/sources/source-form/direct-source-specialization";
-import type { RegistrySource, ReviseSourceDefinition } from "@/lib/api/sources";
+import type { InstalledSource, ReviseSourceDefinition } from "@/lib/api/sources";
 
 export type SourceEditDraftState = {
   name: string;
@@ -54,7 +54,7 @@ export function sourceEditDraftFromSource({
   schemaMetadata,
   createConfigEntryId,
 }: {
-  source: RegistrySource;
+  source: InstalledSource;
   schemaMetadata: SchemaMetadata;
   createConfigEntryId: () => string;
 }): SourceEditDraftState {
@@ -85,7 +85,7 @@ export function buildUpdatedSourceDocument({
   directSourceSpecializationText,
   schemaMetadata,
 }: {
-  source: RegistrySource;
+  source: InstalledSource;
   name: string;
   configEntries: SourceConfigEntry[];
   directSourceSpecializationText: string;

@@ -21,7 +21,7 @@ import { resolveSource } from "@/features/sources/view-model/registry-resolution
 import type { SourceResolution } from "@/features/sources/view-model/registry-resolution";
 import type {
   ProfileAccessPathDefinition,
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SelectedAccessPath,
   SourceOwnedSelectedAccessPath,
@@ -29,7 +29,7 @@ import type {
 } from "@/lib/api/sources";
 
 type SourceDetailsProps = {
-  source: RegistrySource;
+  source: InstalledSource;
   profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnostics: StructuredDiagnostic[];
   onUpdated?: () => Promise<unknown> | unknown;
@@ -90,7 +90,7 @@ export function SourceDetails({
           }
         />
         <DetailRow label="Ursprung" value={originLabels[source.origin]} />
-        <DetailRow label="Registry-Dokument" value={source.path} mono />
+        <DetailRow label="Registry-Dokument" value={source.fileName} mono />
       </dl>
 
       <SchemaValuePreview
@@ -145,18 +145,23 @@ function AccessPathDetails({
       <div className="grid gap-3 rounded-lg border p-3 text-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <p className="font-medium">Effektiver Profil-Zugriffspfad</p>
+            <p className="font-medium">Vorbereitetes Source-Verhalten</p>
             <p className="text-xs text-muted-foreground">
-              Vom Backend-Compiler aus Basisprofil und authored accessPaths
-              materialisiertes Verhalten.
+              Intentionaler Backend-Auszug aus dem exakt vorbereiteten
+              Verhalten; Compiler-Produkte werden nicht an die Oberfläche
+              übertragen.
             </p>
           </div>
           <Badge
             variant={
-              resolution.profileAccessPath ? "success-light" : "warning-light"
+              resolution.resolvedAccessPathName
+                ? "success-light"
+                : "warning-light"
             }
           >
-            {resolution.profileAccessPath ? "aufgelöst" : "nicht aufgelöst"}
+            {resolution.resolvedAccessPathName
+              ? "vorbereitet"
+              : "nicht vorbereitet"}
           </Badge>
         </div>
         <dl className="grid gap-3 sm:grid-cols-2">
@@ -178,10 +183,10 @@ function AccessPathDetails({
               value={supportLevelLabels[resolution.supportLevel]}
             />
           ) : null}
-          {resolution.profileAccessPath ? (
+          {resolution.resolvedAccessPathName ? (
             <DetailRow
               label="Pfad-Name"
-              value={resolution.profileAccessPath.name}
+              value={resolution.resolvedAccessPathName}
             />
           ) : null}
           <DetailRow
@@ -189,12 +194,33 @@ function AccessPathDetails({
             value={resolution.capabilities.join(", ") || "—"}
           />
         </dl>
-        {resolution.profileAccessPath ? (
-          <AccessPathJsonBlocks accessPath={resolution.profileAccessPath} />
+        {resolution.resolvedAccessPathName ? null : (
+          <Alert variant="warning">
+            <AlertCircleIcon className="size-4" aria-hidden="true" />
+            <AlertTitle>Zugriffspfad nicht vorbereitet</AlertTitle>
+            <AlertDescription>
+              Die Registry sollte diese Source nicht als ausführbar markieren,
+              wenn das Profil oder der Pfad fehlt. Bitte Diagnosen prüfen.
+            </AlertDescription>
+          </Alert>
+        )}
+        {resolution.baseProfileAccessPath ? (
+          <div className="grid gap-2 border-t pt-3">
+            <p className="font-medium">
+              Authored Basis-Access-Path des Profils
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Wiederverwendbare Basisdefinition; Direct Source Specialization
+              kann das vorbereitete Verhalten dieser Source verändern.
+            </p>
+            <AccessPathJsonBlocks
+              accessPath={resolution.baseProfileAccessPath}
+            />
+          </div>
         ) : (
           <Alert variant="warning">
             <AlertCircleIcon className="size-4" aria-hidden="true" />
-            <AlertTitle>Zugriffspfad nicht gefunden</AlertTitle>
+            <AlertTitle>Authored Basis-Zugriffspfad nicht gefunden</AlertTitle>
             <AlertDescription>
               Die Registry sollte diese Source nicht als ausführbar markieren,
               wenn das Profil oder der Pfad fehlt. Bitte Diagnosen prüfen.

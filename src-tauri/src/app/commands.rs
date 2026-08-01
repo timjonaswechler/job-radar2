@@ -484,28 +484,16 @@ fn browser_runtime_installing(state: &AppState) -> bool {
     }
 }
 
-fn load_source_profile_registry_snapshot(
-    app_data_dir: &Path,
-) -> crate::source_profile::registry::SourceProfileRegistrySnapshot {
-    crate::source_profile::registry::load_snapshot(app_data_dir)
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SourceInventoryView {
-    profiles: sources::installed::ProfilesView,
-    sources: Vec<crate::source_profile::registry::RegistrySource>,
-    diagnostics: source_profile_dsl::definition::Diagnostics,
-}
-
 #[tauri::command]
-pub fn get_source_inventory(state: State<'_, AppState>) -> Result<SourceInventoryView, String> {
-    let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
-    Ok(SourceInventoryView {
-        profiles: snapshot.installed_profiles().view().clone(),
-        sources: snapshot.sources,
-        diagnostics: snapshot.diagnostics,
-    })
+pub async fn get_source_inventory(
+    state: State<'_, AppState>,
+) -> Result<sources::installed::SnapshotView, String> {
+    let installed_sources = state.installed_sources.clone();
+    tokio::task::spawn_blocking(move || installed_sources.snapshot())
+        .await
+        .map_err(|error| error.to_string())?
+        .map(|snapshot| snapshot.view().clone())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -604,43 +592,35 @@ pub async fn detect_source_proposal_from_url(
 #[tauri::command]
 pub async fn create_source(
     state: State<'_, AppState>,
-    draft: crate::source_onboarding::CreateSourceDraft,
-) -> Result<crate::source_onboarding::SavedSource, String> {
-    state
-        .source_onboarding
-        .change(crate::source_onboarding::SourceChange::CreateDraft(draft))
+    draft: sources::installed::CreateDraft,
+) -> Result<sources::installed::SourceView, sources::installed::Error> {
+    let installed = state.installed_sources.clone();
+    tokio::task::spawn_blocking(move || installed.create(draft))
         .await
-        .map(|outcome| outcome.source)
-        .map_err(|error| error.to_string())
+        .expect("installed Source creation task must run to completion")
 }
 
 #[tauri::command]
 pub async fn update_source(
     state: State<'_, AppState>,
-    revision: crate::source_onboarding::ReviseSourceDefinition,
-) -> Result<crate::source_onboarding::SavedSource, String> {
-    state
-        .source_onboarding
-        .change(crate::source_onboarding::SourceChange::ReviseDefinition(
-            revision,
-        ))
+    revision: sources::installed::Revision,
+) -> Result<sources::installed::SourceView, sources::installed::Error> {
+    let installed = state.installed_sources.clone();
+    tokio::task::spawn_blocking(move || installed.revise(revision))
         .await
-        .map(|outcome| outcome.source)
-        .map_err(|error| error.to_string())
+        .expect("installed Source revision task must run to completion")
 }
 
 #[tauri::command]
 pub async fn set_source_inactive(
     state: State<'_, AppState>,
     source_key: String,
-    status: crate::source_onboarding::InactiveSourceStatus,
-) -> Result<crate::source_onboarding::SavedSource, String> {
-    state
-        .source_onboarding
-        .change(crate::source_onboarding::SourceChange::SetInactive { source_key, status })
+    status: sources::installed::InactiveStatus,
+) -> Result<sources::installed::SourceView, sources::installed::Error> {
+    let installed = state.installed_sources.clone();
+    tokio::task::spawn_blocking(move || installed.set_inactive(&source_key, status))
         .await
-        .map(|outcome| outcome.source)
-        .map_err(|error| error.to_string())
+        .expect("installed Source lifecycle task must run to completion")
 }
 
 #[tauri::command]
@@ -705,7 +685,7 @@ fn schedule_search_request_run(
     let pool = state.db.clone();
     let running_search_runs = state.running_search_runs.clone();
     let browser_runtime_dir = state.paths.browser_runtime_dir.clone();
-    let app_data_dir = state.paths.app_data_dir.clone();
+    let installed_sources = state.installed_sources.clone();
     let geo_db_path = state.resources.geo_db_path.clone();
 
     state.background_tasks.schedule(
@@ -721,7 +701,7 @@ fn schedule_search_request_run(
                         running_search_runs.as_ref(),
                         &source_resolver,
                         crate::search::run::default_search_run_result_artifact(),
-                        app_data_dir,
+                        installed_sources,
                     )
                     .with_geo_resolver(&geo_resolver)
                     .run_with_cancellation(id, Some(&context.cancellation_token))
@@ -817,7 +797,7 @@ pub async fn get_job_posting(
     crate::search::posting::JobPostingService::new(&state.db)
         .get_job_posting(
             posting_id,
-            &state.paths.app_data_dir,
+            &state.installed_sources,
             state.paths.browser_runtime_dir.clone(),
         )
         .await
@@ -978,14 +958,13 @@ mod tests {
             .unwrap();
             assert!(removed_tables.is_empty());
 
-            let registry_snapshot =
-                crate::source_profile::registry::load_snapshot(&state.paths.app_data_dir);
+            let registry_snapshot = state.installed_sources.snapshot().unwrap();
             assert!(registry_snapshot.profile("greenhouse").is_some());
             assert!(registry_snapshot.profile("workday").is_some());
             assert!(
-                registry_snapshot.diagnostics.is_empty(),
+                registry_snapshot.view().diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",
-                registry_snapshot.diagnostics
+                registry_snapshot.view().diagnostics
             );
         });
     }
@@ -999,10 +978,10 @@ mod tests {
                     .unwrap();
             let state = AppState::new(paths).await.unwrap();
 
-            let snapshot = load_source_profile_registry_snapshot(&state.paths.app_data_dir);
+            let snapshot = state.installed_sources.snapshot().unwrap();
 
             assert!(snapshot
-                .installed_profiles()
+                .profiles()
                 .view()
                 .profiles
                 .iter()
@@ -1012,7 +991,7 @@ mod tests {
                     .map(|definition| definition.key.as_str())
                     == Some("greenhouse")));
             assert!(snapshot
-                .installed_profiles()
+                .profiles()
                 .view()
                 .profiles
                 .iter()
@@ -1022,9 +1001,9 @@ mod tests {
                     .map(|definition| definition.key.as_str())
                     == Some("workday")));
             assert!(
-                snapshot.diagnostics.is_empty(),
+                snapshot.view().diagnostics.is_empty(),
                 "built-in registry diagnostics: {:#?}",
-                snapshot.diagnostics
+                snapshot.view().diagnostics
             );
         });
     }

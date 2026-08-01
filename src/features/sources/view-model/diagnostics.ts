@@ -1,6 +1,6 @@
 import type {
   JsonValue,
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SourceRegistryDocumentKind,
   SourceRegistryDocumentOrigin,
@@ -18,7 +18,7 @@ export type DiagnosticIndex = {
 };
 
 export function buildDiagnosticIndex(
-  sources: RegistrySource[],
+  sources: InstalledSource[],
   profiles: InstalledProfileWithDefinition[],
   diagnostics: StructuredDiagnostic[],
 ): DiagnosticIndex {
@@ -26,8 +26,8 @@ export function buildDiagnosticIndex(
   const byProfileKey = new Map<string, StructuredDiagnostic[]>();
   const sourceKeys = new Set(sources.map((source) => source.document.key));
   const profileKeys = new Set(profiles.map((profile) => profile.definition.key));
-  const sourceKeyByPath = new Map(
-    sources.map((source) => [source.path, source.document.key]),
+  const sourceKeyByFileName = new Map(
+    sources.map((source) => [source.fileName, source.document.key]),
   );
   const profileKeyByFileName = new Map(
     profiles.map((profile) => [profile.fileName, profile.definition.key]),
@@ -38,7 +38,6 @@ export function buildDiagnosticIndex(
     let attached = false;
     const details = diagnosticDetails(diagnostic);
     const documentKind = diagnosticDocumentKind(diagnostic);
-    const diagnosticPath = diagnosticDocumentPath(diagnostic);
     const diagnosticFileName = stringValue(details.fileName);
     const detailSourceKey = stringValue(details.sourceKey);
     const detailProfileKey = stringValue(details.sourceProfileKey);
@@ -57,10 +56,10 @@ export function buildDiagnosticIndex(
       attached = true;
     }
 
-    if (!attached && diagnosticPath) {
-      const sourcePathKey = sourceKeyByPath.get(diagnosticPath);
-      if (sourcePathKey) {
-        pushDiagnostic(bySourceKey, sourcePathKey, diagnostic);
+    if (!attached && diagnosticFileName) {
+      const sourceKey = sourceKeyByFileName.get(diagnosticFileName);
+      if (sourceKey) {
+        pushDiagnostic(bySourceKey, sourceKey, diagnostic);
         attached = true;
       }
     }

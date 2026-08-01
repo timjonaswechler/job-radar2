@@ -52,7 +52,7 @@ where
             &state.running_search_runs,
             &source_resolver,
             result_path,
-            state.paths.app_data_dir.clone(),
+            state.installed_sources.clone(),
             source_keys,
             options.allow_draft,
         )

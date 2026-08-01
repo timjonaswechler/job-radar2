@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { minimalDetailStrategy, minimalDiscoveryStrategy } from "@/features/sources/tests/support/source-behavior";
+import {
+  minimalDetailStrategy,
+  minimalDiscoveryStrategy,
+} from "@/features/sources/tests/support/source-behavior";
 
 import { SourceRegistryTab } from "@/features/sources/registry/source/source-registry-tab";
 import {
@@ -11,7 +14,7 @@ import {
 } from "@/features/sources/view-model/source-grid-model";
 import { resolveSource } from "@/features/sources/view-model/registry-resolution";
 import type {
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
 } from "@/lib/api/sources";
 import { test } from "vitest";
@@ -37,17 +40,23 @@ test("source registry contract", async () => {
         {
           key: "boards_api",
           name: "Boards API",
-          discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("jobs_api")] },
-          detail: { policy: { type: "first_accepted" }, strategies: [minimalDetailStrategy("detail_api")] },
+          discovery: {
+            policy: { type: "first_accepted" },
+            strategies: [minimalDiscoveryStrategy("jobs_api")],
+          },
+          detail: {
+            policy: { type: "first_accepted" },
+            strategies: [minimalDetailStrategy("detail_api")],
+          },
         },
       ],
     },
   };
   const profilesByKey = new Map([[profile.definition.key, profile]]);
 
-  const source: RegistrySource = {
+  const source: InstalledSource = {
     origin: "custom",
-    path: "sources/acme.json",
+    fileName: "acme.json",
     document: {
       schemaVersion: 3,
       key: "acme",
@@ -67,11 +76,16 @@ test("source registry contract", async () => {
       canExecute: true,
       diagnostics: [],
     },
+    resolved: {
+      accessPathName: "Prepared Boards API",
+      capabilities: ["discovery", "detail"],
+      support: { level: "stable" },
+    },
   };
 
-  const sourceOwnedSource: RegistrySource = {
+  const sourceOwnedSource: InstalledSource = {
     origin: "custom",
-    path: "sources/one_off.json",
+    fileName: "one_off.json",
     document: {
       schemaVersion: 3,
       key: "one_off",
@@ -84,7 +98,10 @@ test("source registry contract", async () => {
         key: "html_jobs",
         name: "HTML jobs",
         sourceConfigSchema: { type: "object" },
-        discovery: { policy: { type: "first_accepted" }, strategies: [minimalDiscoveryStrategy("html")] },
+        discovery: {
+          policy: { type: "first_accepted" },
+          strategies: [minimalDiscoveryStrategy("html")],
+        },
       },
     },
     validationState: {
@@ -105,9 +122,10 @@ test("source registry contract", async () => {
     },
   };
 
-  const missingProfileSource: RegistrySource = {
+  const missingProfileSource: InstalledSource = {
     ...source,
-    path: "sources/missing_profile.json",
+    resolved: undefined,
+    fileName: "missing_profile.json",
     document: {
       ...source.document,
       key: "missing_profile_source",
@@ -127,9 +145,10 @@ test("source registry contract", async () => {
     },
   };
 
-  const missingAccessPathSource: RegistrySource = {
+  const missingAccessPathSource: InstalledSource = {
     ...source,
-    path: "sources/missing_path.json",
+    resolved: undefined,
+    fileName: "missing_path.json",
     document: {
       ...source.document,
       key: "missing_path_source",
@@ -183,7 +202,12 @@ test("source registry contract", async () => {
     ]),
   );
   assert.deepEqual(
-    rows.map((row) => [row.key, row.health, row.ownDiagnosticsCount, row.dependencyDiagnosticsCount]),
+    rows.map((row) => [
+      row.key,
+      row.health,
+      row.ownDiagnosticsCount,
+      row.dependencyDiagnosticsCount,
+    ]),
     [
       ["acme", "valid", 0, 0],
       ["one_off", "invalid", 1, 0],
@@ -201,7 +225,11 @@ test("source registry contract", async () => {
   assert.equal(rows[1]?.supportLabel, "Experimentell");
   assert.equal(rows[1]?.accessPathLabel, "Source-owned · html_jobs");
   assert.equal(rows[2]?.supportLabel, "—");
-  assert.deepEqual(countSourceStatuses(rows), { draft: 1, active: 2, disabled: 1 });
+  assert.deepEqual(countSourceStatuses(rows), {
+    draft: 1,
+    active: 2,
+    disabled: 1,
+  });
   assert.deepEqual(countOrigins(rows), { built_in: 0, custom: 4 });
   assert.deepEqual(
     filterSourceGridRows(rows, {
@@ -214,21 +242,28 @@ test("source registry contract", async () => {
   );
 
   const resolution = resolveSource(source, profilesByKey);
-  assert.equal(resolution.profileAccessPath?.key, "boards_api");
+  assert.equal(resolution.baseProfileAccessPath?.key, "boards_api");
+  assert.equal(resolution.baseProfileAccessPath?.name, "Boards API");
+  assert.equal(resolution.resolvedAccessPathName, "Prepared Boards API");
   assert.equal(resolution.supportLevel, "stable");
   assert.deepEqual(resolution.capabilities, ["discovery", "detail"]);
   const sourceOwnedResolution = resolveSource(sourceOwnedSource, profilesByKey);
   assert.equal(sourceOwnedResolution.profile, null);
   assert.equal(sourceOwnedResolution.sourceOwnedAccessPath?.key, "html_jobs");
-  assert.deepEqual(sourceOwnedResolution.effectiveSourceConfigSchema, { type: "object" });
+  assert.deepEqual(sourceOwnedResolution.effectiveSourceConfigSchema, {
+    type: "object",
+  });
   assert.equal(sourceOwnedResolution.supportLevel, "experimental");
   assert.deepEqual(sourceOwnedResolution.capabilities, ["discovery"]);
   const missingAccessPathResolution = resolveSource(
     missingAccessPathSource,
     profilesByKey,
   );
-  assert.equal(missingAccessPathResolution.profile?.definition.key, "greenhouse");
-  assert.equal(missingAccessPathResolution.profileAccessPath, null);
+  assert.equal(
+    missingAccessPathResolution.profile?.definition.key,
+    "greenhouse",
+  );
+  assert.equal(missingAccessPathResolution.baseProfileAccessPath, null);
   assert.deepEqual(missingAccessPathResolution.capabilities, []);
 
   function removedSourceProfileTerms() {

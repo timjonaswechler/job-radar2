@@ -33,7 +33,7 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
                 temp_dir
                     .path()
                     .join(format!("{:?}-search-run-result.json", status)),
-                temp_dir.path(),
+                sources::installed::Store::new(temp_dir.path()),
             )
             .run(search_request.id)
             .await
@@ -77,7 +77,7 @@ fn completed_run_persists_postings_and_records_last_run_success() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await

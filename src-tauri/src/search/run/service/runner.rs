@@ -28,7 +28,7 @@ pub struct SearchRunService<'a> {
     running_search_runs: &'a RunningSearchRuns,
     resolution_runtime: &'a SearchRunResolutionRuntime,
     result_artifact: SearchRunResultArtifact,
-    source_registry_app_data_dir: PathBuf,
+    installed_sources: sources::installed::Store,
     selection_options: SourceSelectionOptions,
     geo_resolver: Option<&'a dyn GeoResolver>,
     #[cfg(test)]
@@ -41,14 +41,14 @@ impl<'a> SearchRunService<'a> {
         running_search_runs: &'a RunningSearchRuns,
         resolution_runtime: &'a SearchRunResolutionRuntime,
         result_path: impl Into<PathBuf>,
-        source_registry_app_data_dir: impl Into<PathBuf>,
+        installed_sources: sources::installed::Store,
     ) -> Self {
         Self::new_with_result_artifact(
             pool,
             running_search_runs,
             resolution_runtime,
             SearchRunResultArtifact::WriteTo(result_path.into()),
-            source_registry_app_data_dir,
+            installed_sources,
         )
     }
 
@@ -57,14 +57,14 @@ impl<'a> SearchRunService<'a> {
         running_search_runs: &'a RunningSearchRuns,
         resolution_runtime: &'a SearchRunResolutionRuntime,
         result_artifact: SearchRunResultArtifact,
-        source_registry_app_data_dir: impl Into<PathBuf>,
+        installed_sources: sources::installed::Store,
     ) -> Self {
         Self {
             pool,
             running_search_runs,
             resolution_runtime,
             result_artifact,
-            source_registry_app_data_dir: source_registry_app_data_dir.into(),
+            installed_sources,
             selection_options: SourceSelectionOptions::default(),
             geo_resolver: None,
             #[cfg(test)]
@@ -131,8 +131,11 @@ impl<'a> SearchRunService<'a> {
             })?,
         };
 
-        let snapshot =
-            crate::source_profile::registry::load_snapshot(&self.source_registry_app_data_dir);
+        let installed_sources = self.installed_sources.clone();
+        let snapshot = tokio::task::spawn_blocking(move || installed_sources.snapshot())
+            .await
+            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())?;
         let selected = resolve_selected_sources_with_options(
             &snapshot,
             &request.source_keys,
@@ -149,7 +152,7 @@ impl<'a> SearchRunService<'a> {
                 continue;
             }
             let source = match selected_source {
-                SelectedSearchRunSource::Resolved(source) => source.as_ref(),
+                SelectedSearchRunSource::Resolved(source) => *source,
                 SelectedSearchRunSource::Missing { source_key, error } => {
                     source_runs.push(source_run_failed_for_key(source_key, error.clone()));
                     continue;
@@ -271,7 +274,7 @@ fn artifact_write_failed_diagnostic() -> Diagnostic {
 }
 
 fn cancelled_source_run_for_selected(
-    selected: &SelectedSearchRunSource,
+    selected: &SelectedSearchRunSource<'_>,
 ) -> super::super::SourceRunResult {
     match selected {
         SelectedSearchRunSource::Resolved(source) => {

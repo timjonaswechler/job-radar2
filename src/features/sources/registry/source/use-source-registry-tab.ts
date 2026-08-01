@@ -18,14 +18,14 @@ import {
   type SourceGridRow,
 } from "@/features/sources/view-model/source-grid-model";
 import type {
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SourceRegistryDocumentOrigin,
   SourceStatus,
 } from "@/lib/api/sources";
 
 type UseSourceRegistryTabOptions = {
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   profilesByKey: Map<string, InstalledProfileWithDefinition>;
   diagnosticIndex: DiagnosticIndex;
 };
@@ -42,7 +42,7 @@ export function useSourceRegistryTab({
   >([]);
   const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
   const [selectedRow, setSelectedRow] = useState<SourceGridRow | null>(null);
-  const [editingSource, setEditingSource] = useState<RegistrySource | null>(null);
+  const [editingSource, setEditingSource] = useState<InstalledSource | null>(null);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -133,7 +133,7 @@ export function useSourceRegistryTab({
     closeEdit() {
       setEditingSource(null);
     },
-    editSource(source: RegistrySource) {
+    editSource(source: InstalledSource) {
       setSelectedRow(null);
       setEditingSource(source);
     },

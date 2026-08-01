@@ -4,6 +4,7 @@ use dom_query::NodeRef;
 use serde_json::{json, Value};
 
 use crate::{
+    definition::documents::SourceConfig,
     definition::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::{
@@ -25,7 +26,6 @@ use crate::{
     execution::occurrence::{
         ContributionOrigin, DetailField, DetailPatch, PostingOccurrence, RequestedDetailFields,
     },
-    source::documents::SourceConfig,
 };
 
 use super::{

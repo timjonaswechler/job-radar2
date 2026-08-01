@@ -1,49 +1,27 @@
 use serde::{Deserialize, Serialize};
 
-use crate::definition::diagnostics::Diagnostics;
-use crate::definition::documents::{
+use super::{
     AccessPathFragment, DetailStep, DiscoveryStep, JsonObject, JsonSchemaObject, SupportMetadata,
 };
 
 pub type SourceConfig = JsonObject;
 
+/// Lifecycle-free Source behavior accepted by the Profile Compiler.
+///
+/// Persisted schema version, lifecycle status, and authored diagnostics are
+/// deliberately owned by the installed Source module and never enter this
+/// interface.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SourceDocument {
-    #[serde(deserialize_with = "deserialize_schema_version_3")]
-    pub schema_version: u64,
+pub struct SourceBehavior {
     pub key: String,
     pub name: String,
-    pub status: SourceStatus,
     pub source_config: SourceConfig,
     pub selected_access_path: SelectedAccessPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access_paths: Option<Vec<AccessPathFragment>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_support: Option<SupportMetadata>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub diagnostics: Option<Diagnostics>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SourceStatus {
-    Draft,
-    Active,
-    Disabled,
-}
-
-fn deserialize_schema_version_3<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error as _;
-    let version = u64::deserialize(deserializer)?;
-    if version == 3 {
-        Ok(version)
-    } else {
-        Err(D::Error::custom("schemaVersion must be 3"))
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -55,8 +33,6 @@ pub enum SelectedAccessPath {
         #[serde(rename = "pathKey")]
         path_key: String,
     },
-    /// Inline Access Path owned by this Source. It reuses shared Source Behavior Language
-    /// steps but is not a reusable Source Profile Access Path.
     SourceOwnedAccessPath {
         key: String,
         name: String,
@@ -68,6 +44,6 @@ pub enum SelectedAccessPath {
         #[serde(skip_serializing_if = "Option::is_none")]
         detail: Option<DetailStep>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        diagnostics: Option<Diagnostics>,
+        diagnostics: Option<crate::definition::Diagnostics>,
     },
 }

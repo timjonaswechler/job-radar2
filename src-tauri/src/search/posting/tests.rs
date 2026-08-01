@@ -1,9 +1,6 @@
 use super::*;
-use crate::{
-    search::run::{
-        NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
-    },
-    source_profile::registry::SourceProfileRegistrySnapshot,
+use crate::search::run::{
+    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
 };
 use serde_json::{from_str, json, Value};
 use source_profile_dsl::test_support::{
@@ -89,16 +86,16 @@ fn rendered_browser_acquisition(
 fn test_snapshot(
     profile_documents: Vec<String>,
     source_documents: Vec<String>,
-) -> SourceProfileRegistrySnapshot {
+) -> sources::installed::Snapshot {
     let snapshot = test_snapshot_with_diagnostics(profile_documents, source_documents);
-    assert_eq!(snapshot.diagnostics, Vec::new());
+    assert_eq!(snapshot.view().diagnostics, Vec::new());
     snapshot
 }
 
 fn test_snapshot_with_diagnostics(
     profile_documents: Vec<String>,
     source_documents: Vec<String>,
-) -> SourceProfileRegistrySnapshot {
+) -> sources::installed::Snapshot {
     let temp_dir = tempfile::tempdir().unwrap();
     let profile_dir = temp_dir.path().join("source-profiles");
     let source_dir = temp_dir.path().join("sources");
@@ -120,7 +117,7 @@ fn test_snapshot_with_diagnostics(
         .unwrap();
     }
 
-    crate::source_profile::registry::load_snapshot(temp_dir.path())
+    sources::installed::Snapshot::load(temp_dir.path()).unwrap()
 }
 
 fn document_key(document: &str) -> String {

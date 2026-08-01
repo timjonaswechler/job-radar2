@@ -2,7 +2,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { SourceProfileTemplateDrawer } from "@/features/sources/create/source-profile/source-profile-template-drawer";
 import { SourceCreateDrawer } from "@/features/sources/create/source/source-create-drawer";
 import type {
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SourceRegistryDocumentKind,
 } from "@/lib/api/sources";
@@ -11,7 +11,7 @@ type CreateRegistryDocumentDrawerProps = {
   kind: SourceRegistryDocumentKind | null;
   open: boolean;
   profiles: InstalledProfileWithDefinition[];
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   onCreated?: () => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
 };

@@ -16,7 +16,7 @@ use source_profile_dsl::test_support::{
     PhaseLimits, PhaseOutcome, PolicyOutcome, PolicyUnsatisfiedCause, PostingOccurrence,
     ProfileHttpFailureKind, RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    ScriptedProfileHttpClient, SourceBehavior, SourceExecutionPlan, SourceProfileDocument,
     StrategyPolicy,
 };
 
@@ -258,11 +258,11 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         StrategyPolicy::CollectAll { min_accepted: 3 },
     );
 
-    let source_owned: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source_owned: SourceBehavior = serde_json::from_value(json!({
+
         "key": "owned",
         "name": "Owned",
-        "status": "active",
+
         "sourceConfig": {},
         "selectedAccessPath": {
             "type": "source_owned_access_path",
@@ -299,7 +299,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         json!({ "type": "at_least", "count": 2 });
     source_owned_at_least["selectedAccessPath"]["detail"]["policy"] =
         json!({ "type": "at_least", "count": 2 });
-    let source_owned_at_least: SourceDocument =
+    let source_owned_at_least: SourceBehavior =
         serde_json::from_value(source_owned_at_least).unwrap();
     let CompileSourceOutcome::Compiled {
         source,
@@ -322,7 +322,7 @@ fn final_compiler_preserves_policy_for_inherited_specialized_added_and_source_ow
         json!({ "type": "collect_all", "minAccepted": 3 });
     source_owned_collect_all["selectedAccessPath"]["detail"]["policy"] =
         json!({ "type": "collect_all", "minAccepted": 3 });
-    let source_owned_collect_all: SourceDocument =
+    let source_owned_collect_all: SourceBehavior =
         serde_json::from_value(source_owned_collect_all).unwrap();
     let CompileSourceOutcome::Compiled {
         source,
@@ -2003,7 +2003,7 @@ fn assert_plan_policies(plan: &SourceExecutionPlan, expected: StrategyPolicy) {
     assert_eq!(plan.detail.as_ref().unwrap().policy, expected);
 }
 
-fn compile(source: SourceDocument, profile: SourceProfileDocument) -> SourceExecutionPlan {
+fn compile(source: SourceBehavior, profile: SourceProfileDocument) -> SourceExecutionPlan {
     let outcome = compile_source(
         &source,
         &SourceProfileRegistrySnapshot {
@@ -2121,12 +2121,12 @@ fn profile_document() -> SourceProfileDocument {
     .unwrap()
 }
 
-fn profile_source(access_paths: Option<Value>, path_key: &str) -> SourceDocument {
+fn profile_source(access_paths: Option<Value>, path_key: &str) -> SourceBehavior {
     let mut value = json!({
-        "schemaVersion": 3,
+
         "key": "policy_source",
         "name": "Policy source",
-        "status": "active",
+
         "sourceConfig": {},
         "selectedAccessPath": {
             "type": "profile_access_path",

@@ -11,7 +11,7 @@ import {
 } from "@/features/sources/view-model/diagnostics";
 import type {
   JsonValue,
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SelectedAccessPath,
   SourceRegistryDocumentOrigin,
@@ -49,9 +49,9 @@ export type SourceGridRow = {
   diagnosticsCount: number;
   ownDiagnosticsCount: number;
   dependencyDiagnosticsCount: number;
-  path: string;
+  fileName: string;
   searchText: string;
-  source: RegistrySource;
+  source: InstalledSource;
 };
 
 export type SourceGridFilters = {
@@ -62,7 +62,7 @@ export type SourceGridFilters = {
 };
 
 export function createSourceGridRows(
-  sources: RegistrySource[],
+  sources: InstalledSource[],
   profilesByKey: Map<string, InstalledProfileWithDefinition>,
   diagnosticsBySourceKey: Map<string, StructuredDiagnostic[]>,
 ): SourceGridRow[] {
@@ -103,7 +103,7 @@ export function createSourceGridRows(
       supportLabel,
       capabilitiesSummary,
       configSummary,
-      source.path,
+      source.fileName,
     ]
       .join(" ")
       .toLocaleLowerCase("de");
@@ -127,7 +127,7 @@ export function createSourceGridRows(
       diagnosticsCount: diagnosticSummary.diagnosticsCount,
       ownDiagnosticsCount: diagnosticSummary.ownDiagnosticsCount,
       dependencyDiagnosticsCount: diagnosticSummary.dependencyDiagnosticsCount,
-      path: source.path,
+      fileName: source.fileName,
       searchText,
       source,
     };
@@ -135,7 +135,7 @@ export function createSourceGridRows(
 }
 
 export function classifySourceRegistryRowHealth(
-  source: RegistrySource,
+  source: InstalledSource,
   diagnostics: StructuredDiagnostic[],
 ): SourceRegistryRowDiagnosticSummary {
   const dependencyDiagnosticsCount = diagnostics.filter(isSourceDependencyDiagnostic).length;

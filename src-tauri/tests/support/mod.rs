@@ -278,7 +278,15 @@ pub fn compile_test_source(
         }
     }
 
-    compile_source(source, &TestProfiles(profile.into_iter().collect()))
+    let behavior = source_profile_dsl::definition::SourceBehavior {
+        key: source.key.clone(),
+        name: source.name.clone(),
+        source_config: source.source_config.clone(),
+        selected_access_path: source.selected_access_path.clone(),
+        access_paths: source.access_paths.clone(),
+        source_support: source.source_support.clone(),
+    };
+    compile_source(&behavior, &TestProfiles(profile.into_iter().collect()))
 }
 
 pub fn unwrap_plan(outcome: CompileSourceOutcome) -> SourceExecutionPlan {

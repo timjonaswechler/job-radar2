@@ -14,8 +14,8 @@ use source_profile_dsl::test_support::{
     PostingOccurrence, PostingOccurrenceIdentity, PostingReference, ProfileCompilerInput,
     ProviderValues, RequestedDetailFields, RequestedFieldDisposition, RuntimeCancellation,
     ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceDetailFailure,
-    SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequestSnapshot, SourceDocument,
+    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceBehavior, SourceDetailFailure,
+    SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequestSnapshot,
     SourceProfileDocument,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -66,8 +66,8 @@ fn compiled_source() -> CompiledSource {
             }] }
         }]
     })).unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3, "key": "fixture_source", "name": "Fixture source", "status": "active",
+    let source: SourceBehavior = serde_json::from_value(json!({
+        "key": "fixture_source", "name": "Fixture source",
         "sourceConfig": { "feedUrl": "https://example.test/feed" },
         "selectedAccessPath": { "type": "profile_access_path", "profileKey": "fixture_profile", "pathKey": "default" }
     })).unwrap();

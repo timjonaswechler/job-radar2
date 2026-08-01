@@ -1,11 +1,11 @@
 use crate::definition::diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
+use crate::definition::documents::SelectedAccessPath;
 use crate::definition::documents::{JsonObject, JsonSchemaObject};
 use crate::definition::source_config::{
     compile_contract, ContractViolation, EffectiveSourceConfigContract, SchemaLocation,
 };
-use crate::source::documents::SelectedAccessPath;
 
 pub(super) fn compile_reusable_contract(
     profile_schema: Option<&JsonSchemaObject>,

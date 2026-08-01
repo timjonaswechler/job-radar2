@@ -1,10 +1,7 @@
-use crate::{
-    source::documents::SourceStatus, source_profile::registry::SourceProfileRegistrySnapshot,
-};
 use source_profile_dsl::definition::{
-    compile_source, CompileSourceOutcome, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    Diagnostics,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
+use sources::installed::{Snapshot, SourceStatus};
 
 use super::SourceExecutionError;
 
@@ -14,8 +11,8 @@ pub(super) struct SourceSelectionOptions {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum SelectedSearchRunSource {
-    Resolved(Box<source_profile_dsl::definition::CompiledSource>),
+pub(super) enum SelectedSearchRunSource<'a> {
+    Resolved(&'a source_profile_dsl::definition::CompiledSource),
     Missing {
         source_key: String,
         error: SourceExecutionError,
@@ -33,20 +30,22 @@ pub(super) enum SelectedSearchRunSource {
     },
 }
 
-pub(super) fn resolve_selected_sources_with_options(
-    snapshot: &SourceProfileRegistrySnapshot,
+pub(super) fn resolve_selected_sources_with_options<'a>(
+    snapshot: &'a Snapshot,
     source_keys: &[String],
     options: SourceSelectionOptions,
-) -> Vec<SelectedSearchRunSource> {
+) -> Vec<SelectedSearchRunSource<'a>> {
     source_keys
         .iter()
         .map(|source_key| {
             let Some(source) = snapshot.source(source_key) else {
                 let diagnostics = vec![source_validation_diagnostic(
                     "source_not_found",
-                    format!("Selected Source `{source_key}` was not found in the Source Profile registry snapshot"),
+                    format!(
+                        "Selected Source `{source_key}` was not found in the installed Snapshot"
+                    ),
                     "",
-                    serde_json::json!({ "sourceKey": source_key }),
+                    serde_json::json!({"sourceKey": source_key}),
                 )];
                 return SelectedSearchRunSource::Missing {
                     source_key: source_key.clone(),
@@ -56,57 +55,47 @@ pub(super) fn resolve_selected_sources_with_options(
                     },
                 };
             };
-
-            let allow_draft_source = options.allow_draft_sources
-                && source.document.status == SourceStatus::Draft;
-            if source.document.status != SourceStatus::Active && !allow_draft_source {
-                let status = serde_json::to_value(source.document.status)
-                    .expect("SourceStatus should serialize to a stable diagnostic value");
+            let document = source.document();
+            let validation = source.validation();
+            let allow_draft = options.allow_draft_sources && document.status == SourceStatus::Draft;
+            if document.status != SourceStatus::Active && !allow_draft {
+                let status =
+                    serde_json::to_value(document.status).expect("Source Status serializes");
                 let diagnostics = vec![source_validation_diagnostic(
                     "source_not_active",
                     format!(
                         "Selected Source `{}` has status `{}` and was skipped",
-                        source.document.key,
+                        document.key,
                         status.as_str().unwrap_or("unknown")
                     ),
                     "/status",
-                    serde_json::json!({
-                        "sourceKey": source.document.key,
-                        "status": status,
-                    }),
+                    serde_json::json!({"sourceKey": document.key, "status": status}),
                 )];
                 return SelectedSearchRunSource::Skipped {
-                    source_key: source.document.key.clone(),
-                    source_name: source.document.name.clone(),
+                    source_key: document.key.clone(),
+                    source_name: document.name.clone(),
                     summary: diagnostic_summary(&diagnostics),
                     diagnostics,
                 };
             }
-
-            if !(source.validation_state.can_execute || allow_draft_source && source.validation_state.can_compile) {
-                let diagnostics = source.validation_state.diagnostics.clone();
+            if !(validation.can_execute || allow_draft && validation.can_compile) {
+                let diagnostics = validation.diagnostics.clone();
                 return SelectedSearchRunSource::Failed {
-                    source_key: source.document.key.clone(),
-                    source_name: source.document.name.clone(),
+                    source_key: document.key.clone(),
+                    source_name: document.name.clone(),
                     error: SourceExecutionError::FailedWithDiagnostics {
                         message: diagnostic_summary(&diagnostics),
                         diagnostics,
                     },
                 };
             }
-
-            match compile_source(&source.document, snapshot) {
-                CompileSourceOutcome::Compiled {
-                    source: compiled,
-                    diagnostics,
-                } if !has_error_diagnostics(&diagnostics) => {
-                    SelectedSearchRunSource::Resolved(Box::new(compiled))
-                },
-                CompileSourceOutcome::Compiled { diagnostics, .. }
-                | CompileSourceOutcome::Rejected { diagnostics } => {
+            match source.compiled() {
+                Some(compiled) => SelectedSearchRunSource::Resolved(compiled),
+                None => {
+                    let diagnostics = source.preparation_diagnostics().to_vec();
                     SelectedSearchRunSource::Failed {
-                        source_key: source.document.key.clone(),
-                        source_name: source.document.name.clone(),
+                        source_key: document.key.clone(),
+                        source_name: document.name.clone(),
                         error: SourceExecutionError::FailedWithDiagnostics {
                             message: diagnostic_summary(&diagnostics),
                             diagnostics,
@@ -118,21 +107,14 @@ pub(super) fn resolve_selected_sources_with_options(
         .collect()
 }
 
-fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {
-    diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-}
-
 fn diagnostic_summary(diagnostics: &Diagnostics) -> String {
     diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .find(|item| item.severity == DiagnosticSeverity::Error)
         .or_else(|| diagnostics.first())
-        .map(|diagnostic| diagnostic.message.clone())
-        .unwrap_or_else(|| "Source could not be executed".to_string())
+        .map(|item| item.message.clone())
+        .unwrap_or_else(|| "Source could not be executed".into())
 }
-
 fn source_validation_diagnostic(
     code: impl Into<String>,
     message: impl Into<String>,

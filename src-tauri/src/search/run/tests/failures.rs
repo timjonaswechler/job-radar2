@@ -41,7 +41,7 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
             &running_search_runs,
             &executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -116,7 +116,7 @@ fn total_source_failure_produces_failed_result_without_postings() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -195,7 +195,7 @@ fn persistence_failure_rolls_back_last_run_update() {
             &running_search_runs,
             &executor,
             artifact_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await

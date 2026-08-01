@@ -45,12 +45,12 @@ import type {
   SearchRequestStatus,
   UpdateSearchRequestInput,
 } from "@/lib/api/search-requests";
-import type { RegistrySource } from "@/lib/api/sources";
+import type { InstalledSource } from "@/lib/api/sources";
 
 type SearchRequestFormDialogProps = {
   open: boolean;
   request: SearchRequest | null;
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   defaultSearchRadiusKm: number | null;
   onOpenChange: (open: boolean) => void;
   onSubmit: (

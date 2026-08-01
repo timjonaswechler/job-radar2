@@ -1,15 +1,11 @@
 use serde_json::{json, Value};
-use source_profile_dsl::test_support::{SourceDocument, SourceProfileDocument};
+use source_profile_dsl::test_support::SourceProfileDocument;
 
 #[test]
 fn schema_v3_profile_and_direct_source_specialization_round_trip_with_final_vocabulary() {
     let profile = profile_document();
     let parsed_profile: SourceProfileDocument = serde_json::from_value(profile.clone()).unwrap();
     assert_eq!(serde_json::to_value(parsed_profile).unwrap(), profile);
-
-    let source = source_document();
-    let parsed_source: SourceDocument = serde_json::from_value(source.clone()).unwrap();
-    assert_eq!(serde_json::to_value(parsed_source).unwrap(), source);
 }
 
 #[test]
@@ -26,10 +22,6 @@ fn serde_rejects_v2_old_phase_override_and_retry_shapes_without_conversion() {
         .unwrap();
     old_phase_profile["accessPaths"][0]["postingDiscovery"] = discovery;
     assert_rejected::<SourceProfileDocument>(old_phase_profile, "postingDiscovery");
-
-    let mut old_override_source = source_document();
-    old_override_source["sourceOverrides"] = json!({});
-    assert_rejected::<SourceDocument>(old_override_source, "sourceOverrides");
 
     let mut legacy_discovery_output = profile_document();
     legacy_discovery_output["accessPaths"][0]["discovery"]["strategies"][0]["extract"] = json!({
@@ -87,30 +79,6 @@ fn profile_document() -> Value {
             "key": "main",
             "name": "Main",
             "discovery": discovery_step()
-        }]
-    })
-}
-
-fn source_document() -> Value {
-    json!({
-        "schemaVersion": 3,
-        "key": "example-source",
-        "name": "Example Source",
-        "status": "draft",
-        "sourceConfig": { "feedUrl": "https://example.test/jobs" },
-        "selectedAccessPath": {
-            "type": "profile_access_path",
-            "profileKey": "example",
-            "pathKey": "main"
-        },
-        "accessPaths": [{
-            "key": "main",
-            "discovery": {
-                "strategies": [{
-                    "key": "api",
-                    "acceptWhen": { "minResults": 1 }
-                }]
-            }
         }]
     })
 }

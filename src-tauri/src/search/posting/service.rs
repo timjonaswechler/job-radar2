@@ -1,15 +1,8 @@
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
-use std::path::Path;
 
-use crate::{
-    browser_runtime::ManagedBrowserAcquisition, profile_dsl::ReqwestProfileHttpClient,
-    source_profile::registry::SourceProfileRegistrySnapshot,
-};
+use crate::{browser_runtime::ManagedBrowserAcquisition, profile_dsl::ReqwestProfileHttpClient};
 use source_profile_dsl::{
-    definition::{
-        compile_source, CompileSourceOutcome, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-        Diagnostics,
-    },
+    definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
     execution::{
         BrowserAcquisition, DetailField, PostingOccurrence, ProfileHttpClient,
         RequestedDetailFields, RequestedFieldDisposition, RuntimeExecutionContext,
@@ -17,6 +10,7 @@ use source_profile_dsl::{
         SourceDetailRequest,
     },
 };
+use sources::installed::{Snapshot, Store};
 
 use super::{
     ApplicationState, InterestState, JobPosting, JobPostingQueueCounts, JobPostingQueueId,
@@ -131,10 +125,14 @@ impl<'a> JobPostingService<'a> {
     pub async fn get_job_posting(
         &self,
         id: i64,
-        app_data_dir: impl AsRef<Path>,
+        installed_sources: &Store,
         browser_runtime_dir: impl Into<std::path::PathBuf>,
     ) -> Result<JobPostingView, String> {
-        let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
+        let installed_sources = installed_sources.clone();
+        let snapshot = tokio::task::spawn_blocking(move || installed_sources.snapshot())
+            .await
+            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())?;
         let fetcher = ReqwestProfileHttpClient::new();
         let browser_runtime_dir = browser_runtime_dir.into();
         let acquisition = ManagedBrowserAcquisition::new(&browser_runtime_dir);
@@ -145,7 +143,7 @@ impl<'a> JobPostingService<'a> {
     pub(crate) async fn get_job_posting_with_runtime<F, A>(
         &self,
         id: i64,
-        snapshot: &SourceProfileRegistrySnapshot,
+        snapshot: &Snapshot,
         fetcher: &F,
         acquisition: &A,
     ) -> Result<JobPostingView, String>
@@ -161,7 +159,7 @@ impl<'a> JobPostingService<'a> {
     pub(crate) async fn get_job_posting_with_detail_execution<E>(
         &self,
         id: i64,
-        snapshot: &SourceProfileRegistrySnapshot,
+        snapshot: &Snapshot,
         execution: &E,
     ) -> Result<JobPostingView, String>
     where
@@ -210,37 +208,23 @@ impl<'a> JobPostingService<'a> {
                 continue;
             };
 
-            if !source.validation_state.can_compile {
+            if !source.validation().can_compile {
                 diagnostics.extend(with_posting_source_context(
-                    source.validation_state.diagnostics.clone(),
+                    source.validation().diagnostics.clone(),
                     &posting_source,
                 ));
                 continue;
             }
 
-            let (compiled_source, compile_diagnostics) =
-                match compile_source(&source.document, snapshot) {
-                    CompileSourceOutcome::Compiled {
-                        source: compiled,
-                        diagnostics,
-                    } if !has_error_diagnostics(&diagnostics) => (compiled, diagnostics),
-                    CompileSourceOutcome::Compiled {
-                        diagnostics: compile_diagnostics,
-                        ..
-                    }
-                    | CompileSourceOutcome::Rejected {
-                        diagnostics: compile_diagnostics,
-                    } => {
-                        diagnostics.extend(with_posting_source_context(
-                            compile_diagnostics,
-                            &posting_source,
-                        ));
-                        continue;
-                    }
-                };
-
+            let Some(compiled_source) = source.compiled() else {
+                diagnostics.extend(with_posting_source_context(
+                    source.preparation_diagnostics().to_vec(),
+                    &posting_source,
+                ));
+                continue;
+            };
             diagnostics.extend(with_posting_source_context(
-                compile_diagnostics,
+                source.preparation_diagnostics().to_vec(),
                 &posting_source,
             ));
             let description_capable = compiled_source
@@ -252,7 +236,7 @@ impl<'a> JobPostingService<'a> {
             let occurrence = posting_occurrence(&posting, &posting_source)?;
             let result = execution
                 .execute(SourceDetailRequest {
-                    compiled_source: &compiled_source,
+                    compiled_source,
                     occurrence: &occurrence,
                     requested_fields: RequestedDetailFields::description_text(),
                     context: RuntimeExecutionContext::uncancellable(),
@@ -336,10 +320,10 @@ impl<'a> JobPostingService<'a> {
                     "detail_missing",
                     format!(
                         "Source `{}` does not provide descriptionText Detail capability",
-                        source.document.key
+                        source.document().key
                     ),
                     "/detail",
-                    serde_json::json!({ "sourceKey": source.document.key }),
+                    serde_json::json!({ "sourceKey": source.document().key }),
                 ));
             }
         }
@@ -552,12 +536,6 @@ fn posting_occurrence(
         hints: Default::default(),
         posting_meta: posting_source.posting_meta.clone(),
     })
-}
-
-fn has_error_diagnostics(diagnostics: &Diagnostics) -> bool {
-    diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
 }
 
 fn with_posting_source_context(

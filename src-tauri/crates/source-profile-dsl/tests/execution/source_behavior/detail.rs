@@ -24,7 +24,7 @@ use source_profile_dsl::test_support::{
     execute_detail, BrowserInteractionInstruction, BrowserWaitInstruction, DetailField, Diagnostic,
     DiagnosticCategory, DiagnosticSeverity, HttpMethod, PhaseBrowser, PhaseCompletion,
     PostingOccurrence, RequestedDetailFields, RuntimeCancellation, RuntimeExecutionContext,
-    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceBehavior,
     SourceExecutionPlan, SourceProfileDocument,
 };
 use tokio::sync::Notify;
@@ -1149,11 +1149,11 @@ fn compiled_detail_plan_with_fetch(
         }]
     }))
     .unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "example_source",
         "name": "Example Source",
-        "status": "active",
+
         "sourceConfig": {
             "feedUrl": "https://example.test/jobs.json",
             "apiBase": "https://api.example.test"
@@ -1233,11 +1233,11 @@ fn compiled_detail_plan_with_strategies(
         }]
     }))
     .unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "fallback_detail_source",
         "name": "Fallback Detail Source",
-        "status": "active",
+
         "sourceConfig": {
             "feedUrl": "https://example.test/jobs.json",
             "apiBase": "https://api.example.test"

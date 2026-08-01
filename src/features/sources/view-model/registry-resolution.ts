@@ -2,7 +2,7 @@ import { effectiveSourceConfigSchema } from "@/features/sources/shared/source-co
 import type {
   JsonValue,
   ProfileAccessPathDefinition,
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   SourceOwnedSelectedAccessPath,
   SupportLevel,
@@ -10,16 +10,16 @@ import type {
 
 export type SourceResolution = {
   profile: InstalledProfileWithDefinition | null;
-  profileAccessPath: ProfileAccessPathDefinition | null;
   baseProfileAccessPath: ProfileAccessPathDefinition | null;
   sourceOwnedAccessPath: SourceOwnedSelectedAccessPath | null;
+  resolvedAccessPathName: string | null;
   effectiveSourceConfigSchema: JsonValue;
   supportLevel: SupportLevel | null;
   capabilities: string[];
 };
 
 export function resolveSource(
-  source: RegistrySource,
+  source: InstalledSource,
   profilesByKey: Map<string, InstalledProfileWithDefinition>,
 ): SourceResolution {
   const selectedAccessPath = source.document.selectedAccessPath;
@@ -27,15 +27,21 @@ export function resolveSource(
   if (selectedAccessPath.type === "source_owned_access_path") {
     return {
       profile: null,
-      profileAccessPath: null,
       baseProfileAccessPath: null,
       sourceOwnedAccessPath: selectedAccessPath,
+      resolvedAccessPathName: source.resolved?.accessPathName ?? null,
       effectiveSourceConfigSchema: effectiveSourceConfigSchema(
-        undefined,
-        selectedAccessPath.sourceConfigSchema,
+        source.resolved?.profileSourceConfigSchema,
+        source.resolved?.accessPathSourceConfigSchema ??
+          selectedAccessPath.sourceConfigSchema,
       ),
-      supportLevel: source.document.sourceSupport?.level ?? null,
-      capabilities: accessPathCapabilities(selectedAccessPath),
+      supportLevel:
+        source.resolved?.support?.level ??
+        source.document.sourceSupport?.level ??
+        null,
+      capabilities:
+        source.resolved?.capabilities ??
+        accessPathCapabilities(selectedAccessPath),
     };
   }
 
@@ -44,23 +50,26 @@ export function resolveSource(
     profile?.definition.accessPaths.find(
       (accessPath) => accessPath.key === selectedAccessPath.pathKey,
     ) ?? null;
-  const effectiveProfile = source.effectiveProfile ?? profile?.definition;
-  const profileAccessPath =
-    effectiveProfile?.accessPaths.find(
-      (accessPath) => accessPath.key === selectedAccessPath.pathKey,
-    ) ?? null;
-
   return {
     profile,
-    profileAccessPath,
     baseProfileAccessPath,
     sourceOwnedAccessPath: null,
+    resolvedAccessPathName: source.resolved?.accessPathName ?? null,
     effectiveSourceConfigSchema: effectiveSourceConfigSchema(
-      profile?.definition.sourceConfigSchema,
-      profileAccessPath?.sourceConfigSchema,
+      source.resolved?.profileSourceConfigSchema ??
+        profile?.definition.sourceConfigSchema,
+      source.resolved?.accessPathSourceConfigSchema ??
+        baseProfileAccessPath?.sourceConfigSchema,
     ),
-    supportLevel: profile?.definition.support.level ?? null,
-    capabilities: profileAccessPath ? accessPathCapabilities(profileAccessPath) : [],
+    supportLevel:
+      source.resolved?.support?.level ??
+      profile?.definition.support.level ??
+      null,
+    capabilities:
+      source.resolved?.capabilities ??
+      (source.validationState.canCompile && baseProfileAccessPath
+        ? accessPathCapabilities(baseProfileAccessPath)
+        : []),
   };
 }
 

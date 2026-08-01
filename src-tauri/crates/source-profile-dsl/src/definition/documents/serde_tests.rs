@@ -3,8 +3,8 @@ use std::{fs, path::Path};
 use serde_json::{json, Value};
 
 use super::{AccessPathFragment, SupportLevel};
+use crate::definition::documents::{SelectedAccessPath, SourceBehavior};
 use crate::definition::profile::{SourceProfileDocument, SourceProfileKind};
-use crate::source::documents::{SelectedAccessPath, SourceDocument, SourceStatus};
 
 #[test]
 fn simple_reusable_source_profile_fixture_deserializes() {
@@ -24,58 +24,6 @@ fn simple_reusable_source_profile_fixture_deserializes() {
 }
 
 #[test]
-fn source_selecting_reusable_access_path_fixture_deserializes() {
-    let source: SourceDocument =
-        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
-
-    assert_eq!(source.schema_version, 3);
-    assert_eq!(source.key, "example_source");
-    assert_eq!(source.status, SourceStatus::Active);
-    assert_eq!(
-        source.source_config["feedUrl"],
-        "https://example.test/jobs.json"
-    );
-
-    let SelectedAccessPath::ProfileAccessPath {
-        profile_key,
-        path_key,
-    } = source.selected_access_path
-    else {
-        panic!("expected source to select a reusable profile access path");
-    };
-
-    assert_eq!(profile_key, "example_jobs");
-    assert_eq!(path_key, "json_feed");
-}
-
-#[test]
-fn source_owned_access_path_fixture_deserializes() {
-    let source: SourceDocument =
-        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
-
-    assert_eq!(source.key, "owned_source");
-    assert_eq!(source.status, SourceStatus::Draft);
-    assert_eq!(
-        source.source_config["startUrl"],
-        "https://example.test/careers"
-    );
-
-    let SelectedAccessPath::SourceOwnedAccessPath {
-        key,
-        name,
-        discovery,
-        ..
-    } = source.selected_access_path
-    else {
-        panic!("expected source-owned access path");
-    };
-
-    assert_eq!(key, "html_page");
-    assert_eq!(name, "HTML page");
-    assert_eq!(discovery.strategies[0].key, "html_cards");
-}
-
-#[test]
 fn direct_profile_fragments_are_typed_and_persisted_in_source_json() {
     let fragments: Vec<AccessPathFragment> = serde_json::from_value(json!([{
         "key": "json_feed",
@@ -90,18 +38,37 @@ fn direct_profile_fragments_are_typed_and_persisted_in_source_json() {
     .expect("the final fragment vocabulary should deserialize independently");
     assert_eq!(fragments[0].key, "json_feed");
 
-    let mut source: SourceDocument =
-        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
+    let mut source: SourceBehavior = read_fixture(
+        "crates/source-profile-dsl/tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
+    );
     source.access_paths = Some(fragments);
     let serialized = serde_json::to_value(&source).unwrap();
     assert_eq!(serialized["accessPaths"][0]["key"], "json_feed");
 
     let authored = read_fixture_value(
-        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
+        "crates/source-profile-dsl/tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     );
-    let parsed = serde_json::from_value::<SourceDocument>(authored)
+    let parsed = serde_json::from_value::<SourceBehavior>(authored)
         .expect("schema-v3 direct fragments must be authorable");
     assert!(parsed.access_paths.is_some());
+}
+
+#[test]
+fn behavior_input_rejects_persistence_and_lifecycle_fields() {
+    let mut behavior = read_fixture_value(
+        "crates/source-profile-dsl/tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
+    );
+    for (field, value) in [
+        ("schemaVersion", json!(3)),
+        ("status", json!("active")),
+        ("diagnostics", json!([])),
+    ] {
+        behavior[field] = value;
+        let error = serde_json::from_value::<SourceBehavior>(behavior.clone())
+            .expect_err("persistence and lifecycle fields must not enter compiler input");
+        assert!(error.to_string().contains(field), "{field}: {error}");
+        behavior.as_object_mut().unwrap().remove(field);
+    }
 }
 
 #[test]
@@ -142,12 +109,6 @@ fn representative_documents_serialize_back_without_losing_modeled_fields() {
     assert_fixture_round_trips::<SourceProfileDocument>(
         "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     );
-    assert_fixture_round_trips::<SourceDocument>(
-        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
-    assert_fixture_round_trips::<SourceDocument>(
-        "tests/fixtures/source-behavior/valid/source-owned-access-path.json",
-    );
 }
 
 #[test]
@@ -174,26 +135,6 @@ fn support_level_values_deserialize_and_serialize() {
 }
 
 #[test]
-fn source_status_values_deserialize_and_serialize() {
-    for (raw, expected) in [
-        ("draft", SourceStatus::Draft),
-        ("active", SourceStatus::Active),
-        ("disabled", SourceStatus::Disabled),
-    ] {
-        let mut source_json = read_fixture_value(
-            "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-        );
-        source_json["status"] = json!(raw);
-
-        let source: SourceDocument = serde_json::from_value(source_json)
-            .unwrap_or_else(|error| panic!("source status {raw} should deserialize: {error}"));
-
-        assert_eq!(source.status, expected);
-        assert_eq!(serde_json::to_value(source.status).unwrap(), raw);
-    }
-}
-
-#[test]
 fn v1_vocabulary_does_not_deserialize_into_new_document_model() {
     assert_fixture_deserialize_rejected::<SourceProfileDocument>(
         "tests/fixtures/source-behavior/invalid/v1-adapter-key.json",
@@ -203,15 +144,6 @@ fn v1_vocabulary_does_not_deserialize_into_new_document_model() {
         "tests/fixtures/source-behavior/invalid/v1-inventory.json",
         "inventory",
     );
-    assert_fixture_deserialize_rejected::<SourceDocument>(
-        "tests/fixtures/source-behavior/invalid/v1-source-specific.json",
-        "source_specific",
-    );
-    assert_fixture_deserialize_rejected::<SourceDocument>(
-        "tests/fixtures/source-behavior/invalid/v1-source-specific-pascal.json",
-        "SourceSpecific",
-    );
-
     let mut profile =
         read_fixture_value("tests/fixtures/source-behavior/valid/simple-source-profile.json");
     profile["accessPaths"][0]["adapter_key"] = json!("declarative_endpoint_inventory");

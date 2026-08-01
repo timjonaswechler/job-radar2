@@ -1,5 +1,6 @@
 use crate::definition::diagnostics::Diagnostics;
 use crate::definition::documents::{DetailStep, DiscoveryStep};
+use crate::definition::documents::{SelectedAccessPath, SourceBehavior};
 use crate::definition::execution_plan::capabilities::ExecutionPlanBuildError;
 use crate::definition::execution_plan::detail::compile_detail_step;
 use crate::definition::execution_plan::discovery::compile_discovery_step;
@@ -9,7 +10,6 @@ use crate::definition::execution_plan::{
 use crate::definition::profile::SourceProfileDocument;
 use crate::definition::source_config::EffectiveSourceConfigContract;
 use crate::detection::compile_detection_plan;
-use crate::source::documents::{SelectedAccessPath, SourceDocument};
 
 use super::boundedness::validate_boundedness;
 use super::capabilities::validate_capability_compatibility;
@@ -143,7 +143,7 @@ fn validate_source_profile_document_with_contracts(
 }
 
 pub(super) fn compile_materialized_profile_access_path(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     effective_profile: &SourceProfileDocument,
     profile_key: &str,
     path_key: &str,
@@ -241,7 +241,7 @@ pub(super) fn compile_materialized_profile_access_path(
 }
 
 fn resolve_access_path<'a>(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profile: &'a SourceProfileDocument,
     profile_key: &str,
     path_key: &str,
@@ -270,7 +270,7 @@ fn resolve_access_path<'a>(
 }
 
 pub(super) fn compile_source_owned_access_path(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     diagnostics: &mut Diagnostics,
 ) -> Option<ResolvedSourceExecutionPlan> {
     let SelectedAccessPath::SourceOwnedAccessPath {
@@ -337,7 +337,7 @@ pub(super) fn compile_source_owned_access_path(
 }
 
 fn validate_source_owned_access_path(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     discovery: &DiscoveryStep,
     detail: Option<&DetailStep>,
     diagnostics: &mut Diagnostics,

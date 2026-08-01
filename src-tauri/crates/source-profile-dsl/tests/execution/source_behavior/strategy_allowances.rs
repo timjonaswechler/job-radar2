@@ -22,7 +22,7 @@ use source_profile_dsl::test_support::{
     DiscoveryBrowserAdapter, ExecutionPlanFetch, PhaseBrowser, PhaseCancellationReason,
     PhaseCompletion, PhaseLimits, PhaseLimitsFragment, ProfileHttpFailureKind, RuntimeCancellation,
     RuntimeExecutionContext, ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceDocument, SourceProfileDocument,
+    ScriptedProfileHttpClient, SourceBehavior, SourceProfileDocument,
 };
 
 struct QueueFetcher {
@@ -756,11 +756,11 @@ fn sitemap_fan_out_plan() -> source_profile_dsl::test_support::SourceExecutionPl
     profile_value["accessPaths"][0]["discovery"]["strategies"][0]["pagination"]["limits"] =
         json!({ "maxRequests": 3, "maxItems": 200, "maxDepth": 1 });
     let profile: SourceProfileDocument = serde_json::from_value(profile_value).unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "fanout_source",
         "name": "Fanout source",
-        "status": "active",
+
         "sourceConfig": {
             "baseUrl": "https://example.test",
             "sitemapUrl": "https://example.test/sitemap.xml"
@@ -780,15 +780,15 @@ fn plan() -> source_profile_dsl::test_support::SourceExecutionPlan {
         "tests/fixtures/source-behavior/valid/simple-source-profile.json",
     ))
     .unwrap();
-    let source: SourceDocument = serde_json::from_value(read_json(
-        "tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
+    let source: SourceBehavior = serde_json::from_value(read_json(
+        "crates/source-profile-dsl/tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
     ))
     .unwrap();
     compile_plan(source, profile)
 }
 
 fn compile_plan(
-    source: SourceDocument,
+    source: SourceBehavior,
     profile: SourceProfileDocument,
 ) -> source_profile_dsl::test_support::SourceExecutionPlan {
     let registry = SourceProfileRegistrySnapshot {

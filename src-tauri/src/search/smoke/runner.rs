@@ -24,7 +24,7 @@ pub(crate) async fn run_search_run_smoke(
     running_search_runs: &RunningSearchRuns,
     resolver: &SearchRunResolutionRuntime,
     result_path: impl Into<PathBuf>,
-    source_registry_app_data_dir: impl Into<PathBuf>,
+    installed_sources: sources::installed::Store,
     source_keys: Vec<String>,
 ) -> Result<SearchRunSmokeSummary, String> {
     run_search_run_smoke_with_options(
@@ -32,7 +32,7 @@ pub(crate) async fn run_search_run_smoke(
         running_search_runs,
         resolver,
         result_path,
-        source_registry_app_data_dir,
+        installed_sources,
         source_keys,
         false,
     )
@@ -44,7 +44,7 @@ pub(crate) async fn run_search_run_smoke_with_options(
     running_search_runs: &RunningSearchRuns,
     resolver: &SearchRunResolutionRuntime,
     result_path: impl Into<PathBuf>,
-    source_registry_app_data_dir: impl Into<PathBuf>,
+    installed_sources: sources::installed::Store,
     source_keys: Vec<String>,
     allow_draft_sources: bool,
 ) -> Result<SearchRunSmokeSummary, String> {
@@ -59,7 +59,7 @@ pub(crate) async fn run_search_run_smoke_with_options(
         running_search_runs,
         resolver,
         result_path.clone(),
-        source_registry_app_data_dir,
+        installed_sources,
     )
     .with_geo_resolver(&geo_resolver)
     .allowing_draft_sources(allow_draft_sources)

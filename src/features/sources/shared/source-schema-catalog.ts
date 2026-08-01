@@ -10,7 +10,7 @@ import selectSchema from "../../../../src-tauri/crates/source-profile-dsl/schema
 import strategySchema from "../../../../src-tauri/crates/source-profile-dsl/schema/source-behavior/strategy.schema.json";
 import transformSchema from "../../../../src-tauri/crates/source-profile-dsl/schema/source-behavior/transform.schema.json";
 import sourceProfileSchema from "../../../../src-tauri/crates/source-profile-dsl/schema/source-profile.schema.json";
-import sourceSchema from "../../../../src-tauri/crates/source-profile-dsl/schema/source.schema.json";
+import sourceSchema from "../../../../src-tauri/crates/sources/schema/source.schema.json";
 
 import {
   createSchemaCatalog,

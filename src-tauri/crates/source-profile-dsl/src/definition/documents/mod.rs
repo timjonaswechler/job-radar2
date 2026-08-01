@@ -11,6 +11,7 @@ pub mod limits;
 pub mod pagination;
 pub mod parse;
 pub mod select;
+mod source_behavior;
 pub mod strategy;
 pub mod support;
 
@@ -38,6 +39,7 @@ pub use limits::{PhaseLimits, PhaseLimitsFragment};
 pub use pagination::{Pagination, PaginationLimits, PaginationParameterLocation};
 pub use parse::{Parse, ParseType};
 pub use select::{CaptureRule, Captures, Select};
+pub use source_behavior::{SelectedAccessPath, SourceBehavior, SourceConfig};
 pub use strategy::Acceptance;
 pub use support::{
     JsonObject, JsonSchemaObject, SupportEvidence, SupportEvidenceKind, SupportLevel,

@@ -8,9 +8,7 @@ mod db;
 mod geo;
 mod profile_dsl;
 mod search;
-mod source;
 mod source_onboarding;
-mod source_profile;
 
 pub use crate::geo::GeoDbResolver;
 pub use ::geo::{
@@ -36,15 +34,13 @@ pub use search_resolution::{
     SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
     SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
 };
-pub use source::validation::{SourceValidationState, ValidationStateKind};
 pub use source_onboarding::{
-    CreateSourceDraft, DetectSource, DetectionOutcome, InactiveSourceStatus, OperationContext,
-    ReviseSourceDefinition, SavedSource, SourceChange, SourceChangeOutcome, SourceLiveCheckOutcome,
+    DetectSource, DetectionOutcome, OperationContext, SourceLiveCheckOutcome,
     SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError, SourceOnboardingErrorKind,
 };
-pub use source_profile::registry::{
-    load_snapshot as load_source_profile_registry_snapshot, RegistrySource,
-    SourceProfileRegistrySnapshot,
+pub use sources::installed::{
+    CreateDraft, InactiveStatus, Revision, SourceDocument, SourceStatus, SourceView,
+    Store as InstalledSourceStore,
 };
 
 use tauri::{Emitter, Manager};

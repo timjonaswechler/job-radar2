@@ -63,7 +63,7 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                         running_for_task.as_ref(),
                         &executor,
                         SearchRunResultArtifact::Disabled,
-                        app_data_dir,
+                        sources::installed::Store::new(app_data_dir),
                     )
                     .run(search_request.id)
                     .await;
@@ -215,7 +215,7 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
             &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(request.id)
         .await
@@ -337,7 +337,7 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
             &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(request.id)
         .await
@@ -430,7 +430,7 @@ fn token_driven_background_cancellation_and_sql_terminal_state_agree() {
                         &RunningSearchRuns::default(),
                         &runtime,
                         SearchRunResultArtifact::Disabled,
-                        app_data_dir,
+                        sources::installed::Store::new(app_data_dir),
                     )
                     .after_source_resolution(&cancel_after_resolution)
                     .run_with_cancellation(request.id, Some(&context.cancellation_token))
@@ -565,7 +565,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
             &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(request.id)
         .await
@@ -639,7 +639,7 @@ fn disabled_search_run_result_artifact_does_not_write_json() {
             &running_search_runs,
             &executor,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -681,7 +681,7 @@ fn each_run_overwrites_search_run_result_json() {
             &running_search_runs,
             &first_executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -706,7 +706,7 @@ fn each_run_overwrites_search_run_result_json() {
             &running_search_runs,
             &second_executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -750,7 +750,7 @@ fn post_commit_artifact_failure_keeps_atomic_search_run_rows() {
             &RunningSearchRuns::default(),
             &resolver,
             &artifact_directory,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(request.id)
         .await

@@ -4,17 +4,16 @@ use std::{fs, path::Path};
 use source_profile_dsl::test_support::{
     compile_source, compile_template, CompileSourceOutcome, CompiledHttpFetch, CompiledPagination,
     DiagnosticCategory, DiagnosticSeverity, ExecutionPlanAccessPath,
-    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch, SourceDocument,
-    SourceExecutionPlan, SourceProfileDocument, SourceStatus, TemplateDescriptor,
+    ExecutionPlanBrowserInteraction, ExecutionPlanBrowserWait, ExecutionPlanFetch, SourceBehavior,
+    SourceExecutionPlan, SourceProfileDocument, TemplateDescriptor,
 };
 
 #[test]
 fn compiler_resolves_source_selecting_reusable_profile_access_path() {
     let profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
 
     let plan = compiled_plan(&source, Some(profile));
 
@@ -72,9 +71,8 @@ fn resolved_source_config_is_ephemeral_runtime_input_and_absent_from_the_plan() 
     let mut profile: SourceProfileDocument =
         read_fixture("../../tests/fixtures/source-behavior/valid/simple-source-profile.json");
     profile.access_paths[0].discovery.strategies[0].pagination = None;
-    let mut source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     source
         .source_config
         .insert("feedUrl".to_string(), serde_json::json!(SENTINEL));
@@ -85,9 +83,8 @@ fn resolved_source_config_is_ephemeral_runtime_input_and_absent_from_the_plan() 
 
 #[test]
 fn compiler_resolves_source_owned_access_path() {
-    let mut source: SourceDocument =
-        read_fixture("../../tests/fixtures/source-behavior/valid/source-owned-access-path.json");
-    source.status = SourceStatus::Active;
+    let mut source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-owned-access-path.json");
 
     let plan = compiled_plan(&source, None);
 
@@ -133,9 +130,8 @@ fn compiler_resolves_source_owned_access_path() {
 
 #[test]
 fn missing_profile_and_access_path_return_structured_diagnostics() {
-    let source: SourceDocument = read_fixture(
-        "../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json",
-    );
+    let source: SourceBehavior =
+        read_fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     let missing_profile = compile_source(&source, &SourceProfileRegistrySnapshot::default());
     let CompileSourceOutcome::Rejected { diagnostics } = missing_profile else {
         panic!("missing profile must reject");
@@ -162,7 +158,7 @@ fn missing_profile_and_access_path_return_structured_diagnostics() {
 }
 
 fn compiled_plan(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profile: Option<SourceProfileDocument>,
 ) -> SourceExecutionPlan {
     match compile_source(source, &registry(profile)) {

@@ -1,6 +1,6 @@
 import { validationStateLabels } from "@/features/sources/labels";
 import { sourceStatusLabels } from "@/features/sources/status";
-import type { RegistrySource, SourceKey } from "@/lib/api/sources";
+import type { InstalledSource, SourceKey } from "@/lib/api/sources";
 
 export type SearchRequestSourceOption = {
   key: SourceKey;
@@ -13,7 +13,7 @@ export type SearchRequestSourceOption = {
 };
 
 export function createSearchRequestSourceOptions(
-  sources: RegistrySource[],
+  sources: InstalledSource[],
   selectedSourceKeys: SourceKey[] = [],
 ): SearchRequestSourceOption[] {
   const optionsByKey = new Map<SourceKey, SearchRequestSourceOption>();
@@ -64,7 +64,7 @@ export function createSearchRequestSourceOptions(
 
 export function selectedMissingSourceKeys(
   sourceKeys: SourceKey[],
-  sources: RegistrySource[],
+  sources: InstalledSource[],
 ): SourceKey[] {
   const knownKeys = new Set(sources.map((source) => source.document.key));
   return sourceKeys.filter((sourceKey) => !knownKeys.has(sourceKey));

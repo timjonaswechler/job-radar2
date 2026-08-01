@@ -1,0 +1,28 @@
+{
+  "key": "example_source",
+  "name": "Example Source",
+  "sourceConfig": {
+    "feedUrl": "https://example.test/jobs.json",
+    "language": "en"
+  },
+  "selectedAccessPath": {
+    "type": "profile_access_path",
+    "profileKey": "example_jobs",
+    "pathKey": "json_feed"
+  },
+  "accessPaths": [
+    {
+      "key": "json_feed",
+      "discovery": {
+        "strategies": [
+          {
+            "key": "json_api",
+            "acceptWhen": {
+              "minResults": 0
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

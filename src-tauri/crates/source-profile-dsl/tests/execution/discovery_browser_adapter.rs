@@ -11,7 +11,7 @@ use source_profile_dsl::test_support::{
     PhaseUsage, PolicyOutcome, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
     ScriptedBrowserAcquisitionExpectation, ScriptedBrowserFinalization, ScriptedHttpBodyEvent,
-    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument, SourceExecutionPlan,
+    ScriptedHttpEvent, ScriptedProfileHttpClient, SourceBehavior, SourceExecutionPlan,
     SourceProfileDocument,
 };
 
@@ -52,8 +52,8 @@ fn compiled_plan(browser: bool) -> SourceExecutionPlan {
             }
         }]
     })).unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3, "key": "source", "name": "Source", "status": "active",
+    let source: SourceBehavior = serde_json::from_value(json!({
+        "key": "source", "name": "Source",
         "sourceConfig": { "startUrl": "https://example.test/jobs" },
         "selectedAccessPath": { "type": "profile_access_path", "profileKey": "adapter", "pathKey": "main" }
     })).unwrap();

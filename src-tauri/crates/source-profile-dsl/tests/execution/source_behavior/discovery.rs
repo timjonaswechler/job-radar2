@@ -12,7 +12,7 @@ use source_profile_dsl::test_support::{
     CompileSourceOutcome, DiagnosticCategory, DiagnosticSeverity, ExecutionPlanFetch, HttpMethod,
     PhaseBrowser, PhaseCompletion, ProfileHttpFailureKind, RuntimeCancellation,
     RuntimeExecutionContext, ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
-    SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    SourceBehavior, SourceExecutionPlan, SourceProfileDocument,
 };
 
 #[path = "discovery/core.rs"]
@@ -138,11 +138,11 @@ fn compile_discovery_outcome_with_strategy(
         }]
     }))
     .unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "example_source",
         "name": "Example Source",
-        "status": "active",
+
         "sourceConfig": { "feedUrl": feed_url },
         "selectedAccessPath": {
             "type": "profile_access_path",
@@ -156,11 +156,11 @@ fn compile_discovery_outcome_with_strategy(
 }
 
 fn source_owned_json_discovery_plan(fields: Value) -> SourceExecutionPlan {
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "owned_source",
         "name": "Owned Source",
-        "status": "active",
+
         "sourceConfig": { "feedUrl": "https://example.test/source-owned.json" },
         "sourceSupport": {
             "level": "experimental",

@@ -1,15 +1,16 @@
 use std::{fmt, path::Path};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use source_profile_dsl::{
     definition::{
-        DetectionDocument, Diagnostic, Diagnostics, JsonSchemaObject, ReusableAccessPathDocument,
-        SourceProfileDocument, SourceProfileKind, SourceProfileLookup, SupportMetadata,
+        CompileSourceOutcome, CompiledSource, DetectionDocument, Diagnostic, Diagnostics,
+        JsonSchemaObject, ReusableAccessPathDocument, SourceProfileDocument, SourceProfileKind,
+        SourceProfileLookup, SupportMetadata,
     },
     detection::CompiledDetectionPlan,
 };
 
-use super::profiles;
+use super::{loading, profiles, sources::SourceDocument};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -143,5 +144,144 @@ impl SourceProfileLookup for Profiles {
             .iter()
             .find(|profile| profile.document.key == key)
             .map(|profile| &profile.document)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidationStateKind {
+    Unknown,
+    Valid,
+    Invalid,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ValidationState {
+    pub source_key: String,
+    pub state: ValidationStateKind,
+    pub can_compile: bool,
+    pub can_execute: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Diagnostics,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedBehaviorView {
+    pub access_path_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_source_config_schema: Option<JsonSchemaObject>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_path_source_config_schema: Option<JsonSchemaObject>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub support: Option<SupportMetadata>,
+    pub capabilities: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceView {
+    pub origin: Origin,
+    pub file_name: String,
+    pub document: SourceDocument,
+    pub validation_state: ValidationState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved: Option<ResolvedBehaviorView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotView {
+    pub profiles: ProfilesView,
+    pub sources: Vec<SourceView>,
+    pub diagnostics: Diagnostics,
+}
+
+/// Opaque identity of the complete Source and selected admitted Profile
+/// behavior used by one exact preparation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Generation(pub(crate) String);
+
+#[derive(Clone, Debug)]
+pub struct PreparedSource {
+    pub(crate) origin: Origin,
+    pub(crate) file_name: String,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) document: SourceDocument,
+    pub(crate) validation: ValidationState,
+    pub(crate) outcome: CompileSourceOutcome,
+    pub(crate) generation: Generation,
+    pub(crate) resolved: Option<ResolvedBehaviorView>,
+}
+
+impl PreparedSource {
+    pub fn origin(&self) -> Origin {
+        self.origin
+    }
+    pub fn document(&self) -> &SourceDocument {
+        &self.document
+    }
+    pub fn validation(&self) -> &ValidationState {
+        &self.validation
+    }
+    pub fn generation(&self) -> &Generation {
+        &self.generation
+    }
+    pub fn compiled(&self) -> Option<&CompiledSource> {
+        match &self.outcome {
+            CompileSourceOutcome::Compiled {
+                source,
+                diagnostics,
+            } if !diagnostics.iter().any(|item| {
+                item.severity == source_profile_dsl::definition::DiagnosticSeverity::Error
+            }) =>
+            {
+                Some(source)
+            }
+            _ => None,
+        }
+    }
+    /// Temporary exact preparation material for Desktop Live Check; removed when
+    /// check ownership moves into this crate in #319.
+    #[doc(hidden)]
+    pub fn compiler_outcome(&self) -> &CompileSourceOutcome {
+        &self.outcome
+    }
+    pub fn preparation_diagnostics(&self) -> &Diagnostics {
+        match &self.outcome {
+            CompileSourceOutcome::Compiled { diagnostics, .. }
+            | CompileSourceOutcome::Rejected { diagnostics } => diagnostics,
+        }
+    }
+}
+
+/// Immutable operation-local installed Profile/Source state. It intentionally
+/// has no serialization implementation; hosts receive [`SnapshotView`].
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    pub(crate) profiles: Profiles,
+    pub(crate) sources: Vec<PreparedSource>,
+    pub(crate) view: SnapshotView,
+}
+
+impl Snapshot {
+    pub fn load(app_data_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
+        let profiles = Profiles::load(app_data_dir.as_ref())?;
+        Ok(loading::load(app_data_dir.as_ref(), profiles))
+    }
+    pub fn view(&self) -> &SnapshotView {
+        &self.view
+    }
+    pub fn profiles(&self) -> &Profiles {
+        &self.profiles
+    }
+    pub fn source(&self, key: &str) -> Option<&PreparedSource> {
+        self.sources
+            .iter()
+            .find(|source| source.document.key == key)
+    }
+    pub fn profile(&self, key: &str) -> Option<&SourceProfileDocument> {
+        self.profiles.profile(key)
     }
 }

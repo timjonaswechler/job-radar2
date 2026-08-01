@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use source_profile_dsl::test_support::{
-    Diagnostics, SourceDocument, SourceProfileDocument, SourceProfileLookup,
+    Diagnostics, SourceBehavior, SourceProfileDocument, SourceProfileLookup,
 };
 
 #[derive(Default)]
@@ -29,7 +29,7 @@ pub struct RegistrySourceProfile {
 pub struct RegistrySource {
     pub origin: String,
     pub path: String,
-    pub document: SourceDocument,
+    pub document: SourceBehavior,
     pub validation_state: SourceValidationState,
     pub effective_profile: Option<()>,
     pub compile_outcome: Option<()>,

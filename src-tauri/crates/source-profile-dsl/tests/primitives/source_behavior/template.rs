@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 use serde_json::json;
 use source_profile_dsl::test_support::{
     compile_source, compile_template, render_template, CompileSourceOutcome, CompiledValue,
-    DiagnosticCategory, SourceDocument, SourceProfileDocument, TemplateCompileErrorKind,
+    DiagnosticCategory, SourceBehavior, SourceProfileDocument, TemplateCompileErrorKind,
     TemplateDescriptor, TemplateReference, TemplateValueView,
 };
 
@@ -26,8 +26,8 @@ fn fixture<T: serde::de::DeserializeOwned>(path: &str) -> T {
 }
 
 fn compile(profile: SourceProfileDocument) -> CompileSourceOutcome {
-    let source: SourceDocument =
-        fixture("../../tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
+    let source: SourceBehavior =
+        fixture("tests/fixtures/source-behavior/valid/source-selecting-access-path.json");
     compile_source(
         &source,
         &SourceProfileRegistrySnapshot {

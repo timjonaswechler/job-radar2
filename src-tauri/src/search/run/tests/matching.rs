@@ -58,7 +58,7 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
             &running_search_runs,
             &executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -142,7 +142,7 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -211,7 +211,7 @@ fn normalizes_source_candidates_before_matching_and_merging() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -286,7 +286,7 @@ fn filters_search_run_matches_by_request_location_radius() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(search_request.id)
@@ -352,7 +352,7 @@ fn request_locations_without_radius_do_not_apply_filter_and_emit_warning() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(search_request.id)
@@ -412,7 +412,7 @@ fn leaves_matching_unchanged_without_request_locations() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(search_request.id)
@@ -468,7 +468,7 @@ fn radius_without_request_locations_does_not_require_candidate_locations_or_deta
             &running,
             &runtime,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(request.id)
@@ -548,7 +548,7 @@ fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(search_request.id)
@@ -619,7 +619,7 @@ fn candidate_geo_resolver_failure_is_a_truthful_source_runtime_failure_without_r
             &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&resolver)
         .run(request.id)
@@ -690,7 +690,7 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
         .run(search_request.id)

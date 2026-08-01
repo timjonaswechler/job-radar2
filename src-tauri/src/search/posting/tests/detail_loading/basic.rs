@@ -270,7 +270,7 @@ fn get_job_posting_returns_unsupported_when_no_concrete_source_supports_detail()
                 json!({}),
             )],
         );
-        assert_eq!(snapshot.diagnostics, Vec::new());
+        assert_eq!(snapshot.view().diagnostics, Vec::new());
         let client = FixtureDetailHttpClient::new([]);
         let detail = JobPostingService::new(&pool)
             .get_job_posting_with_runtime(

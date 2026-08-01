@@ -20,10 +20,10 @@ import {
 } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { createSearchRequestSourceOptions } from "@/features/search-requests/model/source-options";
-import type { RegistrySource, SourceKey } from "@/lib/api/sources";
+import type { InstalledSource, SourceKey } from "@/lib/api/sources";
 
 type SourceKeyPickerProps = {
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   selectedSourceKeys: SourceKey[];
   disabled?: boolean;
   onChange: (sourceKeys: SourceKey[]) => void;

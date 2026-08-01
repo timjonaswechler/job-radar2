@@ -26,12 +26,12 @@ import {
   getSourceLiveCheckReportStatus,
   setSourceInactive,
   type CheckReport,
-  type RegistrySource,
+  type InstalledSource,
   type SourceLiveCheckReportStatus,
 } from "@/lib/api/sources";
 
 type SourceLiveCheckSectionProps = {
-  source: RegistrySource;
+  source: InstalledSource;
   onUpdated?: () => Promise<unknown> | unknown;
 };
 

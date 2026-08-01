@@ -12,7 +12,8 @@ import { useUnsavedSourceChanges } from "@/features/sources/source-form/use-unsa
 import {
   createSource,
   detectSourceProposalFromUrl,
-  type RegistrySource,
+  sourceCommandErrorMessage,
+  type InstalledSource,
   type InstalledProfileWithDefinition,
   type SourceProposal,
   type SourceProposalDetectionResult,
@@ -35,7 +36,7 @@ import {
 
 type UseSourceCreateProps = {
   profiles: InstalledProfileWithDefinition[];
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   open: boolean;
   onCreated?: () => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
@@ -53,10 +54,13 @@ export function useSourceCreate({
   const [detectionResult, setDetectionResult] =
     useState<SourceProposalDetectionResult | null>(null);
   const [detectionError, setDetectionError] = useState<string | null>(null);
-  const [form, setForm] = useState<SourceCreateFormState>(emptySourceCreateForm);
+  const [form, setForm] = useState<SourceCreateFormState>(
+    emptySourceCreateForm,
+  );
   const [keyTouched, setKeyTouched] = useState(false);
   const [configEntries, setConfigEntries] = useState<SourceConfigEntry[]>([]);
-  const [directSourceSpecializationText, setDirectSourceSpecializationText] = useState("");
+  const [directSourceSpecializationText, setDirectSourceSpecializationText] =
+    useState("");
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -194,7 +198,10 @@ export function useSourceCreate({
   const applyDetectedSource = (detected: DetectedSourceLike) => {
     if (saving || detecting) return;
 
-    const nextDraft = sourceCreateDraftAfterDetectedSource({ profiles, detected });
+    const nextDraft = sourceCreateDraftAfterDetectedSource({
+      profiles,
+      detected,
+    });
     setForm(nextDraft.form);
     setKeyTouched(nextDraft.keyTouched);
     setConfigEntries(nextDraft.configEntries);
@@ -245,30 +252,33 @@ export function useSourceCreate({
           setForm(nextDraft.form);
           setKeyTouched(nextDraft.keyTouched);
           setConfigEntries(nextDraft.configEntries);
-          setDirectSourceSpecializationText(nextDraft.directSourceSpecializationText);
+          setDirectSourceSpecializationText(
+            nextDraft.directSourceSpecializationText,
+          );
           setJsonPreviewOpen(nextDraft.jsonPreviewOpen);
           setSaveAttempted(nextDraft.saveAttempted);
           toast.success("Quelle erkannt und Formular vorausgefüllt.");
         }
       } else if (result.status === "unsupported") {
-        setConfigEntries((current) =>
-          sourceCreateDraftAfterDetectionResult({
-            draft: {
-              form,
-              keyTouched,
-              configEntries: current,
-              directSourceSpecializationText,
-              jsonPreviewOpen,
-              saveAttempted,
-            },
-            profiles,
-            result,
-            trimmedUrl,
-          }).configEntries,
+        setConfigEntries(
+          (current) =>
+            sourceCreateDraftAfterDetectionResult({
+              draft: {
+                form,
+                keyTouched,
+                configEntries: current,
+                directSourceSpecializationText,
+                jsonPreviewOpen,
+                saveAttempted,
+              },
+              profiles,
+              result,
+              trimmedUrl,
+            }).configEntries,
         );
       }
     } catch (error) {
-      setDetectionError(errorMessage(error));
+      setDetectionError(sourceCommandErrorMessage(error));
     } finally {
       setDetecting(false);
     }
@@ -300,14 +310,14 @@ export function useSourceCreate({
       } catch (refreshError) {
         toast.warning(
           "Quelle gespeichert, Registry konnte aber nicht neu geladen werden.",
-          { description: errorMessage(refreshError) },
+          { description: sourceCommandErrorMessage(refreshError) },
         );
       }
       toast.success("Quelle wurde als Custom-Registry-Dokument gespeichert.");
       unsavedChanges.forceCloseAfterSave();
     } catch (error) {
       toast.error("Quelle konnte nicht gespeichert werden.", {
-        description: errorMessage(error),
+        description: sourceCommandErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -354,8 +364,4 @@ export function useSourceCreate({
       handleSave,
     },
   };
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

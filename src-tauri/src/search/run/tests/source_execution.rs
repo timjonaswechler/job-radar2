@@ -34,7 +34,7 @@ fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
             &running_search_runs,
             &executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -78,7 +78,7 @@ fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
 }
 
 #[test]
-fn invalid_derived_selected_source_fails_with_structured_diagnostics_and_valid_sources_continue() {
+fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
@@ -123,7 +123,7 @@ fn invalid_derived_selected_source_fails_with_structured_diagnostics_and_valid_s
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await
@@ -134,11 +134,7 @@ fn invalid_derived_selected_source_fails_with_structured_diagnostics_and_valid_s
         assert!(result.source_runs[0]
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "missing_source_support"));
-        assert!(result.source_runs[0]
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "source_validation_failed"));
+            .any(|diagnostic| diagnostic.code == "source_not_found"));
         assert_eq!(result.source_runs[1].status, SourceRunStatus::Completed);
         assert_eq!(result.postings.len(), 1);
     });
@@ -192,7 +188,7 @@ fn draft_and_disabled_selected_sources_are_skipped_without_execution() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
         )
         .run(search_request.id)
         .await

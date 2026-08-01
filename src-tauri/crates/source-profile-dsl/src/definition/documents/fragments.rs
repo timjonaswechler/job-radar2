@@ -14,7 +14,7 @@ use crate::definition::primitives::{
 };
 
 /// Active schema-v3 Direct Source Specialization fragment for one reusable
-/// Access Path. `SourceDocument::access_paths` persists these typed fragments.
+/// Access Path. `SourceBehavior::access_paths` persists these typed fragments.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccessPathFragment {

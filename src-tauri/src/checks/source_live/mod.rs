@@ -5,9 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use crate::checks::prepare_source_behavior_fingerprints;
-use crate::source_profile::registry::{RegistrySource, SourceProfileRegistrySnapshot};
+use source_profile_dsl::definition::CompiledSource;
 use source_profile_dsl::definition::SelectedAccessPath;
-use source_profile_dsl::definition::{CompileSourceOutcome, CompiledSource};
 use source_profile_dsl::definition::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics,
 };
@@ -18,6 +17,7 @@ use source_profile_dsl::execution::{
     SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
     SourceDetailResult,
 };
+use sources::installed::{PreparedSource, Snapshot};
 
 use super::persistence::validate_source_live_check_report_key;
 use super::{
@@ -79,12 +79,26 @@ impl<'a> SourceLiveCheckExecutionContext<'a> {
     }
 }
 
-pub(crate) fn source_live_check_report_status(
+pub(crate) async fn source_live_check_report_status(
     app_data_dir: impl AsRef<Path>,
+    snapshot: &Snapshot,
     source_key: impl AsRef<str>,
 ) -> Result<SourceLiveCheckReportStatus, String> {
-    let app_data_dir = app_data_dir.as_ref();
-    let source_key = source_key.as_ref();
+    let app_data_dir = app_data_dir.as_ref().to_path_buf();
+    let snapshot = snapshot.clone();
+    let source_key = source_key.as_ref().to_string();
+    tokio::task::spawn_blocking(move || {
+        source_live_check_report_status_blocking(&app_data_dir, &snapshot, &source_key)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn source_live_check_report_status_blocking(
+    app_data_dir: &Path,
+    snapshot: &Snapshot,
+    source_key: &str,
+) -> Result<SourceLiveCheckReportStatus, String> {
     validate_source_live_check_report_key(source_key).map_err(|error| error.to_string())?;
     let report_path = source_live_check_report_path(app_data_dir, source_key);
     let report = match read_latest_check_report(&report_path) {
@@ -99,8 +113,7 @@ pub(crate) fn source_live_check_report_status(
         Err(error) => return Err(error.to_string()),
     };
 
-    let snapshot = crate::source_profile::registry::load_snapshot(app_data_dir);
-    let current_fingerprints = prepare_source_live_check(&snapshot, source_key)?.fingerprints;
+    let current_fingerprints = prepare_source_live_check(snapshot, source_key)?.fingerprints;
     let freshness = evaluate_check_report_freshness(
         &report,
         SOURCE_LIVE_CHECK_LOGIC_VERSION,
@@ -119,7 +132,7 @@ pub(crate) fn source_live_check_report_status(
 }
 
 pub(crate) async fn build_source_live_check_report<D, T, A>(
-    snapshot: &SourceProfileRegistrySnapshot,
+    snapshot: &Snapshot,
     source_key: &str,
     discovery_fetcher: &D,
     detail_fetcher: &T,
@@ -132,8 +145,8 @@ where
     A: BrowserAcquisition + Sync,
 {
     let prepared = prepare_source_live_check(snapshot, source_key)?;
-    let document = &prepared.source.document;
-    let mut diagnostics = prepared.source.validation_state.diagnostics.clone();
+    let document = prepared.source.document();
+    let mut diagnostics = prepared.source.validation().diagnostics.clone();
     let fingerprints = prepared.fingerprints.clone();
     let mut details = source_live_check_details_placeholders();
     details.insert(
@@ -321,33 +334,25 @@ impl SourceLiveCheckSubject {
 }
 
 struct PreparedSourceLiveCheck<'a> {
-    source: &'a RegistrySource,
-    outcome: &'a CompileSourceOutcome,
+    source: &'a PreparedSource,
     fingerprints: Vec<CheckFingerprint>,
 }
 
 impl PreparedSourceLiveCheck<'_> {
     fn compiled(&self) -> Option<&CompiledSource> {
-        match self.outcome {
-            CompileSourceOutcome::Compiled { source, .. } => Some(source),
-            CompileSourceOutcome::Rejected { .. } => None,
-        }
+        self.source.compiled()
     }
 }
 
 fn prepare_source_live_check<'a>(
-    snapshot: &'a SourceProfileRegistrySnapshot,
+    snapshot: &'a Snapshot,
     source_key: &str,
 ) -> Result<PreparedSourceLiveCheck<'a>, String> {
     let source = snapshot
         .source(source_key)
         .ok_or_else(|| format!("Source `{source_key}` was not found in the registry snapshot"))?;
-    let outcome = source.compile_outcome.as_ref().ok_or_else(|| {
-        format!(
-            "Source `{source_key}` has no authoritative compiler outcome in the registry snapshot"
-        )
-    })?;
-    let base_profile = match &source.document.selected_access_path {
+    let outcome = source.compiler_outcome();
+    let base_profile = match &source.document().selected_access_path {
         SelectedAccessPath::ProfileAccessPath { profile_key, .. } => {
             Some(snapshot.profile(profile_key).ok_or_else(|| {
                 format!(
@@ -358,12 +363,11 @@ fn prepare_source_live_check<'a>(
         SelectedAccessPath::SourceOwnedAccessPath { .. } => None,
     };
     let fingerprints =
-        prepare_source_behavior_fingerprints(&source.document, base_profile, outcome)
+        prepare_source_behavior_fingerprints(source.document(), base_profile, outcome)
             .map_err(|error| error.to_string())?;
 
     Ok(PreparedSourceLiveCheck {
         source,
-        outcome,
         fingerprints,
     })
 }

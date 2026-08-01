@@ -37,11 +37,11 @@ pub use provenance::{
 };
 
 use crate::definition::documents::{DetailStep, DiscoveryStep, JsonSchemaObject};
+use crate::definition::documents::{SelectedAccessPath, SourceBehavior, SourceConfig};
 use crate::definition::execution_plan::SourceExecutionPlan;
 use crate::definition::profile::SourceProfileDocument;
 use crate::detection::{compile_detection_plan, CompiledDetectionPlan};
 use crate::execution::occurrence::{DetailField, DetailFieldCapabilities};
-use crate::source::documents::{SelectedAccessPath, SourceConfig, SourceDocument};
 
 /// Immutable Source Profile lookup used by compilation.
 pub trait SourceProfileLookup {
@@ -137,7 +137,7 @@ impl CompiledSource {
         &self.execution_plan.source.name
     }
 
-    pub fn effective_profile(&self) -> Option<&SourceProfileDocument> {
+    pub fn materialized_profile(&self) -> Option<&SourceProfileDocument> {
         match &self.access {
             CompiledSourceAccess::Profile { effective_profile } => {
                 Some(&effective_profile.document)
@@ -227,7 +227,7 @@ pub enum CompileSourceOutcome {
 }
 
 pub fn compile_source(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profiles: &impl SourceProfileLookup,
 ) -> CompileSourceOutcome {
     compile_source_with_profile_validation(source, profiles, true)
@@ -236,14 +236,14 @@ pub fn compile_source(
 /// Compiles against a Profile set whose owner has already validated and
 /// prepared Profile Detection material.
 pub fn compile_source_with_admitted_profiles(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profiles: &impl SourceProfileLookup,
 ) -> CompileSourceOutcome {
     compile_source_with_profile_validation(source, profiles, false)
 }
 
 fn compile_source_with_profile_validation(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profiles: &impl SourceProfileLookup,
     validate_detection: bool,
 ) -> CompileSourceOutcome {
@@ -272,7 +272,7 @@ fn compile_source_with_profile_validation(
 }
 
 fn build_compiled_source(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profiles: &impl SourceProfileLookup,
     validate_detection: bool,
     diagnostics: &mut Diagnostics,

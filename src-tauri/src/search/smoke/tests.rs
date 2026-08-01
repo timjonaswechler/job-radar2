@@ -139,7 +139,7 @@ fn smoke_path_creates_generic_request_and_writes_bounded_result() {
             &running_search_runs,
             &executor,
             result_path.clone(),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             vec![FIRST_SOURCE_KEY.to_string()],
         )
         .await
@@ -224,7 +224,7 @@ fn smoke_path_can_target_multiple_existing_sources() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             source_keys.clone(),
         )
         .await
@@ -283,7 +283,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             source_keys.clone(),
         )
         .await
@@ -298,7 +298,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             source_keys,
             true,
         )
@@ -345,7 +345,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             source_keys.clone(),
         )
         .await
@@ -355,7 +355,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
             &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
-            temp_dir.path(),
+            sources::installed::Store::new(temp_dir.path()),
             source_keys,
         )
         .await

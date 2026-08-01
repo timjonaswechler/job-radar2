@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashSet, VecDeque};
 use serde_json::{json, Value};
 
 use crate::{
+    definition::documents::SourceConfig,
     definition::{
         diagnostics::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics},
         execution_plan::{
@@ -22,7 +23,6 @@ use crate::{
         },
     },
     execution::occurrence::{ContributionOrigin, PostingOccurrence},
-    source::documents::SourceConfig,
 };
 
 use super::{

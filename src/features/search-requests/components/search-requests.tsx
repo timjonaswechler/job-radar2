@@ -30,12 +30,12 @@ import {
 import { getAppPreferences, type AppPreferences } from "@/lib/api/app-preferences";
 import {
   getSourceInventory,
-  type RegistrySource,
+  type InstalledSource,
 } from "@/lib/api/sources";
 
 type SearchRequestsData = {
   requests: SearchRequest[];
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   preferences: AppPreferences | null;
 };
 

@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 
 use source_profile_dsl::test_support::{
     compile_source, AccessPathFragment, CompileSourceOutcome, CompiledSourceProvenance,
-    ProvenanceEntry, ProvenanceOrigin, ProvenancePathSegment, SourceDocument,
+    ProvenanceEntry, ProvenanceOrigin, ProvenancePathSegment, SourceBehavior,
     SourceProfileDocument,
 };
 
@@ -22,7 +22,7 @@ fn base_and_direct_terminals_have_exact_origins_without_metadata() {
         }))
         .unwrap(),
     );
-    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{
         "key": "json_feed",
         "sourceConfigSchema": {
@@ -181,7 +181,7 @@ fn locator_only_fragment_is_a_noop_and_scalar_and_empty_object_are_terminals() {
         .company = Some(
         serde_json::from_value(serde_json::json!({ "type": "const", "value": false })).unwrap(),
     );
-    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     source.access_paths = Some(fragments(serde_json::json!([{ "key": "json_feed" }])));
 
     let provenance = compiled_provenance(&source, profile);
@@ -218,7 +218,7 @@ fn locator_only_fragment_is_a_noop_and_scalar_and_empty_object_are_terminals() {
 #[test]
 fn equivalent_dynamic_map_insertion_orders_serialize_identically() {
     let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let base_source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let base_source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     let provenances = [
         r#"[{"key":"json_feed","discovery":{"strategies":[{"key":"json_api","fetch":{"headers":{"user-agent":"z","accept-language":"a"}}}]}}]"#,
         r#"[{"discovery":{"strategies":[{"fetch":{"headers":{"accept-language":"a","user-agent":"z"}},"key":"json_api"}]},"key":"json_feed"}]"#,
@@ -264,7 +264,7 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
         }]
     }))
     .unwrap();
-    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     let provenance = compiled_provenance(&source, profile);
     let entries = profile_entries(&provenance);
 
@@ -348,7 +348,7 @@ fn arrays_are_atomic_and_policy_and_dynamic_maps_are_complete() {
 #[test]
 fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
     let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let mut source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     source.source_config.remove("language");
     let base_strategy =
         serde_json::to_value(&profile.access_paths[0].discovery.strategies[0]).unwrap();
@@ -396,7 +396,7 @@ fn complete_added_paths_and_strategies_are_direct_in_semantic_order() {
 
 #[test]
 fn source_owned_provenance_is_distinct_all_owned_and_minimized() {
-    let source: SourceDocument = read_fixture("valid/source-owned-access-path.json");
+    let source: SourceBehavior = read_fixture("valid/source-owned-access-path.json");
     let CompileSourceOutcome::Compiled {
         source: compiled, ..
     } = compile_source(&source, &SourceProfileRegistrySnapshot::default())
@@ -428,7 +428,7 @@ fn provenance_serialization_is_typed_stable_and_rejects_unknown_shape() {
     assert_eq!(serde_json::to_value(fixture).unwrap(), fixture_value);
 
     let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
-    let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
+    let source: SourceBehavior = read_fixture("valid/source-selecting-access-path.json");
     let first = compiled_provenance(&source, profile.clone());
     let second = compiled_provenance(&source, profile);
     assert_eq!(
@@ -451,7 +451,7 @@ fn provenance_serialization_is_typed_stable_and_rejects_unknown_shape() {
 }
 
 fn compiled_provenance(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profile: SourceProfileDocument,
 ) -> CompiledSourceProvenance {
     let registry = SourceProfileRegistrySnapshot {
@@ -507,8 +507,11 @@ fn fragments(value: serde_json::Value) -> Vec<AccessPathFragment> {
 }
 
 fn read_fixture<T: serde::de::DeserializeOwned>(name: &str) -> T {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/source-behavior")
-        .join(name);
+    let root = if name.ends_with("simple-source-profile.json") {
+        "../../tests/fixtures/source-behavior"
+    } else {
+        "tests/fixtures/source-behavior"
+    };
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(root).join(name);
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }

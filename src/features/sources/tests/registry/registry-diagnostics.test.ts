@@ -10,7 +10,7 @@ import {
 } from "@/features/sources/workspace/sources-workspace-tabs";
 import { useSourceRegistryInventory } from "@/features/sources/workspace/use-source-registry-inventory";
 import type {
-  RegistrySource,
+  InstalledSource,
   InstalledProfileWithDefinition,
   StructuredDiagnostic,
 } from "@/lib/api/sources";
@@ -57,10 +57,10 @@ test("registry diagnostics contract", async () => {
   assert.deepEqual(index.byProfileKey.get("greenhouse"), [profileDiagnostic]);
   assert.deepEqual(index.unassigned, [unassignedDiagnostic]);
 
-  function registrySource(key: string): RegistrySource {
+  function registrySource(key: string): InstalledSource {
     return {
       origin: "custom",
-      path: `sources/${key}.json`,
+      fileName: `${key}.json`,
       document: {
         schemaVersion: 3,
         key,

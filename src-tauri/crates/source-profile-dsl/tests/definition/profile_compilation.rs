@@ -1,14 +1,14 @@
 use std::{fs, path::PathBuf};
 
 use source_profile_dsl::test_support::{
-    compile_source, CompileSourceOutcome, DiagnosticSeverity, ProfileCompilerInput, SourceDocument,
+    compile_source, CompileSourceOutcome, DiagnosticSeverity, ProfileCompilerInput, SourceBehavior,
     SourceProfileDocument,
 };
 
 #[test]
 fn profile_selected_source_compiles_through_public_core_interface() {
     let profile: SourceProfileDocument = fixture("valid/simple-source-profile.json");
-    let source: SourceDocument = fixture("valid/source-selecting-access-path.json");
+    let source: SourceBehavior = fixture("valid/source-selecting-access-path.json");
     let profiles = [profile];
 
     let CompileSourceOutcome::Compiled {
@@ -36,7 +36,7 @@ fn profile_selected_source_compiles_through_public_core_interface() {
 
 #[test]
 fn source_owned_access_path_uses_the_same_public_compile_interface() {
-    let source: SourceDocument = fixture("valid/source-owned-access-path.json");
+    let source: SourceBehavior = fixture("valid/source-owned-access-path.json");
 
     let CompileSourceOutcome::Compiled {
         source: compiled,
@@ -84,7 +84,7 @@ fn direct_core_compilation_validates_detection_definitions() {
         .remove("accessPaths");
     source_value["selectedAccessPath"]["profileKey"] = serde_json::json!("successfactors");
     source_value["selectedAccessPath"]["pathKey"] = serde_json::json!("rmk_sitemap_html");
-    let source: SourceDocument = serde_json::from_value(source_value).expect("valid Source");
+    let source: SourceBehavior = serde_json::from_value(source_value).expect("valid Source");
     let profiles = [profile];
 
     let CompileSourceOutcome::Rejected { diagnostics } =
@@ -102,7 +102,7 @@ fn direct_core_compilation_validates_detection_definitions() {
 
 #[test]
 fn missing_profile_is_a_closed_rejected_outcome_with_structured_diagnostic() {
-    let source: SourceDocument = fixture("valid/source-selecting-access-path.json");
+    let source: SourceBehavior = fixture("valid/source-selecting-access-path.json");
 
     let CompileSourceOutcome::Rejected { diagnostics } =
         compile_source(&source, &ProfileCompilerInput::new(&[]))
@@ -118,7 +118,15 @@ fn missing_profile_is_a_closed_rejected_outcome_with_structured_diagnostic() {
 }
 
 fn fixture<T: serde::de::DeserializeOwned>(name: &str) -> T {
-    let path = fixture_root().join(name);
+    let path = if name.ends_with("source-selecting-access-path.json")
+        || name.ends_with("source-owned-access-path.json")
+    {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/source-behavior")
+            .join(name)
+    } else {
+        fixture_root().join(name)
+    };
     let json = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
     serde_json::from_str(&json)

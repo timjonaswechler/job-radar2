@@ -6,9 +6,9 @@ use source_profile_dsl::test_support::{
     PhaseUsage, PolicyOutcome, PolicyUnsatisfiedCause, ProfileHttpFailureKind, ProviderValues,
     RequestedDetailFields, RequestedFieldDisposition, RuntimeCancellation, RuntimeExecutionContext,
     ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceBehaviorDetailExecution,
-    SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome, SourceDetailRequest,
-    SourceDetailRequestSnapshot, SourceDocument, SourceProfileDocument,
+    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceBehavior,
+    SourceBehaviorDetailExecution, SourceDetailExecution, SourceDetailFailure, SourceDetailOutcome,
+    SourceDetailRequest, SourceDetailRequestSnapshot, SourceProfileDocument,
 };
 
 #[test]
@@ -736,12 +736,10 @@ fn fixture_profile_value(strategies: Vec<Value>, policy: Value) -> Value {
     })
 }
 
-fn fixture_source() -> SourceDocument {
+fn fixture_source() -> SourceBehavior {
     serde_json::from_value(json!({
-        "schemaVersion": 3,
         "key": "fixture_source",
         "name": "Fixture source",
-        "status": "active",
         "sourceConfig": { "feedUrl": "https://example.test/feed" },
         "selectedAccessPath": {
             "type": "profile_access_path",

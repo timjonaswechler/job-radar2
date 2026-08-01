@@ -3,7 +3,7 @@ use source_profile_dsl::test_support::{
     PhaseBrowser, PhaseCancelled, PhaseExecutionFailure, PhaseExecutionReport, PhaseOutcome,
     PhasePreStartFailure, PhaseRunError, PhaseRunResult, PolicyOutcome, PolicyUnsatisfiedCause,
     PostingOccurrence, ProfileCompilerInput, ProfileHttpClient, RequestedDetailFields,
-    RuntimeExecutionContext, SourceDocument, SourceExecutionPlan, SourceProfileDocument,
+    RuntimeExecutionContext, SourceBehavior, SourceExecutionPlan, SourceProfileDocument,
 };
 
 #[derive(Default)]
@@ -297,7 +297,7 @@ where
 }
 
 pub fn compile_test_source(
-    source: &SourceDocument,
+    source: &SourceBehavior,
     profile: Option<SourceProfileDocument>,
 ) -> CompileSourceOutcome {
     let profiles = profile.into_iter().collect::<Vec<_>>();

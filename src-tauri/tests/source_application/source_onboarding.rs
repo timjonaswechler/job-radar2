@@ -2,20 +2,21 @@ use std::{fs, future::Future, path::Path, sync::Arc};
 
 use crate::job_radar_lib::{
     CheckReport, CheckReportFreshnessState, CheckReportKind, CheckReportResult,
-    CheckReportStaleReason, CheckReportSubjectType, CreateSourceDraft, DetectSource,
-    DetectionRunStatus, DiagnosticCategory, DiagnosticSeverity, OperationContext,
-    ProfileHttpRequest, ReviseSourceDefinition, RuntimeCancellation, SavedSource,
-    ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, SourceChange, SourceDocument, SourceLiveCheckOutcome,
-    SourceLiveCheckReportState, SourceLiveCheckRequest, SourceOnboarding, SourceOnboardingError,
-    SourceOnboardingErrorKind, SourceStatus, SOURCE_LIVE_CHECK_LOGIC_VERSION,
+    CheckReportStaleReason, CheckReportSubjectType, DetectSource, DetectionRunStatus,
+    DiagnosticCategory, DiagnosticSeverity, InstalledSourceStore, OperationContext,
+    ProfileHttpRequest, Revision, RuntimeCancellation, ScriptedBrowserAcquisition,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient, SourceDocument,
+    SourceLiveCheckOutcome, SourceLiveCheckReportState, SourceLiveCheckRequest, SourceOnboarding,
+    SourceOnboardingError, SourceOnboardingErrorKind, SourceStatus, SourceView,
+    SOURCE_LIVE_CHECK_LOGIC_VERSION,
 };
 use serde_json::json;
 
 const SIMPLE_PROFILE: &str =
     include_str!("../fixtures/source-behavior/valid/simple-source-profile.json");
-const SIMPLE_SOURCE: &str =
-    include_str!("../fixtures/source-behavior/valid/source-selecting-access-path.json");
+const SIMPLE_SOURCE: &str = include_str!(
+    "../../crates/sources/tests/fixtures/sources/valid/source-selecting-access-path.json"
+);
 
 fn write_profile(app_data_dir: &Path, profile: &serde_json::Value) {
     let profile_dir = app_data_dir.join("source-profiles");
@@ -84,7 +85,7 @@ fn run_checked(
     app_data_dir: impl AsRef<Path>,
     key: &str,
     client: Arc<ScriptedProfileHttpClient>,
-) -> Result<(CheckReport, SavedSource), SourceOnboardingError> {
+) -> Result<(CheckReport, SourceView), SourceOnboardingError> {
     match block_on(onboarding(app_data_dir, client).live_check(
         SourceLiveCheckRequest::Run {
             source_key: key.to_string(),
@@ -574,22 +575,17 @@ fn source_live_check_report_status_excludes_source_name_metadata() {
     let mut source = simple_source_with_status("draft");
     source["name"] = json!("Renamed Example Source");
     let document: SourceDocument = serde_json::from_value(source).unwrap();
-    let revised = block_on(
-        onboarding(
-            temp_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .change(SourceChange::ReviseDefinition(ReviseSourceDefinition {
+    let revised = InstalledSourceStore::new(temp_dir.path())
+        .revise(Revision {
             key: document.key,
             name: document.name,
             source_config: document.source_config,
             selected_access_path: document.selected_access_path,
             access_paths: document.access_paths,
             source_support: document.source_support,
-        })),
-    )
-    .unwrap();
-    assert_eq!(revised.source.document.status, SourceStatus::Draft);
+        })
+        .unwrap();
+    assert_eq!(revised.document.status, SourceStatus::Draft);
 
     let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
@@ -636,22 +632,17 @@ fn source_live_check_report_status_marks_changed_source_config_and_direct_specia
     source["sourceConfig"]["language"] = json!("de");
     source["accessPaths"][0]["discovery"]["strategies"][0]["acceptWhen"]["minResults"] = json!(2);
     let document: SourceDocument = serde_json::from_value(source).unwrap();
-    let revised = block_on(
-        onboarding(
-            temp_dir.path(),
-            Arc::new(ScriptedProfileHttpClient::new([])),
-        )
-        .change(SourceChange::ReviseDefinition(ReviseSourceDefinition {
+    let revised = InstalledSourceStore::new(temp_dir.path())
+        .revise(Revision {
             key: document.key,
             name: document.name,
             source_config: document.source_config,
             selected_access_path: document.selected_access_path,
             access_paths: document.access_paths,
             source_support: document.source_support,
-        })),
-    )
-    .unwrap();
-    assert_eq!(revised.source.document.status, SourceStatus::Draft);
+        })
+        .unwrap();
+    assert_eq!(revised.document.status, SourceStatus::Draft);
 
     let status = latest_status(temp_dir.path(), "example_source").unwrap();
 
@@ -1177,77 +1168,6 @@ impl FakeLiveCheckFetcher {
     }
 }
 
-fn authored_draft() -> CreateSourceDraft {
-    let document: SourceDocument = serde_json::from_str(SIMPLE_SOURCE).unwrap();
-    CreateSourceDraft {
-        key: document.key,
-        name: document.name,
-        source_config: document.source_config,
-        selected_access_path: document.selected_access_path,
-        access_paths: document.access_paths,
-        source_support: document.source_support,
-    }
-}
-
-#[test]
-fn source_onboarding_creation_is_draft_only_and_revision_preserves_status() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    write_profile(temp_dir.path(), &simple_profile_without_pagination());
-    let onboarding = onboarding(
-        temp_dir.path(),
-        Arc::new(ScriptedProfileHttpClient::new([])),
-    );
-
-    let created = block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
-    assert_eq!(created.source.document.status, SourceStatus::Draft);
-    let saved_view = serde_json::to_value(&created.source).unwrap();
-    assert!(saved_view.get("path").is_none());
-    assert!(saved_view.get("compileOutcome").is_none());
-    assert!(saved_view.get("effectiveProfile").is_none());
-
-    let disabled = block_on(onboarding.change(SourceChange::SetInactive {
-        source_key: "example_source".to_string(),
-        status: crate::job_radar_lib::InactiveSourceStatus::Disabled,
-    }))
-    .unwrap();
-    assert_eq!(disabled.source.document.status, SourceStatus::Disabled);
-
-    let document = disabled.source.document;
-    let revised = block_on(onboarding.change(SourceChange::ReviseDefinition(
-        ReviseSourceDefinition {
-            key: document.key,
-            name: "Revised name".to_string(),
-            source_config: document.source_config,
-            selected_access_path: document.selected_access_path,
-            access_paths: document.access_paths,
-            source_support: document.source_support,
-        },
-    )))
-    .unwrap();
-    assert_eq!(revised.source.document.status, SourceStatus::Disabled);
-    assert_eq!(revised.source.document.name, "Revised name");
-}
-
-#[test]
-fn source_onboarding_rejects_duplicate_and_invalid_keys_with_typed_errors() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    write_profile(temp_dir.path(), &simple_profile_without_pagination());
-    let onboarding = onboarding(
-        temp_dir.path(),
-        Arc::new(ScriptedProfileHttpClient::new([])),
-    );
-    block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
-
-    let duplicate =
-        block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap_err();
-    assert_eq!(duplicate.kind, SourceOnboardingErrorKind::Duplicate);
-
-    let mut invalid = authored_draft();
-    invalid.key = "../outside".to_string();
-    let invalid = block_on(onboarding.change(SourceChange::CreateDraft(invalid))).unwrap_err();
-    assert_eq!(invalid.kind, SourceOnboardingErrorKind::InvalidKey);
-}
-
 #[test]
 fn source_onboarding_detection_has_no_persistent_source_side_effect() {
     let temp_dir = tempfile::tempdir().unwrap();
@@ -1466,49 +1386,6 @@ fn source_onboarding_check_and_activate_returns_the_persisted_report_fingerprint
 }
 
 #[test]
-fn source_onboarding_authors_profile_selected_source_owned_and_compile_invalid_drafts() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    write_profile(temp_dir.path(), &simple_profile_without_pagination());
-    let onboarding = onboarding(
-        temp_dir.path(),
-        Arc::new(ScriptedProfileHttpClient::new([])),
-    );
-
-    let profile_selected =
-        block_on(onboarding.change(SourceChange::CreateDraft(authored_draft()))).unwrap();
-    assert_eq!(profile_selected.source.document.status, SourceStatus::Draft);
-
-    let source_owned_document: SourceDocument = serde_json::from_str(include_str!(
-        "../fixtures/source-behavior/valid/source-owned-access-path.json"
-    ))
-    .unwrap();
-    let source_owned = CreateSourceDraft {
-        key: source_owned_document.key,
-        name: source_owned_document.name,
-        source_config: source_owned_document.source_config,
-        selected_access_path: source_owned_document.selected_access_path,
-        access_paths: source_owned_document.access_paths,
-        source_support: source_owned_document.source_support,
-    };
-    let source_owned =
-        block_on(onboarding.change(SourceChange::CreateDraft(source_owned))).unwrap();
-    assert_eq!(source_owned.source.document.status, SourceStatus::Draft);
-
-    let mut invalid = authored_draft();
-    invalid.key = "compile_invalid".to_string();
-    invalid.selected_access_path = crate::job_radar_lib::SelectedAccessPath::ProfileAccessPath {
-        profile_key: "missing_profile".to_string(),
-        path_key: "missing_path".to_string(),
-    };
-    let invalid = block_on(onboarding.change(SourceChange::CreateDraft(invalid))).unwrap();
-    assert_eq!(
-        invalid.source.validation_state.state,
-        crate::job_radar_lib::ValidationStateKind::Invalid
-    );
-    assert!(!invalid.source.validation_state.diagnostics.is_empty());
-}
-
-#[test]
 fn source_onboarding_report_storage_failure_cannot_leave_source_active() {
     let temp_dir = tempfile::tempdir().unwrap();
     write_profile(temp_dir.path(), &simple_profile_without_pagination());
@@ -1546,16 +1423,86 @@ fn source_onboarding_report_storage_failure_cannot_leave_source_active() {
 
     assert_eq!(error.kind, SourceOnboardingErrorKind::Storage);
     let document: SourceDocument = serde_json::from_str(SIMPLE_SOURCE).unwrap();
-    let revised = block_on(onboarding.change(SourceChange::ReviseDefinition(
-        ReviseSourceDefinition {
+    let revised = InstalledSourceStore::new(temp_dir.path())
+        .revise(Revision {
             key: document.key,
             name: document.name,
             source_config: document.source_config,
             selected_access_path: document.selected_access_path,
             access_paths: document.access_paths,
             source_support: document.source_support,
+        })
+        .unwrap();
+    assert_eq!(revised.document.status, SourceStatus::Draft);
+}
+
+#[test]
+fn live_check_releases_source_coordination_and_rejects_admission_after_concurrent_revision() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    write_profile(temp_dir.path(), &simple_profile_without_pagination());
+    write_source(temp_dir.path(), &simple_source_with_status("draft"));
+    let store = InstalledSourceStore::new(temp_dir.path());
+    let client = Arc::new(ScriptedProfileHttpClient::new([
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "https://example.test/jobs.json".to_string(),
+            headers: Vec::new(),
+            body: vec![
+                ScriptedHttpBodyEvent::Gate("live-check".to_string()),
+                ScriptedHttpBodyEvent::Chunk(json!({"jobs":[{"id":"job-1","title":"Rust Engineer","company":"ACME","url":"https://example.test/jobs/job-1"}]}).to_string().into_bytes()),
+            ],
+            content_length: None,
         },
-    )))
-    .unwrap();
-    assert_eq!(revised.source.document.status, SourceStatus::Draft);
+        ScriptedHttpEvent::Response {
+            status: 200,
+            final_url: "job-1".to_string(),
+            headers: Vec::new(),
+            body: vec![ScriptedHttpBodyEvent::Chunk(json!({"descriptionHtml":"<p>This description is sufficiently long for admission.</p>"}).to_string().into_bytes())],
+            content_length: None,
+        },
+    ]));
+    let application = SourceOnboarding::new(
+        temp_dir.path(),
+        client.clone(),
+        Arc::new(ScriptedBrowserAcquisition::new([])),
+    );
+    let run = std::thread::spawn(move || {
+        block_on(application.live_check(
+            SourceLiveCheckRequest::CheckAndActivate {
+                source_key: "example_source".to_string(),
+            },
+            OperationContext::default(),
+        ))
+    });
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !client.gate_is_waiting("live-check") && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(client.gate_is_waiting("live-check"));
+    let document: SourceDocument = serde_json::from_str(SIMPLE_SOURCE).unwrap();
+    store
+        .revise(Revision {
+            key: document.key,
+            name: "Concurrent revision".to_string(),
+            source_config: document.source_config,
+            selected_access_path: document.selected_access_path,
+            access_paths: document.access_paths,
+            source_support: document.source_support,
+        })
+        .unwrap();
+    assert!(client.release_gate("live-check"));
+
+    let error = run.join().unwrap().unwrap_err();
+    assert_eq!(error.kind, SourceOnboardingErrorKind::GenerationMismatch);
+    assert_eq!(
+        store
+            .snapshot()
+            .unwrap()
+            .source("example_source")
+            .unwrap()
+            .document()
+            .status,
+        SourceStatus::Draft
+    );
 }

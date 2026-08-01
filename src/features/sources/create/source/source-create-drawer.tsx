@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
 import { DiscardSourceChangesDialog } from "@/features/sources/source-form/discard-source-changes-dialog";
 import { DirectSourceSpecializationEditor } from "@/features/sources/source-form/direct-source-specialization-editor";
-import type { RegistrySource, InstalledProfileWithDefinition } from "@/lib/api/sources";
+import type { InstalledSource, InstalledProfileWithDefinition } from "@/lib/api/sources";
 
 import {
   SourceAccessPathFields,
@@ -31,7 +31,7 @@ type SourceCreateDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profiles: InstalledProfileWithDefinition[];
-  sources: RegistrySource[];
+  sources: InstalledSource[];
   onCreated?: () => Promise<unknown> | unknown;
 };
 

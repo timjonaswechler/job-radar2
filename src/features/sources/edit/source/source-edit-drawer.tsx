@@ -27,12 +27,12 @@ import { SourceNameField } from "@/features/sources/source-form/source-form-fiel
 import { SourceConfigEditor } from "@/features/sources/source-form/source-config/source-config-editor";
 import { DiscardSourceChangesDialog } from "@/features/sources/source-form/discard-source-changes-dialog";
 import { DirectSourceSpecializationEditor } from "@/features/sources/source-form/direct-source-specialization-editor";
-import type { RegistrySource, InstalledProfileWithDefinition } from "@/lib/api/sources";
+import type { InstalledSource, InstalledProfileWithDefinition } from "@/lib/api/sources";
 
 import { useSourceEdit } from "./use-source-edit";
 
 type SourceEditDrawerProps = {
-  source: RegistrySource | null;
+  source: InstalledSource | null;
   profilesByKey: Map<string, InstalledProfileWithDefinition>;
   open: boolean;
   onOpenChange: (open: boolean) => void;

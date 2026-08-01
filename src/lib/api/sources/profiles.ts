@@ -379,12 +379,6 @@ export type SourceValidationState = {
   diagnostics?: Diagnostics
 }
 
-export type SavedSource = {
-  origin: SourceRegistryDocumentOrigin
-  document: SourceDocument
-  validationState: SourceValidationState
-}
-
 export type ProfileDefinition = Omit<
   SourceProfileDocument,
   "schemaVersion" | "diagnostics"

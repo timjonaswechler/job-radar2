@@ -7,13 +7,13 @@ import {
   sourceEditDraftSnapshot,
 } from "@/features/sources/edit/source/source-edit-model";
 import { sourceConfigSchemaMetadata } from "@/features/sources/shared/source-config-schema";
-import type { RegistrySource } from "@/lib/api/sources";
+import type { InstalledSource } from "@/lib/api/sources";
 import { test } from "vitest";
 
 test("source edit contract", async () => {
-  const source: RegistrySource = {
+  const source: InstalledSource = {
     origin: "custom",
-    path: "sources/acme.json",
+    fileName: "acme.json",
     document: {
       schemaVersion: 3,
       key: "acme",

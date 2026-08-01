@@ -42,11 +42,11 @@ fn compiled_discovery_rejects_template_transform_pipes() {
         }]
     }))
     .unwrap();
-    let source: SourceDocument = serde_json::from_value(json!({
-        "schemaVersion": 3,
+    let source: SourceBehavior = serde_json::from_value(json!({
+
         "key": "example_source",
         "name": "Example Source",
-        "status": "active",
+
         "sourceConfig": { "feedUrl": "https://example.test/jobs.json" },
         "selectedAccessPath": {
             "type": "profile_access_path",

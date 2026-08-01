@@ -1,3 +1,5 @@
+use source_profile_dsl::definition::SourceBehavior;
+
 use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::job_radar_lib::{
@@ -18,7 +20,7 @@ fn profile_success_prepares_the_closed_order_and_optional_runtime_binding() {
     let mut source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
     source.name = "Fingerprint source".to_string();
     let registry = registry_with_profile(profile.clone());
-    let outcome = compile_source(&source, &registry);
+    let outcome = compile_source(&source_behavior(&source), &registry);
 
     let CompileSourceOutcome::Compiled {
         source: compiled, ..
@@ -164,7 +166,10 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
         .discovery
         .strategies
         .clear();
-    let rejected = compile_source(&source, &registry_with_profile(rejected_profile.clone()));
+    let rejected = compile_source(
+        &source_behavior(&source),
+        &registry_with_profile(rejected_profile.clone()),
+    );
     assert!(matches!(rejected, CompileSourceOutcome::Rejected { .. }));
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&source, Some(&rejected_profile), &rejected).unwrap(),
@@ -174,7 +179,10 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
             "selected_access_path",
         ],
     );
-    let rejected_direct = compile_source(&direct, &registry_with_profile(rejected_profile.clone()));
+    let rejected_direct = compile_source(
+        &source_behavior(&direct),
+        &registry_with_profile(rejected_profile.clone()),
+    );
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&direct, Some(&rejected_profile), &rejected_direct)
             .unwrap(),
@@ -186,12 +194,12 @@ fn all_success_and_rejection_branches_have_the_authoritative_counts() {
         ],
     );
 
-    let unresolved = compile_source(&source, &TestProfiles::default());
+    let unresolved = compile_source(&source_behavior(&source), &TestProfiles::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&source, None, &unresolved).unwrap(),
         &["source_config", "selected_access_path"],
     );
-    let unresolved_direct = compile_source(&direct, &TestProfiles::default());
+    let unresolved_direct = compile_source(&source_behavior(&direct), &TestProfiles::default());
     assert_behavior_order(
         &prepare_source_behavior_fingerprints(&direct, None, &unresolved_direct).unwrap(),
         &[
@@ -320,7 +328,10 @@ fn source_name_is_hashed_only_when_the_compiler_emits_its_binding() {
 fn preparation_rejects_a_compile_outcome_for_different_source_material() {
     let profile: SourceProfileDocument = read_fixture("valid/simple-source-profile.json");
     let source: SourceDocument = read_fixture("valid/source-selecting-access-path.json");
-    let outcome = compile_source(&source, &registry_with_profile(profile.clone()));
+    let outcome = compile_source(
+        &source_behavior(&source),
+        &registry_with_profile(profile.clone()),
+    );
     let mut different = source.clone();
     different.name = "secret source name".into();
     let error = prepare_source_behavior_fingerprints(&different, Some(&profile), &outcome)
@@ -373,7 +384,7 @@ fn rejected_source_owned_preparation_contains_no_compiled_only_rows() {
         panic!("fixture uses Source-owned access")
     };
     discovery.strategies.clear();
-    let outcome = compile_source(&source, &TestProfiles::default());
+    let outcome = compile_source(&source_behavior(&source), &TestProfiles::default());
     assert!(matches!(outcome, CompileSourceOutcome::Rejected { .. }));
 
     let fingerprints = prepare_source_behavior_fingerprints(&source, None, &outcome).unwrap();
@@ -394,12 +405,26 @@ fn prepare_profile(
     source: &SourceDocument,
     profile: &SourceProfileDocument,
 ) -> Vec<crate::job_radar_lib::CheckFingerprint> {
-    let outcome = compile_source(source, &registry_with_profile(profile.clone()));
+    let outcome = compile_source(
+        &source_behavior(&source),
+        &registry_with_profile(profile.clone()),
+    );
     prepare_source_behavior_fingerprints(source, Some(profile), &outcome).unwrap()
 }
 
+fn source_behavior(source: &SourceDocument) -> SourceBehavior {
+    SourceBehavior {
+        key: source.key.clone(),
+        name: source.name.clone(),
+        source_config: source.source_config.clone(),
+        selected_access_path: source.selected_access_path.clone(),
+        access_paths: source.access_paths.clone(),
+        source_support: source.source_support.clone(),
+    }
+}
+
 fn prepare_owned(source: &SourceDocument) -> Vec<crate::job_radar_lib::CheckFingerprint> {
-    let outcome = compile_source(source, &TestProfiles::default());
+    let outcome = compile_source(&source_behavior(&source), &TestProfiles::default());
     prepare_source_behavior_fingerprints(source, None, &outcome).unwrap()
 }
 
@@ -487,8 +512,14 @@ fn registry_with_profile(profile: SourceProfileDocument) -> TestProfiles {
 }
 
 fn read_fixture<T: serde::de::DeserializeOwned>(relative: &str) -> T {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/source-behavior")
-        .join(relative);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let path = if relative.ends_with("source-selecting-access-path.json")
+        || relative.ends_with("source-owned-access-path.json")
+    {
+        root.join("crates/sources/tests/fixtures/sources")
+            .join(relative)
+    } else {
+        root.join("tests/fixtures/source-behavior").join(relative)
+    };
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
