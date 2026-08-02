@@ -55,7 +55,7 @@ for root in (
     "src-tauri/crates/search-resolution",
     "src-tauri/crates/search-requests",
     "src-tauri/crates/sources",
-    "src/lib/api/sources",
+    "src/lib/api",
 ):
     for directory, _, files in os.walk(root):
         for name in files:
@@ -108,7 +108,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-engine/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='373ae26eb5c268298338b78c6775817c6dfff0d9b45615e0f3bdf56a19c4274e'
+FROZEN_MANIFEST_SHA256='1f2145b0ea44a178c4e1ee2f3bf4ebb2ed7466fc5d087a78683ec0aecb01b98e'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

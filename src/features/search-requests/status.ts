@@ -1,5 +1,6 @@
 import type { BadgeProps } from "@/components/reui/badge";
-import type { SearchRequestStatus, SearchRunStatus } from "@/lib/api/search-requests";
+import type { SearchRequestStatus } from "@/lib/api/search-requests";
+import type { SearchRunStatus } from "@/lib/api/search-runs";
 
 export const searchRequestStatusLabels: Record<SearchRequestStatus, string> = {
   draft: "Entwurf",

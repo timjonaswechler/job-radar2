@@ -574,6 +574,73 @@ pub async fn set_source_inactive(
         .expect("installed Source lifecycle task must run to completion")
 }
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SearchRequestErrorKind {
+    InvalidInput,
+    NotFound,
+    Busy,
+    CorruptStoredRow,
+    StorageUnavailable,
+    InternalInvariant,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRequestCommandError {
+    kind: SearchRequestErrorKind,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<i64>,
+}
+
+impl SearchRequestCommandError {
+    fn invalid_input(message: impl Into<String>) -> Self {
+        Self {
+            kind: SearchRequestErrorKind::InvalidInput,
+            message: message.into(),
+            id: None,
+        }
+    }
+
+    fn storage_unavailable(message: impl Into<String>) -> Self {
+        Self {
+            kind: SearchRequestErrorKind::StorageUnavailable,
+            message: message.into(),
+            id: None,
+        }
+    }
+}
+
+impl From<search_requests::Error> for SearchRequestCommandError {
+    fn from(error: search_requests::Error) -> Self {
+        let (kind, id) = match &error {
+            search_requests::Error::InvalidInput { .. } => {
+                (SearchRequestErrorKind::InvalidInput, None)
+            }
+            search_requests::Error::NotFound { id } => {
+                (SearchRequestErrorKind::NotFound, Some(id.get()))
+            }
+            search_requests::Error::Busy { id } => (SearchRequestErrorKind::Busy, Some(id.get())),
+            search_requests::Error::CorruptStoredRow { id, .. } => (
+                SearchRequestErrorKind::CorruptStoredRow,
+                id.map(search_requests::Id::get),
+            ),
+            search_requests::Error::StorageUnavailable { .. } => {
+                (SearchRequestErrorKind::StorageUnavailable, None)
+            }
+            search_requests::Error::InternalInvariant { .. } => {
+                (SearchRequestErrorKind::InternalInvariant, None)
+            }
+        };
+        Self {
+            kind,
+            message: error.to_string(),
+            id,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRequestInput {
@@ -683,12 +750,15 @@ fn search_request_views(
 pub async fn create_search_request(
     state: State<'_, AppState>,
     input: SearchRequestInput,
-) -> Result<SearchRequestView, String> {
+) -> Result<SearchRequestView, SearchRequestCommandError> {
+    let input = input
+        .try_into()
+        .map_err(SearchRequestCommandError::invalid_input)?;
     let record = state
         .search_requests
-        .create(input.try_into()?)
+        .create(input)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(SearchRequestCommandError::from)?;
     Ok(search_request_view(
         record,
         crate::search::run::LatestSummary::default(),
@@ -698,14 +768,16 @@ pub async fn create_search_request(
 #[tauri::command]
 pub async fn list_search_requests(
     state: State<'_, AppState>,
-) -> Result<Vec<SearchRequestView>, String> {
+) -> Result<Vec<SearchRequestView>, SearchRequestCommandError> {
     let records = state
         .search_requests
         .list()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(SearchRequestCommandError::from)?;
     let ids = records.iter().map(|record| record.id).collect::<Vec<_>>();
-    let latest = crate::search::run::latest_summaries(&state.db, &ids).await?;
+    let latest = crate::search::run::latest_summaries(&state.db, &ids)
+        .await
+        .map_err(SearchRequestCommandError::storage_unavailable)?;
     Ok(search_request_views(records, latest))
 }
 
@@ -713,17 +785,17 @@ pub async fn list_search_requests(
 pub async fn get_search_request(
     state: State<'_, AppState>,
     id: i64,
-) -> Result<SearchRequestView, String> {
-    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+) -> Result<SearchRequestView, SearchRequestCommandError> {
+    let id = search_requests::Id::new(id).map_err(SearchRequestCommandError::from)?;
     let record = state
         .search_requests
         .get(id)
         .await
-        .map_err(|error| error.to_string())?;
-    Ok(search_request_view(
-        record,
-        crate::search::run::latest_summary(&state.db, id).await?,
-    ))
+        .map_err(SearchRequestCommandError::from)?;
+    let latest = crate::search::run::latest_summary(&state.db, id)
+        .await
+        .map_err(SearchRequestCommandError::storage_unavailable)?;
+    Ok(search_request_view(record, latest))
 }
 
 #[tauri::command]
@@ -731,27 +803,33 @@ pub async fn update_search_request(
     state: State<'_, AppState>,
     id: i64,
     input: SearchRequestInput,
-) -> Result<SearchRequestView, String> {
-    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+) -> Result<SearchRequestView, SearchRequestCommandError> {
+    let id = search_requests::Id::new(id).map_err(SearchRequestCommandError::from)?;
+    let input = input
+        .try_into()
+        .map_err(SearchRequestCommandError::invalid_input)?;
     let record = state
         .search_requests
-        .update(id, input.try_into()?)
+        .update(id, input)
         .await
-        .map_err(|error| error.to_string())?;
-    Ok(search_request_view(
-        record,
-        crate::search::run::latest_summary(&state.db, id).await?,
-    ))
+        .map_err(SearchRequestCommandError::from)?;
+    let latest = crate::search::run::latest_summary(&state.db, id)
+        .await
+        .map_err(SearchRequestCommandError::storage_unavailable)?;
+    Ok(search_request_view(record, latest))
 }
 
 #[tauri::command]
-pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+pub async fn delete_search_request(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), SearchRequestCommandError> {
+    let id = search_requests::Id::new(id).map_err(SearchRequestCommandError::from)?;
     state
         .search_requests
         .delete(id)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(SearchRequestCommandError::from)
 }
 
 #[tauri::command]
@@ -1152,6 +1230,19 @@ mod tests {
             assert!(validate_base_font_size(MIN_BASE_FONT_SIZE_PX - 1).is_err());
             assert!(validate_base_font_size(MAX_BASE_FONT_SIZE_PX + 1).is_err());
         });
+    }
+
+    #[test]
+    fn search_request_command_errors_preserve_catalog_distinctions() {
+        let id = search_requests::Id::new(7).unwrap();
+        let value = serde_json::to_value(SearchRequestCommandError::from(
+            search_requests::Error::NotFound { id },
+        ))
+        .unwrap();
+
+        assert_eq!(value["kind"], "not_found");
+        assert_eq!(value["message"], "search request 7 not found");
+        assert_eq!(value["id"], 7);
     }
 
     #[test]

@@ -2,7 +2,7 @@ import { AlertCircleIcon } from "lucide-react";
 
 import { Badge, type BadgeProps } from "@/components/reui/badge";
 import { diagnosticSeverityBadgeVariants } from "@/features/search-requests/components/diagnostic-severity-badges";
-import type { SourceRunResult, SourceRunStatus } from "@/lib/api/search-requests";
+import type { SourceRunResult, SourceRunStatus } from "@/lib/api/search-runs";
 import type { StructuredDiagnostic } from "@/lib/api/sources";
 
 const sourceRunStatusLabels: Record<SourceRunStatus, string> = {

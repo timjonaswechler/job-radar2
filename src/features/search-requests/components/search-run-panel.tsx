@@ -16,7 +16,11 @@ import { SourceRunSummary } from "@/features/search-requests/components/source-r
 import type { SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
 import { createSearchRunDiagnosticViewModels } from "@/features/search-requests/model/search-run-diagnostics";
 import { searchRunStatusBadgeVariants, searchRunStatusLabels } from "@/features/search-requests/status";
-import type { BackgroundTaskSnapshot, SearchRunResult } from "@/lib/api/search-requests";
+import {
+  isInFlightBackgroundTask,
+  type BackgroundTaskSnapshot,
+} from "@/lib/api/background-tasks";
+import type { SearchRunResult } from "@/lib/api/search-runs";
 
 const backgroundTaskStateLabels: Record<BackgroundTaskSnapshot["state"], string> = {
   queued: "Wartet",
@@ -259,8 +263,4 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function isInFlightBackgroundTask(task: BackgroundTaskSnapshot | null) {
-  return task?.state === "queued" || task?.state === "running" || task?.state === "cancelling";
 }

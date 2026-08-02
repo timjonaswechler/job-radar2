@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for the #318 installed Profile Detection ownership migration.
+# Frozen primitive-residue classification. Updated for the #324 frontend transport ownership split.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -942,12 +942,14 @@ src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_
 src/lib/api/agent-chat.ts:23:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/agent-chat.ts:75:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/job-postings.ts:11:5:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:105:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:106:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:15:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:199:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:315:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:315:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.test.ts:160:45:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport fixture reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.test.ts:28:47:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport fixture reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:18:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:227:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-runs.ts:194:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-runs.ts:194:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-runs.ts:63:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-runs.ts:64:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/sources/detection.test.ts:70:35:retry:retry	explicit_negative_or_contract_test	Profile Detection transport negative test rejects non-contract completion values.
 src/lib/api/sources/detection.ts:203:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.
 src/lib/api/sources/detection.ts:203:56:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.

@@ -14,19 +14,25 @@ import { SearchRequestsTable } from "@/features/search-requests/components/searc
 import { createSearchRequestRows, type SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
 import {
   cancelBackgroundTask,
+  getBackgroundTask,
+  isInFlightBackgroundTask,
+  isTerminalBackgroundTask,
+  type BackgroundTaskSnapshot,
+} from "@/lib/api/background-tasks";
+import {
   createSearchRequest,
   deleteSearchRequest,
-  getBackgroundTask,
   listSearchRequests,
-  parseSearchRunResult,
-  runSearchRequest,
   updateSearchRequest,
-  type BackgroundTaskSnapshot,
   type CreateSearchRequestInput,
   type SearchRequest,
-  type SearchRunResult,
   type UpdateSearchRequestInput,
 } from "@/lib/api/search-requests";
+import {
+  parseSearchRunResult,
+  runSearchRequest,
+  type SearchRunResult,
+} from "@/lib/api/search-runs";
 import { getAppPreferences, type AppPreferences } from "@/lib/api/app-preferences";
 import {
   getSourceInventory,
@@ -347,13 +353,6 @@ function SearchRequestsSkeleton() {
   );
 }
 
-function isInFlightBackgroundTask(task: BackgroundTaskSnapshot | null) {
-  return task?.state === "queued" || task?.state === "running" || task?.state === "cancelling";
-}
-
-function isTerminalBackgroundTask(task: BackgroundTaskSnapshot) {
-  return task.state === "succeeded" || task.state === "failed" || task.state === "cancelled";
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
