@@ -2,15 +2,14 @@ use search_resolution::{
     merge_unique_locations, same_job_posting, FinalizedCandidate, PostingComparison,
 };
 
-use super::super::{NormalizedPosting, PostingSource};
+use super::super::{MergedPosting, MergedPostingSource};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FinalizedMergeInput {
     title: String,
     company: String,
-    url: String,
     locations: Vec<String>,
-    source: PostingSource,
+    source: MergedPostingSource,
 }
 
 /// Sole productive conversion from Q01's committed final value into merger input.
@@ -21,9 +20,8 @@ pub(super) fn finalized_merge_input(
     FinalizedMergeInput {
         title: candidate.title().to_string(),
         company: candidate.company().to_string(),
-        url: candidate.url().to_string(),
         locations: candidate.locations().to_vec(),
-        source: PostingSource {
+        source: MergedPostingSource {
             source_key: candidate.source_key().to_string(),
             source_name: source_name.to_string(),
             url: candidate.url().to_string(),
@@ -31,8 +29,8 @@ pub(super) fn finalized_merge_input(
     }
 }
 
-pub(super) fn merge_postings(inputs: Vec<FinalizedMergeInput>) -> Vec<NormalizedPosting> {
-    let mut postings = Vec::<NormalizedPosting>::new();
+pub(super) fn merge_postings(inputs: Vec<FinalizedMergeInput>) -> Vec<MergedPosting> {
+    let mut postings = Vec::<MergedPosting>::new();
     for input in inputs {
         if let Some(existing) = postings
             .iter_mut()
@@ -40,10 +38,9 @@ pub(super) fn merge_postings(inputs: Vec<FinalizedMergeInput>) -> Vec<Normalized
         {
             merge_into_posting(existing, input);
         } else {
-            postings.push(NormalizedPosting {
+            postings.push(MergedPosting {
                 title: input.title,
                 company: input.company,
-                url: input.url,
                 locations: input.locations,
                 sources: vec![input.source],
             });
@@ -52,7 +49,7 @@ pub(super) fn merge_postings(inputs: Vec<FinalizedMergeInput>) -> Vec<Normalized
     postings
 }
 
-fn can_merge(posting: &NormalizedPosting, input: &FinalizedMergeInput) -> bool {
+fn can_merge(posting: &MergedPosting, input: &FinalizedMergeInput) -> bool {
     same_job_posting(
         PostingComparison {
             title: &posting.title,
@@ -67,7 +64,7 @@ fn can_merge(posting: &NormalizedPosting, input: &FinalizedMergeInput) -> bool {
     )
 }
 
-fn merge_into_posting(posting: &mut NormalizedPosting, input: FinalizedMergeInput) {
+fn merge_into_posting(posting: &mut MergedPosting, input: FinalizedMergeInput) {
     posting.locations =
         merge_unique_locations(std::mem::take(&mut posting.locations), &input.locations);
     if !posting.sources.iter().any(|existing| {

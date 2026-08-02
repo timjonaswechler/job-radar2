@@ -29,9 +29,9 @@ import {
   type UpdateSearchRequestInput,
 } from "@/lib/api/search-requests";
 import {
-  parseSearchRunResult,
+  parseSearchRunOutcome,
   runSearchRequest,
-  type SearchRunResult,
+  type SearchRunOutcome,
 } from "@/lib/api/search-runs";
 import { getAppPreferences, type AppPreferences } from "@/lib/api/app-preferences";
 import {
@@ -59,7 +59,7 @@ export function SearchRequests() {
   const [activeRunRow, setActiveRunRow] = useState<SearchRequestTableRow | null>(null);
   const [runStarting, setRunStarting] = useState(false);
   const [runTask, setRunTask] = useState<BackgroundTaskSnapshot | null>(null);
-  const [runResult, setRunResult] = useState<SearchRunResult | null>(null);
+  const [runResult, setRunResult] = useState<SearchRunOutcome | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [runCancelling, setRunCancelling] = useState(false);
 
@@ -100,7 +100,7 @@ export function SearchRequests() {
 
   const handleTerminalSnapshot = useCallback(
     async (snapshot: BackgroundTaskSnapshot) => {
-      const result = parseSearchRunResult(snapshot.result);
+      const result = parseSearchRunOutcome(snapshot.result);
       setRunCancelling(false);
       setRunResult(result);
 

@@ -65,15 +65,21 @@ fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
                 .map_or(0, |r| r.counts.finalized as usize),
             1
         );
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].sources[0].source_key, source_keys[0]);
+        assert_eq!(result.matched_posting_count, 1);
+        assert_eq!(
+            sqlx::query_scalar::<_, String>(
+                "SELECT source_key FROM job_posting_sources ORDER BY id LIMIT 1"
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            source_keys[0]
+        );
 
         let result_json: Value =
             serde_json::from_str(&std::fs::read_to_string(result_path).unwrap()).unwrap();
         assert!(result_json["sourceRuns"][0].get("sourceId").is_none());
-        assert!(result_json["postings"][0]["sources"][0]
-            .get("sourceId")
-            .is_none());
+        assert!(result_json.get("postings").is_none());
     });
 }
 
@@ -136,7 +142,7 @@ fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
             .iter()
             .any(|diagnostic| diagnostic.code == "source_not_found"));
         assert_eq!(result.source_runs[1].status, SourceRunStatus::Completed);
-        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.matched_posting_count, 1);
     });
 }
 
@@ -206,6 +212,6 @@ fn draft_and_disabled_selected_sources_are_skipped_without_execution() {
             "source_not_active"
         );
         assert_eq!(result.source_runs[2].status, SourceRunStatus::Completed);
-        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.matched_posting_count, 1);
     });
 }

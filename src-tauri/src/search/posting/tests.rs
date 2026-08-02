@@ -1,8 +1,5 @@
 use super::*;
-use crate::search::run::{
-    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceRunResult,
-};
-use serde_json::{from_str, json, Value};
+use serde_json::{json, Value};
 use source_engine::test_support::{
     BrowserAcquisitionRequestSnapshot, DetailField, DetailPatch, RequestedDetailFields,
     RequestedFieldDisposition, ScriptedBrowserAcquisition, ScriptedBrowserAcquisitionEvent,
@@ -12,7 +9,7 @@ use source_engine::test_support::{
 };
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    Row, SqlitePool,
+    SqlitePool,
 };
 use std::collections::BTreeMap;
 
@@ -260,50 +257,6 @@ fn profile_source_json(
     .to_string()
 }
 
-fn search_run_result(postings: Vec<NormalizedPosting>) -> SearchRunResult {
-    SearchRunResult {
-        search_request_id: 1,
-        status: SearchRunStatus::Completed,
-        generated_at: "2026-06-23T21:41:36.000Z".to_string(),
-        diagnostics: Vec::new(),
-        source_runs: Vec::<SourceRunResult>::new(),
-        postings,
-    }
-}
-
-fn posting(
-    title: &str,
-    company: &str,
-    locations: &[&str],
-    sources: Vec<PostingSource>,
-) -> NormalizedPosting {
-    NormalizedPosting {
-        title: title.to_string(),
-        company: company.to_string(),
-        url: sources
-            .first()
-            .map(|source| source.url.clone())
-            .unwrap_or_default(),
-        locations: locations
-            .iter()
-            .map(|location| (*location).to_string())
-            .collect(),
-        sources,
-    }
-}
-
-fn source(source_key: &str, source_name: &str, url: &str) -> PostingSource {
-    PostingSource {
-        source_key: source_key.to_string(),
-        source_name: source_name.to_string(),
-        url: url.to_string(),
-    }
-}
-
-fn locations_from_row(row: &sqlx::sqlite::SqliteRow) -> Vec<String> {
-    from_str::<Vec<String>>(&row.get::<String, _>("locations_json")).unwrap()
-}
-
 struct ExistingPosting<'a> {
     title: &'a str,
     company: &'a str,
@@ -419,13 +372,6 @@ async fn set_primary_source(pool: &SqlitePool, posting_id: i64, source_id: i64) 
         .execute(pool)
         .await
         .unwrap();
-}
-
-async fn table_count(pool: &SqlitePool, table_name: &str) -> i64 {
-    sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table_name}"))
-        .fetch_one(pool)
-        .await
-        .unwrap()
 }
 
 async fn migrated_pool() -> SqlitePool {

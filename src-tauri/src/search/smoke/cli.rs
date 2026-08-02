@@ -157,7 +157,7 @@ fn print_smoke_summary(summary: &SearchRunSmokeSummary) {
         "Overall status: {}",
         serialized_label(&summary.result.status)
     );
-    println!("Postings: {}", summary.result.postings.len());
+    println!("Matched Postings: {}", summary.result.matched_posting_count);
     println!("Source runs:");
     for source_run in &summary.result.source_runs {
         let error = source_run.error.as_deref().unwrap_or("-");

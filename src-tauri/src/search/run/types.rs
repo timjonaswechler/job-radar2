@@ -2,6 +2,7 @@ use search_resolution::{
     CandidateDiagnosticSummary, ResolutionCompletion, ResolutionCounts, SourceResolution,
 };
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use source_engine::{definition::Diagnostics, execution::PhaseUsage};
 
@@ -59,19 +60,43 @@ impl SourceRunStatus {
     }
 }
 
-/// Current-result Suchlauf optionally written to `search-run-result.json` in development.
+/// Authoritative terminal outcome of one committed Search Run.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchRunResult {
+pub struct SearchRunOutcome {
     pub search_request_id: i64,
     pub status: SearchRunStatus,
     pub generated_at: String,
     pub diagnostics: Diagnostics,
     pub source_runs: Vec<SourceRunResult>,
-    pub postings: Vec<NormalizedPosting>,
+    pub matched_posting_count: usize,
 }
 
-/// Quellenlauf outcome for one selected Quelle.
+/// Top-level failures that occur before a terminal Search Run can be committed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SearchRunError {
+    Requirements(String),
+    InstalledState(String),
+    Storage(String),
+}
+
+impl fmt::Display for SearchRunError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Requirements(message) => {
+                write!(formatter, "Search Run requirements failed: {message}")
+            }
+            Self::InstalledState(message) => {
+                write!(formatter, "Search Run installed state failed: {message}")
+            }
+            Self::Storage(message) => write!(formatter, "Search Run storage failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for SearchRunError {}
+
+/// Source Run outcome for one selected Source.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceRunResult {
@@ -83,7 +108,7 @@ pub struct SourceRunResult {
     pub error: Option<String>,
 }
 
-/// Bounded, non-authoritative projection of one committed Q01 Resolution.
+/// Bounded, non-authoritative projection of one Candidate Resolution.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceResolutionSummary {
@@ -104,23 +129,4 @@ impl From<&SourceResolution> for SourceResolutionSummary {
             candidate_diagnostics: resolution.candidate_diagnostics.clone(),
         }
     }
-}
-
-/// Normalized Stellenanzeige after Trefferregel/Ausschlussregel filtering and dedupe.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NormalizedPosting {
-    pub title: String,
-    pub company: String,
-    pub url: String,
-    pub locations: Vec<String>,
-    pub sources: Vec<PostingSource>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PostingSource {
-    pub source_key: String,
-    pub source_name: String,
-    pub url: String,
 }

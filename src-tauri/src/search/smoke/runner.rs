@@ -2,7 +2,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
 
-use crate::search::run::{SearchRunResolutionRuntime, SearchRunResult, SearchRunService};
+use crate::search::run::{SearchRunOutcome, SearchRunResolutionRuntime, SearchRunService};
 use search_requests::Catalog;
 
 use super::request::get_or_create_smoke_search_request;
@@ -13,7 +13,7 @@ pub(crate) struct SearchRunSmokeSummary {
     pub search_request_id: i64,
     pub search_request_created: bool,
     pub result_path: String,
-    pub result: SearchRunResult,
+    pub result: SearchRunOutcome,
 }
 
 #[cfg(test)]
@@ -60,7 +60,8 @@ pub(crate) async fn run_search_run_smoke_with_options(
         .with_geo_resolver(&geo_resolver)
         .allowing_draft_sources(allow_draft_sources)
         .run(execution)
-        .await?;
+        .await
+        .map_err(|error| error.to_string())?;
 
     Ok(SearchRunSmokeSummary {
         search_request_id: request.id.get(),

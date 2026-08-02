@@ -1,6 +1,6 @@
 use super::support::*;
 use crate::search::run::{
-    persist_atomic_search_run, AtomicSearchRunInput, NormalizedPosting, PostingSource,
+    persist_atomic_search_run, AtomicSearchRunInput, MergedPosting, MergedPostingSource,
     SearchRunStatus,
 };
 
@@ -759,22 +759,18 @@ fn posting(
     title: &str,
     company: &str,
     locations: &[&str],
-    sources: Vec<PostingSource>,
-) -> NormalizedPosting {
-    NormalizedPosting {
+    sources: Vec<MergedPostingSource>,
+) -> MergedPosting {
+    MergedPosting {
         title: title.to_string(),
         company: company.to_string(),
-        url: sources
-            .first()
-            .map(|source| source.url.clone())
-            .unwrap_or_default(),
         locations: locations.iter().map(|value| (*value).to_string()).collect(),
         sources,
     }
 }
 
-fn source(source_key: &str, source_name: &str, url: &str) -> PostingSource {
-    PostingSource {
+fn source(source_key: &str, source_name: &str, url: &str) -> MergedPostingSource {
+    MergedPostingSource {
         source_key: source_key.to_string(),
         source_name: source_name.to_string(),
         url: url.to_string(),

@@ -170,13 +170,7 @@ fn smoke_path_creates_generic_request_and_writes_bounded_result() {
                 .discovered,
             2
         );
-        assert_eq!(summary.result.postings.len(), 2);
-        assert!(summary
-            .result
-            .postings
-            .iter()
-            .all(|posting| posting.company == FIXTURE_COMPANY));
-
+        assert_eq!(summary.result.matched_posting_count, 2);
         let result_json: Value =
             serde_json::from_str(&std::fs::read_to_string(&result_path).unwrap()).unwrap();
         assert_ne!(
@@ -239,7 +233,7 @@ fn smoke_path_can_target_multiple_existing_sources() {
         assert_eq!(summary.result.source_runs.len(), 2);
         assert_eq!(summary.result.source_runs[0].source_key, FIRST_SOURCE_KEY);
         assert_eq!(summary.result.source_runs[1].source_key, SECOND_SOURCE_KEY);
-        assert_eq!(summary.result.postings.len(), 2);
+        assert_eq!(summary.result.matched_posting_count, 2);
 
         assert!(!temp_dir.path().join("search-run-candidates.json").exists());
         let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM search_runs")

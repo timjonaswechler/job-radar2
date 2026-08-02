@@ -5,8 +5,8 @@ pub(super) async fn admit(catalog: &Catalog, id: Id) -> search_requests::Executi
     catalog.begin_execution(id).await.unwrap()
 }
 pub(super) use crate::search::run::{
-    SearchRunResolutionRuntime, SearchRunResultArtifact, SearchRunService, SearchRunStatus,
-    SourceExecutionError, SourceRunStatus,
+    SearchRunError, SearchRunResolutionRuntime, SearchRunResultArtifact, SearchRunService,
+    SearchRunStatus, SourceExecutionError, SourceRunStatus,
 };
 pub(super) use serde_json::{json, Value};
 pub(super) use sqlx::{Row, SqlitePool};

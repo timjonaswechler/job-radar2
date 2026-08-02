@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock("@tauri-apps/api/core", () => ({ invoke }))
 
-import { parseSearchRunResult, runSearchRequest } from "./search-runs"
+import { parseSearchRunOutcome, runSearchRequest } from "./search-runs"
 
 beforeEach(() => invoke.mockReset())
 
 describe("Search Run transport", () => {
   it("decodes a Search Run with Source Run resolution", () => {
-    expect(parseSearchRunResult(searchRunWire())).toEqual(searchRunWire())
+    expect(parseSearchRunOutcome(searchRunWire())).toEqual(searchRunWire())
+  })
+
+  it("drops obsolete full Posting bodies from the decoded Outcome", () => {
+    expect(parseSearchRunOutcome({ ...searchRunWire(), postings: [{ title: "obsolete" }] }))
+      .not.toHaveProperty("postings")
   })
 
   it("starts a Search Run and validates its Background Task snapshot", async () => {
@@ -33,10 +38,10 @@ describe("Search Run transport", () => {
   it.each([
     ["unknown run status", { status: "running" }],
     ["malformed Source Runs", { sourceRuns: "invalid" }],
-    ["malformed postings", { postings: [{ title: "missing fields" }] }],
+    ["invalid matched Posting count", { matchedPostingCount: -1 }],
     ["malformed Diagnostics", { diagnostics: [{ severity: "maybe" }] }],
   ])("rejects %s", (_case, override) => {
-    expect(parseSearchRunResult({ ...searchRunWire(), ...override })).toBeNull()
+    expect(parseSearchRunOutcome({ ...searchRunWire(), ...override })).toBeNull()
   })
 })
 
@@ -83,16 +88,6 @@ function searchRunWire() {
       diagnostics: [],
       error: null,
     }],
-    postings: [{
-      title: "Physiker:in",
-      company: "Example",
-      url: "https://example.com/jobs/1",
-      locations: ["Mainz"],
-      sources: [{
-        sourceKey: "fixture_source",
-        sourceName: "Fixture Source",
-        url: "https://example.com/jobs/1",
-      }],
-    }],
+    matchedPostingCount: 1,
   }
 }

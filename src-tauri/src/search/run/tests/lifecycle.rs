@@ -114,7 +114,7 @@ fn search_run_holds_execution_lease_at_terminal_persistence_boundary_and_release
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .before_persistence(&callback)
+        .after_cancellation_cutoff(&callback)
         .run(execution)
         .await
         .unwrap();

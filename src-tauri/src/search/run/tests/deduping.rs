@@ -77,10 +77,10 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.postings.len(), 4);
+        assert_eq!(result.matched_posting_count, 4);
 
-        let laser = result
-            .postings
+        let postings = durable_postings(&pool).await;
+        let laser = postings
             .iter()
             .find(|posting| posting.title == "Laser Engineer")
             .unwrap();
@@ -90,21 +90,19 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
             laser
                 .sources
                 .iter()
-                .map(|source| source.source_key.as_str())
+                .map(|source| source.0.as_str())
                 .collect::<Vec<_>>(),
             vec!["source_one", "source_two"]
         );
 
-        let remote = result
-            .postings
+        let remote = postings
             .iter()
             .find(|posting| posting.title == "Remote Engineer")
             .unwrap();
         assert_eq!(remote.locations, vec!["Berlin"]);
         assert_eq!(remote.sources.len(), 2);
 
-        let optics_postings = result
-            .postings
+        let optics_postings = postings
             .iter()
             .filter(|posting| posting.title == "Optics Engineer")
             .collect::<Vec<_>>();
@@ -169,8 +167,8 @@ fn keyed_posting_meta_never_crosses_finalization() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].sources.len(), 2);
+        assert_eq!(result.matched_posting_count, 1);
+        assert_eq!(durable_postings(&pool).await[0].sources.len(), 2);
         let serialized = serde_json::to_string(&result).unwrap();
         assert!(!serialized.contains("source-one-42"));
         assert!(!serialized.contains("source-two-99"));
@@ -240,21 +238,25 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.postings.len(), 1);
-        let posting = &result.postings[0];
+        assert_eq!(result.matched_posting_count, 1);
+        let postings = durable_postings(&pool).await;
+        let posting = &postings[0];
         assert_eq!(
             posting.title,
             "Head Of Laser & Post Processing Development (mwd) RP/1205240901"
         );
         assert_eq!(posting.company, "Fixture Company");
-        assert_eq!(posting.url, "https://source-one.test/fixture-laser");
+        assert_eq!(
+            posting.sources[0].1,
+            "https://source-one.test/fixture-laser"
+        );
         assert_eq!(posting.locations, vec!["Mainz"]);
         assert_eq!(posting.sources.len(), 2);
         assert_eq!(
             posting
                 .sources
                 .iter()
-                .map(|source| source.source_key.as_str())
+                .map(|source| source.0.as_str())
                 .collect::<Vec<_>>(),
             vec!["source_one", "source_two"]
         );
@@ -310,13 +312,12 @@ fn fuzzy_dedupe_keeps_different_roles_at_same_company_and_location_separate() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.postings.len(), 2);
-        assert!(result
-            .postings
+        assert_eq!(result.matched_posting_count, 2);
+        let postings = durable_postings(&pool).await;
+        assert!(postings
             .iter()
             .any(|posting| posting.title == "Laser Engineer"));
-        assert!(result
-            .postings
+        assert!(postings
             .iter()
             .any(|posting| posting.title == "Senior Laser Engineer Frontend"));
     });
@@ -387,18 +388,17 @@ fn location_compatibility_allows_whole_phrase_overlap_but_blocks_contradictions(
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(result.postings.len(), 3);
+        assert_eq!(result.matched_posting_count, 3);
 
-        let platform = result
-            .postings
+        let postings = durable_postings(&pool).await;
+        let platform = postings
             .iter()
             .find(|posting| posting.title == "Platform Engineer")
             .unwrap();
         assert_eq!(platform.locations, vec!["Berlin", "Berlin, Germany"]);
         assert_eq!(platform.sources.len(), 2);
 
-        let optics_postings = result
-            .postings
+        let optics_postings = postings
             .iter()
             .filter(|posting| posting.title == "Optics Engineer")
             .collect::<Vec<_>>();
@@ -410,4 +410,37 @@ fn location_compatibility_allows_whole_phrase_overlap_but_blocks_contradictions(
             .iter()
             .any(|posting| posting.locations == vec!["Frankfurt am Main"]));
     });
+}
+
+struct DurablePosting {
+    title: String,
+    company: String,
+    locations: Vec<String>,
+    sources: Vec<(String, String)>,
+}
+
+async fn durable_postings(pool: &SqlitePool) -> Vec<DurablePosting> {
+    let rows =
+        sqlx::query("SELECT id, title, company, locations_json FROM job_postings ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+    let mut postings = Vec::with_capacity(rows.len());
+    for row in rows {
+        let posting_id = row.get::<i64, _>("id");
+        let sources = sqlx::query_as::<_, (String, String)>(
+            "SELECT source_key, url FROM job_posting_sources WHERE posting_id = ?1 ORDER BY id",
+        )
+        .bind(posting_id)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+        postings.push(DurablePosting {
+            title: row.get("title"),
+            company: row.get("company"),
+            locations: serde_json::from_str(&row.get::<String, _>("locations_json")).unwrap(),
+            sources,
+        });
+    }
+    postings
 }

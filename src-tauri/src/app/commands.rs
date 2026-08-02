@@ -873,35 +873,42 @@ async fn schedule_search_request_run(
                     .run_with_cancellation(execution, Some(&context.cancellation_token))
                     .await
                 }
-                Err(error) => Err(error),
+                Err(error) => Err(crate::search::run::SearchRunError::Requirements(error)),
             };
 
             match result {
-                Ok(result)
-                    if result.status == crate::search::run::SearchRunStatus::Cancelled
-                        || context.cancellation_token.is_cancelled() =>
-                {
-                    crate::background_tasks::BackgroundTaskCompletion::Cancelled {
-                        error: Some("Search Run cancelled".to_string()),
-                        result: serde_json::to_value(result).ok(),
-                        diagnostics: Vec::new(),
+                Ok(outcome) => search_run_task_completion(outcome),
+                Err(error) => {
+                    let error = error.to_string();
+                    crate::background_tasks::BackgroundTaskCompletion::Failed {
+                        diagnostics: vec![background_task_error_diagnostic(
+                            "search_run_task_failed",
+                            &error,
+                        )],
+                        error,
                     }
                 }
-                Ok(result) => crate::background_tasks::BackgroundTaskCompletion::Succeeded {
-                    result: serde_json::to_value(result).unwrap_or_else(
-                        |error| serde_json::json!({ "serializationError": error.to_string() }),
-                    ),
-                },
-                Err(error) => crate::background_tasks::BackgroundTaskCompletion::Failed {
-                    diagnostics: vec![background_task_error_diagnostic(
-                        "search_run_task_failed",
-                        &error,
-                    )],
-                    error,
-                },
             }
         },
     )
+}
+
+pub(crate) fn search_run_task_completion(
+    outcome: crate::search::run::SearchRunOutcome,
+) -> crate::background_tasks::BackgroundTaskCompletion {
+    if outcome.status == crate::search::run::SearchRunStatus::Cancelled {
+        crate::background_tasks::BackgroundTaskCompletion::Cancelled {
+            error: Some("Search Run cancelled".to_string()),
+            result: serde_json::to_value(outcome).ok(),
+            diagnostics: Vec::new(),
+        }
+    } else {
+        crate::background_tasks::BackgroundTaskCompletion::Succeeded {
+            result: serde_json::to_value(outcome).unwrap_or_else(
+                |error| serde_json::json!({ "serializationError": error.to_string() }),
+            ),
+        }
+    }
 }
 
 #[tauri::command]
@@ -1333,6 +1340,16 @@ mod tests {
                 cancelled.state,
                 crate::background_tasks::BackgroundTaskState::Cancelled
             );
+            for table in ["search_runs", "matches", "job_postings"] {
+                assert_eq!(
+                    sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table}"))
+                        .fetch_one(&state.db)
+                        .await
+                        .unwrap(),
+                    0,
+                    "queued cancellation must not write {table}"
+                );
+            }
             let released = state
                 .search_requests
                 .begin_execution(request.id)

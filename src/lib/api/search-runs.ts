@@ -7,7 +7,6 @@ import {
   isNonNegativeSafeInteger,
   isPositiveSafeInteger,
   isRecord,
-  isString,
   isStructuredDiagnostic,
 } from "./wire"
 
@@ -24,20 +23,6 @@ export type LatestSearchRunSummary = {
 }
 
 export type SourceRunStatus = "completed" | "failed" | "cancelled" | "skipped"
-
-export type PostingSource = {
-  sourceKey: string
-  sourceName: string
-  url: string
-}
-
-export type NormalizedPosting = {
-  title: string
-  company: string
-  url: string
-  locations: string[]
-  sources: PostingSource[]
-}
 
 export type ResolutionCounts = {
   discovered: number
@@ -87,23 +72,23 @@ export type SourceRunResult = {
   error: string | null
 }
 
-export type SearchRunResult = {
+export type SearchRunOutcome = {
   searchRequestId: number
   status: SearchRunStatus
   generatedAt: string
   diagnostics: StructuredDiagnostic[]
   sourceRuns: SourceRunResult[]
-  postings: NormalizedPosting[]
+  matchedPostingCount: number
 }
 
-export function parseSearchRunResult(value: unknown): SearchRunResult | null {
+export function parseSearchRunOutcome(value: unknown): SearchRunOutcome | null {
   if (!isRecord(value)) return null
   if (!isPositiveSafeInteger(value.searchRequestId)) return null
   if (!isSearchRunStatus(value.status)) return null
   if (typeof value.generatedAt !== "string") return null
   if (!isArrayOf(value.diagnostics, isStructuredDiagnostic)) return null
   if (!isArrayOf(value.sourceRuns, isSourceRunResult)) return null
-  if (!isArrayOf(value.postings, isNormalizedPosting)) return null
+  if (!isNonNegativeSafeInteger(value.matchedPostingCount)) return null
 
   return {
     searchRequestId: value.searchRequestId,
@@ -111,33 +96,13 @@ export function parseSearchRunResult(value: unknown): SearchRunResult | null {
     generatedAt: value.generatedAt,
     diagnostics: value.diagnostics,
     sourceRuns: value.sourceRuns,
-    postings: value.postings,
+    matchedPostingCount: value.matchedPostingCount,
   }
 }
 
 export async function runSearchRequest(id: number): Promise<BackgroundTaskSnapshot> {
   return decodeBackgroundTaskSnapshot(
     await invoke<unknown>("run_search_request", { id }),
-  )
-}
-
-function isNormalizedPosting(value: unknown): value is NormalizedPosting {
-  return (
-    isRecord(value) &&
-    typeof value.title === "string" &&
-    typeof value.company === "string" &&
-    typeof value.url === "string" &&
-    isArrayOf(value.locations, isString) &&
-    isArrayOf(value.sources, isPostingSource)
-  )
-}
-
-function isPostingSource(value: unknown): value is PostingSource {
-  return (
-    isRecord(value) &&
-    typeof value.sourceKey === "string" &&
-    typeof value.sourceName === "string" &&
-    typeof value.url === "string"
   )
 }
 

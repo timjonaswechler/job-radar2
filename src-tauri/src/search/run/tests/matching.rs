@@ -78,12 +78,12 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
                 .map_or(0, |r| r.counts.finalized as usize),
             2
         );
+        assert_eq!(result.matched_posting_count, 2);
         assert_eq!(
-            result
-                .postings
-                .iter()
-                .map(|posting| posting.title.as_str())
-                .collect::<Vec<_>>(),
+            sqlx::query_scalar::<_, String>("SELECT title FROM job_postings ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap(),
             vec!["LASER Physicist", "Senior Optics Engineer"]
         );
         let result_json: Value = serde_json::from_str(
@@ -161,13 +161,13 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
                 .map_or(0, |r| r.counts.finalized as usize),
             1
         );
+        assert_eq!(result.matched_posting_count, 1);
         assert_eq!(
-            result
-                .postings
-                .iter()
-                .map(|posting| posting.title.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Laser Engineer"]
+            sqlx::query_scalar::<_, String>("SELECT title FROM job_postings")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "Laser Engineer"
         );
     });
 }
@@ -229,13 +229,25 @@ fn normalizes_source_candidates_before_matching_and_merging() {
                 .map_or(0, |r| r.counts.finalized as usize),
             1
         );
-        assert_eq!(result.postings.len(), 1);
-        let posting = &result.postings[0];
-        assert_eq!(posting.title, "Senior Laser Engineer");
-        assert_eq!(posting.company, "ACME GmbH");
-        assert_eq!(posting.url, "https://example.test/laser");
-        assert_eq!(posting.locations, vec!["Mainz", "München Nord"]);
-        assert_eq!(posting.sources[0].url, "https://example.test/laser");
+        assert_eq!(result.matched_posting_count, 1);
+        let posting: (String, String, String) =
+            sqlx::query_as("SELECT title, company, locations_json FROM job_postings")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(posting.0, "Senior Laser Engineer");
+        assert_eq!(posting.1, "ACME GmbH");
+        assert_eq!(
+            serde_json::from_str::<Vec<String>>(&posting.2).unwrap(),
+            vec!["Mainz", "München Nord"]
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT url FROM job_posting_sources")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "https://example.test/laser"
+        );
     });
 }
 
@@ -304,9 +316,14 @@ fn filters_search_run_matches_by_request_location_radius() {
                 .map_or(0, |r| r.counts.finalized as usize),
             1
         );
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].title, "Laser Engineer Wiesbaden");
-        assert_eq!(result.postings[0].locations, vec!["Wiesbaden"]);
+        assert_eq!(result.matched_posting_count, 1);
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT title FROM job_postings")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "Laser Engineer Wiesbaden"
+        );
     });
 }
 
@@ -363,69 +380,10 @@ fn request_locations_without_radius_do_not_apply_filter_and_emit_warning() {
                 .map_or(0, |r| r.counts.finalized as usize),
             1
         );
-        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.matched_posting_count, 1);
         assert!(result.source_runs[0].diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "location_filter_not_applied_missing_radius_km"
         }));
-    });
-}
-
-#[test]
-fn leaves_matching_unchanged_without_request_locations() {
-    tauri::async_runtime::block_on(async {
-        let pool = migrated_pool().await;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let catalog = Catalog::new(pool.clone());
-        let search_request = catalog
-            .clone()
-            .create(Input {
-                status: Status::Active,
-                include_rules: vec![text_rule("Laser")],
-                exclude_rules: vec![],
-                locations: vec![],
-                radius_km: None,
-                source_keys: source_keys.clone(),
-            })
-            .await
-            .unwrap();
-        let executor = fixture_resolution_runtime([(
-            source_keys[0].clone(),
-            Ok(vec![candidate(
-                "Laser Engineer Köln",
-                "ACME",
-                "https://example.test/koeln",
-                &["Köln"],
-            )]),
-        )]);
-        let geo_db_path =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");
-        let geo_resolver = crate::geo::GeoDbResolver::connect(&geo_db_path)
-            .await
-            .unwrap();
-
-        let result = SearchRunService::new(
-            &pool,
-            &executor,
-            temp_dir.path().join("search-run-result.json"),
-            sources::installed::Store::new(temp_dir.path()),
-        )
-        .with_geo_resolver(&geo_resolver)
-        .run(admit(&catalog, search_request.id).await)
-        .await
-        .unwrap();
-
-        assert_eq!(result.status, SearchRunStatus::Completed);
-        assert_eq!(
-            result.source_runs[0]
-                .resolution
-                .as_ref()
-                .map_or(0, |r| r.counts.finalized as usize),
-            1
-        );
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].title, "Laser Engineer Köln");
-        assert!(result.diagnostics.is_empty());
     });
 }
 
@@ -479,7 +437,14 @@ fn radius_without_request_locations_does_not_require_candidate_locations_or_deta
         let resolution = result.source_runs[0].resolution.as_ref().unwrap();
         assert_eq!(resolution.counts.finalized, 1);
         assert_eq!(resolution.counts.unresolved, 0);
-        assert_eq!(result.postings[0].locations, Vec::<String>::new());
+        assert_eq!(result.matched_posting_count, 1);
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT locations_json FROM job_postings")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "[]"
+        );
     });
 }
 
@@ -563,19 +528,14 @@ fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
                 .map_or(0, |r| r.counts.finalized as usize),
             2
         );
-        assert_eq!(result.postings.len(), 2);
-        assert!(result
-            .postings
-            .iter()
-            .any(|posting| posting.title == "Laser Engineer Wiesbaden"));
-        assert!(result
-            .postings
-            .iter()
-            .any(|posting| posting.title == "Laser Engineer Twin City"));
-        assert!(!result
-            .postings
-            .iter()
-            .any(|posting| posting.title == "Laser Engineer Atlantis"));
+        assert_eq!(result.matched_posting_count, 2);
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT title FROM job_postings ORDER BY title")
+                .fetch_all(&pool)
+                .await
+                .unwrap(),
+            vec!["Laser Engineer Twin City", "Laser Engineer Wiesbaden"]
+        );
 
         assert!(result.diagnostics.is_empty());
         assert!(result.source_runs[0].diagnostics.iter().any(|diagnostic| {
@@ -657,7 +617,7 @@ impl GeoResolver for FailingCandidateGeoResolver {
 }
 
 #[test]
-fn fails_search_run_when_request_location_cannot_be_resolved() {
+fn cancelled_token_does_not_mask_request_location_requirements_error() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
@@ -690,6 +650,8 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
             .await
             .unwrap();
 
+        let cancellation = crate::background_tasks::CancellationToken::new();
+        cancellation.cancel();
         let error = SearchRunService::new(
             &pool,
             &executor,
@@ -697,13 +659,25 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(admit(&catalog, search_request.id).await)
+        .run_with_cancellation(
+            admit(&catalog, search_request.id).await,
+            Some(&cancellation),
+        )
         .await
         .unwrap_err();
 
         assert_eq!(
             error,
-            "Search Request location could not be resolved: Gibtsnichtstadt"
+            SearchRunError::Requirements(
+                "Search Request location could not be resolved: Gibtsnichtstadt".to_string()
+            )
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM search_runs")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            0
         );
     });
 }

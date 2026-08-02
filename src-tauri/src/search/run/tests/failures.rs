@@ -47,7 +47,7 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
-        assert_eq!(result.postings.len(), 1);
+        assert_eq!(result.matched_posting_count, 1);
         assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
         assert_eq!(result.source_runs[1].status, SourceRunStatus::Failed);
         assert_eq!(
@@ -117,7 +117,7 @@ fn total_source_failure_produces_failed_result_without_postings() {
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Failed);
-        assert!(result.postings.is_empty());
+        assert!(result.matched_posting_count == 0);
         assert!(result
             .source_runs
             .iter()
@@ -193,7 +193,10 @@ fn persistence_failure_rolls_back_last_run_update() {
         .await
         .unwrap_err();
 
-        assert!(error.contains("invalid type"));
+        assert!(matches!(
+            error,
+            SearchRunError::Storage(message) if message.contains("invalid type")
+        ));
         let posting_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_postings")
             .fetch_one(&pool)
             .await

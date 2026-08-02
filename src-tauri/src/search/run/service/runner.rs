@@ -9,8 +9,8 @@ use crate::search::run::{persist_atomic_search_run, AtomicSearchRunInput};
 use search_requests::Execution;
 
 use super::super::{
-    cancellation_or_default, NeverCancelled, SearchRunResolutionRuntime, SearchRunResult,
-    SearchRunStatus,
+    cancellation_or_default, NeverCancelled, SearchRunError, SearchRunOutcome,
+    SearchRunResolutionRuntime, SearchRunStatus,
 };
 use super::{
     finalized_merge_input, generated_at_timestamp, last_run_error_summary, merge_postings,
@@ -31,7 +31,7 @@ pub struct SearchRunService<'a> {
     #[cfg(test)]
     after_source_resolution: Option<&'a (dyn Fn() + Send + Sync)>,
     #[cfg(test)]
-    before_persistence: Option<&'a (dyn Fn() + Send + Sync)>,
+    after_cancellation_cutoff: Option<&'a (dyn Fn() + Send + Sync)>,
 }
 
 impl<'a> SearchRunService<'a> {
@@ -65,7 +65,7 @@ impl<'a> SearchRunService<'a> {
             #[cfg(test)]
             after_source_resolution: None,
             #[cfg(test)]
-            before_persistence: None,
+            after_cancellation_cutoff: None,
         }
     }
 
@@ -89,12 +89,15 @@ impl<'a> SearchRunService<'a> {
     }
 
     #[cfg(test)]
-    pub(crate) fn before_persistence(mut self, callback: &'a (dyn Fn() + Send + Sync)) -> Self {
-        self.before_persistence = Some(callback);
+    pub(crate) fn after_cancellation_cutoff(
+        mut self,
+        callback: &'a (dyn Fn() + Send + Sync),
+    ) -> Self {
+        self.after_cancellation_cutoff = Some(callback);
         self
     }
 
-    pub async fn run(&self, execution: Execution) -> Result<SearchRunResult, String> {
+    pub async fn run(&self, execution: Execution) -> Result<SearchRunOutcome, SearchRunError> {
         self.run_with_cancellation(execution, None).await
     }
 
@@ -102,14 +105,16 @@ impl<'a> SearchRunService<'a> {
         &self,
         execution: Execution,
         cancellation_token: Option<&crate::background_tasks::CancellationToken>,
-    ) -> Result<SearchRunResult, String> {
+    ) -> Result<SearchRunOutcome, SearchRunError> {
         let request = execution.snapshot();
         let search_request_id = execution.id().get();
 
         let requirements = match request.radius_km {
             Some(radius) => {
                 let resolver = self.geo_resolver.ok_or_else(|| {
-                    "Search Request radius requires an available GeoResolver".to_string()
+                    SearchRunError::Requirements(
+                        "Search Request radius requires an available GeoResolver".to_string(),
+                    )
                 })?;
                 CompiledSearchRequirements::compile_with_geo(
                     &request.include_rules,
@@ -118,7 +123,8 @@ impl<'a> SearchRunService<'a> {
                     Some(radius),
                     resolver,
                 )
-                .await?
+                .await
+                .map_err(|error| SearchRunError::Requirements(error.to_string()))?
             }
             None => CompiledSearchRequirements::compile(
                 &request.include_rules,
@@ -127,15 +133,17 @@ impl<'a> SearchRunService<'a> {
                 None,
             )
             .map_err(|failure| {
-                format!("Search Request matching requirements are invalid: {failure:?}")
+                SearchRunError::Requirements(format!(
+                    "Search Request matching requirements are invalid: {failure:?}"
+                ))
             })?,
         };
 
         let installed_sources = self.installed_sources.clone();
         let snapshot = tokio::task::spawn_blocking(move || installed_sources.snapshot())
             .await
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| SearchRunError::InstalledState(error.to_string()))?
+            .map_err(|error| SearchRunError::InstalledState(error.to_string()))?;
         let selected = resolve_selected_sources_with_options(
             &snapshot,
             &request.source_keys,
@@ -207,61 +215,65 @@ impl<'a> SearchRunService<'a> {
             callback();
         }
 
-        // Source resolution may finish concurrently with a task cancellation. Re-read the
-        // authoritative token rather than relying only on the Source outcomes it produced.
-        let cancelled_after_resolution =
-            cancellation_token.is_some_and(|token| token.is_cancelled());
-        let status = if cancelled_after_resolution {
-            SearchRunStatus::Cancelled
-        } else {
-            overall_status(&source_runs)
-        };
-        let postings = if matches!(
-            status,
+        let source_status = overall_status(&source_runs);
+        let merged_postings = if matches!(
+            source_status,
             SearchRunStatus::Completed | SearchRunStatus::CompletedWithErrors
         ) {
             merge_postings(finalized)
         } else {
             Vec::new()
         };
-        let mut result = SearchRunResult {
+        let generated_at = generated_at_timestamp(self.pool)
+            .await
+            .map_err(SearchRunError::Storage)?;
+
+        // This is the single terminal cancellation linearization point. Everything fallible that
+        // precedes terminal persistence is prepared above. Once observed, the atomic commit and
+        // returned Outcome are non-cancellable and authoritative to Desktop.
+        let cancelled = cancellation_token.is_some_and(|token| token.is_cancelled());
+        let status = if cancelled {
+            SearchRunStatus::Cancelled
+        } else {
+            source_status
+        };
+        let postings = if cancelled {
+            &[][..]
+        } else {
+            merged_postings.as_slice()
+        };
+        let mut outcome = SearchRunOutcome {
             search_request_id,
             status,
-            generated_at: generated_at_timestamp(self.pool).await?,
+            generated_at,
             diagnostics: Vec::new(),
             source_runs,
-            postings,
+            matched_posting_count: postings.len(),
         };
-
-        // This is the last cancellation boundary before DB01. It keeps the terminal Search Run
-        // and posting persistence under one authority and preserves the single DB01 invocation.
-        if cancellation_token.is_some_and(|token| token.is_cancelled()) {
-            result.status = SearchRunStatus::Cancelled;
-            result.postings.clear();
-        }
-        let last_run_error = last_run_error_summary(&result);
+        let last_run_error = last_run_error_summary(&outcome);
         #[cfg(test)]
-        if let Some(callback) = self.before_persistence {
+        if let Some(callback) = self.after_cancellation_cutoff {
             callback();
         }
         persist_atomic_search_run(
             self.pool,
             AtomicSearchRunInput {
                 search_request_id,
-                status: result.status,
-                generated_at: &result.generated_at,
+                status: outcome.status,
+                generated_at: &outcome.generated_at,
                 last_run_error: last_run_error.as_deref(),
-                postings: &result.postings,
+                postings,
             },
         )
-        .await?;
+        .await
+        .map_err(SearchRunError::Storage)?;
 
         if let SearchRunResultArtifact::WriteTo(path) = &self.result_artifact {
-            if write_search_run_result(path, &result).await.is_err() {
-                result.diagnostics.push(artifact_write_failed_diagnostic());
+            if write_search_run_result(path, &outcome).await.is_err() {
+                outcome.diagnostics.push(artifact_write_failed_diagnostic());
             }
         }
-        Ok(result)
+        Ok(outcome)
     }
 }
 

@@ -74,7 +74,7 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                             }
                         }
                         Err(error) => crate::background_tasks::BackgroundTaskCompletion::Failed {
-                            error,
+                            error: error.to_string(),
                             diagnostics: Vec::new(),
                         },
                     }
@@ -97,7 +97,8 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
             result["sourceRuns"][1]["diagnostics"][0]["code"],
             json!("fixture_runtime_failure")
         );
-        assert_eq!(result["postings"][0]["title"], json!("Laser Engineer"));
+        assert_eq!(result["matchedPostingCount"], json!(1));
+        assert!(result.get("postings").is_none());
     });
 }
 
@@ -225,10 +226,7 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
         assert_eq!(result.status, SearchRunStatus::CompletedWithErrors);
         assert_eq!(result.source_runs[0].status, SourceRunStatus::Completed);
         assert_eq!(result.source_runs[1].status, SourceRunStatus::Failed);
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].title, "Laser Engineer");
-        assert_eq!(result.postings[0].sources.len(), 1);
-        assert_eq!(result.postings[0].sources[0].source_key, source_keys[0]);
+        assert_eq!(result.matched_posting_count, 1);
 
         let rows: Vec<(String, String, i64)> = sqlx::query_as(
             "SELECT jp.title, jps.source_key, m.search_run_id FROM job_postings jp JOIN job_posting_sources jps ON jps.posting_id = jp.id JOIN matches m ON m.job_posting_id = jp.id ORDER BY jp.id",
@@ -361,13 +359,7 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
         assert_eq!(summary.counts.finalized, 1);
         assert_eq!(summary.counts.unresolved, 1);
         assert_eq!(summary.counts.budget_skipped, 1);
-        assert_eq!(result.postings.len(), 1);
-        assert_eq!(result.postings[0].title, "Laser Engineer");
-        assert_eq!(result.postings[0].sources.len(), 1);
-        assert_eq!(
-            result.postings[0].sources[0].url,
-            "https://example.test/finalized-before-budget"
-        );
+        assert_eq!(result.matched_posting_count, 1);
 
         let persisted: Vec<(String, String)> = sqlx::query_as(
             "SELECT jp.title, jps.url FROM job_postings jp JOIN job_posting_sources jps ON jps.posting_id = jp.id ORDER BY jp.id",
@@ -440,19 +432,7 @@ fn token_driven_background_cancellation_and_sql_terminal_state_agree() {
                     .run_with_cancellation(execution, Some(&context.cancellation_token))
                     .await
                     .unwrap();
-                    if result.status == SearchRunStatus::Cancelled
-                        || context.cancellation_token.is_cancelled()
-                    {
-                        crate::background_tasks::BackgroundTaskCompletion::Cancelled {
-                            error: Some("Search Run cancelled".to_string()),
-                            result: serde_json::to_value(result).ok(),
-                            diagnostics: Vec::new(),
-                        }
-                    } else {
-                        crate::background_tasks::BackgroundTaskCompletion::Succeeded {
-                            result: serde_json::to_value(result).unwrap(),
-                        }
-                    }
+                    crate::app::commands::search_run_task_completion(result)
                 },
             )
             .unwrap();
@@ -487,6 +467,72 @@ fn token_driven_background_cancellation_and_sql_terminal_state_agree() {
             .await
             .unwrap();
         assert_eq!(run_status, "cancelled");
+    });
+}
+
+#[test]
+fn cancellation_after_final_observation_keeps_committed_outcome_authoritative() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_keys =
+            write_test_sources(temp_dir.path(), &[("cutoff_source", "Cutoff Source")]);
+        let request = create_test_search_request(
+            &pool,
+            source_keys.clone(),
+            vec![text_rule("engineer")],
+            vec![],
+        )
+        .await;
+        let runtime = fixture_resolution_runtime([(
+            source_keys[0].clone(),
+            Ok(vec![candidate(
+                "Laser Engineer",
+                "ACME",
+                "https://example.test/committed-after-cutoff",
+                &["Mainz"],
+            )]),
+        )]);
+        let cancellation = crate::background_tasks::CancellationToken::new();
+        let token_after_cutoff = cancellation.clone();
+        let cancel_after_cutoff = move || token_after_cutoff.cancel();
+        let outcome = SearchRunService::new_with_result_artifact(
+            &pool,
+            &runtime,
+            SearchRunResultArtifact::Disabled,
+            sources::installed::Store::new(temp_dir.path()),
+        )
+        .after_cancellation_cutoff(&cancel_after_cutoff)
+        .run_with_cancellation(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+            Some(&cancellation),
+        )
+        .await
+        .unwrap();
+
+        assert!(cancellation.is_cancelled());
+        assert_eq!(outcome.status, SearchRunStatus::Completed);
+        assert_eq!(outcome.matched_posting_count, 1);
+        assert!(matches!(
+            crate::app::commands::search_run_task_completion(outcome),
+            crate::background_tasks::BackgroundTaskCompletion::Succeeded { .. }
+        ));
+        assert_eq!(
+            sqlx::query_as::<_, (String, i64)>(
+                "SELECT status,
+                   (SELECT COUNT(*) FROM job_postings) +
+                   (SELECT COUNT(*) FROM job_posting_sources) +
+                   (SELECT COUNT(*) FROM matches)
+                 FROM search_runs"
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            ("completed".to_string(), 3)
+        );
     });
 }
 
@@ -580,7 +626,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
         .unwrap();
 
         assert_eq!(result.status, SearchRunStatus::Cancelled);
-        assert!(result.postings.is_empty());
+        assert!(result.matched_posting_count == 0);
         assert_eq!(
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM search_runs")
                 .fetch_one(&pool)

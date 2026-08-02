@@ -6,7 +6,9 @@ mod service;
 mod tests;
 mod types;
 
-pub(crate) use atomic_persistence::{persist_atomic_search_run, AtomicSearchRunInput};
+use atomic_persistence::{
+    persist_atomic_search_run, AtomicSearchRunInput, MergedPosting, MergedPostingSource,
+};
 #[cfg(test)]
 pub(crate) use execution::ScriptedResolutionSource;
 pub use execution::SearchRunResolutionRuntime;
@@ -19,6 +21,6 @@ pub use service::{
     SearchRunService, SourceExecutionError,
 };
 pub use types::{
-    NormalizedPosting, PostingSource, SearchRunResult, SearchRunStatus, SourceResolutionSummary,
-    SourceRunResult, SourceRunStatus,
+    SearchRunError, SearchRunOutcome, SearchRunStatus, SourceResolutionSummary, SourceRunResult,
+    SourceRunStatus,
 };

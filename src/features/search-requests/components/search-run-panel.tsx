@@ -20,7 +20,7 @@ import {
   isInFlightBackgroundTask,
   type BackgroundTaskSnapshot,
 } from "@/lib/api/background-tasks";
-import type { SearchRunResult } from "@/lib/api/search-runs";
+import type { SearchRunOutcome } from "@/lib/api/search-runs";
 
 const backgroundTaskStateLabels: Record<BackgroundTaskSnapshot["state"], string> = {
   queued: "Wartet",
@@ -47,7 +47,7 @@ type SearchRunPanelProps = {
   row: SearchRequestTableRow | null;
   starting: boolean;
   task: BackgroundTaskSnapshot | null;
-  result: SearchRunResult | null;
+  result: SearchRunOutcome | null;
   error: string | null;
   cancelling: boolean;
   onCancel: () => void;
@@ -237,7 +237,7 @@ function SearchRunDiagnostics({
 function getPanelStatusLabel(
   starting: boolean,
   task: BackgroundTaskSnapshot | null,
-  result: SearchRunResult | null,
+  result: SearchRunOutcome | null,
   error: string | null,
 ) {
   if (starting) return "Startet";

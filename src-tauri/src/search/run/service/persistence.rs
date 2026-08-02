@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use sqlx::SqlitePool;
 
-use super::super::{SearchRunResult, SearchRunStatus, SourceRunStatus};
+use super::super::{SearchRunOutcome, SearchRunStatus, SourceRunStatus};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SearchRunResultArtifact {
@@ -33,7 +33,7 @@ pub(super) async fn generated_at_timestamp(pool: &SqlitePool) -> Result<String, 
         .map_err(|error| error.to_string())
 }
 
-pub(super) fn last_run_error_summary(result: &SearchRunResult) -> Option<String> {
+pub(super) fn last_run_error_summary(result: &SearchRunOutcome) -> Option<String> {
     if result.status == SearchRunStatus::Completed {
         return None;
     }
@@ -84,7 +84,7 @@ pub(super) fn last_run_error_summary(result: &SearchRunResult) -> Option<String>
 
 pub(super) async fn write_search_run_result(
     path: &Path,
-    result: &SearchRunResult,
+    result: &SearchRunOutcome,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -108,7 +108,7 @@ pub(super) async fn write_search_run_result(
         status: result.status,
         generated_at: &result.generated_at,
         source_runs: &result.source_runs,
-        posting_count: result.postings.len(),
+        posting_count: result.matched_posting_count,
     };
     let json = serde_json::to_string_pretty(&summary).map_err(|error| error.to_string())?;
     tokio::fs::write(path, json)
