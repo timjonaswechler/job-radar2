@@ -3,65 +3,58 @@
 -- During early development this migration is intentionally squashed instead of
 -- keeping a history of intermediate schema experiments.
 
-CREATE TABLE app_metadata(
-  key TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-);
-
+CREATE TABLE app_metadata(key TEXT PRIMARY KEY NOT NULL,
+value TEXT NOT NULL);
 CREATE TABLE app_settings(
   key TEXT PRIMARY KEY NOT NULL,
   value_json TEXT NOT NULL DEFAULT 'null',
   updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(json_valid(value_json))
 );
-
 CREATE TABLE search_requests(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   status TEXT NOT NULL,
   include_rules_json TEXT NOT NULL DEFAULT '[]',
-  exclude_rules_json TEXT NOT NULL DEFAULT '[]',
-  locations_json TEXT NOT NULL DEFAULT '[]',
-  radius_km INTEGER NULL,
-  source_keys_json TEXT NOT NULL DEFAULT '[]',
-  validation_error TEXT NULL,
-  last_run_at TEXT NULL,
-  last_run_status TEXT NULL,
-  last_run_error TEXT NULL,
-  created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  CHECK(status IN('draft', 'active', 'disabled', 'invalid')),
-  CHECK(last_run_status IS NULL OR last_run_status IN('completed', 'completed_with_errors', 'failed', 'cancelled')),
-  CHECK(json_valid(include_rules_json)),
-  CHECK(json_valid(exclude_rules_json)),
-  CHECK(json_valid(locations_json)),
-  CHECK(json_valid(source_keys_json)),
-  CHECK(radius_km IS NULL OR radius_km >= 0)
+exclude_rules_json TEXT NOT NULL DEFAULT '[]',
+locations_json TEXT NOT NULL DEFAULT '[]',
+radius_km INTEGER NULL,
+source_keys_json TEXT NOT NULL DEFAULT '[]',
+last_run_at TEXT NULL,
+last_run_status TEXT NULL,
+last_run_error TEXT NULL,
+created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+CHECK(status IN('draft', 'active', 'disabled')),
+CHECK(last_run_status IS NULL OR last_run_status IN('completed', 'completed_with_errors', 'failed', 'cancelled')),
+CHECK(json_valid(include_rules_json)),
+CHECK(json_valid(exclude_rules_json)),
+CHECK(json_valid(locations_json)),
+CHECK(json_valid(source_keys_json)),
+CHECK(radius_km IS NULL OR radius_km BETWEEN 0 AND 9007199254740991)
 );
-
 CREATE TABLE job_postings(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
   company TEXT NOT NULL,
   locations_json TEXT NOT NULL DEFAULT '[]',
-  description_text TEXT NULL,
-  primary_source_id INTEGER NULL REFERENCES job_posting_sources(id) ON DELETE SET NULL,
-  read_state TEXT NOT NULL DEFAULT 'unread',
-  interest_state TEXT NOT NULL DEFAULT 'undecided',
-  preparation_state TEXT NOT NULL DEFAULT 'not_started',
-  application_state TEXT NOT NULL DEFAULT 'not_applied',
-  first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  CHECK(trim(title) <> ''),
-  CHECK(trim(company) <> ''),
-  CHECK(json_valid(locations_json)),
-  CHECK(read_state IN('unread', 'read')),
-  CHECK(interest_state IN('undecided', 'interested', 'dismissed')),
-  CHECK(preparation_state IN('not_started', 'in_progress', 'ready')),
-  CHECK(application_state IN('not_applied', 'submitted', 'in_process', 'rejected_by_company', 'withdrawn_by_me', 'accepted'))
+description_text TEXT NULL,
+primary_source_id INTEGER NULL REFERENCES job_posting_sources(id) ON DELETE SET NULL,
+read_state TEXT NOT NULL DEFAULT 'unread',
+interest_state TEXT NOT NULL DEFAULT 'undecided',
+preparation_state TEXT NOT NULL DEFAULT 'not_started',
+application_state TEXT NOT NULL DEFAULT 'not_applied',
+first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+updated_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+CHECK(trim(title) <> ''),
+CHECK(trim(company) <> ''),
+CHECK(json_valid(locations_json)),
+CHECK(read_state IN('unread', 'read')),
+CHECK(interest_state IN('undecided', 'interested', 'dismissed')),
+CHECK(preparation_state IN('not_started', 'in_progress', 'ready')),
+CHECK(application_state IN('not_applied', 'submitted', 'in_process', 'rejected_by_company', 'withdrawn_by_me', 'accepted'))
 );
-
 CREATE TABLE job_posting_sources(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   posting_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
@@ -77,16 +70,14 @@ CREATE TABLE job_posting_sources(
   CHECK(json_valid(posting_meta_json) AND json_type(posting_meta_json) = 'object'),
   UNIQUE(posting_id, source_key, url)
 );
-
 CREATE INDEX idx_job_posting_sources_url
-  ON job_posting_sources(url);
-
+ON job_posting_sources(url);
 CREATE INDEX idx_job_posting_sources_posting_id
-  ON job_posting_sources(posting_id);
-
+ON job_posting_sources(
+  posting_id
+);
 CREATE INDEX idx_job_postings_last_seen_at
-  ON job_postings(last_seen_at);
-
+ON job_postings(last_seen_at);
 CREATE TABLE search_runs(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   search_request_id INTEGER NOT NULL REFERENCES search_requests(id) ON DELETE CASCADE,
@@ -95,10 +86,10 @@ CREATE TABLE search_runs(
   created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(status IN('completed', 'completed_with_errors', 'failed', 'cancelled'))
 );
-
 CREATE INDEX idx_search_runs_search_request_id
-  ON search_runs(search_request_id);
-
+ON search_runs(
+  search_request_id
+);
 CREATE TABLE matches(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   search_run_id INTEGER NOT NULL REFERENCES search_runs(id) ON DELETE CASCADE,
@@ -106,6 +97,5 @@ CREATE TABLE matches(
   created_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE(search_run_id, job_posting_id)
 );
-
 CREATE INDEX idx_matches_job_posting_id
-  ON matches(job_posting_id);
+ON matches(job_posting_id);

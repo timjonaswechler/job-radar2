@@ -24,7 +24,7 @@ export type SearchRequestTableRow = {
   locationsSummary: string;
   radiusLabel: string;
   validationLabel: string;
-  validationError: string | null;
+  validationIssues: SearchRequest["validationIssues"];
   lastRunLabel: string;
   lastRunError: string | null;
   groupId: SearchRequestGroupId;
@@ -75,7 +75,9 @@ export function createSearchRequestRows(
       ? request.locations.join(", ")
       : "Keine Orte";
     const radiusLabel = request.radiusKm === null ? "Kein Radius" : `${request.radiusKm} km`;
-    const validationLabel = request.validationError ? "Validation Error" : "OK";
+    const validationLabel = request.validationIssues.length
+      ? `${request.validationIssues.length} Validation Issue${request.validationIssues.length === 1 ? "" : "s"}`
+      : "OK";
     const lastRunLabel = lastRunSummary(request);
     const sourceSummary = sourceLabels.length
       ? summarizeList(sourceLabels, "Keine Sources")
@@ -90,7 +92,7 @@ export function createSearchRequestRows(
       missingSourceKeys.join(" "),
       locationsSummary,
       radiusLabel,
-      request.validationError ?? "",
+      request.validationIssues.map((issue) => `${issue.code} ${issue.path} ${issue.message}`).join(" "),
       request.lastRunStatus ? searchRunStatusLabels[request.lastRunStatus] : "",
       request.lastRunError ?? "",
     ]
@@ -112,7 +114,7 @@ export function createSearchRequestRows(
       locationsSummary,
       radiusLabel,
       validationLabel,
-      validationError: request.validationError,
+      validationIssues: request.validationIssues,
       lastRunLabel,
       lastRunError: request.lastRunError,
       groupId,
@@ -143,7 +145,6 @@ export function countSearchRequestStatuses(rows: SearchRequestTableRow[]) {
     draft: 0,
     active: 0,
     disabled: 0,
-    invalid: 0,
   };
   for (const row of rows) counts[row.status] += 1;
   return counts;
@@ -175,8 +176,7 @@ function searchRequestGroupId(
   missingSourceKeys: SourceKey[],
 ): SearchRequestGroupId {
   if (
-    request.status === "invalid" ||
-    request.validationError ||
+    request.validationIssues.length > 0 ||
     missingSourceKeys.length > 0 ||
     request.lastRunStatus === "failed" ||
     request.lastRunError

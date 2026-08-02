@@ -86,7 +86,7 @@ export function SearchRequests() {
     () => createSearchRequestRows(data.requests, data.sources),
     [data.requests, data.sources],
   );
-  const validationErrorCount = rows.filter((row) => row.validationError).length;
+  const validationIssueCount = rows.filter((row) => row.validationIssues.length).length;
   const missingSourceKeyCount = rows.reduce(
     (count, row) => count + row.missingSourceKeys.length,
     0,
@@ -280,12 +280,12 @@ export function SearchRequests() {
         />
       ) : null}
 
-      {validationErrorCount || missingSourceKeyCount ? (
+      {validationIssueCount || missingSourceKeyCount ? (
         <Alert variant="warning">
           <AlertCircleIcon aria-hidden="true" />
           <AlertTitle>Einige Search Requests brauchen Aufmerksamkeit</AlertTitle>
           <AlertDescription>
-            {validationErrorCount ? `${validationErrorCount} mit Backend-Validierungsfehler. ` : null}
+            {validationIssueCount ? `${validationIssueCount} mit Validierungs-Issues. ` : null}
             {missingSourceKeyCount ? `${missingSourceKeyCount} ausgewählte Source Keys fehlen in der aktuellen Registry.` : null}
           </AlertDescription>
         </Alert>

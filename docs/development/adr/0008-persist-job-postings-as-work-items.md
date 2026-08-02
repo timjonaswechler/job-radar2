@@ -82,7 +82,7 @@ Duplicate occurrences are prevented per posting/source/url. The same URL may sti
 
 ## Search-run persistence behavior
 
-Running a search request will automatically persist normalized postings. Only active search requests may run and write postings. Draft, disabled, and invalid search requests must fail with a clear error instead of silently producing persisted data.
+Running a search request will automatically persist normalized postings. Only active, valid Search Requests may run and write postings. Draft and disabled Search Requests, and active requests with derived validation issues, must fail with a clear error instead of silently producing persisted data.
 
 Partial source failures still persist successful normalized postings. A fully failed run updates the search request's last-run fields but leaves job postings unchanged.
 

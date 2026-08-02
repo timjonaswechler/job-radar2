@@ -32,7 +32,7 @@ fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String
         && search_request.locations.is_empty()
         && search_request.radius_km.is_none()
         && search_request.source_keys == source_keys
-        && search_request.validation_error.is_none()
+        && search_request.validation_issues.is_empty()
 }
 
 fn smoke_search_request_input(source_keys: Vec<String>) -> CreateSearchRequestInput {

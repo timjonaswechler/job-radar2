@@ -7,3 +7,5 @@ This does not allow hidden data loss. A reset must be explicit, visible, and lim
 Important source knowledge must therefore not live only in SQLite. Built-in sources and source profiles are versioned JSON artifacts in the repository and embedded into the application bundle. Custom sources and source profiles are user/runtime JSON documents in the OS app data directory. Custom documents must not override bundled built-in keys.
 
 The database remains runtime state for search requests, search runs, results, caches, and diagnostics. It may index loaded JSON documents, but it is not the authoritative store for sources or source profiles. Production-grade migration compatibility becomes a hard requirement when Job Radar starts carrying non-disposable user data across stable releases.
+
+When a squashed development schema removes a column or lifecycle value, developers use the explicit `just db-reset-after-squash` path. `just db-preserve-after-squash` is only for unchanged schemas and refuses incompatible data; neither path permits a release build to delete a user's database.

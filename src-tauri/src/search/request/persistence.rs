@@ -3,21 +3,25 @@ use sqlx::{sqlite::SqliteRow, Row};
 
 use crate::search::run::SearchRunStatus;
 
-use super::{SearchRequest, SearchRequestStatus};
+use super::{validation::derive_issues, SearchRequest, SearchRequestStatus, SearchRule};
 
 pub(super) fn search_request_from_row(row: SqliteRow) -> Result<SearchRequest, String> {
     let status: String = row.try_get("status").map_err(db_error)?;
     let last_run_status: Option<String> = row.try_get("last_run_status").map_err(db_error)?;
+    let include_rules: Vec<SearchRule> = json_from_row(&row, "include_rules_json")?;
+    let exclude_rules: Vec<SearchRule> = json_from_row(&row, "exclude_rules_json")?;
+    let source_keys: Vec<String> = json_from_row(&row, "source_keys_json")?;
+    let validation_issues = derive_issues(&include_rules, &exclude_rules, &source_keys);
 
     Ok(SearchRequest {
         id: row.try_get("id").map_err(db_error)?,
         status: SearchRequestStatus::try_from(status.as_str())?,
-        include_rules: json_from_row(&row, "include_rules_json")?,
-        exclude_rules: json_from_row(&row, "exclude_rules_json")?,
+        include_rules,
+        exclude_rules,
         locations: json_from_row(&row, "locations_json")?,
         radius_km: row.try_get("radius_km").map_err(db_error)?,
-        source_keys: json_from_row(&row, "source_keys_json")?,
-        validation_error: row.try_get("validation_error").map_err(db_error)?,
+        source_keys,
+        validation_issues,
         last_run_at: row.try_get("last_run_at").map_err(db_error)?,
         last_run_status: last_run_status
             .as_deref()

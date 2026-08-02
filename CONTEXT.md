@@ -151,8 +151,12 @@ The provider-neutral amount of model reasoning requested for future Agent Conver
 _Avoid_: provider-specific reasoning effort, hidden prompt instruction
 
 **Search Request**:
-A user-created, saved job-search intent containing search terms, optional location criteria, and selected Sources. Search criteria belong here, not in Source Config.
+A user-created, saved job-search intent containing search terms, optional location criteria, and selected Sources. Search criteria belong here, not in Source Config. Its validity is derived from its authored criteria and selected Source keys rather than chosen as lifecycle state.
 _Avoid_: Source, profile, Search Run
+
+**Search Request Status**:
+The user-controlled lifecycle state of a Search Request: `draft`, `active`, or `disabled`. `invalid` is not a persisted Search Request Status; validation issues are derived from the authored Search Request. Invalid drafts remain authorable, while activation and execution require valid criteria.
+_Avoid_: validation state, invalid status, execution result
 
 **Search Run**:
 A durable terminal record of one concrete execution of a Search Request at a specific time. Each executed Source is resolved once through Candidate Resolution; only committed finalized values are normalized/merged across Sources and persisted. A Search Run may complete with errors when only some Sources fail. Runtime Resolution, Diagnostic, usage, provider payload, and criteria-snapshot history is not persisted.

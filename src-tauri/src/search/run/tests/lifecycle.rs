@@ -9,11 +9,7 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
         let temp_dir = tempfile::tempdir().unwrap();
         let executor = fixture_resolution_runtime([("test_source", Ok(vec![]))]);
 
-        for status in [
-            SearchRequestStatus::Draft,
-            SearchRequestStatus::Disabled,
-            SearchRequestStatus::Invalid,
-        ] {
+        for status in [SearchRequestStatus::Draft, SearchRequestStatus::Disabled] {
             let search_request = service
                 .create(CreateSearchRequestInput {
                     status,
@@ -45,6 +41,47 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
             assert!(reloaded.last_run_status.is_none());
             assert!(reloaded.last_run_error.is_none());
         }
+    });
+}
+
+#[test]
+fn execution_admission_uses_the_requests_derived_validation_issues() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let service = SearchRequestService::new(&pool, &running_search_runs);
+        let request = service
+            .create(CreateSearchRequestInput {
+                status: SearchRequestStatus::Draft,
+                include_rules: vec![regex_rule("[")],
+                exclude_rules: vec![],
+                locations: vec![],
+                radius_km: None,
+                source_keys: vec!["test_source".to_string()],
+            })
+            .await
+            .unwrap();
+        sqlx::query("UPDATE search_requests SET status = 'active' WHERE id = ?1")
+            .bind(request.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let error = SearchRunService::new(
+            &pool,
+            &running_search_runs,
+            &fixture_resolution_runtime([("unused", Ok(vec![]))]),
+            temp_dir.path().join("search-run-result.json"),
+            sources::installed::Store::new(temp_dir.path()),
+        )
+        .run(request.id)
+        .await
+        .unwrap_err();
+
+        assert!(error.contains("invalid_regex at /includeRules/0/value"));
+        let reloaded = service.get(request.id).await.unwrap();
+        assert!(reloaded.last_run_at.is_none());
     });
 }
 

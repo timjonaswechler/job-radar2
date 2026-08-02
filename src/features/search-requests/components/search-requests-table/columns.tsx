@@ -118,11 +118,11 @@ export function searchRequestColumns({
       id: "validation",
       header: "Validierung",
       cell: ({ row }) =>
-        row.original.validationError ? (
+        row.original.validationIssues.length ? (
           <div className="grid max-w-56 gap-1">
-            <Badge variant="warning-light">Validation Error</Badge>
+            <Badge variant="warning-light">{row.original.validationLabel}</Badge>
             <span className="truncate text-muted-foreground">
-              {row.original.validationError}
+              {row.original.validationIssues[0].message}
             </span>
           </div>
         ) : (
@@ -219,7 +219,7 @@ function getRunDisabledReason(
   if (row.status !== "active") {
     return "Nur aktive Search Requests können ausgeführt werden.";
   }
-  if (row.validationError) {
+  if (row.validationIssues.length) {
     return "Search Requests mit Validierungsfehlern können nicht ausgeführt werden.";
   }
   if (row.missingSourceKeys.length) {

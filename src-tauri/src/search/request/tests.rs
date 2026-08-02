@@ -5,6 +5,39 @@ use sqlx::{
 };
 
 #[test]
+fn migrated_schema_persists_only_authored_lifecycle_and_criteria() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+
+        let invalid_status = sqlx::query("INSERT INTO search_requests (status) VALUES ('invalid')")
+            .execute(&pool)
+            .await
+            .unwrap_err();
+        assert!(invalid_status
+            .to_string()
+            .contains("CHECK constraint failed"));
+
+        let columns: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM pragma_table_info('search_requests') ORDER BY cid",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert!(!columns.iter().any(|column| column == "validation_error"));
+
+        let unsafe_radius = sqlx::query(
+            "INSERT INTO search_requests (status, radius_km) VALUES ('draft', 9007199254740992)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap_err();
+        assert!(unsafe_radius
+            .to_string()
+            .contains("CHECK constraint failed"));
+    });
+}
+
+#[test]
 fn search_request_crud_round_trips_without_name() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
@@ -15,8 +48,8 @@ fn search_request_crud_round_trips_without_name() {
         let created = service
             .create(CreateSearchRequestInput {
                 status: SearchRequestStatus::Active,
-                include_rules: vec![text_rule(" Physik ")],
-                exclude_rules: vec![text_rule("Praktikum")],
+                include_rules: vec![text_rule(" Physik "), regex_rule("Laser|Optik")],
+                exclude_rules: vec![text_rule("Praktikum"), text_rule("Werkstudent")],
                 locations: vec![" Mainz ".to_string(), "".to_string()],
                 radius_km: Some(30),
                 source_keys: vec![source_key.clone()],
@@ -25,12 +58,26 @@ fn search_request_crud_round_trips_without_name() {
             .unwrap();
 
         assert_eq!(created.status, SearchRequestStatus::Active);
-        assert_eq!(created.include_rules[0].value, "Physik");
-        assert_eq!(created.exclude_rules[0].value, "Praktikum");
+        assert_eq!(
+            created
+                .include_rules
+                .iter()
+                .map(|rule| rule.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Physik", "Laser|Optik"]
+        );
+        assert_eq!(
+            created
+                .exclude_rules
+                .iter()
+                .map(|rule| rule.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Praktikum", "Werkstudent"]
+        );
         assert_eq!(created.locations, vec!["Mainz"]);
         assert_eq!(created.radius_km, Some(30));
         assert_eq!(created.source_keys, vec![source_key]);
-        assert!(created.validation_error.is_none());
+        assert!(created.validation_issues.is_empty());
         assert!(created.last_run_at.is_none());
         assert!(created.last_run_status.is_none());
         assert!(created.last_run_error.is_none());
@@ -77,18 +124,34 @@ fn search_request_crud_round_trips_without_name() {
         assert_eq!(updated.radius_km, None);
         assert!(updated.source_keys.is_empty());
 
+        let disabled = service
+            .update(
+                created.id,
+                UpdateSearchRequestInput {
+                    status: SearchRequestStatus::Disabled,
+                    include_rules: vec![text_rule("Physik")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["fixture_source".to_string()],
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(disabled.status, SearchRequestStatus::Disabled);
+        assert!(disabled.validation_issues.is_empty());
+
         service.delete(created.id).await.unwrap();
         assert!(service.get(created.id).await.is_err());
     });
 }
 
 #[test]
-fn invalid_regex_is_persisted_as_validation_error_only_when_not_active() {
+fn invalid_draft_exposes_typed_derived_issues_while_active_input_is_rejected() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
         let running_search_runs = RunningSearchRuns::default();
         let service = SearchRequestService::new(&pool, &running_search_runs);
-        let source_key = "fixture_source".to_string();
 
         let draft = service
             .create(CreateSearchRequestInput {
@@ -101,12 +164,21 @@ fn invalid_regex_is_persisted_as_validation_error_only_when_not_active() {
             })
             .await
             .unwrap();
-        assert_eq!(draft.status, SearchRequestStatus::Draft);
-        assert!(draft
-            .validation_error
-            .as_deref()
-            .unwrap()
-            .contains("includeRules[0].value is invalid regex"));
+        assert_eq!(
+            draft.validation_issues,
+            vec![
+                ValidationIssue {
+                    code: ValidationIssueCode::InvalidRegex,
+                    path: "/includeRules/0/value".to_string(),
+                    message: "Rule value must be a valid regular expression.".to_string(),
+                },
+                ValidationIssue {
+                    code: ValidationIssueCode::SourceKeyRequired,
+                    path: "/sourceKeys".to_string(),
+                    message: "At least one Source key is required.".to_string(),
+                },
+            ]
+        );
 
         let active_error = service
             .create(CreateSearchRequestInput {
@@ -115,12 +187,84 @@ fn invalid_regex_is_persisted_as_validation_error_only_when_not_active() {
                 exclude_rules: vec![],
                 locations: vec![],
                 radius_km: None,
-                source_keys: vec![source_key.clone()],
+                source_keys: vec!["fixture_source".to_string()],
             })
             .await
             .unwrap_err();
-        assert!(active_error.contains("validationError"));
-        assert!(active_error.contains("invalid regex"));
+        assert!(active_error.contains("invalid_regex"));
+        assert!(active_error.contains("/includeRules/0/value"));
+    });
+}
+
+#[test]
+fn duplicate_source_keys_are_preserved_and_derived_as_bounded_issues() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let running_search_runs = RunningSearchRuns::default();
+        let service = SearchRequestService::new(&pool, &running_search_runs);
+
+        let draft = service
+            .create(CreateSearchRequestInput {
+                status: SearchRequestStatus::Draft,
+                include_rules: (0..70).map(|_| regex_rule("[")).collect(),
+                exclude_rules: vec![],
+                locations: vec![],
+                radius_km: None,
+                source_keys: vec![
+                    "first".to_string(),
+                    "second".to_string(),
+                    "first".to_string(),
+                ],
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(draft.source_keys, vec!["first", "second", "first"]);
+        assert_eq!(draft.validation_issues.len(), 64);
+        assert_eq!(
+            draft.validation_issues.last().unwrap().code,
+            ValidationIssueCode::IssuesTruncated
+        );
+
+        let duplicate_only = service
+            .update(
+                draft.id,
+                UpdateSearchRequestInput {
+                    status: SearchRequestStatus::Draft,
+                    include_rules: vec![text_rule("Physik")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["first".to_string(), "first".to_string()],
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            duplicate_only.validation_issues,
+            vec![ValidationIssue {
+                code: ValidationIssueCode::DuplicateSourceKey,
+                path: "/sourceKeys/1".to_string(),
+                message: "Source key duplicates /sourceKeys/0; remove the duplicate entry."
+                    .to_string(),
+            }]
+        );
+
+        let active_error = service
+            .update(
+                draft.id,
+                UpdateSearchRequestInput {
+                    status: SearchRequestStatus::Active,
+                    include_rules: vec![text_rule("Physik")],
+                    exclude_rules: vec![],
+                    locations: vec![],
+                    radius_km: None,
+                    source_keys: vec!["first".to_string(), "first".to_string()],
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(active_error.contains("duplicate_source_key at /sourceKeys/1"));
     });
 }
 
@@ -180,7 +324,7 @@ fn active_search_requests_require_include_rule_and_source_key() {
             })
             .await
             .unwrap_err();
-        assert!(missing_rule.contains("at least one include rule"));
+        assert!(missing_rule.contains("include_rule_required at /includeRules"));
 
         let missing_source = service
             .create(CreateSearchRequestInput {
@@ -193,7 +337,7 @@ fn active_search_requests_require_include_rule_and_source_key() {
             })
             .await
             .unwrap_err();
-        assert!(missing_source.contains("at least one sourceKey"));
+        assert!(missing_source.contains("source_key_required at /sourceKeys"));
     });
 }
 
@@ -250,6 +394,19 @@ fn unsupported_rules_and_empty_rule_values_are_rejected() {
             .await
             .unwrap_err();
         assert!(empty_value.contains("includeRules[0].value must not be empty"));
+
+        let unsafe_radius = service
+            .create(CreateSearchRequestInput {
+                status: SearchRequestStatus::Draft,
+                include_rules: vec![text_rule("Physik")],
+                exclude_rules: vec![],
+                locations: vec![],
+                radius_km: Some(9_007_199_254_740_992),
+                source_keys: vec![],
+            })
+            .await
+            .unwrap_err();
+        assert!(unsafe_radius.contains("radiusKm must be at most 9007199254740991"));
     });
 }
 

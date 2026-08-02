@@ -714,8 +714,8 @@ src-tauri/src/lib.rs:59:23:arbitrary_execution:plugin	final_implementation_or_in
 src-tauri/src/lib.rs:60:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:60:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/posting/tests.rs:76:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/request/tests.rs:212:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/request/tests.rs:304:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/request/tests.rs:356:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/request/tests.rs:461:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/execution.rs:17:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/tests/support.rs:169:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/tests/support.rs:287:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
@@ -928,7 +928,7 @@ src/features/postings/tests/postings-ui.test.ts:129:17:predicate_all_any_none:"a
 src/features/postings/tests/postings-ui.test.ts:276:7:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/features/search-requests/model/search-request-form-model.ts:47:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/search-requests/model/search-request-form-model.ts:48:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/registry/profile/profile-registry-grid.tsx:9:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/registry/source/source-live-check-section.tsx:292:58:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/registry/source/source-registry-grid.tsx:7:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
@@ -944,11 +944,12 @@ src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_
 src/lib/api/agent-chat.ts:23:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/agent-chat.ts:75:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/job-postings.ts:11:5:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:105:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:106:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:15:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:239:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:239:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:92:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-requests.ts:93:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:199:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:315:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-requests.ts:315:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/sources/detection.test.ts:70:35:retry:retry	explicit_negative_or_contract_test	Profile Detection transport negative test rejects non-contract completion values.
 src/lib/api/sources/detection.ts:203:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.
 src/lib/api/sources/detection.ts:203:56:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.

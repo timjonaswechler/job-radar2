@@ -6,7 +6,10 @@ import {
   searchRequestFormFromRequest,
 } from "@/features/search-requests/model/search-request-form-model";
 import { createSearchRunDiagnosticViewModels } from "@/features/search-requests/model/search-run-diagnostics";
-import type { SearchRequest } from "@/lib/api/search-requests";
+import {
+  parseSearchRequest,
+  type SearchRequest,
+} from "@/lib/api/search-requests";
 import type { StructuredDiagnostic } from "@/lib/api/sources";
 import { test } from "vitest";
 
@@ -15,13 +18,51 @@ test("search requests ui contract", async () => {
   assert.equal(newForm.radiusKmText, "42");
   assert.equal(buildSearchRequestInput(newForm).input?.radiusKm, 42);
 
-  const savedRadiusForm = searchRequestFormFromRequest(searchRequest({ radiusKm: 15 }), 42);
+  const savedRadiusForm = searchRequestFormFromRequest(searchRequest({ radiusKm: 15 }));
   assert.equal(savedRadiusForm.radiusKmText, "15");
   assert.equal(buildSearchRequestInput(savedRadiusForm).input?.radiusKm, 15);
 
-  const unsavedRadiusForm = searchRequestFormFromRequest(searchRequest({ radiusKm: null }), 42);
-  assert.equal(unsavedRadiusForm.radiusKmText, "42");
-  assert.equal(buildSearchRequestInput(unsavedRadiusForm).input?.radiusKm, 42);
+  const noRadiusForm = searchRequestFormFromRequest(searchRequest({ radiusKm: null }));
+  assert.equal(noRadiusForm.radiusKmText, "");
+  assert.equal(buildSearchRequestInput(noRadiusForm).input?.radiusKm, null);
+
+  const maximumRadiusForm = createEmptySearchRequestForm(Number.MAX_SAFE_INTEGER);
+  assert.equal(
+    buildSearchRequestInput(maximumRadiusForm).input?.radiusKm,
+    Number.MAX_SAFE_INTEGER,
+  );
+  maximumRadiusForm.radiusKmText = String(Number.MAX_SAFE_INTEGER + 1);
+  assert.match(buildSearchRequestInput(maximumRadiusForm).errors[0], /höchstens/);
+
+  const duplicateDraft = createEmptySearchRequestForm();
+  duplicateDraft.sourceKeys = ["fixture_source", "fixture_source"];
+  const duplicateDraftResult = buildSearchRequestInput(duplicateDraft);
+  assert.deepEqual(duplicateDraftResult.input?.sourceKeys, [
+    "fixture_source",
+    "fixture_source",
+  ]);
+  assert.match(duplicateDraftResult.warnings[0], /doppelt.*entferne/i);
+
+  duplicateDraft.status = "active";
+  duplicateDraft.includeRules[0].value = "Physik";
+  const duplicateActiveResult = buildSearchRequestInput(duplicateDraft);
+  assert.equal(duplicateActiveResult.input, null);
+  assert.match(duplicateActiveResult.errors[0], /doppelt.*entferne/i);
+
+  const decoded = parseSearchRequest(searchRequest({
+    validationIssues: [{
+      code: "duplicate_source_key",
+      path: "/sourceKeys/1",
+      message: "Source key duplicates /sourceKeys/0; remove the duplicate entry.",
+    }],
+  }));
+  assert.equal(decoded?.validationIssues[0].code, "duplicate_source_key");
+  assert.equal(parseSearchRequest({ ...searchRequest(), status: "invalid" }), null);
+  assert.equal(parseSearchRequest({ ...searchRequest(), validationIssues: "invalid" }), null);
+  assert.equal(
+    parseSearchRequest({ ...searchRequest(), radiusKm: Number.MAX_SAFE_INTEGER + 1 }),
+    null,
+  );
 
   const missingRadiusDiagnostic = structuredDiagnostic({
     code: "location_filter_not_applied_missing_radius_km",
@@ -45,7 +86,7 @@ test("search requests ui contract", async () => {
       locations: ["Mainz"],
       radiusKm: null,
       sourceKeys: [],
-      validationError: null,
+      validationIssues: [],
       lastRunAt: null,
       lastRunStatus: null,
       lastRunError: null,

@@ -2,7 +2,7 @@ use sqlx::SqlitePool;
 
 use super::{
     persistence::{db_error, json_to_string, search_request_from_row},
-    validation::validate_search_request_input,
+    validation::normalize_search_request_input,
     CreateSearchRequestInput, RunningSearchRuns, SearchRequest, UpdateSearchRequestInput,
 };
 
@@ -20,16 +20,14 @@ impl<'a> SearchRequestService<'a> {
     }
 
     pub async fn create(&self, input: CreateSearchRequestInput) -> Result<SearchRequest, String> {
-        let input = validate_search_request_input(
-            self.pool,
+        let input = normalize_search_request_input(
             input.status,
             input.include_rules,
             input.exclude_rules,
             input.locations,
             input.radius_km,
             input.source_keys,
-        )
-        .await?;
+        )?;
         let include_rules_json = json_to_string(&input.include_rules)?;
         let exclude_rules_json = json_to_string(&input.exclude_rules)?;
         let locations_json = json_to_string(&input.locations)?;
@@ -38,9 +36,9 @@ impl<'a> SearchRequestService<'a> {
         let result = sqlx::query(
             "INSERT INTO search_requests (
                status, include_rules_json, exclude_rules_json, locations_json,
-               radius_km, source_keys_json, validation_error
+               radius_km, source_keys_json
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(input.status.as_str())
         .bind(include_rules_json)
@@ -48,7 +46,6 @@ impl<'a> SearchRequestService<'a> {
         .bind(locations_json)
         .bind(input.radius_km)
         .bind(source_keys_json)
-        .bind(input.validation_error.as_deref())
         .execute(self.pool)
         .await
         .map_err(db_error)?;
@@ -59,7 +56,7 @@ impl<'a> SearchRequestService<'a> {
     pub async fn list(&self) -> Result<Vec<SearchRequest>, String> {
         let rows = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_keys_json, validation_error,
+                    radius_km, source_keys_json,
                     last_run_at, last_run_status, last_run_error,
                     created_at, updated_at
              FROM search_requests
@@ -75,7 +72,7 @@ impl<'a> SearchRequestService<'a> {
     pub async fn get(&self, id: i64) -> Result<SearchRequest, String> {
         let row = sqlx::query(
             "SELECT id, status, include_rules_json, exclude_rules_json, locations_json,
-                    radius_km, source_keys_json, validation_error,
+                    radius_km, source_keys_json,
                     last_run_at, last_run_status, last_run_error,
                     created_at, updated_at
              FROM search_requests
@@ -99,16 +96,14 @@ impl<'a> SearchRequestService<'a> {
         self.get(id).await?;
         self.ensure_not_running(id)?;
 
-        let input = validate_search_request_input(
-            self.pool,
+        let input = normalize_search_request_input(
             input.status,
             input.include_rules,
             input.exclude_rules,
             input.locations,
             input.radius_km,
             input.source_keys,
-        )
-        .await?;
+        )?;
         let include_rules_json = json_to_string(&input.include_rules)?;
         let exclude_rules_json = json_to_string(&input.exclude_rules)?;
         let locations_json = json_to_string(&input.locations)?;
@@ -122,9 +117,8 @@ impl<'a> SearchRequestService<'a> {
                  locations_json = ?4,
                  radius_km = ?5,
                  source_keys_json = ?6,
-                 validation_error = ?7,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-             WHERE id = ?8",
+             WHERE id = ?7",
         )
         .bind(input.status.as_str())
         .bind(include_rules_json)
@@ -132,7 +126,6 @@ impl<'a> SearchRequestService<'a> {
         .bind(locations_json)
         .bind(input.radius_km)
         .bind(source_keys_json)
-        .bind(input.validation_error.as_deref())
         .bind(id)
         .execute(self.pool)
         .await

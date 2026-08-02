@@ -14,4 +14,7 @@ pub use running::RunningSearchRun;
 pub use running::RunningSearchRuns;
 pub use service::SearchRequestService;
 pub use status::SearchRequestStatus;
-pub use types::{CreateSearchRequestInput, SearchRequest, UpdateSearchRequestInput};
+pub use types::{
+    CreateSearchRequestInput, SearchRequest, UpdateSearchRequestInput, ValidationIssue,
+    ValidationIssueCode,
+};

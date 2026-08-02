@@ -78,7 +78,7 @@ export function SearchRequestFormDialog({
     if (!open) return;
     setForm(
       request
-        ? searchRequestFormFromRequest(request, defaultSearchRadiusKm)
+        ? searchRequestFormFromRequest(request)
         : createEmptySearchRequestForm(defaultSearchRadiusKm),
     );
     setSaveAttempted(false);
@@ -86,6 +86,9 @@ export function SearchRequestFormDialog({
   }, [defaultSearchRadiusKm, open, request]);
 
   const buildResult = useMemo(() => buildSearchRequestInput(form), [form]);
+  const persistedIssues = request?.validationIssues.filter(
+    (issue) => issue.code !== "duplicate_source_key",
+  ) ?? [];
   const title = request ? "Search Request bearbeiten" : "Search Request erstellen";
   const disabled = pending;
 
@@ -131,11 +134,17 @@ export function SearchRequestFormDialog({
             </AlertDescription>
           </Alert>
 
-          {request?.validationError ? (
+          {persistedIssues.length ? (
             <Alert variant="warning">
               <AlertCircleIcon aria-hidden="true" />
-              <AlertTitle>Backend-Validierung</AlertTitle>
-              <AlertDescription>{request.validationError}</AlertDescription>
+              <AlertTitle>Validierung</AlertTitle>
+              <AlertDescription>
+                <ul className="list-inside list-disc">
+                  {persistedIssues.map((issue) => (
+                    <li key={`${issue.code}:${issue.path}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
             </Alert>
           ) : null}
 
@@ -212,6 +221,20 @@ export function SearchRequestFormDialog({
             onChange={(sourceKeys) => setForm((current) => ({ ...current, sourceKeys }))}
           />
         </div>
+
+        {buildResult.warnings.length ? (
+          <Alert variant="warning">
+            <AlertCircleIcon aria-hidden="true" />
+            <AlertTitle>Eingabe prüfen</AlertTitle>
+            <AlertDescription>
+              <ul className="list-inside list-disc">
+                {buildResult.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {(saveAttempted && buildResult.errors.length) || submitError ? (
           <Alert variant="destructive">

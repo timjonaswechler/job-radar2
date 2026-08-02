@@ -47,7 +47,7 @@ export function SourceKeyPicker({
 
   const toggleSourceKey = (sourceKey: SourceKey, checked: boolean) => {
     if (checked) {
-      onChange([...new Set([...selectedSourceKeys, sourceKey])]);
+      onChange([...selectedSourceKeys, sourceKey]);
       return;
     }
     onChange(selectedSourceKeys.filter((selectedKey) => selectedKey !== sourceKey));

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core"
 
 import type { SourceKey, StructuredDiagnostic } from "@/lib/api/sources"
 
-export type SearchRequestStatus = "draft" | "active" | "disabled" | "invalid"
+export type SearchRequestStatus = "draft" | "active" | "disabled"
 
 export type SearchRunStatus =
   | "completed"
@@ -20,6 +20,19 @@ export type SearchRule = {
   value: string
 }
 
+export type SearchRequestValidationIssueCode =
+  | "invalid_regex"
+  | "include_rule_required"
+  | "source_key_required"
+  | "duplicate_source_key"
+  | "issues_truncated"
+
+export type SearchRequestValidationIssue = {
+  code: SearchRequestValidationIssueCode
+  path: string
+  message: string
+}
+
 export type SearchRequest = {
   id: number
   status: SearchRequestStatus
@@ -28,7 +41,7 @@ export type SearchRequest = {
   locations: string[]
   radiusKm: number | null
   sourceKeys: SourceKey[]
-  validationError: string | null
+  validationIssues: SearchRequestValidationIssue[]
   lastRunAt: string | null
   lastRunStatus: SearchRunStatus | null
   lastRunError: string | null
@@ -145,6 +158,69 @@ export type CreateSearchRequestInput = {
 }
 
 export type UpdateSearchRequestInput = CreateSearchRequestInput
+
+export function parseSearchRequest(value: unknown): SearchRequest | null {
+  if (!isRecord(value)) return null
+  if (!isNonNegativeSafeInteger(value.id)) return null
+  if (!isSearchRequestStatus(value.status)) return null
+  if (!isArrayOf(value.includeRules, isSearchRule)) return null
+  if (!isArrayOf(value.excludeRules, isSearchRule)) return null
+  if (!isArrayOf(value.locations, isString)) return null
+  if (!(value.radiusKm === null || isNonNegativeSafeInteger(value.radiusKm))) return null
+  if (!isArrayOf(value.sourceKeys, isString)) return null
+  if (!isArrayOf(value.validationIssues, isSearchRequestValidationIssue)) return null
+  if (value.validationIssues.length > 64) return null
+  if (!(value.lastRunAt === null || typeof value.lastRunAt === "string")) return null
+  if (!(value.lastRunStatus === null || isSearchRunStatus(value.lastRunStatus))) return null
+  if (!(value.lastRunError === null || typeof value.lastRunError === "string")) return null
+  if (typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") return null
+
+  return {
+    id: value.id,
+    status: value.status,
+    includeRules: value.includeRules,
+    excludeRules: value.excludeRules,
+    locations: value.locations,
+    radiusKm: value.radiusKm,
+    sourceKeys: value.sourceKeys,
+    validationIssues: value.validationIssues,
+    lastRunAt: value.lastRunAt,
+    lastRunStatus: value.lastRunStatus,
+    lastRunError: value.lastRunError,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  }
+}
+
+function isSearchRule(value: unknown): value is SearchRule {
+  return (
+    isRecord(value) &&
+    value.target === "title" &&
+    (value.kind === "text" || value.kind === "regex") &&
+    typeof value.value === "string"
+  )
+}
+
+function isSearchRequestValidationIssue(
+  value: unknown,
+): value is SearchRequestValidationIssue {
+  return (
+    isRecord(value) &&
+    [
+      "invalid_regex",
+      "include_rule_required",
+      "source_key_required",
+      "duplicate_source_key",
+      "issues_truncated",
+    ].includes(value.code as SearchRequestValidationIssueCode) &&
+    typeof value.path === "string" &&
+    typeof value.message === "string"
+  )
+}
+
+function isSearchRequestStatus(value: unknown): value is SearchRequestStatus {
+  return value === "draft" || value === "active" || value === "disabled"
+}
 
 export function parseSearchRunResult(value: unknown): SearchRunResult | null {
   if (!isRecord(value)) return null
@@ -289,23 +365,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-export function createSearchRequest(input: CreateSearchRequestInput) {
-  return invoke<SearchRequest>("create_search_request", { input })
+export async function createSearchRequest(input: CreateSearchRequestInput) {
+  return requireSearchRequest(
+    await invoke<unknown>("create_search_request", { input }),
+  )
 }
 
-export function listSearchRequests() {
-  return invoke<SearchRequest[]>("list_search_requests")
+export async function listSearchRequests() {
+  const value = await invoke<unknown>("list_search_requests")
+  if (!Array.isArray(value)) throw invalidSearchRequestResponse()
+  return value.map(requireSearchRequest)
 }
 
-export function getSearchRequest(id: number) {
-  return invoke<SearchRequest>("get_search_request", { id })
+export async function getSearchRequest(id: number) {
+  return requireSearchRequest(await invoke<unknown>("get_search_request", { id }))
 }
 
-export function updateSearchRequest(
+export async function updateSearchRequest(
   id: number,
   input: UpdateSearchRequestInput,
 ) {
-  return invoke<SearchRequest>("update_search_request", { id, input })
+  return requireSearchRequest(
+    await invoke<unknown>("update_search_request", { id, input }),
+  )
+}
+
+function requireSearchRequest(value: unknown) {
+  const request = parseSearchRequest(value)
+  if (!request) throw invalidSearchRequestResponse()
+  return request
+}
+
+function invalidSearchRequestResponse() {
+  return new Error("Search Request response has an invalid shape.")
 }
 
 export function deleteSearchRequest(id: number) {

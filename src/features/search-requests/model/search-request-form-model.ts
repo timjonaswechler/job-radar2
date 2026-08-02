@@ -26,6 +26,7 @@ export type SearchRequestFormState = {
 export type SearchRequestFormBuildResult = {
   input: CreateSearchRequestInput | UpdateSearchRequestInput | null;
   errors: string[];
+  warnings: string[];
 };
 
 export const emptySearchRequestForm: SearchRequestFormState = createEmptySearchRequestForm();
@@ -49,7 +50,6 @@ export function emptySearchRuleDraft(): SearchRuleDraft {
 
 export function searchRequestFormFromRequest(
   request: SearchRequest,
-  defaultSearchRadiusKm: number | null = null,
 ): SearchRequestFormState {
   return {
     status: request.status,
@@ -58,10 +58,7 @@ export function searchRequestFormFromRequest(
       : [emptySearchRuleDraft()],
     excludeRules: request.excludeRules.map(searchRuleDraftFromRule),
     locationsText: request.locations.join("\n"),
-    radiusKmText:
-      request.radiusKm === null
-        ? formatDefaultRadius(defaultSearchRadiusKm)
-        : String(request.radiusKm),
+    radiusKmText: request.radiusKm === null ? "" : String(request.radiusKm),
     sourceKeys: request.sourceKeys,
   };
 }
@@ -70,6 +67,7 @@ export function buildSearchRequestInput(
   form: SearchRequestFormState,
 ): SearchRequestFormBuildResult {
   const errors: string[] = [];
+  const warnings: string[] = [];
   const includeRules = normalizeRuleDrafts(form.includeRules);
   const excludeRules = normalizeRuleDrafts(form.excludeRules);
   const locations = form.locationsText
@@ -77,7 +75,12 @@ export function buildSearchRequestInput(
     .map((location) => location.trim())
     .filter(Boolean);
   const radiusKm = parseRadiusKm(form.radiusKmText, errors);
-  const sourceKeys = uniqueTrimmed(form.sourceKeys);
+  const sourceKeys = trimmed(form.sourceKeys);
+  if (new Set(sourceKeys).size !== sourceKeys.length) {
+    const message = "Ein Source Key ist doppelt ausgewählt; entferne die Source und wähle sie einmal neu aus.";
+    warnings.push(message);
+    if (form.status === "active") errors.push(message);
+  }
 
   if (form.status === "active") {
     if (!includeRules.length) {
@@ -88,7 +91,7 @@ export function buildSearchRequestInput(
     }
   }
 
-  if (errors.length) return { input: null, errors };
+  if (errors.length) return { input: null, errors, warnings };
 
   return {
     input: {
@@ -100,6 +103,7 @@ export function buildSearchRequestInput(
       sourceKeys,
     },
     errors: [],
+    warnings,
   };
 }
 
@@ -127,9 +131,14 @@ function parseRadiusKm(value: string, errors: string[]) {
     errors.push("Radius muss eine ganze Zahl ab 0 sein.");
     return null;
   }
-  return Number(trimmed);
+  const radiusKm = Number(trimmed);
+  if (!Number.isSafeInteger(radiusKm)) {
+    errors.push(`Radius darf höchstens ${Number.MAX_SAFE_INTEGER} sein.`);
+    return null;
+  }
+  return radiusKm;
 }
 
-function uniqueTrimmed(values: string[]) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+function trimmed(values: string[]) {
+  return values.map((value) => value.trim()).filter(Boolean);
 }

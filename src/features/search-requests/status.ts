@@ -5,7 +5,6 @@ export const searchRequestStatusLabels: Record<SearchRequestStatus, string> = {
   draft: "Entwurf",
   active: "Aktiv",
   disabled: "Deaktiviert",
-  invalid: "Ungültig",
 };
 
 export const searchRequestStatusBadgeVariants: Record<
@@ -15,7 +14,6 @@ export const searchRequestStatusBadgeVariants: Record<
   draft: "primary-outline",
   active: "success-light",
   disabled: "invert-light",
-  invalid: "destructive-light",
 };
 
 export const searchRequestStatusOptions = Object.entries(
