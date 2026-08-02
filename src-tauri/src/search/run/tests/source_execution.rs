@@ -4,12 +4,13 @@ use super::support::*;
 fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("laser")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -31,12 +32,11 @@ fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -81,7 +81,7 @@ fn missing_source_key_becomes_failed_source_run_and_valid_keys_continue() {
 fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let temp_dir = tempfile::tempdir().unwrap();
         let mut invalid_source: Value =
             serde_json::from_str(&source_json("invalid_source", "Invalid Source")).unwrap();
@@ -97,9 +97,10 @@ fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
             temp_dir.path().join("sources/valid_source.json"),
             &source_json("valid_source", "Valid Source"),
         );
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("laser")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -120,12 +121,11 @@ fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -144,7 +144,7 @@ fn schema_invalid_selected_source_is_not_admitted_and_valid_sources_continue() {
 fn draft_and_disabled_selected_sources_are_skipped_without_execution() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let temp_dir = tempfile::tempdir().unwrap();
         write_json(
             temp_dir.path().join("sources/draft_source.json"),
@@ -158,9 +158,10 @@ fn draft_and_disabled_selected_sources_are_skipped_without_execution() {
             temp_dir.path().join("sources/active_source.json"),
             &source_json("active_source", "Active Source"),
         );
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("laser")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -185,12 +186,11 @@ fn draft_and_disabled_selected_sources_are_skipped_without_execution() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 

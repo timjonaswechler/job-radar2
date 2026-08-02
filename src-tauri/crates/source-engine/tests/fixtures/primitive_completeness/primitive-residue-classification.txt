@@ -714,11 +714,8 @@ src-tauri/src/lib.rs:59:23:arbitrary_execution:plugin	final_implementation_or_in
 src-tauri/src/lib.rs:60:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:60:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/posting/tests.rs:76:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/request/tests.rs:356:27:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/request/tests.rs:461:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/run/execution.rs:17:32:bot:Bot	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/run/tests/support.rs:169:15:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/run/tests/support.rs:287:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/search/run/tests/support.rs:288:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/desktop/browser_acquisition.rs:106:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
@@ -929,6 +926,7 @@ src/features/postings/tests/postings-ui.test.ts:276:7:predicate_all_any_none:"al
 src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/search-requests/model/search-request-form-model.ts:48:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/search-requests/tests/search-request-form-dialog.test.tsx:60:45:json_text:"text"	explicit_negative_or_contract_test	Executable Search Request transport test fixture reviewed for the matched token.
 src/features/sources/registry/profile/profile-registry-grid.tsx:9:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/registry/source/source-live-check-section.tsx:292:58:predicate_all_any_none:"none"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/sources/registry/source/source-registry-grid.tsx:7:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.

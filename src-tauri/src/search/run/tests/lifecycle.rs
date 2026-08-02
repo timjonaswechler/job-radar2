@@ -4,14 +4,12 @@ use super::support::*;
 fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_empty() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
-        let service = SearchRequestService::new(&pool, &running_search_runs);
-        let temp_dir = tempfile::tempdir().unwrap();
-        let executor = fixture_resolution_runtime([("test_source", Ok(vec![]))]);
+        let catalog = Catalog::new(pool.clone());
+        let service = catalog.clone();
 
-        for status in [SearchRequestStatus::Draft, SearchRequestStatus::Disabled] {
+        for status in [Status::Draft, Status::Disabled] {
             let search_request = service
-                .create(CreateSearchRequestInput {
+                .create(Input {
                     status,
                     include_rules: vec![text_rule("laser")],
                     exclude_rules: vec![],
@@ -22,24 +20,20 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
                 .await
                 .unwrap();
 
-            let error = SearchRunService::new(
-                &pool,
-                &running_search_runs,
-                &executor,
-                temp_dir
-                    .path()
-                    .join(format!("{:?}-search-run-result.json", status)),
-                sources::installed::Store::new(temp_dir.path()),
-            )
-            .run(search_request.id)
-            .await
-            .unwrap_err();
+            let error = catalog
+                .begin_execution(search_request.id)
+                .await
+                .err()
+                .unwrap()
+                .to_string();
 
             assert!(error.contains("cannot run unless status is active"));
-            let reloaded = service.get(search_request.id).await.unwrap();
-            assert!(reloaded.last_run_at.is_none());
-            assert!(reloaded.last_run_status.is_none());
-            assert!(reloaded.last_run_error.is_none());
+            let reloaded = crate::search::run::latest_summary(&pool, search_request.id)
+                .await
+                .unwrap();
+            assert!(reloaded.at.is_none());
+            assert!(reloaded.status.is_none());
+            assert!(reloaded.error.is_none());
         }
     });
 }
@@ -48,12 +42,11 @@ fn only_active_search_requests_can_run_and_non_active_requests_leave_last_run_em
 fn execution_admission_uses_the_requests_derived_validation_issues() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let service = SearchRequestService::new(&pool, &running_search_runs);
+        let catalog = Catalog::new(pool.clone());
+        let service = catalog.clone();
         let request = service
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Draft,
+            .create(Input {
+                status: Status::Draft,
                 include_rules: vec![regex_rule("[")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -63,25 +56,72 @@ fn execution_admission_uses_the_requests_derived_validation_issues() {
             .await
             .unwrap();
         sqlx::query("UPDATE search_requests SET status = 'active' WHERE id = ?1")
-            .bind(request.id)
+            .bind(request.id.get())
             .execute(&pool)
             .await
             .unwrap();
 
-        let error = SearchRunService::new(
-            &pool,
-            &running_search_runs,
-            &fixture_resolution_runtime([("unused", Ok(vec![]))]),
-            temp_dir.path().join("search-run-result.json"),
-            sources::installed::Store::new(temp_dir.path()),
-        )
-        .run(request.id)
-        .await
-        .unwrap_err();
+        let error = catalog
+            .begin_execution(request.id)
+            .await
+            .err()
+            .unwrap()
+            .to_string();
 
         assert!(error.contains("invalid_regex at /includeRules/0/value"));
-        let reloaded = service.get(request.id).await.unwrap();
-        assert!(reloaded.last_run_at.is_none());
+        let reloaded = crate::search::run::latest_summary(&pool, request.id)
+            .await
+            .unwrap();
+        assert!(reloaded.at.is_none());
+    });
+}
+
+#[test]
+fn search_run_holds_execution_lease_at_terminal_persistence_boundary_and_releases_after_return() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let catalog = Catalog::new(pool.clone());
+        let temp_dir = tempfile::tempdir().unwrap();
+        let request = catalog
+            .create(Input {
+                status: Status::Active,
+                include_rules: vec![text_rule("engineer")],
+                exclude_rules: vec![],
+                locations: vec![],
+                radius_km: None,
+                source_keys: vec!["missing_source".into()],
+            })
+            .await
+            .unwrap();
+        let observed = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let callback = {
+            let catalog = catalog.clone();
+            let observed = observed.clone();
+            move || {
+                let catalog = catalog.clone();
+                let result = std::thread::spawn(move || {
+                    tauri::async_runtime::block_on(async move { catalog.delete(request.id).await })
+                })
+                .join()
+                .unwrap();
+                *observed.lock().unwrap() = Some(result);
+            }
+        };
+        let execution = catalog.begin_execution(request.id).await.unwrap();
+        SearchRunService::new_with_result_artifact(
+            &pool,
+            &fixture_resolution_runtime([("unused", Ok(vec![]))]),
+            SearchRunResultArtifact::Disabled,
+            sources::installed::Store::new(temp_dir.path()),
+        )
+        .before_persistence(&callback)
+        .run(execution)
+        .await
+        .unwrap();
+        assert!(
+            matches!(observed.lock().unwrap().take(), Some(Err(search_requests::Error::Busy { id })) if id == request.id)
+        );
+        catalog.delete(request.id).await.unwrap();
     });
 }
 
@@ -89,7 +129,7 @@ fn execution_admission_uses_the_requests_derived_validation_issues() {
 fn completed_run_persists_postings_and_records_last_run_success() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
         let search_request = create_test_search_request(
@@ -111,12 +151,11 @@ fn completed_run_persists_postings_and_records_last_run_success() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -137,12 +176,11 @@ fn completed_run_persists_postings_and_records_last_run_success() {
             .unwrap();
         assert_eq!(source_url, "https://example.test/laser");
 
-        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
-            .get(search_request.id)
+        let reloaded = crate::search::run::latest_summary(&pool, search_request.id)
             .await
             .unwrap();
-        assert_eq!(reloaded.last_run_at, Some(result.generated_at));
-        assert_eq!(reloaded.last_run_status, Some(SearchRunStatus::Completed));
-        assert!(reloaded.last_run_error.is_none());
+        assert_eq!(reloaded.at, Some(result.generated_at));
+        assert_eq!(reloaded.status, Some(SearchRunStatus::Completed));
+        assert!(reloaded.error.is_none());
     });
 }

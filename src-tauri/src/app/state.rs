@@ -11,7 +11,7 @@ pub struct AppState {
     pub paths: AppPaths,
     pub resources: AppResources,
     pub browser_runtime_install_lock: Mutex<()>,
-    pub running_search_runs: Arc<crate::search::request::RunningSearchRuns>,
+    pub search_requests: search_requests::Catalog,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
@@ -79,12 +79,14 @@ impl AppState {
             Arc::new(sources::live_check::SystemClock),
         );
 
+        let search_requests = search_requests::Catalog::new(db.clone());
+
         Ok(Self {
             db,
             paths,
             resources,
             browser_runtime_install_lock: Mutex::new(()),
-            running_search_runs: Arc::new(crate::search::request::RunningSearchRuns::default()),
+            search_requests,
             background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(
                 crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
                 notifier,

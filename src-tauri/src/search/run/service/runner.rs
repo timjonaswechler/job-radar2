@@ -5,10 +5,8 @@ use search_resolution::CompiledSearchRequirements;
 use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
 use sqlx::SqlitePool;
 
-use crate::search::{
-    request::{RunningSearchRuns, SearchRequestService},
-    run::{persist_atomic_search_run, AtomicSearchRunInput},
-};
+use crate::search::run::{persist_atomic_search_run, AtomicSearchRunInput};
+use search_requests::Execution;
 
 use super::super::{
     cancellation_or_default, NeverCancelled, SearchRunResolutionRuntime, SearchRunResult,
@@ -19,13 +17,12 @@ use super::{
     overall_status, resolve_selected_sources_with_options, source_run_cancelled_for_key,
     source_run_cancelled_for_source, source_run_completed, source_run_failed_for_key,
     source_run_failed_for_source, source_run_resolution_failed, source_run_skipped_for_source,
-    validate_executable_search_request, write_search_run_result, SearchRunResultArtifact,
-    SelectedSearchRunSource, SourceSelectionOptions,
+    write_search_run_result, SearchRunResultArtifact, SelectedSearchRunSource,
+    SourceSelectionOptions,
 };
 
 pub struct SearchRunService<'a> {
     pool: &'a SqlitePool,
-    running_search_runs: &'a RunningSearchRuns,
     resolution_runtime: &'a SearchRunResolutionRuntime,
     result_artifact: SearchRunResultArtifact,
     installed_sources: sources::installed::Store,
@@ -33,19 +30,19 @@ pub struct SearchRunService<'a> {
     geo_resolver: Option<&'a dyn GeoResolver>,
     #[cfg(test)]
     after_source_resolution: Option<&'a (dyn Fn() + Send + Sync)>,
+    #[cfg(test)]
+    before_persistence: Option<&'a (dyn Fn() + Send + Sync)>,
 }
 
 impl<'a> SearchRunService<'a> {
     pub fn new(
         pool: &'a SqlitePool,
-        running_search_runs: &'a RunningSearchRuns,
         resolution_runtime: &'a SearchRunResolutionRuntime,
         result_path: impl Into<PathBuf>,
         installed_sources: sources::installed::Store,
     ) -> Self {
         Self::new_with_result_artifact(
             pool,
-            running_search_runs,
             resolution_runtime,
             SearchRunResultArtifact::WriteTo(result_path.into()),
             installed_sources,
@@ -54,14 +51,12 @@ impl<'a> SearchRunService<'a> {
 
     pub fn new_with_result_artifact(
         pool: &'a SqlitePool,
-        running_search_runs: &'a RunningSearchRuns,
         resolution_runtime: &'a SearchRunResolutionRuntime,
         result_artifact: SearchRunResultArtifact,
         installed_sources: sources::installed::Store,
     ) -> Self {
         Self {
             pool,
-            running_search_runs,
             resolution_runtime,
             result_artifact,
             installed_sources,
@@ -69,6 +64,8 @@ impl<'a> SearchRunService<'a> {
             geo_resolver: None,
             #[cfg(test)]
             after_source_resolution: None,
+            #[cfg(test)]
+            before_persistence: None,
         }
     }
 
@@ -91,20 +88,23 @@ impl<'a> SearchRunService<'a> {
         self
     }
 
-    pub async fn run(&self, search_request_id: i64) -> Result<SearchRunResult, String> {
-        self.run_with_cancellation(search_request_id, None).await
+    #[cfg(test)]
+    pub(crate) fn before_persistence(mut self, callback: &'a (dyn Fn() + Send + Sync)) -> Self {
+        self.before_persistence = Some(callback);
+        self
+    }
+
+    pub async fn run(&self, execution: Execution) -> Result<SearchRunResult, String> {
+        self.run_with_cancellation(execution, None).await
     }
 
     pub async fn run_with_cancellation(
         &self,
-        search_request_id: i64,
+        execution: Execution,
         cancellation_token: Option<&crate::background_tasks::CancellationToken>,
     ) -> Result<SearchRunResult, String> {
-        let _running_run = self.running_search_runs.begin(search_request_id)?;
-        let request = SearchRequestService::new(self.pool, self.running_search_runs)
-            .get(search_request_id)
-            .await?;
-        validate_executable_search_request(&request)?;
+        let request = execution.snapshot();
+        let search_request_id = execution.id().get();
 
         let requirements = match request.radius_km {
             Some(radius) => {
@@ -240,6 +240,10 @@ impl<'a> SearchRunService<'a> {
             result.postings.clear();
         }
         let last_run_error = last_run_error_summary(&result);
+        #[cfg(test)]
+        if let Some(callback) = self.before_persistence {
+            callback();
+        }
         persist_atomic_search_run(
             self.pool,
             AtomicSearchRunInput {

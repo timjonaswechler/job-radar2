@@ -34,16 +34,15 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
                 )),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -60,16 +59,12 @@ fn partial_source_failure_completes_with_errors_and_records_failed_source_error(
             .await
             .unwrap();
         assert_eq!(posting_count, 1);
-        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
-            .get(search_request.id)
+        let reloaded = crate::search::run::latest_summary(&pool, search_request.id)
             .await
             .unwrap();
-        assert_eq!(reloaded.last_run_at, Some(result.generated_at.clone()));
-        assert_eq!(
-            reloaded.last_run_status,
-            Some(SearchRunStatus::CompletedWithErrors)
-        );
-        let last_run_error = reloaded.last_run_error.unwrap();
+        assert_eq!(reloaded.at, Some(result.generated_at.clone()));
+        assert_eq!(reloaded.status, Some(SearchRunStatus::CompletedWithErrors));
+        let last_run_error = reloaded.error.unwrap();
         assert!(last_run_error.contains("source_two"));
         assert!(last_run_error.contains("Candidate Resolution failed: DiscoveryExecution"));
 
@@ -109,16 +104,15 @@ fn total_source_failure_produces_failed_result_without_postings() {
                 Err(SourceExecutionError::Failed("second failed".to_string())),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -133,13 +127,12 @@ fn total_source_failure_produces_failed_result_without_postings() {
             .await
             .unwrap();
         assert_eq!(posting_count, 0);
-        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
-            .get(search_request.id)
+        let reloaded = crate::search::run::latest_summary(&pool, search_request.id)
             .await
             .unwrap();
-        assert_eq!(reloaded.last_run_at, Some(result.generated_at));
-        assert_eq!(reloaded.last_run_status, Some(SearchRunStatus::Failed));
-        let last_run_error = reloaded.last_run_error.unwrap();
+        assert_eq!(reloaded.at, Some(result.generated_at));
+        assert_eq!(reloaded.status, Some(SearchRunStatus::Failed));
+        let last_run_error = reloaded.error.unwrap();
         assert!(last_run_error.contains("source_one"));
         assert!(last_run_error.contains("Candidate Resolution failed"));
         assert!(last_run_error.contains("source_two"));
@@ -150,7 +143,7 @@ fn total_source_failure_produces_failed_result_without_postings() {
 fn persistence_failure_rolls_back_last_run_update() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
         let search_request = create_test_search_request(
@@ -192,12 +185,11 @@ fn persistence_failure_rolls_back_last_run_update() {
         let artifact_path = temp_dir.path().join("search-run-result.json");
         let error = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             artifact_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap_err();
 
@@ -212,16 +204,31 @@ fn persistence_failure_rolls_back_last_run_update() {
             .await
             .unwrap();
         assert_eq!(source_count, 1);
-        let reloaded = SearchRequestService::new(&pool, &running_search_runs)
-            .get(search_request.id)
+        let reloaded = crate::search::run::latest_summary(&pool, search_request.id)
             .await
             .unwrap();
-        assert!(reloaded.last_run_at.is_none());
-        assert!(reloaded.last_run_status.is_none());
-        assert!(reloaded.last_run_error.is_none());
+        assert!(reloaded.at.is_none());
+        assert!(reloaded.status.is_none());
+        assert!(reloaded.error.is_none());
         assert!(
             !artifact_path.exists(),
             "DB failure must not write an artifact"
         );
+        let readmitted = catalog.begin_execution(search_request.id).await.unwrap();
+        drop(readmitted);
+        catalog
+            .update(
+                search_request.id,
+                Input {
+                    status: Status::Active,
+                    include_rules: vec![text_rule("updated")],
+                    exclude_rules: Vec::new(),
+                    locations: Vec::new(),
+                    radius_km: None,
+                    source_keys: vec!["test_source".into()],
+                },
+            )
+            .await
+            .unwrap();
     });
 }

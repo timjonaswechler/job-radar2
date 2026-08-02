@@ -4,7 +4,6 @@ mod persistence;
 mod runner;
 mod selection;
 mod source_runs;
-mod validation;
 
 use merging::{finalized_merge_input, merge_postings};
 use persistence::{generated_at_timestamp, last_run_error_summary, write_search_run_result};
@@ -16,7 +15,6 @@ use source_runs::{
     source_run_completed, source_run_failed_for_key, source_run_failed_for_source,
     source_run_resolution_failed, source_run_skipped_for_source,
 };
-use validation::validate_executable_search_request;
 
 pub use errors::SourceExecutionError;
 pub use persistence::{

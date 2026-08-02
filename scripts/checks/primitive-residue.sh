@@ -53,6 +53,7 @@ paths = [path for path in tracked if Path(path).suffix in extensions and Path(pa
 for root in (
     "src-tauri/crates/source-engine",
     "src-tauri/crates/search-resolution",
+    "src-tauri/crates/search-requests",
     "src-tauri/crates/sources",
     "src/lib/api/sources",
 ):
@@ -107,7 +108,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-engine/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='32d3a77c8d0cc5cbdd09f16aa03841b4fa49813c858c43ef16486bc140b5b6b6'
+FROZEN_MANIFEST_SHA256='373ae26eb5c268298338b78c6775817c6dfff0d9b45615e0f3bdf56a19c4274e'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

@@ -51,16 +51,15 @@ fn matching_uses_or_semantics_and_excludes_after_positive_matching() {
                 ),
             ]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -135,16 +134,15 @@ fn exclude_regex_matching_is_case_insensitive_without_changing_include_regex() {
                 ),
             ]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -204,16 +202,15 @@ fn normalizes_source_candidates_before_matching_and_merging() {
                 ),
             ]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -256,7 +253,7 @@ fn filters_search_run_matches_by_request_location_radius() {
         )
         .await;
         sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
-            .bind(search_request.id).execute(&pool).await.unwrap();
+            .bind(search_request.id.get()).execute(&pool).await.unwrap();
         let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
@@ -274,7 +271,7 @@ fn filters_search_run_matches_by_request_location_radius() {
                 ),
             ]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let geo_db_path =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");
         let geo_resolver = crate::geo::GeoDbResolver::connect(&geo_db_path)
@@ -283,13 +280,12 @@ fn filters_search_run_matches_by_request_location_radius() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -320,10 +316,11 @@ fn request_locations_without_radius_do_not_apply_filter_and_emit_warning() {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let running_search_runs = RunningSearchRuns::default();
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let catalog = Catalog::new(pool.clone());
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("Laser")],
                 exclude_rules: vec![],
                 locations: vec!["Mainz".to_string()],
@@ -349,13 +346,12 @@ fn request_locations_without_radius_do_not_apply_filter_and_emit_warning() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -380,10 +376,11 @@ fn leaves_matching_unchanged_without_request_locations() {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let running_search_runs = RunningSearchRuns::default();
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let catalog = Catalog::new(pool.clone());
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("Laser")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -409,13 +406,12 @@ fn leaves_matching_unchanged_without_request_locations() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -439,10 +435,11 @@ fn radius_without_request_locations_does_not_require_candidate_locations_or_deta
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let running = RunningSearchRuns::default();
-        let request = SearchRequestService::new(&pool, &running)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let catalog = Catalog::new(pool.clone());
+        let request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("Laser")],
                 exclude_rules: vec![],
                 locations: vec![],
@@ -465,13 +462,17 @@ fn radius_without_request_locations_does_not_require_candidate_locations_or_deta
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &running,
             &runtime,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -496,7 +497,7 @@ fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
         )
         .await;
         sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
-            .bind(search_request.id).execute(&pool).await.unwrap();
+            .bind(search_request.id.get()).execute(&pool).await.unwrap();
         let executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![
@@ -520,7 +521,7 @@ fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
                 ),
             ]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let geo_resolver = FixtureGeoResolver::new([
             (
                 "Mainz",
@@ -545,13 +546,12 @@ fn geo_radius_matching_handles_unresolved_and_ambiguous_candidate_locations() {
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -602,7 +602,7 @@ fn candidate_geo_resolver_failure_is_a_truthful_source_runtime_failure_without_r
         )
         .await;
         sqlx::query("UPDATE search_requests SET locations_json = '[\"Mainz\"]', radius_km = 30 WHERE id = ?1")
-            .bind(request.id).execute(&pool).await.unwrap();
+            .bind(request.id.get()).execute(&pool).await.unwrap();
         let runtime = fixture_resolution_runtime([(
             source_keys[0].clone(),
             Ok(vec![candidate(
@@ -616,13 +616,17 @@ fn candidate_geo_resolver_failure_is_a_truthful_source_runtime_failure_without_r
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&resolver)
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -658,10 +662,11 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         let source_keys = write_test_sources(temp_dir.path(), &[("test_source", "Test Source")]);
-        let running_search_runs = RunningSearchRuns::default();
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .create(CreateSearchRequestInput {
-                status: SearchRequestStatus::Active,
+        let catalog = Catalog::new(pool.clone());
+        let search_request = catalog
+            .clone()
+            .create(Input {
+                status: Status::Active,
                 include_rules: vec![text_rule("Laser")],
                 exclude_rules: vec![],
                 locations: vec!["Gibtsnichtstadt".to_string()],
@@ -687,13 +692,12 @@ fn fails_search_run_when_request_location_cannot_be_resolved() {
 
         let error = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
         .with_geo_resolver(&geo_resolver)
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap_err();
 

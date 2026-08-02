@@ -64,16 +64,15 @@ fn dedupes_with_overlapping_locations_or_missing_locations_and_preserves_sources
                 ]),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -157,16 +156,15 @@ fn keyed_posting_meta_never_crosses_finalization() {
                 )]),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -229,16 +227,15 @@ fn fuzzy_dedupes_equivalent_titles_and_preserves_representative_posting() {
                 )]),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -300,16 +297,15 @@ fn fuzzy_dedupe_keeps_different_roles_at_same_company_and_location_separate() {
                 )]),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -378,16 +374,15 @@ fn location_compatibility_allows_whole_phrase_overlap_but_blocks_contradictions(
                 ]),
             ),
         ]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new(
             &pool,
-            &running_search_runs,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 

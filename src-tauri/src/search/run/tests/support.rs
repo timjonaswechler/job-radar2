@@ -1,7 +1,9 @@
-pub(super) use crate::search::request::{
-    CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
-    SearchRequestStatus, SearchRuleInput,
-};
+pub(super) use search_requests::{Catalog, Id, Input, Record, Status};
+pub(super) use search_resolution::SearchRule;
+
+pub(super) async fn admit(catalog: &Catalog, id: Id) -> search_requests::Execution {
+    catalog.begin_execution(id).await.unwrap()
+}
 pub(super) use crate::search::run::{
     SearchRunResolutionRuntime, SearchRunResultArtifact, SearchRunService, SearchRunStatus,
     SourceExecutionError, SourceRunStatus,
@@ -102,13 +104,12 @@ pub(super) fn fixture_resolution_runtime<K: ToString>(
 pub(super) async fn create_test_search_request(
     pool: &SqlitePool,
     source_keys: Vec<String>,
-    include_rules: Vec<SearchRuleInput>,
-    exclude_rules: Vec<SearchRuleInput>,
-) -> SearchRequest {
-    let running_search_runs = RunningSearchRuns::default();
-    SearchRequestService::new(pool, &running_search_runs)
-        .create(CreateSearchRequestInput {
-            status: SearchRequestStatus::Active,
+    include_rules: Vec<SearchRule>,
+    exclude_rules: Vec<SearchRule>,
+) -> Record {
+    Catalog::new(pool.clone())
+        .create(Input {
+            status: Status::Active,
             include_rules,
             exclude_rules,
             locations: vec![],
@@ -163,18 +164,18 @@ pub(super) fn source_json_with_detail(key: &str, name: &str) -> String {
     source.to_string()
 }
 
-pub(super) fn text_rule(value: &str) -> SearchRuleInput {
-    SearchRuleInput {
-        target: "title".to_string(),
-        kind: "text".to_string(),
+pub(super) fn text_rule(value: &str) -> SearchRule {
+    SearchRule {
+        target: search_resolution::SearchRuleTarget::Title,
+        kind: search_resolution::SearchRuleKind::Text,
         value: value.to_string(),
     }
 }
 
-pub(super) fn regex_rule(value: &str) -> SearchRuleInput {
-    SearchRuleInput {
-        target: "title".to_string(),
-        kind: "regex".to_string(),
+pub(super) fn regex_rule(value: &str) -> SearchRule {
+    SearchRule {
+        target: search_resolution::SearchRuleTarget::Title,
+        kind: search_resolution::SearchRuleKind::Regex,
         value: value.to_string(),
     }
 }

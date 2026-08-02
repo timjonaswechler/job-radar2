@@ -49,7 +49,7 @@ where
         let source_keys = options.source_keys;
         let summary = run_search_run_smoke_with_options(
             &state.db,
-            &state.running_search_runs,
+            &state.search_requests,
             &source_resolver,
             result_path,
             state.installed_sources.clone(),

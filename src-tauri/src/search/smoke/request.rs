@@ -1,48 +1,38 @@
-use sqlx::SqlitePool;
-
-use crate::search::request::{
-    CreateSearchRequestInput, RunningSearchRuns, SearchRequest, SearchRequestService,
-    SearchRequestStatus, SearchRule, SearchRuleInput, SearchRuleKind, SearchRuleTarget,
-};
+use search_requests::{Catalog, Input, Record, Status};
+use search_resolution::{SearchRule, SearchRuleKind, SearchRuleTarget};
 
 use super::constants::SMOKE_INCLUDE_PATTERN;
 
 pub(super) async fn get_or_create_smoke_search_request(
-    pool: &SqlitePool,
-    running_search_runs: &RunningSearchRuns,
+    catalog: &Catalog,
     source_keys: Vec<String>,
-) -> Result<(SearchRequest, bool), String> {
-    let service = SearchRequestService::new(pool, running_search_runs);
-    for search_request in service.list().await? {
-        if is_smoke_search_request(&search_request, &source_keys) {
-            return Ok((search_request, false));
+) -> Result<(Record, bool), String> {
+    for request in catalog.list().await.map_err(|error| error.to_string())? {
+        if is_smoke_search_request(&request, &source_keys) {
+            return Ok((request, false));
         }
     }
-
-    let created = service
+    let created = catalog
         .create(smoke_search_request_input(source_keys))
-        .await?;
+        .await
+        .map_err(|error| error.to_string())?;
     Ok((created, true))
 }
 
-fn is_smoke_search_request(search_request: &SearchRequest, source_keys: &[String]) -> bool {
-    search_request.status == SearchRequestStatus::Active
-        && search_request.include_rules == expected_smoke_rules()
-        && search_request.exclude_rules.is_empty()
-        && search_request.locations.is_empty()
-        && search_request.radius_km.is_none()
-        && search_request.source_keys == source_keys
-        && search_request.validation_issues.is_empty()
+fn is_smoke_search_request(request: &Record, source_keys: &[String]) -> bool {
+    request.status == Status::Active
+        && request.include_rules == expected_smoke_rules()
+        && request.exclude_rules.is_empty()
+        && request.locations.is_empty()
+        && request.radius_km.is_none()
+        && request.source_keys == source_keys
+        && request.validation.is_valid()
 }
 
-fn smoke_search_request_input(source_keys: Vec<String>) -> CreateSearchRequestInput {
-    CreateSearchRequestInput {
-        status: SearchRequestStatus::Active,
-        include_rules: vec![SearchRuleInput {
-            target: "title".to_string(),
-            kind: "regex".to_string(),
-            value: SMOKE_INCLUDE_PATTERN.to_string(),
-        }],
+fn smoke_search_request_input(source_keys: Vec<String>) -> Input {
+    Input {
+        status: Status::Active,
+        include_rules: expected_smoke_rules(),
         exclude_rules: Vec::new(),
         locations: Vec::new(),
         radius_km: None,

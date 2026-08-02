@@ -20,7 +20,7 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
             vec![],
         )
         .await;
-        let running_search_runs = std::sync::Arc::new(RunningSearchRuns::default());
+        let catalog = Catalog::new(pool.clone());
         let executor = fixture_resolution_runtime([
             (
                 source_keys[0].clone(),
@@ -52,7 +52,7 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
         );
         let pool_for_task = pool.clone();
         let app_data_dir = temp_dir.path().to_path_buf();
-        let running_for_task = running_search_runs.clone();
+        let execution = admit(&catalog, search_request.id).await;
 
         let task = scheduler
             .schedule(
@@ -60,12 +60,11 @@ fn scheduled_search_run_preserves_source_outcomes_and_structured_diagnostics() {
                 move |_context| async move {
                     let result = SearchRunService::new_with_result_artifact(
                         &pool_for_task,
-                        running_for_task.as_ref(),
                         &executor,
                         SearchRunResultArtifact::Disabled,
                         sources::installed::Store::new(app_data_dir),
                     )
-                    .run(search_request.id)
+                    .run(execution)
                     .await;
 
                     match result {
@@ -210,12 +209,16 @@ fn two_source_success_and_source_detail_abort_persist_only_successful_source_sta
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -330,12 +333,16 @@ fn partial_resolution_persists_only_its_committed_finalized_output() {
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -415,6 +422,8 @@ fn token_driven_background_cancellation_and_sql_terminal_state_agree() {
         );
         let pool_for_task = pool.clone();
         let app_data_dir = temp_dir.path().to_path_buf();
+        let catalog = Catalog::new(pool.clone());
+        let execution = catalog.begin_execution(request.id).await.unwrap();
         let task = scheduler
             .schedule(
                 crate::background_tasks::BackgroundTaskSpec::search_run(),
@@ -423,13 +432,12 @@ fn token_driven_background_cancellation_and_sql_terminal_state_agree() {
                     let cancel_after_resolution = move || token_for_boundary.cancel();
                     let result = SearchRunService::new_with_result_artifact(
                         &pool_for_task,
-                        &RunningSearchRuns::default(),
                         &runtime,
                         SearchRunResultArtifact::Disabled,
                         sources::installed::Store::new(app_data_dir),
                     )
                     .after_source_resolution(&cancel_after_resolution)
-                    .run_with_cancellation(request.id, Some(&context.cancellation_token))
+                    .run_with_cancellation(execution, Some(&context.cancellation_token))
                     .await
                     .unwrap();
                     if result.status == SearchRunStatus::Cancelled
@@ -558,12 +566,16 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &RunningSearchRuns::default(),
             &runtime,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -593,7 +605,7 @@ fn cancellation_after_earlier_source_resolution_persists_metadata_without_candid
         let metadata: (Option<String>, Option<String>) = sqlx::query_as(
             "SELECT last_run_status, last_run_error FROM search_requests WHERE id = ?1",
         )
-        .bind(request.id)
+        .bind(request.id.get())
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -628,16 +640,15 @@ fn disabled_search_run_result_artifact_does_not_write_json() {
                 &[],
             )]),
         )]);
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let result = SearchRunService::new_with_result_artifact(
             &pool,
-            &running_search_runs,
             &executor,
             SearchRunResultArtifact::Disabled,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -661,7 +672,7 @@ fn each_run_overwrites_search_run_result_json() {
         .await;
         let result_path = temp_dir.path().join("search-run-result.json");
         std::fs::write(&result_path, "stale result").unwrap();
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
 
         let first_executor = fixture_resolution_runtime([(
             source_keys[0].clone(),
@@ -674,12 +685,11 @@ fn each_run_overwrites_search_run_result_json() {
         )]);
         SearchRunService::new(
             &pool,
-            &running_search_runs,
             &first_executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
         let first_contents = std::fs::read_to_string(&result_path).unwrap();
@@ -699,12 +709,11 @@ fn each_run_overwrites_search_run_result_json() {
         )]);
         SearchRunService::new(
             &pool,
-            &running_search_runs,
             &second_executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(search_request.id)
+        .run(admit(&catalog, search_request.id).await)
         .await
         .unwrap();
 
@@ -743,12 +752,16 @@ fn post_commit_artifact_failure_keeps_atomic_search_run_rows() {
         std::fs::create_dir(&artifact_directory).unwrap();
         let result = SearchRunService::new(
             &pool,
-            &RunningSearchRuns::default(),
             &resolver,
             &artifact_directory,
             sources::installed::Store::new(temp_dir.path()),
         )
-        .run(request.id)
+        .run(
+            Catalog::new(pool.clone())
+                .begin_execution(request.id)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
         assert_eq!(result.status, SearchRunStatus::Completed);

@@ -2,10 +2,8 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
 
-use crate::{
-    search::request::RunningSearchRuns,
-    search::run::{SearchRunResolutionRuntime, SearchRunResult, SearchRunService},
-};
+use crate::search::run::{SearchRunResolutionRuntime, SearchRunResult, SearchRunService};
+use search_requests::Catalog;
 
 use super::request::get_or_create_smoke_search_request;
 
@@ -21,7 +19,7 @@ pub(crate) struct SearchRunSmokeSummary {
 #[cfg(test)]
 pub(crate) async fn run_search_run_smoke(
     pool: &SqlitePool,
-    running_search_runs: &RunningSearchRuns,
+    catalog: &Catalog,
     resolver: &SearchRunResolutionRuntime,
     result_path: impl Into<PathBuf>,
     installed_sources: sources::installed::Store,
@@ -29,7 +27,7 @@ pub(crate) async fn run_search_run_smoke(
 ) -> Result<SearchRunSmokeSummary, String> {
     run_search_run_smoke_with_options(
         pool,
-        running_search_runs,
+        catalog,
         resolver,
         result_path,
         installed_sources,
@@ -41,7 +39,7 @@ pub(crate) async fn run_search_run_smoke(
 
 pub(crate) async fn run_search_run_smoke_with_options(
     pool: &SqlitePool,
-    running_search_runs: &RunningSearchRuns,
+    catalog: &Catalog,
     resolver: &SearchRunResolutionRuntime,
     result_path: impl Into<PathBuf>,
     installed_sources: sources::installed::Store,
@@ -50,24 +48,22 @@ pub(crate) async fn run_search_run_smoke_with_options(
 ) -> Result<SearchRunSmokeSummary, String> {
     let result_path = result_path.into();
     let (request, search_request_created) =
-        get_or_create_smoke_search_request(pool, running_search_runs, source_keys).await?;
+        get_or_create_smoke_search_request(catalog, source_keys).await?;
     let geo_db_path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");
     let geo_resolver = crate::geo::GeoDbResolver::connect(&geo_db_path).await?;
-    let result = SearchRunService::new(
-        pool,
-        running_search_runs,
-        resolver,
-        result_path.clone(),
-        installed_sources,
-    )
-    .with_geo_resolver(&geo_resolver)
-    .allowing_draft_sources(allow_draft_sources)
-    .run(request.id)
-    .await?;
+    let execution = catalog
+        .begin_execution(request.id)
+        .await
+        .map_err(|error| error.to_string())?;
+    let result = SearchRunService::new(pool, resolver, result_path.clone(), installed_sources)
+        .with_geo_resolver(&geo_resolver)
+        .allowing_draft_sources(allow_draft_sources)
+        .run(execution)
+        .await?;
 
     Ok(SearchRunSmokeSummary {
-        search_request_id: request.id,
+        search_request_id: request.id.get(),
         search_request_created,
         result_path: result_path.to_string_lossy().to_string(),
         result,

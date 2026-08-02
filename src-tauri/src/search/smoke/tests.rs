@@ -3,12 +3,10 @@ use search_resolution::{
     self as resolution, ScriptedDiscoveryBatch, ScriptedSourceDiscoveryExecution,
 };
 
-use crate::search::{
-    request::{RunningSearchRuns, SearchRequestService},
-    run::{
-        ScriptedResolutionSource, SearchRunResolutionRuntime, SourceExecutionError, SourceRunStatus,
-    },
+use crate::search::run::{
+    ScriptedResolutionSource, SearchRunResolutionRuntime, SourceExecutionError, SourceRunStatus,
 };
+use search_requests::Catalog;
 use serde_json::Value;
 use source_engine::{
     execution::{PhaseCompletion, PhaseExecutionReport, PhaseUsage},
@@ -113,7 +111,7 @@ fn smoke_path_creates_generic_request_and_writes_bounded_result() {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         write_fixture_source_file(temp_dir.path(), FIRST_SOURCE_KEY, "Fixture Source One");
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let executor = fixture_resolution_runtime([(
             FIRST_SOURCE_KEY,
             Ok(vec![
@@ -136,7 +134,7 @@ fn smoke_path_creates_generic_request_and_writes_bounded_result() {
 
         let summary = run_search_run_smoke(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             result_path.clone(),
             sources::installed::Store::new(temp_dir.path()),
@@ -146,8 +144,9 @@ fn smoke_path_creates_generic_request_and_writes_bounded_result() {
         .unwrap();
 
         assert!(summary.search_request_created);
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .get(summary.search_request_id)
+        let search_request = catalog
+            .clone()
+            .get(search_requests::Id::new(summary.search_request_id).unwrap())
             .await
             .unwrap();
         assert_eq!(search_request.include_rules, expected_smoke_rules());
@@ -196,7 +195,7 @@ fn smoke_path_can_target_multiple_existing_sources() {
         let temp_dir = tempfile::tempdir().unwrap();
         write_fixture_source_file(temp_dir.path(), FIRST_SOURCE_KEY, "Fixture Source One");
         write_fixture_source_file(temp_dir.path(), SECOND_SOURCE_KEY, "Fixture Source Two");
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let executor = fixture_resolution_runtime([
             (
                 FIRST_SOURCE_KEY,
@@ -221,7 +220,7 @@ fn smoke_path_can_target_multiple_existing_sources() {
         let source_keys = vec![FIRST_SOURCE_KEY.to_string(), SECOND_SOURCE_KEY.to_string()];
         let summary = run_search_run_smoke(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
@@ -230,8 +229,9 @@ fn smoke_path_can_target_multiple_existing_sources() {
         .await
         .unwrap();
 
-        let search_request = SearchRequestService::new(&pool, &running_search_runs)
-            .get(summary.search_request_id)
+        let search_request = catalog
+            .clone()
+            .get(search_requests::Id::new(summary.search_request_id).unwrap())
             .await
             .unwrap();
         assert_eq!(search_request.source_keys, source_keys);
@@ -266,7 +266,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
             "Fixture Draft Source",
             "draft",
         );
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let executor = fixture_resolution_runtime([(
             FIRST_SOURCE_KEY,
             Ok(vec![candidate(
@@ -280,7 +280,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
 
         let skipped = run_search_run_smoke(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
@@ -295,7 +295,7 @@ fn smoke_path_can_execute_draft_sources_when_allowed_without_persisting_status_c
 
         let allowed = run_search_run_smoke_with_options(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
@@ -328,7 +328,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         let pool = migrated_pool().await;
         let temp_dir = tempfile::tempdir().unwrap();
         write_fixture_source_file(temp_dir.path(), FIRST_SOURCE_KEY, "Fixture Source One");
-        let running_search_runs = RunningSearchRuns::default();
+        let catalog = Catalog::new(pool.clone());
         let executor = fixture_resolution_runtime([(
             FIRST_SOURCE_KEY,
             Ok(vec![candidate(
@@ -342,7 +342,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
 
         let first = run_search_run_smoke(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
@@ -352,7 +352,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         .unwrap();
         let second = run_search_run_smoke(
             &pool,
-            &running_search_runs,
+            &catalog,
             &executor,
             temp_dir.path().join("search-run-result.json"),
             sources::installed::Store::new(temp_dir.path()),
@@ -364,14 +364,7 @@ fn smoke_path_reuses_existing_smoke_request_on_later_runs() {
         assert!(first.search_request_created);
         assert!(!second.search_request_created);
         assert_eq!(first.search_request_id, second.search_request_id);
-        assert_eq!(
-            SearchRequestService::new(&pool, &running_search_runs)
-                .list()
-                .await
-                .unwrap()
-                .len(),
-            1
-        );
+        assert_eq!(catalog.clone().list().await.unwrap().len(), 1);
     });
 }
 

@@ -574,51 +574,184 @@ pub async fn set_source_inactive(
         .expect("installed Source lifecycle task must run to completion")
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRequestInput {
+    status: search_requests::Status,
+    include_rules: Vec<SearchRuleInput>,
+    exclude_rules: Vec<SearchRuleInput>,
+    locations: Vec<String>,
+    radius_km: Option<i64>,
+    source_keys: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchRuleInput {
+    target: String,
+    kind: String,
+    value: String,
+}
+
+impl TryFrom<SearchRequestInput> for search_requests::Input {
+    type Error = String;
+    fn try_from(input: SearchRequestInput) -> Result<Self, Self::Error> {
+        fn rules(
+            values: Vec<SearchRuleInput>,
+            field: &str,
+        ) -> Result<Vec<search_resolution::SearchRule>, String> {
+            values
+                .into_iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    Ok(search_resolution::SearchRule {
+                        target: search_resolution::SearchRuleTarget::try_from(
+                            value.target.as_str(),
+                        )
+                        .map_err(|error| format!("{field}[{index}].target {error}"))?,
+                        kind: search_resolution::SearchRuleKind::try_from(value.kind.as_str())
+                            .map_err(|error| format!("{field}[{index}].kind {error}"))?,
+                        value: value.value,
+                    })
+                })
+                .collect()
+        }
+        Ok(Self {
+            status: input.status,
+            include_rules: rules(input.include_rules, "includeRules")?,
+            exclude_rules: rules(input.exclude_rules, "excludeRules")?,
+            locations: input.locations,
+            radius_km: input.radius_km,
+            source_keys: input.source_keys,
+        })
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRequestView {
+    id: i64,
+    status: search_requests::Status,
+    include_rules: Vec<search_resolution::SearchRule>,
+    exclude_rules: Vec<search_resolution::SearchRule>,
+    locations: Vec<String>,
+    radius_km: Option<i64>,
+    source_keys: Vec<String>,
+    validation_issues: Vec<search_requests::ValidationIssue>,
+    last_run_at: Option<String>,
+    last_run_status: Option<crate::search::run::SearchRunStatus>,
+    last_run_error: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+fn search_request_view(
+    record: search_requests::Record,
+    latest: crate::search::run::LatestSummary,
+) -> SearchRequestView {
+    SearchRequestView {
+        id: record.id.get(),
+        status: record.status,
+        include_rules: record.include_rules,
+        exclude_rules: record.exclude_rules,
+        locations: record.locations,
+        radius_km: record.radius_km,
+        source_keys: record.source_keys,
+        validation_issues: record.validation.issues,
+        last_run_at: latest.at,
+        last_run_status: latest.status,
+        last_run_error: latest.error,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+    }
+}
+
+fn search_request_views(
+    records: Vec<search_requests::Record>,
+    mut latest: std::collections::HashMap<search_requests::Id, crate::search::run::LatestSummary>,
+) -> Vec<SearchRequestView> {
+    records
+        .into_iter()
+        .map(|record| {
+            let summary = latest.remove(&record.id).unwrap_or_default();
+            search_request_view(record, summary)
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub async fn create_search_request(
     state: State<'_, AppState>,
-    input: crate::search::request::CreateSearchRequestInput,
-) -> Result<crate::search::request::SearchRequest, String> {
-    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
-        .create(input)
+    input: SearchRequestInput,
+) -> Result<SearchRequestView, String> {
+    let record = state
+        .search_requests
+        .create(input.try_into()?)
         .await
+        .map_err(|error| error.to_string())?;
+    Ok(search_request_view(
+        record,
+        crate::search::run::LatestSummary::default(),
+    ))
 }
 
 #[tauri::command]
 pub async fn list_search_requests(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::search::request::SearchRequest>, String> {
-    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
+) -> Result<Vec<SearchRequestView>, String> {
+    let records = state
+        .search_requests
         .list()
         .await
+        .map_err(|error| error.to_string())?;
+    let ids = records.iter().map(|record| record.id).collect::<Vec<_>>();
+    let latest = crate::search::run::latest_summaries(&state.db, &ids).await?;
+    Ok(search_request_views(records, latest))
 }
 
 #[tauri::command]
 pub async fn get_search_request(
     state: State<'_, AppState>,
     id: i64,
-) -> Result<crate::search::request::SearchRequest, String> {
-    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
+) -> Result<SearchRequestView, String> {
+    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+    let record = state
+        .search_requests
         .get(id)
         .await
+        .map_err(|error| error.to_string())?;
+    Ok(search_request_view(
+        record,
+        crate::search::run::latest_summary(&state.db, id).await?,
+    ))
 }
 
 #[tauri::command]
 pub async fn update_search_request(
     state: State<'_, AppState>,
     id: i64,
-    input: crate::search::request::UpdateSearchRequestInput,
-) -> Result<crate::search::request::SearchRequest, String> {
-    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
-        .update(id, input)
+    input: SearchRequestInput,
+) -> Result<SearchRequestView, String> {
+    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+    let record = state
+        .search_requests
+        .update(id, input.try_into()?)
         .await
+        .map_err(|error| error.to_string())?;
+    Ok(search_request_view(
+        record,
+        crate::search::run::latest_summary(&state.db, id).await?,
+    ))
 }
 
 #[tauri::command]
 pub async fn delete_search_request(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    crate::search::request::SearchRequestService::new(&state.db, &state.running_search_runs)
+    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+    state
+        .search_requests
         .delete(id)
         .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -626,15 +759,20 @@ pub async fn run_search_request(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
-    schedule_search_request_run(&state, id)
+    schedule_search_request_run(&state, id).await
 }
 
-fn schedule_search_request_run(
+async fn schedule_search_request_run(
     state: &AppState,
     id: i64,
 ) -> Result<crate::background_tasks::BackgroundTaskSnapshot, String> {
+    let id = search_requests::Id::new(id).map_err(|error| error.to_string())?;
+    let execution = state
+        .search_requests
+        .begin_execution(id)
+        .await
+        .map_err(|error| error.to_string())?;
     let pool = state.db.clone();
-    let running_search_runs = state.running_search_runs.clone();
     let browser_runtime_dir = state.paths.browser_runtime_dir.clone();
     let installed_sources = state.installed_sources.clone();
     let geo_db_path = state.resources.geo_db_path.clone();
@@ -649,13 +787,12 @@ fn schedule_search_request_run(
                 Ok(geo_resolver) => {
                     crate::search::run::SearchRunService::new_with_result_artifact(
                         &pool,
-                        running_search_runs.as_ref(),
                         &source_resolver,
                         crate::search::run::default_search_run_result_artifact(),
                         installed_sources,
                     )
                     .with_geo_resolver(&geo_resolver)
-                    .run_with_cancellation(id, Some(&context.cancellation_token))
+                    .run_with_cancellation(execution, Some(&context.cancellation_token))
                     .await
                 }
                 Err(error) => Err(error),
@@ -1018,6 +1155,46 @@ mod tests {
     }
 
     #[test]
+    fn search_request_list_host_view_associates_batched_latest_run_summaries() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let paths =
+                crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
+                    .unwrap();
+            let state = AppState::new(paths).await.unwrap();
+            let completed = create_active_test_search_request(&state).await;
+            let failed = create_active_test_search_request(&state).await;
+            let never_run = create_active_test_search_request(&state).await;
+            sqlx::query("UPDATE search_requests SET last_run_at='2026-01-01T00:00:00Z', last_run_status='completed', last_run_error=NULL WHERE id=?1")
+                .bind(completed.id.get()).execute(&state.db).await.unwrap();
+            sqlx::query("UPDATE search_requests SET last_run_at='2026-02-02T00:00:00Z', last_run_status='failed', last_run_error='source failed' WHERE id=?1")
+                .bind(failed.id.get()).execute(&state.db).await.unwrap();
+
+            let records = state.search_requests.list().await.unwrap();
+            let ids = records.iter().map(|record| record.id).collect::<Vec<_>>();
+            let latest = crate::search::run::latest_summaries(&state.db, &ids)
+                .await
+                .unwrap();
+            let values = serde_json::to_value(search_request_views(records, latest)).unwrap();
+
+            assert_eq!(values[0]["id"], completed.id.get());
+            assert_eq!(values[0]["lastRunAt"], "2026-01-01T00:00:00Z");
+            assert_eq!(values[0]["lastRunStatus"], "completed");
+            assert!(values[0]["lastRunError"].is_null());
+            assert_eq!(values[1]["id"], failed.id.get());
+            assert_eq!(values[1]["lastRunAt"], "2026-02-02T00:00:00Z");
+            assert_eq!(values[1]["lastRunStatus"], "failed");
+            assert_eq!(values[1]["lastRunError"], "source failed");
+            assert_eq!(values[2]["id"], never_run.id.get());
+            assert!(values[2]["lastRunAt"].is_null());
+            assert!(values[2]["lastRunStatus"].is_null());
+            assert!(values[2]["lastRunError"].is_null());
+            assert!(values[0].get("validationIssues").is_some());
+            assert!(values[0].get("validation").is_none());
+        });
+    }
+
+    #[test]
     fn run_search_request_command_seam_returns_queued_background_task_when_search_run_is_active() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
@@ -1025,6 +1202,7 @@ mod tests {
                 crate::app::paths::AppPaths::from_app_data_dir(temp_dir.path().to_path_buf())
                     .unwrap();
             let state = AppState::new(paths).await.unwrap();
+            let request = create_active_test_search_request(&state).await;
             let (release_active, active_released) = tokio::sync::oneshot::channel::<()>();
 
             let active = state
@@ -1044,7 +1222,9 @@ mod tests {
                 crate::background_tasks::BackgroundTaskState::Running
             );
 
-            let queued = schedule_search_request_run(&state, 123).unwrap();
+            let queued = schedule_search_request_run(&state, request.id.get())
+                .await
+                .unwrap();
 
             assert_eq!(
                 queued.kind,
@@ -1054,11 +1234,20 @@ mod tests {
                 queued.state,
                 crate::background_tasks::BackgroundTaskState::Queued
             );
+            assert!(
+                matches!(state.search_requests.delete(request.id).await, Err(search_requests::Error::Busy { id }) if id == request.id)
+            );
             let cancelled = state.background_tasks.cancel(&queued.task_id).unwrap();
             assert_eq!(
                 cancelled.state,
                 crate::background_tasks::BackgroundTaskState::Cancelled
             );
+            let released = state
+                .search_requests
+                .begin_execution(request.id)
+                .await
+                .unwrap();
+            drop(released);
             release_active.send(()).unwrap();
         });
     }
@@ -1078,8 +1267,11 @@ mod tests {
             )
             .await
             .unwrap();
+            let request = create_active_test_search_request(&state).await;
 
-            let task = schedule_search_request_run(&state, 123).unwrap();
+            let task = schedule_search_request_run(&state, request.id.get())
+                .await
+                .unwrap();
             let finished = wait_for_background_task_state(
                 &state.background_tasks,
                 &task.task_id,
@@ -1095,6 +1287,25 @@ mod tests {
                 "expected geo database failure, got {finished:#?}"
             );
         });
+    }
+
+    async fn create_active_test_search_request(state: &AppState) -> search_requests::Record {
+        state
+            .search_requests
+            .create(search_requests::Input {
+                status: search_requests::Status::Active,
+                include_rules: vec![search_resolution::SearchRule {
+                    target: search_resolution::SearchRuleTarget::Title,
+                    kind: search_resolution::SearchRuleKind::Text,
+                    value: "engineer".into(),
+                }],
+                exclude_rules: Vec::new(),
+                locations: Vec::new(),
+                radius_km: None,
+                source_keys: vec!["fixture_source".into()],
+            })
+            .await
+            .unwrap()
     }
 
     async fn wait_for_background_task_state(
