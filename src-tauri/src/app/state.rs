@@ -12,6 +12,7 @@ pub struct AppState {
     pub resources: AppResources,
     pub browser_runtime_install_lock: Mutex<()>,
     pub search_requests: search_requests::Catalog,
+    pub search_run_history: search_runs::History,
     pub search_runs: Arc<search_runs::Runner>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
@@ -87,6 +88,7 @@ impl AppState {
         );
 
         let search_requests = search_requests::Catalog::new(db.clone());
+        let search_run_history = search_runs::History::new(db.clone());
 
         Ok(Self {
             db,
@@ -94,6 +96,7 @@ impl AppState {
             resources,
             browser_runtime_install_lock: Mutex::new(()),
             search_requests,
+            search_run_history,
             search_runs,
             background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(
                 crate::background_tasks::BackgroundTaskSchedulerConfig::default(),

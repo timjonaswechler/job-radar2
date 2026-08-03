@@ -602,12 +602,23 @@ impl SearchRequestCommandError {
             id: None,
         }
     }
+}
 
-    fn storage_unavailable(message: impl Into<String>) -> Self {
+impl From<search_runs::HistoryError> for SearchRequestCommandError {
+    fn from(error: search_runs::HistoryError) -> Self {
+        let (kind, id) = match &error {
+            search_runs::HistoryError::CorruptStoredRow { id, .. } => (
+                SearchRequestErrorKind::CorruptStoredRow,
+                id.map(search_requests::Id::get),
+            ),
+            search_runs::HistoryError::StorageUnavailable { .. } => {
+                (SearchRequestErrorKind::StorageUnavailable, None)
+            }
+        };
         Self {
-            kind: SearchRequestErrorKind::StorageUnavailable,
-            message: message.into(),
-            id: None,
+            kind,
+            message: error.to_string(),
+            id,
         }
     }
 }
@@ -714,7 +725,7 @@ pub struct SearchRequestView {
 
 fn search_request_view(
     record: search_requests::Record,
-    latest: crate::search::run::LatestSummary,
+    latest: search_runs::Latest,
 ) -> SearchRequestView {
     SearchRequestView {
         id: record.id.get(),
@@ -735,7 +746,7 @@ fn search_request_view(
 
 fn search_request_views(
     records: Vec<search_requests::Record>,
-    mut latest: std::collections::HashMap<search_requests::Id, crate::search::run::LatestSummary>,
+    mut latest: std::collections::HashMap<search_requests::Id, search_runs::Latest>,
 ) -> Vec<SearchRequestView> {
     records
         .into_iter()
@@ -759,10 +770,12 @@ pub async fn create_search_request(
         .create(input)
         .await
         .map_err(SearchRequestCommandError::from)?;
-    Ok(search_request_view(
-        record,
-        crate::search::run::LatestSummary::default(),
-    ))
+    let latest = state
+        .search_run_history
+        .latest(record.id)
+        .await
+        .map_err(SearchRequestCommandError::from)?;
+    Ok(search_request_view(record, latest))
 }
 
 #[tauri::command]
@@ -775,9 +788,11 @@ pub async fn list_search_requests(
         .await
         .map_err(SearchRequestCommandError::from)?;
     let ids = records.iter().map(|record| record.id).collect::<Vec<_>>();
-    let latest = crate::search::run::latest_summaries(&state.db, &ids)
+    let latest = state
+        .search_run_history
+        .latest_many(&ids)
         .await
-        .map_err(SearchRequestCommandError::storage_unavailable)?;
+        .map_err(SearchRequestCommandError::from)?;
     Ok(search_request_views(records, latest))
 }
 
@@ -792,9 +807,11 @@ pub async fn get_search_request(
         .get(id)
         .await
         .map_err(SearchRequestCommandError::from)?;
-    let latest = crate::search::run::latest_summary(&state.db, id)
+    let latest = state
+        .search_run_history
+        .latest(id)
         .await
-        .map_err(SearchRequestCommandError::storage_unavailable)?;
+        .map_err(SearchRequestCommandError::from)?;
     Ok(search_request_view(record, latest))
 }
 
@@ -813,9 +830,11 @@ pub async fn update_search_request(
         .update(id, input)
         .await
         .map_err(SearchRequestCommandError::from)?;
-    let latest = crate::search::run::latest_summary(&state.db, id)
+    let latest = state
+        .search_run_history
+        .latest(id)
         .await
-        .map_err(SearchRequestCommandError::storage_unavailable)?;
+        .map_err(SearchRequestCommandError::from)?;
     Ok(search_request_view(record, latest))
 }
 
@@ -1259,6 +1278,29 @@ mod tests {
     }
 
     #[test]
+    fn search_run_history_errors_preserve_projection_and_storage_distinctions() {
+        let id = search_requests::Id::new(7).unwrap();
+        let corrupt = serde_json::to_value(SearchRequestCommandError::from(
+            search_runs::HistoryError::CorruptStoredRow {
+                id: Some(id),
+                message: "unknown status".into(),
+            },
+        ))
+        .unwrap();
+        let storage = serde_json::to_value(SearchRequestCommandError::from(
+            search_runs::HistoryError::StorageUnavailable {
+                message: "database closed".into(),
+            },
+        ))
+        .unwrap();
+
+        assert_eq!(corrupt["kind"], "corrupt_stored_row");
+        assert_eq!(corrupt["id"], 7);
+        assert_eq!(storage["kind"], "storage_unavailable");
+        assert!(storage.get("id").is_none());
+    }
+
+    #[test]
     fn search_request_list_host_view_associates_batched_latest_run_summaries() {
         tauri::async_runtime::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
@@ -1276,9 +1318,7 @@ mod tests {
 
             let records = state.search_requests.list().await.unwrap();
             let ids = records.iter().map(|record| record.id).collect::<Vec<_>>();
-            let latest = crate::search::run::latest_summaries(&state.db, &ids)
-                .await
-                .unwrap();
+            let latest = state.search_run_history.latest_many(&ids).await.unwrap();
             let values = serde_json::to_value(search_request_views(records, latest)).unwrap();
 
             assert_eq!(values[0]["id"], completed.id.get());
