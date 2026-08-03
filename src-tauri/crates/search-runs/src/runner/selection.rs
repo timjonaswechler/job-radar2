@@ -1,24 +1,19 @@
 use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 use sources::installed::{Snapshot, SourceStatus};
 
-use super::SourceExecutionError;
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(super) struct SourceSelectionOptions {
-    pub allow_draft_sources: bool,
-}
+use super::{errors::SourceFailure, SourceAdmission};
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum SelectedSearchRunSource<'a> {
+pub(super) enum Selected<'a> {
     Resolved(&'a source_engine::definition::CompiledSource),
     Missing {
         source_key: String,
-        error: SourceExecutionError,
+        error: SourceFailure,
     },
     Failed {
         source_key: String,
         source_name: String,
-        error: SourceExecutionError,
+        error: SourceFailure,
     },
     Skipped {
         source_key: String,
@@ -28,11 +23,11 @@ pub(super) enum SelectedSearchRunSource<'a> {
     },
 }
 
-pub(super) fn resolve_selected_sources_with_options<'a>(
+pub(super) fn resolve_selected_sources<'a>(
     snapshot: &'a Snapshot,
     source_keys: &[String],
-    options: SourceSelectionOptions,
-) -> Vec<SelectedSearchRunSource<'a>> {
+    options: SourceAdmission,
+) -> Vec<Selected<'a>> {
     source_keys
         .iter()
         .map(|source_key| {
@@ -45,17 +40,15 @@ pub(super) fn resolve_selected_sources_with_options<'a>(
                     "",
                     serde_json::json!({"sourceKey": source_key}),
                 )];
-                return SelectedSearchRunSource::Missing {
+                return Selected::Missing {
                     source_key: source_key.clone(),
-                    error: SourceExecutionError::FailedWithDiagnostics {
-                        message: diagnostic_summary(&diagnostics),
-                        diagnostics,
-                    },
+                    error: SourceFailure::new(diagnostic_summary(&diagnostics), diagnostics),
                 };
             };
             let document = source.document();
             let validation = source.validation();
-            let allow_draft = options.allow_draft_sources && document.status == SourceStatus::Draft;
+            let allow_draft = options == SourceAdmission::DevelopmentSmokeAllowDraft
+                && document.status == SourceStatus::Draft;
             if document.status != SourceStatus::Active && !allow_draft {
                 let status =
                     serde_json::to_value(document.status).expect("Source Status serializes");
@@ -69,7 +62,7 @@ pub(super) fn resolve_selected_sources_with_options<'a>(
                     "/status",
                     serde_json::json!({"sourceKey": document.key, "status": status}),
                 )];
-                return SelectedSearchRunSource::Skipped {
+                return Selected::Skipped {
                     source_key: document.key.clone(),
                     source_name: document.name.clone(),
                     summary: diagnostic_summary(&diagnostics),
@@ -78,26 +71,20 @@ pub(super) fn resolve_selected_sources_with_options<'a>(
             }
             if !(validation.can_execute || allow_draft && validation.can_compile) {
                 let diagnostics = validation.diagnostics.clone();
-                return SelectedSearchRunSource::Failed {
+                return Selected::Failed {
                     source_key: document.key.clone(),
                     source_name: document.name.clone(),
-                    error: SourceExecutionError::FailedWithDiagnostics {
-                        message: diagnostic_summary(&diagnostics),
-                        diagnostics,
-                    },
+                    error: SourceFailure::new(diagnostic_summary(&diagnostics), diagnostics),
                 };
             }
             match source.compiled() {
-                Some(compiled) => SelectedSearchRunSource::Resolved(compiled),
+                Some(compiled) => Selected::Resolved(compiled),
                 None => {
                     let diagnostics = source.preparation_diagnostics().to_vec();
-                    SelectedSearchRunSource::Failed {
+                    Selected::Failed {
                         source_key: document.key.clone(),
                         source_name: document.name.clone(),
-                        error: SourceExecutionError::FailedWithDiagnostics {
-                            message: diagnostic_summary(&diagnostics),
-                            diagnostics,
-                        },
+                        error: SourceFailure::new(diagnostic_summary(&diagnostics), diagnostics),
                     }
                 }
             }

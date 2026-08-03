@@ -12,6 +12,7 @@ pub struct AppState {
     pub resources: AppResources,
     pub browser_runtime_install_lock: Mutex<()>,
     pub search_requests: search_requests::Catalog,
+    pub search_runs: Arc<search_runs::Runner>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
@@ -67,6 +68,12 @@ impl AppState {
             paths.browser_runtime_dir.clone(),
         ));
         let installed_sources = sources::installed::Store::new(paths.app_data_dir.clone());
+        let search_runs = Arc::new(search_runs::Runner::new(
+            db.clone(),
+            installed_sources.clone(),
+            source_http.clone(),
+            source_browser.clone(),
+        ));
         let source_detection = sources::detection::Operation::new(
             installed_sources.clone(),
             source_http.clone(),
@@ -87,6 +94,7 @@ impl AppState {
             resources,
             browser_runtime_install_lock: Mutex::new(()),
             search_requests,
+            search_runs,
             background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(
                 crate::background_tasks::BackgroundTaskSchedulerConfig::default(),
                 notifier,

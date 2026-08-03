@@ -3,35 +3,32 @@
 use search_resolution::{merge_unique_locations, same_job_posting, PostingComparison};
 use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 
-use super::SearchRunStatus;
+use super::Status;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct MergedPosting {
+pub(super) struct Posting {
     pub(super) title: String,
     pub(super) company: String,
     pub(super) locations: Vec<String>,
-    pub(super) sources: Vec<MergedPostingSource>,
+    pub(super) sources: Vec<PostingSource>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct MergedPostingSource {
+pub(super) struct PostingSource {
     pub(super) source_key: String,
     pub(super) source_name: String,
     pub(super) url: String,
 }
 
-pub(super) struct AtomicSearchRunInput<'a> {
+pub(super) struct Commit<'a> {
     pub(super) search_request_id: i64,
-    pub(super) status: SearchRunStatus,
+    pub(super) status: Status,
     pub(super) generated_at: &'a str,
     pub(super) last_run_error: Option<&'a str>,
-    pub(super) postings: &'a [MergedPosting],
+    pub(super) postings: &'a [Posting],
 }
 
-pub(super) async fn persist_atomic_search_run(
-    pool: &SqlitePool,
-    input: AtomicSearchRunInput<'_>,
-) -> Result<i64, String> {
+pub(super) async fn commit(pool: &SqlitePool, input: Commit<'_>) -> Result<i64, String> {
     validate_input(&input)?;
 
     let mut transaction = pool.begin().await.map_err(db_error)?;
@@ -87,20 +84,18 @@ pub(super) async fn persist_atomic_search_run(
     Ok(search_run_id)
 }
 
-fn validate_input(input: &AtomicSearchRunInput<'_>) -> Result<(), String> {
+fn validate_input(input: &Commit<'_>) -> Result<(), String> {
     match input.status {
-        SearchRunStatus::Completed | SearchRunStatus::CompletedWithErrors => {
-            validate_merged_postings(input.postings)
-        }
-        SearchRunStatus::Failed | SearchRunStatus::Cancelled if input.postings.is_empty() => Ok(()),
-        SearchRunStatus::Failed | SearchRunStatus::Cancelled => Err(format!(
+        Status::Completed | Status::CompletedWithErrors => validate_merged_postings(input.postings),
+        Status::Failed | Status::Cancelled if input.postings.is_empty() => Ok(()),
+        Status::Failed | Status::Cancelled => Err(format!(
             "{} Search Run cannot persist posting or Match input",
             input.status.as_str()
         )),
     }
 }
 
-fn validate_merged_postings(postings: &[MergedPosting]) -> Result<(), String> {
+fn validate_merged_postings(postings: &[Posting]) -> Result<(), String> {
     for posting in postings {
         if posting.sources.is_empty() {
             return Err("posting has no sources".to_string());
@@ -125,7 +120,7 @@ fn validate_merged_postings(postings: &[MergedPosting]) -> Result<(), String> {
 
 async fn persist_merged_posting_in_transaction(
     transaction: &mut Transaction<'_, Sqlite>,
-    posting: &MergedPosting,
+    posting: &Posting,
     seen_at: &str,
 ) -> Result<i64, String> {
     match find_existing_posting(transaction, posting).await? {
@@ -139,7 +134,7 @@ async fn persist_merged_posting_in_transaction(
 
 async fn find_existing_posting(
     transaction: &mut Transaction<'_, Sqlite>,
-    posting: &MergedPosting,
+    posting: &Posting,
 ) -> Result<Option<i64>, String> {
     if let Some(posting_id) = find_posting_by_source_url(transaction, posting).await? {
         return Ok(Some(posting_id));
@@ -150,7 +145,7 @@ async fn find_existing_posting(
 
 async fn find_posting_by_source_url(
     transaction: &mut Transaction<'_, Sqlite>,
-    posting: &MergedPosting,
+    posting: &Posting,
 ) -> Result<Option<i64>, String> {
     for source in &posting.sources {
         let rows = sqlx::query(
@@ -178,7 +173,7 @@ async fn find_posting_by_source_url(
 
 async fn find_posting_by_dedupe(
     transaction: &mut Transaction<'_, Sqlite>,
-    posting: &MergedPosting,
+    posting: &Posting,
 ) -> Result<Option<i64>, String> {
     let rows = sqlx::query(
         "SELECT id, title, company, locations_json
@@ -219,7 +214,7 @@ async fn find_posting_by_dedupe(
 
 async fn insert_new_posting(
     transaction: &mut Transaction<'_, Sqlite>,
-    posting: &MergedPosting,
+    posting: &Posting,
     seen_at: &str,
 ) -> Result<i64, String> {
     let locations_json = serde_json::to_string(&posting.locations).map_err(json_error)?;
@@ -259,7 +254,7 @@ async fn insert_new_posting(
 async fn update_existing_posting(
     transaction: &mut Transaction<'_, Sqlite>,
     posting_id: i64,
-    posting: &MergedPosting,
+    posting: &Posting,
     seen_at: &str,
 ) -> Result<(), String> {
     let existing_locations_json = sqlx::query_scalar::<_, String>(
@@ -298,7 +293,7 @@ async fn update_existing_posting(
 async fn upsert_posting_source(
     transaction: &mut Transaction<'_, Sqlite>,
     posting_id: i64,
-    source: &MergedPostingSource,
+    source: &PostingSource,
     seen_at: &str,
 ) -> Result<i64, String> {
     let existing_source_id = sqlx::query_scalar::<_, i64>(

@@ -1,8 +1,6 @@
 use serde::Serialize;
-use sqlx::SqlitePool;
 use std::path::PathBuf;
 
-use crate::search::run::{SearchRunOutcome, SearchRunResolutionRuntime, SearchRunService};
 use search_requests::Catalog;
 
 use super::request::get_or_create_smoke_search_request;
@@ -13,55 +11,40 @@ pub(crate) struct SearchRunSmokeSummary {
     pub search_request_id: i64,
     pub search_request_created: bool,
     pub result_path: String,
-    pub result: SearchRunOutcome,
-}
-
-#[cfg(test)]
-pub(crate) async fn run_search_run_smoke(
-    pool: &SqlitePool,
-    catalog: &Catalog,
-    resolver: &SearchRunResolutionRuntime,
-    result_path: impl Into<PathBuf>,
-    installed_sources: sources::installed::Store,
-    source_keys: Vec<String>,
-) -> Result<SearchRunSmokeSummary, String> {
-    run_search_run_smoke_with_options(
-        pool,
-        catalog,
-        resolver,
-        result_path,
-        installed_sources,
-        source_keys,
-        false,
-    )
-    .await
+    pub result: search_runs::Outcome,
 }
 
 pub(crate) async fn run_search_run_smoke_with_options(
-    pool: &SqlitePool,
     catalog: &Catalog,
-    resolver: &SearchRunResolutionRuntime,
+    runner: &search_runs::Runner,
     result_path: impl Into<PathBuf>,
-    installed_sources: sources::installed::Store,
     source_keys: Vec<String>,
     allow_draft_sources: bool,
+    geo: &dyn geo::GeoResolver,
 ) -> Result<SearchRunSmokeSummary, String> {
     let result_path = result_path.into();
     let (request, search_request_created) =
         get_or_create_smoke_search_request(catalog, source_keys).await?;
-    let geo_db_path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/geo_loc.sqlite");
-    let geo_resolver = crate::geo::GeoDbResolver::connect(&geo_db_path).await?;
     let execution = catalog
         .begin_execution(request.id)
         .await
         .map_err(|error| error.to_string())?;
-    let result = SearchRunService::new(pool, resolver, result_path.clone(), installed_sources)
-        .with_geo_resolver(&geo_resolver)
-        .allowing_draft_sources(allow_draft_sources)
-        .run(execution)
+    let mut result = runner
+        .run(
+            execution,
+            search_runs::Context {
+                cancellation: None,
+                geo: Some(geo),
+                source_admission: if allow_draft_sources {
+                    search_runs::SourceAdmission::DevelopmentSmokeAllowDraft
+                } else {
+                    search_runs::SourceAdmission::ActiveOnly
+                },
+            },
+        )
         .await
         .map_err(|error| error.to_string())?;
+    crate::adapters::search_run_artifact::write(&result_path, &mut result).await;
 
     Ok(SearchRunSmokeSummary {
         search_request_id: request.id.get(),

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use search_requests::Id;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 
-use super::SearchRunStatus;
+use search_runs::Status;
 
 // Stay well below SQLite's host-parameter limit while preserving a batched, non-N+1 query path.
 const SQLITE_PROJECTION_CHUNK: usize = 500;
@@ -11,7 +11,7 @@ const SQLITE_PROJECTION_CHUNK: usize = 500;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct LatestSummary {
     pub(crate) at: Option<String>,
-    pub(crate) status: Option<SearchRunStatus>,
+    pub(crate) status: Option<Status>,
     pub(crate) error: Option<String>,
 }
 
@@ -56,10 +56,7 @@ pub(crate) async fn latest_summaries(
                     at: row
                         .try_get("last_run_at")
                         .map_err(|error| error.to_string())?,
-                    status: status
-                        .as_deref()
-                        .map(SearchRunStatus::try_from)
-                        .transpose()?,
+                    status: status.as_deref().map(Status::try_from).transpose()?,
                     error: row
                         .try_get("last_run_error")
                         .map_err(|error| error.to_string())?,

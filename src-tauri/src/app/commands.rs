@@ -706,7 +706,7 @@ pub struct SearchRequestView {
     source_keys: Vec<String>,
     validation_issues: Vec<search_requests::ValidationIssue>,
     last_run_at: Option<String>,
-    last_run_status: Option<crate::search::run::SearchRunStatus>,
+    last_run_status: Option<search_runs::Status>,
     last_run_error: Option<String>,
     created_at: String,
     updated_at: String,
@@ -850,34 +850,40 @@ async fn schedule_search_request_run(
         .begin_execution(id)
         .await
         .map_err(|error| error.to_string())?;
-    let pool = state.db.clone();
-    let browser_runtime_dir = state.paths.browser_runtime_dir.clone();
-    let installed_sources = state.installed_sources.clone();
+    let runner = state.search_runs.clone();
     let geo_db_path = state.resources.geo_db_path.clone();
 
     state.background_tasks.schedule(
         crate::background_tasks::BackgroundTaskSpec::search_run(),
         move |context| async move {
             let _ = context.progress.report("running Search Run", None, None);
-            let source_resolver =
-                crate::search::run::SearchRunResolutionRuntime::production(browser_runtime_dir);
             let result = match crate::geo::GeoDbResolver::connect(&geo_db_path).await {
                 Ok(geo_resolver) => {
-                    crate::search::run::SearchRunService::new_with_result_artifact(
-                        &pool,
-                        &source_resolver,
-                        crate::search::run::default_search_run_result_artifact(),
-                        installed_sources,
-                    )
-                    .with_geo_resolver(&geo_resolver)
-                    .run_with_cancellation(execution, Some(&context.cancellation_token))
-                    .await
+                    runner
+                        .run(
+                            execution,
+                            search_runs::Context {
+                                cancellation: Some(&context.cancellation_token),
+                                geo: Some(&geo_resolver),
+                                source_admission: search_runs::SourceAdmission::ActiveOnly,
+                            },
+                        )
+                        .await
                 }
-                Err(error) => Err(crate::search::run::SearchRunError::Requirements(error)),
+                Err(error) => Err(search_runs::Error::Requirements(error)),
             };
 
             match result {
-                Ok(outcome) => search_run_task_completion(outcome),
+                Ok(mut outcome) => {
+                    if cfg!(debug_assertions) {
+                        crate::adapters::search_run_artifact::write(
+                            &crate::adapters::search_run_artifact::default_path(),
+                            &mut outcome,
+                        )
+                        .await;
+                    }
+                    search_run_task_completion(outcome)
+                }
                 Err(error) => {
                     let error = error.to_string();
                     crate::background_tasks::BackgroundTaskCompletion::Failed {
@@ -894,9 +900,9 @@ async fn schedule_search_request_run(
 }
 
 pub(crate) fn search_run_task_completion(
-    outcome: crate::search::run::SearchRunOutcome,
+    outcome: search_runs::Outcome,
 ) -> crate::background_tasks::BackgroundTaskCompletion {
-    if outcome.status == crate::search::run::SearchRunStatus::Cancelled {
+    if outcome.status == search_runs::Status::Cancelled {
         crate::background_tasks::BackgroundTaskCompletion::Cancelled {
             error: Some("Search Run cancelled".to_string()),
             result: serde_json::to_value(outcome).ok(),

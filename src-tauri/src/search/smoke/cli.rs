@@ -1,10 +1,7 @@
 use serde::Serialize;
 use std::{ffi::OsString, path::PathBuf};
 
-use crate::{
-    app::paths::AppPaths,
-    search::run::{default_search_run_result_path, SearchRunResolutionRuntime},
-};
+use crate::app::paths::AppPaths;
 
 use super::{
     constants::{SMOKE_APP_DATA_DIR_ENV, SMOKE_COMMAND},
@@ -43,18 +40,16 @@ where
             .await
             .map_err(|error| error.to_string())?;
 
-        let result_path = default_search_run_result_path();
-        let source_resolver =
-            SearchRunResolutionRuntime::production(state.paths.browser_runtime_dir.clone());
+        let result_path = crate::adapters::search_run_artifact::default_path();
         let source_keys = options.source_keys;
+        let geo_resolver = crate::geo::GeoDbResolver::connect(&state.resources.geo_db_path).await?;
         let summary = run_search_run_smoke_with_options(
-            &state.db,
             &state.search_requests,
-            &source_resolver,
+            &state.search_runs,
             result_path,
-            state.installed_sources.clone(),
             source_keys,
             options.allow_draft,
+            &geo_resolver,
         )
         .await?;
 
