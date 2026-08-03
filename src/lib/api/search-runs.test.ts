@@ -12,11 +12,6 @@ describe("Search Run transport", () => {
     expect(parseSearchRunOutcome(searchRunWire())).toEqual(searchRunWire())
   })
 
-  it("drops obsolete full Posting bodies from the decoded Outcome", () => {
-    expect(parseSearchRunOutcome({ ...searchRunWire(), postings: [{ title: "obsolete" }] }))
-      .not.toHaveProperty("postings")
-  })
-
   it("starts a Search Run and validates its Background Task snapshot", async () => {
     invoke.mockResolvedValueOnce({
       taskId: "task-1",

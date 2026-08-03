@@ -16,10 +16,8 @@ import { SourceRunSummary } from "@/features/search-requests/components/source-r
 import type { SearchRequestTableRow } from "@/features/search-requests/model/search-request-row-model";
 import { createSearchRunDiagnosticViewModels } from "@/features/search-requests/model/search-run-diagnostics";
 import { searchRunStatusBadgeVariants, searchRunStatusLabels } from "@/features/search-requests/status";
-import {
-  isInFlightBackgroundTask,
-  type BackgroundTaskSnapshot,
-} from "@/lib/api/background-tasks";
+import type { SearchRunOperation } from "@/features/search-requests/use-search-run";
+import type { BackgroundTaskSnapshot } from "@/lib/api/background-tasks";
 import type { SearchRunOutcome } from "@/lib/api/search-runs";
 
 const backgroundTaskStateLabels: Record<BackgroundTaskSnapshot["state"], string> = {
@@ -45,26 +43,33 @@ const backgroundTaskStateBadgeVariants: Record<
 
 type SearchRunPanelProps = {
   row: SearchRequestTableRow | null;
-  starting: boolean;
-  task: BackgroundTaskSnapshot | null;
-  result: SearchRunOutcome | null;
-  error: string | null;
-  cancelling: boolean;
+  operation: Exclude<SearchRunOperation, { status: "idle" }>;
   onCancel: () => void;
 };
 
 export function SearchRunPanel({
   row,
-  starting,
-  task,
-  result,
-  error,
-  cancelling,
+  operation,
   onCancel,
 }: SearchRunPanelProps) {
-  const inFlight = starting || isInFlightBackgroundTask(task);
-  const canCancel = task?.state === "queued" || task?.state === "running";
+  const starting = operation.status === "starting";
+  const task = operation.status === "active" || operation.status === "terminal"
+    ? operation.task
+    : operation.status === "interrupted"
+      ? operation.task
+      : null;
+  const result = operation.status === "terminal" ? operation.outcome : null;
+  const error = operation.status === "active" || operation.status === "terminal" || operation.status === "interrupted"
+    ? operation.error
+    : null;
+  const cancelling = operation.status === "active" && operation.cancelling;
+  const inFlight = starting || operation.status === "active";
+  const canCancel = operation.status === "active" &&
+    (task?.state === "queued" || task?.state === "running");
   const sourceRunCount = result?.sourceRuns.length ?? 0;
+  const taskDiagnostics = task
+    ? createSearchRunDiagnosticViewModels(task.diagnostics)
+    : [];
   const runDiagnostics = result
     ? createSearchRunDiagnosticViewModels(result.diagnostics)
     : [];
@@ -168,7 +173,16 @@ export function SearchRunPanel({
           </p>
         ) : null}
 
-        {runDiagnostics.length ? <SearchRunDiagnostics diagnostics={runDiagnostics} /> : null}
+        {taskDiagnostics.length ? (
+          <DiagnosticsPanel
+            title="Background-Task-Diagnostics"
+            diagnostics={taskDiagnostics}
+          />
+        ) : null}
+
+        {runDiagnostics.length ? (
+          <DiagnosticsPanel title="Search-Run-Diagnostics" diagnostics={runDiagnostics} />
+        ) : null}
 
         {result ? <SourceRunSummary sourceRuns={result.sourceRuns} /> : null}
       </CardContent>
@@ -189,9 +203,11 @@ type SearchRunDiagnosticViewModel = ReturnType<
   typeof createSearchRunDiagnosticViewModels
 >[number];
 
-function SearchRunDiagnostics({
+function DiagnosticsPanel({
+  title,
   diagnostics,
 }: {
+  title: string;
   diagnostics: SearchRunDiagnosticViewModel[];
 }) {
   const variant = diagnostics.some((diagnostic) => diagnostic.severity === "error")
@@ -203,7 +219,7 @@ function SearchRunDiagnostics({
   return (
     <Alert variant={variant}>
       <InfoIcon aria-hidden="true" />
-      <AlertTitle>Search-Run-Diagnostics ({diagnostics.length})</AlertTitle>
+      <AlertTitle>{title} ({diagnostics.length})</AlertTitle>
       <AlertDescription>
         <div className="grid gap-2">
           {diagnostics.map((diagnostic, index) => (

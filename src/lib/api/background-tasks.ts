@@ -35,6 +35,8 @@ export type BackgroundTaskSnapshot = {
 }
 
 type TaskState = Pick<BackgroundTaskSnapshot, "state">
+type InFlightState = "queued" | "running" | "cancelling"
+type TerminalState = "succeeded" | "failed" | "cancelled"
 
 export function decodeBackgroundTaskSnapshot(value: unknown): BackgroundTaskSnapshot {
   if (
@@ -74,11 +76,15 @@ export async function cancelBackgroundTask(taskId: string) {
   )
 }
 
-export function isInFlightBackgroundTask(task: TaskState | null): boolean {
+export function isInFlightBackgroundTask<T extends TaskState>(
+  task: T | null,
+): task is T & { state: InFlightState } {
   return task?.state === "queued" || task?.state === "running" || task?.state === "cancelling"
 }
 
-export function isTerminalBackgroundTask(task: TaskState): boolean {
+export function isTerminalBackgroundTask<T extends TaskState>(
+  task: T,
+): task is T & { state: TerminalState } {
   return task.state === "succeeded" || task.state === "failed" || task.state === "cancelled"
 }
 
