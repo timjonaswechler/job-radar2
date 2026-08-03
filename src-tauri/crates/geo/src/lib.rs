@@ -5,9 +5,9 @@ mod resolver;
 
 pub use distance::distance_km;
 pub use matching::{
-    matches_location_filter, prepare_location_filter, LocationFilterMatchReport,
-    LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
-    PreparedLocationFilter,
+    matches_location_filter, prepare_location_filter, LocationFilterError,
+    LocationFilterMatchReport, LocationFilterNotAppliedReason, LocationMatchOutcome,
+    LocationResolutionAmbiguity, PreparedLocationFilter,
 };
 pub use normalization::{location_lookup_keys, postal_lookup_keys};
 pub use resolver::{GeoResolveFuture, GeoResolver};

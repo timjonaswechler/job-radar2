@@ -49,6 +49,13 @@ impl geo::GeoResolver for SamePlace {
     }
 }
 
+struct FailingGeo(&'static str);
+impl geo::GeoResolver for FailingGeo {
+    fn resolve<'a>(&'a self, _input: &'a str) -> geo::GeoResolveFuture<'a> {
+        Box::pin(async move { Err(self.0.to_string()) })
+    }
+}
+
 struct CancelOnCheck {
     after: usize,
     checks: AtomicUsize,
@@ -520,6 +527,41 @@ async fn duplicate_occurrence_aborts_without_resolution() {
 }
 
 #[tokio::test]
+async fn resolver_failure_that_looks_like_authored_input_remains_geo_resolution_failure() {
+    let geo = FailingGeo("Search Request location could not be resolved: resolver unavailable");
+    let requirements = CompiledSearchRequirements::compile_with_geo(
+        &[rule(SearchRuleKind::Text, "engineer")],
+        &[],
+        &["Berlin".into()],
+        Some(25),
+        &geo,
+    )
+    .await
+    .expect("resolver failures remain owned by Source Resolution");
+    let source = compiled_source();
+    let discovery = ScriptedSourceDiscoveryExecution::new("fixture_source", []);
+    let detail = ScriptedSourceDetailExecution::new([]);
+
+    let result = resolve_source_candidates(SourceResolutionRequest {
+        compiled_source: &source,
+        requirements: &requirements,
+        ceilings: ceilings(),
+        cancellation: &NeverCancelled,
+        discovery: SourceDiscovery::scripted(&discovery),
+        detail: &detail,
+    })
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(SourceResolutionError::Failed {
+            failure: ResolutionFailure::GeoResolution,
+            ..
+        })
+    ));
+}
+
+#[tokio::test]
 async fn matching_title_with_required_missing_location_requests_only_location_detail() {
     let mut candidate = occurrence("location-only", Some("Engineer"), Some("ACME"));
     candidate.provider_values.locations.clear();
@@ -553,6 +595,30 @@ async fn matching_title_with_required_missing_location_requests_only_location_de
     assert_eq!(result.counts.finalized, 1);
     assert_eq!(result.finalized[0].locations(), ["Berlin"]);
     detail.assert_finished();
+}
+
+#[tokio::test]
+async fn authored_locations_without_radius_keep_not_applied_diagnostic() {
+    let requirements = CompiledSearchRequirements::compile(
+        &[rule(SearchRuleKind::Text, "engineer")],
+        &[],
+        &["Berlin".into()],
+        None,
+    )
+    .unwrap();
+    let detail = ScriptedSourceDetailExecution::new([]);
+
+    let result = resolve_fixture(
+        &requirements,
+        vec![occurrence("missing-radius", Some("Engineer"), Some("ACME"))],
+        &detail,
+    )
+    .await;
+
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "location_filter_not_applied_missing_radius_km"));
 }
 
 #[tokio::test]

@@ -10,8 +10,8 @@ mod search;
 pub use crate::geo::GeoDbResolver;
 pub use ::geo::{
     distance_km, matches_location_filter, prepare_location_filter, GeoPoint, GeoResolveFuture,
-    GeoResolver, LocationFilterMatchReport, LocationFilterNotAppliedReason, LocationMatchOutcome,
-    LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
+    GeoResolver, LocationFilterError, LocationFilterMatchReport, LocationFilterNotAppliedReason,
+    LocationMatchOutcome, LocationResolutionAmbiguity, PreparedLocationFilter, ResolvedLocation,
 };
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use search::smoke::run_dev_search_run_smoke_cli;

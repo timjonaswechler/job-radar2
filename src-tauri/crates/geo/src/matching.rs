@@ -1,5 +1,33 @@
 use super::{distance::distance_km, GeoResolver, ResolvedLocation};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LocationFilterError {
+    UnresolvedRequestLocation { input: String },
+    ResolverFailure { message: String },
+}
+
+impl LocationFilterError {
+    fn resolver(message: String) -> Self {
+        Self::ResolverFailure { message }
+    }
+}
+
+impl std::fmt::Display for LocationFilterError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnresolvedRequestLocation { input } => {
+                write!(
+                    formatter,
+                    "Search Request location could not be resolved: {input}"
+                )
+            }
+            Self::ResolverFailure { message } => formatter.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for LocationFilterError {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum LocationMatchOutcome {
     Applied {
@@ -50,7 +78,7 @@ pub async fn prepare_location_filter<RequestLocation>(
     resolver: &dyn GeoResolver,
     request_locations: &[RequestLocation],
     radius_km: Option<i64>,
-) -> Result<PreparedLocationFilter, String>
+) -> Result<PreparedLocationFilter, LocationFilterError>
 where
     RequestLocation: AsRef<str> + Sync,
 {
@@ -74,11 +102,14 @@ where
     let mut request_ambiguities = Vec::new();
     for request_location in request_locations {
         let input = request_location.as_ref();
-        let resolved = resolver.resolve(input).await?;
+        let resolved = resolver
+            .resolve(input)
+            .await
+            .map_err(LocationFilterError::resolver)?;
         if resolved.is_empty() {
-            return Err(format!(
-                "Search Request location could not be resolved: {input}"
-            ));
+            return Err(LocationFilterError::UnresolvedRequestLocation {
+                input: input.to_string(),
+            });
         }
         if resolved.len() > 1 {
             request_ambiguities.push(location_ambiguity(input, &resolved));
@@ -100,7 +131,7 @@ pub async fn matches_location_filter<RequestLocation, CandidateLocation>(
     request_locations: &[RequestLocation],
     radius_km: Option<i64>,
     candidate_locations: &[CandidateLocation],
-) -> Result<LocationMatchOutcome, String>
+) -> Result<LocationMatchOutcome, LocationFilterError>
 where
     RequestLocation: AsRef<str> + Sync,
     CandidateLocation: AsRef<str> + Sync,
@@ -116,7 +147,7 @@ impl PreparedLocationFilter {
         &self,
         resolver: &dyn GeoResolver,
         candidate_locations: &[CandidateLocation],
-    ) -> Result<LocationMatchOutcome, String>
+    ) -> Result<LocationMatchOutcome, LocationFilterError>
     where
         CandidateLocation: AsRef<str> + Sync,
     {
@@ -130,7 +161,7 @@ impl PreparedLocationFilter {
         &self,
         resolver: &dyn GeoResolver,
         candidate_locations: &[CandidateLocation],
-    ) -> Result<LocationFilterMatchReport, String>
+    ) -> Result<LocationFilterMatchReport, LocationFilterError>
     where
         CandidateLocation: AsRef<str> + Sync,
     {
@@ -155,7 +186,10 @@ impl PreparedLocationFilter {
         let mut candidate_ambiguities = Vec::new();
         for candidate_location in candidate_locations {
             let input = candidate_location.as_ref();
-            let resolved_candidate_locations = resolver.resolve(input).await?;
+            let resolved_candidate_locations = resolver
+                .resolve(input)
+                .await
+                .map_err(LocationFilterError::resolver)?;
             if resolved_candidate_locations.is_empty() {
                 unresolved_candidate_locations.push(input.to_string());
                 continue;

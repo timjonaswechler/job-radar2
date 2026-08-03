@@ -656,6 +656,113 @@ async fn explicit_radius_uses_geo_resolver_and_persists_in_radius_match() {
 }
 
 #[tokio::test]
+async fn unresolved_authored_radius_location_preserves_requirements_message() {
+    struct Unresolved;
+    impl geo::GeoResolver for Unresolved {
+        fn resolve<'a>(&'a self, _input: &'a str) -> geo::GeoResolveFuture<'a> {
+            Box::pin(async { Ok(vec![]) })
+        }
+    }
+
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    let request = catalog
+        .create(Input {
+            status: Status::Active,
+            include_rules: vec![SearchRule {
+                target: SearchRuleTarget::Title,
+                kind: SearchRuleKind::Text,
+                value: "engineer".into(),
+            }],
+            exclude_rules: vec![],
+            locations: vec!["Atlantis".into()],
+            radius_km: Some(25),
+            source_keys: vec!["missing".into()],
+        })
+        .await
+        .unwrap();
+    let runner = runner_with_responses(&pool, installed_dir.path(), []);
+
+    let error = runner
+        .run(
+            catalog.begin_execution(request.id).await.unwrap(),
+            Context {
+                cancellation: None,
+                geo: Some(&Unresolved),
+                source_admission: SourceAdmission::ActiveOnly,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        search_runs::Error::Requirements(
+            "Search Request location could not be resolved: Atlantis".to_string()
+        )
+    );
+    assert_eq!(row_count(&pool, "search_runs").await, 0);
+    catalog.delete(request.id).await.unwrap();
+}
+
+#[tokio::test]
+async fn radius_resolver_failure_remains_source_owned_geo_resolution_failure() {
+    struct Failed;
+    impl geo::GeoResolver for Failed {
+        fn resolve<'a>(&'a self, _input: &'a str) -> geo::GeoResolveFuture<'a> {
+            Box::pin(async {
+                Err("Search Request location could not be resolved: resolver unavailable".into())
+            })
+        }
+    }
+
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "fixture", "active");
+    let request = catalog
+        .create(Input {
+            status: Status::Active,
+            include_rules: vec![SearchRule {
+                target: SearchRuleTarget::Title,
+                kind: SearchRuleKind::Text,
+                value: "engineer".into(),
+            }],
+            exclude_rules: vec![],
+            locations: vec!["Berlin".into()],
+            radius_km: Some(25),
+            source_keys: vec!["fixture".into()],
+        })
+        .await
+        .unwrap();
+    let runner = runner_with_responses(&pool, installed_dir.path(), []);
+
+    let outcome = runner
+        .run(
+            catalog.begin_execution(request.id).await.unwrap(),
+            Context {
+                cancellation: None,
+                geo: Some(&Failed),
+                source_admission: SourceAdmission::ActiveOnly,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.status, RunStatus::Failed);
+    assert_eq!(
+        outcome.source_runs[0].status,
+        search_runs::SourceStatus::Failed
+    );
+    assert_eq!(
+        outcome.source_runs[0].error.as_deref(),
+        Some("Candidate Resolution failed: GeoResolution")
+    );
+    assert_eq!(row_count(&pool, "search_runs").await, 1);
+}
+
+#[tokio::test]
 async fn explicit_radius_without_geo_resolver_fails_before_terminal_persistence() {
     let pool = migrated_pool().await;
     let catalog = Catalog::new(pool.clone());

@@ -6,7 +6,7 @@ use std::{
 };
 
 use geo::{
-    prepare_location_filter, GeoResolver, LocationFilterMatchReport,
+    prepare_location_filter, GeoResolver, LocationFilterError, LocationFilterMatchReport,
     LocationFilterNotAppliedReason, LocationMatchOutcome, LocationResolutionAmbiguity,
     PreparedLocationFilter,
 };
@@ -89,7 +89,7 @@ pub struct CompiledSearchRequirements<'a> {
     exclude: Vec<CompiledRule>,
     geo: Option<GeoRequirements<'a>>,
     missing_radius: bool,
-    geo_runtime_failure: bool,
+    geo_failure: Option<LocationFilterError>,
 }
 
 #[derive(Clone)]
@@ -135,7 +135,7 @@ impl<'a> CompiledSearchRequirements<'a> {
             exclude: compile_rules(exclude, true)?,
             geo: None,
             missing_radius: !locations.is_empty(),
-            geo_runtime_failure: false,
+            geo_failure: None,
         })
     }
 
@@ -148,22 +148,20 @@ impl<'a> CompiledSearchRequirements<'a> {
         radius_km: Option<i64>,
         resolver: &'a dyn GeoResolver,
     ) -> Result<Self, String> {
-        let (geo, geo_runtime_failure) =
-            match prepare_location_filter(resolver, locations, radius_km).await {
-                Ok(filter) => (Some(GeoRequirements { filter, resolver }), false),
-                Err(error)
-                    if error.starts_with("Search Request location could not be resolved:") =>
-                {
-                    return Err(error);
-                }
-                Err(_) => (None, true),
-            };
+        let (geo, geo_failure) = match prepare_location_filter(resolver, locations, radius_km).await
+        {
+            Ok(filter) => (Some(GeoRequirements { filter, resolver }), None),
+            Err(error @ LocationFilterError::UnresolvedRequestLocation { .. }) => {
+                return Err(error.to_string());
+            }
+            Err(error @ LocationFilterError::ResolverFailure { .. }) => (None, Some(error)),
+        };
         Ok(Self {
             include: compile_rules(include, false).map_err(requirements_error)?,
             exclude: compile_rules(exclude, true).map_err(requirements_error)?,
             geo,
             missing_radius: false,
-            geo_runtime_failure,
+            geo_failure,
         })
     }
 
@@ -175,7 +173,7 @@ impl<'a> CompiledSearchRequirements<'a> {
     async fn matches_locations(
         &self,
         locations: &[String],
-    ) -> Result<(bool, Option<LocationFilterMatchReport>), String> {
+    ) -> Result<(bool, Option<LocationFilterMatchReport>), LocationFilterError> {
         if let Some(geo) = &self.geo {
             let report = geo
                 .filter
@@ -722,8 +720,8 @@ pub async fn resolve_source_candidates(
         .ceilings
         .validate()
         .map_err(|failure| failed(failure, Vec::new()))?;
-    if request.requirements.geo_runtime_failure {
-        return Err(geo_resolution_failed(String::new()));
+    if let Some(error) = request.requirements.geo_failure.clone() {
+        return Err(geo_resolution_failed(error));
     }
     let source_key = request.compiled_source.source_key().to_string();
     let mut state = ResolutionState::new(source_key.clone(), ceilings.phase, request.requirements);
@@ -1289,7 +1287,7 @@ impl CandidateValues {
     async fn final_matches(
         &self,
         requirements: &CompiledSearchRequirements<'_>,
-    ) -> Result<(bool, Option<LocationFilterMatchReport>), String> {
+    ) -> Result<(bool, Option<LocationFilterMatchReport>), LocationFilterError> {
         let title_matches = self
             .title
             .as_deref()
@@ -1689,7 +1687,7 @@ fn location_filter_missing_radius_diagnostic() -> Diagnostic {
         details: None,
     }
 }
-fn geo_resolution_failed(_error: String) -> SourceResolutionError {
+fn geo_resolution_failed(_error: LocationFilterError) -> SourceResolutionError {
     failed(
         ResolutionFailure::GeoResolution,
         vec![Diagnostic {
