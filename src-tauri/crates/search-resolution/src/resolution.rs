@@ -944,11 +944,16 @@ impl ResolutionState {
         )?;
         for (index, occurrence) in occurrences.iter().enumerate() {
             cancelled(request.cancellation)?;
-            if hint_rejects(occurrence, request.requirements) {
+            let mut values = CandidateValues::from_occurrence(occurrence);
+            if values
+                .title
+                .as_deref()
+                .is_some_and(|title| !request.requirements.matches_title(title))
+                || (values.title.is_none() && hint_rejects(occurrence, request.requirements))
+            {
                 self.counts.rejected = checked_add(self.counts.rejected, 1)?;
                 continue;
             }
-            let mut values = CandidateValues::from_occurrence(occurrence);
             if values.is_complete(request.requirements) {
                 let matches = values
                     .final_matches(request.requirements)

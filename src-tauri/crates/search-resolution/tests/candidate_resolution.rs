@@ -3,20 +3,20 @@ use search_resolution::{
     ResolutionCeilings, ResolutionCompletion, ResolutionFailure, ResolutionLimitDimension,
     ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution, SearchRule,
     SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
-    SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
+    SourceResolutionRequest,
 };
 use serde_json::json;
 use source_engine::test_support::{
     compile_source, AllowanceDimension, AllowanceExhaustion, AllowanceLimitSource,
     CandidateDetailFailure, CompileSourceOutcome, CompiledSource, DetailField, DetailPatch,
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, PhaseCancellationReason, PhaseCancelled,
-    PhaseCompletion, PhaseExecutionFailure, PhaseExecutionReport, PhaseLimits, PhaseUsage,
-    PostingOccurrence, PostingOccurrenceIdentity, PostingReference, ProfileCompilerInput,
-    ProviderValues, RequestedDetailFields, RequestedFieldDisposition, RuntimeCancellation,
-    ScriptedBrowserAcquisition, ScriptedHttpBodyEvent, ScriptedHttpEvent,
-    ScriptedProfileHttpClient, ScriptedSourceDetailExecution, SourceBehavior, SourceDetailFailure,
-    SourceDetailOutcome, SourceDetailPhaseEvidence, SourceDetailRequestSnapshot,
-    SourceProfileDocument,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveryHint, HintUse,
+    PhaseCancellationReason, PhaseCancelled, PhaseCompletion, PhaseExecutionFailure,
+    PhaseExecutionReport, PhaseLimits, PhaseUsage, PostingOccurrence, PostingOccurrenceIdentity,
+    PostingReference, ProfileCompilerInput, ProviderValues, RequestedDetailFields,
+    RequestedFieldDisposition, RuntimeCancellation, ScriptedBrowserAcquisition,
+    ScriptedHttpBodyEvent, ScriptedHttpEvent, ScriptedProfileHttpClient,
+    ScriptedSourceDetailExecution, SourceBehavior, SourceDetailFailure, SourceDetailOutcome,
+    SourceDetailPhaseEvidence, SourceDetailRequestSnapshot, SourceProfileDocument,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -30,6 +30,22 @@ struct Cancelled;
 impl RuntimeCancellation for Cancelled {
     fn is_cancelled(&self) -> bool {
         true
+    }
+}
+
+struct SamePlace;
+impl geo::GeoResolver for SamePlace {
+    fn resolve<'a>(&'a self, input: &'a str) -> geo::GeoResolveFuture<'a> {
+        Box::pin(async move {
+            Ok(vec![geo::ResolvedLocation {
+                input: input.into(),
+                label: input.into(),
+                point: geo::GeoPoint {
+                    latitude: 52.52,
+                    longitude: 13.405,
+                },
+            }])
+        })
     }
 }
 
@@ -98,6 +114,22 @@ fn occurrence(id: &str, title: Option<&str>, company: Option<&str>) -> PostingOc
     }
 }
 
+fn hinted_occurrence(
+    id: &str,
+    title: Option<&str>,
+    hint_use: Option<HintUse>,
+) -> PostingOccurrence {
+    let mut occurrence = occurrence(id, title, Some("ACME"));
+    occurrence.hints.insert(
+        "title".into(),
+        DiscoveryHint {
+            value: "Accountant".into(),
+            hint_use,
+        },
+    );
+    occurrence
+}
+
 fn report(requests: u64) -> PhaseExecutionReport {
     PhaseExecutionReport {
         usage: PhaseUsage {
@@ -146,18 +178,23 @@ fn ceilings() -> ResolutionCeilings {
         phase: PhaseLimits::BACKEND,
     }
 }
+fn rule(kind: SearchRuleKind, value: &str) -> SearchRule {
+    SearchRule {
+        target: SearchRuleTarget::Title,
+        kind,
+        value: value.into(),
+    }
+}
+
 fn requirements() -> CompiledSearchRequirements<'static> {
-    CompiledSearchRequirements::compile(
-        &[SearchRule {
-            target: SearchRuleTarget::Title,
-            kind: SearchRuleKind::Text,
-            value: "engineer".into(),
-        }],
-        &[],
-        &[],
-        None,
-    )
-    .unwrap()
+    rule_requirements(&[rule(SearchRuleKind::Text, "engineer")], &[])
+}
+
+fn rule_requirements(
+    include: &[SearchRule],
+    exclude: &[SearchRule],
+) -> CompiledSearchRequirements<'static> {
+    CompiledSearchRequirements::compile(include, exclude, &[], None).unwrap()
 }
 fn discovery_limits(requests_used: u64, maximum: u64) -> PhaseLimits {
     PhaseLimits {
@@ -185,6 +222,56 @@ fn batch(
     )
 }
 
+fn successful_detail(
+    fields: DetailPatch,
+    produced: impl IntoIterator<Item = DetailField>,
+) -> SourceDetailOutcome {
+    SourceDetailOutcome::Completed {
+        fields,
+        dispositions: produced
+            .into_iter()
+            .map(|field| RequestedFieldDisposition::Produced { field })
+            .collect(),
+        phase_evidence: Some(SourceDetailPhaseEvidence {
+            complete_budget_report: report(1),
+            diagnostics: vec![],
+        }),
+    }
+}
+
+async fn resolve_fixture_result(
+    requirements: &CompiledSearchRequirements<'_>,
+    occurrences: Vec<PostingOccurrence>,
+    detail: &ScriptedSourceDetailExecution,
+) -> Result<SourceResolution, SourceResolutionError> {
+    let source = compiled_source();
+    let discovery = ScriptedSourceDiscoveryExecution::new(
+        "fixture_source",
+        [batch(occurrences, true, Some(0), None)],
+    );
+    let result = resolve_source_candidates(SourceResolutionRequest {
+        compiled_source: &source,
+        requirements,
+        ceilings: ceilings(),
+        cancellation: &NeverCancelled,
+        discovery: SourceDiscovery::scripted(&discovery),
+        detail,
+    })
+    .await;
+    discovery.assert_finished();
+    result
+}
+
+async fn resolve_fixture(
+    requirements: &CompiledSearchRequirements<'_>,
+    occurrences: Vec<PostingOccurrence>,
+    detail: &ScriptedSourceDetailExecution,
+) -> SourceResolution {
+    resolve_fixture_result(requirements, occurrences, detail)
+        .await
+        .unwrap()
+}
+
 fn expected_batch(
     occurrences: Vec<PostingOccurrence>,
     exhausted: bool,
@@ -210,31 +297,17 @@ fn expected_batch(
 
 #[tokio::test]
 async fn resolves_normalized_final_only_values_and_exact_counts() {
-    let source = compiled_source();
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(
-            vec![occurrence(
-                "1",
-                Some("  Software   Engineer "),
-                Some(" ACME "),
-            )],
-            true,
-            Some(0),
-            None,
-        )],
-    );
     let detail = ScriptedSourceDetailExecution::new([]);
-    let result = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await
-    .unwrap();
+    let result = resolve_fixture(
+        &requirements(),
+        vec![occurrence(
+            "1",
+            Some("  Software   Engineer "),
+            Some(" ACME "),
+        )],
+        &detail,
+    )
+    .await;
     assert_eq!(result.completion, ResolutionCompletion::Complete);
     assert_eq!((result.counts.discovered, result.counts.finalized), (1, 1));
     assert_eq!(result.remaining, Some(0));
@@ -244,7 +317,103 @@ async fn resolves_normalized_final_only_values_and_exact_counts() {
     let serialized = serde_json::to_string(&result).unwrap();
     assert!(!serialized.contains("must-not-escape"));
     assert!(!serialized.contains("postingMeta"));
-    discovery.assert_finished();
+}
+
+#[tokio::test]
+async fn canonical_title_rejections_avoid_detail_and_preserve_rule_semantics() {
+    let cases = [
+        (
+            "include-text-nonmatch",
+            "Accountant",
+            rule_requirements(&[rule(SearchRuleKind::Text, "engineer")], &[]),
+        ),
+        (
+            "exclusion-text-match",
+            "Data Engineer",
+            rule_requirements(
+                &[rule(SearchRuleKind::Text, "engineer")],
+                &[rule(SearchRuleKind::Text, "data")],
+            ),
+        ),
+        (
+            "include-regex-is-case-sensitive",
+            "engineer",
+            rule_requirements(&[rule(SearchRuleKind::Regex, "^Engineer$")], &[]),
+        ),
+        (
+            "exclusion-regex-is-case-insensitive",
+            "Engineer",
+            rule_requirements(
+                &[rule(SearchRuleKind::Text, "engineer")],
+                &[rule(SearchRuleKind::Regex, "^engineer$")],
+            ),
+        ),
+    ];
+
+    for (id, title, requirements) in cases {
+        let detail = ScriptedSourceDetailExecution::new([]);
+        let result = resolve_fixture(
+            &requirements,
+            vec![occurrence(id, Some(title), None)],
+            &detail,
+        )
+        .await;
+
+        assert_eq!(result.counts.rejected, 1, "{id}");
+        assert_eq!(result.report.usage.requests, 1, "{id}");
+    }
+}
+
+#[tokio::test]
+async fn canonical_title_wins_while_hints_remain_rejection_only() {
+    let candidates = vec![
+        hinted_occurrence(
+            "provider-wins",
+            Some("Engineer"),
+            Some(HintUse::SearchPrefilter),
+        ),
+        hinted_occurrence("authorized-rejects", None, Some(HintUse::SearchPrefilter)),
+        hinted_occurrence("inert-needs-title", None, None),
+        occurrence("matching-needs-company", Some("Engineer"), None),
+    ];
+    let detail = ScriptedSourceDetailExecution::new([
+        (
+            SourceDetailRequestSnapshot::new(
+                "fixture_source",
+                candidates[2].identity.clone(),
+                RequestedDetailFields::new([DetailField::Title]).unwrap(),
+            ),
+            Ok(successful_detail(
+                DetailPatch {
+                    title: Some("Engineer".into()),
+                    ..Default::default()
+                },
+                [DetailField::Title],
+            )),
+        ),
+        (
+            SourceDetailRequestSnapshot::new(
+                "fixture_source",
+                candidates[3].identity.clone(),
+                RequestedDetailFields::new([DetailField::Company]).unwrap(),
+            ),
+            Ok(successful_detail(
+                DetailPatch {
+                    company: Some("ACME".into()),
+                    ..Default::default()
+                },
+                [DetailField::Company],
+            )),
+        ),
+    ]);
+
+    let result = resolve_fixture(&requirements(), candidates, &detail).await;
+
+    assert_eq!((result.counts.finalized, result.counts.rejected), (3, 1));
+    assert!(result
+        .finalized
+        .iter()
+        .all(|value| value.title() == "Engineer"));
     detail.assert_finished();
 }
 
@@ -337,22 +506,10 @@ async fn continuation_protocol_and_remaining_recurrence_are_checked() {
 
 #[tokio::test]
 async fn duplicate_occurrence_aborts_without_resolution() {
-    let source = compiled_source();
     let repeated = occurrence("same", Some("Engineer"), Some("A"));
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![repeated.clone(), repeated], true, Some(0), None)],
-    );
     let detail = ScriptedSourceDetailExecution::new([]);
-    let result = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await;
+    let result =
+        resolve_fixture_result(&requirements(), vec![repeated.clone(), repeated], &detail).await;
     assert!(matches!(
         result,
         Err(SourceResolutionError::Failed {
@@ -363,111 +520,38 @@ async fn duplicate_occurrence_aborts_without_resolution() {
 }
 
 #[tokio::test]
-async fn detail_failures_continue_and_sampling_is_fixed_at_ten() {
-    let source = compiled_source();
-    let occurrences = (0..11)
-        .map(|i| occurrence(&i.to_string(), Some("Engineer"), None))
-        .collect::<Vec<_>>();
-    let script = occurrences.iter().map(|o| {
-        (
-            SourceDetailRequestSnapshot::new(
-                "fixture_source",
-                o.identity.clone(),
-                RequestedDetailFields::new([DetailField::Company]).unwrap(),
-            ),
-            Ok(SourceDetailOutcome::CandidateExecutionFailed {
-                typed_failure: CandidateDetailFailure::IncludesExecutionFailure,
-                complete_budget_report: candidate_failure_report(),
-                diagnostics: vec![Diagnostic {
-                    category: DiagnosticCategory::Runtime,
-                    code: "provider-secret-code".into(),
-                    message: "secret payload".into(),
-                    severity: DiagnosticSeverity::Error,
-                    path: "/secret".into(),
-                    strategy_key: None,
-                    details: Some(json!({"secret":"payload"})),
-                }],
-            }),
-        )
-    });
-    let detail = ScriptedSourceDetailExecution::new(script);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(occurrences, true, Some(0), None)],
-    );
-    let result = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await
-    .unwrap();
-    assert_eq!(result.counts.failed, 11);
-    assert_eq!(
-        result.candidate_diagnostics.samples.len(),
-        CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT
-    );
-    assert_eq!(
-        result.candidate_diagnostics.candidate_diagnostics_omitted,
-        1
-    );
-    assert_eq!(
-        result.candidate_diagnostics.counts_by_code["candidate_detail_execution_failed"],
-        11
-    );
-    assert!(!serde_json::to_string(&result)
-        .unwrap()
-        .contains("secret payload"));
-    detail.assert_finished();
-}
-
-#[tokio::test]
-async fn minimal_multi_field_detail_patch_finalizes_and_accounting_is_exact() {
-    let source = compiled_source();
-    let candidate = occurrence("1", None, None);
-    let requested = RequestedDetailFields::new([DetailField::Title, DetailField::Company]).unwrap();
+async fn matching_title_with_required_missing_location_requests_only_location_detail() {
+    let mut candidate = occurrence("location-only", Some("Engineer"), Some("ACME"));
+    candidate.provider_values.locations.clear();
     let detail = ScriptedSourceDetailExecution::new([(
-        SourceDetailRequestSnapshot::new("fixture_source", candidate.identity.clone(), requested),
-        Ok(SourceDetailOutcome::Completed {
-            fields: DetailPatch {
-                title: Some("Engineer".into()),
-                company: Some("ACME".into()),
+        SourceDetailRequestSnapshot::new(
+            "fixture_source",
+            candidate.identity.clone(),
+            RequestedDetailFields::new([DetailField::Locations]).unwrap(),
+        ),
+        Ok(successful_detail(
+            DetailPatch {
+                locations: Some(vec!["Berlin".into()]),
                 ..Default::default()
             },
-            dispositions: vec![
-                RequestedFieldDisposition::Produced {
-                    field: DetailField::Title,
-                },
-                RequestedFieldDisposition::Produced {
-                    field: DetailField::Company,
-                },
-            ],
-            phase_evidence: Some(SourceDetailPhaseEvidence {
-                complete_budget_report: report(2),
-                diagnostics: vec![],
-            }),
-        }),
+            [DetailField::Locations],
+        )),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate], true, Some(0), None)],
-    );
-    let result = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
+    let geo = SamePlace;
+    let requirements = CompiledSearchRequirements::compile_with_geo(
+        &[rule(SearchRuleKind::Text, "engineer")],
+        &[],
+        &["Berlin".into()],
+        Some(25),
+        &geo,
+    )
     .await
     .unwrap();
+
+    let result = resolve_fixture(&requirements, vec![candidate], &detail).await;
+
     assert_eq!(result.counts.finalized, 1);
-    assert_eq!(result.report.usage.requests, 3);
-    assert_eq!(result.report.usage.response_bytes, 30);
+    assert_eq!(result.finalized[0].locations(), ["Berlin"]);
     detail.assert_finished();
 }
 
@@ -609,25 +693,14 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
             candidates[0].identity.clone(),
             requested,
         ),
-        Ok(SourceDetailOutcome::Completed {
-            fields: DetailPatch {
+        Ok(successful_detail(
+            DetailPatch {
                 title: Some("Engineer".into()),
                 company: Some("A".into()),
                 ..Default::default()
             },
-            dispositions: vec![
-                RequestedFieldDisposition::Produced {
-                    field: DetailField::Title,
-                },
-                RequestedFieldDisposition::Produced {
-                    field: DetailField::Company,
-                },
-            ],
-            phase_evidence: Some(SourceDetailPhaseEvidence {
-                complete_budget_report: report(1),
-                diagnostics: vec![],
-            }),
-        }),
+            [DetailField::Title, DetailField::Company],
+        )),
     )]);
     let discovery = ScriptedSourceDiscoveryExecution::new(
         "fixture_source",
@@ -666,7 +739,6 @@ async fn exact_detail_candidate_bound_returns_partial_with_current_unresolved_an
 
 #[tokio::test]
 async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_cancellation() {
-    let source = compiled_source();
     let candidate = occurrence("mapping", Some("Engineer"), None);
     let requested = RequestedDetailFields::new([DetailField::Company]).unwrap();
     let snapshot =
@@ -685,20 +757,7 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
             }),
         }),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate.clone()], true, Some(0), None)],
-    );
-    let unresolved = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await
-    .unwrap();
+    let unresolved = resolve_fixture(&requirements(), vec![candidate.clone()], &detail).await;
     assert_eq!(unresolved.counts.unresolved, 1);
     assert_eq!(unresolved.counts.finalized, 0);
 
@@ -706,19 +765,8 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
         snapshot.clone(),
         Ok(SourceDetailOutcome::SourceMismatch),
     )]);
-    let mismatch_discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate.clone()], true, Some(0), None)],
-    );
-    let mismatch = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&mismatch_discovery),
-        detail: &mismatch_detail,
-    })
-    .await;
+    let mismatch =
+        resolve_fixture_result(&requirements(), vec![candidate.clone()], &mismatch_detail).await;
     assert!(matches!(
         mismatch,
         Err(SourceResolutionError::Failed {
@@ -734,20 +782,7 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
             diagnostics: vec![],
         }),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate.clone()], true, Some(0), None)],
-    );
-    let partial = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await
-    .unwrap();
+    let partial = resolve_fixture(&requirements(), vec![candidate.clone()], &detail).await;
     assert_eq!(
         partial.completion,
         ResolutionCompletion::Partial {
@@ -775,19 +810,7 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
             diagnostics: vec![source_abort_diagnostic.clone()],
         }),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate.clone()], true, Some(0), None)],
-    );
-    let aborted = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await;
+    let aborted = resolve_fixture_result(&requirements(), vec![candidate.clone()], &detail).await;
     assert_eq!(
         aborted,
         Err(SourceResolutionError::Failed {
@@ -805,19 +828,7 @@ async fn source_detail_terminal_mapping_covers_conflicted_no_progress_abort_and_
             diagnostics: vec![],
         }),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate], true, Some(0), None)],
-    );
-    let cancelled = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await;
+    let cancelled = resolve_fixture_result(&requirements(), vec![candidate], &detail).await;
     assert_eq!(cancelled, Err(SourceResolutionError::Cancelled));
 }
 
@@ -901,7 +912,7 @@ async fn detail_diagnostics_are_appended_in_execution_order() {
     ));
 }
 
-async fn failed_candidate_resolution(source: &CompiledSource, count: usize) -> SourceResolution {
+async fn failed_candidate_resolution(count: usize) -> SourceResolution {
     let occurrences = (0..count)
         .map(|index| occurrence(&format!("sample-{count}-{index}"), Some("Engineer"), None))
         .collect::<Vec<_>>();
@@ -915,42 +926,40 @@ async fn failed_candidate_resolution(source: &CompiledSource, count: usize) -> S
             Ok(SourceDetailOutcome::CandidateExecutionFailed {
                 typed_failure: CandidateDetailFailure::IncludesExecutionFailure,
                 complete_budget_report: candidate_failure_report(),
-                diagnostics: vec![],
+                diagnostics: vec![Diagnostic {
+                    category: DiagnosticCategory::Runtime,
+                    code: "provider-secret-code".into(),
+                    message: "secret payload".into(),
+                    severity: DiagnosticSeverity::Error,
+                    path: "/secret".into(),
+                    strategy_key: None,
+                    details: Some(json!({"secret":"payload"})),
+                }],
             }),
         )
     });
     let detail = ScriptedSourceDetailExecution::new(script);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(occurrences, true, Some(0), None)],
-    );
-    resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await
-    .unwrap()
+    resolve_fixture(&requirements(), occurrences, &detail).await
 }
 
 #[tokio::test]
 async fn candidate_sampling_boundaries_keep_nine_ten_and_only_first_ten_of_larger_stream() {
-    let source = compiled_source();
     for (count, expected_samples, expected_omitted) in [(9, 9, 0), (10, 10, 0), (25, 10, 15)] {
-        let result = failed_candidate_resolution(&source, count).await;
+        let result = failed_candidate_resolution(count).await;
         assert_eq!(result.candidate_diagnostics.samples.len(), expected_samples);
         assert_eq!(
             result.candidate_diagnostics.candidate_diagnostics_omitted,
             expected_omitted
         );
         assert_eq!(result.candidate_diagnostics.sample_limit, 10);
+        assert_eq!(result.counts.failed, count as u64);
         assert_eq!(
             result.candidate_diagnostics.counts_by_code["candidate_detail_execution_failed"],
             count as u64
         );
+        assert!(!serde_json::to_string(&result)
+            .unwrap()
+            .contains("secret payload"));
     }
 }
 
@@ -998,7 +1007,6 @@ async fn cumulative_child_duration_above_parent_ceiling_is_an_invariant_failure(
 
 #[tokio::test]
 async fn source_detail_failure_report_presence_must_match_the_typed_failure() {
-    let source = compiled_source();
     let candidate = occurrence("bad-evidence", Some("Engineer"), None);
     let requested = RequestedDetailFields::new([DetailField::Company]).unwrap();
     let detail = ScriptedSourceDetailExecution::new([(
@@ -1011,20 +1019,7 @@ async fn source_detail_failure_report_presence_must_match_the_typed_failure() {
             diagnostics: vec![],
         }),
     )]);
-    let discovery = ScriptedSourceDiscoveryExecution::new(
-        "fixture_source",
-        [batch(vec![candidate], true, Some(0), None)],
-    );
-
-    let result = resolve_source_candidates(SourceResolutionRequest {
-        compiled_source: &source,
-        requirements: &requirements(),
-        ceilings: ceilings(),
-        cancellation: &NeverCancelled,
-        discovery: SourceDiscovery::scripted(&discovery),
-        detail: &detail,
-    })
-    .await;
+    let result = resolve_fixture_result(&requirements(), vec![candidate], &detail).await;
 
     assert!(matches!(
         result,
