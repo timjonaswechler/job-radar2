@@ -9,17 +9,13 @@ use std::{fmt, sync::Arc};
 use geo::GeoResolver;
 use search_requests::Execution;
 use search_resolution::{
-    resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
-    ResolutionCeilings, ResolutionCompletion, ResolutionCounts, SourceDiscovery, SourceResolution,
-    SourceResolutionError, SourceResolutionRequest,
+    CandidateDiagnosticSummary, Requirements, Resolution, ResolutionCompletion, ResolutionCounts,
+    ResolutionError, Resolver,
 };
 use serde::{Deserialize, Serialize};
 use source_engine::{
-    definition::{Diagnostics, PhaseLimits},
-    execution::{
-        BoxedBrowserAcquisitionFuture, BrowserAcquisition, BrowserAcquisitionRequest, PhaseUsage,
-        ProfileHttpClient, RuntimeCancellation, SourceBehaviorDetailExecution,
-    },
+    definition::Diagnostics,
+    execution::{BrowserAcquisition, PhaseUsage, ProfileHttpClient, RuntimeCancellation},
 };
 use sqlx::SqlitePool;
 
@@ -64,7 +60,7 @@ impl Runner {
                         "Search Request radius requires an available GeoResolver".to_string(),
                     )
                 })?;
-                CompiledSearchRequirements::compile_with_geo(
+                Requirements::compile_with_geo(
                     &request.include_rules,
                     &request.exclude_rules,
                     &request.locations,
@@ -74,7 +70,7 @@ impl Runner {
                 .await
                 .map_err(|error| Error::Requirements(error.to_string()))?
             }
-            None => CompiledSearchRequirements::compile(
+            None => Requirements::compile(
                 &request.include_rules,
                 &request.exclude_rules,
                 &request.locations,
@@ -199,20 +195,12 @@ impl Runner {
     async fn resolve(
         &self,
         source: &source_engine::definition::CompiledSource,
-        requirements: &CompiledSearchRequirements<'_>,
+        requirements: &Requirements<'_>,
         cancellation: &dyn RuntimeCancellation,
-    ) -> Result<SourceResolution, SourceResolutionError> {
-        let browser = BrowserAdapter(self.browser.as_ref());
-        let detail = SourceBehaviorDetailExecution::new(self.http.as_ref(), &browser);
-        resolve_source_candidates(SourceResolutionRequest {
-            compiled_source: source,
-            requirements,
-            ceilings: production_resolution_ceilings(),
-            cancellation,
-            discovery: SourceDiscovery::source_engine(self.http.as_ref(), &browser),
-            detail: &detail,
-        })
-        .await
+    ) -> Result<Resolution, ResolutionError> {
+        Resolver::new(self.http.as_ref(), self.browser.as_ref())
+            .resolve(source, requirements, cancellation)
+            .await
     }
 }
 
@@ -331,30 +319,18 @@ pub struct SourceOutcome {
 pub struct ResolutionSummary {
     pub completion: ResolutionCompletion,
     pub counts: ResolutionCounts,
-    pub remaining: Option<u64>,
     pub usage: PhaseUsage,
     pub candidate_diagnostics: CandidateDiagnosticSummary,
 }
 
-impl From<&SourceResolution> for ResolutionSummary {
-    fn from(resolution: &SourceResolution) -> Self {
+impl From<&Resolution> for ResolutionSummary {
+    fn from(resolution: &Resolution) -> Self {
         Self {
             completion: resolution.completion.clone(),
             counts: resolution.counts,
-            remaining: resolution.remaining,
-            usage: resolution.report.usage,
+            usage: resolution.usage,
             candidate_diagnostics: resolution.candidate_diagnostics.clone(),
         }
-    }
-}
-
-struct BrowserAdapter<'a>(&'a dyn BrowserAcquisition);
-impl BrowserAcquisition for BrowserAdapter<'_> {
-    fn acquire<'a>(
-        &'a self,
-        request: BrowserAcquisitionRequest<'a>,
-    ) -> BoxedBrowserAcquisitionFuture<'a> {
-        self.0.acquire(request)
     }
 }
 
@@ -362,17 +338,6 @@ struct NeverCancelled;
 impl RuntimeCancellation for NeverCancelled {
     fn is_cancelled(&self) -> bool {
         false
-    }
-}
-
-fn production_resolution_ceilings() -> ResolutionCeilings {
-    let phase = PhaseLimits::BACKEND;
-    ResolutionCeilings {
-        max_batch_size: phase.max_produced_items,
-        max_discovery_batches: phase.max_pages,
-        max_discovered_items: phase.max_produced_items,
-        max_detail_candidates: phase.max_fan_out,
-        phase,
     }
 }
 

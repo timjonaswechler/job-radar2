@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for Candidate Resolution #331.
+# Frozen primitive-residue classification. Updated for Candidate Resolution #333.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -229,32 +229,38 @@ src-tauri/crates/agent/src/sessions/wire.rs:724:18:json_text:"text"	unrelated_ag
 src-tauri/crates/agent/src/sessions/wire.rs:725:40:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/sessions/wire.rs:741:50:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/tests/contracts/model_registry.rs:105:29:json_text:"text"	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
-src-tauri/crates/search-resolution/src/resolution.rs:1175:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1175:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1176:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1176:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1410:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1410:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1430:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1430:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1481:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1482:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1483:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1486:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1487:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1488:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1523:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1523:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1524:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/resolution.rs:1524:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/src/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:1223:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:1264:36:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:144:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:154:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:209:13:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:209:54:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src-tauri/crates/search-resolution/tests/candidate_resolution.rs:375:50:registration_residue:rejection_only	explicit_negative_or_contract_test	Executable Candidate Resolution contract test; rejection-only is domain behavior, not Primitive registration residue.
+src-tauri/crates/search-resolution/src/resolver.rs:1205:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:1205:42:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:1206:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:1206:50:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:296:13:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:296:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:296:67:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:297:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:298:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:299:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:588:18:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:588:46:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:589:18:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:589:54:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:823:28:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:823:62:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:843:28:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:843:70:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:894:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:895:21:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:896:17:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:899:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:900:21:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:901:17:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:936:14:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:936:34:http_byte_dimension:response_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:937:14:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/resolver.rs:937:42:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/src/rules.rs:32:13:json_text:"text"	final_implementation_or_interface	Final typed Candidate Resolution implementation/interface reviewed for #333.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:312:32:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Candidate Resolution contract test reviewed for #333.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:519:13:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable Candidate Resolution contract test reviewed for #333.
+src-tauri/crates/search-resolution/tests/candidate_resolution.rs:519:72:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable Candidate Resolution contract test reviewed for #333.
 src-tauri/crates/source-engine/schema/source-behavior/extract.schema.json:8:44:predicate_all_any_none:"all"	final_implementation_or_interface	Final implementation or deliberate interface evidence reviewed for #315.
 src-tauri/crates/source-engine/schema/source-behavior/fetch.schema.json:54:28:json_text:"text"	final_implementation_or_interface	Final implementation or deliberate interface evidence reviewed for #315.
 src-tauri/crates/source-engine/schema/source-behavior/fragments.schema.json:112:10:http_byte_dimension:maxResponseBytes	final_implementation_or_interface	Final implementation or deliberate interface evidence reviewed for #315.
@@ -709,10 +715,10 @@ src-tauri/src/browser_runtime/owned.rs:2112:25:arbitrary_execution:shell	unrelat
 src-tauri/src/browser_runtime/owned.rs:2117:14:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2138:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
 src-tauri/src/browser_runtime/owned.rs:2148:44:arbitrary_execution:shell	unrelated_browser_install_or_admin_retry	Browser runtime installation/admin lifecycle vocabulary reviewed.
-src-tauri/src/lib.rs:59:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:59:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:60:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/lib.rs:60:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:51:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:51:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:52:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/lib.rs:52:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/search/posting/tests.rs:73:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
@@ -944,10 +950,10 @@ src/lib/api/search-requests.test.ts:160:45:json_text:"text"	unrelated_frontend_u
 src/lib/api/search-requests.test.ts:28:47:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport fixture reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:18:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:227:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-runs.ts:159:24:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-runs.ts:159:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-runs.ts:48:6:http_byte_dimension:response_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/search-runs.ts:49:6:browser_byte_dimension:browser_rendered_bytes	unrelated_frontend_ui_identifier	Frontend Search Run result field reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/search-runs.ts:155:24:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final Search Run transport interface reviewed for #333.
+src/lib/api/search-runs.ts:155:6:http_byte_dimension:response_bytes	final_implementation_or_interface	Final Search Run transport interface reviewed for #333.
+src/lib/api/search-runs.ts:46:6:http_byte_dimension:response_bytes	final_implementation_or_interface	Final Search Run transport interface reviewed for #333.
+src/lib/api/search-runs.ts:47:6:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final Search Run transport interface reviewed for #333.
 src/lib/api/sources/detection.test.ts:70:35:retry:retry	explicit_negative_or_contract_test	Profile Detection transport negative test rejects non-contract completion values.
 src/lib/api/sources/detection.ts:203:38:http_byte_dimension:response_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.
 src/lib/api/sources/detection.ts:203:56:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Intentional Profile Detection transport interface validates bounded execution usage dimensions.

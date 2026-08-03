@@ -57,18 +57,16 @@ impl crate::definition::CompiledSource {
         self.execution_plan.discovery.limits
     }
 
-    /// Whether Discovery can be represented as one truthful materialized batch.
-    pub fn discovery_is_materializable(&self) -> bool {
-        !self
-            .execution_plan
-            .discovery
-            .strategies
-            .iter()
-            .any(|strategy| strategy.pagination.is_some())
-    }
-
     pub fn supports_detail(&self) -> bool {
         self.execution_plan.detail.is_some()
+    }
+
+    /// Accepted limits for one candidate-scoped Detail execution, when Detail is supported.
+    pub fn detail_limits(&self) -> Option<crate::definition::PhaseLimits> {
+        self.execution_plan
+            .detail
+            .as_ref()
+            .map(|detail| detail.limits)
     }
 
     pub fn discovery_uses_browser(&self) -> bool {

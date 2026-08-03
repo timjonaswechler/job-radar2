@@ -1,6 +1,4 @@
-use search_resolution::{
-    merge_unique_locations, same_job_posting, FinalizedCandidate, PostingComparison,
-};
+use search_resolution::{merge_unique_locations, same_job_posting, Candidate, PostingComparison};
 
 use super::sqlite::{Posting, PostingSource};
 
@@ -13,10 +11,7 @@ pub(super) struct MergeInput {
 }
 
 /// Sole productive conversion from Q01's committed final value into merger input.
-pub(super) fn finalized_merge_input(
-    candidate: &FinalizedCandidate,
-    source_name: &str,
-) -> MergeInput {
+pub(super) fn finalized_merge_input(candidate: &Candidate, source_name: &str) -> MergeInput {
     MergeInput {
         title: candidate.title().to_string(),
         company: candidate.company().to_string(),

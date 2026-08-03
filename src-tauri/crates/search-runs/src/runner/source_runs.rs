@@ -1,4 +1,4 @@
-use search_resolution::{SourceResolution, SourceResolutionError};
+use search_resolution::{Resolution, ResolutionError};
 
 use source_engine::definition::{CompiledSource, Diagnostics};
 
@@ -9,7 +9,7 @@ fn source_identity(source: &CompiledSource) -> (&str, &str) {
     (source.source_key(), source.source_name())
 }
 
-pub(super) fn completed(source: &CompiledSource, resolution: &SourceResolution) -> SourceOutcome {
+pub(super) fn completed(source: &CompiledSource, resolution: &Resolution) -> SourceOutcome {
     let (source_key, source_name) = source_identity(source);
     SourceOutcome {
         source_key: source_key.to_string(),
@@ -21,14 +21,11 @@ pub(super) fn completed(source: &CompiledSource, resolution: &SourceResolution) 
     }
 }
 
-pub(super) fn resolution_failed(
-    source: &CompiledSource,
-    error: SourceResolutionError,
-) -> SourceOutcome {
+pub(super) fn resolution_failed(source: &CompiledSource, error: ResolutionError) -> SourceOutcome {
     let (source_key, source_name) = source_identity(source);
     match error {
-        SourceResolutionError::Cancelled => cancelled_for_source(source_key, source_name),
-        SourceResolutionError::Failed {
+        ResolutionError::Cancelled => cancelled_for_source(source_key, source_name),
+        ResolutionError::Failed {
             failure,
             diagnostics,
         } => SourceOutcome {

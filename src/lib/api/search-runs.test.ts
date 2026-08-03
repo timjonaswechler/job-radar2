@@ -61,7 +61,6 @@ function searchRunWire() {
           failed: 0,
           budgetSkipped: 0,
         },
-        remaining: null,
         usage: {
           strategyAttempts: 1,
           requests: 1,

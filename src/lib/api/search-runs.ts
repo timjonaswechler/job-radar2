@@ -35,8 +35,6 @@ export type ResolutionCounts = {
 }
 
 export type ResolutionLimitDimension =
-  | "discovery_batches"
-  | "discovered_items"
   | "detail_candidates"
   | "strategy_attempts"
   | "requests"
@@ -53,7 +51,6 @@ export type SourceResolutionSummary = {
     | { type: "complete" }
     | { type: "partial"; limitReached: ResolutionLimitDimension }
   counts: ResolutionCounts
-  remaining: number | null
   usage: Record<string, number>
   candidateDiagnostics: {
     countsByCode: Record<string, number>
@@ -130,7 +127,6 @@ function isSourceResolutionSummary(value: unknown): value is SourceResolutionSum
   const counts = value.counts
   if (!countFields.every((key) => isNonNegativeSafeInteger(counts[key]))) return false
   if (!isResolutionCompletion(value.completion)) return false
-  if (!(value.remaining === null || isNonNegativeSafeInteger(value.remaining))) return false
   if (!isRecord(value.usage)) return false
   const usage = value.usage
   if (!usageFields.every((key) => isNonNegativeSafeInteger(usage[key]))) return false
@@ -154,7 +150,7 @@ function isResolutionCompletion(value: unknown): boolean {
 
 function isResolutionLimitDimension(value: unknown): value is ResolutionLimitDimension {
   return [
-    "discovery_batches", "discovered_items", "detail_candidates", "strategy_attempts",
+    "detail_candidates", "strategy_attempts",
     "requests", "produced_items", "duration", "pages", "browser_actions", "fan_out",
     "response_bytes", "browser_rendered_bytes",
   ].includes(value as ResolutionLimitDimension)

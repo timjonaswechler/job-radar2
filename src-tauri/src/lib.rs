@@ -15,14 +15,6 @@ pub use ::geo::{
 };
 pub use browser_runtime::ManagedBrowserAcquisition;
 pub use search::smoke::run_dev_search_run_smoke_cli;
-pub use search_resolution::{
-    resolve_source_candidates, CandidateDiagnosticSummary, CompiledSearchRequirements,
-    FinalizedCandidate, RequirementsCompilationFailure, ResolutionCeilings, ResolutionCompletion,
-    ResolutionCounts, ResolutionFailure, ResolutionLimitDimension, ResolutionReport,
-    ScriptedDiscoveryBatch, ScriptedDiscoveryOutcome, ScriptedSourceDiscoveryExecution, SearchRule,
-    SearchRuleKind, SearchRuleTarget, SourceDiscovery, SourceResolution, SourceResolutionError,
-    SourceResolutionRequest, CANDIDATE_DIAGNOSTIC_SAMPLE_LIMIT,
-};
 pub use sources::installed::{
     CreateDraft, InactiveStatus, Revision, SourceDocument, SourceStatus, SourceView,
     Store as InstalledSourceStore,
