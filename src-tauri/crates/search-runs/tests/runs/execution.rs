@@ -236,7 +236,7 @@ async fn provider_id_rediscovery_survives_url_change_and_preserves_workflow() {
         .await
         .unwrap();
     let primary_source_before =
-        sqlx::query_scalar::<_, i64>("SELECT primary_source_id FROM job_postings")
+        sqlx::query_scalar::<_, i64>("SELECT id FROM job_posting_sources WHERE is_primary = 1")
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -332,7 +332,7 @@ async fn provider_id_rediscovery_survives_url_change_and_preserves_workflow() {
         "kept description"
     );
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT primary_source_id FROM job_postings")
+        sqlx::query_scalar::<_, i64>("SELECT id FROM job_posting_sources WHERE is_primary = 1",)
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -605,11 +605,25 @@ async fn exact_identity_conflict_rolls_back_the_complete_terminal_transaction() 
 #[tokio::test]
 async fn no_exact_hit_with_multiple_semantic_matches_selects_the_lowest_id() {
     let pool = migrated_pool().await;
-    for _ in 0..2 {
-        sqlx::query(
+    for index in 0..2 {
+        let posting_id = sqlx::query(
             "INSERT INTO job_postings (title, company, locations_json)
              VALUES ('Platform Engineer', 'ACME', '[\"Mainz\"]')",
         )
+        .execute(&pool)
+        .await
+        .unwrap()
+        .last_insert_rowid();
+        let identity = format!("seed-{index}");
+        sqlx::query(
+            "INSERT INTO job_posting_sources (
+               posting_id, source_key, identity_kind, identity_value, provider_url,
+               source_name_snapshot, posting_meta_json, is_primary
+             ) VALUES (?1, ?2, 'provider_posting_id', ?2, ?3, 'Seed', '{}', 1)",
+        )
+        .bind(posting_id)
+        .bind(&identity)
+        .bind(format!("https://seed.test/{index}"))
         .execute(&pool)
         .await
         .unwrap();

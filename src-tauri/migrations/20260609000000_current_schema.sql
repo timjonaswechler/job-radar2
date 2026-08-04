@@ -38,7 +38,6 @@ CREATE TABLE job_postings(
   company TEXT NOT NULL,
   locations_json TEXT NOT NULL DEFAULT '[]',
 description_text TEXT NULL,
-primary_source_id INTEGER NULL REFERENCES job_posting_sources(id) ON DELETE SET NULL,
 read_state TEXT NOT NULL DEFAULT 'unread',
 interest_state TEXT NOT NULL DEFAULT 'undecided',
 preparation_state TEXT NOT NULL DEFAULT 'not_started',
@@ -64,6 +63,7 @@ CREATE TABLE job_posting_sources(
   provider_url TEXT NOT NULL,
   source_name_snapshot TEXT NOT NULL,
   posting_meta_json TEXT NOT NULL,
+  is_primary INTEGER NOT NULL DEFAULT 0,
   first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(trim(source_key) <> ''),
@@ -72,12 +72,16 @@ CREATE TABLE job_posting_sources(
   CHECK(trim(provider_url) <> ''),
   CHECK(trim(source_name_snapshot) <> ''),
   CHECK(json_valid(posting_meta_json) AND json_type(posting_meta_json) = 'object'),
+  CHECK(is_primary IN (0, 1)),
   UNIQUE(source_key, identity_kind, identity_value)
 );
 CREATE INDEX idx_job_posting_sources_posting_id
 ON job_posting_sources(
   posting_id
 );
+CREATE UNIQUE INDEX idx_job_posting_sources_one_primary
+ON job_posting_sources(posting_id)
+WHERE is_primary = 1;
 CREATE INDEX idx_job_postings_last_seen_at
 ON job_postings(last_seen_at);
 CREATE TABLE search_runs(

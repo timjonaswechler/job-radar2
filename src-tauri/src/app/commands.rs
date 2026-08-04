@@ -968,57 +968,108 @@ fn background_task_error_diagnostic(
     }
 }
 
-#[tauri::command]
-pub async fn list_job_postings(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::search::posting::JobPosting>, String> {
-    crate::search::posting::JobPostingService::new(&state.db)
-        .list()
-        .await
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PostingCommandError {
+    NotFound { posting_id: i64, message: String },
+    InvalidChange { message: String },
+    Corrupt { posting_id: i64, message: String },
+    Storage { message: String },
+    BeforeRead { message: String },
+    AfterRead { posting_id: i64, message: String },
+}
+
+impl From<job_postings::catalog::Error> for PostingCommandError {
+    fn from(error: job_postings::catalog::Error) -> Self {
+        let message = error.to_string();
+        match error {
+            job_postings::catalog::Error::NotFound(id) => Self::NotFound {
+                posting_id: id.get(),
+                message,
+            },
+            job_postings::catalog::Error::InvalidChange => Self::InvalidChange { message },
+            job_postings::catalog::Error::Corrupt { posting, .. } => Self::Corrupt {
+                posting_id: posting.get(),
+                message,
+            },
+            job_postings::catalog::Error::Storage(_) => Self::Storage { message },
+        }
+    }
+}
+
+impl From<job_postings::detail::Error> for PostingCommandError {
+    fn from(error: job_postings::detail::Error) -> Self {
+        let message = error.to_string();
+        match error {
+            job_postings::detail::Error::BeforeRead(_) => Self::BeforeRead { message },
+            job_postings::detail::Error::AfterRead { posting, .. } => Self::AfterRead {
+                posting_id: posting.get(),
+                message,
+            },
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn list_job_postings_for_queue(
     state: State<'_, AppState>,
-    queue_id: crate::search::posting::JobPostingQueueId,
-) -> Result<Vec<crate::search::posting::JobPosting>, String> {
-    crate::search::posting::JobPostingService::new(&state.db)
-        .list_for_queue(queue_id)
-        .await
+    queue_id: job_postings::Queue,
+) -> Result<Vec<job_postings::Posting>, PostingCommandError> {
+    state.job_postings.list(queue_id).await.map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_job_posting(
     state: State<'_, AppState>,
     posting_id: i64,
-) -> Result<crate::search::posting::JobPostingView, String> {
-    crate::search::posting::JobPostingService::new(&state.db)
-        .get_job_posting(
-            posting_id,
-            &state.installed_sources,
-            state.paths.browser_runtime_dir.clone(),
-        )
+) -> Result<job_postings::Opened, PostingCommandError> {
+    state
+        .posting_detail
+        .open(job_postings::Id::new(posting_id))
         .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_job_posting_queue_counts(
     state: State<'_, AppState>,
-) -> Result<crate::search::posting::JobPostingQueueCounts, String> {
-    crate::search::posting::JobPostingService::new(&state.db)
-        .queue_counts()
-        .await
+) -> Result<job_postings::Counts, PostingCommandError> {
+    state.job_postings.counts().await.map_err(Into::into)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostingStateChangeInput {
+    read_state: Option<job_postings::catalog::ReadState>,
+    interest_state: Option<job_postings::catalog::InterestState>,
+    preparation_state: Option<job_postings::catalog::PreparationState>,
+    application_state: Option<job_postings::catalog::ApplicationState>,
 }
 
 #[tauri::command]
 pub async fn update_job_posting_state(
     state: State<'_, AppState>,
     id: i64,
-    input: crate::search::posting::UpdateJobPostingStateInput,
-) -> Result<crate::search::posting::JobPosting, String> {
-    crate::search::posting::JobPostingService::new(&state.db)
-        .update_state(id, input)
+    input: PostingStateChangeInput,
+) -> Result<job_postings::Posting, PostingCommandError> {
+    let change = posting_change(input)?;
+    state
+        .job_postings
+        .change(job_postings::Id::new(id), change)
         .await
+        .map_err(Into::into)
+}
+
+fn posting_change(
+    input: PostingStateChangeInput,
+) -> Result<job_postings::Change, PostingCommandError> {
+    job_postings::Change::new(
+        input.read_state,
+        input.interest_state,
+        input.preparation_state,
+        input.application_state,
+    )
+    .map_err(Into::into)
 }
 
 async fn read_app_preferences(pool: &SqlitePool) -> Result<AppPreferences, String> {
@@ -1262,6 +1313,41 @@ mod tests {
             assert!(validate_base_font_size(MIN_BASE_FONT_SIZE_PX - 1).is_err());
             assert!(validate_base_font_size(MAX_BASE_FONT_SIZE_PX + 1).is_err());
         });
+    }
+
+    #[test]
+    fn posting_transport_maps_camel_case_change_and_rejects_empty_input() {
+        let input = serde_json::from_value::<PostingStateChangeInput>(serde_json::json!({
+            "readState": "read",
+            "applicationState": "submitted"
+        }))
+        .unwrap();
+        assert!(posting_change(input).is_ok());
+        let empty =
+            serde_json::from_value::<PostingStateChangeInput>(serde_json::json!({})).unwrap();
+        let invalid = serde_json::to_value(posting_change(empty).unwrap_err()).unwrap();
+        assert_eq!(invalid["kind"], "invalid_change");
+        assert_eq!(invalid["message"], "no state fields supplied");
+        assert_eq!(
+            serde_json::to_value(job_postings::Queue::Preparation).unwrap(),
+            "preparation"
+        );
+
+        let not_found = serde_json::to_value(PostingCommandError::from(
+            job_postings::catalog::Error::NotFound(job_postings::Id::new(7)),
+        ))
+        .unwrap();
+        assert_eq!(not_found["kind"], "not_found");
+        assert_eq!(not_found["posting_id"], 7);
+        let corrupt = serde_json::to_value(PostingCommandError::from(
+            job_postings::catalog::Error::Corrupt {
+                posting: job_postings::Id::new(8),
+                message: "missing primary".into(),
+            },
+        ))
+        .unwrap();
+        assert_eq!(corrupt["kind"], "corrupt");
+        assert_eq!(corrupt["posting_id"], 8);
     }
 
     #[test]

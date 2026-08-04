@@ -89,29 +89,33 @@ test("postings ui contract", async () => {
   const queuePostings = {
     unreadInbox: createPosting({ id: 101, readState: "unread" }),
     readInbox: createPosting({ id: 102, readState: "read" }),
-    interested: createPosting({ id: 103, interestState: "interested" }),
+    interested: createPosting({ id: 103, interestState: "interested", primaryQueue: "interested" }),
     preparationInProgress: createPosting({
       id: 104,
       interestState: "interested",
       preparationState: "in_progress",
+      primaryQueue: "preparation",
     }),
     preparationReady: createPosting({
       id: 105,
       interestState: "interested",
       preparationState: "ready",
+      primaryQueue: "preparation",
     }),
-    appliedSubmitted: createPosting({ id: 106, applicationState: "submitted" }),
-    appliedInProcess: createPosting({ id: 107, applicationState: "in_process" }),
-    archiveDismissed: createPosting({ id: 108, interestState: "dismissed" }),
+    appliedSubmitted: createPosting({ id: 106, applicationState: "submitted", primaryQueue: "applied" }),
+    appliedInProcess: createPosting({ id: 107, applicationState: "in_process", primaryQueue: "applied" }),
+    archiveDismissed: createPosting({ id: 108, interestState: "dismissed", primaryQueue: "archive" }),
     archiveRejected: createPosting({
       id: 109,
       applicationState: "rejected_by_company",
+      primaryQueue: "archive",
     }),
     archiveAcceptedWithPreparation: createPosting({
       id: 110,
       interestState: "interested",
       preparationState: "ready",
       applicationState: "accepted",
+      primaryQueue: "archive",
     }),
   };
 
@@ -291,6 +295,7 @@ test("postings ui contract", async () => {
       interestState: "undecided",
       preparationState: "not_started",
       applicationState: "not_applied",
+      primaryQueue: "inbox",
       firstSeenAt: "2026-07-05T10:00:00.000Z",
       lastSeenAt: "2026-07-05T11:00:00.000Z",
       createdAt: "2026-07-05T10:00:00.000Z",

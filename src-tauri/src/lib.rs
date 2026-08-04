@@ -113,7 +113,6 @@ pub fn run() {
             app::commands::run_search_request,
             app::commands::get_background_task,
             app::commands::cancel_background_task,
-            app::commands::list_job_postings,
             app::commands::list_job_postings_for_queue,
             app::commands::get_job_posting,
             app::commands::get_job_posting_queue_counts,

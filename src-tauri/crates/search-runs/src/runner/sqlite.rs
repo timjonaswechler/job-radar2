@@ -249,19 +249,9 @@ async fn insert_new_posting(
     .map_err(db_error)?;
     let posting_id = inserted_posting.last_insert_rowid();
 
-    let mut primary_source_id = None;
-    for source in &posting.sources {
-        let source_id = upsert_posting_source(transaction, posting_id, source, seen_at).await?;
-        if primary_source_id.is_none() {
-            primary_source_id = Some(source_id);
-        }
+    for (index, source) in posting.sources.iter().enumerate() {
+        insert_posting_source(transaction, posting_id, source, seen_at, index == 0).await?;
     }
-    sqlx::query("UPDATE job_postings SET primary_source_id = ?1 WHERE id = ?2")
-        .bind(primary_source_id)
-        .bind(posting_id)
-        .execute(&mut **transaction)
-        .await
-        .map_err(db_error)?;
     Ok(posting_id)
 }
 
@@ -271,6 +261,20 @@ async fn update_existing_posting(
     posting: &Posting,
     seen_at: &str,
 ) -> Result<(), Error> {
+    let primary_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM job_posting_sources
+         WHERE posting_id = ?1 AND is_primary = 1",
+    )
+    .bind(posting_id)
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(db_error)?;
+    if primary_count != 1 {
+        return Err(Error::Storage(format!(
+            "job posting {posting_id} has {primary_count} primary occurrences"
+        )));
+    }
+
     let existing_locations_json =
         sqlx::query_scalar::<_, String>("SELECT locations_json FROM job_postings WHERE id = ?1")
             .bind(posting_id)
@@ -348,11 +352,23 @@ async fn upsert_posting_source(
         return Ok(source_id);
     }
 
+    insert_posting_source(transaction, posting_id, source, seen_at, false).await
+}
+
+async fn insert_posting_source(
+    transaction: &mut Transaction<'_, Sqlite>,
+    posting_id: i64,
+    source: &PostingSource,
+    seen_at: &str,
+    is_primary: bool,
+) -> Result<i64, Error> {
+    let (kind, value) = identity_parts(&source.identity);
+    let posting_meta_json = serde_json::to_string(&source.posting_meta).map_err(json_error)?;
     let inserted = sqlx::query(
         "INSERT INTO job_posting_sources (
            posting_id, source_key, identity_kind, identity_value, provider_url,
-           source_name_snapshot, posting_meta_json, first_seen_at, last_seen_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+           source_name_snapshot, posting_meta_json, is_primary, first_seen_at, last_seen_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
     )
     .bind(posting_id)
     .bind(&source.source_key)
@@ -361,6 +377,7 @@ async fn upsert_posting_source(
     .bind(&source.provider_url)
     .bind(&source.source_name)
     .bind(posting_meta_json)
+    .bind(is_primary)
     .bind(seen_at)
     .execute(&mut **transaction)
     .await

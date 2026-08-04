@@ -37,6 +37,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 agent = { path = "crates/agent" }
 geo = { path = "crates/geo" }
+job-postings = { path = "crates/job-postings" }
 search-resolution = { path = "crates/search-resolution" }
 search-requests = { path = "crates/search-requests" }
 search-runs = { path = "crates/search-runs" }

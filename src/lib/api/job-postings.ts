@@ -49,11 +49,12 @@ export type JobPosting = {
   interestState: JobPostingInterestState
   preparationState: JobPostingPreparationState
   applicationState: JobPostingApplicationState
+  primaryQueue: JobPostingQueueId
   firstSeenAt: string
   lastSeenAt: string
   createdAt: string
   updatedAt: string
-  primarySource: JobPostingSource | null
+  primarySource: JobPostingSource
   sources: JobPostingSource[]
 }
 
@@ -76,10 +77,6 @@ export type UpdateJobPostingStateInput = {
   interestState?: JobPostingInterestState
   preparationState?: JobPostingPreparationState
   applicationState?: JobPostingApplicationState
-}
-
-export function listJobPostings() {
-  return invoke<JobPosting[]>("list_job_postings")
 }
 
 export function listJobPostingsForQueue(queueId: JobPostingQueueId) {

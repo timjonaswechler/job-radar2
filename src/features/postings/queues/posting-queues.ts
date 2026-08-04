@@ -103,50 +103,11 @@ export function createQueueCounts(postings: JobPosting[]): QueueCounts {
 }
 
 export function isPostingInQueue(posting: JobPosting, queueId: PostingQueueId) {
-  if (queueId === "all") return true;
-
-  const archived = isArchivedPosting(posting);
-
-  if (queueId === "archive") return archived;
-  if (archived) return false;
-
-  if (queueId === "inbox") {
-    return (
-      posting.interestState === "undecided" &&
-      posting.applicationState === "not_applied"
-    );
-  }
-
-  if (queueId === "interested") {
-    return (
-      posting.interestState === "interested" &&
-      posting.preparationState === "not_started" &&
-      posting.applicationState === "not_applied"
-    );
-  }
-
-  if (queueId === "preparation") {
-    return (
-      posting.interestState === "interested" &&
-      posting.applicationState === "not_applied" &&
-      (posting.preparationState === "in_progress" ||
-        posting.preparationState === "ready")
-    );
-  }
-
-  return (
-    posting.applicationState === "submitted" ||
-    posting.applicationState === "in_process"
-  );
+  return queueId === "all" || posting.primaryQueue === queueId;
 }
 
 export function isArchivedPosting(posting: JobPosting) {
-  return (
-    posting.interestState === "dismissed" ||
-    posting.applicationState === "rejected_by_company" ||
-    posting.applicationState === "withdrawn_by_me" ||
-    posting.applicationState === "accepted"
-  );
+  return posting.primaryQueue === "archive";
 }
 
 export function getQueueDefinition(queueId: PostingQueueId) {

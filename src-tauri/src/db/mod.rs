@@ -68,6 +68,39 @@ mod tests {
             assert!(search_request_columns.contains(&"last_run_status".to_string()));
             assert!(search_request_columns.contains(&"last_run_error".to_string()));
 
+            let posting_columns = sqlx::query_scalar::<_, String>(
+                "SELECT name FROM pragma_table_info('job_postings') ORDER BY cid",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            let occurrence_columns = sqlx::query_scalar::<_, String>(
+                "SELECT name FROM pragma_table_info('job_posting_sources') ORDER BY cid",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                posting_columns,
+                [
+                    "id",
+                    "title",
+                    "company",
+                    "locations_json",
+                    "description_text",
+                    "read_state",
+                    "interest_state",
+                    "preparation_state",
+                    "application_state",
+                    "first_seen_at",
+                    "last_seen_at",
+                    "created_at",
+                    "updated_at",
+                ]
+                .map(str::to_string)
+            );
+            assert!(occurrence_columns.contains(&"is_primary".to_string()));
+
             let posting_state_defaults = sqlx::query(
                 "INSERT INTO job_postings (title, company)
                  VALUES ('Fixture Engineer', 'Fixture Company')
@@ -108,11 +141,11 @@ mod tests {
             sqlx::query(
                 "INSERT INTO job_posting_sources (
                    posting_id, source_key, identity_kind, identity_value, provider_url,
-                   source_name_snapshot, posting_meta_json
+                   source_name_snapshot, posting_meta_json, is_primary
                  ) VALUES (
                    ?1, 'fixture_source', 'normalized_url',
                    'https://example.test/jobs/fixture', 'https://example.test/jobs/fixture',
-                   'Fixture Company', '{}'
+                   'Fixture Company', '{}', 1
                  )",
             )
             .bind(posting_id)

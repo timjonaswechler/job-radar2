@@ -12,6 +12,8 @@ pub struct AppState {
     pub resources: AppResources,
     pub browser_runtime_install_lock: Mutex<()>,
     pub search_requests: search_requests::Catalog,
+    pub job_postings: job_postings::Catalog,
+    pub posting_detail: job_postings::Detail,
     pub search_run_history: search_runs::History,
     pub search_runs: Arc<search_runs::Runner>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
@@ -82,12 +84,19 @@ impl AppState {
         );
         let source_live_check = sources::live_check::Operation::new(
             installed_sources.clone(),
-            source_http,
-            source_browser,
+            source_http.clone(),
+            source_browser.clone(),
             Arc::new(sources::live_check::SystemClock),
         );
 
         let search_requests = search_requests::Catalog::new(db.clone());
+        let job_postings = job_postings::Catalog::new(db.clone());
+        let posting_detail = job_postings::Detail::new(
+            job_postings.clone(),
+            installed_sources.clone(),
+            source_http,
+            source_browser,
+        );
         let search_run_history = search_runs::History::new(db.clone());
 
         Ok(Self {
@@ -96,6 +105,8 @@ impl AppState {
             resources,
             browser_runtime_install_lock: Mutex::new(()),
             search_requests,
+            job_postings,
+            posting_detail,
             search_run_history,
             search_runs,
             background_tasks: crate::background_tasks::BackgroundTaskScheduler::new_with_notifier(

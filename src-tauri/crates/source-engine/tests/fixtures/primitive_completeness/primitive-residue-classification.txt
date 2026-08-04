@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for Candidate Resolution provenance in #335.
+# Frozen primitive-residue classification. Updated for Job Posting ownership in #336.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -719,7 +719,6 @@ src-tauri/src/lib.rs:51:10:arbitrary_execution:plugin	final_implementation_or_in
 src-tauri/src/lib.rs:51:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:52:10:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/lib.rs:52:23:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/search/posting/tests.rs:73:13:browser_byte_dimension:browser_rendered_bytes	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry:retry	explicit_negative_or_contract_test	Test-only negative, completeness, or final contract evidence.
 src-tauri/tests/desktop/agent/chat_application.rs:401:25:retry_after:retry_after	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/tests/desktop/browser_acquisition.rs:106:29:browser_byte_dimension:browser_rendered_bytes	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
@@ -912,21 +911,21 @@ src/features/postings/preview/posting-preview-panel.tsx:44:5:retry:Retry	unrelat
 src/features/postings/preview/posting-preview-panel.tsx:66:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/preview/posting-preview-panel.tsx:85:11:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/preview/posting-preview-panel.tsx:85:20:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/features/postings/queues/posting-queues.ts:106:19:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/postings/queues/posting-queues.ts:191:25:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/postings/queues/posting-queues.ts:106:22:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/postings/queues/posting-queues.ts:152:25:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/postings/queues/posting-queues.ts:73:9:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/postings/queues/postings-sidebar.tsx:27:34:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/postings/tests/postings-ui.test.ts:118:53:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:119:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:120:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:121:69:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:122:64:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:123:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:124:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:125:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:126:59:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:129:17:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:276:7:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:122:53:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:123:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:124:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:125:69:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:126:64:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:127:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:128:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:129:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:130:59:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:133:17:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/tests/postings-ui.test.ts:280:7:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
 src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/search-requests/model/search-request-form-model.ts:48:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
