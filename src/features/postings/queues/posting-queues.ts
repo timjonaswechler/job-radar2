@@ -77,35 +77,6 @@ export const QUEUE_DEFINITIONS = [
   },
 ] satisfies PostingQueue[];
 
-export function createQueueCounts(postings: JobPosting[]): QueueCounts {
-  const inboxPostings = postings.filter((posting) =>
-    isPostingInQueue(posting, "inbox"),
-  );
-
-  return {
-    inbox: inboxPostings.length,
-    interested: postings.filter((posting) =>
-      isPostingInQueue(posting, "interested"),
-    ).length,
-    preparation: postings.filter((posting) =>
-      isPostingInQueue(posting, "preparation"),
-    ).length,
-    applied: postings.filter((posting) => isPostingInQueue(posting, "applied"))
-      .length,
-    archive: postings.filter((posting) => isPostingInQueue(posting, "archive"))
-      .length,
-    all: postings.length,
-    newInbox: inboxPostings.filter((posting) => posting.readState === "unread")
-      .length,
-    reviewInbox: inboxPostings.filter((posting) => posting.readState === "read")
-      .length,
-  };
-}
-
-export function isPostingInQueue(posting: JobPosting, queueId: PostingQueueId) {
-  return queueId === "all" || posting.primaryQueue === queueId;
-}
-
 export function isArchivedPosting(posting: JobPosting) {
   return posting.primaryQueue === "archive";
 }
@@ -147,10 +118,5 @@ export function isPostingQueuePathActive(
 }
 
 export function getPrimaryQueueLabel(posting: JobPosting) {
-  const queue = QUEUE_DEFINITIONS.find(
-    (definition) =>
-      definition.id !== "all" && isPostingInQueue(posting, definition.id),
-  );
-
-  return queue?.label ?? "Alle Anzeigen";
+  return getQueueDefinition(posting.primaryQueue).label;
 }

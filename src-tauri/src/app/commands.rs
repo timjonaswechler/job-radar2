@@ -971,12 +971,30 @@ fn background_task_error_diagnostic(
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PostingCommandError {
-    NotFound { posting_id: i64, message: String },
-    InvalidChange { message: String },
-    Corrupt { posting_id: i64, message: String },
-    Storage { message: String },
-    BeforeRead { message: String },
-    AfterRead { posting_id: i64, message: String },
+    NotFound {
+        #[serde(rename = "postingId")]
+        posting_id: i64,
+        message: String,
+    },
+    InvalidChange {
+        message: String,
+    },
+    Corrupt {
+        #[serde(rename = "postingId")]
+        posting_id: i64,
+        message: String,
+    },
+    Storage {
+        message: String,
+    },
+    BeforeRead {
+        message: String,
+    },
+    AfterRead {
+        #[serde(rename = "postingId")]
+        posting_id: i64,
+        message: String,
+    },
 }
 
 impl From<job_postings::catalog::Error> for PostingCommandError {
@@ -1338,7 +1356,7 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(not_found["kind"], "not_found");
-        assert_eq!(not_found["posting_id"], 7);
+        assert_eq!(not_found["postingId"], 7);
         let corrupt = serde_json::to_value(PostingCommandError::from(
             job_postings::catalog::Error::Corrupt {
                 posting: job_postings::Id::new(8),
@@ -1347,7 +1365,14 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(corrupt["kind"], "corrupt");
-        assert_eq!(corrupt["posting_id"], 8);
+        assert_eq!(corrupt["postingId"], 8);
+        let after_read = serde_json::to_value(PostingCommandError::AfterRead {
+            posting_id: 9,
+            message: "failed after mark-read".into(),
+        })
+        .unwrap();
+        assert_eq!(after_read["kind"], "after_read");
+        assert_eq!(after_read["postingId"], 9);
     }
 
     #[test]

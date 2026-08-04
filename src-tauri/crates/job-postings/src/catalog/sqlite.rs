@@ -1,6 +1,6 @@
 use super::{
-    queues, ApplicationState, Change, Counts, Error, Id, InterestState, Posting, PreparationState,
-    Queue, ReadState, Source,
+    queues, ApplicationState, Change, Counts, Error, Id, InterestState, Occurrence,
+    OccurrenceIdentity, Posting, PreparationState, Queue, ReadState,
 };
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use std::collections::BTreeMap;
@@ -180,41 +180,52 @@ async fn hydrate(pool: &SqlitePool, rows: Vec<SqliteRow>) -> Result<Vec<Posting>
     .bind(ids_json)
     .fetch_all(pool)
     .await?;
-    let mut sources_by_posting: BTreeMap<i64, Vec<(Source, bool)>> = BTreeMap::new();
+    let mut occurrences_by_posting: BTreeMap<i64, Vec<(Occurrence, bool)>> = BTreeMap::new();
     for row in source_rows {
         let posting_id = row.try_get::<i64, _>("posting_id")?;
-        let source = Source {
+        let identity_kind = row.try_get::<String, _>("identity_kind")?;
+        let posting_meta_json = row.try_get::<String, _>("posting_meta_json")?;
+        let posting_meta = serde_json::from_str::<BTreeMap<String, String>>(&posting_meta_json)
+            .map_err(|error| {
+                Error::corrupt(
+                    Id::new(posting_id),
+                    format!("invalid Posting occurrence postingMeta: {error}"),
+                )
+            })?;
+        let occurrence = Occurrence {
             id: row.try_get("id")?,
             source_key: row.try_get("source_key")?,
             source_name_snapshot: row.try_get("source_name_snapshot")?,
-            url: row.try_get("provider_url")?,
+            identity: OccurrenceIdentity {
+                kind: identity_kind,
+                value: row.try_get("identity_value")?,
+            },
+            provider_url: row.try_get("provider_url")?,
+            posting_meta,
             first_seen_at: row.try_get("first_seen_at")?,
             last_seen_at: row.try_get("last_seen_at")?,
-            identity_kind: row.try_get("identity_kind")?,
-            identity_value: row.try_get("identity_value")?,
-            posting_meta_json: row.try_get("posting_meta_json")?,
         };
-        sources_by_posting
+        occurrences_by_posting
             .entry(posting_id)
             .or_default()
-            .push((source, row.try_get::<bool, _>("is_primary")?));
+            .push((occurrence, row.try_get::<bool, _>("is_primary")?));
     }
 
     rows.into_iter()
         .map(|row| {
             let id = row.try_get::<i64, _>("id")?;
-            posting_from_row(row, sources_by_posting.remove(&id))
+            posting_from_row(row, occurrences_by_posting.remove(&id))
         })
         .collect()
 }
 
 fn posting_from_row(
     row: SqliteRow,
-    hydrated_sources: Option<Vec<(Source, bool)>>,
+    hydrated_occurrences: Option<Vec<(Occurrence, bool)>>,
 ) -> Result<Posting, Error> {
     let id = Id::new(row.try_get("id")?);
-    let hydrated_sources = hydrated_sources.unwrap_or_default();
-    let primary = hydrated_sources
+    let hydrated_occurrences = hydrated_occurrences.unwrap_or_default();
+    let primary = hydrated_occurrences
         .iter()
         .filter(|(_, is_primary)| *is_primary)
         .map(|(source, _)| source.clone())
@@ -270,10 +281,10 @@ fn posting_from_row(
         last_seen_at: row.try_get("last_seen_at")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
-        primary_source: primary.into_iter().next().expect("length checked"),
-        sources: hydrated_sources
+        primary_occurrence: primary.into_iter().next().expect("length checked"),
+        occurrences: hydrated_occurrences
             .into_iter()
-            .map(|(source, _)| source)
+            .map(|(occurrence, _)| occurrence)
             .collect(),
     })
 }

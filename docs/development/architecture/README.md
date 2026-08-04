@@ -16,6 +16,8 @@ Accepted decisions live in [`../adr/`](../adr/). Start with:
 - [Minimal Agent Conversation contract](../adr/0011-minimal-agent-conversation-contract.md)
 - [Separate Source behavior from installed Source ownership](../adr/0013-source-engine-and-sources.md)
 - [Keep Search Request catalog ownership separate from execution](../adr/0014-search-request-catalog.md)
+- [Keep Search Run execution and history together](../adr/0015-search-run-runner-and-history.md)
+- [Keep durable Job Posting workflow ownership in `job-postings`](../adr/0016-job-posting-workflow-ownership.md)
 
 Use an ADR for a durable architectural decision, its context, alternatives, and consequences. Intended product behavior belongs in [Product](../product/README.md); repeatable implementation workflows belong in [Development](../README.md).
 

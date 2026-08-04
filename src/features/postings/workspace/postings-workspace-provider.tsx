@@ -9,17 +9,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 
 import {
   getJobPostingQueueCounts,
   getPostingDetail,
   listJobPostingsForQueue,
-  updateJobPostingState,
+  PostingTransportError,
   type JobPosting,
   type JobPostingDetail,
 } from "@/lib/api/job-postings";
-import { loadPostingDetailForWorkspace } from "@/features/postings/workspace/load-posting-detail";
 import {
   EMPTY_QUEUE_COUNTS,
   getPostingQueueIdFromPath,
@@ -28,6 +26,7 @@ import {
   type PostingQueueId,
   type QueueCounts,
 } from "@/features/postings/queues/posting-queues";
+import type { PostingDetailLoadState } from "@/features/postings/view-model/posting-item-view-model";
 
 export type JobPostingsLoadError = {
   title: string;
@@ -44,28 +43,23 @@ type PostingsCountsContextValue = {
 type PostingsListContextValue = {
   activeQueue: PostingQueue;
   activeQueueId: PostingQueueId;
+  detailState: PostingDetailLoadState;
   listError: JobPostingsLoadError | null;
   listLoading: boolean;
   postings: JobPosting[];
-  loadPostingDetail: (postingId: number) => Promise<JobPostingDetail>;
-  markPostingAsRead: (postingId: number) => Promise<void>;
   refreshList: () => Promise<void>;
-  refreshWorkspace: () => Promise<void>;
+  retryDetail: () => void;
+  selectedPostingId: number | null;
+  selectPosting: (postingId: number) => void;
 };
-
-type PostingsWorkspaceContextValue = PostingsCountsContextValue &
-  PostingsListContextValue;
 
 type PostingsWorkspaceProviderProps = {
   children: ReactNode;
   pathname: string;
 };
 
-const PostingsCountsContext =
-  createContext<PostingsCountsContextValue | null>(null);
-const PostingsListContext = createContext<PostingsListContextValue | null>(
-  null,
-);
+const PostingsCountsContext = createContext<PostingsCountsContextValue | null>(null);
+const PostingsListContext = createContext<PostingsListContextValue | null>(null);
 
 const countsLoadError = {
   title: "Queue-Zahlen konnten nicht geladen werden",
@@ -79,6 +73,9 @@ const listLoadError = {
     "Die gespeicherten Anzeigen sind gerade nicht erreichbar. Prüfe, ob die lokale App-Datenbank verfügbar ist, und versuche es erneut.",
 } satisfies JobPostingsLoadError;
 
+const detailLoadMessage =
+  "Die Ausschreibung konnte gerade nicht geladen werden. Bitte versuche es erneut.";
+
 export function PostingsWorkspaceProvider({
   children,
   pathname,
@@ -88,137 +85,169 @@ export function PostingsWorkspaceProvider({
   const shouldLoadPostings =
     pathname === "/postings" || pathname.startsWith("/postings/");
 
+  const mountedRef = useRef(true);
+  const activeQueueIdRef = useRef(activeQueueId);
+  const shouldLoadPostingsRef = useRef(shouldLoadPostings);
+  activeQueueIdRef.current = activeQueueId;
+  shouldLoadPostingsRef.current = shouldLoadPostings;
+
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_QUEUE_COUNTS);
   const [countsLoading, setCountsLoading] = useState(true);
-  const [countsError, setCountsError] = useState<JobPostingsLoadError | null>(
-    null,
-  );
+  const [countsError, setCountsError] = useState<JobPostingsLoadError | null>(null);
+  const countsGenerationRef = useRef(0);
+
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const postingsRef = useRef<JobPosting[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<JobPostingsLoadError | null>(null);
-  const pendingReadPostingIds = useRef(new Set<number>());
+  const listGenerationRef = useRef(0);
 
-  const setPostingsState = useCallback(
-    (nextPostings: SetStateAction<JobPosting[]>) => {
-      setPostings((currentPostings) => {
-        const resolvedPostings =
-          typeof nextPostings === "function"
-            ? nextPostings(currentPostings)
-            : nextPostings;
+  const [selectedPostingId, setSelectedPostingId] = useState<number | null>(null);
+  const [detailState, setDetailState] = useState<PostingDetailLoadState>({ status: "idle" });
+  const detailGenerationRef = useRef(0);
+  const detailCacheRef = useRef(new Map<number, JobPostingDetail>());
 
-        postingsRef.current = resolvedPostings;
-        return resolvedPostings;
-      });
-    },
+  const setPostingsState = useCallback((next: SetStateAction<JobPosting[]>) => {
+    setPostings((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      postingsRef.current = resolved;
+      return resolved;
+    });
+  }, []);
+
+  const invalidateDetail = useCallback(() => {
+    detailGenerationRef.current += 1;
+    detailCacheRef.current.clear();
+    setSelectedPostingId(null);
+    setDetailState({ status: "idle" });
+  }, []);
+
+  const operationIsCurrent = useCallback(
+    (generationRef: { current: number }, generation: number, queueId?: PostingQueueId) =>
+      mountedRef.current &&
+      generationRef.current === generation &&
+      (queueId === undefined ||
+        (activeQueueIdRef.current === queueId && shouldLoadPostingsRef.current)),
     [],
   );
 
   const refreshCounts = useCallback(async () => {
+    const generation = ++countsGenerationRef.current;
+    setCountsLoading(true);
+    setCountsError(null);
     try {
-      setCountsLoading(true);
-      setCountsError(null);
-      setCounts(await getJobPostingQueueCounts());
+      const nextCounts = await getJobPostingQueueCounts();
+      if (operationIsCurrent(countsGenerationRef, generation)) setCounts(nextCounts);
     } catch (unknownError) {
+      if (!operationIsCurrent(countsGenerationRef, generation)) return;
       console.error("Failed to load job posting queue counts", unknownError);
       setCounts(EMPTY_QUEUE_COUNTS);
       setCountsError(countsLoadError);
     } finally {
-      setCountsLoading(false);
+      if (operationIsCurrent(countsGenerationRef, generation)) setCountsLoading(false);
     }
-  }, []);
+  }, [operationIsCurrent]);
 
-  const refreshList = useCallback(async () => {
-    if (!shouldLoadPostings) {
-      setPostingsState([]);
-      setListLoading(false);
-      setListError(null);
-      return;
-    }
-
-    try {
+  const loadList = useCallback(
+    async (queueId: PostingQueueId, resetDetail: boolean) => {
+      const generation = ++listGenerationRef.current;
+      if (resetDetail) invalidateDetail();
+      if (!shouldLoadPostingsRef.current) {
+        setPostingsState([]);
+        setListLoading(false);
+        setListError(null);
+        return;
+      }
       setListLoading(true);
       setListError(null);
-      setPostingsState(await listJobPostingsForQueue(activeQueueId));
-    } catch (unknownError) {
-      console.error("Failed to load job postings", unknownError);
-      setPostingsState([]);
-      setListError(listLoadError);
-    } finally {
-      setListLoading(false);
-    }
-  }, [activeQueueId, setPostingsState, shouldLoadPostings]);
-
-  const refreshWorkspace = useCallback(async () => {
-    await Promise.all([refreshCounts(), refreshList()]);
-  }, [refreshCounts, refreshList]);
-
-  const loadPostingDetail = useCallback(
-    async (postingId: number) =>
-      loadPostingDetailForWorkspace({
-        activeQueueId,
-        currentPostings: postingsRef.current,
-        postingId,
-        getPostingDetail,
-        setPostings: setPostingsState,
-        refreshCounts,
-      }),
-    [activeQueueId, refreshCounts, setPostingsState],
+      try {
+        const nextPostings = await listJobPostingsForQueue(queueId);
+        if (!operationIsCurrent(listGenerationRef, generation, queueId)) return;
+        setPostingsState(nextPostings);
+        if (resetDetail) setSelectedPostingId(nextPostings[0]?.id ?? null);
+      } catch (unknownError) {
+        if (!operationIsCurrent(listGenerationRef, generation, queueId)) return;
+        console.error("Failed to load job postings", unknownError);
+        setPostingsState([]);
+        setListError(listLoadError);
+      } finally {
+        if (operationIsCurrent(listGenerationRef, generation, queueId)) {
+          setListLoading(false);
+        }
+      }
+    },
+    [invalidateDetail, operationIsCurrent, setPostingsState],
   );
 
-  const markPostingAsRead = useCallback(
-    async (postingId: number) => {
-      const posting = postingsRef.current.find((item) => item.id === postingId);
+  const refreshList = useCallback(
+    () => loadList(activeQueueId, true),
+    [activeQueueId, loadList, shouldLoadPostings],
+  );
 
-      if (
-        activeQueueId !== "inbox" ||
-        !posting ||
-        posting.readState === "read" ||
-        pendingReadPostingIds.current.has(postingId)
-      ) {
+  const startDetailLoad = useCallback(
+    (postingId: number, force: boolean) => {
+      const postingBeforeLoad = postingsRef.current.find((posting) => posting.id === postingId);
+      if (!postingBeforeLoad) return;
+
+      setSelectedPostingId(postingId);
+      const cached = detailCacheRef.current.get(postingId);
+      if (cached && !force) {
+        setDetailState({ status: "loaded", postingId, detail: cached });
+        return;
+      }
+      if (!force && detailState.status === "loading" && detailState.postingId === postingId) {
         return;
       }
 
-      pendingReadPostingIds.current.add(postingId);
-      setPostingsState((currentPostings) =>
-        currentPostings.map((item) =>
-          item.id === postingId ? { ...item, readState: "read" } : item,
-        ),
-      );
-      setCounts((currentCounts) => ({
-        ...currentCounts,
-        newInbox: Math.max(0, currentCounts.newInbox - 1),
-        reviewInbox: currentCounts.reviewInbox + 1,
-      }));
+      const generation = detailGenerationRef.current + 1;
+      const queueId = activeQueueIdRef.current;
+      detailGenerationRef.current = generation;
+      setDetailState({ status: "loading", postingId });
 
-      try {
-        const updatedPosting = await updateJobPostingState(postingId, {
-          readState: "read",
+      void getPostingDetail(postingId)
+        .then(async (detail) => {
+          if (!operationIsCurrent(detailGenerationRef, generation, queueId)) return;
+          detailCacheRef.current.set(postingId, detail);
+          setPostingsState((current) =>
+            current.map((posting) => (posting.id === postingId ? detail : posting)),
+          );
+          setDetailState({ status: "loaded", postingId, detail });
+          if (postingBeforeLoad.readState === "unread" && detail.readState === "read") {
+            await refreshCounts();
+          }
+        })
+        .catch((unknownError) => {
+          if (!operationIsCurrent(detailGenerationRef, generation, queueId)) return;
+          console.error("Failed to load job posting detail", unknownError);
+          setDetailState({ status: "failed", postingId, message: detailLoadMessage });
+          if (unknownError instanceof PostingTransportError && unknownError.kind === "after_read") {
+            void refreshCounts();
+            void loadList(queueId, false);
+          }
         });
-
-        setPostingsState((currentPostings) =>
-          currentPostings.map((item) =>
-            item.id === postingId ? updatedPosting : item,
-          ),
-        );
-      } catch (unknownError) {
-        console.error("Failed to mark job posting as read", unknownError);
-        setPostingsState((currentPostings) =>
-          currentPostings.map((item) =>
-            item.id === postingId ? { ...item, readState: "unread" } : item,
-          ),
-        );
-        toast.error("Anzeige konnte nicht als gelesen markiert werden.", {
-          description:
-            "Der Neu-Status bleibt erhalten. Bitte versuche es gleich noch einmal.",
-        });
-      } finally {
-        pendingReadPostingIds.current.delete(postingId);
-        void refreshCounts();
-      }
     },
-    [activeQueueId, refreshCounts, setPostingsState],
+    [detailState, loadList, operationIsCurrent, refreshCounts, setPostingsState],
   );
+
+  const selectPosting = useCallback(
+    (postingId: number) => startDetailLoad(postingId, false),
+    [startDetailLoad],
+  );
+
+  const retryDetail = useCallback(() => {
+    if (selectedPostingId !== null) startDetailLoad(selectedPostingId, true);
+  }, [selectedPostingId, startDetailLoad]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      countsGenerationRef.current += 1;
+      listGenerationRef.current += 1;
+      detailGenerationRef.current += 1;
+      detailCacheRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     void refreshCounts();
@@ -229,12 +258,7 @@ export function PostingsWorkspaceProvider({
   }, [refreshList]);
 
   const countsValue = useMemo(
-    () => ({
-      counts,
-      countsError,
-      countsLoading,
-      refreshCounts,
-    }),
+    () => ({ counts, countsError, countsLoading, refreshCounts }),
     [counts, countsError, countsLoading, refreshCounts],
   );
 
@@ -242,24 +266,26 @@ export function PostingsWorkspaceProvider({
     () => ({
       activeQueue,
       activeQueueId,
+      detailState,
       listError,
       listLoading,
       postings,
-      loadPostingDetail,
-      markPostingAsRead,
       refreshList,
-      refreshWorkspace,
+      retryDetail,
+      selectedPostingId,
+      selectPosting,
     }),
     [
       activeQueue,
       activeQueueId,
+      detailState,
       listError,
       listLoading,
       postings,
-      loadPostingDetail,
-      markPostingAsRead,
       refreshList,
-      refreshWorkspace,
+      retryDetail,
+      selectedPostingId,
+      selectPosting,
     ],
   );
 
@@ -274,31 +300,16 @@ export function PostingsWorkspaceProvider({
 
 export function usePostingsCounts() {
   const context = useContext(PostingsCountsContext);
-
   if (!context) {
-    throw new Error(
-      "usePostingsCounts must be used within PostingsWorkspaceProvider.",
-    );
+    throw new Error("usePostingsCounts must be used within PostingsWorkspaceProvider.");
   }
-
   return context;
 }
 
 export function usePostingsList() {
   const context = useContext(PostingsListContext);
-
   if (!context) {
-    throw new Error(
-      "usePostingsList must be used within PostingsWorkspaceProvider.",
-    );
+    throw new Error("usePostingsList must be used within PostingsWorkspaceProvider.");
   }
-
   return context;
-}
-
-export function usePostingsWorkspace(): PostingsWorkspaceContextValue {
-  return {
-    ...usePostingsCounts(),
-    ...usePostingsList(),
-  };
 }

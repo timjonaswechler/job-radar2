@@ -369,19 +369,10 @@ export function getProcessSlotLabel(posting: JobPosting) {
   return null;
 }
 
-export function getSourceLabel(posting: JobPosting) {
-  const sourceName = getPrimarySourceLabel(posting);
-  const sourceCount = posting.sources.length;
-
-  if (sourceCount <= 1) return sourceName;
-
-  return `${sourceName} +${sourceCount - 1}`;
-}
-
 export function getPrimarySourceLabel(posting: JobPosting) {
   return displayText(
-    posting.primarySource?.sourceNameSnapshot ??
-      posting.sources[0]?.sourceNameSnapshot,
+    posting.primaryOccurrence?.sourceNameSnapshot ??
+      posting.occurrences[0]?.sourceNameSnapshot,
     "Quelle offen",
   );
 }

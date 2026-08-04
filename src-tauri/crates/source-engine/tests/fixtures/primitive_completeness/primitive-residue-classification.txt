@@ -911,23 +911,17 @@ src/features/postings/preview/posting-preview-panel.tsx:44:5:retry:Retry	unrelat
 src/features/postings/preview/posting-preview-panel.tsx:66:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/preview/posting-preview-panel.tsx:85:11:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/preview/posting-preview-panel.tsx:85:20:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/features/postings/queues/posting-queues.ts:106:22:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/postings/queues/posting-queues.ts:152:25:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/postings/queues/posting-queues.ts:73:9:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/postings/queues/postings-sidebar.tsx:27:34:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/postings/tests/postings-ui.test.ts:122:53:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:123:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:124:57:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:125:69:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:126:64:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:127:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:128:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:129:60:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:130:59:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:133:17:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/tests/postings-ui.test.ts:280:7:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
-src/features/postings/workspace/postings-workspace-view.tsx:114:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/features/postings/workspace/postings-workspace-view.tsx:131:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/tests/postings-ui.test.ts:39:9:retry:Retry	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/features/postings/workspace/postings-workspace-provider.tsx:237:9:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-provider.tsx:274:7:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-provider.tsx:286:7:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-provider.tsx:51:3:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-view.tsx:22:5:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-view.tsx:60:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-view.tsx:77:13:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/features/postings/workspace/postings-workspace-view.tsx:77:67:retry:retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/search-requests/model/search-request-form-model.ts:48:35:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/search-requests/tests/search-request-form-dialog.test.tsx:60:45:json_text:"text"	explicit_negative_or_contract_test	Executable Search Request transport test fixture reviewed for the matched token.
 src/features/sources/registry/profile/profile-registry-grid.tsx:9:85:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
@@ -944,7 +938,9 @@ src/features/sources/workspace/sources-workspace-view.tsx:92:43:transform_alias:
 src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/lib/api/agent-chat.ts:23:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/agent-chat.ts:75:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/job-postings.ts:11:5:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/job-postings.test.ts:47:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
+src/lib/api/job-postings.ts:165:37:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
+src/lib/api/job-postings.ts:25:60:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/lib/api/search-requests.test.ts:160:45:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport fixture reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.test.ts:28:47:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport fixture reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/search-requests.ts:18:30:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Search Request transport identifier reviewed and unrelated to Source Behavior Language execution.

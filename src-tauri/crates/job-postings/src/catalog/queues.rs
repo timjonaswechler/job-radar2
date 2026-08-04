@@ -1,4 +1,4 @@
-use super::{ApplicationState, InterestState, PreparationState, Queue};
+use super::{ApplicationState, InterestState, PreparationState, PrimaryQueue, Queue};
 
 pub(super) const ARCHIVE: &str = "(interest_state = 'dismissed' OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted'))";
 pub(super) const APPLIED: &str = "(NOT (interest_state = 'dismissed' OR application_state IN ('rejected_by_company', 'withdrawn_by_me', 'accepted')) AND application_state IN ('submitted', 'in_process'))";
@@ -23,7 +23,7 @@ pub(super) fn primary(
     interest: InterestState,
     preparation: PreparationState,
     application: ApplicationState,
-) -> Queue {
+) -> PrimaryQueue {
     if interest == InterestState::Dismissed
         || matches!(
             application,
@@ -32,14 +32,14 @@ pub(super) fn primary(
                 | ApplicationState::Accepted
         )
     {
-        Queue::Archive
+        PrimaryQueue::Archive
     } else if matches!(
         application,
         ApplicationState::Submitted | ApplicationState::InProcess
     ) {
-        Queue::Applied
+        PrimaryQueue::Applied
     } else if interest == InterestState::Undecided && application == ApplicationState::NotApplied {
-        Queue::Inbox
+        PrimaryQueue::Inbox
     } else if interest == InterestState::Interested
         && application == ApplicationState::NotApplied
         && matches!(
@@ -47,8 +47,8 @@ pub(super) fn primary(
             PreparationState::InProgress | PreparationState::Ready
         )
     {
-        Queue::Preparation
+        PrimaryQueue::Preparation
     } else {
-        Queue::Interested
+        PrimaryQueue::Interested
     }
 }

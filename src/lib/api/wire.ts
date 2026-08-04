@@ -32,11 +32,12 @@ export function isStructuredDiagnostic(value: unknown): value is StructuredDiagn
     ["info", "warning", "error"].includes(String(value.severity)) &&
     typeof value.path === "string" &&
     (value.strategyKey === undefined || typeof value.strategyKey === "string") &&
-    (value.details === undefined || isJsonValue(value.details))
+    (value.details === undefined || isJsonValue(value.details, 0))
   )
 }
 
-function isJsonValue(value: unknown): boolean {
+function isJsonValue(value: unknown, depth: number): boolean {
+  if (depth > 32) return false
   if (
     value === null ||
     typeof value === "string" ||
@@ -45,6 +46,11 @@ function isJsonValue(value: unknown): boolean {
   ) {
     return true
   }
-  if (Array.isArray(value)) return value.every(isJsonValue)
-  return isRecord(value) && Object.values(value).every(isJsonValue)
+  if (Array.isArray(value)) {
+    return value.every((entry) => isJsonValue(entry, depth + 1))
+  }
+  return (
+    isRecord(value) &&
+    Object.values(value).every((entry) => isJsonValue(entry, depth + 1))
+  )
 }

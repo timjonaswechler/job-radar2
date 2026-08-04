@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import {
-  createPostingItemViewModel,
-  type PostingDetailLoadState,
-} from "@/features/postings/view-model/posting-item-view-model";
+import { createPostingItemViewModel } from "@/features/postings/view-model/posting-item-view-model";
 import { usePostingsList } from "@/features/postings/workspace/postings-workspace-provider";
 
 import { PostingsListPanel } from "@/features/postings/list/postings-list-panel";
@@ -17,74 +14,23 @@ import { PostingPreviewPanel } from "@/features/postings/preview/posting-preview
 export function PostingsWorkspaceView() {
   const {
     activeQueue,
+    detailState,
     listError,
     listLoading,
-    loadPostingDetail,
     postings,
     refreshList,
+    retryDetail,
+    selectedPostingId,
+    selectPosting,
   } = usePostingsList();
-  const [selectedPostingId, setSelectedPostingId] = useState<number | null>(
-    null,
-  );
-  const [detailState, setDetailState] = useState<PostingDetailLoadState>({
-    status: "idle",
-  });
-  const detailRequestIdRef = useRef(0);
 
   const { activePostingItems, activePostingRows } = useMemo(() => {
     const items = postings.map(createPostingItemViewModel);
-
     return {
       activePostingItems: items,
       activePostingRows: items.map((posting) => posting.row),
     };
   }, [postings]);
-  useEffect(() => {
-    if (listLoading) return;
-
-    if (!activePostingItems.length) {
-      detailRequestIdRef.current += 1;
-      setSelectedPostingId(null);
-      setDetailState({ status: "idle" });
-      return;
-    }
-
-    const selectedPostingIsVisible = activePostingItems.some(
-      (posting) => posting.id === selectedPostingId,
-    );
-
-    if (!selectedPostingIsVisible) {
-      detailRequestIdRef.current += 1;
-      setSelectedPostingId(activePostingItems[0].id);
-      setDetailState({ status: "idle" });
-    }
-  }, [activePostingItems, listLoading, selectedPostingId]);
-
-  const handleSelectPosting = useCallback(
-    (postingId: number) => {
-      const requestId = detailRequestIdRef.current + 1;
-      detailRequestIdRef.current = requestId;
-      setSelectedPostingId(postingId);
-      setDetailState({ status: "loading", postingId });
-
-      void loadPostingDetail(postingId)
-        .then((detail) => {
-          if (detailRequestIdRef.current !== requestId) return;
-          setDetailState({ status: "loaded", postingId, detail });
-        })
-        .catch((unknownError) => {
-          if (detailRequestIdRef.current !== requestId) return;
-          console.error("Failed to load job posting detail", unknownError);
-          setDetailState({
-            status: "failed",
-            postingId,
-            message:
-              "Die Ausschreibung konnte gerade nicht geladen werden. Bitte versuche es erneut.",
-          });
-        });
-    },
-    [loadPostingDetail],
-  );
 
   const selectedPosting = useMemo(
     () =>
@@ -112,7 +58,7 @@ export function PostingsWorkspaceView() {
           postings={activePostingRows}
           selectedPostingId={selectedPostingId}
           onRetry={refreshList}
-          onSelectPosting={handleSelectPosting}
+          onSelectPosting={selectPosting}
         />
       </ResizablePanel>
 
@@ -128,11 +74,7 @@ export function PostingsWorkspaceView() {
           detailState={detailState}
           posting={selectedPosting?.preview ?? null}
           loading={listLoading}
-          onRetryDetail={
-            selectedPostingId === null
-              ? undefined
-              : () => handleSelectPosting(selectedPostingId)
-          }
+          onRetryDetail={selectedPostingId === null ? undefined : retryDetail}
         />
       </ResizablePanel>
     </ResizablePanelGroup>

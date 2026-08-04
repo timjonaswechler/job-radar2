@@ -58,6 +58,17 @@ stored_state!(ApplicationState {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum PrimaryQueue {
+    Inbox,
+    Interested,
+    Preparation,
+    Applied,
+    Archive,
+}
+
+/// Queue-scoped Catalog list selection. `All` is a list scope, never a Posting's primary queue.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Queue {
     Inbox,
     Interested,
@@ -80,21 +91,26 @@ pub struct Counts {
     pub review_inbox: i64,
 }
 
+/// Persisted identity projection. `kind` remains raw so Detail can diagnose one
+/// corrupt occurrence and continue to a valid fallback instead of rejecting the whole Posting.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OccurrenceIdentity {
+    pub kind: String,
+    pub value: String,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Source {
+pub struct Occurrence {
     pub id: i64,
     pub source_key: String,
     pub source_name_snapshot: String,
-    pub url: String,
+    pub identity: OccurrenceIdentity,
+    pub provider_url: String,
+    pub posting_meta: std::collections::BTreeMap<String, String>,
     pub first_seen_at: String,
     pub last_seen_at: String,
-    #[serde(skip)]
-    pub(crate) identity_kind: String,
-    #[serde(skip)]
-    pub(crate) identity_value: String,
-    #[serde(skip)]
-    pub(crate) posting_meta_json: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -109,13 +125,13 @@ pub struct Posting {
     pub interest_state: InterestState,
     pub preparation_state: PreparationState,
     pub application_state: ApplicationState,
-    pub primary_queue: Queue,
+    pub primary_queue: PrimaryQueue,
     pub first_seen_at: String,
     pub last_seen_at: String,
     pub created_at: String,
     pub updated_at: String,
-    pub primary_source: Source,
-    pub sources: Vec<Source>,
+    pub primary_occurrence: Occurrence,
+    pub occurrences: Vec<Occurrence>,
 }
 
 /// A nonempty partial update across the four independent Posting workflow axes.

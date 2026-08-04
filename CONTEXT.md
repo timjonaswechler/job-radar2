@@ -87,7 +87,7 @@ The lazy Source Behavior Language step that loads detail fields for one concrete
 _Avoid_: Discovery, bulk detail fanout, inventory fields
 
 **Posting Occurrence**:
-One Source-local sighting of a posting flowing from Discovery into Detail and Candidate Resolution. It contains four disjoint sections: a required provider reference, optional Provider Values, keyed Discovery Hints, and keyed postingMeta. Its identity is the concrete Source key plus a case-sensitive provider posting ID when present, otherwise the Source key plus a conservatively normalized absolute HTTP(S) provider URL. ID and URL-fallback identities never correlate merely by URL.
+One Source-local sighting of an opportunity flowing from Discovery through Detail and Candidate Resolution and, when persisted, associating with one durable Job Posting. It contains four disjoint sections: a required provider reference, optional Provider Values, keyed Discovery Hints, and keyed postingMeta. Its identity is the concrete Source key plus a case-sensitive provider posting ID when present, otherwise the Source key plus a conservatively normalized absolute HTTP(S) provider URL. ID and URL-fallback identities never correlate merely by URL. A stable provider-ID occurrence may later carry a changed provider URL; that URL and postingMeta remain occurrence data used for opening and Detail, not identity substitutes. Several distinct Posting Occurrences may associate with one Job Posting.
 _Avoid_: Job Posting, Match, normalized candidate, persisted posting
 
 **Provider Value**:
@@ -175,8 +175,8 @@ The user-defined rule set of a Search Request that removes postings from the mat
 _Avoid_: Source, Source Config, anti-pattern
 
 **Job Posting**:
-A job opportunity found by Job Radar with a title, company, URL, sources, and zero or more locations. Duplicate detection uses company and title; when both postings provide locations, postings are treated as the same opportunity only when at least one location overlaps.
-_Avoid_: match, Source, Search Run
+A durable job opportunity and user workflow object that collects one or more Source-local Posting Occurrences, has one immutable primary occurrence, and carries title, company, zero or more locations, cached description, and independent workflow axes. Association first checks exact Posting Occurrence identity and only then semantic company/title/location equivalence; when both candidates provide locations, semantic equivalence requires at least one overlap. Rediscovery preserves manual workflow state and the primary occurrence while updating eligible occurrence data and last-seen evidence.
+_Avoid_: Posting Occurrence, match, Source, Search Run
 
 **Application Preparation Progress**:
 The explicit per-Job-Posting checklist of work needed before an application is submitted. It records preparation tasks independently from Job Posting Queues and the application's lifecycle state.

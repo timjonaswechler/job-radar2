@@ -1,4 +1,6 @@
-use job_postings::catalog::{ApplicationState, Error, InterestState, PreparationState, ReadState};
+use job_postings::catalog::{
+    ApplicationState, Error, InterestState, PreparationState, PrimaryQueue, ReadState,
+};
 use job_postings::{Catalog, Change, Id, Queue};
 
 use super::support::{insert_posting, insert_source, pool, Posting};
@@ -61,20 +63,33 @@ async fn catalog_lists_all_in_order_with_batched_sources_and_primary_queue() {
             .collect::<Vec<_>>(),
         vec![newer_tie, newer, older]
     );
-    assert_eq!(postings[0].primary_queue, Queue::Preparation);
+    assert_eq!(postings[0].primary_queue, PrimaryQueue::Preparation);
     assert_eq!(
         serde_json::to_value(&postings[0]).unwrap()["primaryQueue"],
         "preparation"
     );
-    assert_eq!(postings[2].primary_queue, Queue::Inbox);
-    assert_eq!(postings[2].primary_source.id, primary);
+    assert_eq!(postings[2].primary_queue, PrimaryQueue::Inbox);
+    assert_eq!(postings[2].primary_occurrence.id, primary);
     assert_eq!(
         postings[2]
-            .sources
+            .occurrences
             .iter()
-            .map(|source| source.id)
+            .map(|occurrence| occurrence.id)
             .collect::<Vec<_>>(),
         vec![primary, secondary]
+    );
+    let wire = serde_json::to_value(&postings[2]).unwrap();
+    assert_eq!(
+        wire["primaryOccurrence"]["identity"]["kind"],
+        "normalized_url"
+    );
+    assert_eq!(
+        wire["primaryOccurrence"]["providerUrl"],
+        "https://example.test/jobs/older"
+    );
+    assert_eq!(
+        wire["primaryOccurrence"]["postingMeta"],
+        serde_json::json!({})
     );
 }
 
@@ -198,7 +213,17 @@ async fn catalog_preserves_queue_membership_counts_and_subcategories() {
         Queue::Archive,
     ] {
         let listed = catalog.list(queue).await.unwrap();
-        assert!(listed.iter().all(|posting| posting.primary_queue == queue));
+        let expected_primary = match queue {
+            Queue::Inbox => PrimaryQueue::Inbox,
+            Queue::Interested => PrimaryQueue::Interested,
+            Queue::Preparation => PrimaryQueue::Preparation,
+            Queue::Applied => PrimaryQueue::Applied,
+            Queue::Archive => PrimaryQueue::Archive,
+            Queue::All => unreachable!(),
+        };
+        assert!(listed
+            .iter()
+            .all(|posting| posting.primary_queue == expected_primary));
         assert_eq!(
             listed.len() as i64,
             match queue {
@@ -240,7 +265,7 @@ async fn catalog_changes_only_supplied_workflow_axes() {
     assert_eq!(posting.interest_state, InterestState::Undecided);
     assert_eq!(posting.preparation_state, PreparationState::Ready);
     assert_eq!(posting.application_state, ApplicationState::NotApplied);
-    assert_eq!(posting.primary_queue, Queue::Inbox);
+    assert_eq!(posting.primary_queue, PrimaryQueue::Inbox);
 }
 
 #[tokio::test]

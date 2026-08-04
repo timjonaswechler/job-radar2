@@ -14,7 +14,7 @@ Source outcomes, runtime Candidate Resolutions, Structured Diagnostics, usage, p
 
 `History` owns latest-run status decoding, missing-value defaults, corruption and storage distinctions, and bounded batched reads, even though the physical latest-run columns remain on `search_requests` for atomic commit locality. `Runner` and `History` exclude Search Request CRUD and admission, Source behavior, Candidate Resolution internals, Geo behavior, generic Background Tasks, Tauri transport, and Job Posting workflow operations.
 
-Automatic Posting import is private `Runner` implementation required by the atomic terminal transaction. Job Posting listing, queues, manual workflow changes, and detail loading remain separate Desktop workflow ownership pending the Job Posting Workflow investigation. ADR 0008's exact-URL lookup wording and the current `(source_key, url)` lookup behavior are not reconciled here; that mismatch is deferred to the same investigation.
+Automatic Posting import remains private `Runner` SQL required by the atomic terminal transaction. `Runner` consumes `job-postings::identity` for exact-before-semantic association, exact-conflict rollback, lowest-ID semantic ambiguity, and additive location merge. The focused Tauri-free `job-postings` crate separately owns `Catalog` listing/queues/workflow changes and `Detail` opening/acquisition/cache behavior. Import SQL is not moved behind a public transaction, repository, or commit-plan seam because doing so would expose transaction mechanics and weaken DB01 commit locality. ADR 0016 records the durable Posting ownership and Source-local Posting Occurrence identity.
 
 The bounded `search-run-result.json` artifact is a Desktop post-commit Adapter. It is never persistence authority, and artifact failure can add a warning but cannot change the committed Outcome. The development smoke runner is a second productive `Runner` consumer without making Tauri or Desktop a crate dependency.
 
@@ -25,4 +25,4 @@ Rejected alternatives are:
 - splitting execution from a public ledger/commit-plan Module, because it would expose transaction mechanics and weaken commit locality;
 - retaining a Desktop-only Search Run Module, because Desktop and the smoke runner need the same execution behavior and Desktop would remain a second application core;
 - introducing a broad `job-search` crate, because Search Request authoring, Search Run execution, and Candidate Resolution have different invariants and change drivers;
-- introducing a premature `job-postings` crate, because automatic import is currently transaction-private while the wider Job Posting workflow boundary has not been researched.
+- moving private automatic-import SQL behind `job-postings::Catalog`, because only Search Run owns the surrounding terminal transaction and no second transaction Adapter exists.

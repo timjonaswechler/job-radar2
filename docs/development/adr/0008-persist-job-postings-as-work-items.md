@@ -1,101 +1,59 @@
 # Persist job postings as work items
 
-Job Radar persists found job postings as durable work items. A Search Request remains editable and rerunnable. This ADR's original no-history/no-persisted-Search-Request-link claims are superseded narrowly: terminal Search Runs and their Match relationships are durable, while Job Postings remain the user workflow objects and no criteria snapshot or runtime Resolution history is stored.
+Job Radar persists found Job Postings as durable user workflow objects. Search Requests remain editable and rerunnable. Terminal Search Runs and their Match relationships are durable, while runtime Candidate Resolutions, criteria snapshots, provider payloads, and Diagnostic history are not.
 
-## Context
-
-Search execution already produces normalized `SearchRunResult.postings`: postings are filtered by include/exclude rules, normalized, deduplicated across selected sources, and contain source references. The development JSON output is useful for inspecting runs, but it is not the product persistence model.
-
-The user-facing work is centered on reviewing and processing job postings:
-
-- identify newly found postings;
-- decide whether a posting is interesting;
-- prepare an application;
-- track whether an application was submitted and what happened next.
-
-It is not currently important to reconstruct which search configuration found which posting. Search requests can be edited over time and rerun from their latest configuration.
+ADR 0016 supersedes this ADR's original global found-URL identity, parent-owned primary-source pointer, and provisional comparison ownership. Canonical association now uses Source-local Posting Occurrence identity before semantic Job Posting equivalence.
 
 ## Decision
 
-Persist normalized job postings in SQLite as the primary work items:
+Persist normalized Job Postings in SQLite as the primary work items:
 
-- `job_postings` stores the deduplicated posting and manual workflow state.
-- `job_posting_sources` stores the found source/link occurrences for a posting.
-- `job_postings.primary_source_id` points to the source/link used for the primary “open posting” action.
-- `search_runs` records terminal executions linked to `search_requests`.
+- `job_postings` stores durable Posting values, cached description, and manual workflow axes.
+- `job_posting_sources` stores Source-local Posting Occurrences and owns the immutable primary marker.
+- `search_runs` records terminal executions linked to Search Requests.
 - `matches` links each Search Run to each finalized, cross-Source-merged Job Posting exactly once.
-- `search_requests` also retains its small overwritten last-run status for current-state display.
+- `search_requests` retains its small overwritten latest-run projection.
 
-Search Run history is intentionally narrow: it does not persist criteria snapshots, Source Runs, runtime Resolutions, Diagnostics, usage, provider payloads, or checkpoints.
+Search Run history intentionally excludes criteria snapshots, Source Runs, runtime Candidate Resolutions, Diagnostics, usage, provider payloads, and checkpoints.
 
-## Job posting state
+## Independent workflow axes and queues
 
-Manual posting state is stored as independent dimensions rather than one overloaded status:
+Manual Posting state is stored as independent dimensions:
 
 - `read_state`: `unread | read`
 - `interest_state`: `undecided | interested | dismissed`
 - `preparation_state`: `not_started | in_progress | ready`
 - `application_state`: `not_applied | submitted | in_process | rejected_by_company | withdrawn_by_me | accepted`
 
-Newly imported postings default to:
+New Postings default to unread, undecided, not started, and not applied. Rediscovery never resets those axes. User-facing queues and Counts are backend-derived projections of them; `all` is only a list scope and never a Posting's primary queue.
 
-```txt
-read_state = unread
-interest_state = undecided
-preparation_state = not_started
-application_state = not_applied
-```
+## Association and rediscovery
 
-When an existing posting is found again, manual state is not reset.
+A Posting Occurrence is identified within one Source by provider posting ID when present, otherwise by normalized provider URL. Provider-ID and URL-fallback identities do not correlate merely by provider URL. Automatic import applies this order:
 
-## Matching existing postings
+1. collect all existing owners for every exact Source-local occurrence identity;
+2. fail and roll back if exact identities resolve to conflicting durable Job Postings;
+3. if an exact owner exists, use it;
+4. otherwise compare durable Job Postings by normalized company, title, and overlapping locations;
+5. preserve the lowest-ID choice when several semantic candidates remain;
+6. create a new Job Posting only when neither exact nor semantic association succeeds.
 
-Importing a normalized posting uses this order:
+When an existing Posting is found again, import updates last-seen time, merges locations additively, and creates or updates the canonical occurrence. It does not overwrite title, company, manual workflow state, cached description, or the immutable primary occurrence. Provider URL and `postingMeta` may be updated as occurrence data; neither is an identity substitute.
 
-1. Find an existing `job_posting_sources.url` with the exact found URL.
-2. Otherwise compare against existing `job_postings` using the same title/company/location dedupe semantics as search-run result merging.
-3. Create a new posting only if neither step finds a match.
+Each occurrence records its Source key and display-name snapshot, canonical identity kind/value, current provider URL, `postingMeta`, primary marker, and first/last-seen timestamps. Source-name snapshots remain useful when a Source is renamed or removed.
 
-URLs are stored and compared exactly as received from normalized search results. There is no URL normalization key.
+## Search Run transaction
 
-When an existing posting is found again:
+Only active, valid Search Requests may execute and persist results. Partial Source failures still persist successful finalized Postings. A fully failed run records its terminal result but contributes no Posting or Match input.
 
-- update `job_postings.last_seen_at`;
-- merge newly observed locations additively;
-- create or update the relevant `job_posting_sources` row;
-- do not overwrite title, company, primary source, or manual workflow state.
+One private Search Run SQLite transaction atomically writes the terminal Search Run, imported/updated Job Postings and Posting Occurrences, one Match per finalized Posting, and the Search Request's latest-run projection. ADR 0015 owns this transaction; ADR 0016 owns Posting identity, Catalog, and Detail policy. No public repository, transaction, or commit-plan seam is exposed.
 
-## Source/link occurrences
-
-Each `job_posting_sources` row records one found source/link occurrence:
-
-- `posting_id`
-- `source_key`
-- `source_name_snapshot`
-- `url`
-- `first_seen_at`
-- `last_seen_at`
-
-`source_name_snapshot` is a display fallback because sources are authoritative JSON documents and may be renamed or removed later.
-
-Duplicate occurrences are prevented per posting/source/url. The same URL may still appear for different source keys so origin remains visible.
-
-## Search-run persistence behavior
-
-Running a search request will automatically persist normalized postings. Only active, valid Search Requests may run and write postings. Draft and disabled Search Requests, and active requests with derived validation issues, must fail with a clear error instead of silently producing persisted data.
-
-Partial source failures still persist successful normalized postings. A fully failed run updates the search request's last-run fields but leaves job postings unchanged.
-
-Persistence of the terminal Search Run, finalized merged postings and posting sources, one Match per posting, and last-run metadata happens in exactly one database transaction.
-
-## Development JSON output
-
-`search-run-result.json` is a bounded post-commit development/debug summary. It is never persistence authority or a release prerequisite; write failure cannot roll back committed SQLite state.
+The bounded `search-run-result.json` artifact remains post-commit development output. Its failure cannot roll back committed SQLite state.
 
 ## Consequences
 
-- Job postings survive deleting or editing search requests.
-- Dismissed postings stay in the database so they do not reappear as new when found again.
-- The normal UI should list and update job postings directly rather than treating search runs as the main workflow.
-- Historical analytics over runs are intentionally out of scope for now.
-- If future UI needs run history or richer activity, it should be added as a separate product decision rather than inferred from the posting store.
+- Job Postings survive deleting or editing Search Requests.
+- Dismissed Postings remain durable and do not return as new merely because they are rediscovered.
+- Distinct occurrences from several Sources can belong to one Job Posting without losing Source-local identity.
+- The normal UI consumes Job Posting Catalog lists, backend-derived queues/Counts, and Detail rather than treating Search Runs as the workflow.
+- Richer activity/history remains a separate product decision.

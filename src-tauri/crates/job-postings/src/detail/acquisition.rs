@@ -1,5 +1,5 @@
 use super::{diagnostics, Description};
-use crate::catalog::{Posting, Source};
+use crate::catalog::{Occurrence, Posting};
 use source_engine::execution::{
     DetailField, PostingOccurrence, RequestedDetailFields, RequestedFieldDisposition,
     RuntimeExecutionContext, SourceDetailExecution, SourceDetailOutcome, SourceDetailRequest,
@@ -178,16 +178,16 @@ where
     }
 }
 
-fn ordered_sources(posting: &Posting) -> Vec<&Source> {
-    let mut sources = Vec::with_capacity(posting.sources.len());
-    sources.push(&posting.primary_source);
-    sources.extend(
+fn ordered_sources(posting: &Posting) -> Vec<&Occurrence> {
+    let mut occurrences = Vec::with_capacity(posting.occurrences.len());
+    occurrences.push(&posting.primary_occurrence);
+    occurrences.extend(
         posting
-            .sources
+            .occurrences
             .iter()
-            .filter(|source| source.id != posting.primary_source.id),
+            .filter(|occurrence| occurrence.id != posting.primary_occurrence.id),
     );
-    sources
+    occurrences
 }
 
 struct OccurrenceError(String);
@@ -200,10 +200,10 @@ impl std::fmt::Display for OccurrenceError {
 
 fn posting_occurrence(
     posting: &Posting,
-    source: &Source,
+    source: &Occurrence,
 ) -> Result<PostingOccurrence, OccurrenceError> {
-    let provider_posting_id = match source.identity_kind.as_str() {
-        "provider_posting_id" => Some(source.identity_value.clone()),
+    let provider_posting_id = match source.identity.kind.as_str() {
+        "provider_posting_id" => Some(source.identity.value.clone()),
         "normalized_url" => None,
         kind => {
             return Err(OccurrenceError(format!(
@@ -213,22 +213,22 @@ fn posting_occurrence(
     };
     let (reference, identity) = source_engine::execution::validate_posting_reference(
         &source.source_key,
-        &source.url,
+        &source.provider_url,
         provider_posting_id,
     )
     .map_err(|_| {
         OccurrenceError("persisted posting source has an invalid provider reference".to_string())
     })?;
-    let persisted_identity = match source.identity_kind.as_str() {
+    let persisted_identity = match source.identity.kind.as_str() {
         "provider_posting_id" => {
             source_engine::execution::PostingOccurrenceIdentity::ProviderPostingId {
                 source_key: source.source_key.clone(),
-                provider_posting_id: source.identity_value.clone(),
+                provider_posting_id: source.identity.value.clone(),
             }
         }
         "normalized_url" => source_engine::execution::PostingOccurrenceIdentity::NormalizedUrl {
             source_key: source.source_key.clone(),
-            normalized_url: source.identity_value.clone(),
+            normalized_url: source.identity.value.clone(),
         },
         _ => unreachable!("identity kind checked above"),
     };
@@ -237,11 +237,7 @@ fn posting_occurrence(
             "persisted posting source identity does not match its provider reference".to_string(),
         ));
     }
-    let posting_meta = serde_json::from_str(&source.posting_meta_json).map_err(|error| {
-        OccurrenceError(format!(
-            "persisted posting source has invalid postingMeta: {error}"
-        ))
-    })?;
+    let posting_meta = source.posting_meta.clone();
     Ok(PostingOccurrence {
         identity,
         reference,

@@ -1,4 +1,4 @@
-use crate::catalog::Source;
+use crate::catalog::Occurrence;
 use source_engine::definition::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, Diagnostics};
 
 const MAX_OPEN_DIAGNOSTICS: usize = 256;
@@ -14,7 +14,7 @@ pub(super) fn push(target: &mut Diagnostics, diagnostic: Diagnostic) {
     }
 }
 
-pub(super) fn contextualize(diagnostics: Diagnostics, source: &Source) -> Diagnostics {
+pub(super) fn contextualize(diagnostics: Diagnostics, source: &Occurrence) -> Diagnostics {
     diagnostics
         .into_iter()
         .map(|diagnostic| contextualize_one(diagnostic, source))
@@ -22,7 +22,7 @@ pub(super) fn contextualize(diagnostics: Diagnostics, source: &Source) -> Diagno
 }
 
 pub(super) fn source(
-    source: &Source,
+    source: &Occurrence,
     code: impl Into<String>,
     message: impl Into<String>,
     path: impl Into<String>,
@@ -67,7 +67,7 @@ pub(super) fn summary(diagnostics: &Diagnostics, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-fn contextualize_one(mut diagnostic: Diagnostic, source: &Source) -> Diagnostic {
+fn contextualize_one(mut diagnostic: Diagnostic, source: &Occurrence) -> Diagnostic {
     let original_details = diagnostic.details.take();
     let mut details = original_details
         .as_ref()
@@ -83,7 +83,10 @@ fn contextualize_one(mut diagnostic: Diagnostic, source: &Source) -> Diagnostic 
         "postingSourceKey".to_string(),
         serde_json::json!(source.source_key),
     );
-    details.insert("postingUrl".to_string(), serde_json::json!(source.url));
+    details.insert(
+        "postingUrl".to_string(),
+        serde_json::json!(source.provider_url),
+    );
     diagnostic.details = Some(serde_json::Value::Object(details));
     diagnostic
 }
