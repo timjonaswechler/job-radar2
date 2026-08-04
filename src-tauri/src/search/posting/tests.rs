@@ -323,6 +323,56 @@ async fn insert_existing_source_with_meta(
     posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
     seen_at: &str,
 ) -> i64 {
+    insert_existing_source_identity_with_meta(
+        pool,
+        posting_id,
+        source_key,
+        source_name_snapshot,
+        "normalized_url",
+        url,
+        url,
+        posting_meta,
+        seen_at,
+    )
+    .await
+}
+
+async fn insert_existing_provider_source_with_meta(
+    pool: &SqlitePool,
+    posting_id: i64,
+    source_key: &str,
+    source_name_snapshot: &str,
+    provider_posting_id: &str,
+    provider_url: &str,
+    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
+    seen_at: &str,
+) -> i64 {
+    insert_existing_source_identity_with_meta(
+        pool,
+        posting_id,
+        source_key,
+        source_name_snapshot,
+        "provider_posting_id",
+        provider_posting_id,
+        provider_url,
+        posting_meta,
+        seen_at,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn insert_existing_source_identity_with_meta(
+    pool: &SqlitePool,
+    posting_id: i64,
+    source_key: &str,
+    source_name_snapshot: &str,
+    identity_kind: &str,
+    identity_value: &str,
+    provider_url: &str,
+    posting_meta: impl IntoIterator<Item = (&'static str, &'static str)>,
+    seen_at: &str,
+) -> i64 {
     let posting_meta_json = serde_json::to_string(
         &posting_meta
             .into_iter()
@@ -331,15 +381,16 @@ async fn insert_existing_source_with_meta(
     .unwrap();
     sqlx::query(
         "INSERT INTO job_posting_sources (
-           posting_id, source_key, source_name_snapshot, url, posting_meta_json,
-           first_seen_at, last_seen_at
-         )
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+           posting_id, source_key, identity_kind, identity_value, provider_url,
+           source_name_snapshot, posting_meta_json, first_seen_at, last_seen_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
     )
     .bind(posting_id)
     .bind(source_key)
+    .bind(identity_kind)
+    .bind(identity_value)
+    .bind(provider_url)
     .bind(source_name_snapshot)
-    .bind(url)
     .bind(posting_meta_json)
     .bind(seen_at)
     .execute(pool)

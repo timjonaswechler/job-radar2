@@ -1,0 +1,9 @@
+[package]
+name = "job-postings"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+unicode-normalization = "0.1"
+unicode-segmentation = "1"

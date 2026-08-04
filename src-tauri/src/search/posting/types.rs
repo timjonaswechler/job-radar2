@@ -31,6 +31,10 @@ pub struct JobPostingSource {
     pub source_name_snapshot: String,
     pub url: String,
     #[serde(skip)]
+    pub(crate) identity_kind: String,
+    #[serde(skip)]
+    pub(crate) identity_value: String,
+    #[serde(skip)]
     pub(crate) posting_meta: BTreeMap<String, String>,
     pub first_seen_at: String,
     pub last_seen_at: String,

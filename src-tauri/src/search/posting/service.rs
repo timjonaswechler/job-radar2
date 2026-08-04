@@ -468,8 +468,8 @@ impl<'a> JobPostingService<'a> {
 
     async fn sources_for_posting(&self, posting_id: i64) -> Result<Vec<JobPostingSource>, String> {
         let rows = sqlx::query(
-            "SELECT id, source_key, source_name_snapshot, url, posting_meta_json,
-                    first_seen_at, last_seen_at
+            "SELECT id, source_key, source_name_snapshot, identity_kind, identity_value,
+                    provider_url, posting_meta_json, first_seen_at, last_seen_at
              FROM job_posting_sources
              WHERE posting_id = ?1
              ORDER BY id",
@@ -518,12 +518,39 @@ fn posting_occurrence(
     posting: &JobPosting,
     posting_source: &JobPostingSource,
 ) -> Result<PostingOccurrence, String> {
+    let provider_posting_id = match posting_source.identity_kind.as_str() {
+        "provider_posting_id" => Some(posting_source.identity_value.clone()),
+        "normalized_url" => None,
+        kind => {
+            return Err(format!(
+                "persisted posting source has invalid identity kind: {kind}"
+            ))
+        }
+    };
     let (reference, identity) = source_engine::execution::validate_posting_reference(
         &posting_source.source_key,
         &posting_source.url,
-        None,
+        provider_posting_id,
     )
-    .map_err(|_| "persisted posting source has an invalid provider URL".to_string())?;
+    .map_err(|_| "persisted posting source has an invalid provider reference".to_string())?;
+    let persisted_identity = match posting_source.identity_kind.as_str() {
+        "provider_posting_id" => {
+            source_engine::execution::PostingOccurrenceIdentity::ProviderPostingId {
+                source_key: posting_source.source_key.clone(),
+                provider_posting_id: posting_source.identity_value.clone(),
+            }
+        }
+        "normalized_url" => source_engine::execution::PostingOccurrenceIdentity::NormalizedUrl {
+            source_key: posting_source.source_key.clone(),
+            normalized_url: posting_source.identity_value.clone(),
+        },
+        _ => unreachable!("identity kind was checked above"),
+    };
+    if identity != persisted_identity {
+        return Err(
+            "persisted posting source identity does not match its provider reference".to_string(),
+        );
+    }
     Ok(PostingOccurrence {
         identity,
         reference,
@@ -621,7 +648,9 @@ fn source_from_row(row: SqliteRow) -> Result<JobPostingSource, String> {
         id,
         source_key: row.try_get("source_key").map_err(db_error)?,
         source_name_snapshot: row.try_get("source_name_snapshot").map_err(db_error)?,
-        url: row.try_get("url").map_err(db_error)?,
+        url: row.try_get("provider_url").map_err(db_error)?,
+        identity_kind: row.try_get("identity_kind").map_err(db_error)?,
+        identity_value: row.try_get("identity_value").map_err(db_error)?,
         posting_meta,
         first_seen_at: row.try_get("first_seen_at").map_err(db_error)?,
         last_seen_at: row.try_get("last_seen_at").map_err(db_error)?,

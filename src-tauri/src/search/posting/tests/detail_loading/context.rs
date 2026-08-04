@@ -19,11 +19,12 @@ fn get_job_posting_fetches_with_aligned_source_url_config_and_posting_meta() {
             },
         )
         .await;
-        let primary_source_id = insert_existing_source_with_meta(
+        let primary_source_id = insert_existing_provider_source_with_meta(
             &pool,
             posting_id,
             "primary_detail_source",
             "Primary Detail Source",
+            "provider-laser-42",
             "https://primary.example.test/jobs/laser",
             [("jobId", "primary-42")],
             "2026-06-01T00:00:00.000Z",

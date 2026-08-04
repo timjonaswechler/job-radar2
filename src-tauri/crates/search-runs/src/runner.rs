@@ -25,7 +25,7 @@ use source_runs::{
     cancelled_for_key, cancelled_for_source, completed, failed_for_key, failed_for_source,
     overall_status, resolution_failed, skipped_for_source,
 };
-use sqlite::{commit, Commit};
+use sqlite::{commit, Commit, Error as CommitError};
 
 /// Executes one admitted immutable Search Request through one atomic terminal commit.
 pub struct Runner {
@@ -168,7 +168,7 @@ impl Runner {
         } else {
             merged.as_slice()
         };
-        let outcome = Outcome {
+        let mut outcome = Outcome {
             search_request_id,
             status,
             generated_at,
@@ -177,7 +177,7 @@ impl Runner {
             matched_posting_count: postings.len(),
         };
         let last_run_error = last_run_error(&outcome);
-        commit(
+        outcome.matched_posting_count = commit(
             &self.pool,
             Commit {
                 search_request_id,
@@ -188,7 +188,7 @@ impl Runner {
             },
         )
         .await
-        .map_err(Error::Storage)?;
+        .map_err(map_commit_error)?;
         Ok(outcome)
     }
 
@@ -285,6 +285,7 @@ pub struct Outcome {
 pub enum Error {
     Requirements(String),
     InstalledState(String),
+    PostingIdentityConflict { posting_ids: Vec<i64> },
     Storage(String),
 }
 
@@ -297,6 +298,10 @@ impl fmt::Display for Error {
             Self::InstalledState(message) => {
                 write!(formatter, "Search Run installed state failed: {message}")
             }
+            Self::PostingIdentityConflict { posting_ids } => write!(
+                formatter,
+                "Search Run Posting Occurrence identity conflict: {posting_ids:?}"
+            ),
             Self::Storage(message) => write!(formatter, "Search Run storage failed: {message}"),
         }
     }
@@ -338,6 +343,15 @@ struct NeverCancelled;
 impl RuntimeCancellation for NeverCancelled {
     fn is_cancelled(&self) -> bool {
         false
+    }
+}
+
+fn map_commit_error(error: CommitError) -> Error {
+    match error {
+        CommitError::Identity(conflict) => Error::PostingIdentityConflict {
+            posting_ids: conflict.posting_ids().to_vec(),
+        },
+        CommitError::Storage(message) => Error::Storage(message),
     }
 }
 

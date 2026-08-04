@@ -20,7 +20,7 @@ required-features = ["agent-debug"]
 agent-debug = []
 
 [workspace]
-members = [".", "crates/agent", "crates/geo", "crates/search-resolution", "crates/search-requests", "crates/search-runs", "crates/source-engine", "crates/sources"]
+members = [".", "crates/agent", "crates/geo", "crates/job-postings", "crates/search-resolution", "crates/search-requests", "crates/search-runs", "crates/source-engine", "crates/sources"]
 resolver = "2"
 
 

@@ -106,13 +106,72 @@ mod tests {
                 .await
                 .unwrap();
             sqlx::query(
-                "INSERT INTO job_posting_sources (posting_id, source_key, source_name_snapshot, url)
-                 VALUES (?1, 'fixture_source', 'Fixture Company', 'https://example.test/jobs/fixture')",
+                "INSERT INTO job_posting_sources (
+                   posting_id, source_key, identity_kind, identity_value, provider_url,
+                   source_name_snapshot, posting_meta_json
+                 ) VALUES (
+                   ?1, 'fixture_source', 'normalized_url',
+                   'https://example.test/jobs/fixture', 'https://example.test/jobs/fixture',
+                   'Fixture Company', '{}'
+                 )",
             )
             .bind(posting_id)
             .execute(&pool)
             .await
             .unwrap();
+        });
+    }
+
+    #[test]
+    fn fresh_dev_schema_enforces_canonical_source_local_occurrence_identity() {
+        tauri::async_runtime::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let pool = connect_and_migrate(&temp_dir.path().join("job_radar.db"))
+                .await
+                .unwrap();
+            for title in ["First", "Second"] {
+                sqlx::query("INSERT INTO job_postings (title, company) VALUES (?1, 'ACME')")
+                    .bind(title)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            let insert = |posting_id: i64,
+                          source_key: &'static str,
+                          kind: &'static str,
+                          value: &'static str| {
+                sqlx::query(
+                    "INSERT INTO job_posting_sources (
+                       posting_id, source_key, identity_kind, identity_value, provider_url,
+                       source_name_snapshot, posting_meta_json
+                     ) VALUES (?1, ?2, ?3, ?4, 'https://same.test/jobs/42', 'Fixture', '{}')",
+                )
+                .bind(posting_id)
+                .bind(source_key)
+                .bind(kind)
+                .bind(value)
+            };
+
+            insert(1, "first", "provider_posting_id", "Case-42")
+                .execute(&pool)
+                .await
+                .unwrap();
+            insert(1, "second", "provider_posting_id", "Case-42")
+                .execute(&pool)
+                .await
+                .unwrap();
+            insert(1, "first", "normalized_url", "https://same.test/jobs/42")
+                .execute(&pool)
+                .await
+                .unwrap();
+            assert!(insert(2, "first", "provider_posting_id", "Case-42")
+                .execute(&pool)
+                .await
+                .is_err());
+            assert!(insert(2, "third", "invalid", "Case-42")
+                .execute(&pool)
+                .await
+                .is_err());
         });
     }
 

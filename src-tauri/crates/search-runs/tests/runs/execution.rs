@@ -203,7 +203,7 @@ async fn authored_order_and_partial_success_are_preserved() {
 }
 
 #[tokio::test]
-async fn rerun_reuses_durable_posting_and_creates_a_new_match() {
+async fn provider_id_rediscovery_survives_url_change_and_preserves_workflow() {
     let pool = migrated_pool().await;
     let catalog = Catalog::new(pool.clone());
     let installed_dir = tempfile::tempdir().unwrap();
@@ -213,8 +213,14 @@ async fn rerun_reuses_durable_posting_and_creates_a_new_match() {
         &pool,
         installed_dir.path(),
         [
-            jobs_response("https://example.test/jobs/reused"),
-            jobs_response("https://example.test/jobs/reused"),
+            jobs_response_values(serde_json::json!([{
+                "title":"Platform Engineer", "company":"ACME", "locations":["Mainz"],
+                "url":"https://example.test/jobs/old", "providerPostingId":"Case-42", "jobId":"old-meta"
+            }])),
+            jobs_response_values(serde_json::json!([{
+                "title":"Platform Engineer", "company":"ACME", "locations":["Mainz"],
+                "url":"https://example.test/jobs/current", "providerPostingId":"Case-42", "jobId":"current-meta"
+            }])),
         ],
     );
 
@@ -229,9 +235,15 @@ async fn rerun_reuses_durable_posting_and_creates_a_new_match() {
         )
         .await
         .unwrap();
+    let primary_source_before =
+        sqlx::query_scalar::<_, i64>("SELECT primary_source_id FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     sqlx::query(
         "UPDATE job_postings
-         SET read_state = 'read',
+         SET description_text = 'kept description',
+             read_state = 'read',
              interest_state = 'interested',
              preparation_state = 'in_progress',
              application_state = 'submitted'",
@@ -280,6 +292,22 @@ async fn rerun_reuses_durable_posting_and_creates_a_new_match() {
             .unwrap(),
         2
     );
+    let occurrence = sqlx::query_as::<_, (String, String, String, String)>(
+        "SELECT identity_kind, identity_value, provider_url, posting_meta_json
+         FROM job_posting_sources",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        occurrence,
+        (
+            "provider_posting_id".into(),
+            "Case-42".into(),
+            "https://example.test/jobs/current".into(),
+            r#"{"jobId":"current-meta"}"#.into(),
+        )
+    );
     let workflow = sqlx::query_as::<_, (String, String, String, String)>(
         "SELECT read_state, interest_state, preparation_state, application_state
          FROM job_postings",
@@ -295,6 +323,331 @@ async fn rerun_reuses_durable_posting_and_creates_a_new_match() {
             "in_progress".into(),
             "submitted".into(),
         )
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT description_text FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "kept description"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT primary_source_id FROM job_postings")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        primary_source_before
+    );
+}
+
+#[tokio::test]
+async fn url_fallback_identity_is_source_local_even_when_provider_urls_match() {
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "first", "active");
+    write_source(installed_dir.path(), "second", "active");
+    let request = create_request_for_sources(&catalog, &["first", "second"]).await;
+    let runner = runner_with_responses(
+        &pool,
+        installed_dir.path(),
+        [
+            jobs_response("https://same.test/jobs/42"),
+            jobs_response("https://same.test/jobs/42"),
+        ],
+    );
+
+    runner
+        .run(
+            catalog.begin_execution(request.id).await.unwrap(),
+            Context {
+                cancellation: None,
+                geo: None,
+                source_admission: SourceAdmission::ActiveOnly,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(row_count(&pool, "job_postings").await, 1);
+    let identities = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT source_key, identity_kind, identity_value
+         FROM job_posting_sources ORDER BY source_key",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        identities,
+        vec![
+            (
+                "first".into(),
+                "normalized_url".into(),
+                "https://same.test/jobs/42".into()
+            ),
+            (
+                "second".into(),
+                "normalized_url".into(),
+                "https://same.test/jobs/42".into()
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn provider_id_and_url_fallback_do_not_correlate_by_provider_url() {
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "fixture", "active");
+    let request = create_request(&catalog, "fixture").await;
+    let runner = runner_with_responses(
+        &pool,
+        installed_dir.path(),
+        [
+            jobs_response("https://same.test/jobs/42"),
+            jobs_response_values(serde_json::json!([{
+                "title":"Platform Engineering Manager", "company":"ACME", "locations":["Mainz"],
+                "url":"https://same.test/jobs/42", "providerPostingId":"42"
+            }])),
+        ],
+    );
+
+    for _ in 0..2 {
+        runner
+            .run(
+                catalog.begin_execution(request.id).await.unwrap(),
+                Context {
+                    cancellation: None,
+                    geo: None,
+                    source_admission: SourceAdmission::ActiveOnly,
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(row_count(&pool, "job_postings").await, 2);
+    let kinds = sqlx::query_scalar::<_, String>(
+        "SELECT identity_kind FROM job_posting_sources ORDER BY id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(kinds, vec!["normalized_url", "provider_posting_id"]);
+}
+
+#[tokio::test]
+async fn several_exact_identities_to_one_posting_survive_semantic_divergence() {
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "first", "active");
+    write_source(installed_dir.path(), "second", "active");
+    let request = create_request_for_sources(&catalog, &["first", "second"]).await;
+    let response = |source: &str, title: &str, provider_id: &str| {
+        jobs_response_values(serde_json::json!([{
+            "title":title, "company":"ACME", "locations":["Mainz"],
+            "url":format!("https://{source}.test/42"), "providerPostingId":provider_id
+        }]))
+    };
+    let runner = runner_with_responses(
+        &pool,
+        installed_dir.path(),
+        [
+            response("first", "Platform Engineer", "first-42"),
+            response("second", "Platform Engineer", "second-42"),
+            response("first", "Platform Engineer", "first-42"),
+            response("second", "Platform Engineering Manager", "second-42"),
+        ],
+    );
+
+    for _ in 0..2 {
+        let outcome = runner
+            .run(
+                catalog.begin_execution(request.id).await.unwrap(),
+                Context {
+                    cancellation: None,
+                    geo: None,
+                    source_admission: SourceAdmission::ActiveOnly,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(outcome.matched_posting_count, 1);
+    }
+
+    assert_eq!(row_count(&pool, "job_postings").await, 1);
+    assert_eq!(row_count(&pool, "job_posting_sources").await, 2);
+    assert_eq!(row_count(&pool, "matches").await, 2);
+}
+
+#[tokio::test]
+async fn exact_identity_conflict_rolls_back_the_complete_terminal_transaction() {
+    let pool = migrated_pool().await;
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "first", "active");
+    write_source(installed_dir.path(), "second", "active");
+
+    for (source, title, provider_id) in [
+        ("first", "Platform Engineer", "first-42"),
+        ("second", "Platform Engineering Manager", "second-42"),
+    ] {
+        let request = create_request(&catalog, source).await;
+        let runner = runner_with_responses(
+            &pool,
+            installed_dir.path(),
+            [jobs_response_values(serde_json::json!([{
+                "title":title, "company":"ACME", "locations":["Mainz"],
+                "url":format!("https://{source}.test/42"), "providerPostingId":provider_id
+            }]))],
+        );
+        runner
+            .run(
+                catalog.begin_execution(request.id).await.unwrap(),
+                Context {
+                    cancellation: None,
+                    geo: None,
+                    source_admission: SourceAdmission::ActiveOnly,
+                },
+            )
+            .await
+            .unwrap();
+    }
+    sqlx::query("UPDATE job_postings SET title = 'Platform Engineer'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let conflict_request = create_request_for_sources(&catalog, &["first", "second"]).await;
+    let runner = runner_with_responses(
+        &pool,
+        installed_dir.path(),
+        [
+            jobs_response_values(serde_json::json!([
+                {
+                    "title":"Cloud Engineer", "company":"ACME", "locations":["Mainz"],
+                    "url":"https://first.test/rollback", "providerPostingId":"rollback-new"
+                },
+                {
+                    "title":"Platform Engineer", "company":"ACME", "locations":["Mainz"],
+                    "url":"https://first.test/current", "providerPostingId":"first-42"
+                }
+            ])),
+            jobs_response_values(serde_json::json!([{
+                "title":"Platform Engineer", "company":"ACME", "locations":["Mainz"],
+                "url":"https://second.test/current", "providerPostingId":"second-42"
+            }])),
+        ],
+    );
+    let before = (
+        row_count(&pool, "search_runs").await,
+        row_count(&pool, "job_postings").await,
+        row_count(&pool, "job_posting_sources").await,
+        row_count(&pool, "matches").await,
+    );
+
+    let error = runner
+        .run(
+            catalog.begin_execution(conflict_request.id).await.unwrap(),
+            Context {
+                cancellation: None,
+                geo: None,
+                source_admission: SourceAdmission::ActiveOnly,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        search_runs::Error::PostingIdentityConflict { ref posting_ids }
+            if posting_ids.len() == 2 && posting_ids[0] < posting_ids[1]
+    ));
+    assert_eq!(
+        before,
+        (
+            row_count(&pool, "search_runs").await,
+            row_count(&pool, "job_postings").await,
+            row_count(&pool, "job_posting_sources").await,
+            row_count(&pool, "matches").await,
+        )
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM job_posting_sources WHERE identity_value = 'rollback-new'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    let provider_urls = sqlx::query_scalar::<_, String>(
+        "SELECT provider_url FROM job_posting_sources ORDER BY identity_value",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        provider_urls,
+        vec!["https://first.test/42", "https://second.test/42"]
+    );
+    let latest = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT last_run_at, last_run_status FROM search_requests WHERE id = ?1",
+    )
+    .bind(conflict_request.id.get())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(latest, (None, None));
+}
+
+#[tokio::test]
+async fn no_exact_hit_with_multiple_semantic_matches_selects_the_lowest_id() {
+    let pool = migrated_pool().await;
+    for _ in 0..2 {
+        sqlx::query(
+            "INSERT INTO job_postings (title, company, locations_json)
+             VALUES ('Platform Engineer', 'ACME', '[\"Mainz\"]')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let catalog = Catalog::new(pool.clone());
+    let installed_dir = tempfile::tempdir().unwrap();
+    write_source(installed_dir.path(), "fixture", "active");
+    let request = create_request(&catalog, "fixture").await;
+    let runner = runner_with_responses(
+        &pool,
+        installed_dir.path(),
+        [jobs_response_values(serde_json::json!([{
+            "title":"Platform Engineer", "company":"ACME", "locations":["Mainz"],
+            "url":"https://fixture.test/current", "providerPostingId":"new-42"
+        }]))],
+    );
+
+    runner
+        .run(
+            catalog.begin_execution(request.id).await.unwrap(),
+            Context {
+                cancellation: None,
+                geo: None,
+                source_admission: SourceAdmission::ActiveOnly,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(row_count(&pool, "job_postings").await, 2);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT posting_id FROM job_posting_sources WHERE identity_value = 'new-42'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1
     );
 }
 
@@ -395,10 +748,10 @@ async fn cross_source_merge_respects_overlapping_missing_and_disjoint_locations(
     );
     assert_eq!(row_count(&pool, "job_posting_sources").await, 6);
     let provenance = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT postings.title, sources.source_key, sources.url
+        "SELECT postings.title, sources.source_key, sources.provider_url
          FROM job_postings postings
          JOIN job_posting_sources sources ON sources.posting_id = postings.id
-         ORDER BY postings.title, sources.source_key, sources.url",
+         ORDER BY postings.title, sources.source_key, sources.provider_url",
     )
     .fetch_all(&pool)
     .await
@@ -1183,13 +1536,21 @@ fn write_source(root: &std::path::Path, key: &str, status: &str) {
                     "parse": { "type": "json" },
                     "select": { "type": "json_path", "jsonPath": "$.jobs" },
                     "extract": {
-                        "reference": { "url": {
-                            "type": "json_path", "jsonPath": "$.url", "cardinality": "one"
-                        }},
+                        "reference": {
+                            "url": {
+                                "type": "json_path", "jsonPath": "$.url", "cardinality": "one"
+                            },
+                            "providerPostingId": {
+                                "type": "json_path", "jsonPath": "$.providerPostingId", "cardinality": "optional"
+                            }
+                        },
                         "providerValues": {
                             "title": { "type": "json_path", "jsonPath": "$.title", "cardinality": "one" },
                             "company": { "type": "json_path", "jsonPath": "$.company", "cardinality": "one" },
                             "locations": { "type": "json_path", "jsonPath": "$.locations", "cardinality": "all" }
+                        },
+                        "postingMeta": {
+                            "jobId": { "type": "json_path", "jsonPath": "$.jobId", "cardinality": "optional" }
                         }
                     }
                 }]

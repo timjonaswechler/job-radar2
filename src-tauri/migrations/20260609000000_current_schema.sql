@@ -59,19 +59,21 @@ CREATE TABLE job_posting_sources(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   posting_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
   source_key TEXT NOT NULL,
+  identity_kind TEXT NOT NULL,
+  identity_value TEXT NOT NULL,
+  provider_url TEXT NOT NULL,
   source_name_snapshot TEXT NOT NULL,
-  url TEXT NOT NULL,
-  posting_meta_json TEXT NOT NULL DEFAULT '{}',
+  posting_meta_json TEXT NOT NULL,
   first_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK(trim(source_key) <> ''),
+  CHECK(identity_kind IN('provider_posting_id', 'normalized_url')),
+  CHECK(identity_value <> ''),
+  CHECK(trim(provider_url) <> ''),
   CHECK(trim(source_name_snapshot) <> ''),
-  CHECK(trim(url) <> ''),
   CHECK(json_valid(posting_meta_json) AND json_type(posting_meta_json) = 'object'),
-  UNIQUE(posting_id, source_key, url)
+  UNIQUE(source_key, identity_kind, identity_value)
 );
-CREATE INDEX idx_job_posting_sources_url
-ON job_posting_sources(url);
 CREATE INDEX idx_job_posting_sources_posting_id
 ON job_posting_sources(
   posting_id

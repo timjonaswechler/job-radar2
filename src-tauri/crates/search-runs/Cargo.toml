@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 geo = { path = "../geo" }
+job-postings = { path = "../job-postings" }
 search-requests = { path = "../search-requests" }
 search-resolution = { path = "../search-resolution" }
 source-engine = { path = "../source-engine" }

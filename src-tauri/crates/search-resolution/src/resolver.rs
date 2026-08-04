@@ -50,6 +50,7 @@ pub enum ResolutionLimitDimension {
 pub struct Candidate {
     source_key: String,
     identity: PostingOccurrenceIdentity,
+    posting_meta: BTreeMap<String, String>,
     title: String,
     company: String,
     url: String,
@@ -62,6 +63,9 @@ impl Candidate {
     }
     pub fn identity(&self) -> &PostingOccurrenceIdentity {
         &self.identity
+    }
+    pub fn posting_meta(&self) -> &BTreeMap<String, String> {
+        &self.posting_meta
     }
     pub fn title(&self) -> &str {
         &self.title
@@ -760,6 +764,7 @@ impl CandidateValues {
         Ok(Candidate {
             source_key: source_key.to_string(),
             identity: occurrence.identity.clone(),
+            posting_meta: occurrence.posting_meta.clone(),
             title: self
                 .title
                 .ok_or_else(|| failed(ResolutionFailure::ProtocolInvariant, Vec::new()))?,
