@@ -50,7 +50,7 @@ rust-unit *args:
 [group('Development loops')]
 agent-chat-proof:
     cargo test --manifest-path src-tauri/Cargo.toml --package agent
-    cargo test --manifest-path src-tauri/Cargo.toml --package job-radar --test desktop agent::chat_application::
+    cargo test --manifest-path src-tauri/Cargo.toml --package agent --test chats
     npm run test:frontend -- src/features/agent-chat/tests
 
 # Move one synthetic session through production macOS storage, locking, and Trash adapters.

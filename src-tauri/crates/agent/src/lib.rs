@@ -1,6 +1,7 @@
 pub mod api;
 mod auth;
 mod chat;
+mod chats;
 mod compaction;
 pub mod configuration;
 #[cfg(test)]
@@ -11,12 +12,17 @@ pub mod models;
 mod openai_codex;
 mod providers;
 mod registry;
-pub mod sessions;
+mod sessions;
 #[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub mod testing;
 
-pub use chat::{AgentChat, AgentChatError, AgentChatEvent, AgentChatEventStream, AgentChatState};
+pub(crate) use chat::{AgentChat, AgentChatError, AgentChatEvent, AgentChatState};
+pub use chats::{
+    ChatContent, ChatContentKind, ChatCreateInput, ChatError, ChatEvent, ChatEventKind,
+    ChatEventListener, ChatHistoryEntry, ChatId, ChatOpenInput, ChatOperationId, ChatProjection,
+    ChatReasoningLevel, ChatRecoveryNotice, ChatStatus, Chats,
+};
 pub use configuration::Configuration;
 pub use conversation::{
     AgentConversation, AssistantContent, AssistantMessage, ContentKind, ConversationEvent,

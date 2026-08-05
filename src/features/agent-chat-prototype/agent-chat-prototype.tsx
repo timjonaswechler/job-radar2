@@ -113,7 +113,9 @@ function reviewClients(projection: AgentChatProjection): {
   const chatClient: AgentChatClient = {
     create: async () => projection,
     open: async () => projection,
-    send: async () => undefined,
+    snapshot: async () => projection,
+    reload: async () => ({ ...projection, status: "ready" }),
+    send: async () => 0,
     stop: async () => true,
     setModel: async (_chatId, providerId, modelId) => ({
       ...projection,
@@ -125,7 +127,7 @@ function reviewClients(projection: AgentChatProjection): {
       ...projection,
       reasoningLevel,
     }),
-    compact: async () => undefined,
+    compact: async () => 0,
     listen: async () => () => undefined,
   };
   const configurationClient: AgentConfigurationClient = {

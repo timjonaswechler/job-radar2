@@ -56,8 +56,10 @@ test("agent chat client uses the persistent application command and event contra
     reasoningLevel: "medium",
   });
   await client.open({ id: "synthetic-chat-id", systemPrompt: "synthetic prompt" });
+  await client.snapshot("synthetic-chat-id");
+  await client.reload("synthetic-chat-id");
   await client.send("synthetic-chat-id", "Hello");
-  await client.stop("synthetic-chat-id");
+  await client.stop("synthetic-chat-id", 17);
   await client.setModel("synthetic-chat-id", "provider-two", "model-two");
   await client.setReasoningLevel("synthetic-chat-id", "high");
   await client.compact("synthetic-chat-id", null);
@@ -84,10 +86,21 @@ test("agent chat client uses the persistent application command and event contra
       },
     },
     {
+      command: "snapshot_agent_chat",
+      args: { chatId: "synthetic-chat-id" },
+    },
+    {
+      command: "reload_agent_chat",
+      args: { chatId: "synthetic-chat-id" },
+    },
+    {
       command: "send_agent_chat_message",
       args: { chatId: "synthetic-chat-id", text: "Hello" },
     },
-    { command: "stop_agent_chat", args: { chatId: "synthetic-chat-id" } },
+    {
+      command: "stop_agent_chat",
+      args: { chatId: "synthetic-chat-id", operationId: 17 },
+    },
     {
       command: "set_agent_chat_model",
       args: {

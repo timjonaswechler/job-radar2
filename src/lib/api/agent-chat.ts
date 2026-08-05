@@ -50,6 +50,8 @@ export type AgentChatProjection = {
   recoveryNotices: AgentChatRecoveryNotice[];
 };
 
+export type AgentChatOperationId = number;
+
 export type AgentChatApplicationError = {
   code?: string;
   message?: string;
@@ -104,8 +106,10 @@ export const AGENT_CHAT_EVENT = "agent-chat-event";
 export type AgentChatClient = {
   create(input: AgentChatCreateInput): Promise<AgentChatProjection>;
   open(input: AgentChatOpenInput): Promise<AgentChatProjection>;
-  send(chatId: string, text: string): Promise<void>;
-  stop(chatId: string): Promise<boolean>;
+  snapshot(chatId: string): Promise<AgentChatProjection>;
+  reload(chatId: string): Promise<AgentChatProjection>;
+  send(chatId: string, text: string): Promise<AgentChatOperationId>;
+  stop(chatId: string, operationId: AgentChatOperationId | null): Promise<boolean>;
   setModel(
     chatId: string,
     providerId: string,
@@ -115,7 +119,7 @@ export type AgentChatClient = {
     chatId: string,
     reasoningLevel: AgentChatReasoningLevel,
   ): Promise<AgentChatProjection>;
-  compact(chatId: string, focus: string | null): Promise<void>;
+  compact(chatId: string, focus: string | null): Promise<AgentChatOperationId>;
   listen(handler: (event: AgentChatApplicationEvent) => void): Promise<UnlistenFn>;
 };
 
@@ -132,9 +136,12 @@ export function createAgentChatClient(
   return {
     create: (input) => invokeCommand("create_agent_chat", { input }),
     open: (input) => invokeCommand("open_agent_chat", { input }),
+    snapshot: (chatId) => invokeCommand("snapshot_agent_chat", { chatId }),
+    reload: (chatId) => invokeCommand("reload_agent_chat", { chatId }),
     send: (chatId, text) =>
       invokeCommand("send_agent_chat_message", { chatId, text }),
-    stop: (chatId) => invokeCommand("stop_agent_chat", { chatId }),
+    stop: (chatId, operationId) =>
+      invokeCommand("stop_agent_chat", { chatId, operationId }),
     setModel: (chatId, providerId, modelId) =>
       invokeCommand("set_agent_chat_model", { chatId, providerId, modelId }),
     setReasoningLevel: (chatId, reasoningLevel) =>

@@ -8,10 +8,11 @@ use super::{
     AssistantContent, AssistantMessage, ContentKind, ConversationProvider, ConversationRequest,
     ProviderEventStream, TurnCancellation,
 };
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -19,23 +20,33 @@ use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct AgentChatId(String);
+pub struct ChatId(String);
 
-impl AgentChatId {
+impl ChatId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-impl fmt::Debug for AgentChatId {
+impl fmt::Debug for ChatId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("AgentChatId([redacted])")
+        formatter.write_str("ChatId([redacted])")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct ChatOperationId(u64);
+
+impl ChatOperationId {
+    pub fn as_u64(self) -> u64 {
+        self.0
     }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ApplicationReasoningLevel {
+pub enum ChatReasoningLevel {
     Off,
     Minimal,
     Low,
@@ -45,21 +56,21 @@ pub enum ApplicationReasoningLevel {
     Max,
 }
 
-impl From<ApplicationReasoningLevel> for ReasoningLevel {
-    fn from(value: ApplicationReasoningLevel) -> Self {
+impl From<ChatReasoningLevel> for ReasoningLevel {
+    fn from(value: ChatReasoningLevel) -> Self {
         match value {
-            ApplicationReasoningLevel::Off => Self::Off,
-            ApplicationReasoningLevel::Minimal => Self::Minimal,
-            ApplicationReasoningLevel::Low => Self::Low,
-            ApplicationReasoningLevel::Medium => Self::Medium,
-            ApplicationReasoningLevel::High => Self::High,
-            ApplicationReasoningLevel::XHigh => Self::XHigh,
-            ApplicationReasoningLevel::Max => Self::Max,
+            ChatReasoningLevel::Off => Self::Off,
+            ChatReasoningLevel::Minimal => Self::Minimal,
+            ChatReasoningLevel::Low => Self::Low,
+            ChatReasoningLevel::Medium => Self::Medium,
+            ChatReasoningLevel::High => Self::High,
+            ChatReasoningLevel::XHigh => Self::XHigh,
+            ChatReasoningLevel::Max => Self::Max,
         }
     }
 }
 
-impl From<ReasoningLevel> for ApplicationReasoningLevel {
+impl From<ReasoningLevel> for ChatReasoningLevel {
     fn from(value: ReasoningLevel) -> Self {
         match value {
             ReasoningLevel::Off => Self::Off,
@@ -76,23 +87,23 @@ impl From<ReasoningLevel> for ApplicationReasoningLevel {
 /// The system prompt is opaque application input. It is never projected or logged.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChatCreateInput {
+pub struct ChatCreateInput {
     pub system_prompt: String,
     pub provider_id: String,
     pub model_id: String,
-    pub reasoning_level: ApplicationReasoningLevel,
+    pub reasoning_level: ChatReasoningLevel,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChatOpenInput {
-    pub id: AgentChatId,
+pub struct ChatOpenInput {
+    pub id: ChatId,
     pub system_prompt: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentChatStatus {
+pub enum ChatStatus {
     Ready,
     Running,
     ModelUnavailable,
@@ -104,7 +115,7 @@ pub enum AgentChatStatus {
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum AgentChatContent {
+pub enum ChatContent {
     Text { text: String },
     Reasoning { text: String },
     RedactedReasoning,
@@ -112,10 +123,10 @@ pub enum AgentChatContent {
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum AgentChatHistoryEntry {
+pub enum ChatHistoryEntry {
     Turn {
         user: String,
-        assistant: Vec<AgentChatContent>,
+        assistant: Vec<ChatContent>,
     },
     Compaction {
         reason: Option<String>,
@@ -125,22 +136,22 @@ pub enum AgentChatHistoryEntry {
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChatProjection {
-    pub id: AgentChatId,
-    pub status: AgentChatStatus,
-    pub history: Vec<AgentChatHistoryEntry>,
+pub struct ChatProjection {
+    pub id: ChatId,
+    pub status: ChatStatus,
+    pub history: Vec<ChatHistoryEntry>,
     pub selected_provider_id: Option<String>,
     pub selected_model_id: Option<String>,
-    pub reasoning_level: ApplicationReasoningLevel,
+    pub reasoning_level: ChatReasoningLevel,
     pub context_tokens: u64,
     pub context_window: Option<u64>,
-    pub recovery_notices: Vec<AgentChatRecoveryNotice>,
+    pub recovery_notices: Vec<ChatRecoveryNotice>,
 }
 
-impl fmt::Debug for AgentChatProjection {
+impl fmt::Debug for ChatProjection {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("AgentChatProjection")
+            .debug_struct("ChatProjection")
             .field("id", &self.id)
             .field("status", &self.status)
             .field("history_entries", &self.history.len())
@@ -154,55 +165,55 @@ impl fmt::Debug for AgentChatProjection {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentChatRecoveryNotice {
+pub enum ChatRecoveryNotice {
     IncompleteFinalTurnDiscarded,
 }
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChatApplicationError {
+pub struct ChatError {
     pub code: &'static str,
     pub message: &'static str,
 }
 
-impl fmt::Debug for AgentChatApplicationError {
+impl fmt::Debug for ChatError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("AgentChatApplicationError")
+            .debug_struct("ChatError")
             .field("code", &self.code)
             .field("message", &self.message)
             .finish()
     }
 }
 
-impl fmt::Display for AgentChatApplicationError {
+impl fmt::Display for ChatError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.message)
     }
 }
 
-impl std::error::Error for AgentChatApplicationError {}
+impl std::error::Error for ChatError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentChatContentKind {
+pub enum ChatContentKind {
     Text,
     Reasoning,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChatApplicationEvent {
-    pub chat_id: AgentChatId,
+pub struct ChatEvent {
+    pub chat_id: ChatId,
     pub sequence: u64,
     #[serde(flatten)]
-    pub event: AgentChatApplicationEventKind,
+    pub event: ChatEventKind,
 }
 
-impl fmt::Debug for AgentChatApplicationEvent {
+impl fmt::Debug for ChatEvent {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("AgentChatApplicationEvent")
+            .debug_struct("ChatEvent")
             .field("chat_id", &self.chat_id)
             .field("sequence", &self.sequence)
             .field("event", &self.event.safe_name())
@@ -212,11 +223,11 @@ impl fmt::Debug for AgentChatApplicationEvent {
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum AgentChatApplicationEventKind {
+pub enum ChatEventKind {
     Started,
     ContentStarted {
         index: usize,
-        kind: AgentChatContentKind,
+        kind: ChatContentKind,
     },
     ContentDelta {
         index: usize,
@@ -226,37 +237,37 @@ pub enum AgentChatApplicationEventKind {
         index: usize,
     },
     Completed {
-        chat: AgentChatProjection,
+        chat: ChatProjection,
     },
     Failed {
-        error: AgentChatApplicationError,
+        error: ChatError,
     },
     Aborted,
     NotSaved {
-        response: Vec<AgentChatContent>,
-        error: AgentChatApplicationError,
-        chat: AgentChatProjection,
+        response: Vec<ChatContent>,
+        error: ChatError,
+        chat: ChatProjection,
     },
     CompactionStarted {
         reason: String,
     },
     CompactionCompleted {
         reason: String,
-        chat: AgentChatProjection,
+        chat: ChatProjection,
     },
     CompactionCancelled {
         reason: String,
     },
     CompactionFailed {
-        error: AgentChatApplicationError,
+        error: ChatError,
     },
     CompactionNotSaved {
-        error: AgentChatApplicationError,
-        chat: AgentChatProjection,
+        error: ChatError,
+        chat: ChatProjection,
     },
 }
 
-impl AgentChatApplicationEventKind {
+impl ChatEventKind {
     fn safe_name(&self) -> &'static str {
         match self {
             Self::Started => "started",
@@ -276,14 +287,14 @@ impl AgentChatApplicationEventKind {
     }
 }
 
-impl fmt::Debug for AgentChatApplicationEventKind {
+impl fmt::Debug for ChatEventKind {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.safe_name())
     }
 }
 
-pub trait AgentChatEventListener: Send + Sync + 'static {
-    fn emit(&self, event: AgentChatApplicationEvent);
+pub trait ChatEventListener: Send + Sync + 'static {
+    fn emit(&self, event: ChatEvent);
 }
 
 #[derive(Clone)]
@@ -314,31 +325,66 @@ enum OperationKind {
     Compact(Option<String>),
 }
 
-pub struct AgentChatApplication {
+struct ChatSlot {
+    chat: AsyncMutex<AgentChat>,
+    projection: Mutex<ChatProjection>,
+}
+
+struct OperationGuard {
+    chats: Arc<Chats>,
+    slot: Arc<ChatSlot>,
+    id: ChatId,
+    generation: u64,
+    released: bool,
+}
+
+impl OperationGuard {
+    fn release(&mut self) -> bool {
+        if self.released {
+            return false;
+        }
+        let current = self
+            .chats
+            .release_operation(&self.slot, &self.id, self.generation);
+        self.released = true;
+        current
+    }
+}
+
+impl Drop for OperationGuard {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+
+pub struct Chats {
     manager: SessionManager,
     provider: SharedProvider,
-    chats: Mutex<HashMap<AgentChatId, Arc<AsyncMutex<AgentChat>>>>,
-    operations: Mutex<HashMap<AgentChatId, Operation>>,
+    chats: Mutex<HashMap<ChatId, Arc<ChatSlot>>>,
+    operations: Mutex<HashMap<ChatId, Operation>>,
     next_generation: AtomicU64,
     next_sequence: AtomicU64,
 }
 
-impl AgentChatApplication {
-    pub fn new(manager: SessionManager, provider: impl ConversationProvider + 'static) -> Self {
-        Self {
+impl Chats {
+    pub fn new(
+        agents_data_root: impl AsRef<Path>,
+        provider: impl ConversationProvider + 'static,
+    ) -> Result<Self, ChatError> {
+        let root = prepare_agents_root(agents_data_root.as_ref())?;
+        let manager = SessionManager::from_agents_data_root(&root)
+            .map_err(|error| map_session_error(error.code()))?;
+        Ok(Self {
             manager,
             provider: SharedProvider(Arc::new(provider)),
             chats: Mutex::new(HashMap::new()),
             operations: Mutex::new(HashMap::new()),
             next_generation: AtomicU64::new(1),
             next_sequence: AtomicU64::new(1),
-        }
+        })
     }
 
-    pub fn create(
-        &self,
-        input: AgentChatCreateInput,
-    ) -> Result<AgentChatProjection, AgentChatApplicationError> {
+    pub fn create(&self, input: ChatCreateInput) -> Result<ChatProjection, ChatError> {
         let provider = ProviderId::new(input.provider_id).map_err(|_| invalid_request())?;
         let model = ModelId::new(input.model_id).map_err(|_| invalid_request())?;
         let chat = AgentChat::create(
@@ -351,20 +397,28 @@ impl AgentChatApplication {
         )
         .map_err(map_chat_error)?;
         let projection = project_chat(&chat, false);
+        let id = projection.id.clone();
         self.chats
             .lock()
             .expect("Agent Chat registry lock poisoned")
-            .insert(projection.id.clone(), Arc::new(AsyncMutex::new(chat)));
+            .insert(
+                id,
+                Arc::new(ChatSlot {
+                    chat: AsyncMutex::new(chat),
+                    projection: Mutex::new(projection.clone()),
+                }),
+            );
         Ok(projection)
     }
 
-    pub async fn open(
-        &self,
-        input: AgentChatOpenInput,
-    ) -> Result<AgentChatProjection, AgentChatApplicationError> {
-        if let Some(chat) = self.chat(&input.id) {
-            let chat = chat.lock().await;
-            return Ok(project_chat(&chat, self.is_running(&input.id)));
+    pub async fn open(&self, input: ChatOpenInput) -> Result<ChatProjection, ChatError> {
+        if let Some(slot) = self.chat(&input.id) {
+            let projection = slot
+                .projection
+                .lock()
+                .expect("Agent Chat projection lock poisoned")
+                .clone();
+            return Ok(projection);
         }
         let session_id = parse_id(&input.id)?;
         let chat = AgentChat::open(
@@ -375,41 +429,64 @@ impl AgentChatApplication {
         )
         .map_err(map_chat_error)?;
         let projection = project_chat(&chat, false);
-        self.chats
+        let mut chats = self
+            .chats
             .lock()
-            .expect("Agent Chat registry lock poisoned")
-            .insert(input.id, Arc::new(AsyncMutex::new(chat)));
+            .expect("Agent Chat registry lock poisoned");
+        if let Some(slot) = chats.get(&input.id) {
+            return Ok(slot
+                .projection
+                .lock()
+                .expect("Agent Chat projection lock poisoned")
+                .clone());
+        }
+        chats.insert(
+            input.id,
+            Arc::new(ChatSlot {
+                chat: AsyncMutex::new(chat),
+                projection: Mutex::new(projection.clone()),
+            }),
+        );
         Ok(projection)
     }
 
-    pub async fn snapshot(
-        &self,
-        id: &AgentChatId,
-    ) -> Result<AgentChatProjection, AgentChatApplicationError> {
-        let chat = self.chat(id).ok_or_else(chat_not_open)?;
-        let chat = chat.lock().await;
-        Ok(project_chat(&chat, self.is_running(id)))
+    pub async fn snapshot(&self, id: &ChatId) -> Result<ChatProjection, ChatError> {
+        let slot = self.chat(id).ok_or_else(chat_not_open)?;
+        let projection = slot
+            .projection
+            .lock()
+            .expect("Agent Chat projection lock poisoned")
+            .clone();
+        Ok(projection)
     }
 
     pub fn send(
         self: &Arc<Self>,
-        id: AgentChatId,
+        id: ChatId,
         text: String,
-        listener: Arc<dyn AgentChatEventListener>,
-    ) -> Result<(), AgentChatApplicationError> {
+        listener: Arc<dyn ChatEventListener>,
+    ) -> Result<ChatOperationId, ChatError> {
         self.start_operation(id, OperationKind::Send(text), listener)
     }
 
     pub fn compact(
         self: &Arc<Self>,
-        id: AgentChatId,
+        id: ChatId,
         focus: Option<String>,
-        listener: Arc<dyn AgentChatEventListener>,
-    ) -> Result<(), AgentChatApplicationError> {
+        listener: Arc<dyn ChatEventListener>,
+    ) -> Result<ChatOperationId, ChatError> {
         self.start_operation(id, OperationKind::Compact(focus), listener)
     }
 
-    pub fn stop(&self, id: &AgentChatId) -> bool {
+    pub fn stop(&self, id: &ChatId, operation_id: ChatOperationId) -> bool {
+        self.stop_matching(id, Some(operation_id))
+    }
+
+    pub fn stop_current(&self, id: &ChatId) -> bool {
+        self.stop_matching(id, None)
+    }
+
+    fn stop_matching(&self, id: &ChatId, expected: Option<ChatOperationId>) -> bool {
         let mut operations = self
             .operations
             .lock()
@@ -417,6 +494,9 @@ impl AgentChatApplication {
         let Some(operation) = operations.get_mut(id) else {
             return false;
         };
+        if expected.is_some_and(|expected| expected.0 != operation.generation) {
+            return false;
+        }
         operation.stop_requested = true;
         if let Some(cancellation) = &operation.cancellation {
             cancellation.cancel();
@@ -426,43 +506,61 @@ impl AgentChatApplication {
 
     pub async fn select_model(
         &self,
-        id: &AgentChatId,
+        id: &ChatId,
         provider_id: String,
         model_id: String,
-    ) -> Result<AgentChatProjection, AgentChatApplicationError> {
+    ) -> Result<ChatProjection, ChatError> {
+        let slot = self.chat(id).ok_or_else(chat_not_open)?;
+        let mut chat = slot.chat.lock().await;
         self.ensure_idle(id)?;
-        let chat = self.chat(id).ok_or_else(chat_not_open)?;
-        let mut chat = chat.lock().await;
-        self.ensure_idle(id)?;
-        chat.select_model(
+        if let Err(error) = chat.select_model(
             ProviderId::new(provider_id).map_err(|_| invalid_request())?,
             ModelId::new(model_id).map_err(|_| invalid_request())?,
-        )
-        .map_err(map_chat_error)?;
-        Ok(project_chat(&chat, false))
+        ) {
+            let projection = project_chat(&chat, false);
+            self.replace_projection(&slot, projection);
+            return Err(map_chat_error(error));
+        }
+        let projection = project_chat(&chat, false);
+        self.replace_projection(&slot, projection.clone());
+        Ok(projection)
     }
 
     pub async fn set_reasoning_level(
         &self,
-        id: &AgentChatId,
-        reasoning_level: ApplicationReasoningLevel,
-    ) -> Result<AgentChatProjection, AgentChatApplicationError> {
+        id: &ChatId,
+        reasoning_level: ChatReasoningLevel,
+    ) -> Result<ChatProjection, ChatError> {
+        let slot = self.chat(id).ok_or_else(chat_not_open)?;
+        let mut chat = slot.chat.lock().await;
         self.ensure_idle(id)?;
-        let chat = self.chat(id).ok_or_else(chat_not_open)?;
-        let mut chat = chat.lock().await;
+        if let Err(error) = chat.set_reasoning_level(reasoning_level.into()) {
+            let projection = project_chat(&chat, false);
+            self.replace_projection(&slot, projection);
+            return Err(map_chat_error(error));
+        }
+        let projection = project_chat(&chat, false);
+        self.replace_projection(&slot, projection.clone());
+        Ok(projection)
+    }
+
+    pub async fn reload(&self, id: &ChatId) -> Result<ChatProjection, ChatError> {
+        let slot = self.chat(id).ok_or_else(chat_not_open)?;
+        let mut chat = slot.chat.lock().await;
         self.ensure_idle(id)?;
-        chat.set_reasoning_level(reasoning_level.into())
-            .map_err(map_chat_error)?;
-        Ok(project_chat(&chat, false))
+        chat.reload().map_err(map_chat_error)?;
+        let projection = project_chat(&chat, false);
+        self.replace_projection(&slot, projection.clone());
+        Ok(projection)
     }
 
     fn start_operation(
         self: &Arc<Self>,
-        id: AgentChatId,
+        id: ChatId,
         kind: OperationKind,
-        listener: Arc<dyn AgentChatEventListener>,
-    ) -> Result<(), AgentChatApplicationError> {
-        let chat = self.chat(&id).ok_or_else(chat_not_open)?;
+        listener: Arc<dyn ChatEventListener>,
+    ) -> Result<ChatOperationId, ChatError> {
+        let slot = self.chat(&id).ok_or_else(chat_not_open)?;
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
         {
             let mut operations = self
@@ -480,25 +578,46 @@ impl AgentChatApplication {
                     stop_requested: false,
                 },
             );
+            let mut projection = slot
+                .projection
+                .lock()
+                .expect("Agent Chat projection lock poisoned");
+            projection.status = ChatStatus::Running;
         }
         let application = Arc::clone(self);
-        tauri::async_runtime::spawn(async move {
-            application
-                .run_operation(id, generation, chat, kind, listener)
-                .await;
+        let guard = OperationGuard {
+            chats: Arc::clone(self),
+            slot: Arc::clone(&slot),
+            id: id.clone(),
+            generation,
+            released: false,
+        };
+        let cleanup = Arc::clone(self);
+        let cleanup_slot = Arc::clone(&slot);
+        let cleanup_id = id.clone();
+        tokio::spawn(async move {
+            let result = std::panic::AssertUnwindSafe(
+                application.run_operation(id, generation, slot, kind, listener, guard),
+            )
+            .catch_unwind()
+            .await;
+            if result.is_err() {
+                cleanup.release_operation(&cleanup_slot, &cleanup_id, generation);
+            }
         });
-        Ok(())
+        Ok(ChatOperationId(generation))
     }
 
     async fn run_operation(
         self: Arc<Self>,
-        id: AgentChatId,
+        id: ChatId,
         generation: u64,
-        chat: Arc<AsyncMutex<AgentChat>>,
+        slot: Arc<ChatSlot>,
         kind: OperationKind,
-        listener: Arc<dyn AgentChatEventListener>,
+        listener: Arc<dyn ChatEventListener>,
+        mut guard: OperationGuard,
     ) {
-        let mut chat = chat.lock().await;
+        let mut chat = slot.chat.lock().await;
         let stream = match kind {
             OperationKind::Send(text) => chat.send(text),
             OperationKind::Compact(focus) => chat.compact(focus),
@@ -506,14 +625,17 @@ impl AgentChatApplication {
         let mut stream = match stream {
             Ok(stream) => stream,
             Err(error) => {
-                self.finish_operation_and_emit(
-                    &id,
-                    generation,
-                    listener.as_ref(),
-                    AgentChatApplicationEventKind::Failed {
-                        error: map_chat_error(error),
-                    },
-                );
+                let projected = project_chat(&chat, false);
+                self.replace_projection(&slot, projected);
+                if guard.release() {
+                    self.emit(
+                        &id,
+                        listener.as_ref(),
+                        ChatEventKind::Failed {
+                            error: map_chat_error(error),
+                        },
+                    );
+                }
                 return;
             }
         };
@@ -537,76 +659,67 @@ impl AgentChatApplication {
         }
 
         while let Some(event) = stream.next().await {
+            let terminal = stream.is_finished();
             let mut projected = project_snapshot(
                 stream.snapshot(),
                 stream.state(),
-                false,
+                !terminal,
                 Some(stream.context_window()),
             );
             projected.selected_provider_id = Some(stream.selected_provider().as_str().to_owned());
             projected.selected_model_id = Some(stream.selected_model().as_str().to_owned());
             projected.reasoning_level = stream.reasoning_level().into();
+            self.replace_projection(&slot, projected.clone());
             let event = project_event(event, projected);
-            if stream.is_finished() {
-                self.finish_operation_and_emit(&id, generation, listener.as_ref(), event);
+            if terminal {
+                if guard.release() {
+                    self.emit(&id, listener.as_ref(), event);
+                }
                 return;
             }
             self.emit(&id, listener.as_ref(), event);
         }
-        self.finish_operation(&id, generation);
+        self.replace_projection(&slot, project_chat(&chat, false));
+        guard.release();
     }
 
-    fn emit(
-        &self,
-        id: &AgentChatId,
-        listener: &dyn AgentChatEventListener,
-        event: AgentChatApplicationEventKind,
-    ) {
-        listener.emit(AgentChatApplicationEvent {
+    fn emit(&self, id: &ChatId, listener: &dyn ChatEventListener, event: ChatEventKind) {
+        listener.emit(ChatEvent {
             chat_id: id.clone(),
             sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed),
             event,
         });
     }
 
-    fn finish_operation_and_emit(
-        &self,
-        id: &AgentChatId,
-        generation: u64,
-        listener: &dyn AgentChatEventListener,
-        event: AgentChatApplicationEventKind,
-    ) {
+    fn release_operation(&self, slot: &ChatSlot, id: &ChatId, generation: u64) -> bool {
         let mut operations = self
             .operations
             .lock()
             .expect("Agent Chat operation lock poisoned");
-        if operations
+        let current = operations
             .get(id)
-            .is_some_and(|operation| operation.generation == generation)
-        {
-            listener.emit(AgentChatApplicationEvent {
-                chat_id: id.clone(),
-                sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed),
-                event,
-            });
+            .is_some_and(|operation| operation.generation == generation);
+        if current {
             operations.remove(id);
+            let mut projection = slot
+                .projection
+                .lock()
+                .expect("Agent Chat projection lock poisoned");
+            if projection.status == ChatStatus::Running {
+                projection.status = ChatStatus::Ready;
+            }
         }
+        current
     }
 
-    fn finish_operation(&self, id: &AgentChatId, generation: u64) {
-        let mut operations = self
-            .operations
+    fn replace_projection(&self, slot: &ChatSlot, projection: ChatProjection) {
+        *slot
+            .projection
             .lock()
-            .expect("Agent Chat operation lock poisoned");
-        if operations
-            .get(id)
-            .is_some_and(|operation| operation.generation == generation)
-        {
-            operations.remove(id);
-        }
+            .expect("Agent Chat projection lock poisoned") = projection;
     }
 
-    fn chat(&self, id: &AgentChatId) -> Option<Arc<AsyncMutex<AgentChat>>> {
+    fn chat(&self, id: &ChatId) -> Option<Arc<ChatSlot>> {
         self.chats
             .lock()
             .expect("Agent Chat registry lock poisoned")
@@ -614,7 +727,7 @@ impl AgentChatApplication {
             .cloned()
     }
 
-    fn ensure_idle(&self, id: &AgentChatId) -> Result<(), AgentChatApplicationError> {
+    fn ensure_idle(&self, id: &ChatId) -> Result<(), ChatError> {
         if self.is_running(id) {
             Err(chat_busy())
         } else {
@@ -622,7 +735,7 @@ impl AgentChatApplication {
         }
     }
 
-    fn is_running(&self, id: &AgentChatId) -> bool {
+    fn is_running(&self, id: &ChatId) -> bool {
         self.operations
             .lock()
             .expect("Agent Chat operation lock poisoned")
@@ -630,11 +743,27 @@ impl AgentChatApplication {
     }
 }
 
-fn parse_id(id: &AgentChatId) -> Result<SessionId, AgentChatApplicationError> {
+fn prepare_agents_root(root: &Path) -> Result<std::path::PathBuf, ChatError> {
+    if !root.is_absolute()
+        || root.file_name().and_then(|name| name.to_str()) != Some("agents")
+        || super::auth::path_is_inside_repository(root)
+        || super::auth::canonical_existing_prefix_is_inside_repository(root)
+    {
+        return Err(map_session_error(SessionErrorCode::InvalidRoot));
+    }
+    let _existing = root
+        .ancestors()
+        .find(|ancestor| ancestor.exists())
+        .ok_or_else(|| map_session_error(SessionErrorCode::InvalidRoot))?;
+    std::fs::create_dir_all(root).map_err(|_| map_session_error(SessionErrorCode::InvalidRoot))?;
+    std::fs::canonicalize(root).map_err(|_| map_session_error(SessionErrorCode::InvalidRoot))
+}
+
+fn parse_id(id: &ChatId) -> Result<SessionId, ChatError> {
     SessionId::from_str(id.as_str()).map_err(|_| invalid_request())
 }
 
-fn project_chat(chat: &AgentChat, running: bool) -> AgentChatProjection {
+fn project_chat(chat: &AgentChat, running: bool) -> ChatProjection {
     let mut projection = project_snapshot(
         chat.snapshot(),
         chat.state(),
@@ -654,21 +783,21 @@ fn project_snapshot(
     state: AgentChatState,
     running: bool,
     context_window: Option<u64>,
-) -> AgentChatProjection {
-    AgentChatProjection {
-        id: AgentChatId(snapshot.id().to_string()),
+) -> ChatProjection {
+    ChatProjection {
+        id: ChatId(snapshot.id().to_string()),
         status: if running {
-            AgentChatStatus::Running
+            ChatStatus::Running
         } else {
             match state {
-                AgentChatState::Ready => AgentChatStatus::Ready,
-                AgentChatState::ModelUnavailable => AgentChatStatus::ModelUnavailable,
-                AgentChatState::NotSaved => AgentChatStatus::NotSaved,
+                AgentChatState::Ready => ChatStatus::Ready,
+                AgentChatState::ModelUnavailable => ChatStatus::ModelUnavailable,
+                AgentChatState::NotSaved => ChatStatus::NotSaved,
                 AgentChatState::ReadOnly => match snapshot.access() {
-                    SessionAccess::ReadOnlyLocked => AgentChatStatus::ReadOnlyLocked,
-                    SessionAccess::ReadOnlyUnsupported => AgentChatStatus::ReadOnlyUnsupported,
-                    SessionAccess::Damaged => AgentChatStatus::Damaged,
-                    SessionAccess::Writable => AgentChatStatus::Ready,
+                    SessionAccess::ReadOnlyLocked => ChatStatus::ReadOnlyLocked,
+                    SessionAccess::ReadOnlyUnsupported => ChatStatus::ReadOnlyUnsupported,
+                    SessionAccess::Damaged => ChatStatus::Damaged,
+                    SessionAccess::Writable => ChatStatus::Ready,
                 },
             }
         },
@@ -676,23 +805,21 @@ fn project_snapshot(
             .visible_history()
             .iter()
             .map(|entry| match entry {
-                VisibleHistoryEntry::Turn(turn) => AgentChatHistoryEntry::Turn {
+                VisibleHistoryEntry::Turn(turn) => ChatHistoryEntry::Turn {
                     user: turn.user().to_owned(),
                     assistant: turn
                         .assistant()
                         .iter()
                         .map(|block| match block {
-                            VisibleBlock::Text(text) => {
-                                AgentChatContent::Text { text: text.clone() }
-                            }
+                            VisibleBlock::Text(text) => ChatContent::Text { text: text.clone() },
                             VisibleBlock::Thinking(text) => {
-                                AgentChatContent::Reasoning { text: text.clone() }
+                                ChatContent::Reasoning { text: text.clone() }
                             }
-                            VisibleBlock::RedactedThinking => AgentChatContent::RedactedReasoning,
+                            VisibleBlock::RedactedThinking => ChatContent::RedactedReasoning,
                         })
                         .collect(),
                 },
-                VisibleHistoryEntry::Compaction(compaction) => AgentChatHistoryEntry::Compaction {
+                VisibleHistoryEntry::Compaction(compaction) => ChatHistoryEntry::Compaction {
                     reason: compaction.reason().map(str::to_owned),
                     tokens_before: compaction.tokens_before(),
                 },
@@ -712,81 +839,64 @@ fn project_snapshot(
             .iter()
             .map(|notice| match notice {
                 RecoveryNotice::IncompleteFinalTurnDiscarded => {
-                    AgentChatRecoveryNotice::IncompleteFinalTurnDiscarded
+                    ChatRecoveryNotice::IncompleteFinalTurnDiscarded
                 }
             })
             .collect(),
     }
 }
 
-fn project_event(
-    event: AgentChatEvent,
-    chat: AgentChatProjection,
-) -> AgentChatApplicationEventKind {
+fn project_event(event: AgentChatEvent, chat: ChatProjection) -> ChatEventKind {
     match event {
-        AgentChatEvent::Started => AgentChatApplicationEventKind::Started,
-        AgentChatEvent::ContentStarted { index, kind } => {
-            AgentChatApplicationEventKind::ContentStarted {
-                index,
-                kind: match kind {
-                    ContentKind::Text => AgentChatContentKind::Text,
-                    ContentKind::Reasoning => AgentChatContentKind::Reasoning,
-                },
-            }
-        }
+        AgentChatEvent::Started => ChatEventKind::Started,
+        AgentChatEvent::ContentStarted { index, kind } => ChatEventKind::ContentStarted {
+            index,
+            kind: match kind {
+                ContentKind::Text => ChatContentKind::Text,
+                ContentKind::Reasoning => ChatContentKind::Reasoning,
+            },
+        },
         AgentChatEvent::ContentDelta { index, delta } => {
-            AgentChatApplicationEventKind::ContentDelta { index, delta }
+            ChatEventKind::ContentDelta { index, delta }
         }
-        AgentChatEvent::ContentFinished { index } => {
-            AgentChatApplicationEventKind::ContentFinished { index }
-        }
-        AgentChatEvent::Completed { .. } => AgentChatApplicationEventKind::Completed { chat },
-        AgentChatEvent::Failed { error } => AgentChatApplicationEventKind::Failed {
+        AgentChatEvent::ContentFinished { index } => ChatEventKind::ContentFinished { index },
+        AgentChatEvent::Completed { .. } => ChatEventKind::Completed { chat },
+        AgentChatEvent::Failed { error } => ChatEventKind::Failed {
             error: map_agent_error(error),
         },
-        AgentChatEvent::Aborted => AgentChatApplicationEventKind::Aborted,
-        AgentChatEvent::NotSaved { message, error } => AgentChatApplicationEventKind::NotSaved {
+        AgentChatEvent::Aborted => ChatEventKind::Aborted,
+        AgentChatEvent::NotSaved { message, error } => ChatEventKind::NotSaved {
             response: project_message(&message),
             error: map_session_error(error.code()),
             chat,
         },
-        AgentChatEvent::CompactionStarted { reason } => {
-            AgentChatApplicationEventKind::CompactionStarted {
-                reason: compaction_reason(reason).to_owned(),
-            }
-        }
-        AgentChatEvent::CompactionCompleted { reason } => {
-            AgentChatApplicationEventKind::CompactionCompleted {
-                reason: compaction_reason(reason).to_owned(),
-                chat,
-            }
-        }
-        AgentChatEvent::CompactionCancelled { reason } => {
-            AgentChatApplicationEventKind::CompactionCancelled {
-                reason: compaction_reason(reason).to_owned(),
-            }
-        }
-        AgentChatEvent::CompactionFailed { error } => {
-            AgentChatApplicationEventKind::CompactionFailed {
-                error: map_agent_error(error),
-            }
-        }
-        AgentChatEvent::CompactionNotSaved { error } => {
-            AgentChatApplicationEventKind::CompactionNotSaved {
-                error: map_session_error(error.code()),
-                chat,
-            }
-        }
+        AgentChatEvent::CompactionStarted { reason } => ChatEventKind::CompactionStarted {
+            reason: compaction_reason(reason).to_owned(),
+        },
+        AgentChatEvent::CompactionCompleted { reason } => ChatEventKind::CompactionCompleted {
+            reason: compaction_reason(reason).to_owned(),
+            chat,
+        },
+        AgentChatEvent::CompactionCancelled { reason } => ChatEventKind::CompactionCancelled {
+            reason: compaction_reason(reason).to_owned(),
+        },
+        AgentChatEvent::CompactionFailed { error } => ChatEventKind::CompactionFailed {
+            error: map_agent_error(error),
+        },
+        AgentChatEvent::CompactionNotSaved { error } => ChatEventKind::CompactionNotSaved {
+            error: map_session_error(error.code()),
+            chat,
+        },
     }
 }
 
-fn project_message(message: &AssistantMessage) -> Vec<AgentChatContent> {
+fn project_message(message: &AssistantMessage) -> Vec<ChatContent> {
     message
         .content()
         .iter()
         .map(|content| match content {
-            AssistantContent::Text(text) => AgentChatContent::Text { text: text.clone() },
-            AssistantContent::Reasoning(text) => AgentChatContent::Reasoning { text: text.clone() },
+            AssistantContent::Text(text) => ChatContent::Text { text: text.clone() },
+            AssistantContent::Reasoning(text) => ChatContent::Reasoning { text: text.clone() },
         })
         .collect()
 }
@@ -799,7 +909,7 @@ fn compaction_reason(reason: CompactionReason) -> &'static str {
     }
 }
 
-fn map_chat_error(error: AgentChatError) -> AgentChatApplicationError {
+fn map_chat_error(error: AgentChatError) -> ChatError {
     match error {
         AgentChatError::Agent(error) => map_agent_error(error),
         AgentChatError::Session(error) => map_session_error(error.code()),
@@ -808,97 +918,95 @@ fn map_chat_error(error: AgentChatError) -> AgentChatApplicationError {
     }
 }
 
-fn map_agent_error(error: AgentError) -> AgentChatApplicationError {
+fn map_agent_error(error: AgentError) -> ChatError {
     match error.category {
-        AgentErrorCategory::Authentication => AgentChatApplicationError {
+        AgentErrorCategory::Authentication => ChatError {
             code: "authentication_unavailable",
             message: "AI provider authentication is unavailable",
         },
-        AgentErrorCategory::InvalidConfiguration => AgentChatApplicationError {
+        AgentErrorCategory::InvalidConfiguration => ChatError {
             code: "invalid_configuration",
             message: "Agent Chat configuration is unavailable",
         },
-        AgentErrorCategory::RateLimited => AgentChatApplicationError {
+        AgentErrorCategory::RateLimited => ChatError {
             code: "rate_limited",
             message: "AI provider rate limit reached",
         },
-        AgentErrorCategory::Transport => AgentChatApplicationError {
+        AgentErrorCategory::Transport => ChatError {
             code: "transport_unavailable",
             message: "AI provider transport is unavailable",
         },
         AgentErrorCategory::ModelUnavailable => model_unavailable(),
-        AgentErrorCategory::ContextOverflow => AgentChatApplicationError {
+        AgentErrorCategory::ContextOverflow => ChatError {
             code: "context_full",
             message: "Agent Chat context is full",
         },
-        AgentErrorCategory::Provider => AgentChatApplicationError {
+        AgentErrorCategory::Provider => ChatError {
             code: "provider_failed",
             message: "AI provider request failed",
         },
     }
 }
 
-fn map_session_error(code: SessionErrorCode) -> AgentChatApplicationError {
+fn map_session_error(code: SessionErrorCode) -> ChatError {
     match code {
         SessionErrorCode::InvalidSessionId => invalid_request(),
-        SessionErrorCode::NotFound => AgentChatApplicationError {
+        SessionErrorCode::NotFound => ChatError {
             code: "chat_not_found",
             message: "Agent Chat was not found",
         },
-        SessionErrorCode::Locked => AgentChatApplicationError {
+        SessionErrorCode::Locked => ChatError {
             code: "chat_read_only",
             message: "Agent Chat is read-only",
         },
-        SessionErrorCode::Unsupported => AgentChatApplicationError {
+        SessionErrorCode::Unsupported => ChatError {
             code: "chat_unsupported",
             message: "Agent Chat format is read-only",
         },
-        SessionErrorCode::Damaged | SessionErrorCode::IncompleteFinalSuffix => {
-            AgentChatApplicationError {
-                code: "chat_damaged",
-                message: "Agent Chat data is damaged",
-            }
-        }
+        SessionErrorCode::Damaged | SessionErrorCode::IncompleteFinalSuffix => ChatError {
+            code: "chat_damaged",
+            message: "Agent Chat data is damaged",
+        },
         SessionErrorCode::NotSaved | SessionErrorCode::ExternalChange => not_saved(),
         SessionErrorCode::InvalidRoot
         | SessionErrorCode::SizeLimit
-        | SessionErrorCode::TrashFailed => AgentChatApplicationError {
+        | SessionErrorCode::TrashFailed => ChatError {
             code: "chat_unavailable",
             message: "Agent Chat is unavailable",
         },
     }
 }
 
-fn chat_not_open() -> AgentChatApplicationError {
-    AgentChatApplicationError {
+fn chat_not_open() -> ChatError {
+    ChatError {
         code: "chat_not_open",
         message: "Agent Chat is not open",
     }
 }
 
-fn chat_busy() -> AgentChatApplicationError {
-    AgentChatApplicationError {
+fn chat_busy() -> ChatError {
+    ChatError {
         code: "chat_busy",
         message: "Agent Chat already has an active operation",
     }
 }
 
-fn invalid_request() -> AgentChatApplicationError {
-    AgentChatApplicationError {
+fn invalid_request() -> ChatError {
+    ChatError {
         code: "invalid_request",
         message: "Agent Chat request is invalid",
     }
 }
 
-fn model_unavailable() -> AgentChatApplicationError {
-    AgentChatApplicationError {
+fn model_unavailable() -> ChatError {
+    ChatError {
         code: "model_unavailable",
         message: "Agent Model is unavailable",
     }
 }
 
-fn not_saved() -> AgentChatApplicationError {
-    AgentChatApplicationError {
+fn not_saved() -> ChatError {
+    ChatError {
         code: "not_saved",
         message: "Agent Chat change was not saved",
     }

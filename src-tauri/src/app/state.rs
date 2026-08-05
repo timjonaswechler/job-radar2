@@ -18,7 +18,7 @@ pub struct AppState {
     pub search_runs: Arc<search_runs::Runner>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
     pub agent_configuration: Arc<::agent::Configuration>,
-    pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
+    pub agent_chats: Arc<::agent::Chats>,
     pub installed_sources: sources::installed::Store,
     pub source_detection: sources::detection::Operation,
     pub source_live_check: sources::live_check::Operation,
@@ -54,15 +54,10 @@ impl AppState {
         let agent_configuration =
             Arc::new(::agent::Configuration::new(paths.agents_data_dir.clone())?);
         let agent_chat_provider = agent_configuration.provider();
-        std::fs::create_dir_all(&paths.agents_data_dir)?;
-        let canonical_agents_data_dir = std::fs::canonicalize(&paths.agents_data_dir)?;
-        let agent_session_manager = crate::agent::sessions::SessionManager::from_agents_data_root(
-            &canonical_agents_data_dir,
-        )?;
-        let agent_chats = Arc::new(crate::agent::chat_application::AgentChatApplication::new(
-            agent_session_manager,
+        let agent_chats = Arc::new(::agent::Chats::new(
+            paths.agents_data_dir.clone(),
             agent_chat_provider,
-        ));
+        )?);
         let source_http = Arc::new(crate::adapters::ReqwestProfileHttpClient::new());
         let source_browser = Arc::new(crate::browser_runtime::ManagedBrowserAcquisition::new(
             paths.browser_runtime_dir.clone(),

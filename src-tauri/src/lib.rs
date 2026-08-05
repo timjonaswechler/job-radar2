@@ -1,5 +1,4 @@
 mod adapters;
-pub mod agent;
 mod app;
 mod background_tasks;
 mod browser_runtime;
@@ -83,10 +82,12 @@ pub fn run() {
             app::commands::submit_agent_api_key,
             app::commands::create_agent_chat,
             app::commands::open_agent_chat,
+            app::commands::snapshot_agent_chat,
             app::commands::send_agent_chat_message,
             app::commands::stop_agent_chat,
             app::commands::set_agent_chat_model,
             app::commands::set_agent_chat_reasoning_level,
+            app::commands::reload_agent_chat,
             app::commands::compact_agent_chat,
             app::commands::login_agent_subscription,
             app::commands::cancel_agent_subscription_login,

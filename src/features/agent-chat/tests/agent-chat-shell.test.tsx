@@ -102,11 +102,13 @@ function clients(chat: AgentChatProjection = projection) {
   const chatClient: AgentChatClient = {
     create: vi.fn(async () => chat),
     open: vi.fn(async () => chat),
-    send: vi.fn(async () => undefined),
+    snapshot: vi.fn(async () => chat),
+    reload: vi.fn(async () => chat),
+    send: vi.fn(async () => 0),
     stop: vi.fn(async () => true),
     setModel: vi.fn(async () => chat),
     setReasoningLevel: vi.fn(async () => chat),
-    compact: vi.fn(async () => undefined),
+    compact: vi.fn(async () => 0),
     listen: vi.fn(async (handler) => {
       eventHandler = handler;
       return () => undefined;
@@ -267,7 +269,7 @@ test("sends text, renders indexed streaming content, and stops through the typed
     screen.getByRole("button", { name: "agentChat.actions.stop" }),
   );
   await waitFor(() =>
-    expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id"),
+    expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id", 0),
   );
 
   event()?.({
@@ -371,6 +373,12 @@ test("keeps a provider response visibly separate when the completed turn was not
   );
   expect(composer).toBeDisabled();
   expect(screen.getAllByText("agentChat.status.notSaved")).toHaveLength(2);
+
+  await userEvent.setup().click(
+    screen.getByRole("button", { name: "agentChat.actions.reload" }),
+  );
+  expect(chatClient.reload).toHaveBeenCalledWith("synthetic-chat-id");
+  expect(screen.getByRole("textbox", { name: "agentChat.composer.label" })).toBeEnabled();
 });
 
 test("discloses a recovered incomplete final turn without making the Chat read-only", async () => {
@@ -428,7 +436,7 @@ test("can stop an operation that was already running when the Chat opened", asyn
     name: "agentChat.actions.stop",
   });
   await user.click(stopButton);
-  expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id");
+  expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id", null);
   expect(
     screen.getByRole("textbox", { name: "agentChat.composer.label" }),
   ).toBeDisabled();

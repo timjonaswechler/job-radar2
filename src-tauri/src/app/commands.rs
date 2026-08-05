@@ -14,7 +14,6 @@ const MAX_SEARCH_RADIUS_KM: u16 = 500;
 const DEFAULT_BASE_FONT_SIZE_PX: u16 = 16;
 const MIN_BASE_FONT_SIZE_PX: u16 = 12;
 const MAX_BASE_FONT_SIZE_PX: u16 = 24;
-pub const AGENT_CHAT_EVENT: &str = "agent-chat-event";
 
 struct TauriBrowserRuntimeProgressReporter {
     app: AppHandle,
@@ -184,70 +183,63 @@ pub async fn set_window_drag_region_enabled(
     read_app_preferences(&state.db).await
 }
 
-struct TauriAgentChatEventListener {
-    app: AppHandle,
-}
-
-impl crate::agent::chat_application::AgentChatEventListener for TauriAgentChatEventListener {
-    fn emit(&self, event: crate::agent::chat_application::AgentChatApplicationEvent) {
-        let _ = self.app.emit(AGENT_CHAT_EVENT, event);
-    }
-}
-
 #[tauri::command]
 pub fn create_agent_chat(
     state: State<'_, AppState>,
-    input: crate::agent::chat_application::AgentChatCreateInput,
-) -> Result<
-    crate::agent::chat_application::AgentChatProjection,
-    crate::agent::chat_application::AgentChatApplicationError,
-> {
+    input: ::agent::ChatCreateInput,
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
     state.agent_chats.create(input)
 }
 
 #[tauri::command]
 pub async fn open_agent_chat(
     state: State<'_, AppState>,
-    input: crate::agent::chat_application::AgentChatOpenInput,
-) -> Result<
-    crate::agent::chat_application::AgentChatProjection,
-    crate::agent::chat_application::AgentChatApplicationError,
-> {
+    input: ::agent::ChatOpenInput,
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
     state.agent_chats.open(input).await
+}
+
+#[tauri::command]
+pub async fn snapshot_agent_chat(
+    state: State<'_, AppState>,
+    chat_id: ::agent::ChatId,
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
+    state.agent_chats.snapshot(&chat_id).await
 }
 
 #[tauri::command]
 pub fn send_agent_chat_message(
     app: AppHandle,
     state: State<'_, AppState>,
-    chat_id: crate::agent::chat_application::AgentChatId,
+    chat_id: ::agent::ChatId,
     text: String,
-) -> Result<(), crate::agent::chat_application::AgentChatApplicationError> {
+) -> Result<::agent::ChatOperationId, ::agent::ChatError> {
     state.agent_chats.send(
         chat_id,
         text,
-        std::sync::Arc::new(TauriAgentChatEventListener { app }),
+        std::sync::Arc::new(crate::adapters::agent::events::TauriAgentChatEventListener { app }),
     )
 }
 
 #[tauri::command]
 pub fn stop_agent_chat(
     state: State<'_, AppState>,
-    chat_id: crate::agent::chat_application::AgentChatId,
+    chat_id: ::agent::ChatId,
+    operation_id: Option<::agent::ChatOperationId>,
 ) -> bool {
-    state.agent_chats.stop(&chat_id)
+    match operation_id {
+        Some(operation_id) => state.agent_chats.stop(&chat_id, operation_id),
+        None => state.agent_chats.stop_current(&chat_id),
+    }
 }
 
 #[tauri::command]
 pub async fn set_agent_chat_model(
     state: State<'_, AppState>,
-    chat_id: crate::agent::chat_application::AgentChatId,
+    chat_id: ::agent::ChatId,
     provider_id: String,
     model_id: String,
-) -> Result<
-    crate::agent::chat_application::AgentChatProjection,
-    crate::agent::chat_application::AgentChatApplicationError,
-> {
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
     state
         .agent_chats
         .select_model(&chat_id, provider_id, model_id)
@@ -257,12 +249,9 @@ pub async fn set_agent_chat_model(
 #[tauri::command]
 pub async fn set_agent_chat_reasoning_level(
     state: State<'_, AppState>,
-    chat_id: crate::agent::chat_application::AgentChatId,
-    reasoning_level: crate::agent::chat_application::ApplicationReasoningLevel,
-) -> Result<
-    crate::agent::chat_application::AgentChatProjection,
-    crate::agent::chat_application::AgentChatApplicationError,
-> {
+    chat_id: ::agent::ChatId,
+    reasoning_level: ::agent::ChatReasoningLevel,
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
     state
         .agent_chats
         .set_reasoning_level(&chat_id, reasoning_level)
@@ -270,16 +259,24 @@ pub async fn set_agent_chat_reasoning_level(
 }
 
 #[tauri::command]
+pub async fn reload_agent_chat(
+    state: State<'_, AppState>,
+    chat_id: ::agent::ChatId,
+) -> Result<::agent::ChatProjection, ::agent::ChatError> {
+    state.agent_chats.reload(&chat_id).await
+}
+
+#[tauri::command]
 pub fn compact_agent_chat(
     app: AppHandle,
     state: State<'_, AppState>,
-    chat_id: crate::agent::chat_application::AgentChatId,
+    chat_id: ::agent::ChatId,
     focus: Option<String>,
-) -> Result<(), crate::agent::chat_application::AgentChatApplicationError> {
+) -> Result<::agent::ChatOperationId, ::agent::ChatError> {
     state.agent_chats.compact(
         chat_id,
         focus,
-        std::sync::Arc::new(TauriAgentChatEventListener { app }),
+        std::sync::Arc::new(crate::adapters::agent::events::TauriAgentChatEventListener { app }),
     )
 }
 

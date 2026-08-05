@@ -6,8 +6,6 @@ mod job_radar_lib {
     pub use source_engine::test_support::*;
 }
 
-#[path = "desktop/agent.rs"]
-mod agent;
 #[path = "desktop/browser_acquisition.rs"]
 mod browser_acquisition;
 #[path = "desktop/browser_runtime.rs"]

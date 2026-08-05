@@ -4,6 +4,7 @@ import {
   AlertCircleIcon,
   BrainIcon,
   Minimize2Icon,
+  RotateCcwIcon,
   SparklesIcon,
 } from "lucide-react";
 
@@ -86,6 +87,7 @@ type StreamBlock = {
 type SendOperation = {
   type: "send";
   phase: "submitted" | "streaming";
+  operationId: number | null;
   user: string;
   blocks: StreamBlock[];
 };
@@ -93,12 +95,14 @@ type SendOperation = {
 type CompactOperation = {
   type: "compact";
   phase: "submitted" | "streaming";
+  operationId: number | null;
   reason: string | null;
 };
 
 type ActiveOperation = {
   type: "active";
   phase: "streaming";
+  operationId: number | null;
 };
 
 type ReadyState = {
@@ -254,6 +258,7 @@ function reduceEvent(current: ShellState, event: AgentChatApplicationEvent): She
           : {
               type: "send",
               phase: "streaming",
+              operationId: null,
               user: "",
               blocks: [],
             };
@@ -328,6 +333,7 @@ function reduceEvent(current: ShellState, event: AgentChatApplicationEvent): She
         operation: {
           type: "compact",
           phase: "streaming",
+          operationId: null,
           reason: event.reason,
         },
         errorCode: null,
@@ -425,7 +431,7 @@ export function AgentChatShell({
             configuration,
             operation:
               chat.status === "running"
-                ? { type: "active", phase: "streaming" }
+                ? { type: "active", phase: "streaming", operationId: null }
                 : null,
             unsavedTurn: null,
             errorCode: null,
@@ -501,6 +507,7 @@ export function AgentChatShell({
             operation: {
               type: "send",
               phase: "submitted",
+              operationId: null,
               user: text,
               blocks: [],
             },
@@ -511,19 +518,34 @@ export function AgentChatShell({
         : current,
     );
     try {
-      await chatApi.send(state.chat.id, text);
+      const operationId = await chatApi.send(state.chat.id, text);
+      setState((current) =>
+        current.type === "ready" && current.operation?.type === "send"
+          ? { ...current, operation: { ...current.operation, operationId } }
+          : current,
+      );
     } catch (error) {
+      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
       setState((current) =>
         current.type === "ready"
-          ? { ...current, operation: null, errorCode: errorCode(error) }
+          ? {
+              ...current,
+              chat: chat ?? current.chat,
+              operation: null,
+              errorCode: errorCode(error),
+            }
           : current,
       );
     }
   };
 
   const stop = async () => {
+    const operationId =
+      state.operation && "operationId" in state.operation
+        ? state.operation.operationId
+        : null;
     try {
-      const stopped = await chatApi.stop(state.chat.id);
+      const stopped = await chatApi.stop(state.chat.id, operationId);
       if (!stopped) {
         setState((current) =>
           current.type === "ready"
@@ -531,6 +553,30 @@ export function AgentChatShell({
             : current,
         );
       }
+    } catch (error) {
+      setState((current) =>
+        current.type === "ready"
+          ? { ...current, errorCode: errorCode(error) }
+          : current,
+      );
+    }
+  };
+
+  const reloadChat = async () => {
+    try {
+      const chat = await chatApi.reload(state.chat.id);
+      setState((current) =>
+        current.type === "ready"
+          ? {
+              ...current,
+              chat,
+              operation: null,
+              unsavedTurn: null,
+              errorCode: null,
+              notice: null,
+            }
+          : current,
+      );
     } catch (error) {
       setState((current) =>
         current.type === "ready"
@@ -549,6 +595,7 @@ export function AgentChatShell({
             operation: {
               type: "compact",
               phase: "submitted",
+              operationId: null,
               reason: null,
             },
             errorCode: null,
@@ -557,11 +604,22 @@ export function AgentChatShell({
         : current,
     );
     try {
-      await chatApi.compact(state.chat.id, null);
+      const operationId = await chatApi.compact(state.chat.id, null);
+      setState((current) =>
+        current.type === "ready" && current.operation?.type === "compact"
+          ? { ...current, operation: { ...current.operation, operationId } }
+          : current,
+      );
     } catch (error) {
+      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
       setState((current) =>
         current.type === "ready"
-          ? { ...current, operation: null, errorCode: errorCode(error) }
+          ? {
+              ...current,
+              chat: chat ?? current.chat,
+              operation: null,
+              errorCode: errorCode(error),
+            }
           : current,
       );
     }
@@ -582,9 +640,10 @@ export function AgentChatShell({
           : current,
       );
     } catch (error) {
+      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
       setState((current) =>
         current.type === "ready"
-          ? { ...current, errorCode: errorCode(error) }
+          ? { ...current, chat: chat ?? current.chat, errorCode: errorCode(error) }
           : current,
       );
     }
@@ -609,9 +668,10 @@ export function AgentChatShell({
           : current,
       );
     } catch (error) {
+      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
       setState((current) =>
         current.type === "ready"
-          ? { ...current, errorCode: errorCode(error) }
+          ? { ...current, chat: chat ?? current.chat, errorCode: errorCode(error) }
           : current,
       );
     }
@@ -647,6 +707,18 @@ export function AgentChatShell({
                 >
                   <Minimize2Icon aria-hidden="true" />
                 </Button>
+                {state.chat.status === "not_saved" ? (
+                  <Button
+                    aria-label={t("agentChat.actions.reload")}
+                    disabled={busy}
+                    onClick={() => void reloadChat()}
+                    size="icon-sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <RotateCcwIcon aria-hidden="true" />
+                  </Button>
+                ) : null}
                 <Badge size="sm" variant="secondary">
                   {t(statusKey(state.chat.status))}
                 </Badge>

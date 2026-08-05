@@ -96,6 +96,7 @@ export const de = {
       selectModel: "Agent Model auswählen",
       selectReasoning: "Reasoning Level auswählen",
       compact: "Agent Chat komprimieren",
+      reload: "Gespeicherten Chat neu laden",
     },
     context: {
       label: "Kontextnutzung",

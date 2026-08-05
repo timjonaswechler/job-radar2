@@ -96,6 +96,7 @@ export const en = {
       selectModel: "Select Agent Model",
       selectReasoning: "Select Reasoning Level",
       compact: "Compact Agent Chat",
+      reload: "Reload saved Chat",
     },
     context: {
       label: "Context usage",
