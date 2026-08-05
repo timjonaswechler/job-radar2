@@ -1254,7 +1254,7 @@ pub(crate) fn append_reasoning(
         ReasoningLevel::Low => "low",
         ReasoningLevel::Medium => "medium",
         ReasoningLevel::High => "high",
-        ReasoningLevel::XHigh => "xhigh",
+        ReasoningLevel::XHigh => "x_high",
         ReasoningLevel::Max => "max",
     };
     let draft = matches!(h.state, HandleState::Draft { .. });

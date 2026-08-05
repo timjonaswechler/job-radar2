@@ -176,9 +176,12 @@ export const en = {
       modelCount_other: "{{count}} models",
       unavailableDescription:
         "This provider cannot be used with the current configuration.",
+      configuredOnlyDescription:
+        "Configuration is present, but Job Radar has no executable provider and authentication combination for these models.",
       status: {
-        configured: "Configured",
-        available: "Not configured",
+        executable: "Executable",
+        configuredOnly: "Configured, not executable",
+        catalogOnly: "Not configured",
         unavailable: "Unavailable",
       },
       actions: {
@@ -211,6 +214,7 @@ export const en = {
         starting: "Preparing sign-in…",
         openingBrowser: "Opening browser…",
         waitingForBrowser: "Waiting for browser sign-in…",
+        displayingDeviceCode: "Waiting for device-code sign-in…",
         finalizing: "Finishing sign-in…",
         completed: "Sign-in complete.",
         cancelled: "Sign-in cancelled.",

@@ -320,6 +320,20 @@ pub trait ConversationProvider: Send + Sync + 'static {
     fn stream(&self, request: ConversationRequest) -> ProviderEventStream;
 }
 
+impl<T: ConversationProvider + ?Sized> ConversationProvider for Arc<T> {
+    fn models(&self) -> &[Model] {
+        self.as_ref().models()
+    }
+
+    fn model_snapshot(&self) -> Vec<Model> {
+        self.as_ref().model_snapshot()
+    }
+
+    fn stream(&self, request: ConversationRequest) -> ProviderEventStream {
+        self.as_ref().stream(request)
+    }
+}
+
 pub struct AgentConversation {
     system_prompt: String,
     provider: Arc<dyn ConversationProvider>,

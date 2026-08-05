@@ -176,9 +176,12 @@ export const de = {
       modelCount_other: "{{count}} Modelle",
       unavailableDescription:
         "Dieser Provider kann mit der aktuellen Konfiguration nicht verwendet werden.",
+      configuredOnlyDescription:
+        "Die Konfiguration ist vorhanden, aber Job Radar hat keine ausführbare Kombination aus Provider und Authentifizierung für diese Modelle.",
       status: {
-        configured: "Konfiguriert",
-        available: "Nicht konfiguriert",
+        executable: "Ausführbar",
+        configuredOnly: "Konfiguriert, nicht ausführbar",
+        catalogOnly: "Nicht konfiguriert",
         unavailable: "Nicht verfügbar",
       },
       actions: {
@@ -211,6 +214,7 @@ export const de = {
         starting: "Anmeldung wird vorbereitet…",
         openingBrowser: "Browser wird geöffnet…",
         waitingForBrowser: "Warte auf die Anmeldung im Browser…",
+        displayingDeviceCode: "Warte auf die Gerätecode-Anmeldung…",
         finalizing: "Anmeldung wird abgeschlossen…",
         completed: "Anmeldung abgeschlossen.",
         cancelled: "Anmeldung abgebrochen.",

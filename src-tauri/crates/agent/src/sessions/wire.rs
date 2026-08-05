@@ -433,8 +433,10 @@ pub(super) fn parse(bytes: &[u8], expected: Option<Uuid>) -> Result<Document, Se
             }
             "thinking_level_change" => {
                 let level = string(m, "thinkingLevel", line, &ty)?;
-                let valid = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
-                    .contains(&level.as_str());
+                let valid = [
+                    "off", "minimal", "low", "medium", "high", "x_high", "xhigh", "max",
+                ]
+                .contains(&level.as_str());
                 if !valid {
                     return Err(err(
                         SessionErrorCode::Damaged,

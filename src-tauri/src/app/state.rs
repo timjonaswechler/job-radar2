@@ -17,7 +17,7 @@ pub struct AppState {
     pub search_run_history: search_runs::History,
     pub search_runs: Arc<search_runs::Runner>,
     pub background_tasks: crate::background_tasks::BackgroundTaskScheduler,
-    pub agent_configuration: Arc<crate::agent::configuration::AgentConfiguration>,
+    pub agent_configuration: Arc<::agent::Configuration>,
     pub agent_chats: Arc<crate::agent::chat_application::AgentChatApplication>,
     pub installed_sources: sources::installed::Store,
     pub source_detection: sources::detection::Operation,
@@ -51,12 +51,9 @@ impl AppState {
         notifier: Arc<dyn crate::background_tasks::BackgroundTaskNotifier>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let db = crate::db::connect_and_migrate(&paths.database_path).await?;
-        let agent_configuration = Arc::new(
-            crate::agent::configuration::AgentConfiguration::from_agents_data_root(
-                &paths.agents_data_dir,
-            )?,
-        );
-        let agent_chat_provider = agent_configuration.configured_chat_provider();
+        let agent_configuration =
+            Arc::new(::agent::Configuration::new(paths.agents_data_dir.clone())?);
+        let agent_chat_provider = agent_configuration.provider();
         std::fs::create_dir_all(&paths.agents_data_dir)?;
         let canonical_agents_data_dir = std::fs::canonicalize(&paths.agents_data_dir)?;
         let agent_session_manager = crate::agent::sessions::SessionManager::from_agents_data_root(

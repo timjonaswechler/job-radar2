@@ -471,14 +471,14 @@ export function AgentChatShell({
     state.chat.status === "ready" || state.chat.status === "model_unavailable";
   const busy = state.operation !== null;
   const availableModels = state.configuration.providers.flatMap((provider) =>
-    provider.available
-      ? provider.models.map((model) => ({
-          providerId: provider.id,
-          providerName: provider.displayName,
-          model,
-          value: `${provider.id}\u001f${model.id}`,
-        }))
-      : [],
+    provider.models
+      .filter((model) => provider.executable && model.executable)
+      .map((model) => ({
+        providerId: provider.id,
+        providerName: provider.displayName,
+        model,
+        value: `${provider.id}\u001f${model.id}`,
+      })),
   );
   const selectedModel = availableModels.find(
     (candidate) =>

@@ -51,6 +51,7 @@ paths = [path for path in tracked if Path(path).suffix in extensions and Path(pa
 # Workspace packages and responsibility-split frontend modules may be unstaged
 # while this check runs locally; their source and tests are always scanned.
 for root in (
+    "src-tauri/crates/agent",
     "src-tauri/crates/source-engine",
     "src-tauri/crates/search-resolution",
     "src-tauri/crates/search-requests",
@@ -108,7 +109,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-engine/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='5b435eedf6013b8724e499574c506fbd71fe4a8d1ae7f3caf3e8e38f168d7359'
+FROZEN_MANIFEST_SHA256='23334788084af28cb3c97f1fc3c2a157898d56cb47db3502394aa74a5f87f09e'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

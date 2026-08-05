@@ -13,5 +13,6 @@ pub fn descriptor() -> ProviderDescriptor {
         "https://chatgpt.com/backend-api".to_owned(),
         models::builtin_models().to_vec(),
         false,
+        false,
     )
 }

@@ -1,8 +1,6 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::path::Path;
 use tauri::{AppHandle, Emitter, State};
-use tauri_plugin_opener::OpenerExt;
 
 use crate::app::state::AppState;
 
@@ -16,7 +14,6 @@ const MAX_SEARCH_RADIUS_KM: u16 = 500;
 const DEFAULT_BASE_FONT_SIZE_PX: u16 = 16;
 const MIN_BASE_FONT_SIZE_PX: u16 = 12;
 const MAX_BASE_FONT_SIZE_PX: u16 = 24;
-pub const AGENT_SUBSCRIPTION_LOGIN_PROGRESS_EVENT: &str = "agent-subscription-login-progress";
 pub const AGENT_CHAT_EVENT: &str = "agent-chat-event";
 
 struct TauriBrowserRuntimeProgressReporter {
@@ -187,42 +184,6 @@ pub async fn set_window_drag_region_enabled(
     read_app_preferences(&state.db).await
 }
 
-struct TauriAgentOpener {
-    app: AppHandle,
-}
-
-impl crate::agent::configuration::ExternalUrlOpener for TauriAgentOpener {
-    fn open(&self, url: &str) -> Result<(), crate::agent::configuration::OpenError> {
-        self.app
-            .opener()
-            .open_url(url, None::<&str>)
-            .map_err(|_| crate::agent::configuration::OpenError)
-    }
-}
-
-impl crate::agent::configuration::AgentDataFolderOpener for TauriAgentOpener {
-    fn open(&self, path: &Path) -> Result<(), crate::agent::configuration::OpenError> {
-        self.app
-            .opener()
-            .open_path(path.to_string_lossy(), None::<&str>)
-            .map_err(|_| crate::agent::configuration::OpenError)
-    }
-}
-
-struct TauriSubscriptionLoginProgressReporter {
-    app: AppHandle,
-}
-
-impl crate::agent::configuration::SubscriptionLoginProgressReporter
-    for TauriSubscriptionLoginProgressReporter
-{
-    fn report(&self, progress: crate::agent::configuration::SubscriptionLoginProgress) {
-        let _ = self
-            .app
-            .emit(AGENT_SUBSCRIPTION_LOGIN_PROGRESS_EVENT, progress);
-    }
-}
-
 struct TauriAgentChatEventListener {
     app: AppHandle,
 }
@@ -325,7 +286,7 @@ pub fn compact_agent_chat(
 #[tauri::command]
 pub fn get_agent_configuration_status(
     state: State<'_, AppState>,
-) -> crate::agent::configuration::AgentConfigurationStatus {
+) -> ::agent::configuration::Status {
     state.agent_configuration.status()
 }
 
@@ -333,78 +294,71 @@ pub fn get_agent_configuration_status(
 pub async fn submit_agent_api_key(
     state: State<'_, AppState>,
     provider_id: String,
-    api_key: crate::agent::configuration::SecretApiKeyInput,
-) -> Result<
-    crate::agent::configuration::AgentConfigurationStatus,
-    crate::agent::configuration::AgentConfigurationError,
-> {
+    api_key: ::agent::configuration::SecretInput,
+) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+    let provider = ::agent::ProviderId::new(provider_id)
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
-    tauri::async_runtime::spawn_blocking(move || {
-        configuration.submit_api_key(&provider_id, api_key)
-    })
-    .await
-    .map_err(|_| crate::agent::configuration::AgentConfigurationError::unavailable())?
+    tauri::async_runtime::spawn_blocking(move || configuration.set_api_key(provider, api_key))
+        .await
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?
 }
 
 #[tauri::command]
 pub async fn login_agent_subscription(
     app: AppHandle,
     state: State<'_, AppState>,
+    attempt_id: ::agent::configuration::LoginAttemptId,
     provider_id: String,
-) -> Result<
-    crate::agent::configuration::AgentConfigurationStatus,
-    crate::agent::configuration::AgentConfigurationError,
-> {
-    let opener = TauriAgentOpener { app: app.clone() };
-    let progress = TauriSubscriptionLoginProgressReporter { app };
+) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+    let provider = ::agent::ProviderId::new(provider_id)
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
+    let mut interaction = crate::adapters::agent::openers::TauriAgentOpener::new(app);
     state
         .agent_configuration
-        .login_subscription(&provider_id, &opener, &progress)
+        .login(attempt_id, provider, &mut interaction)
         .await
 }
 
 #[tauri::command]
-pub fn cancel_agent_subscription_login(state: State<'_, AppState>, provider_id: String) -> bool {
-    state
-        .agent_configuration
-        .cancel_subscription_login(&provider_id)
+pub fn cancel_agent_subscription_login(
+    state: State<'_, AppState>,
+    attempt_id: ::agent::configuration::LoginAttemptId,
+) -> Result<(), ::agent::configuration::Error> {
+    state.agent_configuration.cancel_login(&attempt_id)
 }
 
 #[tauri::command]
 pub async fn remove_agent_authentication(
     state: State<'_, AppState>,
     provider_id: String,
-) -> Result<
-    crate::agent::configuration::AgentConfigurationStatus,
-    crate::agent::configuration::AgentConfigurationError,
-> {
+) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+    let provider = ::agent::ProviderId::new(provider_id)
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
-    tauri::async_runtime::spawn_blocking(move || configuration.remove_authentication(&provider_id))
+    tauri::async_runtime::spawn_blocking(move || configuration.remove_authentication(provider))
         .await
-        .map_err(|_| crate::agent::configuration::AgentConfigurationError::unavailable())?
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?
 }
 
 #[tauri::command]
 pub async fn reload_agent_configuration(
     state: State<'_, AppState>,
-) -> Result<
-    crate::agent::configuration::AgentConfigurationStatus,
-    crate::agent::configuration::AgentConfigurationError,
-> {
+) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.reload())
         .await
-        .map_err(|_| crate::agent::configuration::AgentConfigurationError::unavailable())
+        .map_err(|_| ::agent::configuration::Error::invalid_input())?
 }
 
 #[tauri::command]
 pub fn open_agent_data_folder(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), crate::agent::configuration::AgentConfigurationError> {
+) -> Result<(), ::agent::configuration::Error> {
     state
         .agent_configuration
-        .open_data_folder(&TauriAgentOpener { app })
+        .open_data_folder(&crate::adapters::agent::openers::TauriAgentOpener::new(app))
 }
 
 #[tauri::command]

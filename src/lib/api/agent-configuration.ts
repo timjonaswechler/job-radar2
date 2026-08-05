@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type AgentAuthenticationKind = "api_key" | "subscription";
 export type AgentConfigurationState = "ready" | "invalid";
+export type AgentProviderCapability = "catalog_only" | "configured_only" | "executable";
 
 export type AgentConfigurationDiagnostic = {
   code: string;
@@ -13,6 +14,7 @@ export type AgentModelStatus = {
   id: string;
   displayName: string;
   reasoningLevels: string[];
+  executable: boolean;
 };
 
 export type ProviderConfigurationStatus = {
@@ -21,7 +23,8 @@ export type ProviderConfigurationStatus = {
   authenticationMethods: AgentAuthenticationKind[];
   activeAuthentication: AgentAuthenticationKind | null;
   configuredByModelsFile: boolean;
-  available: boolean;
+  capability: AgentProviderCapability;
+  executable: boolean;
   models: AgentModelStatus[];
 };
 
@@ -36,12 +39,14 @@ export type SubscriptionLoginStage =
   | "starting"
   | "opening_browser"
   | "waiting_for_browser"
+  | "displaying_device_code"
   | "finalizing"
   | "completed"
   | "cancelled"
   | "failed";
 
 export type SubscriptionLoginProgress = {
+  attemptId: string;
   providerId: string;
   stage: SubscriptionLoginStage;
 };
@@ -57,8 +62,8 @@ export const AGENT_SUBSCRIPTION_LOGIN_PROGRESS_EVENT =
 export type AgentConfigurationClient = {
   getStatus(): Promise<AgentConfigurationStatus>;
   submitApiKey(providerId: string, apiKey: string): Promise<AgentConfigurationStatus>;
-  loginSubscription(providerId: string): Promise<AgentConfigurationStatus>;
-  cancelSubscriptionLogin(providerId: string): Promise<boolean>;
+  loginSubscription(providerId: string, attemptId: string): Promise<AgentConfigurationStatus>;
+  cancelSubscriptionLogin(attemptId: string): Promise<void>;
   removeAuthentication(providerId: string): Promise<AgentConfigurationStatus>;
   reload(): Promise<AgentConfigurationStatus>;
   openDataFolder(): Promise<void>;
@@ -81,10 +86,10 @@ export function createAgentConfigurationClient(
     getStatus: () => invokeCommand("get_agent_configuration_status"),
     submitApiKey: (providerId, apiKey) =>
       invokeCommand("submit_agent_api_key", { providerId, apiKey }),
-    loginSubscription: (providerId) =>
-      invokeCommand("login_agent_subscription", { providerId }),
-    cancelSubscriptionLogin: (providerId) =>
-      invokeCommand("cancel_agent_subscription_login", { providerId }),
+    loginSubscription: (providerId, attemptId) =>
+      invokeCommand("login_agent_subscription", { providerId, attemptId }),
+    cancelSubscriptionLogin: (attemptId) =>
+      invokeCommand("cancel_agent_subscription_login", { attemptId }),
     removeAuthentication: (providerId) =>
       invokeCommand("remove_agent_authentication", { providerId }),
     reload: () => invokeCommand("reload_agent_configuration"),

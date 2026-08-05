@@ -18,6 +18,7 @@ pub struct ProviderDescriptor {
     default_base_url: String,
     models: Vec<Model>,
     configured_api_key: bool,
+    api_key_reference: bool,
 }
 
 impl ProviderDescriptor {
@@ -30,6 +31,7 @@ impl ProviderDescriptor {
         default_base_url: String,
         models: Vec<Model>,
         configured_api_key: bool,
+        api_key_reference: bool,
     ) -> Self {
         Self {
             id,
@@ -39,6 +41,7 @@ impl ProviderDescriptor {
             default_base_url,
             models,
             configured_api_key,
+            api_key_reference,
         }
     }
 
@@ -68,6 +71,10 @@ impl ProviderDescriptor {
 
     pub fn has_configured_api_key(&self) -> bool {
         self.configured_api_key
+    }
+
+    pub(crate) fn has_api_key_reference(&self) -> bool {
+        self.api_key_reference
     }
 }
 

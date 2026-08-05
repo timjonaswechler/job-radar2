@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
-use agent::openai_codex::{AgentAuthentication, AuthStatus};
-use agent::AgentErrorCategory;
+use crate::openai_codex::{AgentAuthentication, AuthStatus};
+use crate::AgentErrorCategory;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};

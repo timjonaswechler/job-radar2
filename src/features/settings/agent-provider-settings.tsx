@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import {
   agentConfigurationClient,
+  type AgentConfigurationClient,
   type AgentConfigurationError,
   type AgentConfigurationStatus,
   type ProviderConfigurationStatus,
@@ -59,7 +60,11 @@ import type { TranslationKey } from "@/lib/i18n/resources";
 type BusyAction = "reload" | "folder" | "api-key" | "login" | "remove";
 type BusyState = { action: BusyAction; providerId?: string } | null;
 
-export function AgentProviderSettings() {
+export function AgentProviderSettings({
+  client = agentConfigurationClient,
+}: {
+  client?: AgentConfigurationClient;
+}) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<AgentConfigurationStatus | null>(null);
   const [busy, setBusy] = useState<BusyState>(null);
@@ -73,7 +78,7 @@ export function AgentProviderSettings() {
     let active = true;
     let unlisten: (() => void) | undefined;
 
-    void agentConfigurationClient
+    void client
       .getStatus()
       .then((nextStatus) => {
         if (active) setStatus(nextStatus);
@@ -82,9 +87,15 @@ export function AgentProviderSettings() {
         if (active) setErrorCode(error.code ?? "unavailable");
       });
 
-    void agentConfigurationClient
+    void client
       .listenToSubscriptionLoginProgress((nextProgress) => {
-        if (active) setProgress(nextProgress);
+        if (active) {
+          setProgress((current) =>
+            current === null || current.attemptId === nextProgress.attemptId
+              ? nextProgress
+              : current,
+          );
+        }
       })
       .then((stopListening) => {
         if (!active) {
@@ -101,7 +112,7 @@ export function AgentProviderSettings() {
       active = false;
       unlisten?.();
     };
-  }, []);
+  }, [client]);
 
   const runStatusAction = async (
     nextBusy: NonNullable<BusyState>,
@@ -128,7 +139,7 @@ export function AgentProviderSettings() {
     setBusy({ action: "folder" });
     setErrorCode(null);
     try {
-      await agentConfigurationClient.openDataFolder();
+      await client.openDataFolder();
     } catch (error) {
       setErrorCode((error as AgentConfigurationError).code ?? "unavailable");
     } finally {
@@ -137,17 +148,20 @@ export function AgentProviderSettings() {
   };
 
   const handleLogin = async (providerId: string) => {
-    setProgress({ providerId, stage: "starting" });
+    const attemptId = crypto.randomUUID();
+    setProgress({ attemptId, providerId, stage: "starting" });
     await runStatusAction(
       { action: "login", providerId },
-      () => agentConfigurationClient.loginSubscription(providerId),
+      () => client.loginSubscription(providerId, attemptId),
       t("settings.agents.notices.loginComplete"),
     );
   };
 
   const handleCancelLogin = async (providerId: string) => {
+    const attempt = progress?.providerId === providerId ? progress : null;
+    if (!attempt) return;
     try {
-      await agentConfigurationClient.cancelSubscriptionLogin(providerId);
+      await client.cancelSubscriptionLogin(attempt.attemptId);
     } catch (error) {
       setErrorCode((error as AgentConfigurationError).code ?? "unavailable");
     }
@@ -159,7 +173,7 @@ export function AgentProviderSettings() {
     setRemoveProvider(null);
     await runStatusAction(
       { action: "remove", providerId: provider.id },
-      () => agentConfigurationClient.removeAuthentication(provider.id),
+      () => client.removeAuthentication(provider.id),
       t("settings.agents.notices.authenticationRemoved"),
     );
   };
@@ -184,7 +198,7 @@ export function AgentProviderSettings() {
             onClick={() =>
               void runStatusAction(
                 { action: "reload" },
-                () => agentConfigurationClient.reload(),
+                () => client.reload(),
                 t("settings.agents.notices.reloaded"),
               )
             }
@@ -250,7 +264,7 @@ export function AgentProviderSettings() {
               onSubmitApiKey={(apiKey) =>
                 runStatusAction(
                   { action: "api-key", providerId: provider.id },
-                  () => agentConfigurationClient.submitApiKey(provider.id, apiKey),
+                  () => client.submitApiKey(provider.id, apiKey),
                   t("settings.agents.notices.apiKeySaved"),
                 )
               }
@@ -326,13 +340,19 @@ function ProviderRow({
           <span className="truncate">{provider.displayName}</span>
           <Badge
             size="sm"
-            variant={provider.available ? "success-light" : "destructive-light"}
+            variant={
+              provider.capability === "executable"
+                ? "success-light"
+                : provider.capability === "configured_only"
+                  ? "warning-light"
+                  : "secondary"
+            }
           >
-            {provider.available
-              ? provider.activeAuthentication || provider.configuredByModelsFile
-                ? t("settings.agents.status.configured")
-                : t("settings.agents.status.available")
-              : t("settings.agents.status.unavailable")}
+            {provider.capability === "executable"
+              ? t("settings.agents.status.executable")
+              : provider.capability === "configured_only"
+                ? t("settings.agents.status.configuredOnly")
+                : t("settings.agents.status.catalogOnly")}
           </Badge>
           <span className="text-muted-foreground">
             {t("settings.agents.modelCount", { count: provider.models.length })}
@@ -340,12 +360,12 @@ function ProviderRow({
         </span>
       </AccordionTrigger>
       <AccordionContent className="flex flex-col gap-4">
-        {!provider.available ? (
+        {provider.capability === "configured_only" ? (
           <Alert variant="warning">
             <AlertCircleIcon aria-hidden="true" />
-            <AlertTitle>{t("settings.agents.status.unavailable")}</AlertTitle>
+            <AlertTitle>{t("settings.agents.status.configuredOnly")}</AlertTitle>
             <AlertDescription>
-              {t("settings.agents.unavailableDescription")}
+              {t("settings.agents.configuredOnlyDescription")}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -498,6 +518,7 @@ function progressLabel(stage: SubscriptionLoginStage, t: Translator) {
     starting: "settings.agents.progress.starting",
     opening_browser: "settings.agents.progress.openingBrowser",
     waiting_for_browser: "settings.agents.progress.waitingForBrowser",
+    displaying_device_code: "settings.agents.progress.displayingDeviceCode",
     finalizing: "settings.agents.progress.finalizing",
     completed: "settings.agents.progress.completed",
     cancelled: "settings.agents.progress.cancelled",

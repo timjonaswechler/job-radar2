@@ -3,6 +3,9 @@
 // contracts portable until that implementation and its native acceptance exist.
 #[cfg(unix)]
 mod chats;
+#[cfg(unix)]
+mod configuration_authentication;
+mod configuration_registry;
 mod conversation;
 #[cfg(unix)]
 mod sessions;

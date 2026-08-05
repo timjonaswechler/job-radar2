@@ -60,17 +60,37 @@ const configuration: AgentConfigurationStatus = {
       authenticationMethods: ["api_key"],
       activeAuthentication: "api_key",
       configuredByModelsFile: false,
-      available: true,
+      capability: "executable",
+      executable: true,
       models: [
         {
           id: "model-one",
           displayName: "Model One",
           reasoningLevels: ["off", "medium", "high"],
+          executable: true,
         },
         {
           id: "model-two",
           displayName: "Model Two",
           reasoningLevels: ["off", "high"],
+          executable: true,
+        },
+      ],
+    },
+    {
+      id: "configured-provider",
+      displayName: "Configured Provider",
+      authenticationMethods: ["api_key"],
+      activeAuthentication: "api_key",
+      configuredByModelsFile: false,
+      capability: "configured_only",
+      executable: false,
+      models: [
+        {
+          id: "configured-model",
+          displayName: "Configured Model",
+          reasoningLevels: ["off", "x_high"],
+          executable: false,
         },
       ],
     },
@@ -572,6 +592,9 @@ test("changes the Agent Model and Reasoning Level explicitly", async () => {
   modelSelector.focus();
   fireEvent.keyDown(modelSelector, { key: "ArrowDown" });
   await waitFor(() => expect(modelSelector).toHaveAttribute("aria-expanded", "true"));
+  expect(
+    screen.queryByRole("option", { name: "Configured Provider · Configured Model" }),
+  ).not.toBeInTheDocument();
   await user.click(
     await screen.findByRole("option", { name: "Provider One · Model Two" }),
   );

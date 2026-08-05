@@ -464,7 +464,7 @@ fn parse_reasoning(s: &str) -> ReasoningLevel {
         "low" => ReasoningLevel::Low,
         "medium" => ReasoningLevel::Medium,
         "high" => ReasoningLevel::High,
-        "xhigh" => ReasoningLevel::XHigh,
+        "x_high" | "xhigh" => ReasoningLevel::XHigh,
         "max" => ReasoningLevel::Max,
         _ => ReasoningLevel::Off,
     }

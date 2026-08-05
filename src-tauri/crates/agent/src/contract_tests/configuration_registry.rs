@@ -1,7 +1,7 @@
-use agent::api::ApiKind;
-use agent::models::{ModelId, ModelInput, ProviderId, ReasoningLevel};
-use agent::registry::{ModelRegistry, ProviderAvailability};
-use agent::AgentErrorCategory;
+use crate::api::ApiKind;
+use crate::models::{ModelId, ModelInput, ProviderId, ReasoningLevel};
+use crate::registry::ModelRegistry;
+use crate::AgentErrorCategory;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -22,7 +22,7 @@ fn write_models(root: &std::path::Path, document: &str) {
 }
 
 #[test]
-fn absent_models_document_publishes_pinned_builtins_and_value_free_availability() {
+fn absent_models_document_publishes_pinned_builtins() {
     let (_temporary, root) = registry_root();
     let registry = ModelRegistry::from_agents_data_root(&root).unwrap();
     let snapshot = registry.snapshot();
@@ -50,12 +50,6 @@ fn absent_models_document_publishes_pinned_builtins_and_value_free_availability(
         Some(272_000)
     );
     assert_eq!(pinned.compat()["supportsToolSearch"], true);
-    assert!(snapshot
-        .available_models(&ProviderAvailability::default())
-        .is_empty());
-
-    let availability = ProviderAvailability::new([provider]);
-    assert_eq!(snapshot.available_models(&availability).len(), 7);
 }
 
 #[test]
@@ -218,14 +212,14 @@ fn comments_custom_providers_overrides_and_whole_model_upserts_follow_pi_merge_o
     );
     assert_eq!(custom.context_window(), 64_000);
     assert_eq!(custom.max_tokens(), 2_048);
-    assert_eq!(
-        snapshot
-            .available_models(&ProviderAvailability::default())
-            .iter()
-            .filter(|model| model.provider() == &custom_provider)
-            .count(),
-        1
-    );
+    assert!(snapshot
+        .provider(&custom_provider)
+        .unwrap()
+        .has_api_key_reference());
+    assert!(snapshot
+        .provider(&custom_provider)
+        .unwrap()
+        .has_configured_api_key());
     assert!(!format!("{snapshot:?}").contains("SYNTHETIC_API_KEY"));
 }
 
@@ -305,7 +299,7 @@ fn invalid_startup_and_unsupported_api_fail_closed_without_losing_builtins() {
 }
 
 #[test]
-fn availability_resolves_direct_and_environment_references_without_exposing_values() {
+fn api_key_references_distinguish_presence_from_local_resolution_without_exposing_values() {
     let (_temporary, root) = registry_root();
     write_models(
         &root,
@@ -340,18 +334,21 @@ fn availability_resolves_direct_and_environment_references_without_exposing_valu
     )
     .unwrap();
     let snapshot = registry.snapshot();
-    let available = snapshot.available_models(&ProviderAvailability::default());
-
-    assert_eq!(available.len(), 2);
-    assert!(available
-        .iter()
-        .any(|model| model.id().as_str() == "direct-model"));
-    assert!(available
-        .iter()
-        .any(|model| model.id().as_str() == "present-model"));
-    assert!(!available
-        .iter()
-        .any(|model| model.id().as_str() == "missing-model"));
+    let direct_provider = snapshot
+        .provider(&ProviderId::new("direct-provider").unwrap())
+        .unwrap();
+    let present_provider = snapshot
+        .provider(&ProviderId::new("present-provider").unwrap())
+        .unwrap();
+    let missing_provider = snapshot
+        .provider(&ProviderId::new("missing-provider").unwrap())
+        .unwrap();
+    assert!(direct_provider.has_api_key_reference());
+    assert!(direct_provider.has_configured_api_key());
+    assert!(present_provider.has_api_key_reference());
+    assert!(present_provider.has_configured_api_key());
+    assert!(missing_provider.has_api_key_reference());
+    assert!(!missing_provider.has_configured_api_key());
     let direct = snapshot
         .model(
             &ProviderId::new("direct-provider").unwrap(),

@@ -2,20 +2,22 @@ pub mod api;
 mod auth;
 mod chat;
 mod compaction;
+pub mod configuration;
 #[cfg(test)]
 mod contract_tests;
 mod conversation;
 pub mod error;
 pub mod models;
-pub mod openai_codex;
-pub mod providers;
-pub mod registry;
+mod openai_codex;
+mod providers;
+mod registry;
 pub mod sessions;
 #[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub mod testing;
 
 pub use chat::{AgentChat, AgentChatError, AgentChatEvent, AgentChatEventStream, AgentChatState};
+pub use configuration::Configuration;
 pub use conversation::{
     AgentConversation, AssistantContent, AssistantMessage, ContentKind, ConversationEvent,
     ConversationEventStream, ConversationProvider, ConversationRequest, FinishReason, Message,
@@ -23,4 +25,4 @@ pub use conversation::{
     UserMessage,
 };
 pub use error::{AgentError, AgentErrorCategory};
-pub use registry::{ModelRegistry, ModelRegistrySnapshot, ProviderAvailability};
+pub use models::{ModelId, ProviderId, ReasoningLevel};

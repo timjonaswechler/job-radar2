@@ -34,12 +34,14 @@ const configuration: AgentConfigurationStatus = {
       authenticationMethods: ["subscription"],
       activeAuthentication: "subscription",
       configuredByModelsFile: false,
-      available: true,
+      capability: "executable",
+      executable: true,
       models: [
         {
           id: "gpt-5.4",
           displayName: "GPT-5.4",
           reasoningLevels: ["off", "minimal", "low", "medium", "high", "x_high"],
+          executable: true,
         },
         {
           id: "gpt-5.6-sol",
@@ -53,6 +55,7 @@ const configuration: AgentConfigurationStatus = {
             "x_high",
             "max",
           ],
+          executable: true,
         },
       ],
     },
@@ -129,7 +132,7 @@ function reviewClients(projection: AgentChatProjection): {
     getStatus: async () => configuration,
     submitApiKey: async () => configuration,
     loginSubscription: async () => configuration,
-    cancelSubscriptionLogin: async () => true,
+    cancelSubscriptionLogin: async () => undefined,
     removeAuthentication: async () => configuration,
     reload: async () => configuration,
     openDataFolder: async () => undefined,

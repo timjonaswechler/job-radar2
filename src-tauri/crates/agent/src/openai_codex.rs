@@ -1,7 +1,9 @@
+pub(crate) mod loopback;
 mod streaming;
 
 pub use self::streaming::OpenAiCodexProvider;
-pub use crate::auth::{AuthStatus, StoredAuthenticationKind};
+#[cfg(test)]
+pub(crate) use crate::auth::AuthStatus;
 use crate::auth::{AuthStorage, AuthStorageError, OAuthCredential};
 use crate::{AgentError, AgentErrorCategory};
 use base64::Engine;
@@ -9,6 +11,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::future::Future;
+#[cfg(test)]
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -28,7 +31,8 @@ const SCOPE: &str = "openid profile email offline_access";
 const JWT_AUTH_CLAIM: &str = "https://api.openai.com/auth";
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
-pub type AuthFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, AgentError>> + Send + 'a>>;
+pub(crate) type AuthFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, AgentError>> + Send + 'a>>;
 
 impl From<AuthStorageError> for AgentError {
     fn from(error: AuthStorageError) -> Self {
@@ -50,12 +54,12 @@ impl From<AuthStorageError> for AgentError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LoginMethod {
+pub(crate) enum LoginMethod {
     Browser,
     DeviceCode,
 }
 
-pub struct SecretAuthorizationInput(String);
+pub(crate) struct SecretAuthorizationInput(String);
 
 impl SecretAuthorizationInput {
     pub fn new(value: impl Into<String>) -> Self {
@@ -63,25 +67,19 @@ impl SecretAuthorizationInput {
     }
 }
 
-pub struct BrowserAuthorization {
+pub(crate) struct BrowserAuthorization {
     url: String,
-    instructions: &'static str,
 }
 
 impl BrowserAuthorization {
     pub fn url(&self) -> &str {
         &self.url
     }
-
-    pub fn instructions(&self) -> &str {
-        self.instructions
-    }
 }
 
-pub struct DeviceAuthorization {
+pub(crate) struct DeviceAuthorization {
     verification_uri: &'static str,
     user_code: String,
-    expires_in: Duration,
 }
 
 impl DeviceAuthorization {
@@ -92,13 +90,17 @@ impl DeviceAuthorization {
     pub fn user_code(&self) -> &str {
         &self.user_code
     }
-
-    pub fn expires_in(&self) -> Duration {
-        self.expires_in
-    }
 }
 
-pub trait AuthInteraction: Send {
+pub(crate) trait AuthInteraction: Send {
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+
+    fn begin_finalizing(&self) -> bool {
+        true
+    }
+
     fn select_login_method(&mut self) -> AuthFuture<'_, LoginMethod>;
     fn authorize_browser(
         &mut self,
@@ -229,18 +231,21 @@ pub(crate) struct ProviderCredential {
 }
 
 #[derive(Clone)]
-pub struct AgentAuthentication {
+pub(crate) struct AgentAuthentication {
     storage: Arc<AuthStorage>,
     http: Arc<dyn OAuthHttpClient>,
     runtime: Arc<dyn OAuthRuntime>,
 }
 
 impl AgentAuthentication {
-    pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
+    #[cfg(test)]
+    pub(crate) fn from_agents_data_root(
+        agents_data_root: impl AsRef<Path>,
+    ) -> Result<Self, AgentError> {
         Self::with_storage(AuthStorage::in_agents_data_root(agents_data_root.as_ref())?)
     }
 
-    fn with_storage(storage: AuthStorage) -> Result<Self, AgentError> {
+    pub(crate) fn with_storage(storage: AuthStorage) -> Result<Self, AgentError> {
         Ok(Self {
             storage: Arc::new(storage),
             http: Arc::new(ReqwestOAuthHttpClient::new()?),
@@ -261,7 +266,8 @@ impl AgentAuthentication {
         }
     }
 
-    pub fn status(&self) -> Result<AuthStatus, AgentError> {
+    #[cfg(test)]
+    pub(crate) fn status(&self) -> Result<AuthStatus, AgentError> {
         self.storage.status(PROVIDER_ID).map_err(Into::into)
     }
 
@@ -284,11 +290,10 @@ impl AgentAuthentication {
         self.storage.logout(provider).map_err(Into::into)
     }
 
-    pub fn reload(&self) -> Result<(), AgentError> {
-        self.storage.reload().map_err(Into::into)
-    }
-
-    pub async fn login(&self, interaction: &mut impl AuthInteraction) -> Result<(), AgentError> {
+    pub(crate) async fn login(
+        &self,
+        interaction: &mut impl AuthInteraction,
+    ) -> Result<(), AgentError> {
         let credential = match interaction.select_login_method().await? {
             LoginMethod::Browser => self.login_browser(interaction).await,
             LoginMethod::DeviceCode => self.login_device(interaction).await,
@@ -300,7 +305,8 @@ impl AgentAuthentication {
         Ok(())
     }
 
-    pub fn logout(&self) -> Result<(), AgentError> {
+    #[cfg(test)]
+    pub(crate) fn logout(&self) -> Result<(), AgentError> {
         self.storage.logout(PROVIDER_ID).map_err(Into::into)
     }
 
@@ -385,17 +391,10 @@ impl AgentAuthentication {
             .append_pair("codex_cli_simplified_flow", "true")
             .append_pair("originator", "pi");
         let input = interaction
-            .authorize_browser(BrowserAuthorization {
-                url: url.into(),
-                instructions:
-                    "Complete authentication in the browser or paste the redirect result.",
-            })
+            .authorize_browser(BrowserAuthorization { url: url.into() })
             .await?;
         let (code, returned_state) = parse_authorization_input(input)?;
-        if returned_state
-            .as_deref()
-            .is_some_and(|returned| returned != state)
-        {
+        if returned_state != state {
             return Err(AgentError::authentication());
         }
         exchange_code(
@@ -429,12 +428,14 @@ impl AgentAuthentication {
             return Err(AgentError::authentication());
         }
         let started = self.runtime.monotonic_elapsed();
+        if interaction.is_cancelled() {
+            return Err(AgentError::authentication());
+        }
         tokio::time::timeout(
             DEVICE_TIMEOUT,
             interaction.display_device_code(DeviceAuthorization {
                 verification_uri: DEVICE_VERIFICATION_URI,
                 user_code: device.user_code.clone(),
-                expires_in: DEVICE_TIMEOUT,
             }),
         )
         .await
@@ -445,6 +446,9 @@ impl AgentAuthentication {
 
         let mut wait = interval;
         loop {
+            if interaction.is_cancelled() {
+                return Err(AgentError::authentication());
+            }
             if device_deadline_elapsed(self.runtime.as_ref(), started) {
                 return Err(AgentError::authentication());
             }
@@ -487,11 +491,12 @@ impl AgentAuthentication {
                 )
                 .await
                 .map_err(|_| AgentError::authentication())??;
-                return if device_deadline_elapsed(self.runtime.as_ref(), started) {
-                    Err(AgentError::authentication())
-                } else {
-                    Ok(credential)
-                };
+                if device_deadline_elapsed(self.runtime.as_ref(), started)
+                    || !interaction.begin_finalizing()
+                {
+                    return Err(AgentError::authentication());
+                }
+                return Ok(credential);
             }
             if slow_down_error(&response.body) {
                 wait = wait.saturating_add(Duration::from_secs(5));
@@ -505,6 +510,9 @@ impl AgentAuthentication {
             let elapsed = self.runtime.monotonic_elapsed().saturating_sub(started);
             let remaining = DEVICE_TIMEOUT.saturating_sub(elapsed);
             self.runtime.sleep(wait.min(remaining)).await?;
+            if interaction.is_cancelled() {
+                return Err(AgentError::authentication());
+            }
         }
     }
 }
@@ -620,37 +628,20 @@ fn account_id_from_jwt(access: &str) -> Result<String, AgentError> {
 
 fn parse_authorization_input(
     input: SecretAuthorizationInput,
-) -> Result<(String, Option<String>), AgentError> {
-    let value = input.0.trim();
-    if value.is_empty() {
-        return Err(AgentError::authentication());
-    }
-    if let Ok(url) = url::Url::parse(value) {
-        let parameters: std::collections::HashMap<_, _> = url.query_pairs().collect();
-        let code = parameters
-            .get("code")
-            .filter(|code| !code.is_empty())
-            .map(|code| code.to_string())
-            .ok_or_else(AgentError::authentication)?;
-        return Ok((code, parameters.get("state").map(|state| state.to_string())));
-    }
-    if let Some((code, state)) = value.split_once('#') {
-        if code.is_empty() {
-            return Err(AgentError::authentication());
-        }
-        return Ok((code.to_owned(), Some(state.to_owned())));
-    }
-    if value.contains("code=") {
-        let parameters: std::collections::HashMap<_, _> =
-            url::form_urlencoded::parse(value.as_bytes()).collect();
-        let code = parameters
-            .get("code")
-            .filter(|code| !code.is_empty())
-            .map(|code| code.to_string())
-            .ok_or_else(AgentError::authentication)?;
-        return Ok((code, parameters.get("state").map(|state| state.to_string())));
-    }
-    Ok((value.to_owned(), None))
+) -> Result<(String, String), AgentError> {
+    let url = url::Url::parse(input.0.trim()).map_err(|_| AgentError::authentication())?;
+    let parameters: std::collections::HashMap<_, _> = url.query_pairs().collect();
+    let code = parameters
+        .get("code")
+        .filter(|code| !code.is_empty())
+        .map(|code| code.to_string())
+        .ok_or_else(AgentError::authentication)?;
+    let state = parameters
+        .get("state")
+        .filter(|state| !state.is_empty())
+        .map(|state| state.to_string())
+        .ok_or_else(AgentError::authentication)?;
+    Ok((code, state))
 }
 
 #[derive(Deserialize)]
@@ -788,6 +779,9 @@ mod tests {
         method: LoginMethod,
         authorization_url: Option<String>,
         device_code_seen: bool,
+        cancel_after_display: bool,
+        cancelled: bool,
+        finalization_allowed: bool,
         display_delay: Option<(Arc<SyntheticRuntime>, Duration)>,
     }
 
@@ -797,6 +791,9 @@ mod tests {
                 method: LoginMethod::Browser,
                 authorization_url: None,
                 device_code_seen: false,
+                cancel_after_display: false,
+                cancelled: false,
+                finalization_allowed: true,
                 display_delay: None,
             }
         }
@@ -806,12 +803,23 @@ mod tests {
                 method: LoginMethod::DeviceCode,
                 authorization_url: None,
                 device_code_seen: false,
+                cancel_after_display: false,
+                cancelled: false,
+                finalization_allowed: true,
                 display_delay: None,
             }
         }
     }
 
     impl AuthInteraction for SyntheticInteraction {
+        fn is_cancelled(&self) -> bool {
+            self.cancelled
+        }
+
+        fn begin_finalizing(&self) -> bool {
+            !self.cancelled && self.finalization_allowed
+        }
+
         fn select_login_method(&mut self) -> AuthFuture<'_, LoginMethod> {
             let method = self.method;
             Box::pin(async move { Ok(method) })
@@ -822,15 +830,25 @@ mod tests {
             authorization: BrowserAuthorization,
         ) -> AuthFuture<'_, SecretAuthorizationInput> {
             self.authorization_url = Some(authorization.url().to_owned());
-            Box::pin(async {
-                Ok(SecretAuthorizationInput::new(
-                    "synthetic-authorization-code",
-                ))
+            let state = url::Url::parse(authorization.url())
+                .unwrap()
+                .query_pairs()
+                .find(|(name, _)| name == "state")
+                .unwrap()
+                .1
+                .into_owned();
+            Box::pin(async move {
+                Ok(SecretAuthorizationInput::new(format!(
+                    "http://localhost:1455/auth/callback?code=synthetic-authorization-code&state={state}"
+                )))
             })
         }
 
         fn display_device_code(&mut self, _device_code: DeviceAuthorization) -> AuthFuture<'_, ()> {
             self.device_code_seen = true;
+            if self.cancel_after_display {
+                self.cancelled = true;
+            }
             if let Some((runtime, delay)) = &self.display_delay {
                 runtime
                     .monotonic_ms
@@ -1038,6 +1056,52 @@ mod tests {
             exchange.get("redirect_uri").map(|value| value.as_ref()),
             Some(DEVICE_REDIRECT_URI)
         );
+    }
+
+    #[test]
+    fn device_login_cancellation_after_display_stops_before_polling_or_persistence() {
+        let (auth, http, _runtime, _app_data) = authentication(
+            vec![OAuthHttpResponse::new(
+                200,
+                r#"{"device_auth_id":"synthetic-device-auth","user_code":"synthetic-user-code","interval":2}"#.to_owned(),
+            )],
+            10_000,
+        );
+        let mut interaction = SyntheticInteraction::device();
+        interaction.cancel_after_display = true;
+
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
+
+        assert_eq!(error.category, AgentErrorCategory::Authentication);
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+        assert_eq!(auth.status().unwrap(), AuthStatus::NotConfigured);
+    }
+
+    #[test]
+    fn device_login_rejects_late_cancellation_before_persisting_credentials() {
+        let access = synthetic_jwt("late-cancel");
+        let (auth, http, _runtime, _app_data) = authentication(
+            vec![
+                OAuthHttpResponse::new(
+                    200,
+                    r#"{"device_auth_id":"synthetic-device-auth","user_code":"synthetic-user-code","interval":2}"#.to_owned(),
+                ),
+                OAuthHttpResponse::new(
+                    200,
+                    r#"{"authorization_code":"synthetic-device-authorization","code_verifier":"synthetic-device-verifier"}"#.to_owned(),
+                ),
+                token_response(&access, "synthetic-refresh-late-cancel", 60),
+            ],
+            10_000,
+        );
+        let mut interaction = SyntheticInteraction::device();
+        interaction.finalization_allowed = false;
+
+        let error = crate::testing::block_on(auth.login(&mut interaction)).unwrap_err();
+
+        assert_eq!(error.category, AgentErrorCategory::Authentication);
+        assert_eq!(http.requests.lock().unwrap().len(), 3);
+        assert_eq!(auth.status().unwrap(), AuthStatus::NotConfigured);
     }
 
     #[test]

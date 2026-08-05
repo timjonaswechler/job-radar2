@@ -76,7 +76,7 @@ fn draft_is_ephemeral_then_publishes_and_reopens() {
             ModelId::new("synthetic-model").unwrap(),
         )
         .unwrap();
-    draft.set_reasoning_level(ReasoningLevel::Low).unwrap();
+    draft.set_reasoning_level(ReasoningLevel::XHigh).unwrap();
     draft
         .append_completed_turn(turn("synthetic assistant"))
         .unwrap();
@@ -87,7 +87,7 @@ fn draft_is_ephemeral_then_publishes_and_reopens() {
     drop(draft);
     let reopened = manager.open(&id).unwrap();
     assert_eq!(reopened.snapshot().turns().len(), 1);
-    assert_eq!(reopened.snapshot().reasoning_level(), ReasoningLevel::Low);
+    assert_eq!(reopened.snapshot().reasoning_level(), ReasoningLevel::XHigh);
     let bytes = std::fs::read(
         std::fs::read_dir(root(&temp).join("sessions"))
             .unwrap()
@@ -98,7 +98,10 @@ fn draft_is_ephemeral_then_publishes_and_reopens() {
     )
     .unwrap();
     assert!(bytes.ends_with(b"\n"));
-    assert!(String::from_utf8(bytes).unwrap().contains("\"version\":3"));
+    let document = String::from_utf8(bytes).unwrap();
+    assert!(document.contains("\"version\":3"));
+    assert!(document.contains("\"thinkingLevel\":\"x_high\""));
+    assert!(!document.contains("\"thinkingLevel\":\"xhigh\""));
 }
 
 #[test]

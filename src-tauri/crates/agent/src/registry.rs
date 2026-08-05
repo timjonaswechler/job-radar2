@@ -11,29 +11,14 @@ use crate::providers::{self, AuthenticationMethod, ProviderDescriptor};
 use crate::AgentError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+#[cfg(test)]
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 const MODELS_FILE: &str = "models.json";
-
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct ProviderAvailability {
-    configured: BTreeSet<ProviderId>,
-}
-
-impl ProviderAvailability {
-    pub fn new(providers: impl IntoIterator<Item = ProviderId>) -> Self {
-        Self {
-            configured: providers.into_iter().collect(),
-        }
-    }
-
-    pub fn contains(&self, provider: &ProviderId) -> bool {
-        self.configured.contains(provider)
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModelRegistrySnapshot {
@@ -58,7 +43,8 @@ impl ModelRegistrySnapshot {
         &self.providers
     }
 
-    pub fn models(&self) -> &[Model] {
+    #[cfg(test)]
+    pub(crate) fn models(&self) -> &[Model] {
         &self.models
     }
 
@@ -71,23 +57,12 @@ impl ModelRegistrySnapshot {
             .iter()
             .find(|candidate| candidate.provider() == provider && candidate.id() == model)
     }
-
-    pub fn available_models<'a>(&'a self, availability: &ProviderAvailability) -> Vec<&'a Model> {
-        self.providers
-            .iter()
-            .filter(|provider| {
-                provider.authentication_methods().is_empty()
-                    || provider.has_configured_api_key()
-                    || availability.contains(provider.id())
-            })
-            .flat_map(ProviderDescriptor::models)
-            .collect()
-    }
 }
 
 #[derive(Clone)]
 enum EnvironmentAvailability {
     Process,
+    #[cfg(test)]
     Names(BTreeSet<String>),
 }
 
@@ -95,6 +70,7 @@ impl EnvironmentAvailability {
     fn configured(&self, name: &str) -> bool {
         match self {
             Self::Process => std::env::var_os(name).is_some_and(|value| !value.is_empty()),
+            #[cfg(test)]
             Self::Names(names) => names.contains(name),
         }
     }
@@ -162,7 +138,8 @@ impl ModelRegistry {
 
     /// Test/application seam that supplies only configured environment-variable names,
     /// never their values.
-    pub fn from_agents_data_root_with_environment_names(
+    #[cfg(test)]
+    pub(crate) fn from_agents_data_root_with_environment_names(
         agents_data_root: impl AsRef<Path>,
         names: impl IntoIterator<Item = String>,
     ) -> Result<Self, AgentError> {
@@ -213,6 +190,22 @@ impl ModelRegistry {
         )
     }
 
+    pub(crate) fn has_request_overrides(&self, provider: &ProviderId) -> bool {
+        let published = self.published.read().expect("registry lock poisoned");
+        published
+            .request_configs
+            .providers
+            .get(provider)
+            .is_some_and(|config| {
+                config.api_key.is_some() || !config.headers.is_empty() || config.auth_header
+            })
+            || published
+                .request_configs
+                .models
+                .keys()
+                .any(|(configured_provider, _)| configured_provider == provider)
+    }
+
     pub(crate) fn resolve_request(
         &self,
         provider: &ProviderId,
@@ -254,7 +247,8 @@ impl ModelRegistry {
             .reload_failed
     }
 
-    pub fn reload(&self) -> Result<Arc<ModelRegistrySnapshot>, AgentError> {
+    #[cfg(test)]
+    pub(crate) fn reload(&self) -> Result<Arc<ModelRegistrySnapshot>, AgentError> {
         match self.load_candidate() {
             Ok(candidate) => Ok(self.publish(candidate, false)),
             Err(_) => {
@@ -712,6 +706,7 @@ struct ProviderWork {
     default_base_url: String,
     models: Vec<Model>,
     configured_api_key: bool,
+    api_key_reference: bool,
 }
 
 impl ProviderWork {
@@ -724,6 +719,7 @@ impl ProviderWork {
             default_base_url: descriptor.default_base_url().to_owned(),
             models: descriptor.models().to_vec(),
             configured_api_key: descriptor.has_configured_api_key(),
+            api_key_reference: descriptor.has_api_key_reference(),
         }
     }
 
@@ -736,6 +732,7 @@ impl ProviderWork {
             self.default_base_url,
             self.models,
             self.configured_api_key,
+            self.api_key_reference,
         )
     }
 }
@@ -847,6 +844,7 @@ fn apply_provider(
             default_base_url: base_url,
             models: Vec::new(),
             configured_api_key: false,
+            api_key_reference: false,
         }
     };
 
@@ -864,6 +862,7 @@ fn apply_provider(
         provider.default_base_url.clone_from(base_url);
     }
     provider.configured_api_key |= configured_api_key;
+    provider.api_key_reference |= config.api_key.is_some();
     if config.api_key.is_some()
         && !provider
             .authentication_methods
