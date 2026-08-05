@@ -1,13 +1,15 @@
 use crate::api::ApiKind;
-use crate::auth::{
-    canonical_existing_prefix_is_inside_repository, create_private_directory,
-    path_below_ancestor_contains_symlink, path_is_inside_repository, read_existing_private_file,
-    trusted_directory_is_real,
+use crate::configuration::authentication::{
+    create_private_directory, read_existing_private_file, trusted_directory_is_real,
 };
 use crate::models::{
     Model, ModelCost, ModelCostTier, ModelId, ModelInput, ProviderId, ReasoningLevel,
 };
 use crate::providers::{self, AuthenticationMethod, ProviderDescriptor};
+use crate::secure_fs::{
+    canonical_existing_prefix_is_inside_repository, path_below_ancestor_contains_symlink,
+    path_is_inside_repository,
+};
 use crate::AgentError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
@@ -21,7 +23,7 @@ use std::sync::{Arc, RwLock};
 const MODELS_FILE: &str = "models.json";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ModelRegistrySnapshot {
+pub(crate) struct ModelRegistrySnapshot {
     providers: Vec<ProviderDescriptor>,
     models: Vec<Model>,
 }
@@ -39,7 +41,7 @@ impl ModelRegistrySnapshot {
         Self { providers, models }
     }
 
-    pub fn providers(&self) -> &[ProviderDescriptor] {
+    pub(crate) fn providers(&self) -> &[ProviderDescriptor] {
         &self.providers
     }
 
@@ -48,11 +50,11 @@ impl ModelRegistrySnapshot {
         &self.models
     }
 
-    pub fn provider(&self, id: &ProviderId) -> Option<&ProviderDescriptor> {
+    pub(crate) fn provider(&self, id: &ProviderId) -> Option<&ProviderDescriptor> {
         self.providers.iter().find(|provider| provider.id() == id)
     }
 
-    pub fn model(&self, provider: &ProviderId, model: &ModelId) -> Option<&Model> {
+    pub(crate) fn model(&self, provider: &ProviderId, model: &ModelId) -> Option<&Model> {
         self.models
             .iter()
             .find(|candidate| candidate.provider() == provider && candidate.id() == model)
@@ -124,7 +126,7 @@ impl ResolvedModelRequest {
     }
 }
 
-pub struct ModelRegistry {
+pub(crate) struct ModelRegistry {
     agents_data_root: PathBuf,
     models_path: PathBuf,
     environment: EnvironmentAvailability,
@@ -132,7 +134,9 @@ pub struct ModelRegistry {
 }
 
 impl ModelRegistry {
-    pub fn from_agents_data_root(agents_data_root: impl AsRef<Path>) -> Result<Self, AgentError> {
+    pub(crate) fn from_agents_data_root(
+        agents_data_root: impl AsRef<Path>,
+    ) -> Result<Self, AgentError> {
         Self::with_environment(agents_data_root.as_ref(), EnvironmentAvailability::Process)
     }
 
@@ -180,7 +184,7 @@ impl ModelRegistry {
         Ok(registry)
     }
 
-    pub fn snapshot(&self) -> Arc<ModelRegistrySnapshot> {
+    pub(crate) fn snapshot(&self) -> Arc<ModelRegistrySnapshot> {
         Arc::clone(
             &self
                 .published
@@ -240,7 +244,7 @@ impl ModelRegistry {
         })
     }
 
-    pub fn last_reload_failed(&self) -> bool {
+    pub(crate) fn last_reload_failed(&self) -> bool {
         self.published
             .read()
             .expect("registry lock poisoned")

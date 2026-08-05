@@ -6,9 +6,9 @@ use super::sessions::{
     SessionSnapshot, StopReason,
 };
 use super::{
-    conversation::ConversationAttempt, AgentConversation, AgentError, AssistantContent,
-    AssistantMessage, ContentKind, ConversationEvent, ConversationProvider, FinishReason, Message,
-    TokenUsage, TurnCancellation, UserMessage,
+    conversation::ConversationAttempt, AgentError, AssistantContent, AssistantMessage, ContentKind,
+    Conversation, ConversationEvent, ConversationProvider, FinishReason, Message, TokenUsage,
+    TurnCancellation, UserMessage,
 };
 use futures_util::Stream;
 use std::fmt;
@@ -67,7 +67,7 @@ pub struct AgentChat {
     system_prompt: String,
     provider: Arc<dyn ConversationProvider>,
     session: SessionHandle,
-    conversation: Option<AgentConversation>,
+    conversation: Option<Conversation>,
     not_saved: bool,
 }
 
@@ -88,7 +88,7 @@ impl AgentChat {
         if reasoning != ReasoningLevel::Off {
             session.set_reasoning_level(reasoning)?;
         }
-        let conversation = AgentConversation::from_shared(
+        let conversation = Conversation::from_shared(
             system_prompt.clone(),
             Arc::clone(&provider),
             model.provider().clone(),
@@ -145,7 +145,7 @@ impl AgentChat {
     pub fn reasoning_level(&self) -> ReasoningLevel {
         self.conversation
             .as_ref()
-            .map(AgentConversation::reasoning_level)
+            .map(Conversation::reasoning_level)
             .unwrap_or_else(|| self.session.snapshot().reasoning_level())
     }
 
@@ -297,7 +297,7 @@ impl AgentChat {
         let current_reasoning = self
             .conversation
             .as_ref()
-            .map(AgentConversation::reasoning_level)
+            .map(Conversation::reasoning_level)
             .unwrap_or_else(|| self.session.snapshot().reasoning_level());
         let effective = selected.normalize_reasoning(current_reasoning);
         if let Err(error) = self.session.select_model(provider.clone(), model.clone()) {
@@ -384,7 +384,7 @@ fn build_conversation(
     system_prompt: &str,
     provider: &Arc<dyn ConversationProvider>,
     session: &SessionHandle,
-) -> Option<AgentConversation> {
+) -> Option<Conversation> {
     build_conversation_with_models(system_prompt, provider, session, provider.model_snapshot())
 }
 
@@ -393,7 +393,7 @@ fn build_conversation_with_models(
     provider: &Arc<dyn ConversationProvider>,
     session: &SessionHandle,
     models: Vec<Model>,
-) -> Option<AgentConversation> {
+) -> Option<Conversation> {
     if session.snapshot().access() != SessionAccess::Writable {
         return None;
     }
@@ -404,7 +404,7 @@ fn build_conversation_with_models(
         .find(|model| model.provider() == provider_id && model.id() == model_id)?
         .clone();
     let messages = hydrate_messages(session.continuation(), &model, provider.as_ref());
-    AgentConversation::from_shared_with_models(
+    Conversation::from_shared_with_models(
         system_prompt.to_owned(),
         Arc::clone(provider),
         model.provider().clone(),
@@ -614,7 +614,7 @@ enum ChatPhase {
 pub struct AgentChatEventStream<'a> {
     phase: ChatPhase,
     session: &'a mut SessionHandle,
-    conversation: &'a mut AgentConversation,
+    conversation: &'a mut Conversation,
     user_text: Option<String>,
     cancellation: TurnCancellation,
     not_saved: &'a mut bool,

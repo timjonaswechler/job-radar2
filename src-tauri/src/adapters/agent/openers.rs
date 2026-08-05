@@ -1,8 +1,7 @@
-use agent::configuration::{
+use agent::{
     DataFolderOpener, InteractionError, InteractionFuture, LoginAttemptId, LoginInteraction,
-    LoginMethod, LoginProgress, OpenError,
+    LoginMethod, LoginProgress, OpenError, ProviderId,
 };
-use agent::ProviderId;
 use std::path::Path;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_opener::OpenerExt;

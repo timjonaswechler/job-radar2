@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 const BASE_URL: &str = "https://chatgpt.com/backend-api";
 
-pub fn builtin_models() -> &'static [Model] {
+pub(crate) fn builtin_models() -> &'static [Model] {
     static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
     MODELS.get_or_init(|| {
         // Exact capability snapshot from Pi at dcfe36c79702ec240b146c45f167ab75ecddd205.

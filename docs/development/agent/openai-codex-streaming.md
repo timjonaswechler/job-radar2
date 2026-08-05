@@ -19,7 +19,7 @@ Credential-bearing fields and account-routing data stay inside private transport
 
 ## Verification
 
-The synthetic byte-stream adapter drives production provider behavior through `AgentConversation` where practical. Coverage includes request semantics, authentication, opaque replay, model/reasoning changes, completion, usage, SSE framing and bounds, provider/transport failures, malformed terminals, bounded rate-limit delays, no retry after output, and redaction.
+The synthetic byte-stream adapter drives production provider behavior through `Conversation` where practical. Coverage includes request semantics, authentication, opaque replay, model/reasoning changes, completion, usage, SSE framing and bounds, provider/transport failures, malformed terminals, bounded rate-limit delays, no retry after output, and redaction.
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml agent::openai_codex --no-fail-fast

@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Job Radar will expose a provider-neutral `AgentConversation` module in `job_radar_lib` for ephemeral multi-turn exchanges. It is deliberately smaller than Pi's full `Agent` and `AgentSession`: application workflows may use an Agent Conversation, but persistence, tools, compaction, Tauri contracts, and Source Profile authoring behavior remain outside it.
+Job Radar will expose a provider-neutral `Conversation` module in `job_radar_lib` for ephemeral multi-turn exchanges. It is deliberately smaller than Pi's full `Agent` and `AgentSession`: application workflows may use an Agent Conversation, but persistence, tools, compaction, Tauri contracts, and Source Profile authoring behavior remain outside it.
 
 ## Caller-facing contract
 
@@ -11,7 +11,7 @@ The caller supplies an immutable system prompt, a `ConversationProvider`, an ini
 The intended surface is:
 
 ```rust
-impl AgentConversation {
+impl Conversation {
     pub fn new(
         system_prompt: String,
         provider: impl ConversationProvider,

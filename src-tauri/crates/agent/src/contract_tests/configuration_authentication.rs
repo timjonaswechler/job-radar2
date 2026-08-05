@@ -1,6 +1,6 @@
 #![cfg(unix)]
 
-use crate::openai_codex::{AgentAuthentication, AuthStatus};
+use crate::providers::openai_codex::{AgentAuthentication, AuthStatus};
 use crate::AgentErrorCategory;
 use std::fs::{self, OpenOptions};
 use std::io::Write;

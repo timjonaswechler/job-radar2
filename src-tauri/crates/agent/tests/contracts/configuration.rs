@@ -1,7 +1,7 @@
-use agent::configuration::{
-    AuthenticationKind, Capability, ConfigurationState, ErrorKind, InteractionError,
-    InteractionFuture, LoginAttemptId, LoginInteraction, LoginMethod, LoginProgress, LoginStage,
-    SecretInput,
+use agent::{
+    AuthenticationKind, Capability, ConfigurationErrorKind as ErrorKind, ConfigurationState,
+    InteractionError, InteractionFuture, LoginAttemptId, LoginInteraction, LoginMethod,
+    LoginProgress, LoginStage, SecretInput,
 };
 use agent::{Configuration, ProviderId};
 use std::fs;

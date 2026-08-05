@@ -280,7 +280,7 @@ impl SafeContinuationBlock {
 }
 
 #[derive(Clone)]
-pub struct SessionTestHarness {
+pub(crate) struct SessionTestHarness {
     runtime: Arc<TestSessionRuntime>,
 }
 
@@ -293,7 +293,7 @@ struct TestSessionRuntime {
 }
 
 impl SessionTestHarness {
-    pub fn new(timestamps: Vec<String>, uuids: Vec<Uuid>, trash_succeeds: bool) -> Self {
+    pub(crate) fn new(timestamps: Vec<String>, uuids: Vec<Uuid>, trash_succeeds: bool) -> Self {
         Self {
             runtime: Arc::new(TestSessionRuntime {
                 timestamps: Mutex::new(timestamps.into()),
@@ -305,7 +305,7 @@ impl SessionTestHarness {
         }
     }
 
-    pub fn fail_at(self, checkpoints: impl IntoIterator<Item = SessionCheckpoint>) -> Self {
+    pub(crate) fn fail_at(self, checkpoints: impl IntoIterator<Item = SessionCheckpoint>) -> Self {
         self.runtime
             .failing_checkpoints
             .lock()
@@ -314,11 +314,11 @@ impl SessionTestHarness {
         self
     }
 
-    pub fn manager(&self, agents_root: &Path) -> Result<SessionManager, SessionError> {
+    pub(crate) fn manager(&self, agents_root: &Path) -> Result<SessionManager, SessionError> {
         sessions::manager_with_runtime(agents_root, self.runtime.clone())
     }
 
-    pub fn continuation(&self, handle: &SessionHandle) -> Vec<SafeContinuationBlock> {
+    pub(crate) fn continuation(&self, handle: &SessionHandle) -> Vec<SafeContinuationBlock> {
         handle
             .continuation
             .iter()
@@ -380,7 +380,7 @@ impl SessionTestHarness {
             .collect()
     }
 
-    pub fn trashed_paths(&self) -> Vec<PathBuf> {
+    pub(crate) fn trashed_paths(&self) -> Vec<PathBuf> {
         self.runtime
             .trashed
             .lock()

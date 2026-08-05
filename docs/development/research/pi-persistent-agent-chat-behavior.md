@@ -2,7 +2,7 @@
 
 ## Summary
 
-Pi persists an append-only, versioned JSONL event tree per session: the file header supplies stable session identity and ancestry, while entry `id`/`parentId` links define the active branch; reopening reconstructs messages plus the latest model/reasoning settings from the final persisted leaf. Job Radar should reuse the event-log and deterministic reconstruction ideas, but introduce a product-level **Agent Chat** above the existing ephemeral `AgentConversation`, use app-data storage and stronger commit/recovery guarantees, and initially omit Pi’s tools, skills/extensions, branch UI, and compaction.
+Pi persists an append-only, versioned JSONL event tree per session: the file header supplies stable session identity and ancestry, while entry `id`/`parentId` links define the active branch; reopening reconstructs messages plus the latest model/reasoning settings from the final persisted leaf. Job Radar should reuse the event-log and deterministic reconstruction ideas, but introduce a product-level **Agent Chat** above the existing ephemeral `Conversation`, use app-data storage and stronger commit/recovery guarantees, and initially omit Pi’s tools, skills/extensions, branch UI, and compaction.
 
 ## Findings
 
@@ -24,7 +24,7 @@ Pi persists an append-only, versioned JSONL event tree per session: the file hea
 
 ## Proposed Job Radar destination
 
-- Add **Agent Chat** as the persisted, user-visible aggregate; retain **Agent Conversation** as the ephemeral turn engine exactly as defined in `CONTEXT.md`, `docs/development/adr/0011-minimal-agent-conversation-contract.md`, and `src-tauri/src/agent/conversation.rs`. Do not rename or inflate `AgentConversation` into persistence.
+- Add **Agent Chat** as the persisted, user-visible aggregate; retain **Agent Conversation** as the ephemeral turn engine exactly as defined in `CONTEXT.md`, `docs/development/adr/0011-minimal-agent-conversation-contract.md`, and `src-tauri/src/agent/conversation.rs`. Do not rename or inflate `Conversation` into persistence.
 - Explicitly build on issue 208: store chats under the same app-data `agents/` root (proposed `agents/chats/<chat-id>.jsonl` plus a rebuildable index only if needed); each chat stores provider/model IDs and effective Reasoning Level, while credentials and provider transport configuration remain solely in `agents/auth.json` and `agents/models.json`. New chats preselect issue 208’s last-used model; resumed chats resolve their persisted IDs against the current immutable registry snapshot and show a recoverable “model unavailable” state rather than silently substituting.
 - Start with schema-versioned header plus append-only entries: `user_assistant_turn` (one atomic logical record containing the completed pair), `model_change`, `reasoning_change`, and `chat_info` (name). Persist assistant content blocks, effective provider/model, usage, finish reason, and opaque replay metadata only if the provider adapter requires it for correct replay; encrypt or otherwise protect account-linked opaque data consistently with `docs/development/agent/credential-containment.md`.
 - Preserve current semantics: `Completed` alone commits; failed, aborted, malformed, or dropped streams commit neither (`docs/development/agent/conversation-core.md`; `src-tauri/src/agent/conversation.rs`). Publish a completed turn with temp-write + durable atomic rename or an equivalently tested framed append/recovery protocol—do **not** copy Pi’s best-effort line append.

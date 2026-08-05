@@ -3,7 +3,7 @@ use crate::testing::{
     synthetic_assistant_message, ExpectedConversationRequest, ScriptedProvider, ScriptedTurn,
 };
 use crate::{
-    AgentConversation, AgentErrorCategory, AssistantContent, ContentKind, ConversationEvent,
+    AgentErrorCategory, AssistantContent, ContentKind, Conversation, ConversationEvent,
     FinishReason, Message, ProviderEvent, ProviderTurnCompletion, TokenUsage, UserMessage,
 };
 use futures_util::StreamExt;
@@ -18,7 +18,7 @@ fn synthetic_model(id: &str, levels: Vec<ReasoningLevel>) -> Model {
     .unwrap()
 }
 
-fn run_turn(conversation: &mut AgentConversation, text: &str) -> Vec<ConversationEvent> {
+fn run_turn(conversation: &mut Conversation, text: &str) -> Vec<ConversationEvent> {
     crate::testing::block_on(async {
         let mut stream = conversation.send(text.to_owned()).unwrap();
         let mut events = Vec::new();
@@ -91,7 +91,7 @@ fn completed_turn_streams_lifecycle_and_commits_one_complete_pair() {
         )],
     );
     let provider_handle = provider.clone();
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "Be concise.".to_owned(),
         provider,
         model.id().clone(),
@@ -188,7 +188,7 @@ fn multi_turn_requests_replay_only_committed_pairs_and_keep_one_conversation_id(
         ],
     );
     let handle = provider.clone();
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         first_model.id().clone(),
@@ -250,7 +250,7 @@ fn reasoning_and_text_blocks_preserve_provider_order() {
             ],
         )],
     );
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         model.id().clone(),
@@ -288,7 +288,7 @@ fn dropping_an_unfinished_turn_rolls_back_pending_messages() {
             completed_text("Not consumed"),
         )],
     );
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         model.id().clone(),
@@ -310,7 +310,7 @@ fn model_selection_rejects_unknown_ids_and_normalizes_reasoning() {
     );
     let provider = ScriptedProvider::new(vec![sparse.clone()], Vec::new());
     let missing = ModelId::new("missing").unwrap();
-    let error = match AgentConversation::new(
+    let error = match Conversation::new(
         "System".to_owned(),
         provider.clone(),
         missing.clone(),
@@ -321,7 +321,7 @@ fn model_selection_rejects_unknown_ids_and_normalizes_reasoning() {
     };
     assert_eq!(error.category, AgentErrorCategory::ModelUnavailable);
 
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         sparse.id().clone(),
@@ -384,7 +384,7 @@ fn failed_and_aborted_turns_roll_back_user_and_partial_assistant_messages() {
         ],
     );
     let handle = provider.clone();
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         model.id().clone(),
@@ -446,7 +446,7 @@ fn malformed_provider_lifecycles_fail_once_without_committing() {
                 events,
             )],
         );
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             model.id().clone(),
@@ -488,7 +488,7 @@ fn scripted_provider_detects_request_mismatches_and_missing_calls() {
         )],
     );
     let handle = provider.clone();
-    let mut conversation = AgentConversation::new(
+    let mut conversation = Conversation::new(
         "System".to_owned(),
         provider,
         model.id().clone(),

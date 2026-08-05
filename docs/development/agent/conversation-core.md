@@ -4,7 +4,7 @@ This document describes the provider-neutral, ephemeral conversation contract ac
 
 ## Behavior
 
-- `AgentConversation` owns an immutable system prompt, one internal conversation identifier, the selected Agent Model and effective Reasoning Level, and only completed User/Assistant pairs.
+- `Conversation` owns an immutable system prompt, one internal conversation identifier, the selected Agent Model and effective Reasoning Level, and only completed User/Assistant pairs.
 - `send` includes the current User Message in the provider request but does not commit it yet. A validated `Completed` terminal event commits the User and complete Assistant Messages together. `Failed`, `Aborted`, malformed streams, and dropped streams commit neither.
 - `ConversationEventStream` holds a mutable borrow of the conversation, so another turn or model/Reasoning Level mutation cannot overlap it.
 - Provider events must begin once with `Started`, use contiguous indexed content blocks, and end once with `Completed`, `Failed`, or `Aborted`. Successful completion requires balanced start/delta/finish events; failures and aborts may terminate a partial block, which is rolled back. The provider stream must then close. Invalid sequences become one redacted provider failure.

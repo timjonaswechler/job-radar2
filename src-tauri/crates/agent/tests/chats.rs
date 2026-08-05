@@ -1,4 +1,4 @@
-use agent::models::Model;
+use agent::Model;
 use agent::{
     ChatCreateInput, ChatEvent, ChatEventKind, ChatEventListener, ChatOpenInput,
     ChatReasoningLevel, ChatStatus, Chats, ContentKind, ConversationProvider, ConversationRequest,
@@ -102,6 +102,11 @@ fn input() -> ChatCreateInput {
         model_id: "synthetic-model".into(),
         reasoning_level: ChatReasoningLevel::Off,
     }
+}
+
+#[test]
+fn public_model_debug_omits_transport_metadata() {
+    assert!(!format!("{:?}", model()).contains("https://api.openai.com"));
 }
 
 #[tokio::test]

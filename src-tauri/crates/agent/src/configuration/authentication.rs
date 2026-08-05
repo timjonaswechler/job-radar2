@@ -1,6 +1,10 @@
 // This module is integrated by the follow-up authentication/provider tickets.
 #![allow(dead_code)]
 
+use crate::secure_fs::{
+    canonical_existing_prefix_is_inside_repository, path_below_ancestor_contains_symlink,
+    path_is_inside_repository, PathError,
+};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -22,19 +26,19 @@ const TEMP_FILE: &str = "auth.json.tmp";
 const LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthStatus {
+pub(crate) enum AuthStatus {
     NotConfigured,
     Configured,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StoredAuthenticationKind {
+pub(crate) enum StoredAuthenticationKind {
     ApiKey,
     OAuth,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthStorageErrorCategory {
+pub(crate) enum AuthStorageErrorCategory {
     InvalidConfiguration,
     MigrationConflict,
     Unavailable,
@@ -42,13 +46,13 @@ pub enum AuthStorageErrorCategory {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AuthStorageError {
-    pub category: AuthStorageErrorCategory,
-    pub message: &'static str,
+pub(crate) struct AuthStorageError {
+    pub(crate) category: AuthStorageErrorCategory,
+    pub(crate) message: &'static str,
 }
 
 impl AuthStorageError {
-    pub(super) fn invalid_configuration() -> Self {
+    pub(crate) fn invalid_configuration() -> Self {
         Self {
             category: AuthStorageErrorCategory::InvalidConfiguration,
             message: "authentication storage is not securely configured",
@@ -69,7 +73,7 @@ impl AuthStorageError {
         }
     }
 
-    pub(super) fn refresh_failed() -> Self {
+    pub(crate) fn refresh_failed() -> Self {
         Self {
             category: AuthStorageErrorCategory::RefreshFailed,
             message: "authentication refresh failed",
@@ -226,7 +230,7 @@ pub(crate) struct AuthStorage {
 
 impl AuthStorage {
     #[cfg(test)]
-    pub(super) fn for_test_app_data(app_data_dir: &Path) -> Result<Self, AuthStorageError> {
+    pub(crate) fn for_test_app_data(app_data_dir: &Path) -> Result<Self, AuthStorageError> {
         Self::in_app_data_dir(app_data_dir)
     }
 
@@ -268,7 +272,12 @@ impl AuthStorage {
             || !app_data_dir.starts_with(trusted_ancestor)
             || path_is_inside_repository(app_data_dir)
             || canonical_existing_prefix_is_inside_repository(app_data_dir)
-            || path_below_ancestor_contains_symlink(trusted_ancestor, app_data_dir)?
+            || path_below_ancestor_contains_symlink(trusted_ancestor, app_data_dir).map_err(
+                |error| match error {
+                    PathError::Invalid => AuthStorageError::invalid_configuration(),
+                    PathError::Unavailable => AuthStorageError::unavailable(),
+                },
+            )?
         {
             return Err(AuthStorageError::invalid_configuration());
         }
@@ -730,51 +739,8 @@ fn validate_provider(provider: &str) -> Result<(), AuthStorageError> {
     }
 }
 
-pub(crate) fn path_is_inside_repository(path: &Path) -> bool {
-    path.ancestors()
-        .any(|ancestor| ancestor.join(".git").exists())
-}
-
-pub(crate) fn canonical_existing_prefix_is_inside_repository(path: &Path) -> bool {
-    path.ancestors()
-        .find(|ancestor| ancestor.exists())
-        .and_then(|ancestor| fs::canonicalize(ancestor).ok())
-        .is_some_and(|canonical| path_is_inside_repository(&canonical))
-}
-
-pub(crate) fn path_below_ancestor_contains_symlink(
-    trusted_ancestor: &Path,
-    path: &Path,
-) -> Result<bool, AuthStorageError> {
-    let relative = path
-        .strip_prefix(trusted_ancestor)
-        .map_err(|_| AuthStorageError::invalid_configuration())?;
-    let mut current = trusted_ancestor.to_owned();
-    for component in relative.components() {
-        current.push(component);
-        match fs::symlink_metadata(&current) {
-            Ok(metadata) if private_path_metadata_is_unsafe(&metadata) => return Ok(true),
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(AuthStorageError::unavailable()),
-        }
-    }
-    Ok(false)
-}
-
-#[cfg(unix)]
 fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
-}
-
-#[cfg(windows)]
-fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
-    crate::sessions::unsafe_path_metadata(metadata)
-}
-
-#[cfg(not(any(unix, windows)))]
-fn private_path_metadata_is_unsafe(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
+    crate::secure_fs::unsafe_path_metadata(metadata)
 }
 
 #[cfg(unix)]

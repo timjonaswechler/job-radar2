@@ -1,4 +1,5 @@
 use super::models::{ModelId, ProviderId, ReasoningLevel};
+use super::secure_fs::{canonical_existing_prefix_is_inside_repository, path_is_inside_repository};
 use super::sessions::{
     CompactionReason, RecoveryNotice, SessionAccess, SessionErrorCode, SessionId, SessionManager,
     SessionSnapshot, VisibleBlock, VisibleHistoryEntry,
@@ -746,8 +747,8 @@ impl Chats {
 fn prepare_agents_root(root: &Path) -> Result<std::path::PathBuf, ChatError> {
     if !root.is_absolute()
         || root.file_name().and_then(|name| name.to_str()) != Some("agents")
-        || super::auth::path_is_inside_repository(root)
-        || super::auth::canonical_existing_prefix_is_inside_repository(root)
+        || path_is_inside_repository(root)
+        || canonical_existing_prefix_is_inside_repository(root)
     {
         return Err(map_session_error(SessionErrorCode::InvalidRoot));
     }

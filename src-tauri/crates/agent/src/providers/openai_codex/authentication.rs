@@ -1,10 +1,6 @@
-pub(crate) mod loopback;
-mod streaming;
-
-pub use self::streaming::OpenAiCodexProvider;
 #[cfg(test)]
-pub(crate) use crate::auth::AuthStatus;
-use crate::auth::{AuthStorage, AuthStorageError, OAuthCredential};
+pub(crate) use crate::configuration::authentication::AuthStatus;
+use crate::configuration::authentication::{AuthStorage, AuthStorageError, OAuthCredential};
 use crate::{AgentError, AgentErrorCategory};
 use base64::Engine;
 use serde::Deserialize;
@@ -17,7 +13,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub const PROVIDER_ID: &str = "openai-codex";
+pub(crate) const PROVIDER_ID: &str = "openai-codex";
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";
 const TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
@@ -36,7 +32,7 @@ pub(crate) type AuthFuture<'a, T> =
 
 impl From<AuthStorageError> for AgentError {
     fn from(error: AuthStorageError) -> Self {
-        use crate::auth::AuthStorageErrorCategory;
+        use crate::configuration::authentication::AuthStorageErrorCategory;
         match error.category {
             AuthStorageErrorCategory::InvalidConfiguration => {
                 AgentError::invalid_authentication_configuration()
@@ -62,7 +58,7 @@ pub(crate) enum LoginMethod {
 pub(crate) struct SecretAuthorizationInput(String);
 
 impl SecretAuthorizationInput {
-    pub fn new(value: impl Into<String>) -> Self {
+    pub(crate) fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 }
@@ -72,7 +68,7 @@ pub(crate) struct BrowserAuthorization {
 }
 
 impl BrowserAuthorization {
-    pub fn url(&self) -> &str {
+    pub(crate) fn url(&self) -> &str {
         &self.url
     }
 }
@@ -83,11 +79,11 @@ pub(crate) struct DeviceAuthorization {
 }
 
 impl DeviceAuthorization {
-    pub fn verification_uri(&self) -> &str {
+    pub(crate) fn verification_uri(&self) -> &str {
         self.verification_uri
     }
 
-    pub fn user_code(&self) -> &str {
+    pub(crate) fn user_code(&self) -> &str {
         &self.user_code
     }
 }
@@ -271,22 +267,23 @@ impl AgentAuthentication {
         self.storage.status(PROVIDER_ID).map_err(Into::into)
     }
 
-    pub fn authentication_kind(
+    pub(crate) fn authentication_kind(
         &self,
         provider: &str,
-    ) -> Result<Option<crate::auth::StoredAuthenticationKind>, AgentError> {
+    ) -> Result<Option<crate::configuration::authentication::StoredAuthenticationKind>, AgentError>
+    {
         self.storage
             .authentication_kind(provider)
             .map_err(Into::into)
     }
 
-    pub fn set_api_key(&self, provider: &str, key: String) -> Result<(), AgentError> {
+    pub(crate) fn set_api_key(&self, provider: &str, key: String) -> Result<(), AgentError> {
         self.storage
             .set_api_key(provider, key, BTreeMap::new())
             .map_err(Into::into)
     }
 
-    pub fn remove(&self, provider: &str) -> Result<(), AgentError> {
+    pub(crate) fn remove(&self, provider: &str) -> Result<(), AgentError> {
         self.storage.logout(provider).map_err(Into::into)
     }
 
@@ -336,7 +333,7 @@ impl AgentAuthentication {
                         Err(error) => {
                             *captured_error.lock().expect("refresh error lock poisoned") =
                                 Some(error);
-                            Err(crate::auth::AuthStorageError::refresh_failed())
+                            Err(crate::configuration::authentication::AuthStorageError::refresh_failed())
                         }
                     }
                 },
@@ -356,7 +353,9 @@ impl AgentAuthentication {
             }
         }
         .ok_or_else(AgentError::authentication)?;
-        let crate::auth::ResolvedCredential::OAuth { access, metadata } = credential else {
+        let crate::configuration::authentication::ResolvedCredential::OAuth { access, metadata } =
+            credential
+        else {
             return Err(AgentError::authentication());
         };
         let account_id = metadata

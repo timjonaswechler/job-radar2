@@ -6,6 +6,9 @@ use super::{
     SessionSummary, SystemRuntime,
 };
 use crate::models::{ModelId, ProviderId, ReasoningLevel};
+use crate::secure_fs::{
+    canonical_existing_prefix_is_inside_repository, path_is_inside_repository, unsafe_path_metadata,
+};
 use fs2::FileExt;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -19,7 +22,7 @@ use std::sync::Arc;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Clone)]
-pub struct SessionManager {
+pub(crate) struct SessionManager {
     root: Arc<PathBuf>,
     runtime: Arc<dyn Runtime>,
 }
@@ -39,7 +42,7 @@ pub(crate) enum HandleState {
 }
 
 impl SessionManager {
-    pub fn from_agents_data_root(root: &Path) -> Result<Self, SessionError> {
+    pub(crate) fn from_agents_data_root(root: &Path) -> Result<Self, SessionError> {
         Self::with_runtime(root, Arc::new(SystemRuntime))
     }
     pub(crate) fn with_runtime(
@@ -52,7 +55,7 @@ impl SessionManager {
             runtime,
         })
     }
-    pub fn create(&self) -> Result<SessionHandle, SessionError> {
+    pub(crate) fn create(&self) -> Result<SessionHandle, SessionError> {
         let timestamp = self.runtime.now();
         validate_timestamp(&timestamp)?;
         let id = generate_session_id(self.runtime.as_ref())?;
@@ -70,12 +73,12 @@ impl SessionManager {
             poisoned: false,
         })
     }
-    pub fn open(&self, id: &SessionId) -> Result<SessionHandle, SessionError> {
+    pub(crate) fn open(&self, id: &SessionId) -> Result<SessionHandle, SessionError> {
         let path = find_path(&self.root, id)?
             .ok_or_else(|| SessionError::new(SessionErrorCode::NotFound))?;
         open_path(self.clone(), id, path)
     }
-    pub fn list(&self) -> Result<Vec<SessionSummary>, SessionError> {
+    pub(crate) fn list(&self) -> Result<Vec<SessionSummary>, SessionError> {
         let mut out = Vec::new();
         for entry in fs::read_dir(&*self.root)
             .map_err(|_| SessionError::new(SessionErrorCode::InvalidRoot))?
@@ -120,7 +123,7 @@ impl SessionManager {
         });
         Ok(out)
     }
-    pub fn move_to_trash(&self, id: &SessionId) -> Result<(), SessionError> {
+    pub(crate) fn move_to_trash(&self, id: &SessionId) -> Result<(), SessionError> {
         let path = find_path(&self.root, id)?
             .ok_or_else(|| SessionError::new(SessionErrorCode::NotFound))?;
         let owner_path = lock_path(&self.root, id, "owner");
@@ -182,8 +185,8 @@ impl SessionManager {
 fn validate_root(root: &Path) -> Result<(), SessionError> {
     if !root.is_absolute()
         || root.file_name().and_then(|x| x.to_str()) != Some("agents")
-        || crate::auth::path_is_inside_repository(root)
-        || crate::auth::canonical_existing_prefix_is_inside_repository(root)
+        || path_is_inside_repository(root)
+        || canonical_existing_prefix_is_inside_repository(root)
     {
         return Err(SessionError::new(SessionErrorCode::InvalidRoot));
     }
@@ -214,20 +217,6 @@ fn validate_root(root: &Path) -> Result<(), SessionError> {
     private_dir(root)?;
     private_dir(&root.join("sessions"))
 }
-pub(crate) fn unsafe_path_metadata(metadata: &fs::Metadata) -> bool {
-    if metadata.file_type().is_symlink() {
-        return true;
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
-    }
-    #[cfg(not(windows))]
-    false
-}
-
 #[cfg(windows)]
 pub(crate) fn harden_windows_path(path: &Path, directory: bool) -> Result<(), SessionError> {
     use std::ffi::c_void;
@@ -1333,7 +1322,8 @@ fn valid_compaction_boundary(h: &SessionHandle, kept: &str) -> Result<bool, Sess
 
 #[cfg(all(test, windows))]
 mod windows_tests {
-    use super::{harden_windows_path, unsafe_path_metadata};
+    use super::harden_windows_path;
+    use crate::secure_fs::unsafe_path_metadata;
     use std::os::windows::fs::symlink_file;
 
     #[test]

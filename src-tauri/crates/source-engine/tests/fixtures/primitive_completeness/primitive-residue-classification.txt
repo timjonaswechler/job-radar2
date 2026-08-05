@@ -1,4 +1,4 @@
-# Frozen primitive-residue classification. Updated for Agent Configuration ownership in #339.
+# Frozen primitive-residue classification. Updated for Agent provider ownership in #341.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:356:retry:Retry	active_contract_documentation	Accepted active architecture contract; token is classified context, not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:363:pacing:pacing	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/adr/0009-declarative-source-profile-dsl.md:13:371:rate_limit:rate limit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
@@ -12,8 +12,8 @@ docs/development/adr/0011-minimal-agent-conversation-contract.md:140:5:rate_limi
 docs/development/adr/0011-minimal-agent-conversation-contract.md:146:332:retry:retry	unrelated_agent_provider_retry	Accepted Agent provider retry lifecycle, outside Source Behavior Language Retry.
 docs/development/adr/0011-minimal-agent-conversation-contract.md:146:332:retry_after:retry_after	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/agent/openai-codex-streaming.md:13:40:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
-docs/development/agent/openai-codex-streaming.md:22:310:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
-docs/development/agent/openai-codex-streaming.md:22:332:retry:retry	unrelated_agent_provider_retry	Agent provider retry contract, outside Source Behavior Language Retry.
+docs/development/agent/openai-codex-streaming.md:22:305:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
+docs/development/agent/openai-codex-streaming.md:22:327:retry:retry	unrelated_agent_provider_retry	Agent provider retry contract, outside Source Behavior Language Retry.
 docs/development/agent/openai-codex-streaming.md:7:40:old_detection:mutable `ModelRegistry` generation per turn, then resolves protected OAuth immediately before transport. Reloads affect later turns while an in-flight turn keeps its capture	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
 docs/development/agent/persistent-agent-chat-verification.md:13:45:arbitrary_execution:shell	active_contract_documentation	Maintained Agent verification command documentation; unrelated to Source Behavior Language arbitrary execution.
 docs/development/agent/persistent-agent-chat-verification.md:32:110:retry:retry	unrelated_agent_provider_retry	Maintained Agent compaction retry contract, outside Source Behavior Language Retry.
@@ -122,13 +122,15 @@ docs/development/source-behavior/catalog.md:259:11:predicate_composition:negat	a
 docs/development/source-behavior/catalog.md:516:8:http_byte_dimension:response_bytes	active_contract_documentation	Maintained Source Behavior Language contract reviewed for #315.
 docs/development/source-behavior/catalog.md:524:4:rate_limit:rate_limit	active_contract_documentation	Maintained Source Behavior Language contract reviewed for #315.
 docs/development/source-behavior/catalog.md:559:21:arbitrary_execution:JavaScript	active_contract_documentation	Maintained Source Behavior Language contract reviewed for #315.
-src-tauri/crates/agent/src/auth.rs:1877:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/chat.rs:595:5:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/chat.rs:826:77:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/chat.rs:882:51:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/chats.rs:931:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/crates/agent/src/chats.rs:932:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/crates/agent/src/chats.rs:933:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:932:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:933:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:934:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/configuration/authentication.rs:1843:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/configuration/registry.rs:1054:33:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/configuration/registry.rs:1057:13:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/contract_tests/chats.rs:1078:17:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
 src-tauri/crates/agent/src/contract_tests/chats.rs:1078:17:retry_after:retry_after	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
 src-tauri/crates/agent/src/contract_tests/chats.rs:317:25:retry:retry	explicit_negative_or_contract_test	Executable Agent crate contract test reviewed for the matched token.
@@ -155,73 +157,71 @@ src-tauri/crates/agent/src/error.rs:97:19:rate_limit:rate_limit	unrelated_agent_
 src-tauri/crates/agent/src/error.rs:97:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/error.rs:97:32:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/error.rs:99:43:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex.rs:862:89:predicate_all_any_none:"none"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1009:57:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1025:37:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:112:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:112:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:112:37:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:112:37:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1202:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1202:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:120:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:120:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1230:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1235:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1454:80:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1471:203:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1508:62:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1545:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1547:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1548:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1559:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1561:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1624:36:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1637:13:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1637:63:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1641:35:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1645:23:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1645:23:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1659:56:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1660:45:rate_limit:rate limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1661:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1661:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1745:58:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1748:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1748:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1792:44:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1792:83:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1843:51:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1865:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1865:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1939:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1943:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1945:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1945:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1948:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1949:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1949:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1950:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1953:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:1953:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:275:52:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:343:9:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:379:45:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:482:46:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:482:46:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:497:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:497:32:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:512:48:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:514:28:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:514:41:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:514:41:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:549:10:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:549:10:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:551:15:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:65:5:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/openai_codex/streaming.rs:65:5:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/registry.rs:1050:33:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/registry.rs:1053:13:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/authentication.rs:861:89:predicate_all_any_none:"none"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1009:57:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1025:37:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:112:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:112:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:112:37:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:112:37:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1202:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1202:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:120:17:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:120:17:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1230:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1235:58:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1454:80:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1471:203:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1508:62:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1545:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1547:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1548:53:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1559:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1561:41:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1624:36:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1637:13:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1637:63:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1641:35:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1645:23:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1645:23:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1659:56:rate_limit:RateLimit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1660:45:rate_limit:rate limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1661:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1661:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1745:58:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1748:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1748:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1792:44:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1792:83:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1843:51:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1865:13:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1865:13:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1939:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1943:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1945:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1945:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1948:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1949:26:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1949:26:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1950:25:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1953:19:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:1953:19:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:275:52:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:343:9:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:379:45:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:482:46:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:482:46:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:497:32:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:497:32:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:512:48:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:514:28:rate_limit:rate_limit	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:514:41:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:514:41:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:549:10:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:549:10:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:551:15:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:65:5:retry:retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
+src-tauri/crates/agent/src/providers/openai_codex/streaming.rs:65:5:retry_after:retry_after	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/sessions/wire.rs:1155:43:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/sessions/wire.rs:1155:50:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/sessions/wire.rs:136:14:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
@@ -688,9 +688,9 @@ src-tauri/crates/source-engine/tests/primitives/source_behavior/value.rs:425:25:
 src-tauri/crates/source-engine/tests/primitives/source_behavior/value.rs:567:109:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/crates/sources/tests/detection.rs:347:39:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Installed Profile Detection application contract verifies bounded usage and intentional host projection.
 src-tauri/crates/sources/tests/installed_profiles.rs:254:34:registration_residue:raw_paths_documents_and_detection_plan	explicit_negative_or_contract_test	Installed Profile host-view contract verifies raw paths, authored documents, and Detection plans remain private.
-src-tauri/src/adapters/agent/openers.rs:8:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
-src-tauri/src/bin/agent_debug.rs:229:13:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
-src-tauri/src/bin/agent_debug.rs:229:13:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/adapters/agent/openers.rs:7:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
+src-tauri/src/bin/agent_debug.rs:227:13:retry:retry	final_implementation_or_interface	Final typed implementation/interface occurrence; reviewed as non-legacy and non-dispatch.
+src-tauri/src/bin/agent_debug.rs:227:13:retry_after:retry_after	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/bin/agent_debug.rs:98:29:rate_limit:RateLimit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/bin/agent_debug.rs:98:45:rate_limit:rate limit	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/browser_runtime/owned.rs:1514:34:retry:retry	unrelated_browser_install_or_admin_retry	Browser installation or administration retry, outside Source Behavior Language execution.

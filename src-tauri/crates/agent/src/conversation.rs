@@ -334,7 +334,7 @@ impl<T: ConversationProvider + ?Sized> ConversationProvider for Arc<T> {
     }
 }
 
-pub struct AgentConversation {
+pub struct Conversation {
     system_prompt: String,
     provider: Arc<dyn ConversationProvider>,
     models: Vec<Model>,
@@ -344,7 +344,7 @@ pub struct AgentConversation {
     conversation_id: String,
 }
 
-impl AgentConversation {
+impl Conversation {
     pub fn new(
         system_prompt: String,
         provider: impl ConversationProvider,
@@ -686,17 +686,17 @@ impl Stream for ConversationAttempt {
 /// Model and Reasoning Level changes therefore cannot overlap an active turn.
 ///
 /// ```compile_fail
-/// use agent::AgentConversation;
-/// use agent::models::ReasoningLevel;
+/// use agent::Conversation;
+/// use agent::ReasoningLevel;
 ///
-/// fn change_during_turn(conversation: &mut AgentConversation) {
+/// fn change_during_turn(conversation: &mut Conversation) {
 ///     let stream = conversation.send("hello".to_owned()).unwrap();
 ///     conversation.set_reasoning_level(ReasoningLevel::High);
 ///     drop(stream);
 /// }
 /// ```
 pub struct ConversationEventStream<'a> {
-    conversation: &'a mut AgentConversation,
+    conversation: &'a mut Conversation,
     attempt: ConversationAttempt,
     user: UserMessage,
 }

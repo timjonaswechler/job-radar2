@@ -1,16 +1,16 @@
-pub mod openai_codex;
+pub(crate) mod openai_codex;
 
 use crate::api::ApiKind;
 use crate::models::{Model, ProviderId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthenticationMethod {
+pub(crate) enum AuthenticationMethod {
     ApiKey,
     OAuth,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProviderDescriptor {
+pub(crate) struct ProviderDescriptor {
     id: ProviderId,
     display_name: String,
     api: ApiKind,
@@ -45,31 +45,31 @@ impl ProviderDescriptor {
         }
     }
 
-    pub fn id(&self) -> &ProviderId {
+    pub(crate) fn id(&self) -> &ProviderId {
         &self.id
     }
 
-    pub fn display_name(&self) -> &str {
+    pub(crate) fn display_name(&self) -> &str {
         &self.display_name
     }
 
-    pub fn api(&self) -> ApiKind {
+    pub(crate) fn api(&self) -> ApiKind {
         self.api
     }
 
-    pub fn authentication_methods(&self) -> &[AuthenticationMethod] {
+    pub(crate) fn authentication_methods(&self) -> &[AuthenticationMethod] {
         &self.authentication_methods
     }
 
-    pub fn default_base_url(&self) -> &str {
+    pub(crate) fn default_base_url(&self) -> &str {
         &self.default_base_url
     }
 
-    pub fn models(&self) -> &[Model] {
+    pub(crate) fn models(&self) -> &[Model] {
         &self.models
     }
 
-    pub fn has_configured_api_key(&self) -> bool {
+    pub(crate) fn has_configured_api_key(&self) -> bool {
         self.configured_api_key
     }
 

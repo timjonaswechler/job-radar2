@@ -3,7 +3,7 @@ use crate::AgentError;
 /// Identifies a request protocol compiled into Job Radar. Provider identity is
 /// deliberately separate so multiple providers can share one protocol.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ApiKind {
+pub(crate) enum ApiKind {
     OpenAiResponses,
 }
 
@@ -15,7 +15,7 @@ impl ApiKind {
         }
     }
 
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::OpenAiResponses => "openai-responses",
         }

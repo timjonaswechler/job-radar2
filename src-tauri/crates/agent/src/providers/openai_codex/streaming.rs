@@ -1,7 +1,7 @@
 use super::{AgentAuthentication, ProviderCredential};
+use crate::configuration::registry::{ModelRegistry, ResolvedModelRequest};
 use crate::conversation::BlockSignature;
 use crate::models::{Model, ProviderId, ReasoningLevel};
-use crate::registry::{ModelRegistry, ResolvedModelRequest};
 use crate::{
     AgentError, AssistantContent, ContentKind, ConversationProvider, ConversationRequest,
     FinishReason, Message, ProviderEvent, ProviderEventStream, ProviderTurnCompletion, TokenUsage,
@@ -124,7 +124,7 @@ impl CodexHttpClient for ReqwestCodexHttpClient {
     }
 }
 
-pub struct OpenAiCodexProvider {
+pub(crate) struct OpenAiCodexProvider {
     authentication: Arc<dyn CredentialResolver>,
     registry: Arc<ModelRegistry>,
     models: Vec<Model>,
@@ -132,7 +132,7 @@ pub struct OpenAiCodexProvider {
 }
 
 impl OpenAiCodexProvider {
-    pub fn new(
+    pub(crate) fn new(
         authentication: Arc<AgentAuthentication>,
         registry: Arc<ModelRegistry>,
     ) -> Result<Self, AgentError> {
@@ -1067,7 +1067,7 @@ fn parse_usage(value: Option<&Value>) -> TokenUsage {
 mod tests {
     use super::*;
     use crate::models::{ModelId, ReasoningLevel};
-    use crate::{AgentConversation, AgentErrorCategory, ConversationEvent};
+    use crate::{AgentErrorCategory, Conversation, ConversationEvent};
     use futures_util::StreamExt;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1239,7 +1239,7 @@ mod tests {
         )
     }
 
-    fn collect_turn(conversation: &mut AgentConversation, text: &str) -> Vec<ConversationEvent> {
+    fn collect_turn(conversation: &mut Conversation, text: &str) -> Vec<ConversationEvent> {
         crate::testing::block_on(async {
             conversation
                 .send(text.to_owned())
@@ -1294,7 +1294,7 @@ mod tests {
             registry,
             http.clone(),
         );
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1337,7 +1337,7 @@ mod tests {
             registry,
             http.clone(),
         );
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1373,7 +1373,7 @@ mod tests {
             Arc::clone(&registry),
             http.clone(),
         );
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1417,7 +1417,7 @@ mod tests {
             dropped: Mutex::new(Some(dropped_sender)),
         });
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http);
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1474,7 +1474,7 @@ mod tests {
             ],
         )]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http.clone());
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "Be concise.".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1520,7 +1520,7 @@ mod tests {
             Arc::new(CountingCredential(Arc::clone(&resolution_count))),
             http.clone(),
         );
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1590,7 +1590,7 @@ mod tests {
             completed_text_response("Second reply", "synthetic-second-item"),
         ]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http.clone());
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1645,7 +1645,7 @@ mod tests {
         rate_response.retry_after = Some(Duration::from_secs(17));
         let http = Arc::new(SyntheticHttp::new(vec![rate_response]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http);
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1687,7 +1687,7 @@ mod tests {
                     vec![r#"{"error":{"message":"synthetic-sensitive-provider-body"}}"#.to_owned()],
                 )])),
             );
-            let mut conversation = AgentConversation::new(
+            let mut conversation = Conversation::new(
                 "System".to_owned(),
                 provider,
                 ModelId::new("gpt-5.4").unwrap(),
@@ -1723,7 +1723,7 @@ mod tests {
                 Arc::new(FixedCredential),
                 Arc::new(SyntheticHttp::new(vec![response])),
             );
-            let mut conversation = AgentConversation::new(
+            let mut conversation = Conversation::new(
                 "System".to_owned(),
                 provider,
                 ModelId::new("gpt-5.4").unwrap(),
@@ -1755,7 +1755,7 @@ mod tests {
             ])),
         }]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http.clone());
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1797,7 +1797,7 @@ mod tests {
             ],
         )]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http);
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),
@@ -1868,7 +1868,7 @@ mod tests {
             )),
         }]));
         let provider = OpenAiCodexProvider::with_adapters(Arc::new(FixedCredential), http);
-        let mut conversation = AgentConversation::new(
+        let mut conversation = Conversation::new(
             "System".to_owned(),
             provider,
             ModelId::new("gpt-5.4").unwrap(),

@@ -121,8 +121,8 @@ impl From<agent::AgentError> for HarnessFailure {
     }
 }
 
-impl From<agent::configuration::Error> for HarnessFailure {
-    fn from(_: agent::configuration::Error) -> Self {
+impl From<agent::ConfigurationError> for HarnessFailure {
+    fn from(_: agent::ConfigurationError) -> Self {
         Self::Configuration
     }
 }
@@ -153,16 +153,16 @@ struct DebugLoginInteraction<'a, R, W> {
     writer: &'a mut W,
 }
 
-impl<R, W> agent::configuration::LoginInteraction for DebugLoginInteraction<'_, R, W>
+impl<R, W> agent::LoginInteraction for DebugLoginInteraction<'_, R, W>
 where
     R: std::io::BufRead + Send,
     W: std::io::Write + Send,
 {
     fn select_method(
         &mut self,
-        _attempt: &agent::configuration::LoginAttemptId,
+        _attempt: &agent::LoginAttemptId,
         _provider: &agent::ProviderId,
-    ) -> agent::configuration::InteractionFuture<'_, agent::configuration::LoginMethod> {
+    ) -> agent::InteractionFuture<'_, agent::LoginMethod> {
         let result = numbered_selection(
             self.reader,
             self.writer,
@@ -173,50 +173,48 @@ where
         .flatten()
         .map(|selected| {
             if selected == 0 {
-                agent::configuration::LoginMethod::Browser
+                agent::LoginMethod::Browser
             } else {
-                agent::configuration::LoginMethod::DeviceCode
+                agent::LoginMethod::DeviceCode
             }
         })
-        .ok_or(agent::configuration::InteractionError);
+        .ok_or(agent::InteractionError);
         Box::pin(async move { result })
     }
 
     fn open_url(
         &mut self,
-        _attempt: &agent::configuration::LoginAttemptId,
+        _attempt: &agent::LoginAttemptId,
         url: &str,
-    ) -> Result<(), agent::configuration::InteractionError> {
+    ) -> Result<(), agent::InteractionError> {
         writeln!(self.writer, "Waiting for the browser callback...")
-            .map_err(|_| agent::configuration::InteractionError)?;
-        self.writer
-            .flush()
-            .map_err(|_| agent::configuration::InteractionError)?;
+            .map_err(|_| agent::InteractionError)?;
+        self.writer.flush().map_err(|_| agent::InteractionError)?;
         open_system_browser(url)
             .then_some(())
-            .ok_or(agent::configuration::InteractionError)
+            .ok_or(agent::InteractionError)
     }
 
     fn display_device_code(
         &mut self,
-        _attempt: &agent::configuration::LoginAttemptId,
+        _attempt: &agent::LoginAttemptId,
         verification_uri: &str,
         user_code: &str,
-    ) -> Result<(), agent::configuration::InteractionError> {
+    ) -> Result<(), agent::InteractionError> {
         writeln!(self.writer, "Open: {verification_uri}")
             .and_then(|_| writeln!(self.writer, "Device code: {user_code}"))
             .and_then(|_| self.writer.flush())
-            .map_err(|_| agent::configuration::InteractionError)
+            .map_err(|_| agent::InteractionError)
     }
 
-    fn report(&mut self, progress: agent::configuration::LoginProgress) {
+    fn report(&mut self, progress: agent::LoginProgress) {
         let _ = writeln!(self.writer, "login: {:?}", progress.stage);
     }
 }
 
 fn new_conversation(
     configuration: &agent::Configuration,
-) -> Result<agent::AgentConversation, agent::AgentError> {
+) -> Result<agent::Conversation, agent::AgentError> {
     let provider = configuration.provider();
     let models = provider.model_snapshot();
     let model = models
@@ -228,7 +226,7 @@ fn new_conversation(
             message: "model unavailable".to_owned(),
             retry_after: None,
         })?;
-    agent::AgentConversation::new(
+    agent::Conversation::new(
         "You are a concise, helpful assistant.".to_owned(),
         provider,
         model.id().clone(),
@@ -237,7 +235,7 @@ fn new_conversation(
 }
 
 fn stream_prompt(
-    conversation: &mut agent::AgentConversation,
+    conversation: &mut agent::Conversation,
     text: String,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
@@ -279,7 +277,7 @@ fn numbered_selection(
 }
 
 fn choose_model(
-    conversation: &mut agent::AgentConversation,
+    conversation: &mut agent::Conversation,
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
@@ -300,7 +298,7 @@ fn choose_model(
 }
 
 fn choose_reasoning(
-    conversation: &mut agent::AgentConversation,
+    conversation: &mut agent::Conversation,
     reader: &mut impl std::io::BufRead,
     writer: &mut impl std::io::Write,
 ) -> HarnessResult<()> {
@@ -354,7 +352,7 @@ where
                 None => writeln!(writer, "error: authentication failed")?,
             },
             Input::Login => {
-                let attempt = agent::configuration::LoginAttemptId::generate();
+                let attempt = agent::LoginAttemptId::generate();
                 let provider = agent::ProviderId::new("openai-codex")?;
                 let result = {
                     let mut interaction = DebugLoginInteraction { reader, writer };

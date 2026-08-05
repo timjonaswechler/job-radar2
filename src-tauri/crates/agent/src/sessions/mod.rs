@@ -6,14 +6,14 @@ use crate::models::{ModelId, ProviderId, ReasoningLevel};
 use std::{fmt, path::Path, str::FromStr, sync::Arc};
 use uuid::Uuid;
 
-pub use storage::SessionManager;
+pub(crate) use storage::SessionManager;
 #[cfg(windows)]
-pub(crate) use storage::{harden_windows_path, path_matches_file, unsafe_path_metadata};
+pub(crate) use storage::{harden_windows_path, path_matches_file};
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SessionId(String);
+pub(crate) struct SessionId(String);
 impl SessionId {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
     pub(crate) fn uuid(&self) -> Uuid {
@@ -43,24 +43,24 @@ impl FromStr for SessionId {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SessionAccess {
+pub(crate) enum SessionAccess {
     Writable,
     ReadOnlyLocked,
     ReadOnlyUnsupported,
     Damaged,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RecoveryNotice {
+pub(crate) enum RecoveryNotice {
     IncompleteFinalTurnDiscarded,
 }
 #[derive(Clone, Eq, PartialEq)]
-pub enum VisibleBlock {
+pub(crate) enum VisibleBlock {
     Text(String),
     Thinking(String),
     RedactedThinking,
 }
 #[derive(Clone, Eq, PartialEq)]
-pub struct VisibleTurn {
+pub(crate) struct VisibleTurn {
     user: String,
     assistant: Vec<VisibleBlock>,
 }
@@ -82,21 +82,21 @@ impl fmt::Debug for VisibleTurn {
     }
 }
 impl VisibleTurn {
-    pub fn user(&self) -> &str {
+    pub(crate) fn user(&self) -> &str {
         &self.user
     }
-    pub fn assistant(&self) -> &[VisibleBlock] {
+    pub(crate) fn assistant(&self) -> &[VisibleBlock] {
         &self.assistant
     }
 }
 #[derive(Clone, Eq, PartialEq)]
-pub enum VisibleHistoryEntry {
+pub(crate) enum VisibleHistoryEntry {
     Turn(VisibleTurn),
     Compaction(CompactionSnapshot),
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct CompactionSnapshot {
+pub(crate) struct CompactionSnapshot {
     summary: String,
     first_kept_entry_id: String,
     tokens_before: u64,
@@ -113,16 +113,16 @@ impl fmt::Debug for CompactionSnapshot {
     }
 }
 impl CompactionSnapshot {
-    pub fn summary(&self) -> &str {
+    pub(crate) fn summary(&self) -> &str {
         &self.summary
     }
-    pub fn tokens_before(&self) -> u64 {
+    pub(crate) fn tokens_before(&self) -> u64 {
         self.tokens_before
     }
-    pub fn reason(&self) -> Option<&str> {
+    pub(crate) fn reason(&self) -> Option<&str> {
         self.reason.as_deref()
     }
-    pub fn first_kept_entry_id(&self) -> &str {
+    pub(crate) fn first_kept_entry_id(&self) -> &str {
         &self.first_kept_entry_id
     }
 }
@@ -141,7 +141,7 @@ pub(crate) enum ContextRole {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct SessionSnapshot {
+pub(crate) struct SessionSnapshot {
     id: SessionId,
     access: SessionAccess,
     display_name: String,
@@ -188,45 +188,45 @@ impl SessionSnapshot {
             compaction_entries: Vec::new(),
         }
     }
-    pub fn id(&self) -> SessionId {
+    pub(crate) fn id(&self) -> SessionId {
         self.id.clone()
     }
-    pub fn access(&self) -> SessionAccess {
+    pub(crate) fn access(&self) -> SessionAccess {
         self.access
     }
-    pub fn display_name(&self) -> &str {
+    pub(crate) fn display_name(&self) -> &str {
         &self.display_name
     }
-    pub fn created_at(&self) -> &str {
+    pub(crate) fn created_at(&self) -> &str {
         &self.created_at
     }
-    pub fn modified_at(&self) -> &str {
+    pub(crate) fn modified_at(&self) -> &str {
         &self.modified_at
     }
-    pub fn turns(&self) -> &[VisibleTurn] {
+    pub(crate) fn turns(&self) -> &[VisibleTurn] {
         &self.turns
     }
-    pub fn selected_provider(&self) -> Option<&ProviderId> {
+    pub(crate) fn selected_provider(&self) -> Option<&ProviderId> {
         self.selected_provider.as_ref()
     }
-    pub fn selected_model(&self) -> Option<&ModelId> {
+    pub(crate) fn selected_model(&self) -> Option<&ModelId> {
         self.selected_model.as_ref()
     }
-    pub fn reasoning_level(&self) -> ReasoningLevel {
+    pub(crate) fn reasoning_level(&self) -> ReasoningLevel {
         self.reasoning_level
     }
-    pub fn compactions(&self) -> &[CompactionSnapshot] {
+    pub(crate) fn compactions(&self) -> &[CompactionSnapshot] {
         &self.compactions
     }
-    pub fn recovery_notices(&self) -> &[RecoveryNotice] {
+    pub(crate) fn recovery_notices(&self) -> &[RecoveryNotice] {
         &self.recovery_notices
     }
-    pub fn visible_history(&self) -> &[VisibleHistoryEntry] {
+    pub(crate) fn visible_history(&self) -> &[VisibleHistoryEntry] {
         &self.visible_history
     }
 
     /// Estimated tokens in the provider context reconstructed for the next request.
-    pub fn context_tokens(&self) -> u64 {
+    pub(crate) fn context_tokens(&self) -> u64 {
         let anchor = self
             .context_entries
             .iter()
@@ -255,7 +255,7 @@ fn estimate_text(text: &str) -> u64 {
     (text.chars().count() as u64).saturating_add(3) / 4
 }
 #[derive(Clone, Eq, PartialEq)]
-pub struct SessionSummary {
+pub(crate) struct SessionSummary {
     snapshot: SessionSnapshot,
 }
 impl fmt::Debug for SessionSummary {
@@ -268,28 +268,28 @@ impl fmt::Debug for SessionSummary {
     }
 }
 impl SessionSummary {
-    pub fn id(&self) -> SessionId {
+    pub(crate) fn id(&self) -> SessionId {
         self.snapshot.id()
     }
-    pub fn access(&self) -> SessionAccess {
+    pub(crate) fn access(&self) -> SessionAccess {
         self.snapshot.access()
     }
-    pub fn display_name(&self) -> &str {
+    pub(crate) fn display_name(&self) -> &str {
         self.snapshot.display_name()
     }
-    pub fn created_at(&self) -> &str {
+    pub(crate) fn created_at(&self) -> &str {
         self.snapshot.created_at()
     }
-    pub fn modified_at(&self) -> &str {
+    pub(crate) fn modified_at(&self) -> &str {
         self.snapshot.modified_at()
     }
-    pub fn turn_count(&self) -> usize {
+    pub(crate) fn turn_count(&self) -> usize {
         self.snapshot.turns.len()
     }
 }
 
 #[derive(Clone)]
-pub struct AssistantBlock(pub(crate) AssistantBlockKind);
+pub(crate) struct AssistantBlock(pub(crate) AssistantBlockKind);
 #[derive(Clone)]
 pub(crate) enum AssistantBlockKind {
     Text {
@@ -303,19 +303,19 @@ pub(crate) enum AssistantBlockKind {
     },
 }
 impl AssistantBlock {
-    pub fn text(text: impl Into<String>) -> Self {
+    pub(crate) fn text(text: impl Into<String>) -> Self {
         Self(AssistantBlockKind::Text {
             text: text.into(),
             text_signature: None,
         })
     }
-    pub fn signed_text(text: impl Into<String>, signature: impl Into<String>) -> Self {
+    pub(crate) fn signed_text(text: impl Into<String>, signature: impl Into<String>) -> Self {
         Self(AssistantBlockKind::Text {
             text: text.into(),
             text_signature: Some(signature.into()),
         })
     }
-    pub fn thinking(
+    pub(crate) fn thinking(
         thinking: impl Into<String>,
         signature: Option<String>,
         redacted: bool,
@@ -340,31 +340,31 @@ impl fmt::Debug for AssistantBlock {
     }
 }
 #[derive(Clone, Debug, Default)]
-pub struct UsageCost {
-    pub input: f64,
-    pub output: f64,
-    pub cache_read: f64,
-    pub cache_write: f64,
-    pub total: f64,
+pub(crate) struct UsageCost {
+    pub(crate) input: f64,
+    pub(crate) output: f64,
+    pub(crate) cache_read: f64,
+    pub(crate) cache_write: f64,
+    pub(crate) total: f64,
 }
 #[derive(Clone, Debug, Default)]
-pub struct AssistantUsage {
-    pub input: u64,
-    pub output: u64,
-    pub cache_read: u64,
-    pub cache_write: u64,
-    pub cache_write_1h: Option<u64>,
-    pub reasoning: Option<u64>,
-    pub total_tokens: u64,
-    pub cost: UsageCost,
+pub(crate) struct AssistantUsage {
+    pub(crate) input: u64,
+    pub(crate) output: u64,
+    pub(crate) cache_read: u64,
+    pub(crate) cache_write: u64,
+    pub(crate) cache_write_1h: Option<u64>,
+    pub(crate) reasoning: Option<u64>,
+    pub(crate) total_tokens: u64,
+    pub(crate) cost: UsageCost,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StopReason {
+pub(crate) enum StopReason {
     Stop,
     Length,
 }
 #[derive(Clone)]
-pub struct CompletedTurn {
+pub(crate) struct CompletedTurn {
     user_text: String,
     assistant_blocks: Vec<AssistantBlock>,
     api: String,
@@ -376,7 +376,7 @@ pub struct CompletedTurn {
     stop_reason: StopReason,
 }
 impl CompletedTurn {
-    pub fn new(
+    pub(crate) fn new(
         user_text: impl Into<String>,
         assistant_blocks: Vec<AssistantBlock>,
         api: impl Into<String>,
@@ -397,7 +397,7 @@ impl CompletedTurn {
             stop_reason,
         }
     }
-    pub fn with_replay(
+    pub(crate) fn with_replay(
         mut self,
         response_model: Option<String>,
         response_id: Option<String>,
@@ -419,7 +419,7 @@ impl fmt::Debug for CompletedTurn {
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CompactionReason {
+pub(crate) enum CompactionReason {
     Manual,
     Threshold,
     Overflow,
@@ -434,11 +434,11 @@ impl CompactionReason {
     }
 }
 #[derive(Clone)]
-pub struct CompactionRecord {
-    pub summary: String,
-    pub first_kept_entry_id: String,
-    pub tokens_before: u64,
-    pub reason: Option<CompactionReason>,
+pub(crate) struct CompactionRecord {
+    pub(crate) summary: String,
+    pub(crate) first_kept_entry_id: String,
+    pub(crate) tokens_before: u64,
+    pub(crate) reason: Option<CompactionReason>,
 }
 impl fmt::Debug for CompactionRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -451,7 +451,7 @@ impl fmt::Debug for CompactionRecord {
     }
 }
 impl CompactionRecord {
-    pub fn new(
+    pub(crate) fn new(
         summary: impl Into<String>,
         first_kept_entry_id: impl Into<String>,
         tokens_before: u64,
@@ -467,7 +467,7 @@ impl CompactionRecord {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SessionErrorCode {
+pub(crate) enum SessionErrorCode {
     InvalidRoot,
     InvalidSessionId,
     NotFound,
@@ -481,7 +481,7 @@ pub enum SessionErrorCode {
     TrashFailed,
 }
 #[derive(Clone, Eq, PartialEq)]
-pub struct SessionError {
+pub(crate) struct SessionError {
     code: SessionErrorCode,
     line: Option<u32>,
     entry_type: Option<&'static str>,
@@ -509,16 +509,16 @@ impl SessionError {
             field: field.and_then(known_label),
         }
     }
-    pub fn code(&self) -> SessionErrorCode {
+    pub(crate) fn code(&self) -> SessionErrorCode {
         self.code
     }
-    pub fn line(&self) -> Option<u32> {
+    pub(crate) fn line(&self) -> Option<u32> {
         self.line
     }
-    pub fn entry_type(&self) -> Option<&str> {
+    pub(crate) fn entry_type(&self) -> Option<&str> {
         self.entry_type
     }
-    pub fn field(&self) -> Option<&str> {
+    pub(crate) fn field(&self) -> Option<&str> {
         self.field
     }
 }
@@ -599,7 +599,7 @@ pub(crate) enum ContinuationAssistantBlock {
     },
 }
 
-pub struct SessionHandle {
+pub(crate) struct SessionHandle {
     pub(crate) manager: SessionManager,
     pub(crate) snapshot: SessionSnapshot,
     pub(crate) continuation: Vec<ContinuationBlock>,
@@ -607,32 +607,41 @@ pub struct SessionHandle {
     pub(crate) poisoned: bool,
 }
 impl SessionHandle {
-    pub fn snapshot(&self) -> &SessionSnapshot {
+    pub(crate) fn snapshot(&self) -> &SessionSnapshot {
         &self.snapshot
     }
     pub(crate) fn continuation(&self) -> &[ContinuationBlock] {
         &self.continuation
     }
-    pub fn reload(&mut self) -> Result<(), SessionError> {
+    pub(crate) fn reload(&mut self) -> Result<(), SessionError> {
         storage::reload(self)
     }
-    pub fn append_completed_turn(&mut self, turn: CompletedTurn) -> Result<(), SessionError> {
+    pub(crate) fn append_completed_turn(
+        &mut self,
+        turn: CompletedTurn,
+    ) -> Result<(), SessionError> {
         storage::append_turn(self, turn)
     }
-    pub fn select_model(
+    pub(crate) fn select_model(
         &mut self,
         provider: ProviderId,
         model: ModelId,
     ) -> Result<(), SessionError> {
         storage::append_model(self, provider, model)
     }
-    pub fn set_reasoning_level(&mut self, level: ReasoningLevel) -> Result<(), SessionError> {
+    pub(crate) fn set_reasoning_level(
+        &mut self,
+        level: ReasoningLevel,
+    ) -> Result<(), SessionError> {
         storage::append_reasoning(self, level)
     }
-    pub fn set_name(&mut self, name: String) -> Result<(), SessionError> {
+    pub(crate) fn set_name(&mut self, name: String) -> Result<(), SessionError> {
         storage::append_name(self, name)
     }
-    pub fn append_compaction(&mut self, record: CompactionRecord) -> Result<(), SessionError> {
+    pub(crate) fn append_compaction(
+        &mut self,
+        record: CompactionRecord,
+    ) -> Result<(), SessionError> {
         storage::append_compaction(self, record)
     }
 }
@@ -655,7 +664,7 @@ impl Drop for SessionHandle {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum SessionCheckpoint {
+pub(crate) enum SessionCheckpoint {
     TempWrite,
     TempSync,
     Publish,
@@ -668,7 +677,7 @@ pub enum SessionCheckpoint {
     Trash,
 }
 impl SessionCheckpoint {
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::TempWrite => "temp-write",
             Self::TempSync => "temp-sync",

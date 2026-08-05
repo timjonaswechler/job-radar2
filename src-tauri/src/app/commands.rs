@@ -281,9 +281,7 @@ pub fn compact_agent_chat(
 }
 
 #[tauri::command]
-pub fn get_agent_configuration_status(
-    state: State<'_, AppState>,
-) -> ::agent::configuration::Status {
+pub fn get_agent_configuration_status(state: State<'_, AppState>) -> ::agent::ConfigurationStatus {
     state.agent_configuration.status()
 }
 
@@ -291,25 +289,25 @@ pub fn get_agent_configuration_status(
 pub async fn submit_agent_api_key(
     state: State<'_, AppState>,
     provider_id: String,
-    api_key: ::agent::configuration::SecretInput,
-) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+    api_key: ::agent::SecretInput,
+) -> Result<::agent::ConfigurationStatus, ::agent::ConfigurationError> {
     let provider = ::agent::ProviderId::new(provider_id)
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?;
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.set_api_key(provider, api_key))
         .await
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
 }
 
 #[tauri::command]
 pub async fn login_agent_subscription(
     app: AppHandle,
     state: State<'_, AppState>,
-    attempt_id: ::agent::configuration::LoginAttemptId,
+    attempt_id: ::agent::LoginAttemptId,
     provider_id: String,
-) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+) -> Result<::agent::ConfigurationStatus, ::agent::ConfigurationError> {
     let provider = ::agent::ProviderId::new(provider_id)
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?;
     let mut interaction = crate::adapters::agent::openers::TauriAgentOpener::new(app);
     state
         .agent_configuration
@@ -320,8 +318,8 @@ pub async fn login_agent_subscription(
 #[tauri::command]
 pub fn cancel_agent_subscription_login(
     state: State<'_, AppState>,
-    attempt_id: ::agent::configuration::LoginAttemptId,
-) -> Result<(), ::agent::configuration::Error> {
+    attempt_id: ::agent::LoginAttemptId,
+) -> Result<(), ::agent::ConfigurationError> {
     state.agent_configuration.cancel_login(&attempt_id)
 }
 
@@ -329,30 +327,30 @@ pub fn cancel_agent_subscription_login(
 pub async fn remove_agent_authentication(
     state: State<'_, AppState>,
     provider_id: String,
-) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+) -> Result<::agent::ConfigurationStatus, ::agent::ConfigurationError> {
     let provider = ::agent::ProviderId::new(provider_id)
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?;
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?;
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.remove_authentication(provider))
         .await
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
 }
 
 #[tauri::command]
 pub async fn reload_agent_configuration(
     state: State<'_, AppState>,
-) -> Result<::agent::configuration::Status, ::agent::configuration::Error> {
+) -> Result<::agent::ConfigurationStatus, ::agent::ConfigurationError> {
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.reload())
         .await
-        .map_err(|_| ::agent::configuration::Error::invalid_input())?
+        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
 }
 
 #[tauri::command]
 pub fn open_agent_data_folder(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), ::agent::configuration::Error> {
+) -> Result<(), ::agent::ConfigurationError> {
     state
         .agent_configuration
         .open_data_folder(&crate::adapters::agent::openers::TauriAgentOpener::new(app))

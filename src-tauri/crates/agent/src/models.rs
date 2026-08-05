@@ -81,13 +81,13 @@ impl ReasoningLevel {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ModelInput {
+pub(crate) enum ModelInput {
     Text,
     Image,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ModelCostTier {
+pub(crate) struct ModelCostTier {
     pub(crate) input_tokens_above: serde_json::Number,
     pub(crate) input: serde_json::Number,
     pub(crate) output: serde_json::Number,
@@ -96,29 +96,29 @@ pub struct ModelCostTier {
 }
 
 impl ModelCostTier {
-    pub fn input_tokens_above(&self) -> &serde_json::Number {
+    pub(crate) fn input_tokens_above(&self) -> &serde_json::Number {
         &self.input_tokens_above
     }
 
-    pub fn input(&self) -> &serde_json::Number {
+    pub(crate) fn input(&self) -> &serde_json::Number {
         &self.input
     }
 
-    pub fn output(&self) -> &serde_json::Number {
+    pub(crate) fn output(&self) -> &serde_json::Number {
         &self.output
     }
 
-    pub fn cache_read(&self) -> &serde_json::Number {
+    pub(crate) fn cache_read(&self) -> &serde_json::Number {
         &self.cache_read
     }
 
-    pub fn cache_write(&self) -> &serde_json::Number {
+    pub(crate) fn cache_write(&self) -> &serde_json::Number {
         &self.cache_write
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ModelCost {
+pub(crate) struct ModelCost {
     input: serde_json::Number,
     output: serde_json::Number,
     cache_read: serde_json::Number,
@@ -139,23 +139,23 @@ impl Default for ModelCost {
 }
 
 impl ModelCost {
-    pub fn input(&self) -> &serde_json::Number {
+    pub(crate) fn input(&self) -> &serde_json::Number {
         &self.input
     }
 
-    pub fn output(&self) -> &serde_json::Number {
+    pub(crate) fn output(&self) -> &serde_json::Number {
         &self.output
     }
 
-    pub fn cache_read(&self) -> &serde_json::Number {
+    pub(crate) fn cache_read(&self) -> &serde_json::Number {
         &self.cache_read
     }
 
-    pub fn cache_write(&self) -> &serde_json::Number {
+    pub(crate) fn cache_write(&self) -> &serde_json::Number {
         &self.cache_write
     }
 
-    pub fn tiers(&self) -> Option<&[ModelCostTier]> {
+    pub(crate) fn tiers(&self) -> Option<&[ModelCostTier]> {
         self.tiers.as_deref()
     }
 
@@ -298,43 +298,43 @@ impl Model {
         &self.supported_reasoning_levels
     }
 
-    pub fn api(&self) -> ApiKind {
+    pub(crate) fn api(&self) -> ApiKind {
         self.api
     }
 
-    pub fn base_url(&self) -> &str {
+    pub(crate) fn base_url(&self) -> &str {
         &self.base_url
     }
 
-    pub fn input(&self) -> &[ModelInput] {
+    pub(crate) fn input(&self) -> &[ModelInput] {
         &self.input
     }
 
-    pub fn cost(&self) -> &ModelCost {
+    pub(crate) fn cost(&self) -> &ModelCost {
         &self.cost
     }
 
-    pub fn context_window(&self) -> u64 {
+    pub(crate) fn context_window(&self) -> u64 {
         self.context_window
     }
 
-    pub fn max_tokens(&self) -> u64 {
+    pub(crate) fn max_tokens(&self) -> u64 {
         self.max_tokens
     }
 
-    pub fn headers(&self) -> &BTreeMap<String, String> {
+    pub(crate) fn headers(&self) -> &BTreeMap<String, String> {
         &self.headers
     }
 
-    pub fn compat(&self) -> &Value {
+    pub(crate) fn compat(&self) -> &Value {
         &self.compat
     }
 
-    pub fn thinking_level_map(&self) -> &BTreeMap<ReasoningLevel, Option<String>> {
+    pub(crate) fn thinking_level_map(&self) -> &BTreeMap<ReasoningLevel, Option<String>> {
         &self.thinking_level_map
     }
 
-    pub fn normalize_reasoning(&self, requested: ReasoningLevel) -> ReasoningLevel {
+    pub(crate) fn normalize_reasoning(&self, requested: ReasoningLevel) -> ReasoningLevel {
         if self.supported_reasoning_levels.contains(&requested) {
             return requested;
         }
@@ -381,15 +381,6 @@ impl fmt::Debug for Model {
                 "supported_reasoning_levels",
                 &self.supported_reasoning_levels,
             )
-            .field("api", &self.api)
-            .field("base_url", &self.base_url)
-            .field("input", &self.input)
-            .field("cost", &self.cost)
-            .field("context_window", &self.context_window)
-            .field("max_tokens", &self.max_tokens)
-            .field("header_names", &self.headers.keys().collect::<Vec<_>>())
-            .field("compat", &self.compat)
-            .field("thinking_level_map", &self.thinking_level_map)
             .finish()
     }
 }

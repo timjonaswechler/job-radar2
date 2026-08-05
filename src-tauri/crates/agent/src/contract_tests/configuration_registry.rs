@@ -1,6 +1,6 @@
 use crate::api::ApiKind;
+use crate::configuration::registry::ModelRegistry;
 use crate::models::{ModelId, ModelInput, ProviderId, ReasoningLevel};
-use crate::registry::ModelRegistry;
 use crate::AgentErrorCategory;
 use std::fs;
 #[cfg(unix)]

@@ -1,14 +1,17 @@
+pub(crate) mod authentication;
+pub(crate) mod registry;
+
 use crate::api::ApiKind;
-use crate::auth::{
+use crate::configuration::authentication::{
     AuthStorage, AuthStorageError, AuthStorageErrorCategory, StoredAuthenticationKind,
 };
+use crate::configuration::registry::ModelRegistry;
 use crate::models::{Model, ProviderId, ReasoningLevel};
-use crate::openai_codex::{
+use crate::providers::openai_codex::{
     AgentAuthentication, AuthFuture, AuthInteraction, BrowserAuthorization, DeviceAuthorization,
     LoginMethod as ProviderLoginMethod, OpenAiCodexProvider, SecretAuthorizationInput, PROVIDER_ID,
 };
 use crate::providers::AuthenticationMethod;
-use crate::registry::ModelRegistry;
 use crate::{
     AgentError, AgentErrorCategory, ConversationProvider, ConversationRequest, ProviderEvent,
     ProviderEventStream,
@@ -358,7 +361,7 @@ impl LoginCancellation {
     }
 }
 
-impl crate::openai_codex::loopback::Cancellation for LoginCancellation {
+impl crate::providers::openai_codex::loopback::Cancellation for LoginCancellation {
     fn is_cancelled(&self) -> bool {
         self.cancelled()
     }
@@ -611,7 +614,9 @@ impl AuthInteraction for HostLoginAdapter<'_> {
     }
 
     fn begin_finalizing(&self) -> bool {
-        crate::openai_codex::loopback::Cancellation::begin_finalizing(self.cancellation.as_ref())
+        crate::providers::openai_codex::loopback::Cancellation::begin_finalizing(
+            self.cancellation.as_ref(),
+        )
     }
 
     fn select_login_method(&mut self) -> AuthFuture<'_, ProviderLoginMethod> {
@@ -647,7 +652,7 @@ impl AuthInteraction for HostLoginAdapter<'_> {
                 })
                 .filter(|state| !state.is_empty())
                 .ok_or_else(interaction_agent_error)?;
-            let listener = crate::openai_codex::loopback::bind()?;
+            let listener = crate::providers::openai_codex::loopback::bind()?;
             report(
                 self.interaction,
                 self.attempt,
@@ -666,7 +671,7 @@ impl AuthInteraction for HostLoginAdapter<'_> {
                 self.provider,
                 LoginStage::WaitingForBrowser,
             );
-            let input = crate::openai_codex::loopback::capture(
+            let input = crate::providers::openai_codex::loopback::capture(
                 &listener,
                 &expected_state,
                 self.cancellation.as_ref(),
