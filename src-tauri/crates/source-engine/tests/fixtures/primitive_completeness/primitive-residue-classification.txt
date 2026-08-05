@@ -685,6 +685,7 @@ src-tauri/crates/source-engine/tests/primitives/source_behavior/value.rs:425:25:
 src-tauri/crates/source-engine/tests/primitives/source_behavior/value.rs:567:109:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable test or negative fixture reviewed for the matched token.
 src-tauri/crates/sources/tests/detection.rs:347:39:http_byte_dimension:response_bytes	explicit_negative_or_contract_test	Installed Profile Detection application contract verifies bounded usage and intentional host projection.
 src-tauri/crates/sources/tests/installed_profiles.rs:254:34:registration_residue:raw_paths_documents_and_detection_plan	explicit_negative_or_contract_test	Installed Profile host-view contract verifies raw paths, authored documents, and Detection plans remain private.
+src-tauri/src/adapters/agent/openers.rs:8:11:arbitrary_execution:plugin	final_implementation_or_interface	Final typed implementation/interface or explicit nonproductive metadata reviewed.
 src-tauri/src/agent/chat_application.rs:821:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:822:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/src/agent/chat_application.rs:823:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
