@@ -122,6 +122,34 @@ _Avoid_: support level, source status, Search Run
 The Check Report produced by a Source Live Check. It records the last bounded live result for one Source, including freshness fingerprints, runtime diagnostics, discovery summary, and optional one-candidate detail-check summary. It may support explicit activation flows, but it does not verify a Source Profile.
 _Avoid_: source status, support level
 
+**Guided Source Repair**:
+A deterministic, reviewable workflow for repairing one concrete Source from bounded user evidence and validating the resulting Source before application. It does not mutate a Source Profile or require Agent Assistance.
+_Avoid_: Source Onboarding, profile repair, autonomous repair
+
+**Interactive Source Session**:
+An ephemeral, user-driven authoring session for navigating one Source entry point and collecting bounded evidence. It is not Browser Acquisition and does not persist browser state.
+_Avoid_: Browser Runtime, Search Run, browser session
+
+**Repair Draft**:
+A resumable structured set of authored Source intent, ordered Repair Steps, safe Element Evidence, and its exact Source/Profile generation. A Repair Draft is not a Source Profile, Effective Source Profile, compiler plan, or browser-state snapshot.
+_Avoid_: JSON patch, Source Profile fork, browser snapshot
+
+**Repair Step**:
+One bounded, ordered question in Guided Source Repair that targets a Discovery or Detail concern and accepts a typed answer such as picker evidence, manual entry, explicit absence, retry, or unresolved uncertainty.
+_Avoid_: free-form repair instruction, AI task
+
+**Element Evidence**:
+Bounded, current-page evidence about one selected element, including safe selector candidates, match information, allowlisted attributes, and a normalized preview. Element Evidence is advisory and must be revalidated by Source Live Check.
+_Avoid_: HTML snapshot, screenshot, DOM dump
+
+**Picker Outcome**:
+The closed result of one Element Picker operation: `Selected`, `NotPresent`, `CannotDetermine`, `Cancelled`, or `Failed`.
+_Avoid_: nullable selector, generic picker error
+
+**Repair Proposal**:
+An immutable, fingerprinted candidate Source together with its compiler result, complete Source Live Check result, generation binding, and review data. A Repair Proposal is not applied until explicit confirmation.
+_Avoid_: Source Profile proposal, auto-save, activation result
+
 **Validation State**:
 A derived state indicating whether a Source or profile can currently compile and execute. It is computed from schema, registry, compiler, and source validation diagnostics; it is not a persisted user status.
 _Avoid_: source status invalid, profile status
