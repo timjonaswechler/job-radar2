@@ -15,6 +15,10 @@ const DEFAULT_BASE_FONT_SIZE_PX: u16 = 16;
 const MIN_BASE_FONT_SIZE_PX: u16 = 12;
 const MAX_BASE_FONT_SIZE_PX: u16 = 24;
 
+fn configuration_task_failed() -> ::agent::ConfigurationError {
+    ::agent::ConfigurationError::task_failed()
+}
+
 struct TauriBrowserRuntimeProgressReporter {
     app: AppHandle,
 }
@@ -296,7 +300,7 @@ pub async fn submit_agent_api_key(
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.set_api_key(provider, api_key))
         .await
-        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
+        .map_err(|_| configuration_task_failed())?
 }
 
 #[tauri::command]
@@ -333,7 +337,7 @@ pub async fn remove_agent_authentication(
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.remove_authentication(provider))
         .await
-        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
+        .map_err(|_| configuration_task_failed())?
 }
 
 #[tauri::command]
@@ -343,7 +347,7 @@ pub async fn reload_agent_configuration(
     let configuration = std::sync::Arc::clone(&state.agent_configuration);
     tauri::async_runtime::spawn_blocking(move || configuration.reload())
         .await
-        .map_err(|_| ::agent::ConfigurationError::invalid_input())?
+        .map_err(|_| configuration_task_failed())?
 }
 
 #[tauri::command]
@@ -1154,6 +1158,24 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configuration_task_failures_are_stable_and_redacted_at_the_command_seam() {
+        let error = configuration_task_failed();
+        let invalid = ::agent::ConfigurationError::invalid_input();
+        assert_eq!(error.kind(), ::agent::ConfigurationErrorKind::TaskFailed);
+        assert_ne!(error.kind(), invalid.kind());
+        assert_eq!(error.code(), "agent_configuration_task_failed");
+        assert_eq!(error.message(), "agent configuration task failed");
+        let serialized = serde_json::to_string(&error).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"code":"agent_configuration_task_failed","message":"agent configuration task failed"}"#
+        );
+        assert!(!serialized.contains("panic"));
+        assert!(!serialized.contains("path"));
+        assert!(!serialized.contains("credential"));
+    }
 
     #[test]
     fn app_state_starts_without_source_or_profile_domain_tables() {

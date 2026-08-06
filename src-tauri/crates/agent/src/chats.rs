@@ -17,7 +17,6 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -140,6 +139,7 @@ pub enum ChatHistoryEntry {
 pub struct ChatProjection {
     pub id: ChatId,
     pub status: ChatStatus,
+    pub active_operation_id: Option<ChatOperationId>,
     pub history: Vec<ChatHistoryEntry>,
     pub selected_provider_id: Option<String>,
     pub selected_model_id: Option<String>,
@@ -206,7 +206,9 @@ pub enum ChatContentKind {
 #[serde(rename_all = "camelCase")]
 pub struct ChatEvent {
     pub chat_id: ChatId,
+    pub operation_id: ChatOperationId,
     pub sequence: u64,
+    pub terminal: bool,
     #[serde(flatten)]
     pub event: ChatEventKind,
 }
@@ -216,7 +218,9 @@ impl fmt::Debug for ChatEvent {
         formatter
             .debug_struct("ChatEvent")
             .field("chat_id", &self.chat_id)
+            .field("operation_id", &self.operation_id)
             .field("sequence", &self.sequence)
+            .field("terminal", &self.terminal)
             .field("event", &self.event.safe_name())
             .finish()
     }
@@ -327,8 +331,35 @@ enum OperationKind {
 }
 
 struct ChatSlot {
-    chat: AsyncMutex<AgentChat>,
+    // The operation lease owns the AgentChat while its stream is being polled.
+    // This keeps the synchronous Chat lock out of provider awaits and listener code.
+    chat: Mutex<Option<AgentChat>>,
     projection: Mutex<ChatProjection>,
+}
+
+struct ChatLease {
+    slot: Arc<ChatSlot>,
+    chat: Option<AgentChat>,
+}
+
+impl ChatLease {
+    fn chat_mut(&mut self) -> &mut AgentChat {
+        self.chat
+            .as_mut()
+            .expect("Agent Chat lease must own the Chat")
+    }
+
+    fn restore(&mut self) {
+        if let Some(chat) = self.chat.take() {
+            *self.slot.chat.lock().expect("Agent Chat lock poisoned") = Some(chat);
+        }
+    }
+}
+
+impl Drop for ChatLease {
+    fn drop(&mut self) {
+        self.restore();
+    }
 }
 
 struct OperationGuard {
@@ -405,7 +436,7 @@ impl Chats {
             .insert(
                 id,
                 Arc::new(ChatSlot {
-                    chat: AsyncMutex::new(chat),
+                    chat: Mutex::new(Some(chat)),
                     projection: Mutex::new(projection.clone()),
                 }),
             );
@@ -444,7 +475,7 @@ impl Chats {
         chats.insert(
             input.id,
             Arc::new(ChatSlot {
-                chat: AsyncMutex::new(chat),
+                chat: Mutex::new(Some(chat)),
                 projection: Mutex::new(projection.clone()),
             }),
         );
@@ -512,8 +543,9 @@ impl Chats {
         model_id: String,
     ) -> Result<ChatProjection, ChatError> {
         let slot = self.chat(id).ok_or_else(chat_not_open)?;
-        let mut chat = slot.chat.lock().await;
+        let mut chat_slot = slot.chat.lock().expect("Agent Chat lock poisoned");
         self.ensure_idle(id)?;
+        let chat = chat_slot.as_mut().ok_or_else(chat_busy)?;
         if let Err(error) = chat.select_model(
             ProviderId::new(provider_id).map_err(|_| invalid_request())?,
             ModelId::new(model_id).map_err(|_| invalid_request())?,
@@ -533,8 +565,9 @@ impl Chats {
         reasoning_level: ChatReasoningLevel,
     ) -> Result<ChatProjection, ChatError> {
         let slot = self.chat(id).ok_or_else(chat_not_open)?;
-        let mut chat = slot.chat.lock().await;
+        let mut chat_slot = slot.chat.lock().expect("Agent Chat lock poisoned");
         self.ensure_idle(id)?;
+        let chat = chat_slot.as_mut().ok_or_else(chat_busy)?;
         if let Err(error) = chat.set_reasoning_level(reasoning_level.into()) {
             let projection = project_chat(&chat, false);
             self.replace_projection(&slot, projection);
@@ -547,8 +580,9 @@ impl Chats {
 
     pub async fn reload(&self, id: &ChatId) -> Result<ChatProjection, ChatError> {
         let slot = self.chat(id).ok_or_else(chat_not_open)?;
-        let mut chat = slot.chat.lock().await;
+        let mut chat_slot = slot.chat.lock().expect("Agent Chat lock poisoned");
         self.ensure_idle(id)?;
+        let chat = chat_slot.as_mut().ok_or_else(chat_busy)?;
         chat.reload().map_err(map_chat_error)?;
         let projection = project_chat(&chat, false);
         self.replace_projection(&slot, projection.clone());
@@ -563,7 +597,13 @@ impl Chats {
     ) -> Result<ChatOperationId, ChatError> {
         let slot = self.chat(&id).ok_or_else(chat_not_open)?;
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
-        {
+        let lease = {
+            // Admission and Chat ownership use one lock order. A control call
+            // cannot pass its idle check while an operation is being reserved.
+            let mut chat_slot = slot.chat.lock().expect("Agent Chat lock poisoned");
+            if chat_slot.is_none() {
+                return Err(chat_busy());
+            }
             let mut operations = self
                 .operations
                 .lock()
@@ -584,7 +624,12 @@ impl Chats {
                 .lock()
                 .expect("Agent Chat projection lock poisoned");
             projection.status = ChatStatus::Running;
-        }
+            projection.active_operation_id = Some(ChatOperationId(generation));
+            ChatLease {
+                slot: Arc::clone(&slot),
+                chat: Some(chat_slot.take().expect("admitted Chat must be present")),
+            }
+        };
         let application = Arc::clone(self);
         let guard = OperationGuard {
             chats: Arc::clone(self),
@@ -598,7 +643,7 @@ impl Chats {
         let cleanup_id = id.clone();
         tokio::spawn(async move {
             let result = std::panic::AssertUnwindSafe(
-                application.run_operation(id, generation, slot, kind, listener, guard),
+                application.run_operation(id, generation, slot, kind, listener, lease, guard),
             )
             .catch_unwind()
             .await;
@@ -616,21 +661,24 @@ impl Chats {
         slot: Arc<ChatSlot>,
         kind: OperationKind,
         listener: Arc<dyn ChatEventListener>,
+        mut chat: ChatLease,
         mut guard: OperationGuard,
     ) {
-        let mut chat = slot.chat.lock().await;
         let stream = match kind {
-            OperationKind::Send(text) => chat.send(text),
-            OperationKind::Compact(focus) => chat.compact(focus),
+            OperationKind::Send(text) => chat.chat_mut().send(text),
+            OperationKind::Compact(focus) => chat.chat_mut().compact(focus),
         };
         let mut stream = match stream {
             Ok(stream) => stream,
             Err(error) => {
-                let projected = project_chat(&chat, false);
+                let projected = project_chat(chat.chat_mut(), false);
                 self.replace_projection(&slot, projected);
+                chat.restore();
                 if guard.release() {
                     self.emit(
                         &id,
+                        ChatOperationId(generation),
+                        true,
                         listener.as_ref(),
                         ChatEventKind::Failed {
                             error: map_chat_error(error),
@@ -667,27 +715,57 @@ impl Chats {
                 !terminal,
                 Some(stream.context_window()),
             );
+            projected.active_operation_id = (!terminal).then_some(ChatOperationId(generation));
             projected.selected_provider_id = Some(stream.selected_provider().as_str().to_owned());
             projected.selected_model_id = Some(stream.selected_model().as_str().to_owned());
             projected.reasoning_level = stream.reasoning_level().into();
             self.replace_projection(&slot, projected.clone());
             let event = project_event(event, projected);
             if terminal {
+                // The stream has finished its durable transition. Drop its
+                // borrow, restore the Chat, and release operation authority
+                // before arbitrary listener code runs.
+                drop(stream);
+                chat.restore();
                 if guard.release() {
-                    self.emit(&id, listener.as_ref(), event);
+                    self.emit(
+                        &id,
+                        ChatOperationId(generation),
+                        true,
+                        listener.as_ref(),
+                        event,
+                    );
                 }
                 return;
             }
-            self.emit(&id, listener.as_ref(), event);
+            self.emit(
+                &id,
+                ChatOperationId(generation),
+                false,
+                listener.as_ref(),
+                event,
+            );
         }
-        self.replace_projection(&slot, project_chat(&chat, false));
+        drop(stream);
+        let projected = project_chat(chat.chat_mut(), false);
+        self.replace_projection(&slot, projected);
+        chat.restore();
         guard.release();
     }
 
-    fn emit(&self, id: &ChatId, listener: &dyn ChatEventListener, event: ChatEventKind) {
+    fn emit(
+        &self,
+        id: &ChatId,
+        operation_id: ChatOperationId,
+        terminal: bool,
+        listener: &dyn ChatEventListener,
+        event: ChatEventKind,
+    ) {
         listener.emit(ChatEvent {
             chat_id: id.clone(),
+            operation_id,
             sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed),
+            terminal,
             event,
         });
     }
@@ -709,6 +787,7 @@ impl Chats {
             if projection.status == ChatStatus::Running {
                 projection.status = ChatStatus::Ready;
             }
+            projection.active_operation_id = None;
         }
         current
     }
@@ -802,6 +881,7 @@ fn project_snapshot(
                 },
             }
         },
+        active_operation_id: None,
         history: snapshot
             .visible_history()
             .iter()

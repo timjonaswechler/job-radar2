@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { AgentChatShell } from "@/features/agent-chat/agent-chat-shell";
 import {
+  decodeAgentChatOperationId,
   type AgentChatClient,
   type AgentChatProjection,
 } from "@/lib/api/agent-chat";
@@ -65,6 +66,7 @@ const configuration: AgentConfigurationStatus = {
 const baseProjection: AgentChatProjection = {
   id: "00000000-0000-7000-8000-000000000230",
   status: "ready",
+  activeOperationId: null,
   history: [
     {
       type: "turn",
@@ -115,7 +117,7 @@ function reviewClients(projection: AgentChatProjection): {
     open: async () => projection,
     snapshot: async () => projection,
     reload: async () => ({ ...projection, status: "ready" }),
-    send: async () => 0,
+    send: async () => decodeAgentChatOperationId(1),
     stop: async () => true,
     setModel: async (_chatId, providerId, modelId) => ({
       ...projection,
@@ -127,7 +129,7 @@ function reviewClients(projection: AgentChatProjection): {
       ...projection,
       reasoningLevel,
     }),
-    compact: async () => 0,
+    compact: async () => decodeAgentChatOperationId(2),
     listen: async () => () => undefined,
   };
   const configurationClient: AgentConfigurationClient = {

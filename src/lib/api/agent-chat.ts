@@ -70,9 +70,16 @@ export type AgentChatHistoryEntry =
 
 export type AgentChatRecoveryNotice = "incomplete_final_turn_discarded";
 
+declare const agentChatOperationIdBrand: unique symbol;
+
+export type AgentChatOperationId = number & {
+  readonly [agentChatOperationIdBrand]: "AgentChatOperationId";
+};
+
 export type AgentChatProjection = {
   id: string;
   status: AgentChatStatus;
+  activeOperationId: AgentChatOperationId | null;
   history: AgentChatHistoryEntry[];
   selectedProviderId: string | null;
   selectedModelId: string | null;
@@ -81,8 +88,6 @@ export type AgentChatProjection = {
   contextWindow: number | null;
   recoveryNotices: AgentChatRecoveryNotice[];
 };
-
-export type AgentChatOperationId = number;
 
 export type AgentChatApplicationError = {
   code?: string;
@@ -103,7 +108,9 @@ export type AgentChatOpenInput = {
 
 export type AgentChatApplicationEvent = {
   chatId: string;
+  operationId: AgentChatOperationId;
   sequence: number;
+  terminal: boolean;
 } & (
   | { type: "started" }
   | { type: "content_started"; index: number; kind: "text" | "reasoning" }
@@ -243,6 +250,8 @@ export function decodeAgentChatProjection(value: unknown): AgentChatProjection {
     !isRecord(value) ||
     !isIdentifier(value.id) ||
     !includes(chatStatuses, value.status) ||
+    !(value.activeOperationId === null || isPositiveBoundedCount(value.activeOperationId)) ||
+    (value.status === "running") !== (value.activeOperationId !== null) ||
     !isArrayOf(value.history, isAgentChatHistoryEntry) ||
     value.history.length > MAX_HISTORY_ENTRIES ||
     !isNullableIdentifier(value.selectedProviderId) ||
@@ -259,6 +268,10 @@ export function decodeAgentChatProjection(value: unknown): AgentChatProjection {
   return {
     id: value.id,
     status: value.status,
+    activeOperationId:
+      value.activeOperationId === null
+        ? null
+        : decodeAgentChatOperationId(value.activeOperationId),
     history: value.history,
     selectedProviderId: value.selectedProviderId,
     selectedModelId: value.selectedModelId,
@@ -273,13 +286,20 @@ export function decodeAgentChatEvent(value: unknown): AgentChatApplicationEvent 
   if (
     !isRecord(value) ||
     !isIdentifier(value.chatId) ||
+    !isPositiveBoundedCount(value.operationId) ||
     !isPositiveBoundedCount(value.sequence) ||
+    typeof value.terminal !== "boolean" ||
     typeof value.type !== "string"
   ) {
     throw invalidResponse("Agent Chat event");
   }
 
-  const base = { chatId: value.chatId, sequence: value.sequence };
+  const base = {
+    chatId: value.chatId,
+    operationId: decodeAgentChatOperationId(value.operationId),
+    sequence: value.sequence,
+    terminal: value.terminal,
+  };
   switch (value.type) {
     case "started":
     case "aborted":
@@ -363,9 +383,9 @@ export function decodeAgentChatError(value: unknown): AgentChatApplicationError 
   return { code: value.code, message: "Agent Chat operation failed." };
 }
 
-function decodeAgentChatOperationId(value: unknown): AgentChatOperationId {
-  if (!isBoundedCount(value)) throw invalidResponse("Agent Chat operation ID");
-  return value;
+export function decodeAgentChatOperationId(value: unknown): AgentChatOperationId {
+  if (!isPositiveBoundedCount(value)) throw invalidResponse("Agent Chat operation ID");
+  return value as AgentChatOperationId;
 }
 
 function decodeBoolean(value: unknown): boolean {

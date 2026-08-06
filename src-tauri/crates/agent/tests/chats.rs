@@ -77,6 +77,31 @@ impl ChatEventListener for ReentrantListener {
     }
 }
 
+struct ReentrantReloadListener {
+    chats: Arc<Chats>,
+    result: mpsc::UnboundedSender<bool>,
+}
+
+impl ChatEventListener for ReentrantReloadListener {
+    fn emit(&self, event: ChatEvent) {
+        if matches!(event.event, ChatEventKind::Completed { .. }) {
+            let chats = Arc::clone(&self.chats);
+            let chat_id = event.chat_id;
+            let result = std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(chats.reload(&chat_id))
+                    .is_ok()
+            })
+            .join()
+            .unwrap_or(false);
+            let _ = self.result.send(result);
+        }
+    }
+}
+
 struct PanicListener;
 
 impl ChatEventListener for PanicListener {
@@ -138,6 +163,7 @@ async fn running_snapshot_does_not_wait_for_the_provider_stream() {
         .unwrap();
     assert_eq!(snapshot.id, created.id);
     assert_eq!(snapshot.status, agent::ChatStatus::Running);
+    assert_eq!(snapshot.active_operation_id, Some(operation_id));
 
     assert!(chats.stop(&created.id, operation_id));
     let terminal = timeout(Duration::from_secs(1), receiver.recv())
@@ -202,6 +228,92 @@ async fn terminal_event_is_reentrant_after_operation_authority_is_released() {
         chats.snapshot(&created.id).await.unwrap().status,
         ChatStatus::Ready
     );
+}
+
+#[tokio::test]
+async fn terminal_listener_can_reload_chat_without_waiting_for_chat_lock() {
+    let temp = TempDir::new().unwrap();
+    let chats = Arc::new(
+        Chats::new(
+            temp.path().join("agents"),
+            ScriptedProvider {
+                model: model(),
+                response: "reloadable response".into(),
+            },
+        )
+        .unwrap(),
+    );
+    let created = chats.create(input()).unwrap();
+    let (sender, mut receiver) = mpsc::unbounded_channel();
+
+    chats
+        .send(
+            created.id.clone(),
+            "reload request".into(),
+            Arc::new(ReentrantReloadListener {
+                chats: Arc::clone(&chats),
+                result: sender,
+            }),
+        )
+        .unwrap();
+
+    assert!(timeout(Duration::from_secs(1), receiver.recv())
+        .await
+        .expect("re-entrant reload must complete")
+        .expect("re-entrant listener result"));
+    assert_eq!(
+        chats.snapshot(&created.id).await.unwrap().status,
+        ChatStatus::Ready
+    );
+}
+
+#[tokio::test]
+async fn every_event_carries_the_owned_operation_identity() {
+    let temp = TempDir::new().unwrap();
+    let chats = Arc::new(
+        Chats::new(
+            temp.path().join("agents"),
+            ScriptedProvider {
+                model: model(),
+                response: "identity response".into(),
+            },
+        )
+        .unwrap(),
+    );
+    let created = chats.create(input()).unwrap();
+    let (sender, mut receiver) = mpsc::unbounded_channel();
+    let operation_id = chats
+        .send(
+            created.id.clone(),
+            "identity request".into(),
+            Arc::new(ChannelListener(sender)),
+        )
+        .unwrap();
+
+    let mut events = Vec::new();
+    while events.len() < 5 {
+        events.push(
+            timeout(Duration::from_secs(1), receiver.recv())
+                .await
+                .expect("operation event")
+                .expect("operation event channel"),
+        );
+    }
+    assert!(events
+        .iter()
+        .all(|event| event.operation_id == operation_id));
+    assert_eq!(events.iter().filter(|event| event.terminal).count(), 1);
+    assert!(events
+        .windows(2)
+        .all(|events| events[0].sequence < events[1].sequence));
+    let completed = events
+        .iter()
+        .find_map(|event| match &event.event {
+            ChatEventKind::Completed { chat } => Some(chat),
+            _ => None,
+        })
+        .expect("completed event");
+    assert_eq!(completed.active_operation_id, None);
 }
 
 #[tokio::test]

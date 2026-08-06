@@ -9,8 +9,10 @@ import { AgentProviderSettings } from "@/features/settings/agent-provider-settin
 import {
   AGENT_SUBSCRIPTION_LOGIN_PROGRESS_EVENT,
   createAgentConfigurationClient,
+  decodeAgentLoginAttemptId,
   type AgentConfigurationClient,
   type AgentConfigurationStatus,
+  type AgentLoginAttemptId,
   type SubscriptionLoginProgress,
 } from "@/lib/api/agent-configuration";
 
@@ -22,6 +24,8 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+const attemptOne = decodeAgentLoginAttemptId("attempt-one");
 
 const configuredOnlyStatus: AgentConfigurationStatus = {
   providers: [
@@ -120,8 +124,8 @@ describe("Agent configuration transport", () => {
       },
     );
 
-    await client.loginSubscription("synthetic-provider", "attempt-one");
-    await client.cancelSubscriptionLogin("attempt-one");
+    await client.loginSubscription("synthetic-provider", attemptOne);
+    await client.cancelSubscriptionLogin(attemptOne);
 
     expect(calls).toEqual([
       {
@@ -140,13 +144,13 @@ describe("Agent configuration transport", () => {
     });
     progressHandler?.({
       payload: {
-        attemptId: "attempt-one",
+        attemptId: attemptOne,
         providerId: "synthetic-provider",
         stage: "waiting_for_browser",
       },
     });
     expect(received).toEqual({
-      attemptId: "attempt-one",
+      attemptId: attemptOne,
       providerId: "synthetic-provider",
       stage: "waiting_for_browser",
     });
@@ -182,7 +186,7 @@ describe("Agent provider settings", () => {
         },
       ],
     };
-    const attempts: string[] = [];
+    const attempts: AgentLoginAttemptId[] = [];
     let resolveSecondLogin: ((status: AgentConfigurationStatus) => void) | undefined;
     const secondLogin = new Promise<AgentConfigurationStatus>((resolve) => {
       resolveSecondLogin = resolve;

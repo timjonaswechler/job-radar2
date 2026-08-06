@@ -125,9 +125,9 @@ docs/development/source-behavior/catalog.md:559:21:arbitrary_execution:JavaScrip
 src-tauri/crates/agent/src/chat.rs:595:5:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/chat.rs:826:77:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/chat.rs:882:51:retry:Retry	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
-src-tauri/crates/agent/src/chats.rs:932:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/crates/agent/src/chats.rs:933:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
-src-tauri/crates/agent/src/chats.rs:934:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:1012:29:rate_limit:RateLimit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:1013:20:rate_limit:rate_limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
+src-tauri/crates/agent/src/chats.rs:1014:35:rate_limit:rate limit	unrelated_agent_provider_retry	Unrelated agent/provider lifecycle or retry vocabulary reviewed.
 src-tauri/crates/agent/src/configuration/authentication.rs:1843:16:registration_residue:registry_storage_rejects_reparse	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/configuration/registry.rs:1054:33:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
 src-tauri/crates/agent/src/configuration/registry.rs:1057:13:json_text:"text"	unrelated_agent_provider_retry	Agent provider lifecycle and persistence vocabulary, outside the Source Behavior Language.
@@ -875,17 +875,19 @@ src/components/ui/toggle-group.tsx:73:685:pacing:pacing	unrelated_frontend_ui_id
 src/components/ui/toggle-group.tsx:73:771:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/components/ui/toggle-group.tsx:73:81:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/components/ui/toggle-group.tsx:73:859:pacing:pacing	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat-prototype/agent-chat-prototype.tsx:24:56:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/agent-chat-prototype/agent-chat-prototype.tsx:25:56:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat-prototype/agent-chat-prototype.tsx:3:66:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat-prototype/agent-chat-prototype.tsx:77:17:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/agent-chat-prototype/agent-chat-prototype.tsx:79:17:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat/agent-chat-shell.tsx:128:5:rate_limit:rate_limit	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat/agent-chat-shell.tsx:175:26:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat/agent-chat-shell.tsx:185:40:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat/tests/agent-chat-shell.test.tsx:132:88:arbitrary_execution:shell	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
-src/features/agent-chat/tests/agent-chat-shell.test.tsx:238:11:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
-src/features/agent-chat/tests/agent-chat-shell.test.tsx:361:24:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
-src/features/agent-chat/tests/agent-chat-shell.test.tsx:40:17:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/tests/agent-chat-shell.test.tsx:173:88:arbitrary_execution:shell	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/tests/agent-chat-shell.test.tsx:279:11:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/tests/agent-chat-shell.test.tsx:405:24:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/tests/agent-chat-shell.test.tsx:43:17:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
 src/features/agent-chat/tests/agent-chat-shell.test.tsx:8:66:arbitrary_execution:shell	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/tests/use-agent-chat.test.tsx:324:151:retry:retry	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
+src/features/agent-chat/use-agent-chat.ts:61:9:json_text:"text"	unrelated_frontend_ui_identifier	Frontend Agent Chat contract identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/postings/list/postings-list-panel.tsx:102:46:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/list/postings-list-panel.tsx:102:55:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/postings/list/postings-list-panel.tsx:146:5:retry:Retry	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
@@ -928,9 +930,9 @@ src/features/sources/source-form/source-config/source-config-table.tsx:46:47:pac
 src/features/sources/workspace/sources-workspace-tabs.ts:28:31:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/sources/workspace/sources-workspace-view.tsx:92:43:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/lib/api/agent-chat.ts:109:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/agent-chat.ts:290:20:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/agent-chat.ts:419:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:116:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:310:20:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:439:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/agent-chat.ts:55:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/job-postings.test.ts:47:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
 src/lib/api/job-postings.ts:165:37:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.

@@ -212,6 +212,7 @@ pub enum ErrorKind {
     StaleLoginAttempt,
     InteractionUnavailable,
     DataFolderUnavailable,
+    TaskFailed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -222,6 +223,10 @@ pub struct Error {
 impl Error {
     pub fn invalid_input() -> Self {
         Self::new(ErrorKind::InvalidConfiguration)
+    }
+
+    pub fn task_failed() -> Self {
+        Self::new(ErrorKind::TaskFailed)
     }
 
     pub fn kind(&self) -> ErrorKind {
@@ -244,6 +249,7 @@ impl Error {
             ErrorKind::StaleLoginAttempt => "stale_login_attempt",
             ErrorKind::InteractionUnavailable => "login_interaction_unavailable",
             ErrorKind::DataFolderUnavailable => "agent_data_folder_unavailable",
+            ErrorKind::TaskFailed => "agent_configuration_task_failed",
         }
     }
 
@@ -267,6 +273,7 @@ impl Error {
             ErrorKind::StaleLoginAttempt => "login attempt is no longer active",
             ErrorKind::InteractionUnavailable => "login interaction is unavailable",
             ErrorKind::DataFolderUnavailable => "agent data folder could not be opened",
+            ErrorKind::TaskFailed => "agent configuration task failed",
         }
     }
 

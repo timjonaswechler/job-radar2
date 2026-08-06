@@ -6,10 +6,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { AgentChatShell } from "@/features/agent-chat/agent-chat-shell";
-import type {
-  AgentChatApplicationEvent,
-  AgentChatClient,
-  AgentChatProjection,
+import {
+  decodeAgentChatOperationId,
+  type AgentChatApplicationEvent,
+  type AgentChatOperationId,
+  type AgentChatClient,
+  type AgentChatProjection,
 } from "@/lib/api/agent-chat";
 import type {
   AgentConfigurationClient,
@@ -31,6 +33,7 @@ Element.prototype.getAnimations = () => [];
 const projection: AgentChatProjection = {
   id: "synthetic-chat-id",
   status: "ready",
+  activeOperationId: null,
   history: [
     {
       type: "turn",
@@ -48,6 +51,32 @@ const projection: AgentChatProjection = {
   contextWindow: 128000,
   recoveryNotices: [],
 };
+
+type TestEvent = {
+  chatId: string;
+  sequence: number;
+  type: AgentChatApplicationEvent["type"];
+  operationId?: AgentChatOperationId;
+  terminal?: boolean;
+  [key: string]: unknown;
+};
+
+function terminalForTestEvent(event: TestEvent): boolean {
+  return !(
+    event.type === "started" ||
+    event.type === "content_started" ||
+    event.type === "content_delta" ||
+    event.type === "content_finished" ||
+    event.type === "compaction_started"
+  );
+}
+
+function operationForTestEvent(event: TestEvent): AgentChatOperationId {
+  return event.operationId ??
+    (event.type.startsWith("compaction")
+      ? decodeAgentChatOperationId(2)
+      : decodeAgentChatOperationId(1));
+}
 
 const configuration: AgentConfigurationStatus = {
   authenticationConfiguration: "ready",
@@ -104,11 +133,11 @@ function clients(chat: AgentChatProjection = projection) {
     open: vi.fn(async () => chat),
     snapshot: vi.fn(async () => chat),
     reload: vi.fn(async () => chat),
-    send: vi.fn(async () => 0),
+    send: vi.fn(async () => decodeAgentChatOperationId(1)),
     stop: vi.fn(async () => true),
     setModel: vi.fn(async () => chat),
     setReasoningLevel: vi.fn(async () => chat),
-    compact: vi.fn(async () => 0),
+    compact: vi.fn(async () => decodeAgentChatOperationId(2)),
     listen: vi.fn(async (handler) => {
       eventHandler = handler;
       return () => undefined;
@@ -124,7 +153,19 @@ function clients(chat: AgentChatProjection = projection) {
     openDataFolder: vi.fn(),
     listenToSubscriptionLoginProgress: vi.fn(),
   };
-  return { chatClient, configurationClient, event: () => eventHandler };
+  return {
+    chatClient,
+    configurationClient,
+    event: () =>
+      eventHandler
+        ? (event: TestEvent) =>
+            eventHandler?.({
+              ...event,
+              operationId: operationForTestEvent(event),
+              terminal: event.terminal ?? terminalForTestEvent(event),
+            } as AgentChatApplicationEvent)
+        : undefined,
+  };
 }
 
 afterEach(cleanup);
@@ -269,7 +310,10 @@ test("sends text, renders indexed streaming content, and stops through the typed
     screen.getByRole("button", { name: "agentChat.actions.stop" }),
   );
   await waitFor(() =>
-    expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id", 0),
+    expect(chatClient.stop).toHaveBeenCalledWith(
+      "synthetic-chat-id",
+      decodeAgentChatOperationId(1),
+    ),
   );
 
   event()?.({
@@ -415,6 +459,7 @@ test("can stop an operation that was already running when the Chat opened", asyn
   const { chatClient, configurationClient } = clients({
     ...projection,
     status: "running",
+    activeOperationId: decodeAgentChatOperationId(1),
   });
 
   render(
@@ -436,7 +481,10 @@ test("can stop an operation that was already running when the Chat opened", asyn
     name: "agentChat.actions.stop",
   });
   await user.click(stopButton);
-  expect(chatClient.stop).toHaveBeenCalledWith("synthetic-chat-id", null);
+  expect(chatClient.stop).toHaveBeenCalledWith(
+    "synthetic-chat-id",
+    decodeAgentChatOperationId(1),
+  );
   expect(
     screen.getByRole("textbox", { name: "agentChat.composer.label" }),
   ).toBeDisabled();

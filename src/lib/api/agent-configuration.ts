@@ -70,8 +70,14 @@ export type AgentConfigurationStatus = {
 
 export type SubscriptionLoginStage = (typeof loginStages)[number];
 
+declare const agentLoginAttemptIdBrand: unique symbol;
+
+export type AgentLoginAttemptId = string & {
+  readonly [agentLoginAttemptIdBrand]: "AgentLoginAttemptId";
+};
+
 export type SubscriptionLoginProgress = {
-  attemptId: string;
+  attemptId: AgentLoginAttemptId;
   providerId: string;
   stage: SubscriptionLoginStage;
 };
@@ -97,8 +103,11 @@ export class AgentConfigurationTransportError extends Error {
 export type AgentConfigurationClient = {
   getStatus(): Promise<AgentConfigurationStatus>;
   submitApiKey(providerId: string, apiKey: string): Promise<AgentConfigurationStatus>;
-  loginSubscription(providerId: string, attemptId: string): Promise<AgentConfigurationStatus>;
-  cancelSubscriptionLogin(attemptId: string): Promise<void>;
+  loginSubscription(
+    providerId: string,
+    attemptId: AgentLoginAttemptId,
+  ): Promise<AgentConfigurationStatus>;
+  cancelSubscriptionLogin(attemptId: AgentLoginAttemptId): Promise<void>;
   removeAuthentication(providerId: string): Promise<AgentConfigurationStatus>;
   reload(): Promise<AgentConfigurationStatus>;
   openDataFolder(): Promise<void>;
@@ -217,10 +226,15 @@ export function decodeSubscriptionLoginProgress(
     throw invalidResponse("subscription login progress");
   }
   return {
-    attemptId: value.attemptId,
+    attemptId: decodeAgentLoginAttemptId(value.attemptId),
     providerId: value.providerId,
     stage: value.stage,
   };
+}
+
+export function decodeAgentLoginAttemptId(value: unknown): AgentLoginAttemptId {
+  if (!isIdentifier(value)) throw invalidResponse("login attempt ID");
+  return value as AgentLoginAttemptId;
 }
 
 export function decodeAgentConfigurationError(

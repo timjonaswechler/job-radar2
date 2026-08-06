@@ -48,8 +48,10 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import {
   agentConfigurationClient,
+  decodeAgentLoginAttemptId,
   type AgentConfigurationClient,
   type AgentConfigurationError,
+  type AgentLoginAttemptId,
   type AgentConfigurationStatus,
   type ProviderConfigurationStatus,
   type SubscriptionLoginProgress,
@@ -71,8 +73,8 @@ export function AgentProviderSettings({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<SubscriptionLoginProgress | null>(null);
-  const loginAttemptRef = useRef<string | null>(null);
-  const cancelledLoginAttemptsRef = useRef(new Set<string>());
+  const loginAttemptRef = useRef<AgentLoginAttemptId | null>(null);
+  const cancelledLoginAttemptsRef = useRef(new Set<AgentLoginAttemptId>());
   const [removeProvider, setRemoveProvider] =
     useState<ProviderConfigurationStatus | null>(null);
 
@@ -163,7 +165,7 @@ export function AgentProviderSettings({
   };
 
   const handleLogin = async (providerId: string) => {
-    const attemptId = crypto.randomUUID();
+    const attemptId = decodeAgentLoginAttemptId(crypto.randomUUID());
     loginAttemptRef.current = attemptId;
     cancelledLoginAttemptsRef.current.delete(attemptId);
     setProgress({ attemptId, providerId, stage: "starting" });
