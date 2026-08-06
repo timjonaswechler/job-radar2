@@ -193,3 +193,15 @@ _Avoid_: all unread postings, application status, archive
 **Match**:
 The durable relationship that says a finalized, cross-Source-merged Job Posting matched a specific Search Request during a specific Search Run. Each merged posting creates exactly one Match for that run; reruns create distinct Match sets while reusing durable Job Postings.
 _Avoid_: Job Posting, Source
+
+**Agent Assistance**:
+The intentionally incomplete foundation for provider-backed Agent Conversations, durable Agent Chats, and Agent Configuration. Agent Assistance does not own Search, Source, Job Posting, application preparation, domain context binding, tools, or autonomous workflows.
+_Avoid_: completed Agent product, Job Posting assistant, autonomous workflow
+
+**Agent Chat**:
+A durable application-owned conversation record managed by the Chats Module. It persists completed turns and compaction markers, exposes explicit ready/running/read-only/damaged/NotSaved projections, and may be reloaded after an unsaved operation. An Agent Chat is not attached to a Job Posting or another domain context in the current foundation.
+_Avoid_: Agent Conversation, Job Posting Chat, session browser, autonomous workflow
+
+**Agent Configuration**:
+The value-free capability and authentication configuration owned by the Configuration Module. It distinguishes catalogued, configured, and executable providers/models and exposes login progress without credentials, account data, provider transport details, or storage paths. Configuration is separate from Agent Chat execution.
+_Avoid_: provider adapter, model registry, credential document, Chat state

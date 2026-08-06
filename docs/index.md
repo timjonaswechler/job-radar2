@@ -3,7 +3,7 @@
 Die Dokumentation ist nach Zielgruppe in zwei Bereiche getrennt:
 
 - **[Job Radar verwenden](user/README.md):** veröffentlichbare Dokumentation für Endanwender und die spätere In-App-Hilfe.
-- **[Job Radar entwickeln](development/README.md):** technische, architektonische und projektinterne Dokumentation für Contributors und Agents.
+- **[Job Radar entwickeln](development/README.md):** technische, architektonische und projektinterne Dokumentation für Contributors und Agents; die unvollständige Agent-Assistance-Grundlage ist in [`ADR 0017`](development/adr/0017-agent-assistance-foundation.md) dokumentiert.
 
 Der Produktüberblick und die lokale Einrichtung bleiben in der Repository-[`README.md`](../README.md).
 

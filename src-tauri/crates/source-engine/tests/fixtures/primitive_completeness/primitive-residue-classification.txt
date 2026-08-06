@@ -878,9 +878,9 @@ src/components/ui/toggle-group.tsx:73:859:pacing:pacing	unrelated_frontend_ui_id
 src/features/agent-chat-prototype/agent-chat-prototype.tsx:24:56:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat-prototype/agent-chat-prototype.tsx:3:66:arbitrary_execution:shell	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat-prototype/agent-chat-prototype.tsx:77:17:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat/agent-chat-shell.tsx:180:5:rate_limit:rate_limit	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat/agent-chat-shell.tsx:227:26:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/features/agent-chat/agent-chat-shell.tsx:83:9:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/agent-chat/agent-chat-shell.tsx:128:5:rate_limit:rate_limit	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/agent-chat/agent-chat-shell.tsx:175:26:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/features/agent-chat/agent-chat-shell.tsx:185:40:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/features/agent-chat/tests/agent-chat-shell.test.tsx:132:88:arbitrary_execution:shell	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
 src/features/agent-chat/tests/agent-chat-shell.test.tsx:238:11:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
 src/features/agent-chat/tests/agent-chat-shell.test.tsx:361:24:json_text:"text"	explicit_negative_or_contract_test	Executable frontend Agent Chat contract test reviewed for the matched token.
@@ -928,8 +928,10 @@ src/features/sources/source-form/source-config/source-config-table.tsx:46:47:pac
 src/features/sources/workspace/sources-workspace-tabs.ts:28:31:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/features/sources/workspace/sources-workspace-view.tsx:92:43:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/hooks/use-file-upload.ts:136:58:transform_alias:toString	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
-src/lib/api/agent-chat.ts:23:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
-src/lib/api/agent-chat.ts:77:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:109:53:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:290:20:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:419:21:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
+src/lib/api/agent-chat.ts:55:13:json_text:"text"	unrelated_frontend_ui_identifier	Frontend presentation identifier reviewed and unrelated to Source Behavior Language execution.
 src/lib/api/job-postings.test.ts:47:51:predicate_all_any_none:"all"	explicit_negative_or_contract_test	Executable Job Posting transport or UI contract test reviewed for the matched token.
 src/lib/api/job-postings.ts:165:37:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.
 src/lib/api/job-postings.ts:25:60:predicate_all_any_none:"all"	unrelated_frontend_ui_identifier	Frontend UI identifier outside executable Source Behavior Language primitives.

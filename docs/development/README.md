@@ -10,7 +10,7 @@ All contributor-facing, technical, and project-internal documentation lives here
 - [`product/`](product/) and [`prd/`](prd/) — intended product behavior and accepted Product Requirement Documents.
 - [`reference/`](reference/) — stable facts intended for lookup.
 - [`project/`](project/), [`agents/`](agents/), and [`research/`](research/) — internal coordination, engineering-skill configuration, and time-bounded investigations.
-- [`agent/`](agent/) — Agent Conversation, authentication, credential containment, and debug-harness contracts.
+- [`agent/`](agent/) — Agent Conversation, authentication, credential containment, and debug-harness contracts; [ADR 0017](adr/0017-agent-assistance-foundation.md) records the intentionally incomplete Agent Assistance foundation and Chat ownership.
 - [`source-behavior/`](source-behavior/) — implemented Source Behavior Language contracts that need explanation beyond code and tests.
 - [`source-live-check/`](source-live-check/) — Source Live Check implementation and freshness contracts.
 

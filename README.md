@@ -50,7 +50,8 @@ Vorhanden sind unter anderem:
 - Diagnosemeldungen für ungültige oder widersprüchliche Quellen-Dokumente,
 - eine lokal verwaltete Browser-Laufzeit für browserbasierte Quellen,
 - Backend-Logik für Suchanfragen, Suchläufe, Trefferregeln, Ausschlussregeln und Ergebnis-Zusammenführung,
-- erste eingebaute Profile für verbreitete Recruiting-Systeme und Jobquellen.
+- erste eingebaute Profile für verbreitete Recruiting-Systeme und Jobquellen,
+- eine bewusst unvollständige Agent-Assistance-Grundlage für Agent Chat, Conversations und Provider Configuration; sie ist noch keinem Job Posting oder anderen Domain-Kontext zugeordnet ([ADR 0017](docs/development/adr/0017-agent-assistance-foundation.md)).
 
 Noch nicht der Anspruch dieser README: alle technischen Details, Schemata und Entwicklungsentscheidungen vollständig zu erklären. Dafür gibt es die tieferen Dokumente unten.
 

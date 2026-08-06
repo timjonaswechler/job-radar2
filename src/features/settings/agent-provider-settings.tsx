@@ -71,6 +71,8 @@ export function AgentProviderSettings({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<SubscriptionLoginProgress | null>(null);
+  const loginAttemptRef = useRef<string | null>(null);
+  const cancelledLoginAttemptsRef = useRef(new Set<string>());
   const [removeProvider, setRemoveProvider] =
     useState<ProviderConfigurationStatus | null>(null);
 
@@ -88,15 +90,20 @@ export function AgentProviderSettings({
       });
 
     void client
-      .listenToSubscriptionLoginProgress((nextProgress) => {
-        if (active) {
-          setProgress((current) =>
-            current === null || current.attemptId === nextProgress.attemptId
-              ? nextProgress
-              : current,
-          );
-        }
-      })
+      .listenToSubscriptionLoginProgress(
+        (nextProgress) => {
+          if (
+            active &&
+            loginAttemptRef.current === nextProgress.attemptId &&
+            !cancelledLoginAttemptsRef.current.has(nextProgress.attemptId)
+          ) {
+            setProgress(nextProgress);
+          }
+        },
+        () => {
+          if (active) setErrorCode("transport_unavailable");
+        },
+      )
       .then((stopListening) => {
         if (!active) {
           stopListening();
@@ -110,6 +117,8 @@ export function AgentProviderSettings({
 
     return () => {
       active = false;
+      loginAttemptRef.current = null;
+      cancelledLoginAttemptsRef.current.clear();
       unlisten?.();
     };
   }, [client]);
@@ -118,19 +127,25 @@ export function AgentProviderSettings({
     nextBusy: NonNullable<BusyState>,
     action: () => Promise<AgentConfigurationStatus>,
     successNotice?: string,
+    isCurrent: () => boolean = () => true,
   ) => {
     if (busy) return;
     setBusy(nextBusy);
     setErrorCode(null);
     setNotice(null);
     try {
-      setStatus(await action());
-      if (successNotice) setNotice(successNotice);
+      const nextStatus = await action();
+      if (isCurrent()) {
+        setStatus(nextStatus);
+        if (successNotice) setNotice(successNotice);
+      }
     } catch (error) {
-      const configurationError = error as AgentConfigurationError;
-      setErrorCode(configurationError.code ?? "unavailable");
+      if (isCurrent()) {
+        const configurationError = error as AgentConfigurationError;
+        setErrorCode(configurationError.code ?? "unavailable");
+      }
     } finally {
-      setBusy(null);
+      if (isCurrent()) setBusy(null);
     }
   };
 
@@ -149,21 +164,37 @@ export function AgentProviderSettings({
 
   const handleLogin = async (providerId: string) => {
     const attemptId = crypto.randomUUID();
+    loginAttemptRef.current = attemptId;
+    cancelledLoginAttemptsRef.current.delete(attemptId);
     setProgress({ attemptId, providerId, stage: "starting" });
     await runStatusAction(
       { action: "login", providerId },
       () => client.loginSubscription(providerId, attemptId),
       t("settings.agents.notices.loginComplete"),
+      () =>
+        loginAttemptRef.current === attemptId &&
+        !cancelledLoginAttemptsRef.current.has(attemptId),
     );
   };
 
   const handleCancelLogin = async (providerId: string) => {
-    const attempt = progress?.providerId === providerId ? progress : null;
+    const attempt =
+      progress?.providerId === providerId &&
+      progress.attemptId === loginAttemptRef.current
+        ? progress
+        : null;
     if (!attempt) return;
     try {
       await client.cancelSubscriptionLogin(attempt.attemptId);
+      if (loginAttemptRef.current === attempt.attemptId) {
+        cancelledLoginAttemptsRef.current.add(attempt.attemptId);
+        setProgress({ ...attempt, stage: "cancelled" });
+        setBusy(null);
+      }
     } catch (error) {
-      setErrorCode((error as AgentConfigurationError).code ?? "unavailable");
+      if (loginAttemptRef.current === attempt.attemptId) {
+        setErrorCode((error as AgentConfigurationError).code ?? "unavailable");
+      }
     }
   };
 

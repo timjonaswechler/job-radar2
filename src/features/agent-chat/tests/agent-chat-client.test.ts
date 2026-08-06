@@ -20,6 +20,44 @@ const projection: AgentChatProjection = {
   recoveryNotices: [],
 };
 
+test("rejects malformed Agent Chat command responses at the transport seam", async () => {
+  const client = createAgentChatClient(
+    async <T>() => ({ id: "synthetic-chat-id" }) as T,
+    async <T>(_event: string, _handler: (event: { payload: T }) => void) =>
+      () => undefined,
+  );
+
+  await assert.rejects(
+    client.snapshot("synthetic-chat-id"),
+    /invalid Agent Chat projection/i,
+  );
+});
+
+test("ignores malformed events before they reach the lifecycle reducer", async () => {
+  let emit: ((event: { payload: unknown }) => void) | undefined;
+  let malformedCount = 0;
+  const client = createAgentChatClient(
+    async <T>() => projection as T,
+    async <T>(_event: string, handler: (event: { payload: T }) => void) => {
+      emit = handler as (event: { payload: unknown }) => void;
+      return () => undefined;
+    },
+  );
+
+  await client.listen(() => undefined, () => {
+    malformedCount += 1;
+  });
+  emit?.({
+    payload: {
+      chatId: "synthetic-chat-id",
+      sequence: Number.MAX_SAFE_INTEGER + 1,
+      type: "started",
+    },
+  });
+
+  assert.equal(malformedCount, 1);
+});
+
 test("agent chat client uses the persistent application command and event contract", async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   let eventHandler:
@@ -36,7 +74,7 @@ test("agent chat client uses the persistent application command and event contra
         command === "send_agent_chat_message" ||
         command === "compact_agent_chat"
       ) {
-        return undefined as T;
+        return 0 as T;
       }
       return projection as T;
     },

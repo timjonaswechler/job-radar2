@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircleIcon,
@@ -50,24 +50,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SelectGroup } from "@/components/ui/select";
 import {
   agentChatClient,
-  type AgentChatApplicationEvent,
   type AgentChatClient,
   type AgentChatContent,
-  type AgentChatCreateInput,
-  type AgentChatOpenInput,
   type AgentChatProjection,
   type AgentChatReasoningLevel,
 } from "@/lib/api/agent-chat";
 import {
   agentConfigurationClient,
   type AgentConfigurationClient,
-  type AgentConfigurationStatus,
 } from "@/lib/api/agent-configuration";
 import type { TranslationKey } from "@/lib/i18n/resources";
-
-type AgentChatRequest =
-  | ({ type: "create" } & AgentChatCreateInput)
-  | ({ type: "open" } & AgentChatOpenInput);
+import {
+  useAgentChat,
+  type AgentChatRequest,
+} from "@/features/agent-chat/use-agent-chat";
 
 type AgentChatShellProps = {
   request: AgentChatRequest;
@@ -78,47 +74,6 @@ type AgentChatShellProps = {
   configurationClient?: AgentConfigurationClient;
 };
 
-type StreamBlock = {
-  index: number;
-  type: "text" | "reasoning";
-  text: string;
-};
-
-type SendOperation = {
-  type: "send";
-  phase: "submitted" | "streaming";
-  operationId: number | null;
-  user: string;
-  blocks: StreamBlock[];
-};
-
-type CompactOperation = {
-  type: "compact";
-  phase: "submitted" | "streaming";
-  operationId: number | null;
-  reason: string | null;
-};
-
-type ActiveOperation = {
-  type: "active";
-  phase: "streaming";
-  operationId: number | null;
-};
-
-type ReadyState = {
-  type: "ready";
-  chat: AgentChatProjection;
-  configuration: AgentConfigurationStatus;
-  operation: SendOperation | CompactOperation | ActiveOperation | null;
-  unsavedTurn: { user: string; response: AgentChatContent[] } | null;
-  errorCode: string | null;
-  notice: "aborted" | "compacted" | "compaction_cancelled" | null;
-};
-
-type ShellState =
-  | { type: "loading" }
-  | { type: "failed"; code: string }
-  | ReadyState;
 
 const reasoningLevels: AgentChatReasoningLevel[] = [
   "off",
@@ -129,15 +84,6 @@ const reasoningLevels: AgentChatReasoningLevel[] = [
   "x_high",
   "max",
 ];
-
-function errorCode(error: unknown) {
-  return typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string"
-    ? error.code
-    : "unavailable";
-}
 
 function statusKey(status: AgentChatProjection["status"]): TranslationKey {
   const keys: Record<AgentChatProjection["status"], TranslationKey> = {
@@ -164,7 +110,9 @@ function projectionStateKey(status: AgentChatProjection["status"]): TranslationK
   return keys[status] ?? null;
 }
 
-function noticeKey(notice: ReadyState["notice"]): TranslationKey | null {
+function noticeKey(
+  notice: "aborted" | "compacted" | "compaction_cancelled" | null,
+): TranslationKey | null {
   if (notice === "aborted") return "agentChat.notices.aborted";
   if (notice === "compacted") return "agentChat.notices.compacted";
   if (notice === "compaction_cancelled") {
@@ -233,143 +181,12 @@ function AssistantContent({
   );
 }
 
-function streamContent(blocks: StreamBlock[]): AgentChatContent[] {
+function streamContent(
+  blocks: Array<{ index: number; type: "text" | "reasoning"; text: string }>,
+): AgentChatContent[] {
   return [...blocks]
     .sort((left, right) => left.index - right.index)
     .map((block) => ({ type: block.type, text: block.text }));
-}
-
-function reduceEvent(current: ShellState, event: AgentChatApplicationEvent): ShellState {
-  if (current.type !== "ready") return current;
-
-  switch (event.type) {
-    case "started":
-      return current.operation?.type === "send"
-        ? {
-            ...current,
-            operation: { ...current.operation, phase: "streaming" },
-          }
-        : current;
-    case "content_started": {
-      if (!current.operation) return current;
-      const sendOperation: SendOperation =
-        current.operation.type === "send"
-          ? current.operation
-          : {
-              type: "send",
-              phase: "streaming",
-              operationId: null,
-              user: "",
-              blocks: [],
-            };
-      return {
-        ...current,
-        operation: {
-          ...sendOperation,
-          phase: "streaming",
-          blocks: sendOperation.blocks.some((block) => block.index === event.index)
-            ? sendOperation.blocks
-            : [
-                ...sendOperation.blocks,
-                { index: event.index, type: event.kind, text: "" },
-              ],
-        },
-      };
-    }
-    case "content_delta":
-      if (current.operation?.type !== "send") return current;
-      return {
-        ...current,
-        operation: {
-          ...current.operation,
-          phase: "streaming",
-          blocks: current.operation.blocks.map((block) =>
-            block.index === event.index
-              ? { ...block, text: block.text + event.delta }
-              : block,
-          ),
-        },
-      };
-    case "completed":
-      return {
-        ...current,
-        chat: event.chat,
-        operation: null,
-        unsavedTurn: null,
-        errorCode: null,
-        notice: null,
-      };
-    case "failed":
-      return {
-        ...current,
-        operation: null,
-        errorCode: event.error.code ?? "unavailable",
-      };
-    case "not_saved":
-      return {
-        ...current,
-        chat: event.chat,
-        operation: null,
-        unsavedTurn: {
-          user: current.operation?.type === "send" ? current.operation.user : "",
-          response: event.response,
-        },
-        errorCode: event.error.code ?? "not_saved",
-        notice: null,
-      };
-    case "aborted":
-      return {
-        ...current,
-        operation: null,
-        errorCode: null,
-        notice:
-          current.operation?.type === "compact"
-            ? "compaction_cancelled"
-            : "aborted",
-      };
-    case "compaction_started":
-      return {
-        ...current,
-        operation: {
-          type: "compact",
-          phase: "streaming",
-          operationId: null,
-          reason: event.reason,
-        },
-        errorCode: null,
-        notice: null,
-      };
-    case "compaction_completed":
-      return {
-        ...current,
-        chat: event.chat,
-        operation: null,
-        errorCode: null,
-        notice: "compacted",
-      };
-    case "compaction_cancelled":
-      return {
-        ...current,
-        operation: null,
-        errorCode: null,
-        notice: "compaction_cancelled",
-      };
-    case "compaction_failed":
-      return {
-        ...current,
-        operation: null,
-        errorCode: event.error.code ?? "provider_failed",
-      };
-    case "compaction_not_saved":
-      return {
-        ...current,
-        chat: event.chat,
-        operation: null,
-        errorCode: event.error.code ?? "not_saved",
-      };
-    default:
-      return current;
-  }
 }
 
 export function AgentChatShell({
@@ -381,82 +198,20 @@ export function AgentChatShell({
   configurationClient: configurationApi = agentConfigurationClient,
 }: AgentChatShellProps) {
   const { t } = useTranslation();
-  const [state, setState] = useState<ShellState>({ type: "loading" });
+  const {
+    state,
+    submit: submitMessage,
+    stop: stopOperation,
+    reload: reloadChat,
+    compact: compactChat,
+    selectModel: selectModelOperation,
+    selectReasoning: selectReasoningOperation,
+  } = useAgentChat({
+    request,
+    chatClient: chatApi,
+    configurationClient: configurationApi,
+  });
   const [draft, setDraft] = useState("");
-  const chatId = useRef<string | null>(null);
-  const lastSequence = useRef(0);
-
-  useEffect(() => {
-    let active = true;
-    let unlisten: (() => void) | undefined;
-
-    const initialize = async () => {
-      try {
-        const stopListening = await chatApi.listen((event) => {
-          if (
-            !active ||
-            event.chatId !== chatId.current ||
-            event.sequence <= lastSequence.current
-          ) {
-            return;
-          }
-          lastSequence.current = event.sequence;
-          setState((current) => reduceEvent(current, event));
-        });
-        if (!active) {
-          stopListening();
-          return;
-        }
-        unlisten = stopListening;
-
-        const [chat, configuration] = await Promise.all([
-          request.type === "create"
-            ? chatApi.create({
-                systemPrompt: request.systemPrompt,
-                providerId: request.providerId,
-                modelId: request.modelId,
-                reasoningLevel: request.reasoningLevel,
-              })
-            : chatApi.open({
-                id: request.id,
-                systemPrompt: request.systemPrompt,
-              }),
-          configurationApi.getStatus(),
-        ]);
-        if (active) {
-          chatId.current = chat.id;
-          setState({
-            type: "ready",
-            chat,
-            configuration,
-            operation:
-              chat.status === "running"
-                ? { type: "active", phase: "streaming", operationId: null }
-                : null,
-            unsavedTurn: null,
-            errorCode: null,
-            notice: null,
-          });
-        }
-      } catch (error) {
-        if (active) setState({ type: "failed", code: errorCode(error) });
-      }
-    };
-
-    void initialize();
-    return () => {
-      active = false;
-      unlisten?.();
-    };
-  }, [
-    chatApi,
-    configurationApi,
-    request.type,
-    request.systemPrompt,
-    request.type === "open" ? request.id : request.providerId,
-    request.type === "create" ? request.modelId : null,
-    request.type === "create" ? request.reasoningLevel : null,
-  ]);
 
   if (state.type === "loading") {
     return <p role="status">{t("agentChat.loading")}</p>;
@@ -496,160 +251,20 @@ export function AgentChatShell({
       reasoningLevels.includes(level as AgentChatReasoningLevel),
   ) ?? [state.chat.reasoningLevel];
 
-  const submit = async (message: PromptInputMessage) => {
+  const submit = (message: PromptInputMessage) => {
     const text = message.text.trim();
     if (!text || !mutable || busy) return;
     setDraft("");
-    setState((current) =>
-      current.type === "ready"
-        ? {
-            ...current,
-            operation: {
-              type: "send",
-              phase: "submitted",
-              operationId: null,
-              user: text,
-              blocks: [],
-            },
-            unsavedTurn: null,
-            errorCode: null,
-            notice: null,
-          }
-        : current,
-    );
-    try {
-      const operationId = await chatApi.send(state.chat.id, text);
-      setState((current) =>
-        current.type === "ready" && current.operation?.type === "send"
-          ? { ...current, operation: { ...current.operation, operationId } }
-          : current,
-      );
-    } catch (error) {
-      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
-      setState((current) =>
-        current.type === "ready"
-          ? {
-              ...current,
-              chat: chat ?? current.chat,
-              operation: null,
-              errorCode: errorCode(error),
-            }
-          : current,
-      );
-    }
+    submitMessage(text);
   };
 
-  const stop = async () => {
-    const operationId =
-      state.operation && "operationId" in state.operation
-        ? state.operation.operationId
-        : null;
-    try {
-      const stopped = await chatApi.stop(state.chat.id, operationId);
-      if (!stopped) {
-        setState((current) =>
-          current.type === "ready"
-            ? { ...current, operation: null, errorCode: "not_running" }
-            : current,
-        );
-      }
-    } catch (error) {
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, errorCode: errorCode(error) }
-          : current,
-      );
-    }
-  };
-
-  const reloadChat = async () => {
-    try {
-      const chat = await chatApi.reload(state.chat.id);
-      setState((current) =>
-        current.type === "ready"
-          ? {
-              ...current,
-              chat,
-              operation: null,
-              unsavedTurn: null,
-              errorCode: null,
-              notice: null,
-            }
-          : current,
-      );
-    } catch (error) {
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, errorCode: errorCode(error) }
-          : current,
-      );
-    }
-  };
-
-  const compactChat = async () => {
-    if (!mutable || busy) return;
-    setState((current) =>
-      current.type === "ready"
-        ? {
-            ...current,
-            operation: {
-              type: "compact",
-              phase: "submitted",
-              operationId: null,
-              reason: null,
-            },
-            errorCode: null,
-            notice: null,
-          }
-        : current,
-    );
-    try {
-      const operationId = await chatApi.compact(state.chat.id, null);
-      setState((current) =>
-        current.type === "ready" && current.operation?.type === "compact"
-          ? { ...current, operation: { ...current.operation, operationId } }
-          : current,
-      );
-    } catch (error) {
-      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
-      setState((current) =>
-        current.type === "ready"
-          ? {
-              ...current,
-              chat: chat ?? current.chat,
-              operation: null,
-              errorCode: errorCode(error),
-            }
-          : current,
-      );
-    }
-  };
-
-  const selectModel = async (value: unknown) => {
+  const handleModelChange = (value: unknown) => {
     const selection = availableModels.find((candidate) => candidate.value === value);
     if (!selection || busy || !modelChangeAllowed) return;
-    try {
-      const chat = await chatApi.setModel(
-        state.chat.id,
-        selection.providerId,
-        selection.model.id,
-      );
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, chat, errorCode: null, notice: null }
-          : current,
-      );
-    } catch (error) {
-      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, chat: chat ?? current.chat, errorCode: errorCode(error) }
-          : current,
-      );
-    }
+    selectModelOperation(selection.providerId, selection.model.id);
   };
 
-  const selectReasoning = async (value: unknown) => {
+  const handleReasoningChange = (value: unknown) => {
     if (
       !reasoningLevels.includes(value as AgentChatReasoningLevel) ||
       busy ||
@@ -657,24 +272,7 @@ export function AgentChatShell({
     ) {
       return;
     }
-    try {
-      const chat = await chatApi.setReasoningLevel(
-        state.chat.id,
-        value as AgentChatReasoningLevel,
-      );
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, chat, errorCode: null, notice: null }
-          : current,
-      );
-    } catch (error) {
-      const chat = await chatApi.snapshot(state.chat.id).catch(() => null);
-      setState((current) =>
-        current.type === "ready"
-          ? { ...current, chat: chat ?? current.chat, errorCode: errorCode(error) }
-          : current,
-      );
-    }
+    selectReasoningOperation(value as AgentChatReasoningLevel);
   };
 
   const promptStatus = state.operation?.phase ?? "ready";
@@ -847,7 +445,7 @@ export function AgentChatShell({
                     <PromptInputTools className="flex-wrap">
                       <PromptInputSelect
                         disabled={busy || !modelChangeAllowed}
-                        onValueChange={(value) => void selectModel(value)}
+                        onValueChange={handleModelChange}
                         value={selectedModel?.value ?? null}
                       >
                         <PromptInputSelectTrigger
@@ -870,7 +468,7 @@ export function AgentChatShell({
                       </PromptInputSelect>
                       <PromptInputSelect
                         disabled={busy || !mutable}
-                        onValueChange={(value) => void selectReasoning(value)}
+                        onValueChange={handleReasoningChange}
                         value={state.chat.reasoningLevel}
                       >
                         <PromptInputSelectTrigger
@@ -922,7 +520,7 @@ export function AgentChatShell({
                           : t("agentChat.actions.send")
                       }
                       disabled={!busy && (!mutable || !draft.trim())}
-                      onStop={() => void stop()}
+                      onStop={() => stopOperation()}
                       status={promptStatus}
                     />
                   </PromptInputFooter>
