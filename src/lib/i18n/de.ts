@@ -36,6 +36,7 @@ export const de = {
       searchRequests: "Search Requests",
       settings: "Einstellungen",
       agentChatPrototype: "Agent-Chat-Prototyp",
+      guidedSourceRepairPrototype: "Guided-Source-Repair-Prototyp",
       postingsInbox: "Stellenanzeigen-Inbox",
       notFound: "Nicht gefunden",
     },

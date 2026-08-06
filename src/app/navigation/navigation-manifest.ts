@@ -44,6 +44,12 @@ const AgentChatPrototypePage = lazy(() =>
   })),
 );
 
+const GuidedSourceRepairPrototypePage = lazy(() =>
+  import("@/pages/guided-source-repair-prototype-page").then((module) => ({
+    default: module.GuidedSourceRepairPrototypePage,
+  })),
+);
+
 const primarySidebarGroup = {
   groupId: "job-radar",
   groupLabelKey: "navigation.groups.jobRadar",
@@ -100,6 +106,13 @@ export const navigationManifest = [
     titleKey: "navigation.items.agentChatPrototype",
     icon: SparklesIcon,
     Component: AgentChatPrototypePage,
+  },
+  {
+    id: "guided-source-repair-prototype",
+    path: "/labs/guided-source-repair",
+    titleKey: "navigation.items.guidedSourceRepairPrototype",
+    icon: SparklesIcon,
+    Component: GuidedSourceRepairPrototypePage,
   },
 ] as const satisfies readonly NavigationManifestItem[];
 
