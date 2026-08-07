@@ -37,7 +37,7 @@ The browser host must support the already-agreed Guided Source Repair flow:
 - explicit `not present` and `cannot determine reliably` outcomes, with required unresolved fields blocking application;
 - one reviewable repair draft, atomically applied only after final user confirmation and successful compiler/live-check validation;
 - Source-only authoring: Direct Source Specialization for a profile-selected Source or a Source-owned Access Path when no Source Profile fits; never a Source Profile mutation;
-- a Built-in Source is copied to a new editable draft Source before repair;
+- repair starts from one existing Custom Source; the current product has Built-in Source Profiles but no Built-in concrete Sources or copy-to-draft path;
 - resumable structured repair draft, while browser state, HTML, screenshots, and selected page content remain ephemeral;
 - deterministic core behavior without an AI Provider; optional agent assistance has no privileged compiler or live-check path;
 - authenticated sessions, cookie transfer, login, and manually solved challenges are future work, not part of this destination.
@@ -248,7 +248,7 @@ Adopt option A as the target and use a small cross-platform technical prototype 
 5. the same accepted selector can be compiled into a Source-only draft and checked against a deterministic local site through `ManagedBrowserAcquisition` without sharing browser state;
 6. packaged smoke behavior on macOS, Windows, Linux/X11, and Linux/Wayland.
 
-If proof 1 or 3 fails on a supported platform, use option B as an explicit degraded fallback and return to the architecture ticket. Do not respond by exposing platform-native handles throughout the application or weakening the managed Browser Acquisition contract.
+The production decision in [issue #311](https://github.com/timjonaswechler/job-radar2/issues/311) supersedes the earlier fallback recommendation: if proof 1 or 3 fails on a platform, Interactive Source Sessions remain unavailable there with a Structured Diagnostic. A headed managed-Chrome fallback is not part of the first destination and would require a separate architecture decision. Do not respond by exposing platform-native handles throughout the application or weakening the managed Browser Acquisition contract.
 
 ## Sources
 

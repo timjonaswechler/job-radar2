@@ -11,6 +11,14 @@ docs/development/adr/0011-minimal-agent-conversation-contract.md:133:9:retry_aft
 docs/development/adr/0011-minimal-agent-conversation-contract.md:140:5:rate_limit:RateLimit	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
 docs/development/adr/0011-minimal-agent-conversation-contract.md:146:332:retry:retry	unrelated_agent_provider_retry	Accepted Agent provider retry lifecycle, outside Source Behavior Language Retry.
 docs/development/adr/0011-minimal-agent-conversation-contract.md:146:332:retry_after:retry_after	active_contract_documentation	Active architecture or product contract reviewed; not productive residue.
+docs/development/adr/0018-guided-source-repair-domain-and-protocol.md:102:349:retry:retry	active_contract_documentation	Guided Source Repair report persistence reattempt; not Source Behavior Language Retry.
+docs/development/adr/0018-guided-source-repair-domain-and-protocol.md:78:346:retry:Retry	active_contract_documentation	Guided Source Repair evidence replacement action; not Source Behavior Language Retry.
+docs/development/adr/0018-guided-source-repair-domain-and-protocol.md:78:456:retry:retry	active_contract_documentation	Guided Source Repair evidence replacement action; not Source Behavior Language Retry.
+docs/development/architecture/interactive-source-sessions.md:167:27:predicate_composition:negat	active_contract_documentation	Interactive session capability denial prose; not Source Behavior Language predicate composition.
+docs/development/architecture/interactive-source-sessions.md:173:102:arbitrary_execution:javascript	active_contract_documentation	Interactive session security scheme denial; not executable Source behavior.
+docs/development/architecture/interactive-source-sessions.md:183:289:arbitrary_execution:plugin	active_contract_documentation	Interactive session security capability denial; not a Source Behavior Language plugin.
+docs/development/architecture/interactive-source-sessions.md:201:191:arbitrary_execution:JavaScript	active_contract_documentation	Interactive guest threat-model prose; not arbitrary Source execution.
+docs/development/architecture/interactive-source-sessions.md:294:19:retry:retry	active_contract_documentation	Repair application report-only reattempt; not Source Behavior Language Retry.
 docs/development/agent/openai-codex-streaming.md:13:40:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
 docs/development/agent/openai-codex-streaming.md:22:305:rate_limit:rate-limit	active_contract_documentation	Maintained Agent provider contract; not productive Source Behavior Language residue.
 docs/development/agent/openai-codex-streaming.md:22:327:retry:retry	unrelated_agent_provider_retry	Agent provider retry contract, outside Source Behavior Language Retry.
