@@ -1,14 +1,18 @@
+#[cfg(unix)]
 use agent::{
-    AuthenticationKind, Capability, ConfigurationErrorKind as ErrorKind, ConfigurationState,
-    InteractionError, InteractionFuture, LoginAttemptId, LoginInteraction, LoginMethod,
-    LoginProgress, LoginStage, SecretInput,
+    AuthenticationKind, Capability, InteractionError, InteractionFuture, LoginAttemptId,
+    LoginInteraction, LoginMethod, LoginProgress, LoginStage,
 };
 use agent::{Configuration, ProviderId};
+use agent::{ConfigurationErrorKind as ErrorKind, ConfigurationState, SecretInput};
 use std::fs;
+#[cfg(unix)]
 use std::future::Future;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::sync::{Arc, Mutex, Weak};
+#[cfg(unix)]
 use std::task::Poll;
 
 fn configuration_root() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -49,6 +53,8 @@ fn invalid_agents_root_returns_a_typed_error_without_panicking() {
     assert_eq!(error.code(), "agent_configuration_invalid");
 }
 
+// Executable authentication requires private persisted credentials. Native Windows storage is #294.
+#[cfg(unix)]
 #[test]
 fn configured_providers_remain_visible_but_only_compiled_auth_combinations_are_executable() {
     let (_temporary, root) = configuration_root();
@@ -104,6 +110,7 @@ fn configured_providers_remain_visible_but_only_compiled_auth_combinations_are_e
         .any(|model| { model.provider() == &ProviderId::new("synthetic-provider").unwrap() }));
 }
 
+#[cfg(unix)]
 #[test]
 fn oauth_is_executable_while_api_key_configuration_is_not() {
     let (_temporary, root) = configuration_root();
@@ -126,6 +133,7 @@ fn oauth_is_executable_while_api_key_configuration_is_not() {
     assert!(!configuration.provider().model_snapshot().is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn codex_api_key_override_prevents_oauth_configuration_from_being_executable() {
     let (_temporary, root) = configuration_root();
@@ -152,6 +160,7 @@ fn codex_api_key_override_prevents_oauth_configuration_from_being_executable() {
     assert!(configuration.provider().model_snapshot().is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn codex_request_overrides_are_visible_but_never_claimed_executable() {
     let (_temporary, root) = configuration_root();
@@ -235,6 +244,7 @@ fn typed_authentication_errors_do_not_classify_by_message_or_expose_input() {
     assert!(!serialized.contains("synthetic-secret-input-canary"));
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn login_interaction_failures_keep_their_typed_outer_error() {
     struct FailingInteraction;
@@ -283,6 +293,7 @@ async fn login_interaction_failures_keep_their_typed_outer_error() {
     assert_eq!(error.code(), "login_interaction_unavailable");
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn login_progress_and_cancellation_are_attempt_aware_and_reject_stale_attempts() {
     struct CancellingInteraction {
@@ -389,6 +400,7 @@ async fn login_progress_and_cancellation_are_attempt_aware_and_reject_stale_atte
         .all(|progress| progress.stage != LoginStage::DisplayingDeviceCode));
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn concurrent_login_admission_allows_exactly_one_attempt() {
     struct WaitingInteraction;

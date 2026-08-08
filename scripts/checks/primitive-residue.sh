@@ -47,7 +47,16 @@ tracked = subprocess.run(
     stdout=subprocess.PIPE,
     check=True,
 ).stdout.decode().splitlines()
-paths = [path for path in tracked if Path(path).suffix in extensions and Path(path).is_file()]
+untracked_docs = subprocess.run(
+    ["git", "ls-files", "--others", "--exclude-standard", "--", "docs"],
+    stdout=subprocess.PIPE,
+    check=True,
+).stdout.decode().splitlines()
+paths = [
+    path
+    for path in tracked + untracked_docs
+    if Path(path).suffix in extensions and Path(path).is_file()
+]
 # Workspace packages and responsibility-split frontend modules may be unstaged
 # while this check runs locally; their source and tests are always scanned.
 for root in (
@@ -110,7 +119,7 @@ if [[ ${1:-} == --emit ]]; then
 fi
 
 MANIFEST=${PRIMITIVE_RESIDUE_MANIFEST:-src-tauri/crates/source-engine/tests/fixtures/primitive_completeness/primitive-residue-classification.txt}
-FROZEN_MANIFEST_SHA256='695a8293a962ba1138447166b234658764c9372254dcc7bc0b2b5db0784c3629'
+FROZEN_MANIFEST_SHA256='39081fa8f462f4d1c8ff9fd9644f478be8146e523299247a92047b043ef9a818'
 if [[ ${PRIMITIVE_RESIDUE_MANIFEST:-} == '' ]]; then
   actual_sha=$(shasum -a 256 "$MANIFEST" | awk '{print $1}')
   if [[ "$actual_sha" != "$FROZEN_MANIFEST_SHA256" ]]; then

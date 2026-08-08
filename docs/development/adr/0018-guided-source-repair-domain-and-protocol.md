@@ -24,7 +24,7 @@ The protocol uses opaque typed identities:
 - `RepairDraftId` identifies one resumable draft;
 - `RepairStepId` identifies one ordered question;
 - `PickerOperationId` identifies one picker attempt;
-- the existing exact installed `SourceGeneration` binds a draft and candidate to the Source/Profile material they started from;
+- the existing exact `sources::installed::Generation` binds a draft and candidate to the Source/Profile material they started from;
 - `SessionGeneration` identifies the current top-level document within a session;
 - a proposal fingerprint identifies the exact reviewed candidate.
 
@@ -36,16 +36,18 @@ The protocol keeps four related state machines separate:
 Session:    opening -> ready -> closing -> closed
 Navigation: loading -> ready -> invalidated
 Picker:     idle -> active -> terminal
-Draft:      editable -> staged -> stale | applied | discarded
+Draft:      editable -> staged -> applying -> applied_report_pending -> applied
+                       |          `-> stale
+                       `-> stale | discarded
 ```
 
-A session is bound to one persisted concrete Source or an explicit custom draft created by Built-in copy. An unowned URL-only repair session is not supported. There is at most one active repair session for a Repair Draft and one active picker per session.
+A session is bound to one persisted Custom Source. The repository has Built-in Source Profiles but no Built-in concrete Sources, so this destination does not introduce copy-to-draft behavior. An unowned URL-only repair session is not supported. Because Source documents have no universal entry-point field, the session accepts a transient, user-confirmed HTTP(S) URL seeded from supported Source Config or Diagnostic evidence when available. There is at most one active repair session for a Repair Draft and one active picker per session.
 
 One owner serializes session events. Teardown wins over pending work. Navigation invalidates the current page before cancelling its picker. A new picker cancels the previous picker. After one terminal outcome, late guest or child messages are ignored and cannot produce a second terminal.
 
 ### Session commands and outcomes
 
-The transport exposes typed intent and outcomes rather than WebView mechanics. The initial command family is `open`, `navigate`, `beginPicker`, `cancelPicker`, `close`, and `discardDraft`; the event family reports opening, navigation, picker terminal outcomes, closure, and structured Diagnostics.
+The Interactive Source Session transport exposes typed intent and outcomes rather than WebView mechanics. Its initial command family is `open`, `navigate`, `beginPicker`, `cancelPicker`, and `close`; the event family reports opening, navigation, picker terminal outcomes, closure, and structured Diagnostics. Draft discard belongs to the separate `sources` repair interface.
 
 Picker outcomes are a closed set:
 
@@ -57,13 +59,13 @@ Picker outcomes are a closed set:
 
 A result from an old generation is ignored after the active picker has reached its terminal outcome. WebView cleanup failures become structured infrastructure Diagnostics and retain the Repair Draft; they prevent further use of that session but do not silently discard valid authored work.
 
-The protocol does not choose between backend-directed `eval_with_callback` and one narrowly scoped guest result command. That is an implementation prototype decision. Either transport must enforce the same typed identity tuple, payload limits, origin policy, and Rust-side validation.
+Backend-directed `eval_with_callback` is the preferred guest result transport. A narrowly scoped guest result command is permitted only where packaged proof shows that it can be restricted to the generated child Webview label, one command, and no ordinary application capability. Otherwise the feature remains unavailable on that platform. Either accepted transport enforces the same typed identity tuple, payload limits, origin policy, and Rust-side validation.
 
 ### Repair Draft and Repair Steps
 
 A Repair Draft is a versioned, bounded, resumable record owned by the Source-repair boundary. It contains:
 
-- its identity, concrete Source key, and exact base `SourceGeneration`;
+- its identity, concrete Source key, and exact base `sources::installed::Generation`;
 - ordered Repair Step answers and their dependency state;
 - safe, bounded Element Evidence;
 - typed authored Source intent and proposed Source changes;
@@ -71,7 +73,7 @@ A Repair Draft is a versioned, bounded, resumable record owned by the Source-rep
 
 It never contains browser state, HTML, screenshots, cookies, credentials, page objects, Effective Source Profiles, compiler plans, or raw provider payloads. One active draft exists per concrete Source. A Source/Profile generation change marks the draft stale; it is not automatically rebased. Explicit discard is required to delete it. Session close, cancellation, child crash, and application shutdown preserve the last persisted draft.
 
-Initial protocol ceilings are eight selector candidates, sixteen safe attributes, 512 Unicode characters per text preview, 64 Repair Steps, and 256 KiB per serialized draft. Diagnostics and aggregate persistence remain subject to the existing `sources` limits.
+Initial protocol ceilings are 4,096 Repair Draft or receipt documents, 64 MiB aggregate persistence, 256 KiB per complete serialized envelope, 64 Repair Steps, eight selector candidates, sixteen safe attributes, 512 Unicode characters per text preview, 100 Diagnostics per document, and 16,384 Diagnostics in aggregate. The staged candidate, complete Check Report, and apply journal count toward the same per-document limit. A limit failure preserves the prior valid Draft; corrupt or oversized documents are quarantined from productive use.
 
 A Repair Step identifies one phase (`discovery` or `detail`), strategy and schema locations where available, a stable Diagnostic/step identity, an allowed answer shape, prerequisites, and completion state. Steps are ordered by phase, strategy, and schema/Diagnostic order. Resolving an earlier answer invalidates dependent answers and evidence. Retry replaces only unconfirmed evidence for the current step and does not introduce Source Behavior Language retry semantics. `CannotDetermine` leaves a step unresolved. `NotPresent` is accepted only where the target field's compiled contract permits absence.
 
@@ -87,21 +89,19 @@ Picker evidence is never runtime proof. The final Source Live Check runs the can
 
 ### Source intent, proposal, and application
 
-Repair produces typed Source-authored intent, not a generic JSON patch. It may fill supported Source Config, `css_text`, `css_attribute`, Direct Source Specialization, or a complete explicitly supported Source-owned Access Path. A selector alone cannot invent missing fetch, parse, strategy, or phase structure; insufficient structure prevents staging.
+Repair produces typed Source-authored intent, not a generic JSON patch. The first capability may fill supported Source Config, the selector of an existing CSS `select` primitive, `css_text`, or `css_attribute` inside an existing HTML Discovery or Detail Strategy, using Direct Source Specialization or an existing Source-owned Access Path as appropriate. It does not synthesize fetch, parse, pagination, policy, a new Strategy, or an entire Access Path. Insufficient structure is non-repairable and prevents staging.
 
 A staged Repair Proposal is immutable and contains the draft revision, base Source/Profile generation, candidate concrete Source document, compiler result and Diagnostics, complete candidate Source Live Check report, proposal fingerprint, and review summary. Candidate checking compiles and fully checks the unpersisted candidate through the existing engine and managed runtime. It does not write a temporary Source document.
 
 Review displays the authored Source difference, Source Config, selected Access Path, Direct Source Specialization or Source-owned behavior, Diagnostics, complete Live Check result, generation, and status impact. Confirmation is single-use and bound to the exact proposal fingerprint. A changed Source/Profile generation, changed draft revision, or replayed confirmation rejects application without a write.
 
-Application atomically replaces exactly one concrete Source document under the `sources` mutation coordinator. It does not claim a transaction across Source, Repair Draft, and Check Report. Existing Source Status is preserved: drafts remain drafts, disabled Sources remain disabled, and active custom Sources remain active. Repair never auto-activates; explicit activation continues through the existing fresh-success `check_and_activate` path.
+Application uses a durable write-ahead state before atomically replacing exactly one concrete Source document under the existing `sources` mutation coordinator. The `applying` record retains the proposal fingerprint, Draft revision, exact base Source/Profile generation, candidate document fingerprint, candidate Source, and checked report. Recovery compares the current Source with both the base generation and exact candidate document: a base match permits one replacement, an exact candidate match proves a prior replacement, and any other value makes the Draft stale.
 
-The derived Check Report is persisted separately after the Source replacement. A Source write failure produces no report write and retains the proposal. A report persistence failure after a successful Source replacement returns a typed `AppliedReportPending` outcome and retains the proposal for retry. Existing activation ordering remains unchanged: the report is persisted before a lifecycle status change.
+The operation does not claim a transaction across Source, Repair Draft, and Check Report. Existing Source Status is preserved: drafts remain drafts, disabled Sources remain disabled, and active Custom Sources remain active. Repair never auto-activates; explicit activation continues through the existing fresh-success `check_and_activate` path.
+
+After Source replacement, the Draft transitions to `applied_report_pending`; the derived Check Report is then persisted separately and the Draft becomes a compact `applied` receipt. A Source write failure produces no report write and retains the proposal. A report persistence failure returns a typed `AppliedReportPending` outcome for report-only retry. A crash at every write boundary is replayable without replacing the Source twice.
 
 Repeated cancel, close, and confirmation commands are idempotent. A repeated confirmation returns the existing applied/stale result and cannot replace the Source twice.
-
-### Built-in copy
-
-Built-in Sources cannot be mutated. Repair begins with an explicit copy-to-draft operation that clones the concrete authored Source document into a custom Source draft, assigns a deterministic collision-safe key and a generated copy name, sets status to `draft`, and discards Built-in lifecycle and Check Report history. The copied behavior remains subject to normal compiler validation, Source Live Check, review, and confirmation.
 
 ### Determinism and Agent Assistance
 
@@ -111,6 +111,6 @@ The complete repair flow is deterministic and does not require an AI Provider. A
 
 This decision adds a deliberate Source-repair application seam without recreating the superseded onboarding facade or creating a new speculative crate. It keeps interactive authoring and productive browser execution separate, makes stale and partial outcomes visible, and permits restart-resumable repair without storing sensitive browser state.
 
-The first implementation must provide a Tauri-free `sources` protocol seam, a Desktop WebView Adapter, candidate-check support for unpersisted Source intent, versioned bounded draft persistence, and Interface tests for state transitions, race ordering, stale generations, limits, report-pending application, Built-in copying, and selector revalidation. The guest transport fork and cross-platform WebView behavior remain prototype concerns, not domain-contract variants.
+The first implementation must provide a Tauri-free `sources` protocol seam, a Desktop WebView Adapter, candidate-check support for unpersisted Source intent, versioned bounded draft persistence, and Interface tests for state transitions, race ordering, stale generations, limits, write-ahead/report-pending recovery, and selector revalidation. Cross-platform WebView behavior is an Adapter proof and platform-enable gate, not a domain-contract variant.
 
 Rejected alternatives include reintroducing `SourceOnboarding`, mutating Source Profiles, sharing the visible WebView with managed Browser Acquisition, persisting browser state, using generic JSON patches, writing temporary Source documents for candidate checks, and claiming a multi-file Source/Report/Draft transaction.

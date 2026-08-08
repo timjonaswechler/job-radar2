@@ -59,7 +59,7 @@ The typed, validated plan produced by the Profile Compiler and executed by the d
 _Avoid_: raw profile document, adapter config, unvalidated JSON
 
 **Structured Diagnostic**:
-A machine-readable issue emitted by schema validation, registry loading, the Profile Compiler, source validation, detection, live checks, or runtime execution. A Structured Diagnostic has a category, stable code, human-readable message, severity, JSON Pointer path, optional strategy key, and optional machine-readable details. Diagnostic categories include `schema`, `registry`, `compiler`, `runtime`, `detection`, and `source_validation`. The `compiler` category means diagnostics emitted while compiling a concrete Source and its selected Source Profile/Access Path/Source Config/Direct Source Specialization into an Execution Plan; it does not refer to the Rust compiler.
+A machine-readable issue emitted by schema validation, registry loading, the Profile Compiler, source validation, detection, live checks, runtime execution, or technical infrastructure. A Structured Diagnostic has a category, stable code, human-readable message, severity, JSON Pointer path, optional strategy key, and optional machine-readable details. Diagnostic categories include `schema`, `registry`, `compiler`, `runtime`, `detection`, `source_validation`, and `infrastructure`. The `compiler` category means diagnostics emitted while compiling a concrete Source and its selected Source Profile/Access Path/Source Config/Direct Source Specialization into an Execution Plan; it does not refer to the Rust compiler. The `infrastructure` category identifies technical host/runtime availability or lifecycle failures outside productive Source execution.
 _Avoid_: free-form error string only, UI-only copy, Rust compiler diagnostic
 
 **Capability**:
@@ -131,7 +131,7 @@ An ephemeral, user-driven authoring session for navigating one Source entry poin
 _Avoid_: Browser Runtime, Search Run, browser session
 
 **Repair Draft**:
-A resumable structured set of authored Source intent, ordered Repair Steps, safe Element Evidence, and its exact Source/Profile generation. A Repair Draft is not a Source Profile, Effective Source Profile, compiler plan, or browser-state snapshot.
+A resumable structured set of authored Source intent, ordered Repair Steps, safe Element Evidence, and its exact Source/Profile generation. During confirmed application it also carries bounded write-ahead and report-pending state so interruption can be recovered without applying twice. A Repair Draft is not a Source Profile, Effective Source Profile, compiler plan, or browser-state snapshot.
 _Avoid_: JSON patch, Source Profile fork, browser snapshot
 
 **Repair Step**:
