@@ -1,9 +1,12 @@
 use agent::Model;
 use agent::{
-    ChatCreateInput, ChatEvent, ChatEventKind, ChatEventListener, ChatOpenInput,
-    ChatReasoningLevel, ChatStatus, Chats, ContentKind, ConversationProvider, ConversationRequest,
-    FinishReason, ModelId, ProviderEvent, ProviderEventStream, ProviderId, ProviderTurnCompletion,
-    TokenUsage,
+    ChatCreateInput, ChatEvent, ChatEventListener, ChatReasoningLevel, ChatStatus, Chats,
+    ConversationProvider, ConversationRequest, ModelId, ProviderEvent, ProviderEventStream,
+    ProviderId,
+};
+#[cfg(unix)]
+use agent::{
+    ChatEventKind, ChatOpenInput, ContentKind, FinishReason, ProviderTurnCompletion, TokenUsage,
 };
 use futures_util::{stream, StreamExt};
 use std::sync::Arc;
@@ -11,11 +14,13 @@ use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout, Duration};
 
+#[cfg(unix)]
 struct ScriptedProvider {
     model: Model,
     response: String,
 }
 
+#[cfg(unix)]
 impl ConversationProvider for ScriptedProvider {
     fn models(&self) -> &[Model] {
         std::slice::from_ref(&self.model)
@@ -64,11 +69,13 @@ impl ChatEventListener for ChannelListener {
     }
 }
 
+#[cfg(unix)]
 struct ReentrantListener {
     chats: Arc<Chats>,
     result: mpsc::UnboundedSender<bool>,
 }
 
+#[cfg(unix)]
 impl ChatEventListener for ReentrantListener {
     fn emit(&self, event: ChatEvent) {
         if matches!(event.event, ChatEventKind::Completed { .. }) {
@@ -77,11 +84,13 @@ impl ChatEventListener for ReentrantListener {
     }
 }
 
+#[cfg(unix)]
 struct ReentrantReloadListener {
     chats: Arc<Chats>,
     result: mpsc::UnboundedSender<bool>,
 }
 
+#[cfg(unix)]
 impl ChatEventListener for ReentrantReloadListener {
     fn emit(&self, event: ChatEvent) {
         if matches!(event.event, ChatEventKind::Completed { .. }) {
@@ -193,6 +202,8 @@ async fn running_snapshot_does_not_wait_for_the_provider_stream() {
     assert!(matches!(terminal.event, agent::ChatEventKind::Aborted));
 }
 
+// Completion publishes durable session state. Native Windows persistence is tracked by #294.
+#[cfg(unix)]
 #[tokio::test]
 async fn terminal_event_is_reentrant_after_operation_authority_is_released() {
     let temp = TempDir::new().unwrap();
@@ -230,6 +241,7 @@ async fn terminal_event_is_reentrant_after_operation_authority_is_released() {
     );
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn terminal_listener_can_reload_chat_without_waiting_for_chat_lock() {
     let temp = TempDir::new().unwrap();
@@ -267,6 +279,7 @@ async fn terminal_listener_can_reload_chat_without_waiting_for_chat_lock() {
     );
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn every_event_carries_the_owned_operation_identity() {
     let temp = TempDir::new().unwrap();
@@ -316,6 +329,7 @@ async fn every_event_carries_the_owned_operation_identity() {
     assert_eq!(completed.active_operation_id, None);
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn completed_chat_is_durable_before_terminal_event_and_reopens_through_chats() {
     let temp = TempDir::new().unwrap();
